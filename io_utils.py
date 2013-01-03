@@ -85,5 +85,36 @@ def filename_base(filename):
     (base,ext) = os.path.splitext(filename_wext)
     return base
 
+def read_vector(vec_string):
+  elements_str = vec_string.split()
+  elements = []
+  for s in elements_str:
+    elements.append(float(s))
+  vec = np.array(elements)
+  return vec
 
+def read_matrix(row_strings):
+  rows = []
+  for line in row_strings:
+    elements_str = line.split()
+    elements = []
+    for s in elements_str:
+      elements.append(float(s))
+    if (len(elements) > 0):
+      vec = np.array(elements)
+      rows.append(vec)
+  M = np.array(rows)
+  return M
+
+def read_camera_KRT(filename):
+  lines = read_list(filename)
+  # remove any empty lines
+  lines = filter(None,lines)
+  K = read_matrix(lines[0:3])
+  R = read_matrix(lines[3:6])
+  T = read_vector(lines[6])
+  return K, R, T
+
+
+ 
 
