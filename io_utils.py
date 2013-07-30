@@ -157,3 +157,7 @@ def read_bundler_file(filename):
         pts.append(p)
     return intrinsics, Rs, Ts, pts
 
+def read_vsfm_nvm_file(filename):
+    """ read an output file from the "VisualSFM" program in .nvm format """
+    # TODO
+
