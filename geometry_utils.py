@@ -26,4 +26,17 @@ def fit_plane_3d(x_vals, y_vals, z_vals):
 
     return plane
 
+def backproject_points(K, R, T, pts_2d, depths):
+    """ backproject a point given camera params, image position, and depth """
+    invK = np.linalg.inv(K)
+    cam_center = np.dot(-R.transpose(), T)
+    KRinv = np.dot(R.transpose(), invK)
+
+    rays = [np.dot(KRinv, [x[0], x[1], 1.0]) for x in pts_2d]
+    ray_lens = [np.sqrt(r*r).sum() for r in rays]
+    unit_rays = [ r / rlen for (r, rlen) in zip(rays, ray_lens)]
+
+    pts_3d = [cam_center + ur*d for (ur, d) in zip(unit_rays, depths)]
+
+    return pts_3d
 
