@@ -65,5 +65,23 @@ def quaternion_to_matrix(q):
 
     return R
 
+def project_points(K, R, T, pts_3d):
+    """ compute projection matrix from K,R,T and project pts_3d into image coordinates """
+    P = np.dot( K, np.hstack((R, T.reshape(3, 1))) )  
+    num_pts = len(pts_3d)
+    # create 3xN matrix from set of 3d points
+    pts_3d_m = np.array(pts_3d).transpose()
+    # convert to homogeneous coordinates
+    pts_3d_m_h = np.vstack((pts_3d_m, np.ones((1, num_pts))))
+    pts_2d_m_h = np.dot(P, pts_3d_m_h)
+    pts_2d = [ pts_2d_m_h[0:2,c] / pts_2d_m_h[2,c] for c in range(num_pts) ]
+    return pts_2d
+
+def create_K(focal_len, image_shape):
+    """ create calibration matrix K using the focal length and image.shape 
+    Assumes 0 skew and principal point at center of image """
+    K = np.array([[focal_len, 0, image_shape[1]/2.0], [0, focal_len, image_shape[0]/2.0], [0, 0, 1]])
+    return K
+
 
 
