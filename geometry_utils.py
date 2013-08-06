@@ -40,3 +40,30 @@ def backproject_points(K, R, T, pts_2d, depths):
 
     return pts_3d
 
+def quaternion_to_matrix(q):
+    """ Convert a quaternion to an orthogonal rotation matrix """
+    # normalize quaternion
+    norm = np.sqrt((q*q).sum())
+    q /= norm
+    # fill in rotation matrix
+    R = np.zeros((3, 3))
+
+    # save as a,b,c,d for easier reading of conversion math
+    a = q[0]; b = q[1]; c = q[2]; d = q[3]
+
+    R[0,0] = a*a + b*b - c*c - d*d
+    R[0,1] = 2*b*c - 2*a*d
+    R[0,2] = 2*b*d + 2*a*c
+
+    R[1,0] = 2*b*c + 2*a*d
+    R[1,1] = a*a - b*b + c*c - d*d
+    R[1,2] = 2*c*d - 2*a*b
+
+    R[2,0] = 2*b*d - 2*a*c
+    R[2,1] = 2*c*d + 2*a*b
+    R[2,2] = a*a - b*b - c*c + d*d
+
+    return R
+
+
+

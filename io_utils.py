@@ -3,6 +3,16 @@
 import numpy as np
 from PIL import Image
 import os
+import geometry_utils
+
+def read_token(file_obj, tok=None, ignore_char=None):
+    """ return a generator that seperates file based on whitespace, or optionally, tok """
+    for line in file_obj:
+        for token in line.split(tok):
+            if len(token) == 0 or (ignore_char != None and token[0] == ignore_char):
+                # ignore rest of line
+                break
+            yield token
 
 def read_list(filename):
     """ read a list of strings from file, one per line """
@@ -159,5 +169,74 @@ def read_bundler_file(filename):
 
 def read_vsfm_nvm_file(filename):
     """ read an output file from the "VisualSFM" program in .nvm format """
-    # TODO
+    try:
+        fd = open(filename,'r')
+    except IOError:
+        print('Error opening file ' + filename)
+        return None
+    # first line should contain version string and optionally, fixed calibration info
+    magic_string = 'NVM_V3'
+    first_line_toks = fd.readline().split()
+    if len(first_line_toks) == 0 or first_line_toks[0] != magic_string:
+        print('Error: Expecting first token in file to be ' + magic_string)
+        return None
+    if len(first_line_toks) > 1:
+        # file has fixed calibration info
+        # skip for now
+        print('WARNING: skipping read of fixed calibration info')
+
+    # from here on out, read file on token at a time
+    tokgen = read_token(fd, ignore_char = '#')
+
+    num_cameras = int(next(tokgen))
+    print('%d cameras' % num_cameras)
+    img_fnames = []
+    fs = []
+    Rs = []
+    Ts = []
+    for c in range(num_cameras):
+        fname = next(tokgen)
+        f = float(next(tokgen))
+        q = np.zeros(4)
+        for qi in range(4):
+            q[qi] = float(next(tokgen))
+        R = geometry_utils.quaternion_to_matrix(q)
+        cam_center = np.zeros(3)
+        for ci in range(3):
+            cam_center[ci] = float(next(tokgen))
+        dist_coef = float(next(tokgen))
+        if (dist_coef != 0.0):
+            print('WARNING: ignoring nonzero distortion coefficent for camera %d' % c)
+
+        T = np.dot(-R, cam_center)
+
+        img_fnames.append(fname)
+        fs.append(f)
+        Rs.append(R)
+        Ts.append(T)
+        # read '0' as end of camera 
+        if next(tokgen) != '0':
+            print('Error: expecting \'0\' delimiter and end of camera %d section' % c)
+            return None
+    num_points = int(next(tokgen))
+    print('%d points' % num_points)
+    pts = []
+    colors = []
+    for p in range(num_points):
+        pt = np.zeros(3)
+        for pti in range(3):
+            pt[pti] = float(next(tokgen))
+        pts.append(pt)
+        rgb = np.zeros(3, 'uint8')
+        for rgbi in range(3):
+            rgb[rgbi] = np.uint8(next(tokgen))
+        colors.append(rgb)
+        num_measurements = int(next(tokgen))
+        for m in range(num_measurements):
+            # ignore measurement info for now
+            # image index, feature index, x, y
+            for mm in range(4):
+                next(tokgen)
+
+    return img_fnames, fs, Rs, Ts, pts, colors
 
