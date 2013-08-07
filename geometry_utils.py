@@ -84,4 +84,20 @@ def create_K(focal_len, image_shape):
     return K
 
 
+def spherical_to_euclidian(azimuth,elevation):
+    """ convert az,el to euclidean vector 
+    assumes: azimuth is measured in radians east of north
+    assumes: Euclidean x-east y-north z-up coordinate system """
+    x = np.sin(azimuth)*np.cos(elevation)
+    y = np.cos(azimuth)*np.cos(elevation)
+    z = np.sin(elevation)
+    return (x,y,z)
+    
+def euclidian_to_spherical(x,y,z):
+    """ convert a point in eucliean coordinate system to az, el
+    assumes: azimuth is measured in radians east of north. 
+    assumes: y-north, x-east z-up coordinate system """
+    azimuth = np.arctan2(x,y)
+    elevation = np.arcsin(z)
+    return(azimuth,elevation)
 
