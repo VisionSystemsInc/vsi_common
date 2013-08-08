@@ -77,10 +77,11 @@ def project_points(K, R, T, pts_3d):
     pts_2d = [ pts_2d_m_h[0:2,c] / pts_2d_m_h[2,c] for c in range(num_pts) ]
     return pts_2d
 
-def create_K(focal_len, image_shape):
-    """ create calibration matrix K using the focal length and image.shape 
-    Assumes 0 skew and principal point at center of image """
-    K = np.array([[focal_len, 0, image_shape[1]/2.0], [0, focal_len, image_shape[0]/2.0], [0, 0, 1]])
+def create_K(focal_len, image_size):
+    """ create calibration matrix K using the focal length and image.size
+    Assumes 0 skew and principal point at center of image 
+    Note that image_size = (width, height) """
+    K = np.array([[focal_len, 0, image_size[0]/2.0], [0, focal_len, image_size[1]/2.0], [0, 0, 1]])
     return K
 
 
