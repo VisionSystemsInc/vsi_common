@@ -33,7 +33,7 @@ def backproject_points(K, R, T, pts_2d, depths):
     KRinv = np.dot(R.transpose(), invK)
 
     rays = [np.dot(KRinv, [x[0], x[1], 1.0]) for x in pts_2d]
-    ray_lens = [np.sqrt(r*r).sum() for r in rays]
+    ray_lens = [np.sqrt(np.dot(r,r)) for r in rays]
     unit_rays = [ r / rlen for (r, rlen) in zip(rays, ray_lens)]
 
     pts_3d = [cam_center + ur*d for (ur, d) in zip(unit_rays, depths)]
