@@ -24,5 +24,19 @@ def normalized_cross_correlation(img1, img2):
     return np.dot(i1, i2)
 
 
+def sample_point(image, pt):
+    """ return the pixel value, or None if the point is outside image bounds """
+    if pt[0] >= 0 and pt[0] < image.size[0] and pt[1] >= 0 and pt[1] < image.size[1]:
+        return image.getpixel(tuple(pt))
+    return None
 
-    
+def sample_patch(image, corners, patch_size):
+    """ return an Image of size patch_size, or None if the patch is outside image bounds """
+    if any ([c[0] < 0 or c[0] >= image.size[0] or c[1] < 0 or c[1] >= image.size[1] for c in corners]):
+        return None
+    corner_verts = (corners[0][0], corners[0][1],
+                    corners[1][0], corners[1][1],
+                    corners[2][0], corners[2][1],
+                    corners[3][0], corners[3][1])
+    return image.transform(patch_size, Image.QUAD, corner_verts, Image.NEAREST)
+
