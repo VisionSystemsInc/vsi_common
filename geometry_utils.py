@@ -61,6 +61,7 @@ def spherical_to_euclidian(azimuth,elevation):
     z = np.sin(elevation)
     return (x,y,z)
     
+
 def euclidian_to_spherical(x,y,z):
     """ convert a point in eucliean coordinate system to az, el
     assumes: azimuth is measured in radians east of north. 
@@ -69,3 +70,11 @@ def euclidian_to_spherical(x,y,z):
     elevation = np.arcsin(z)
     return(azimuth,elevation)
 
+
+def patch_corners_3d(c, xv, yv):
+    """ given a centroid and "x" and "y" vectors, return the four corners """
+    return [c-xv-yv, c-xv+yv, c+xv+yv, c+xv-yv]
+
+def unitize(v):
+    """ return the unit vector in the same direction as v """
+    return v / np.sqrt(np.dot(v,v))
