@@ -1,13 +1,38 @@
 """ A collection of utility functions related to Image data """
 import numpy as np
 import PIL.Image as Image
-import PIL.ImageStat as ImageStat
+from itertools import izip
 
 
 def rgb2gray(rgb):
     """ convert an rgb image stored as a numpy array to grayscale """
     gr = np.dot(rgb[..., :3], [0.299, 0.587, 0.144]).astype(rgb.dtype)
     return gr
+
+
+def mutual_information(img1, img2, min_val, max_val, nbins):
+    """ compute mutual information of img1 and img2 """
+    counts = np.zeros((nbins,nbins))
+    val_range = max_val - min_val
+    # fill in counts
+    for (v0,v1) in izip(img1.ravel(),img2.ravel()):
+        b0 = int((v0 - min_val) / val_range * nbins)
+        b1 = int((v1 - min_val) / val_range * nbins)
+        counts[b0,b1] += 1
+    total = float(np.prod(img1.shape))
+    p0 = counts.sum(axis=0) / total
+    p1 = counts.sum(axis=1) / total
+    p01 = counts / total
+    mi = 0
+    for i in range(nbins):
+        for j in range(nbins):
+            if p01[i,j] == 0:
+                continue
+            if p0[i] == 0 or p1[j] == 0:
+                raise Exception
+            mi += p01[i,j] * np.log(p01[i,j] / (p0[i]*p1[j]))
+    return mi / np.log(nbins)
+
 
 def normalized_cross_correlation(img1, img2):
     """ compute the normalized cross correlation of img1 and img2 """
