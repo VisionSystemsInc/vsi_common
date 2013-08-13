@@ -1,5 +1,6 @@
 """ Utility classes for modeling cameras """
 import numpy as np
+from itertools import izip
 
 
 def construct_K(focal_len, image_size):
@@ -28,9 +29,9 @@ class PinholeCamera:
         """ backproject a point given camera params, image position, and depth """
         rays = [np.dot(self.KRinv, [x[0], x[1], 1.0]) for x in pts_2d]
         ray_lens = [np.sqrt(np.dot(r, r)) for r in rays]
-        unit_rays = [r / rlen for (r, rlen) in zip(rays, ray_lens)]
+        unit_rays = [r / rlen for (r, rlen) in izip(rays, ray_lens)]
 
-        pts_3d = [self.center + ur * d for (ur, d) in zip(unit_rays, depths)]
+        pts_3d = [self.center + ur * d for (ur, d) in izip(unit_rays, depths)]
 
         return pts_3d
 
@@ -42,6 +43,7 @@ class PinholeCamera:
         # convert to homogeneous coordinates
         pts_3d_m_h = np.vstack((pts_3d_m, np.ones((1, num_pts))))
         pts_2d_m_h = np.dot(self.P, pts_3d_m_h)
-        pts_2d = [pts_2d_m_h[0:2, c] / pts_2d_m_h[2, c] for c in range(num_pts)]
+        #pts_2d = [pts_2d_m_h[0:2, c] / pts_2d_m_h[2, c] for c in range(num_pts)]
+        pts_2d = [col[0:2] / col[2] for col in pts_2d_m_h.transpose()]
         return pts_2d
 
