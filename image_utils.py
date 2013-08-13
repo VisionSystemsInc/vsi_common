@@ -11,15 +11,17 @@ def rgb2gray(rgb):
 
 
 def mutual_information(img1, img2, min_val, max_val, nbins):
+    i1 = np.array(img1).ravel()
+    i2 = np.array(img2).ravel()
     """ compute mutual information of img1 and img2 """
     counts = np.zeros((nbins,nbins))
     val_range = max_val - min_val
     # fill in counts
-    for (v0,v1) in izip(img1.ravel(),img2.ravel()):
+    for (v0,v1) in izip(i1,i2):
         b0 = int((v0 - min_val) / val_range * nbins)
         b1 = int((v1 - min_val) / val_range * nbins)
         counts[b0,b1] += 1
-    total = float(np.prod(img1.shape))
+    total = float(len(i1))
     p0 = counts.sum(axis=0) / total
     p1 = counts.sum(axis=1) / total
     p01 = counts / total
