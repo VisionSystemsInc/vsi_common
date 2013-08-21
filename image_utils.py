@@ -57,13 +57,16 @@ def sample_point(image, pt):
     return None
 
 
-def sample_patch(image, corners, patch_size):
+def sample_patch(image, corners, patch_size, check_bounds=True):
     """ return an Image of size patch_size, or None if the patch is outside image bounds """
-    if any([c[0] < 0 or c[0] >= image.size[0] or c[1] < 0 or c[1] >= image.size[1] for c in corners]):
-        return None
+    if check_bounds:
+        if any([c[0] < 0 or c[0] >= image.size[0] or c[1] < 0 or c[1] >= image.size[1] for c in corners]):
+            return None
     corner_verts = (corners[0][0], corners[0][1],
                     corners[1][0], corners[1][1],
                     corners[2][0], corners[2][1],
                     corners[3][0], corners[3][1])
-    return image.transform(patch_size, Image.QUAD, corner_verts, Image.NEAREST)
+    # transform is counting on patch_size to be a tuple, not numpy array
+    patch_size_tuple = (patch_size[0], patch_size[1])
+    return image.transform(patch_size_tuple, Image.QUAD, corner_verts, Image.NEAREST)
 

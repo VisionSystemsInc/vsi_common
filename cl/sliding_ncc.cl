@@ -28,6 +28,7 @@ __kernel void sliding_ncc(__global const float *a,
     const int window_pix = 4*window_radius*window_radius + 4*window_radius + 1;
     mean_a /= window_pix;
     mean_b /= window_pix;
+#if 1
     // compute the magnitude of the translated vector
     float mag_a = 0.0f;
     float mag_b = 0.0f;
@@ -43,7 +44,10 @@ __kernel void sliding_ncc(__global const float *a,
     }
     mag_a = sqrt(mag_a);
     mag_b = sqrt(mag_b);
-
+#else
+    const float mag_a = 1.0f;
+    const float mag_b = 1.0f;
+#endif
     // protect against divide by zero
     if ( (mag_a < 1e-6) || (mag_b < 1e-6) ) {
         result[idx] = 0.0f;
