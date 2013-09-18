@@ -7,7 +7,10 @@ def init_ocl(device_string=None):
     platforms = cl.get_platforms()
     # use first platform for now
     devices = platforms[0].get_devices()
-    matches = [dev for dev in devices if device_string in dev.name]
+    if device_string is not None:
+        matches = [dev for dev in devices if device_string in dev.name]
+    else:
+        matches = devices
     # choose first matching device for now
     if len(matches) == 0:
         err_str = 'ERROR: no devices containing string %s' % device_string
