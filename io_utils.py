@@ -176,11 +176,18 @@ def read_vsfm_nvm_file(filename):
         return None
     # first line should contain version string and optionally, fixed calibration info
     magic_string = 'NVM_V3'
+    magic_string_R9T = 'NVM_V3_R9T'
     first_line_toks = fd.readline().split()
-    if len(first_line_toks) == 0 or first_line_toks[0] != magic_string:
+    if len(first_line_toks) == 0:
         print('Error: Expecting first token in file to be ' + magic_string)
         return None
-    if len(first_line_toks) > 1:
+    format_R9T = False
+    if first_line_toks[0] == magic_string_R9T:
+        format_R9T = True
+    elif first_line_toks[0] != magic_string:
+        print('Error: Expecting first token in file to be ' + magic_string)
+        return None
+    if len(first_line_toks) > 1 and first_line_toks[1] == 'FixedK':
         # file has fixed calibration info
         # skip for now
         print('WARNING: skipping read of fixed calibration info')
@@ -197,13 +204,23 @@ def read_vsfm_nvm_file(filename):
     for c in range(num_cameras):
         fname = next(tokgen)
         f = float(next(tokgen))
-        q = np.zeros(4)
-        for qi in range(4):
-            q[qi] = float(next(tokgen))
-        R = geometry_utils.quaternion_to_matrix(q)
-        cam_center = np.zeros(3)
-        for ci in range(3):
-            cam_center[ci] = float(next(tokgen))
+        if format_R9T:
+            rvals = np.zeros(9)
+            for ri in range(9):
+                rvals[ri] = float(next(tokgen))
+            R = rvals.reshape((3,3))
+            T = np.zeros(3)
+            for ti in range(3):
+                T[ti] = float(next(tokgen))
+            cam_center = np.dot(-R.transpose(),T)
+        else:
+            q = np.zeros(4)
+            for qi in range(4):
+                q[qi] = float(next(tokgen))
+            R = geometry_utils.quaternion_to_matrix(q)
+            cam_center = np.zeros(3)
+            for ci in range(3):
+                cam_center[ci] = float(next(tokgen))
         dist_coef = float(next(tokgen))
         if (dist_coef != 0.0):
             print('WARNING: ignoring nonzero distortion coefficent for camera %d' % c)
@@ -217,7 +234,7 @@ def read_vsfm_nvm_file(filename):
         # read '0' as end of camera 
         if next(tokgen) != '0':
             print('Error: expecting \'0\' delimiter and end of camera %d section' % c)
-            return None
+            #return None
     num_points = int(next(tokgen))
     print('%d points' % num_points)
     pts = []
