@@ -4,25 +4,48 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 
-def plot_box(x, y, width, height, *args, **kwargs):
+def plot_vector(x, axis, axis_order, *args, **kwargs):
+    """ conveniance method for plotting 2 or 3-d data stored in numpy array """
+
+    if len(x.shape) == 1:
+        x = x.reshape((x.shape[0],1))
+
+    if x.shape[0] == 2:
+        axis.plot(x[axis_order[0],:], x[axis_order[1],:], *args, **kwargs)
+    else:
+        axis.plot(x[axis_order[0],:], x[axis_order[1],:], x[axis_order[2],:], *args, **kwargs)
+
+
+def plot_rectangle(x, y, width, height, *args, **kwargs):
     """ plot a 2-d box """
     xvec = [x, x+width, x+width, x, x]
     yvec = [y, y, y+height, y+height, y]
     plt.plot(xvec, yvec, *args, **kwargs)
 
+def plot_cube(x, y, z, width, height, depth, *args, **kwargs):
+    # TODO
+    pass
 
-def plot_cameras(Ks, Rs, Ts, axis_len=1.0, plot_look=True):
-    """ plot a 3-d representation of a perspective camera """
-    centers = [-R.transpose().dot(T) for (R, T) in zip(Rs, Ts)]
-    centers_mat = np.array(centers).transpose()
-    # plot center of projection 
-    plt.plot(centers_mat[0, :], centers_mat[1, :], centers_mat[2, :],'ro')
-    if plot_look:
-        # plot a line in the direction of the principal axis
-        cam_zs = [R[2, :] for R in Rs]
-        for (center, cam_z) in zip(centers, cam_zs):
-            zax = np.vstack((center, center + axis_len*cam_z))
-            plt.plot(zax[:, 0], zax[:, 1], zax[:, 2],'g-')
+def plot_camera(cam, img_dims=(1280,720), axis=None, axis_order=(0,1,2), img_plane_depth=1.0):
+    """ plot a 3-d representation of a perspective camera with image plane """
+    if axis == None:
+        axis = plt.gca()
+    # plot camera center
+    #axis.plot((cam.center[ao[0]],),(cam.center[ao[1]],),(cam.center[ao[2]],),'b.',markersize=10)
+    plot_vector(cam.center, axis, axis_order, 'b.', markersize=10 )
+    # compute backprojected corners of image plane
+    img_corners = (np.array((0,0)), np.array((img_dims[0],0)),
+                   np.array((img_dims[0],img_dims[1])), np.array((0,img_dims[1])))
+    corners_3d = cam.backproject_points(img_corners, [img_plane_depth,]*4)
+    c3d_np = np.array(corners_3d).T
+    c3d_np = np.hstack((c3d_np, c3d_np[:,0:1]))
+    # plot the image plane
+    #axis.plot(c3d_np[ao[0],:], c3d_np[ao[1],:], c3d_np[ao[2],:],'k-')
+    plot_vector(c3d_np, axis, axis_order, 'k-')
+    # plot connecting lines from the center to the image plane
+    for x in corners_3d:
+        plot_vector(np.array((cam.center, x)).T, axis, axis_order, 'k-') 
+
 
 class OrthoAnd3DPlot:
     """ 2x2 array of plots consisting of 3 ortho views, plus one 3-d view """
