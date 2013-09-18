@@ -78,3 +78,32 @@ def patch_corners_3d(c, xv, yv):
 def unitize(v):
     """ return the unit vector in the same direction as v """
     return v / np.sqrt(np.dot(v,v))
+
+def rasterize_plane(grid_origin, grid_dims, vox_len, plane):
+    """ Visit each cell of a 3-d grid that intersects the plane.
+    grid_origin: 3-D position of voxel grid origin point (ox, oy, oz)
+    grid_dims: number of voxels in x,y,z dimensions.  (nx, ny, nz)
+    vox_len: The side length of a single voxel (voxels assumed to be cubes)
+    plane: The parameters (a,b,c,d) of the plane.  ax + by + cz + d = 0
+    """
+
+    #plane = plane / np.sqrt(np.sum(plane[0:3] * plane[0:3]))
+    # get dimensions of normal in ascending order
+    sorted_dims = np.argsort(plane[0:3])
+    d0 = sorted_dims[0]
+    d1 = sorted_dims[1]
+    d2 = sorted_dims[2]
+
+    for i in range(grid_dims[d0]):
+        # rasterize a line in the [d1,d2] plane
+        d0_val = grid_origin[d0] + vox_len * i
+        for j in range(grid_dims[d1]):
+            d1_val = grid_origin[d1] + vox_len * j
+            d2_val = -(plane[d0]*d0_val + plane[d1]*d1_val + plane[3]) / plane[d2]
+            k = np.floor((d2_val - grid_origin[d2])/vox_len)
+            if k >= 0 and k < grid_dims[d2]:
+                pvals = (i,j,k)
+                p = [pvals[idx] for idx in sorted_dims]
+                yield p
+            
+
