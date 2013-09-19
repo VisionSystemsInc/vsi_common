@@ -79,6 +79,23 @@ def unitize(v):
     """ return the unit vector in the same direction as v """
     return v / np.sqrt(np.dot(v,v))
 
+def intersect_plane_ray(plane, ray_origin, ray_vector):
+    """ Compute and return the intersection point of a plane and ray. 
+        plane: The parameters (a,b,c,d) of the plane,  ax + by + cz + d = 0
+        ray_origin and ray_vector can be 3-d vectors or 4-d homogeneous.
+    """
+    # convert to homogeneous coordinates
+    ray_origin_h = ray_origin
+    if len(ray_origin_h) == 3:
+        ray_origin_h = np.append(ray_origin,1)
+    ray_vector_h = ray_vector
+    if len(ray_vector_h) == 3:
+        ray_vector_h = np.append(ray_vector,0)
+
+    dist = -np.dot(plane,ray_origin_h) / np.dot(plane,ray_vector_h)
+
+    return ray_origin + dist * ray_vector
+
 def rasterize_plane(grid_origin, grid_dims, vox_len, plane):
     """ Visit each cell of a 3-d grid that intersects the plane.
     grid_origin: 3-D position of voxel grid origin point (ox, oy, oz)
@@ -106,4 +123,20 @@ def rasterize_plane(grid_origin, grid_dims, vox_len, plane):
                 p = [pvals[idx] for idx in sorted_dims]
                 yield p
             
+def compute_bounding_box(pts):
+    """ compute the bounding box of a list of points
+        returns (min_pt, max_pt)
+    """
+    if len(pts) == 0:
+        return None
+
+    min_pt = pts[0]
+    max_pt = pts[0]
+    for p in pts:
+        min_pt = np.min(np.vstack((p,min_pt)),axis=0)
+        max_pt = np.max(np.vstack((p,min_pt)),axis=0)
+    return (min_pt, max_pt)
+
+
+
 
