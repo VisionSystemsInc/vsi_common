@@ -96,5 +96,9 @@ def sample_patch_perspective(image, inv_xform_3x3, patch_size):
     """ return an Image of size patch_size """
     patch_size_tuple = (patch_size[0], patch_size[1])
     inv_xform_array = inv_xform_3x3.reshape(9,) / inv_xform_3x3[2,2]
-    return image.transform(patch_size_tuple, Image.PERSPECTIVE, inv_xform_array, Image.NEAREST)
+    patch = image.transform(patch_size_tuple, Image.PERSPECTIVE, inv_xform_array, Image.NEAREST)
+
+    ones_img = Image.new('1', image.size, True)
+    mask = ones_img.transform(patch_size_tuple, Image.PERSPECTIVE, inv_xform_array, Image.NEAREST)
+    return patch, mask
 
