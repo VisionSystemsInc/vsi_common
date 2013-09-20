@@ -70,3 +70,31 @@ def sample_patch(image, corners, patch_size, check_bounds=True):
     patch_size_tuple = (patch_size[0], patch_size[1])
     return image.transform(patch_size_tuple, Image.QUAD, corner_verts, Image.NEAREST)
 
+
+def sample_plane(image, camera, plane_origin, plane_x, plane_y, patch_size):
+    """ return a sampled patch based on the 3-d plane defined by plane_origin, plane_x, and plane_y
+        plane_origin: 3-d point corresponding to the upper left of the patch
+        plane_x: 3-d vector from origin to extent of patch in the "x" direction
+        plane_y: 3-d vector from origin to extent of patch in the "y" direction: assumed perpendicular to plane_x
+    """
+    plane_xlen = np.sqrt(np.dot(plane_x, plane_x))
+    plane_ylen = np.sqrt(np.dot(plane_y, plane_y))
+    plane_xu = plane_x / plane_xlen
+    plane_yu = plane_y / plane_ylen
+    plane_normal = np.cross(plane_xu, plane_yu)
+    plane2world_R = np.vstack((plane_xu, plane_yu, plane_normal)).transpose()
+    plane2world_T = plane_origin
+    plane2world = np.vstack((np.hstack((plane2world_R, plane2world_T.reshape(3,1))),np.array((0,0,0,1))))
+
+    patch2plane = np.array(((plane_xlen/patch_size[0], 0, 0),(0, plane_ylen/patch_size[1], 0),(0,0,0),(0,0,1)))
+    patch2img = np.dot(camera.P, np.dot(plane2world, patch2plane))
+    #raise Exception('debug')
+    return sample_patch_perspective(image, patch2img, patch_size)
+
+
+def sample_patch_perspective(image, inv_xform_3x3, patch_size):
+    """ return an Image of size patch_size """
+    patch_size_tuple = (patch_size[0], patch_size[1])
+    inv_xform_array = inv_xform_3x3.reshape(9,) / inv_xform_3x3[2,2]
+    return image.transform(patch_size_tuple, Image.PERSPECTIVE, inv_xform_array, Image.NEAREST)
+

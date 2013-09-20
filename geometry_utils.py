@@ -134,9 +134,29 @@ def compute_bounding_box(pts):
     max_pt = pts[0]
     for p in pts:
         min_pt = np.min(np.vstack((p,min_pt)),axis=0)
-        max_pt = np.max(np.vstack((p,min_pt)),axis=0)
+        max_pt = np.max(np.vstack((p,max_pt)),axis=0)
     return (min_pt, max_pt)
 
 
+def compute_transform_3d_plane_to_2d(plane_origin, plane_x, plane_y, nx, ny):
+    """ compute a 3x3 perspective transform from a planar segment in 3-d to a 2-d image.
+        plane_origin: the 3-d point corresponding to the upper left of the image
+        plane_x: a 3-d vector that spans the image "x" direction
+        plane_y: a 3-d vector that spans the image "y" direction (assumed perpendicular to plane_x)
+        nx: number of pixels in the image x dimension
+        ny: number of pixels in the image y dimension
+    """
+    plane_xlen = np.sqrt(np.dot(plane_x, plane_x))
+    plane_ylen = np.sqrt(np.dot(plane_y, plane_y))
+    plane_xu = plane_x / plane_xlen
+    plane_yu = plane_y / plane_ylen
+    plane_normal = np.cross(plane_xu, plane_yu)
+    plane_R = np.vstack((plane_xu, plane_yu, plane_normal))
+    plane_T = -np.dot(plane_R.transpose(),plane_origin)
+
+    plane2img = np.array(((nx/plane_xlen, 0, 0),(0, ny/plane_ylen, 0),(0, 0, 0)))
+
+    xform = np.dot(plane2img, np.hstack((plane_R, plane_T.reshape(3,1))))
+    return xform
 
 
