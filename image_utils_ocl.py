@@ -5,20 +5,20 @@ import pyopencl as cl
 import os
 
 
-def NCC_score_image(ocl_ctx, images, masks, window_radius):
+def NCC_score_image(ocl_ctx, images_and_masks, window_radius):
     """ compute a sliding NCC score based on a set of images with masks """
 
     cl_queue = cl.CommandQueue(ocl_ctx)
 
-    num_images = len(images)
-    img_dims = images[0].size
+    num_images = len(images_and_masks)
+    img_dims = images_and_masks[0][0].size
 
     # create large buffers of concatentated images and masks
     image_stack = np.zeros((num_images*img_dims[1], img_dims[0]),np.float32)
     mask_stack = np.zeros((num_images*img_dims[1], img_dims[0]),np.uint8)
     for i in range(num_images):
-        image_stack[i*img_dims[1]:(i+1)*img_dims[1],:] = np.array(images[i]).astype(np.float32)
-        mask_stack[i*img_dims[1]:(i+1)*img_dims[1],:] = np.array(masks[i]).astype(np.uint8)
+        image_stack[i*img_dims[1]:(i+1)*img_dims[1],:] = np.array(images_and_masks[i][0]).astype(np.float32)
+        mask_stack[i*img_dims[1]:(i+1)*img_dims[1],:] = np.array(images_and_masks[i][1]).astype(np.uint8)
 
     mf = cl.mem_flags
     image_buff = cl.Buffer(ocl_ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=image_stack)

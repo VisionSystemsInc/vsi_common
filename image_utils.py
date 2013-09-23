@@ -88,7 +88,7 @@ def sample_plane(image, camera, plane_origin, plane_x, plane_y, patch_size):
 
     patch2plane = np.array(((plane_xlen/patch_size[0], 0, 0),(0, plane_ylen/patch_size[1], 0),(0,0,0),(0,0,1)))
     patch2img = np.dot(camera.P, np.dot(plane2world, patch2plane))
-    #raise Exception('debug')
+
     return sample_patch_perspective(image, patch2img, patch_size)
 
 
@@ -98,7 +98,7 @@ def sample_patch_perspective(image, inv_xform_3x3, patch_size):
     inv_xform_array = inv_xform_3x3.reshape(9,) / inv_xform_3x3[2,2]
     patch = image.transform(patch_size_tuple, Image.PERSPECTIVE, inv_xform_array, Image.NEAREST)
 
-    ones_img = Image.new('1', image.size, True)
+    ones_img = Image.new('L', image.size, 255)
     mask = ones_img.transform(patch_size_tuple, Image.PERSPECTIVE, inv_xform_array, Image.NEAREST)
     return patch, mask
 

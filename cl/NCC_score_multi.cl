@@ -1,4 +1,5 @@
 #define MAX_IMAGES 32
+#define MIN_SCORES 3
 
 __kernel void NCC_score_multi(__global const float *image_stack,
                               __global const unsigned char *mask_stack,
@@ -38,9 +39,9 @@ __kernel void NCC_score_multi(__global const float *image_stack,
                 mean += image_stack[idx];
             }
         }
-        if (!valid[i]) {
-            break;
-        }
+        //if (!valid[i]) {
+        //    break;
+        //}
         mean /= window_pix;
         means[i] = mean;
 
@@ -63,14 +64,14 @@ __kernel void NCC_score_multi(__global const float *image_stack,
     float scores[(MAX_IMAGES*MAX_IMAGES - MAX_IMAGES)/2];
     int num_scores = 0;
     for (int i=0; i<num_images; ++i) {
-        if (!valid[i]) {
-            continue;
-        }
+        //if (!valid[i]) {
+        //    continue;
+        //}
         int img_offset1 = i * num_pix;
         for (int j=0; j<i; ++j) {
-            if (!valid[j]){
-                continue;
-            }
+            //if (!valid[j]){
+            //    continue;
+            //}
             int img_offset2 = j * num_pix;
             // take the dot product of the normalized values
             float ncc = 0.0f;
@@ -86,17 +87,21 @@ __kernel void NCC_score_multi(__global const float *image_stack,
                     ncc += anorm*bnorm;
                 }
             }
-            scores[num_scores++] = ncc;
+            if (valid[i] && valid[j]) {
+                scores[num_scores++] = ncc;
+            }
         }
     }
     float score_sum = 0.0;
     for (int i=0; i<num_scores; ++i) {
         score_sum += scores[i];
     }
-    if (num_scores < 1) {
-        num_scores = 1;
+    if (num_scores < MIN_SCORES) {
+        result[pix_offset] = 0.0f;
     }
-    result[pix_offset] = score_sum/num_scores;
+    else {
+        result[pix_offset] = score_sum/num_scores;
+    }
     return;
 }
 
