@@ -2,12 +2,54 @@
 import numpy as np
 import PIL.Image as Image
 from itertools import izip
+import scipy.ndimage.filters
 
 
 def rgb2gray(rgb):
     """ convert an rgb image stored as a numpy array to grayscale """
     gr = np.dot(rgb[..., :3], [0.299, 0.587, 0.144]).astype(rgb.dtype)
     return gr
+
+
+def weighted_smooth(image, weights, pyramid_min_dim=50, convergence_thresh=0.01, max_its=1000):
+    """ smooth the values in image using a multi-scale regularization.
+        weights should be the same dimensions as image, with values in range (0,1)
+    """
+    # create image pyramids
+    image_py = [Image.fromarray(image),]
+    weight_py = [Image.fromarray(weights),]
+    new_dims = (int(image_py[-1].size[0] / 2), int(image_py[-1].size[1] / 2))
+    while np.min(new_dims) > pyramid_min_dim:
+        image_level = image_py[-1].resize(new_dims, Image.BILINEAR)
+        weight_level = weight_py[-1].resize(new_dims, Image.BILINEAR)
+        image_py.append(image_level)
+        weight_py.append(weight_level)
+        new_dims = (int(image_py[-1].size[0] / 2), int(image_py[-1].size[1] / 2))
+    num_levels = len(image_py)
+
+    # initialize with top of pyramid
+    image_smooth_prev = np.array(image_py[num_levels-1])
+    # traverse all levels of pyramid
+    num_its = 0
+    for l in reversed(range(num_levels)):
+        weights_np = np.array(weight_py[l])
+        for i in range(max_its):
+            num_its = i+1
+            # smooth image
+            image_smooth = scipy.ndimage.filters.gaussian_filter(image_smooth_prev, sigma=1.0, mode='nearest')
+            # compute weighted sum of smoothed image and original
+            image_smooth = weights_np*image_py[l] + (1.0 - weights_np)*image_smooth
+            # test for convergence
+            maxdiff = np.abs(image_smooth - image_smooth_prev).max()
+            if maxdiff <= convergence_thresh:
+                break
+            image_smooth_prev = image_smooth
+        print('level %d: %d iterations' % (l,num_its))
+        # initialize next level with output from previous level
+        if l > 0:
+            image_smooth_prev_pil = Image.fromarray(image_smooth_prev)
+            image_smooth_prev = np.array(image_smooth_prev_pil.resize(image_py[l-1].size))
+    return image_smooth
 
 
 def mutual_information(img1, img2, min_val, max_val, nbins):
