@@ -1,30 +1,84 @@
 """ Utility Functions for various geometric operations """
 import numpy as np
 
-def fit_plane_3d(x_vals, y_vals, z_vals):
+
+def fit_plane_3_points(points):
+    """ compute the plane that passes through all 3 points in the list """
+    # compute normal direction which is perpendicular to vectors p1-p0, p2-p0
+    # use np.subtact instead of "-" operator so that points can be any array-like type
+    norm = np.cross(np.subtract(points[1],points[0]), np.subtract(points[2],points[0]))
+    norm_mag = np.sqrt(np.dot(norm,norm))
+    if norm_mag == 0:
+        # points are co-linear: plane is ill-defined
+        return np.array((0,0,0,np.inf))
+    norm /= norm_mag
+    d = -np.dot(norm,points[0])  # any of the three points should give same answer here
+    return np.array((norm[0], norm[1], norm[2], d))
+
+
+def fit_plane_3d(points):
     """ fit a plane to a set of 3-d points """
 
-    num_pts = len(x_vals)
+    num_pts = len(points)
     P = np.zeros((4, num_pts))
-    P[0, :] = x_vals - x_vals.mean()
-    P[1, :] = y_vals - y_vals.mean()
-    P[2, :] = z_vals - z_vals.mean()
+    P[0:3,:] = np.array(points).T
 
-    radius = np.sqrt((P[0:3, :] * P[0:3, :]).sum(0)).mean()
-    P = P / radius
-    P[3, :] = 1 
-    
+    p_mean = P.mean(axis=1)
+    P -= p_mean.reshape(4,1)
+
+    #radius = np.sqrt((P[0:3, :] * P[0:3, :]).sum(axis=0)).mean()
+    #P = P / radius
+
+    P[3, :] = 1
+
     A = np.dot(P, P.transpose())
-    
-    U, S, Vh = np.linalg.linalg.svd(A)
+    _, _, Vh = np.linalg.linalg.svd(A)
     V = Vh.conj().transpose()
     plane = V[:, -1]
 
     # normal is unit vector
-    plane[0:3] = plane[0:3] / np.sqrt((plane[0:3]*plane[0:3]).sum())
-    # TODO: un-normalize!!
+    norm_mag = np.sqrt((plane[0:3]*plane[0:3]).sum())
+    # points are colinear (or worse) - plane is undefined
+    if norm_mag == 0:
+        return np.array((0,0,0,np.inf))
+
+    plane = plane / norm_mag
+
+    # move plane away from origin
+    d = plane[3] - np.dot(plane,p_mean)
+    plane[3] = d
 
     return plane
+
+
+def fit_plane_3d_RANSAC(points, inlier_thresh=1.0, max_draws=100):
+    """ fit a plane to a noisy set of points. returns the plane and the indices of inliers """
+    num_pts_total = len(points)
+    best_inliers = np.zeros(num_pts_total,np.bool)
+    best_inlier_sum = 0
+    points_homg_np = np.hstack((np.array(points), np.ones((num_pts_total,1))))
+    for _ in range(max_draws):
+        # randomly select 3 points from the set
+        selection = np.random.randint(0,num_pts_total,3)
+        points_rand = [points[s] for s in selection]
+        # fit plane to random selection of points
+        plane_rand = fit_plane_3_points(points_rand)
+        # compute distances from all points to the plane
+        dists = np.dot(points_homg_np, plane_rand)
+        inliers = np.abs(dists) < inlier_thresh
+        inlier_sum = inliers.sum()
+        if inlier_sum > best_inlier_sum:
+            best_inliers = inliers
+            best_inlier_sum = inlier_sum
+        # no need to keep going if all points are inliers
+        if inlier_sum == num_pts_total:
+            break
+    # now re-fit using all inliers
+    points_good = [points[n] for n in range(num_pts_total) if best_inliers[n]]
+    plane = fit_plane_3d(points_good)
+
+    return plane, best_inliers
+
 
 def quaternion_to_matrix(q):
     """ Convert a quaternion to an orthogonal rotation matrix """
@@ -35,7 +89,10 @@ def quaternion_to_matrix(q):
     R = np.zeros((3, 3))
 
     # save as a,b,c,d for easier reading of conversion math
-    a = q[0]; b = q[1]; c = q[2]; d = q[3]
+    a = q[0]
+    b = q[1]
+    c = q[2]
+    d = q[3]
 
     R[0,0] = a*a + b*b - c*c - d*d
     R[0,1] = 2*b*c - 2*a*d
@@ -53,18 +110,18 @@ def quaternion_to_matrix(q):
 
 
 def spherical_to_euclidian(azimuth,elevation):
-    """ convert az,el to euclidean vector 
+    """ convert az,el to euclidean vector
     assumes: azimuth is measured in radians east of north
     assumes: Euclidean x-east y-north z-up coordinate system """
     x = np.sin(azimuth)*np.cos(elevation)
     y = np.cos(azimuth)*np.cos(elevation)
     z = np.sin(elevation)
     return (x,y,z)
-    
+
 
 def euclidian_to_spherical(x,y,z):
     """ convert a point in eucliean coordinate system to az, el
-    assumes: azimuth is measured in radians east of north. 
+    assumes: azimuth is measured in radians east of north.
     assumes: y-north, x-east z-up coordinate system """
     azimuth = np.arctan2(x,y)
     elevation = np.arcsin(z)
@@ -75,12 +132,14 @@ def patch_corners_3d(c, xv, yv):
     """ given a centroid and "x" and "y" vectors, return the four corners """
     return [c-xv-yv, c-xv+yv, c+xv+yv, c+xv-yv]
 
+
 def unitize(v):
     """ return the unit vector in the same direction as v """
     return v / np.sqrt(np.dot(v,v))
 
+
 def intersect_plane_ray(plane, ray_origin, ray_vector):
-    """ Compute and return the intersection point of a plane and ray. 
+    """ Compute and return the intersection point of a plane and ray.
         plane: The parameters (a,b,c,d) of the plane,  ax + by + cz + d = 0
         ray_origin and ray_vector can be 3-d vectors or 4-d homogeneous.
     """
@@ -96,6 +155,7 @@ def intersect_plane_ray(plane, ray_origin, ray_vector):
 
     return ray_origin + dist * ray_vector
 
+
 def rasterize_plane(grid_origin, grid_dims, vox_len, plane):
     """ Visit each cell of a 3-d grid that intersects the plane.
     grid_origin: 3-D position of voxel grid origin point (ox, oy, oz)
@@ -106,7 +166,7 @@ def rasterize_plane(grid_origin, grid_dims, vox_len, plane):
 
     #plane = plane / np.sqrt(np.sum(plane[0:3] * plane[0:3]))
     # get dimensions of normal in ascending order
-    sorted_dims = np.argsort(plane[0:3])
+    sorted_dims = np.argsort(np.abs(plane[0:3]))
     d0 = sorted_dims[0]
     d1 = sorted_dims[1]
     d2 = sorted_dims[2]
@@ -122,7 +182,8 @@ def rasterize_plane(grid_origin, grid_dims, vox_len, plane):
                 pvals = (i,j,k)
                 p = [pvals[idx] for idx in sorted_dims]
                 yield p
-            
+
+
 def compute_bounding_box(pts):
     """ compute the bounding box of a list of points
         returns (min_pt, max_pt)
