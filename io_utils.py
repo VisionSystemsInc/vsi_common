@@ -79,8 +79,10 @@ def imread(filename):
     img = Image.open(filename)
     # workaround for 16 bit images
     if img.mode == 'I;16':
-        img.mode = 'I'
-    return np.array(img)
+        img_np = np.array(img.getdata(), dtype=np.uint16).reshape(img.size[::-1])
+    else:
+        img_np = np.array(img)
+    return img_np
 
 def imwrite(img, filename):
     """ write the 2-d numpy array as an image """
@@ -101,8 +103,8 @@ def imwrite_byte(img, vmin, vmax, filename):
 # remove directory and extension from filename
 def filename_base(filename):
     """ remove the directory and extension from the filename """
-    (path, filename_wext) = os.path.split(filename)
-    (base, ext) = os.path.splitext(filename_wext)
+    (_, filename_wext) = os.path.split(filename)
+    (base, _) = os.path.splitext(filename_wext)
     return base
 
 def read_vector(vec_string):
@@ -239,7 +241,7 @@ def read_vsfm_nvm_file(filename):
     print('%d points' % num_points)
     pts = []
     colors = []
-    for p in range(num_points):
+    for _p in range(num_points):
         pt = np.zeros(3)
         for pti in range(3):
             pt[pti] = float(next(tokgen))
@@ -249,10 +251,10 @@ def read_vsfm_nvm_file(filename):
             rgb[rgbi] = np.uint8(next(tokgen))
         colors.append(rgb)
         num_measurements = int(next(tokgen))
-        for m in range(num_measurements):
+        for _m in range(num_measurements):
             # ignore measurement info for now
             # image index, feature index, x, y
-            for mm in range(4):
+            for _mm in range(4):
                 next(tokgen)
 
     return img_fnames, fs, Rs, Ts, pts, colors
