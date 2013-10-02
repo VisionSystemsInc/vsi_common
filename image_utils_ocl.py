@@ -39,7 +39,7 @@ def NCC_score_image(ocl_ctx, images_and_masks, window_radius):
 
     cl.enqueue_copy(cl_queue, score_img, output_buff)
     cl_queue.finish()
-    return score_img, image_stack, mask_stack
+    return score_img
 
 
 def sliding_NCC(ocl_ctx, img1, img2, window_radius):
