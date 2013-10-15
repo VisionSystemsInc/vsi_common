@@ -177,10 +177,13 @@ def rasterize_plane(grid_origin, grid_dims, vox_len, plane):
         for j in range(grid_dims[d1]):
             d1_val = grid_origin[d1] + vox_len * j
             d2_val = -(plane[d0]*d0_val + plane[d1]*d1_val + plane[3]) / plane[d2]
-            k = np.floor((d2_val - grid_origin[d2])/vox_len)
-            if k >= 0 and k < grid_dims[d2]:
-                pvals = (i,j,k)
-                p = [pvals[idx] for idx in sorted_dims]
+            k = np.int(np.floor((d2_val - grid_origin[d2])/vox_len))
+            #if (k >= 0) and (k < grid_dims[d2]):
+            if 0 <= k < grid_dims[d2]:
+                p = [0,0,0]
+                p[d0] = i
+                p[d1] = j
+                p[d2] = k
                 yield p
 
 
@@ -220,4 +223,18 @@ def compute_transform_3d_plane_to_2d(plane_origin, plane_x, plane_y, nx, ny):
     xform = np.dot(plane2img, np.hstack((plane_R, plane_T.reshape(3,1))))
     return xform
 
+
+def sample_unit_sphere(N):
+    """ generate a set of points distributed on the unit sphere """
+    dlong = np.pi*(3-np.sqrt(5))
+    dz = 2.0/N
+    lon = 0
+    z = 1 - dz/2
+    points = []
+    for _ in range(N):
+        r = np.sqrt(1-z*z)
+        points.append(np.array((np.cos(lon)*r, np.sin(lon)*r, z)))
+        z = z - dz
+        lon = lon + dlong
+    return points
 
