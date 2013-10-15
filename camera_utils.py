@@ -103,3 +103,12 @@ class PinholeCamera:
         p2i = self.plane2image(plane_origin, plane_x, plane_y)
         return np.linalg.inv(p2i)
 
+    def rescale(self, scale_factor):
+        """ Return a new camera corresponding to a resampled image
+            Note: leaves calling object unmodified.
+        """
+        Knew = self.K * scale_factor
+        Knew[2,2] = self.K[2,2]
+        return PinholeCamera(Knew, self.R, self.T)
+
+
