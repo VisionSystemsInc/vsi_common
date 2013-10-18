@@ -238,3 +238,66 @@ def sample_unit_sphere(N):
         lon = lon + dlong
     return points
 
+
+def stack_RT(R,T):
+    """ convert a 3x3 rotation / 3x1 translation combination
+        to a 4x4 homogeneous transform [R T; 0 0 0 1]
+    """
+    return np.vstack((np.hstack((R,T.reshape(3,1))), np.array((0,0,0,1))))
+
+
+def similarity_transform(scale, translation):
+    """ Compute a similarity transform matrix.
+        Dimensionality determined from length of translation vector
+    """
+    D = len(translation.squeeze())
+    S = np.zeros((D+1,D+1))
+    np.fill_diagonal(S,scale)
+    S[D,D] = 1
+    S[0:D,D] = translation.reshape((D,))
+    return S
+
+
+def rectify_calibrated(camera0, camera1, look_pt, image0_shape, image1_shape, max_dim):
+    """ compute epipolar rectification homographies
+    """
+    plane_x = camera1.center - camera0.center
+    plane_x /= np.linalg.norm(plane_x)
+    plane_y = np.cross(plane_x, (camera0.center + camera1.center)/2 - look_pt)
+    plane_y /= np.linalg.norm(plane_y)
+
+    H0 = camera0.image2plane(look_pt, plane_x, plane_y)
+    H1 = camera1.image2plane(look_pt, plane_x, plane_y)
+
+    corners0 = [np.array((0,0)), np.array((0,image0_shape[0])), np.array((image0_shape[1], image0_shape[0])), np.array((image0_shape[1],0))]
+    corners0 = np.vstack((np.array(corners0).T, np.ones((1,4))))
+    corners1 = [np.array((0,0)), np.array((0,image1_shape[0])), np.array((image1_shape[1], image1_shape[0])), np.array((image1_shape[1],0))]
+    corners1 = np.vstack((np.array(corners1).T, np.ones((1,4))))
+    corners_plane0 = np.dot(H0, corners0)
+    corners_plane0 = corners_plane0[0:2,:] / corners_plane0[2,:]
+    corners_plane1 = np.dot(H1, corners1)
+    corners_plane1 = corners_plane1[0:2,:] / corners_plane1[2,:]
+
+    projected_min0 = corners_plane0.min(axis=1)
+    projected_max0 = corners_plane0.max(axis=1)
+    projected_min1 = corners_plane1.min(axis=1)
+    projected_max1 = corners_plane1.max(axis=1)
+
+    max_projected_x = max(projected_max0[0] - projected_min0[0], projected_max1[0] - projected_min1[0])
+    projected_y = max(projected_max0[1], projected_max1[1]) - min(projected_min0[1], projected_min1[1])
+    scale = max_dim / max(max_projected_x, projected_y)
+
+    ty = -min(projected_min0[1], projected_min1[1]) * scale
+    tx0 = -projected_min0[0] * scale
+    tx1 = -projected_min1[0] * scale
+
+    H0final = np.dot(similarity_transform(scale, np.array((tx0, ty))), H0)
+    H1final = np.dot(similarity_transform(scale, np.array((tx1, ty))), H1)
+    output_shape = (np.array((projected_y, max_projected_x)) * scale).astype(np.int)
+
+    return H0final, H1final, output_shape
+
+
+
+
+
