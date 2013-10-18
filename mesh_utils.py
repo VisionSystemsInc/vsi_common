@@ -3,7 +3,7 @@ import numpy as np
 import vtk
 
 
-def colorize_verts_ply(ply_in_filename, ply_out_filename, images, cameras):
+def colorize_verts_ply(ply_in_filename, ply_out_filename, image, camera):
     """ add per-vertex color information based on projections into images """
     # read in PLY file
     reader = vtk.vtkPLYReader()
@@ -19,12 +19,12 @@ def colorize_verts_ply(ply_in_filename, ply_out_filename, images, cameras):
     num_pts = data.GetNumberOfPoints()
     for n in range(num_pts):
         pt3d = data.GetPoint(n)
-        pt2d = cameras[0].project_point(pt3d).astype(np.int)
-        img_size = np.array((images[0].shape[1], images[0].shape[0]))
+        pt2d = camera.project_point(pt3d).astype(np.int)
+        img_size = np.array((image.shape[1], image.shape[0]))
         if np.any(pt2d < 0) or np.any(pt2d >= img_size):
             color = (128, 128, 128)
         else:
-            color = images[0][pt2d[1], pt2d[0], :]
+            color = image[pt2d[1], pt2d[0], :]
         # convert gray to RGB
         if len(color) == 1:
             color = (color, color, color)
