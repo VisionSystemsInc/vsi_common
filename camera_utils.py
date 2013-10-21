@@ -10,7 +10,7 @@ def construct_K(focal_len, image_size):
     return K
 
 
-class PinholeCamera:
+class PinholeCamera(object):
     """ Models a pinhole camera, i.e. one with a single center of projection and no lens distortion """
     def __init__(self, K, R, T):
         self.K = K
@@ -110,5 +110,12 @@ class PinholeCamera:
         Knew = self.K * scale_factor
         Knew[2,2] = self.K[2,2]
         return PinholeCamera(Knew, self.R, self.T)
+
+    def principal_ray(self):
+        """ compute and return the camera's principal ray """
+        #return self.backproject_point(self.K[0:2,2], 1.0) - self.center
+        return self.R[2,:]
+
+
 
 
