@@ -360,7 +360,7 @@ def rectify_calibrated_volume(camera0, camera1, vol_origin, vol_extent, max_dim,
 
     H0final = np.dot(similarity_transform(scale, np.array((tx0, ty))), H0)
     H1final = np.dot(similarity_transform(scale, np.array((tx1, ty))), H1)
-    output_shape = (max_extent * scale).astype(np.int)
+    output_shape = (np.array((max_extent[1], max_extent[0])) * scale).astype(np.int)
 
     return H0final, H1final, output_shape
 
