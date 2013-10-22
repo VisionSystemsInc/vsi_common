@@ -117,5 +117,22 @@ class PinholeCamera(object):
         return self.R[2,:]
 
 
+def triangulate_point(cameras, projections):
+    """ Triangulate a 3-d point given it's projection in two images """
+    num_obs = len(cameras)
+    if len(projections) != num_obs:
+        raise Exception('Expecting same number of cameras and 2-d projections')
+
+    A = np.zeros((2*num_obs,4))
+    for i in range(num_obs):
+        A[2*i,:] = cameras[i].P[0,:] - cameras[i].P[2,:]*projections[i][0]
+        A[2*i + 1,:] = cameras[i].P[1,:] - cameras[i].P[2,:]*projections[i][1]
+
+    _, _, Vh = np.linalg.svd(A)
+    V = Vh.conj().transpose()
+
+    point = V[:,-1]
+
+    return point
 
 
