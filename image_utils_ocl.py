@@ -102,9 +102,12 @@ def sliding_SSD(ocl_ctx, img1, img2, window_radius):
     return ssd_img
 
 
-def NCC_score_rectified_row(ocl_ctx, img1, img2, window_radius, row):
+def score_rectified_row(ocl_ctx, img1, img2, window_radius, row, method='NCC'):
     """ compute a matrix containing score for pairs i,j of column coordinates
         from corresponding rows in img1 and img2
+        method should be one of {'NCC','SSD'}
+        NCC: Normalized Cross Correlation of local patches
+        SSD: Sum of Squared Difference of local patches
     """
     cl_queue = cl.CommandQueue(ocl_ctx)
 
@@ -124,7 +127,13 @@ def NCC_score_rectified_row(ocl_ctx, img1, img2, window_radius, row):
     dest_buf = cl.Buffer(ocl_ctx, mf.WRITE_ONLY, score_img.nbytes)
 
     cl_dir = os.path.dirname(__file__)
-    cl_filename = cl_dir + '/cl/score_rectified_row.cl'
+    if method == 'NCC':
+        cl_filename = cl_dir + '/cl/score_rectified_row_ncc.cl'
+    elif method == 'SSD':
+        cl_filename = cl_dir + '/cl/score_rectified_row_ssd.cl'
+    else:
+        raise Exception('Unrecognized method string ' + method)
+
     with open(cl_filename, 'r') as fd:
         clstr = fd.read()
 
