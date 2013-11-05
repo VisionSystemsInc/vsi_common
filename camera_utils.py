@@ -116,6 +116,30 @@ class PinholeCamera(object):
         #return self.backproject_point(self.K[0:2,2], 1.0) - self.center
         return self.R[2,:]
 
+    def saveas_KRT(self, filename):
+        """ write the K,R,T matrices to an ascii text file """
+        with open(filename, 'w') as fd:
+            # write intrinsics K matrix
+            for row in self.K:
+                fd.write('%f %f %f\n' % (row[0],row[1],row[2]))
+            fd.write('\n')
+            # write rotation matrix
+            for row in self.R:
+                fd.write('%f %f %f\n' % (row[0],row[1],row[2]))
+            fd.write('\n')
+            # write translation vector
+            fd.write('%f %f %f\n' % (self.T[0],self.T[1],self.T[2]))
+        return
+
+    def saveas_P(self, filename):
+        """ write the projection matrix to an ascii text file """
+        with open(filename, 'w') as fd:
+            # write intrinsics K matrix
+            for row in self.P:
+                fd.write('%f %f %f\n' % (row[0],row[1],row[2]))
+            fd.write('\n')
+        return
+
 
 def triangulate_point(cameras, projections):
     """ Triangulate a 3-d point given it's projection in two images """
