@@ -101,3 +101,51 @@ def sliding_SSD(ocl_ctx, img1, img2, window_radius):
 
     return ssd_img
 
+
+def score_rectified_row(ocl_ctx, img1, img2, window_radius, row, method='NCC'):
+    """ compute a matrix containing score for pairs i,j of column coordinates
+        from corresponding rows in img1 and img2
+        method should be one of {'NCC','SSD'}
+        NCC: Normalized Cross Correlation of local patches
+        SSD: Sum of Squared Difference of local patches
+    """
+    cl_queue = cl.CommandQueue(ocl_ctx)
+
+    img1_np = np.array(img1).astype(np.float32)
+    img2_np = np.array(img2).astype(np.float32)
+
+    nrows = img1.shape[0]
+    if img2.shape[0] != nrows:
+        raise Exception('Expecting same number of rows in img1 and img2')
+
+    mf = cl.mem_flags
+    i1_buf = cl.Buffer(ocl_ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=img1_np)
+    i2_buf = cl.Buffer(ocl_ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=img2_np)
+
+    output_shape = (img1.shape[1], img2.shape[1])
+    score_img = np.zeros(output_shape, np.float32)
+    dest_buf = cl.Buffer(ocl_ctx, mf.WRITE_ONLY, score_img.nbytes)
+
+    cl_dir = os.path.dirname(__file__)
+    if method == 'NCC':
+        cl_filename = cl_dir + '/cl/score_rectified_row_ncc.cl'
+    elif method == 'SSD':
+        cl_filename = cl_dir + '/cl/score_rectified_row_ssd.cl'
+    else:
+        raise Exception('Unrecognized method string ' + method)
+
+    with open(cl_filename, 'r') as fd:
+        clstr = fd.read()
+
+    prg = cl.Program(ocl_ctx, clstr).build()
+    prg.score_rectified_row(cl_queue, output_shape, None,
+                            i1_buf, i2_buf, dest_buf,
+                            np.int32(row), np.int32(nrows),
+                            np.int32(img1_np.shape[1]), np.int32(img2_np.shape[1]),
+                            np.int32(window_radius))
+
+    cl.enqueue_copy(cl_queue, score_img, dest_buf)
+    cl_queue.finish()
+
+    return score_img
+

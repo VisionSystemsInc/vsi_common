@@ -147,25 +147,84 @@ def sample_patch(image, corners, patch_size, check_bounds=True):
     return image.transform(patch_size_tuple, Image.QUAD, corner_verts, Image.NEAREST)
 
 
-def sample_plane(image, camera, plane_origin, plane_x, plane_y, patch_size):
+def sample_plane_inverse(planar_patch, plane_origin, plane_x, plane_y, img_shape, camera):
+    """ return the projection of a planar patch into the image
+        planar_patch: The planar patch to project into the image (as a 2-d numpy array)
+        plane_origin: 3-d point corresponding to the upper left of the patch
+        plane_x: 3-d vector from origin to extent of patch in the "x" direction
+        plane_y: 3-d vector from origin to extent of patch in the "y" direction: assumed perpendicular to plane_x
+        img_shape: the dimensions (rows, cols) of the image to project into
+        camera: a PinholeCamera
+    """
+    plane_xlen = np.linalg.norm(plane_x)
+    plane_ylen = np.linalg.norm(plane_y)
+    image2plane = camera.image2plane(plane_origin, plane_x, plane_y)
+    plane2patch = np.array(((planar_patch.shape[1]/plane_xlen, 0, 0),(0, planar_patch.shape[0]/plane_ylen, 0),(0,0,1)))
+    img2patch = np.dot(plane2patch, image2plane)
+
+    return sample_patch_projective(planar_patch, img2patch, img_shape)
+
+
+def sample_plane(image, camera, plane_origin, plane_x, plane_y, patch_shape):
     """ return a sampled patch based on the 3-d plane defined by plane_origin, plane_x, and plane_y
         plane_origin: 3-d point corresponding to the upper left of the patch
         plane_x: 3-d vector from origin to extent of patch in the "x" direction
         plane_y: 3-d vector from origin to extent of patch in the "y" direction: assumed perpendicular to plane_x
     """
-    plane_xlen = np.sqrt(np.dot(plane_x, plane_x))
-    plane_ylen = np.sqrt(np.dot(plane_y, plane_y))
-    plane_xu = plane_x / plane_xlen
-    plane_yu = plane_y / plane_ylen
-    plane_normal = np.cross(plane_xu, plane_yu)
-    plane2world_R = np.vstack((plane_xu, plane_yu, plane_normal)).transpose()
-    plane2world_T = plane_origin
-    plane2world = np.vstack((np.hstack((plane2world_R, plane2world_T.reshape(3,1))),np.array((0,0,0,1))))
+    plane_xlen = np.linalg.norm(plane_x)
+    plane_ylen = np.linalg.norm(plane_y)
+    plane2image = camera.plane2image(plane_origin, plane_x, plane_y)
 
-    patch2plane = np.array(((plane_xlen/patch_size[0], 0, 0),(0, plane_ylen/patch_size[1], 0),(0,0,0),(0,0,1)))
-    patch2img = np.dot(camera.P, np.dot(plane2world, patch2plane))
+    patch2plane = np.array(((plane_xlen/patch_shape[1], 0, 0),(0, plane_ylen/patch_shape[0], 0),(0,0,1)))
+    patch2img = np.dot(plane2image, patch2plane)
 
-    return sample_patch_perspective(image, patch2img, patch_size)
+    return sample_patch_projective(image, patch2img, patch_shape)
+
+
+def sample_patch_projective(image, inv_xform_3x3, patch_shape):
+    """ return a warped image as a numpy array with dtype float64 of size patch_size.
+        if input image is not already of type float64, it will be converted """
+    P = skimage.transform.ProjectiveTransform(inv_xform_3x3)
+    # skimage clips values to range [0,1] for floating point images.  do scale and unscale here.
+    do_scale = False
+    og_dtype = image.dtype
+    if image.dtype in (np.float32, np.float64, np.float128, np.float16):
+        minval = np.nanmin(image)
+        maxval = np.nanmax(image)
+        # if range is good, no need to rescale
+        if minval < 0.0 or maxval > 1.0:
+            do_scale = True
+            # make a copy of image so as not to corrupt original data
+            image = image.copy()
+            scale_factor = maxval - minval
+            image -= minval
+            if scale_factor != 0:
+                image /= scale_factor
+
+    # do the warping
+    patch = skimage.transform.warp(image, P, output_shape=patch_shape, mode='constant', cval=np.nan)
+
+    # revert to original type if necessary
+    if og_dtype != patch.dtype:
+        if og_dtype == np.uint8:
+            patch = skimage.img_as_ubyte(patch)
+        elif og_dtype == np.bool:
+            patch = skimage.img_as_bool(patch)
+        elif og_dtype == np.uint16:
+            patch = skimage.img_as_uint(patch)
+        elif og_dtype == np.int16:
+            patch = skimage.img_as_int(patch)
+        else:
+            # just to straight cast, hope for the best
+            patch_out = np.zeros(patch.shape, og_dtype)
+            np.copyto(patch_out,patch)
+            patch = patch_out
+    # unscale if necessary
+    if do_scale:
+        patch *= scale_factor
+        patch += minval
+
+    return patch
 
 
 def sample_patch_perspective(image, inv_xform_3x3, patch_size):

@@ -130,6 +130,12 @@ def read_matrix(row_strings):
     M = np.array(rows)
     return M
 
+def write_matrix(M, filename):
+    """ write out 1D or 2D numpy array M as ascii text file, one row per line """
+    if len(M.shape) == 1:
+        M = (M,)
+    write_vectors_float(M,filename)
+
 def read_camera_KRT(filename):
     """ read a KRT camera from text file """
     lines = read_list(filename)
