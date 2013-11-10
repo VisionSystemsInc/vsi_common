@@ -136,7 +136,7 @@ class PinholeCamera(object):
         with open(filename, 'w') as fd:
             # write intrinsics K matrix
             for row in self.P:
-                fd.write('%f %f %f\n' % (row[0],row[1],row[2]))
+                fd.write('%f %f %f %f\n' % (row[0],row[1],row[2],row[3]))
             fd.write('\n')
         return
 
