@@ -6,6 +6,39 @@ import scipy.ndimage.filters
 import skimage.transform
 
 
+def sk_resize(img, nsize, **kwargs):
+    """ make skimage.transform.resize() behave in a sane way
+        nsize=[nr, nc] : resize each channel of img
+    """
+
+    # no need to resize
+    # REVIEW maybe should return a copy since that is the normal behavior of
+    # this function
+    if all(np.array(img.shape[0:2]) == nsize): return img
+
+    # resize() rescales pos integer images to between 0 and 1, however, it
+    # clips neg values at 0
+    in_type = img.dtype
+    if issubclass(in_type.type, np.integer):
+        # REVIEW dont always need to use double here...
+        img = img.astype(dtype=np.double) # copies array
+        
+    # resize() expects floating-point images to be scaled between 0 and 1
+    # (otherwise it clips image!!). scale and rescale to prevent
+    min_val = img.min(); max_val = img.max() - min_val
+    img = (img - min_val) / max_val
+    # WARNING this is not equivilent to PIL.resize(), which at least downsamples 
+    # by selecting entire rows/cols when order=0 (nearest-neighbor interp)
+    img_scaled = skimage.transform.resize(img, nsize, **kwargs)
+    img_scaled = img_scaled * max_val + min_val
+
+    if issubclass(in_type.type, np.integer):
+        img_scaled = np.round(img_scaled)
+        img_scaled = img_scaled.astype(dtype=in_type) # copies array
+
+    return img_scaled
+
+
 def rgb2gray(rgb):
     """ convert an rgb image stored as a numpy array to grayscale """
     gr = np.dot(rgb[..., :3], [0.299, 0.587, 0.144]).astype(rgb.dtype)
