@@ -4,6 +4,27 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 
+def imshow(X, *args, **kwargs):
+    """ modify the coordinate formatter to report the image "z"
+        from http://matplotlib.org/examples/api/image_zcoord.html
+    """
+    
+    fig, ax = plt.subplots()
+    ax.imshow(X, *args, **kwargs)
+
+    numrows, numcols = X.shape[0:2]
+    def format_coord(x, y):
+        col = int(x+0.5)
+        row = int(y+0.5)
+        if col>=0 and col<numcols and row>=0 and row<numrows:
+            z = X[row,col]
+            return 'x=%1.4f, y=%1.4f, z=%s'%(x, y, repr(z.tolist()))
+        else:
+            return 'x=%1.4f, y=%1.4f'%(x, y)
+
+    ax.format_coord = format_coord
+    plt.show()
+    
 def plot_vector(x, axis, axis_order, *args, **kwargs):
     """ conveniance method for plotting 2 or 3-d data stored in numpy array """
 
