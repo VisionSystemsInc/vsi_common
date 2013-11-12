@@ -6,11 +6,16 @@ import scipy.ndimage.filters
 import skimage.transform
 
 
-def sk_resize(img, nsize, **kwargs):
+def sk_resize(img, nsize=None, nscale=None, **kwargs):
     """ make skimage.transform.resize() behave in a sane way
         nsize=[nr, nc] : resize each channel of img
     """
 
+    assert nsize is not None or nscale is not None, 'either nsize or nscale must be set'
+    if nsize is None:
+    	nrows, ncols = img.shape[0:2]
+        nsize = round(nscale[0]*nrows), round(nscale[1]*ncols)
+    
     # no need to resize
     # REVIEW maybe should return a copy since that is the normal behavior of
     # this function
@@ -34,7 +39,7 @@ def sk_resize(img, nsize, **kwargs):
 
     if issubclass(in_type.type, np.integer):
         img_scaled = np.round(img_scaled)
-        img_scaled = img_scaled.astype(dtype=in_type) # copies array
+        img_scaled = img_scaled.astype(dtype=in_type) # will copy array
 
     return img_scaled
 
