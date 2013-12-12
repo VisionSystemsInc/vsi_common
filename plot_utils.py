@@ -1,9 +1,72 @@
 """ A set of utility functions related to plotting
 """
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
 
+def lblshow(label_img, labels_str, f=None, cmap=None, *args, **kwargs):
+    ''' display a labeled image with associated legend
+
+	Parameters
+	----------
+	label_img : labeled image [nrows, ncols] = numpy.array.shape
+	labels_str : a list of labels
+    f : (optional) a figure handle
+    cmap : the color of each label (optional). like a list of colors, e.g.,
+            ['Red','Green',...] or a matplotlib.colors.ListedColormap)
+    '''
+
+    f,ax = plt.subplots(1,1) if f is None else (f, f.gca())
+
+    nlabels = len(labels_str)
+    if type(cmap) is mpl.colors.ListedColormap:
+        pass
+    elif hasattr(cmap, '__iter__'):
+        cmap = mpl.colors.ListedColormap(cmap)
+    elif cmap is None:
+        colors = mpl.cm.spectral(np.linspace(0, 1, nlabels))
+        cmap = mpl.colors.ListedColormap(colors)
+    else:
+        assert False, 'invalid color map'
+
+
+    im = ax.imshow(label_img, cmap=cmap, *args, **kwargs); ax.axis('off')
+
+    # create an axes on the right side of ax. The width of cax will be 5%
+    # of ax and the padding between cax and ax will be fixed at 0.05 inch.
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+    cbar = plt.colorbar(im, cax=cax)
+
+    cbar.ax.get_yaxis().set_ticks([])
+    for j, lab in enumerate(labels_str):
+        cbar.ax.text(1.3, float(2 * j + 1) / (nlabels*2), lab, ha='left', va='center')
+
+    return f
+        
+def imshow(X, *args, **kwargs):
+    """ modify the coordinate formatter to report the image "z"
+        from http://matplotlib.org/examples/api/image_zcoord.html
+    """
+    
+    fig, ax = plt.subplots()
+    ax.imshow(X, *args, **kwargs)
+
+    numrows, numcols = X.shape[0:2]
+    def format_coord(x, y):
+        col = int(x+0.5)
+        row = int(y+0.5)
+        if col>=0 and col<numcols and row>=0 and row<numrows:
+            z = X[row,col]
+            return 'x=%1.4f, y=%1.4f, z=%s'%(x, y, repr(z.tolist()))
+        else:
+            return 'x=%1.4f, y=%1.4f'%(x, y)
+
+    ax.format_coord = format_coord
+    plt.show()
+    
 def plot_vector(x, axis, axis_order, *args, **kwargs):
     """ conveniance method for plotting 2 or 3-d data stored in numpy array """
 
