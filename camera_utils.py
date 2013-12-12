@@ -18,6 +18,9 @@ class PinholeCamera(object):
         self.T = T
         # compute projection matrix
         self.P = np.dot( K, np.hstack((R, T.reshape(3, 1))) )
+        # normalize s.t. P[3,4] = 1
+        if abs(self.P[2,3]) > 1e-6:
+            self.P /= self.P[2,3]
         # compute and store camera center
         self.center = np.dot(-R.transpose(), T)
         # compute inverse projection matrix for backprojection
@@ -116,6 +119,14 @@ class PinholeCamera(object):
         #return self.backproject_point(self.K[0:2,2], 1.0) - self.center
         return self.R[2,:]
 
+    def x_axis(self):
+        """ compute and return the camera's x axis """
+        return self.R[0,:]
+
+    def y_axis(self):
+        """ compute and return the camera's x axis """
+        return self.R[1,:]
+
     def saveas_KRT(self, filename):
         """ write the K,R,T matrices to an ascii text file """
         with open(filename, 'w') as fd:
@@ -137,7 +148,6 @@ class PinholeCamera(object):
             # write intrinsics K matrix
             for row in self.P:
                 fd.write('%f %f %f %f\n' % (row[0],row[1],row[2],row[3]))
-            fd.write('\n')
         return
 
 
