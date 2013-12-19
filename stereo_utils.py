@@ -1,5 +1,6 @@
 """ Utility Functions for various stereo vision-related operations """
 import numpy as np
+import skimage.measure
 import geometry_utils
 
 
@@ -52,7 +53,7 @@ def rectify_calibrated_2(camera0, camera1, image0_shape, image1_shape, max_dim):
     return T0final, T1final, output_shape
 
 
-def rectify_calibrated_fov(camera0, camera1, vol_origin, vol_extent, max_dim, img0_shape, img1_shape, plane_normal=None, mask0=None, mask1=None):
+def rectify_calibrated_fov(camera0, camera1, vol_origin, vol_extent, max_dim, img0_shape, img1_shape, plane_normal=None, mask0=None, mask1=None, min_graze_angle_degrees=15):
     """ compute epipolar rectification homographies based on volume of interest
     """
     if plane_normal is None:
@@ -79,6 +80,35 @@ def rectify_calibrated_fov(camera0, camera1, vol_origin, vol_extent, max_dim, im
 
     img0_corners = np.array(((0,0),(0,img0_shape[0]),(img0_shape[1],0),(img0_shape[1],img0_shape[0])))
     img1_corners = np.array(((0,0),(0,img1_shape[0]),(img1_shape[1],0),(img1_shape[1],img1_shape[0])))
+
+    # create image of viewing ray directions
+    x,y = np.meshgrid(range(0,img0_shape[1]),range(0,img0_shape[0]))
+    xypairs = [np.array((xv,yv)) for xv,yv in zip(x.flat,y.flat)]
+    rays = camera0.viewing_rays(xypairs)
+    angles = np.arccos(np.dot(rays, plane_normal)).reshape(img0_shape)
+    rect_mask0 = angles >= np.deg2rad(90.0 + min_graze_angle_degrees)
+
+    x,y = np.meshgrid(range(0,img1_shape[1]),range(0,img1_shape[0]))
+    xypairs = [np.array((xv,yv)) for xv,yv in zip(x.flat,y.flat)]
+    rays = camera1.viewing_rays(xypairs)
+    angles = np.arccos(np.dot(rays, plane_normal)).reshape(img1_shape)
+    rect_mask1 = angles >= np.deg2rad(90.0 + min_graze_angle_degrees)
+
+    if mask0 is not None: 
+        rect_mask0 &= mask0 > 0
+    if mask1 is not None:
+        rect_mask1 &= mask1 > 0
+
+    def compute_mask_corners(mask):
+        """ compute the corners of the bounding box of the mask """
+        mask_int = np.zeros_like(mask,dtype=np.int)
+        mask_int[mask] = 1
+        mask_props = skimage.measure.regionprops(mask_int, properties=['BoundingBox',])
+        mask_bbox = mask_props[0]['BoundingBox']
+        return np.array(((mask_bbox[1],mask_bbox[0]),(mask_bbox[1],mask_bbox[2]),(mask_bbox[3],mask_bbox[0]),(mask_bbox[3],mask_bbox[2])))
+
+    img0_corners = compute_mask_corners(rect_mask0)
+    img1_corners = compute_mask_corners(rect_mask1)
 
     img0_corners_homg = np.vstack((img0_corners.T, np.ones((1,4))))
     img1_corners_homg = np.vstack((img1_corners.T, np.ones((1,4))))
@@ -223,6 +253,22 @@ def rectify_calibrated(camera0, camera1, image0_shape, image1_shape, max_dim):
     return H0final, H1final, output_shape
 
 
+def compute_scale_image(img, max_scale=6, thresh=0.01):
+    """ determine minimum patch size across image """
 
+    img_byte = skimage.img_as_ubyte(img)
+    dog = [im for im in skimage.transform.pyramid_laplacian(img_byte, max_layer=max_scale)]
+    dog_stack = np.zeros((img.shape[0],img.shape[1],len(dog)))
+    for i in range(len(dog)):
+        dog_stack[:,:,i] = abs(skimage.transform.resize(dog[i],img.shape,mode='nearest'))
 
+    dog_cum = np.zeros_like(dog_stack)
+    dog_cum[:,:,0] = dog_stack[:,:,0]
+    for i in range(1,len(dog)):
+        dog_cum[:,:,i] = dog_cum[:,:,i-1] + dog_stack[:,:,i]
+
+    scale_img = np.zeros_like(img,dtype=np.uint8) + len(dog)
+    for i in reversed(range(len(dog))):
+        scale_img[dog_cum[:,:,i] > thresh] = i
+    return scale_img
 
