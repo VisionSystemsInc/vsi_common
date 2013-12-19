@@ -27,15 +27,22 @@ class PinholeCamera(object):
         self.Kinv = np.linalg.inv(K)
         self.KRinv = np.dot(R.transpose(), self.Kinv)
 
+    def viewing_rays(self, pts_2d):
+        """ backproject the 2d image points to unit ray directions (with origin at camera center) """
+        N = len(pts_2d)
+        pts_2d_h_np = np.hstack((np.array(pts_2d), np.ones((N,1))))  # create an Nx3 numpy array
+        rays_np = np.dot(self.KRinv, pts_2d_h_np.T)
+        ray_lens = np.sqrt((rays_np * rays_np).sum(0))
+        unit_rays = rays_np / ray_lens  # use broadcasting to divide by magnitudes
+        unit_rays_list = [unit_rays[:,i] for i in range(N)]
+        return unit_rays_list
+
     def backproject_points(self, pts_2d, depths):
         """ backproject a point given camera params, image position, and depth """
         N = len(depths)
         if not len(pts_2d) == len(depths):
             raise Exception('number of points %d != number of depths %d' % (len(pts_2d),len(depths)))
-        pts_2d_h_np = np.hstack((np.array(pts_2d), np.ones((N,1))))  # create an Nx3 numpy array
-        rays_np = np.dot(self.KRinv, pts_2d_h_np.T)
-        ray_lens = np.sqrt((rays_np * rays_np).sum(0))
-        unit_rays = rays_np / ray_lens  # use broadcasting to divide by magnitudes
+        unit_rays = self.viewing_rays(pts_2d)
         pts_3d_np = self.center.reshape((3,1)) + unit_rays * np.array(depths)
         pts_3d = [pts_3d_np[:,i] for i in range(N)]
 
