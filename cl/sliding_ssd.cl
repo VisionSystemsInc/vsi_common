@@ -10,7 +10,7 @@ __kernel void sliding_ssd(__global const float *a,
     // make sure we have enough room to compute a window around the current pixel
     if ( (gid_x < window_radius) || (gid_x >= (img_nx - window_radius)) || 
          (gid_y < window_radius) || (gid_y >= (img_ny - window_radius)) ) {
-        result[idx] = 0;
+        result[idx] = NAN;
         return;
     }
 

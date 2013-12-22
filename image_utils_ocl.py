@@ -1,7 +1,8 @@
 """ A collection of GPGPU image processing utility functions """
-#from PIL import Image
+
 import numpy as np
 import pyopencl as cl
+import skimage.transform
 import os
 
 
@@ -148,4 +149,18 @@ def score_rectified_row(ocl_ctx, img1, img2, window_radius, row, method='NCC'):
     cl_queue.finish()
 
     return score_img
+
+
+def compute_scale_image(ocl_ctx, img, thresh=0.2):
+    """ compute local scale at each pixel in the image """
+    num_levels = 6
+    scale_img = np.zeros_like(img,dtype=np.uint8)
+    levels = [lvl for lvl in skimage.transform.pyramid_gaussian(img, max_layer=num_levels, mode='nearest' )]
+    num_levels = len(levels)
+    for i in range(1,num_levels):
+        lvl_img = skimage.transform.resize(levels[i],img.shape)
+        diff_img = sliding_SSD(ocl_ctx, img, lvl_img, window_radius=2**i)
+        prediction_good = diff_img < thresh
+        scale_img[prediction_good] = i
+    return scale_img
 
