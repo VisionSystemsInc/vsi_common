@@ -43,6 +43,24 @@ class PinholeCamera(object):
         pts = self.backproject_points((pt_2d,), (depth,))
         return pts[0]
 
+    def project_vectors(self, vecs_3d):
+        """ compute projection matrix from K,R,T and project vecs_3d into image coordinates """
+        num_vecs = len(vecs_3d)
+        # create 3xN matrix from set of 3d vectors
+        vecs_3d_m = np.array(vecs_3d).transpose()
+        # convert to homogeneous coordinates
+        vecs_3d_m_h = np.vstack((vecs_3d_m, np.zeros((1, num_vecs))))
+        vecs_2d_m_h = np.dot(self.P, vecs_3d_m_h)
+        #vecs_2d = [vecs_2d_m_h[0:2, c] / vecs_2d_m_h[2, c] for c in range(num_vecs)]
+        vecs_2d = [col[0:2] / col[2] for col in vecs_2d_m_h.transpose()]
+        return vecs_2d
+
+    def project_vector(self, vecs_3d):
+        """ convenience wrapper around project_vectors """
+        pts = self.project_vectors((vecs_3d,))
+        return pts[0]
+
+
     def project_points(self, pts_3d):
         """ compute projection matrix from K,R,T and project pts_3d into image coordinates """
         num_pts = len(pts_3d)
@@ -56,7 +74,7 @@ class PinholeCamera(object):
         return pts_2d
 
     def project_point(self, pt_3d):
-        """ convenience wrapper around backproject_points """
+        """ convenience wrapper around project_points """
         pts = self.project_points((pt_3d,))
         return pts[0]
 
