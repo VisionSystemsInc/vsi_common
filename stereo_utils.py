@@ -53,62 +53,135 @@ def rectify_calibrated_2(camera0, camera1, image0_shape, image1_shape, max_dim):
     return T0final, T1final, output_shape
 
 
-def rectify_calibrated_fov(camera0, camera1, vol_origin, vol_extent, max_dim, img0_shape, img1_shape, plane_normal=None, mask0=None, mask1=None, min_graze_angle_degrees=15):
+def rectify_calibrated_euclidean(camera0, camera1, img0_shape, img1_shape):
+    """ compute epipolar rectification homographies by rotating image planes """
+    baseline = camera1.center - camera0.center
+    baseline /= np.linalg.norm(baseline)
+    new_look = camera0.principal_ray() + camera1.principal_ray()
+    new_look /= np.linalg.norm(new_look)
+    new_y = np.cross(new_look, baseline)
+    new_y /= np.linalg.norm(new_y)
+    new_z = np.cross(baseline, new_y)
+
+    newK = camera0.K
+    newR = np.vstack((baseline, new_y, new_z))
+    Q0 = camera0.P[0:3,0:3]
+    Q1 = camera1.P[0:3,0:3]
+    Qnew = np.dot(newK, newR)
+
+    H0 = np.dot(Qnew, np.linalg.inv(Q0))
+    H1 = np.dot(Qnew, np.linalg.inv(Q1))
+
+    img0_centroid_homg = np.array((img0_shape[1]/2, img0_shape[0]/2, 1))
+    img1_centroid_homg = np.array((img1_shape[1]/2, img1_shape[0]/2, 1))
+
+    img0_centroid_rect = np.dot(H0, img0_centroid_homg)
+    img0_centroid_rect /= img0_centroid_rect[2]
+
+    img1_centroid_rect = np.dot(H1, img1_centroid_homg)
+    img1_centroid_rect /= img1_centroid_rect[2]
+
+    tx0 = img0_centroid_homg[0] - img0_centroid_rect[0]
+    ty0 = img0_centroid_homg[1] - img0_centroid_rect[1]
+    tx1 = img1_centroid_homg[0] - img1_centroid_rect[0]
+    ty1 = img1_centroid_homg[1] - img1_centroid_rect[1]
+    ty = np.mean((ty0, ty1))
+
+    scale = np.array((1,1))
+    H0final = np.dot(geometry_utils.similarity_transform(scale, np.array((tx0, ty))), H0)
+    H1final = np.dot(geometry_utils.similarity_transform(scale, np.array((tx1, ty))), H1)
+
+    return H0final, H1final, img0_shape, img1_shape
+
+
+def rectify_calibrated_fov(camera0, camera1, max_dim, img0_shape, img1_shape, plane=None, mask0=None, mask1=None, check_angles=True, min_graze_angle_degrees=15):
     """ compute epipolar rectification homographies based on volume of interest
     """
-    if plane_normal is None:
-        # guess that viewing directions are perpendicular to scene
-        plane_normal = camera0.principal_ray() + camera1.principal_ray()
-    plane_x = camera1.center - camera0.center
-    plane_x /= np.linalg.norm(plane_x)
-    plane_y = np.cross(-plane_normal, plane_x)
-    plane_y /= -np.linalg.norm(plane_y)
-
-    mean_cam_center = (camera0.center + camera1.center)/2.0
-    #TODO: estimate aoi_center using camera geometry only
-    aoi_center = vol_origin + vol_extent/2.0
-    plane_dist = np.linalg.norm(mean_cam_center - aoi_center)
-    plane_origin = mean_cam_center + plane_dist * -plane_normal
-
-    # project fov corners onto new image plane
-    #fov_corners =
-    #vol_corners = volume_corners(vol_origin, vol_extent)
-    #vol_corners_plane = [(np.dot(c - plane_origin, plane_x), np.dot(c - plane_origin, plane_y)) for c in vol_corners]
-
-    H0 = camera0.image2plane(plane_origin, plane_x, plane_y)
-    H1 = camera1.image2plane(plane_origin, plane_x, plane_y)
-
-    img0_corners = np.array(((0,0),(0,img0_shape[0]),(img0_shape[1],0),(img0_shape[1],img0_shape[0])))
-    img1_corners = np.array(((0,0),(0,img1_shape[0]),(img1_shape[1],0),(img1_shape[1],img1_shape[0])))
-
-    # create image of viewing ray directions
-    x,y = np.meshgrid(range(0,img0_shape[1]),range(0,img0_shape[0]))
-    xypairs = [np.array((xv,yv)) for xv,yv in zip(x.flat,y.flat)]
-    rays = camera0.viewing_rays(xypairs)
-    angles = np.arccos(np.dot(rays, plane_normal)).reshape(img0_shape)
-    rect_mask0 = angles >= np.deg2rad(90.0 + min_graze_angle_degrees)
-
-    x,y = np.meshgrid(range(0,img1_shape[1]),range(0,img1_shape[0]))
-    xypairs = [np.array((xv,yv)) for xv,yv in zip(x.flat,y.flat)]
-    rays = camera1.viewing_rays(xypairs)
-    angles = np.arccos(np.dot(rays, plane_normal)).reshape(img1_shape)
-    rect_mask1 = angles >= np.deg2rad(90.0 + min_graze_angle_degrees)
-
-    if mask0 is not None: 
-        rect_mask0 &= mask0 > 0
-    if mask1 is not None:
-        rect_mask1 &= mask1 > 0
-
     def compute_mask_corners(mask):
         """ compute the corners of the bounding box of the mask """
         mask_int = np.zeros_like(mask,dtype=np.int)
         mask_int[mask] = 1
         mask_props = skimage.measure.regionprops(mask_int, properties=['BoundingBox',])
+        if len(mask_props) == 0:
+            return None
         mask_bbox = mask_props[0]['BoundingBox']
         return np.array(((mask_bbox[1],mask_bbox[0]),(mask_bbox[1],mask_bbox[2]),(mask_bbox[3],mask_bbox[0]),(mask_bbox[3],mask_bbox[2])))
 
+    max_rows = max_dim
+    max_cols = max_dim
+
+    if plane is None:
+        # guess that viewing directions are perpendicular to scene
+        plane = camera0.principal_ray() + camera1.principal_ray()
+
+    plane_normal = plane[0:3]
+
+    # create image of viewing ray directions
+    if check_angles:
+        x,y = np.meshgrid(range(0,img0_shape[1]),range(0,img0_shape[0]))
+        xypairs = [np.array((xv,yv)) for xv,yv in zip(x.flat,y.flat)]
+        rays = camera0.viewing_rays(xypairs)
+        angles = np.arccos(np.dot(rays, -plane_normal)).reshape(img0_shape)
+        rect_mask0 = angles <= np.deg2rad(90.0 - min_graze_angle_degrees)
+
+        x,y = np.meshgrid(range(0,img1_shape[1]),range(0,img1_shape[0]))
+        xypairs = [np.array((xv,yv)) for xv,yv in zip(x.flat,y.flat)]
+        rays = camera1.viewing_rays(xypairs)
+        angles = np.arccos(np.dot(rays, -plane_normal)).reshape(img1_shape)
+        rect_mask1 = angles <= np.deg2rad(90.0 - min_graze_angle_degrees)
+    else:
+        rect_mask0 = np.ones(img0_shape,np.bool)
+        rect_mask1 = np.ones(img1_shape,np.bool)
+
+    if mask0 is not None:
+        rect_mask0 &= mask0 > 0
+    if mask1 is not None:
+        rect_mask1 &= mask1 > 0
+
     img0_corners = compute_mask_corners(rect_mask0)
     img1_corners = compute_mask_corners(rect_mask1)
+    if img0_corners is None or img1_corners is None:
+        return np.eye(3), np.eye(3), np.array((0,0)), np.array((0,0))
+
+    mean_cam_center = (camera0.center + camera1.center)/2.0
+    if len(plane) == 3:
+        # normal only, no distance
+        # default to 10x the baseline distance
+        plane_dist = 10.0*np.linalg.norm(camera1.center - camera0.center)
+        point_on_plane = mean_cam_center + plane_dist * -plane_normal
+        plane_d = -np.dot(plane_normal, point_on_plane)
+        plane = np.append(plane, plane_d)
+        plane_origin = point_on_plane
+    elif len(plane) == 4:
+        plane_origin = mean_cam_center + np.dot(plane,np.append(mean_cam_center,1)) * -plane_normal
+    else:
+        raise Exception('expecting None, 3 element numpy array, or 4 element numpy array for plane argument')
+
+    plane_x = camera1.center - camera0.center
+    plane_x /= np.linalg.norm(plane_x)
+    plane_y = np.cross(-plane_normal, plane_x)
+    plane_y /= -np.linalg.norm(plane_y)
+
+    H0plane = camera0.image2plane(plane_origin, plane_x, plane_y)
+    H1plane = camera1.image2plane(plane_origin, plane_x, plane_y)
+
+    # now compute backprojection of images onto plane
+    c0 = camera0.backproject_point_plane(img0_corners.mean(axis=0), plane)
+    c1 = camera1.backproject_point_plane(img1_corners.mean(axis=0), plane)
+    offset_3d = c0 - c1
+    # we can't change y coordinate w/out violating epipolar constraint, ,but x is free to move
+    offset_plane = np.array((np.dot(offset_3d, plane_x), 0 ))
+    H1_trans = geometry_utils.similarity_transform(1.0, offset_plane)
+
+    # now project back to a second plane which is close to both image planes
+    # just use plane of image0 for now
+    #Hback = camera0.plane2image(plane_origin, plane_x, plane_y)
+    Hback = np.eye(3)
+    # zero out elements 1,0 and 2,0 since image row cannot be a function of column
+    Hback[1,0] = 0
+    Hback[2,0] = 0
+    H0 = np.dot(Hback, H0plane)
+    H1 = np.dot(Hback, np.dot(H1_trans, H1plane))
 
     img0_corners_homg = np.vstack((img0_corners.T, np.ones((1,4))))
     img1_corners_homg = np.vstack((img1_corners.T, np.ones((1,4))))
@@ -129,23 +202,11 @@ def rectify_calibrated_fov(camera0, camera1, vol_origin, vol_extent, max_dim, im
     bbox0 = np.array(((min_x_plane0, min_y_plane), (max_x_plane0, max_y_plane)))
     bbox1 = np.array(((min_x_plane1, min_y_plane), (max_x_plane1, max_y_plane)))
 
-    #img_corners_homg = np.vstack((np.array(vol_corners_plane).T, np.ones((1,8))))
-    #corners_plane0 = np.dot(H0, vol_corners_plane_homg)
-    #corners_plane0 = corners_plane0[0:2,:] / corners_plane0[2,:]
-    #corners_plane1 = np.dot(H1, vol_corners_plane_homg)
-    #corners_plane1 = corners_plane1[0:2,:] / corners_plane1[2,:]
-
-    #corners_plane0 = np.array(vol_corners_plane).T
-    #corners_plane1 = np.array(vol_corners_plane).T
-
-    #bbox0 = (np.min(corners_plane0,axis=1), np.max(corners_plane0,axis=1))
-
     extents0 = bbox0[1] - bbox0[0]
-    #bbox1 = (np.min(corners_plane1,axis=1), np.max(corners_plane1,axis=1))
     extents1 = bbox1[1] - bbox1[0]
     max_extent = np.max((extents0, extents1),axis=0)
-    #scale = max_dim / max_extent.max()
-    scale = np.array((max_dim, max_dim)) / max_extent
+    scale_xy = np.array((max_cols, max_rows)) / max_extent
+    scale = np.array((scale_xy.min(), scale_xy.min()))
 
     tx0 = -bbox0[0][0] * scale[0]
     tx1 = -bbox1[0][0] * scale[0]
@@ -153,7 +214,7 @@ def rectify_calibrated_fov(camera0, camera1, vol_origin, vol_extent, max_dim, im
 
     H0final = np.dot(geometry_utils.similarity_transform(scale, np.array((tx0, ty))), H0)
     H1final = np.dot(geometry_utils.similarity_transform(scale, np.array((tx1, ty))), H1)
-    #output_shape0 = (np.array((max_extent[1], max_extent[0])) * scale).astype(np.int)
+
     output_shape0 = (np.array((extents0[1], extents0[0])) * np.array((scale[1],scale[0]))).astype(np.int)
     output_shape1 = (np.array((extents1[1], extents1[0])) * np.array((scale[1],scale[0]))).astype(np.int)
 
