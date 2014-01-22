@@ -151,7 +151,7 @@ def score_rectified_row(ocl_ctx, img1, img2, window_radius, row, method='NCC'):
     return score_img
 
 
-def compute_scale_image(ocl_ctx, img, thresh=0.2):
+def compute_scale_image_ssd(ocl_ctx, img, thresh=0.2):
     """ compute local scale at each pixel in the image """
     num_levels = 6
     scale_img = np.zeros_like(img,dtype=np.uint8)
@@ -163,4 +163,95 @@ def compute_scale_image(ocl_ctx, img, thresh=0.2):
         prediction_good = diff_img < thresh
         scale_img[prediction_good] = i
     return scale_img
+
+
+def compute_scale_image_entropy(ocl_ctx, img, entropy_thresh=100, num_bins=8):
+    """ compute local scale at each pixel in the image entropy_thresh as units bits """
+    num_levels = 7
+    window_rads = [2**l for l in range(num_levels)]
+    scale_img = np.zeros_like(img,dtype=np.uint8)
+    scale_img[:] = num_levels
+    ents = [local_entropy(ocl_ctx, img, wr, num_bins) for wr in window_rads]
+    for i in reversed(range(num_levels)):
+        good = ents[i] > entropy_thresh
+        scale_img[good] = i
+    return scale_img
+
+
+def compute_scale_image_gradx(ocl_ctx, img, grad_sum_thresh=1.0):
+    """ compute local scale at each pixel based on the absolute gradient (x component) """
+    num_levels = 7
+    window_radii = [2**l for l in range(num_levels)]
+    scale_img = np.zeros_like(img,dtype=np.uint8)
+    scale_img[:] = num_levels
+    _, gx = np.gradient(img)
+    gsums = [local_sum(ocl_ctx, np.abs(gx), wr) for wr in window_radii]
+    for i in reversed(range(num_levels)):
+        good = gsums[i] > grad_sum_thresh
+        scale_img[good] = i
+    return scale_img
+
+
+def compute_scale_image(ocl_ctx, img, entropy_thresh=100, num_bins=8):
+    """ compute local scale at each pixel in the image entropy_thresh as units bits """
+    num_levels = 7
+    window_rads = [2**l for l in range(num_levels)]
+    scale_img = np.zeros_like(img,dtype=np.uint8)
+    scale_img[:] = num_levels
+    ents = [local_entropy(ocl_ctx, img, wr, num_bins) for wr in window_rads]
+    for i in reversed(range(num_levels)):
+        good = ents[i] > entropy_thresh
+        scale_img[good] = i
+    return scale_img
+
+
+def local_sum(ocl_ctx, img, window_radius):
+    """ compute the sum of all pixels in an encompassing window """
+    mf = cl.mem_flags
+    cl_queue = cl.CommandQueue(ocl_ctx)
+    img_np = np.array(img).astype(np.float32)
+    img_buf = cl.Buffer(ocl_ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=img_np)
+    sum_img = np.zeros_like(img,dtype=np.float32)
+    dest_buf = cl.Buffer(ocl_ctx, mf.WRITE_ONLY, sum_img.nbytes)
+    cl_dir = os.path.dirname(__file__)
+    cl_filename = cl_dir + '/cl/local_sum.cl'
+    with open(cl_filename, 'r') as fd:
+        clstr = fd.read()
+    prg = cl.Program(ocl_ctx, clstr).build()
+    prg.local_sum(cl_queue, sum_img.shape, None,
+                  img_buf, dest_buf,
+                  np.int32(img.shape[1]), np.int32(img.shape[0]),
+                  np.int32(window_radius))
+
+    cl.enqueue_copy(cl_queue, sum_img, dest_buf)
+    cl_queue.finish()
+
+    return sum_img
+
+
+def local_entropy(ocl_ctx, img, window_radius, num_bins=8):
+    """ compute local entropy using a sliding window """
+    mf = cl.mem_flags
+    cl_queue = cl.CommandQueue(ocl_ctx)
+    img_np = np.array(img).astype(np.float32)
+    img_buf = cl.Buffer(ocl_ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=img_np)
+    min_val = np.nanmin(img)
+    max_val = np.nanmax(img)
+    entropy = np.zeros_like(img,dtype=np.float32)
+    dest_buf = cl.Buffer(ocl_ctx, mf.WRITE_ONLY, entropy.nbytes)
+    cl_dir = os.path.dirname(__file__)
+    cl_filename = cl_dir + '/cl/local_entropy.cl'
+    with open(cl_filename, 'r') as fd:
+        clstr = fd.read()
+    prg = cl.Program(ocl_ctx, clstr).build()
+    prg.local_entropy(cl_queue, entropy.shape, None,
+                      img_buf, dest_buf,
+                      np.int32(img.shape[1]), np.int32(img.shape[0]),
+                      np.int32(window_radius), np.int32(num_bins),
+                      np.float32(min_val), np.float32(max_val))
+
+    cl.enqueue_copy(cl_queue, entropy, dest_buf)
+    cl_queue.finish()
+
+    return entropy
 
