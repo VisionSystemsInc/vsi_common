@@ -37,12 +37,26 @@ class PinholeCamera(object):
         unit_rays_list = [unit_rays[:,i] for i in range(N)]
         return unit_rays_list
 
+    def backproject_points_plane(self, pts_2d, plane):
+        """ backproject a point onto a 3-d plane """
+        unit_rays = np.array(self.viewing_rays(pts_2d)).T
+        depths = -np.dot(plane, np.append(self.center,1)) / np.dot(plane[0:3], unit_rays)
+        pts_3d_np = self.center.reshape((3,1)) + unit_rays * depths
+        pts_3d = [pts_3d_np[:,i] for i in range(len(pts_2d))]
+
+        return pts_3d
+
+    def backproject_point_plane(self, pt_2d, plane):
+        """ backproject a point onto a 3-d plane """
+        pts = self.backproject_points_plane((pt_2d,), plane)
+        return pts[0]
+
     def backproject_points(self, pts_2d, depths):
         """ backproject a point given camera params, image position, and depth """
         N = len(depths)
         if not len(pts_2d) == len(depths):
             raise Exception('number of points %d != number of depths %d' % (len(pts_2d),len(depths)))
-        unit_rays = self.viewing_rays(pts_2d)
+        unit_rays = np.array(self.viewing_rays(pts_2d)).T
         pts_3d_np = self.center.reshape((3,1)) + unit_rays * np.array(depths)
         pts_3d = [pts_3d_np[:,i] for i in range(N)]
 
