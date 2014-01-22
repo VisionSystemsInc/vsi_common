@@ -18,21 +18,45 @@ class PinholeCamera(object):
         self.T = T
         # compute projection matrix
         self.P = np.dot( K, np.hstack((R, T.reshape(3, 1))) )
+        # normalize s.t. P[3,4] = 1
+        if abs(self.P[2,3]) > 1e-6:
+            self.P /= self.P[2,3]
         # compute and store camera center
         self.center = np.dot(-R.transpose(), T)
         # compute inverse projection matrix for backprojection
         self.Kinv = np.linalg.inv(K)
         self.KRinv = np.dot(R.transpose(), self.Kinv)
 
+    def viewing_rays(self, pts_2d):
+        """ backproject the 2d image points to unit ray directions (with origin at camera center) """
+        N = len(pts_2d)
+        pts_2d_h_np = np.hstack((np.array(pts_2d), np.ones((N,1))))  # create an Nx3 numpy array
+        rays_np = np.dot(self.KRinv, pts_2d_h_np.T)
+        ray_lens = np.sqrt((rays_np * rays_np).sum(0))
+        unit_rays = rays_np / ray_lens  # use broadcasting to divide by magnitudes
+        unit_rays_list = [unit_rays[:,i] for i in range(N)]
+        return unit_rays_list
+
+    def backproject_points_plane(self, pts_2d, plane):
+        """ backproject a point onto a 3-d plane """
+        unit_rays = np.array(self.viewing_rays(pts_2d)).T
+        depths = -np.dot(plane, np.append(self.center,1)) / np.dot(plane[0:3], unit_rays)
+        pts_3d_np = self.center.reshape((3,1)) + unit_rays * depths
+        pts_3d = [pts_3d_np[:,i] for i in range(len(pts_2d))]
+
+        return pts_3d
+
+    def backproject_point_plane(self, pt_2d, plane):
+        """ backproject a point onto a 3-d plane """
+        pts = self.backproject_points_plane((pt_2d,), plane)
+        return pts[0]
+
     def backproject_points(self, pts_2d, depths):
         """ backproject a point given camera params, image position, and depth """
         N = len(depths)
         if not len(pts_2d) == len(depths):
             raise Exception('number of points %d != number of depths %d' % (len(pts_2d),len(depths)))
-        pts_2d_h_np = np.hstack((np.array(pts_2d), np.ones((N,1))))  # create an Nx3 numpy array
-        rays_np = np.dot(self.KRinv, pts_2d_h_np.T)
-        ray_lens = np.sqrt((rays_np * rays_np).sum(0))
-        unit_rays = rays_np / ray_lens  # use broadcasting to divide by magnitudes
+        unit_rays = np.array(self.viewing_rays(pts_2d)).T
         pts_3d_np = self.center.reshape((3,1)) + unit_rays * np.array(depths)
         pts_3d = [pts_3d_np[:,i] for i in range(N)]
 
@@ -134,6 +158,14 @@ class PinholeCamera(object):
         #return self.backproject_point(self.K[0:2,2], 1.0) - self.center
         return self.R[2,:]
 
+    def x_axis(self):
+        """ compute and return the camera's x axis """
+        return self.R[0,:]
+
+    def y_axis(self):
+        """ compute and return the camera's x axis """
+        return self.R[1,:]
+
     def saveas_KRT(self, filename):
         """ write the K,R,T matrices to an ascii text file """
         with open(filename, 'w') as fd:
@@ -154,8 +186,7 @@ class PinholeCamera(object):
         with open(filename, 'w') as fd:
             # write intrinsics K matrix
             for row in self.P:
-                fd.write('%f %f %f\n' % (row[0],row[1],row[2]))
-            fd.write('\n')
+                fd.write('%f %f %f %f\n' % (row[0],row[1],row[2],row[3]))
         return
 
 

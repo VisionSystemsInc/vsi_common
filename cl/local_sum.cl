@@ -1,7 +1,8 @@
-__kernel void sliding_ssd(__global const float *a,
-                          __global const float *b,
-                          __global float *result,
-                          int img_nx, int img_ny, int window_radius)
+__kernel void local_sum(__global const float *img,
+                            __global float *result,
+                            int img_nx, int img_ny,
+                            int window_radius)
+                            
 {
     int gid_x = get_global_id(1);
     int gid_y = get_global_id(0);
@@ -14,17 +15,17 @@ __kernel void sliding_ssd(__global const float *a,
         return;
     }
 
-    // Compute the Sum of Squared Differences for the two windows
-    float ssd = 0.0f;
+    // traverse pixels in window
+    float sum = 0.0f;
     for (int y = -window_radius; y <= window_radius; ++y) {
         int row_offset = (gid_y + y)*img_nx;
         for (int x = -window_radius; x <= window_radius; ++x) {
             int i = row_offset + gid_x + x;
-            float diff = a[i] - b[i];
-            ssd += diff*diff;
+            if(!isnan(img[i])) {
+                sum += img[i];
+            }
         }
     }
-    result[idx] = ssd;
+    result[idx] = sum;
     return;
 }
-
