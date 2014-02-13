@@ -84,7 +84,6 @@ class PinholeCamera(object):
         pts = self.project_vectors((vecs_3d,))
         return pts[0]
 
-
     def project_points(self, pts_3d):
         """ compute projection matrix from K,R,T and project pts_3d into image coordinates """
         num_pts = len(pts_3d)
@@ -112,7 +111,10 @@ class PinholeCamera(object):
         plane_normal = np.cross(plane_xu, plane_yu)
         plane2world_R = np.vstack((plane_xu, plane_yu, plane_normal)).transpose()
         plane2world_T = plane_origin
-        plane2world = np.vstack((np.hstack((plane2world_R, plane2world_T.reshape(3,1))),np.array((0,0,0,1))))
+        plane_xy_scale = np.eye(4)
+        np.fill_diagonal(plane_xy_scale, (plane_xlen, plane_ylen, 1.0, 1.0))
+        plane2world_RT = np.vstack((np.hstack((plane2world_R, plane2world_T.reshape(3,1))),np.array((0,0,0,1))))
+        plane2world = np.dot(plane2world_RT, plane_xy_scale)
 
         plane2img = np.dot(self.P, plane2world)
         # we can remove the 3rd column since the "Z" coordinates of points on the plane are 0
@@ -153,9 +155,12 @@ class PinholeCamera(object):
         Knew[2,2] = self.K[2,2]
         return PinholeCamera(Knew, self.R, self.T)
 
+    def principal_point(self):
+        """ return the principal point (image coordinates) """
+        return self.K[0:2,2]
+
     def principal_ray(self):
         """ compute and return the camera's principal ray """
-        #return self.backproject_point(self.K[0:2,2], 1.0) - self.center
         return self.R[2,:]
 
     def x_axis(self):
