@@ -1,6 +1,7 @@
 """ A set of utility functions related to plotting
 """
 import matplotlib as mpl
+import matplotlib.cm
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -24,6 +25,9 @@ def lblshow(label_img, labels_str, f=None, cmap=None, *args, **kwargs):
     if type(cmap) is mpl.colors.ListedColormap:
         pass
     elif hasattr(cmap, '__iter__'):
+        if not kwargs.has_key('norm'):
+            bounds = range(0,len(cmap)+1)
+            kwargs['norm'] = mpl.colors.BoundaryNorm(bounds, len(cmap)) # HACKY
         cmap = mpl.colors.ListedColormap(cmap)
     elif cmap is None:
         colors = mpl.cm.spectral(np.linspace(0, 1, nlabels))
