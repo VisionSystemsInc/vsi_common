@@ -169,7 +169,7 @@ def read_camera_KRT(filename):
     """ read a KRT camera from text file """
     lines = read_list(filename)
     # remove any empty lines
-    lines = filter(None, lines)
+    lines = [line for line in lines if line]
     K = read_matrix(lines[0:3])
     R = read_matrix(lines[3:6])
     T = read_vector(lines[6])
