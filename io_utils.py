@@ -4,6 +4,12 @@ import numpy as np
 from PIL import Image
 import os
 import geometry_utils
+try:
+    import tifffile
+    has_tifffile = True
+except ImportError:
+    has_tifffile = False
+
 
 def read_token(file_obj, tok=None, ignore_char=None):
     """ return a generator that seperates file based on whitespace, or optionally, tok """
@@ -76,12 +82,17 @@ def write_vectors_float(vector_list, filename):
             
 def imread(filename):
     """ read the image to a 2-d numpy array """
-    img = Image.open(filename)
-    # workaround for 16 bit images
-    if img.mode == 'I;16':
-        img_np = np.array(img.getdata(), dtype=np.uint16).reshape(img.size[::-1])
+    _, ext = os.path.splitext(filename)
+    if has_tifffile and (ext == '.tiff' or ext == '.tif'):
+        # if image is tiff, use tifffile module
+        img_np = tifffile.imread(filename)
     else:
-        img_np = np.array(img)
+        img = Image.open(filename)
+        # workaround for 16 bit images
+        if img.mode == 'I;16':
+            img_np = np.array(img.getdata(), dtype=np.uint16).reshape(img.size[::-1])
+        else:
+            img_np = np.array(img)
     return img_np
 
 def imwrite(img, filename):
