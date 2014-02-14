@@ -81,7 +81,7 @@ def write_vectors_float(vector_list, filename):
     
             
 def imread(filename):
-    """ read the image to a 2-d numpy array """
+    """ read the image to a numpy array """
     _, ext = os.path.splitext(filename)
     if has_tifffile and (ext == '.tiff' or ext == '.tif'):
         # if image is tiff, use tifffile module
@@ -96,11 +96,17 @@ def imread(filename):
     return img_np
 
 def imwrite(img, filename):
-    """ write the 2-d numpy array as an image """
-    pilImg = Image.fromarray(img)
-    if pilImg.mode == 'L':
-        pilImg.convert('I') # convert to 32 bit signed mode 
-    pilImg.save(filename)
+    """ write the numpy array as an image """
+    _, ext = os.path.splitext(filename)
+    if has_tifffile and (ext == '.tiff' or ext == '.tif'):
+        # if image is tiff, use tifffile module
+        tifffile.imsave(filename, img)
+    else:
+        img = Image.open(filename)
+        pilImg = Image.fromarray(img)
+        if pilImg.mode == 'L':
+            pilImg.convert('I') # convert to 32 bit signed mode 
+        pilImg.save(filename)
     return
 
 def imwrite_byte(img, vmin, vmax, filename):
