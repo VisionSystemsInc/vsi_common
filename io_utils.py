@@ -15,10 +15,11 @@ def read_token(file_obj, tok=None, ignore_char=None):
     """ return a generator that seperates file based on whitespace, or optionally, tok """
     for line in file_obj:
         for token in line.split(tok):
-            if len(token) == 0 or (ignore_char != None and token[0] == ignore_char):
+            if len(token) == 0 or (ignore_char is not None and token[0] == ignore_char):
                 # ignore rest of line
                 break
             yield token
+
 
 def read_list(filename):
     """ read a list of strings from file, one per line """
@@ -32,6 +33,7 @@ def read_list(filename):
         lines.append(line.strip())
     return lines
 
+
 def write_list(thelist, filename):
     """ write each element to a seperate line in the file """
     try:
@@ -43,6 +45,7 @@ def write_list(thelist, filename):
         fd.write(str(list_el) + '\n')
     return
 
+
 def read_vector_float(filename):
     """ read each float into a single vector """
     elements = []
@@ -53,6 +56,7 @@ def read_vector_float(filename):
             elements.append(float(s))
     vec = np.array(elements)
     return vec
+
 
 def read_vectors_float(filename):
     """ read each line as a seperate vector of floats """
@@ -68,6 +72,7 @@ def read_vectors_float(filename):
             vectors.append(vec)
     return vectors
 
+
 def write_vectors_float(vector_list, filename):
     """ write each vector of floats to a seperate line """
     str_list = []
@@ -78,8 +83,8 @@ def write_vectors_float(vector_list, filename):
         str_list.append(v_str)
     write_list(str_list, filename)
     return str_list
-    
-            
+
+
 def imread(filename):
     """ read the image to a numpy array """
     _, ext = os.path.splitext(filename)
@@ -95,6 +100,7 @@ def imread(filename):
             img_np = np.array(img)
     return img_np
 
+
 def imwrite(img, filename):
     """ write the numpy array as an image """
     _, ext = os.path.splitext(filename)
@@ -105,9 +111,10 @@ def imwrite(img, filename):
         img = Image.open(filename)
         pilImg = Image.fromarray(img)
         if pilImg.mode == 'L':
-            pilImg.convert('I') # convert to 32 bit signed mode 
+            pilImg.convert('I')  # convert to 32 bit signed mode
         pilImg.save(filename)
     return
+
 
 def imwrite_byte(img, vmin, vmax, filename):
     """ write the 2-d numpy array as an image, scale to byte range first """
@@ -117,12 +124,14 @@ def imwrite_byte(img, vmin, vmax, filename):
     img_byte[:] = img_norm * 255
     imwrite(img_byte, filename)
 
+
 # remove directory and extension from filename
 def filename_base(filename):
     """ remove the directory and extension from the filename """
     (_, filename_wext) = os.path.split(filename)
     (base, _) = os.path.splitext(filename_wext)
     return base
+
 
 def read_vector(vec_string):
     """ read the individual floats from a string """
@@ -132,6 +141,7 @@ def read_vector(vec_string):
         elements.append(float(s))
     vec = np.array(elements)
     return vec
+
 
 def read_matrix(row_strings):
     """ read the individual matrix elements from a list of strings (one per row) """
@@ -147,11 +157,13 @@ def read_matrix(row_strings):
     M = np.array(rows)
     return M
 
+
 def write_matrix(M, filename):
     """ write out 1D or 2D numpy array M as ascii text file, one row per line """
     if len(M.shape) == 1:
         M = (M,)
     write_vectors_float(M,filename)
+
 
 def read_camera_KRT(filename):
     """ read a KRT camera from text file """
@@ -162,6 +174,7 @@ def read_camera_KRT(filename):
     R = read_matrix(lines[3:6])
     T = read_vector(lines[6])
     return K, R, T
+
 
 def read_bundler_file(filename):
     """ read an output file from the 'bundler' program.  Return the cameras and points """
@@ -192,6 +205,7 @@ def read_bundler_file(filename):
         pts.append(p)
     return intrinsics, Rs, Ts, pts
 
+
 def read_vsfm_nvm_file(filename):
     """ read an output file from the "VisualSFM" program in .nvm format """
     try:
@@ -218,7 +232,7 @@ def read_vsfm_nvm_file(filename):
         print('WARNING: skipping read of fixed calibration info')
 
     # from here on out, read file on token at a time
-    tokgen = read_token(fd, ignore_char = '#')
+    tokgen = read_token(fd, ignore_char='#')
 
     num_cameras = int(next(tokgen))
     print('%d cameras' % num_cameras)
@@ -256,7 +270,7 @@ def read_vsfm_nvm_file(filename):
         fs.append(f)
         Rs.append(R)
         Ts.append(T)
-        # read '0' as end of camera 
+        # read '0' as end of camera
         if next(tokgen) != '0':
             print('Error: expecting \'0\' delimiter and end of camera %d section' % c)
             #return None
