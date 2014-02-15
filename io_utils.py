@@ -104,7 +104,8 @@ def imread(filename):
 def imwrite(img, filename):
     """ write the numpy array as an image """
     _, ext = os.path.splitext(filename)
-    if has_tifffile and (ext == '.tiff' or ext == '.tif'):
+    is_multiplane = len(img.shape) > 2
+    if has_tifffile and (ext == '.tiff' or ext == '.tif') and is_multiplane:
         # if image is tiff, use tifffile module
         tifffile.imsave(filename, img)
     else:
