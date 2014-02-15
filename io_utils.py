@@ -108,7 +108,6 @@ def imwrite(img, filename):
         # if image is tiff, use tifffile module
         tifffile.imsave(filename, img)
     else:
-        img = Image.open(filename)
         pilImg = Image.fromarray(img)
         if pilImg.mode == 'L':
             pilImg.convert('I')  # convert to 32 bit signed mode
