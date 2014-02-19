@@ -199,14 +199,12 @@ class OrthoAnd3DPlot:
             self.ax_array[1][1].invert_yaxis()
 
 
-def imshow_row(images,imshow_args=None):
+def imshow_row(images,*args,**kwargs):
     """ imshow a set of images, arranged in a row """
     nimages = len(images)
     fig,ax = plt.subplots(1,nimages)
-    if imshow_args is None:
-        imshow_args = ([],)*nimages
-    for (axi, imgi, argsi) in zip(ax,images,imshow_args):
-        axi.imshow(imgi,*argsi)
+    for (axi, imgi) in zip(ax,images):
+        axi.imshow(imgi,*args,**kwargs)
     return fig,ax
 
 
