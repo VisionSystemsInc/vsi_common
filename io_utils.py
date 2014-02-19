@@ -143,7 +143,7 @@ def read_vector(vec_string):
     return vec
 
 
-def read_matrix(row_strings):
+def read_matrix_lines(row_strings):
     """ read the individual matrix elements from a list of strings (one per row) """
     rows = []
     for line in row_strings:
@@ -158,6 +158,12 @@ def read_matrix(row_strings):
     return M
 
 
+def read_matrix(filename):
+    """ read a matrix from a file. assumes each row is on a new line """
+    lines = read_list(filename)
+    return read_matrix_lines(lines)
+
+
 def write_matrix(M, filename):
     """ write out 1D or 2D numpy array M as ascii text file, one row per line """
     if len(M.shape) == 1:
@@ -170,8 +176,8 @@ def read_camera_KRT(filename):
     lines = read_list(filename)
     # remove any empty lines
     lines = [line for line in lines if line]
-    K = read_matrix(lines[0:3])
-    R = read_matrix(lines[3:6])
+    K = read_matrix_lines(lines[0:3])
+    R = read_matrix_lines(lines[3:6])
     T = read_vector(lines[6])
     return K, R, T
 
@@ -191,7 +197,7 @@ def read_bundler_file(filename):
     for i in range(num_cams):
         start_line = lines_per_cam * i + 2
         intrinsic = read_vector(lines[start_line])
-        R = read_matrix(lines[start_line + 1: start_line + 4])
+        R = read_matrix_lines(lines[start_line + 1: start_line + 4])
         T = read_vector(lines[start_line + 4])
         intrinsics.append(intrinsic)
         Rs.append(R)
