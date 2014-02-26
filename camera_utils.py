@@ -14,6 +14,9 @@ class ProjectiveCamera(object):
     """ Models a general projective camera with a 3x4 projection matrix """
     def __init__(self,P):
         self.P = P
+        # normalize s.t. P[3,4] = 1
+        if abs(self.P[2,3]) > 1e-6:
+            self.P /= self.P[2,3]
 
     def saveas_P(self, filename):
         """ write the projection matrix to an ascii text file """
@@ -39,18 +42,33 @@ class ProjectiveCamera(object):
         pts = self.project_points((pt_3d,))
         return pts[0]
 
+    def project_vectors(self, vecs_3d):
+        """ compute projection matrix from K,R,T and project vecs_3d into image coordinates """
+        num_vecs = len(vecs_3d)
+        # create 3xN matrix from set of 3d vectors
+        vecs_3d_m = np.array(vecs_3d).transpose()
+        # convert to homogeneous coordinates
+        vecs_3d_m_h = np.vstack((vecs_3d_m, np.zeros((1, num_vecs))))
+        vecs_2d_m_h = np.dot(self.P, vecs_3d_m_h)
+        #vecs_2d = [vecs_2d_m_h[0:2, c] / vecs_2d_m_h[2, c] for c in range(num_vecs)]
+        vecs_2d = [col[0:2] / col[2] for col in vecs_2d_m_h.transpose()]
+        return vecs_2d
 
-class PinholeCamera(object):
+    def project_vector(self, vecs_3d):
+        """ convenience wrapper around project_vectors """
+        pts = self.project_vectors((vecs_3d,))
+        return pts[0]
+
+
+class PinholeCamera(ProjectiveCamera):
     """ Models a pinhole camera, i.e. one with a single center of projection and no lens distortion """
     def __init__(self, K, R, T):
         self.K = K
         self.R = R
         self.T = T
         # compute projection matrix
-        self.P = np.dot( K, np.hstack((R, T.reshape(3, 1))) )
-        # normalize s.t. P[3,4] = 1
-        if abs(self.P[2,3]) > 1e-6:
-            self.P /= self.P[2,3]
+        P = np.dot( K, np.hstack((R, T.reshape(3, 1))) )
+        super(PinholeCamera, self).__init__(P)
         # compute and store camera center
         self.center = np.dot(-R.transpose(), T)
         # compute inverse projection matrix for backprojection
@@ -95,40 +113,6 @@ class PinholeCamera(object):
     def backproject_point(self, pt_2d, depth):
         """ convenience wrapper around backproject_points """
         pts = self.backproject_points((pt_2d,), (depth,))
-        return pts[0]
-
-    def project_vectors(self, vecs_3d):
-        """ compute projection matrix from K,R,T and project vecs_3d into image coordinates """
-        num_vecs = len(vecs_3d)
-        # create 3xN matrix from set of 3d vectors
-        vecs_3d_m = np.array(vecs_3d).transpose()
-        # convert to homogeneous coordinates
-        vecs_3d_m_h = np.vstack((vecs_3d_m, np.zeros((1, num_vecs))))
-        vecs_2d_m_h = np.dot(self.P, vecs_3d_m_h)
-        #vecs_2d = [vecs_2d_m_h[0:2, c] / vecs_2d_m_h[2, c] for c in range(num_vecs)]
-        vecs_2d = [col[0:2] / col[2] for col in vecs_2d_m_h.transpose()]
-        return vecs_2d
-
-    def project_vector(self, vecs_3d):
-        """ convenience wrapper around project_vectors """
-        pts = self.project_vectors((vecs_3d,))
-        return pts[0]
-
-    def project_points(self, pts_3d):
-        """ compute projection matrix from K,R,T and project pts_3d into image coordinates """
-        num_pts = len(pts_3d)
-        # create 3xN matrix from set of 3d points
-        pts_3d_m = np.array(pts_3d).transpose()
-        # convert to homogeneous coordinates
-        pts_3d_m_h = np.vstack((pts_3d_m, np.ones((1, num_pts))))
-        pts_2d_m_h = np.dot(self.P, pts_3d_m_h)
-        #pts_2d = [pts_2d_m_h[0:2, c] / pts_2d_m_h[2, c] for c in range(num_pts)]
-        pts_2d = [col[0:2] / col[2] for col in pts_2d_m_h.transpose()]
-        return pts_2d
-
-    def project_point(self, pt_3d):
-        """ convenience wrapper around project_points """
-        pts = self.project_points((pt_3d,))
         return pts[0]
 
     def plane2image(self, plane_origin, plane_x, plane_y):
@@ -214,14 +198,6 @@ class PinholeCamera(object):
             fd.write('\n')
             # write translation vector
             fd.write('%f %f %f\n' % (self.T[0],self.T[1],self.T[2]))
-        return
-
-    def saveas_P(self, filename):
-        """ write the projection matrix to an ascii text file """
-        with open(filename, 'w') as fd:
-            # write intrinsics K matrix
-            for row in self.P:
-                fd.write('%f %f %f %f\n' % (row[0],row[1],row[2],row[3]))
         return
 
 
