@@ -4,6 +4,7 @@ import numpy as np
 import io_utils
 import glob
 
+
 class CorrClicker:
     """ keep track for correspondences """
 
@@ -32,11 +33,11 @@ class CorrClicker:
             self.pt_idx = -1
         elif event.key == 'q':
             plt.close(self.fig)
+            return
         else:
             print("you pressed " + event.key)
 
         self.choose_corr()
-
 
     def onclick(self, event):
         """ handle mouse click """
@@ -104,14 +105,8 @@ class CorrClicker:
             fd.write('\n')
         fd.close()
 
-    def choose_corr(self):
-        """ choose a corresponence point """
-        if self.pt_idx is not None and self.pt_idx < 0:
-            self.pt_idx = len(self.points[0])
-            for img_pts in self.points:
-                img_pts.append(None)
-
-        print('Image ' + str(self.img_idx) + ' Point ' + str(self.pt_idx) + '? (left click to select, right click for none)')
+    def draw(self):
+        """ draw the correct image and point location """
         img = io_utils.imread(self.img_filenames[self.img_idx])
         self.ax.clear()
         self.ax.imshow(img)
@@ -121,8 +116,17 @@ class CorrClicker:
             if curr_pt is not None:
                 self.ax.plot(curr_pt[0], curr_pt[1], 'ro')
         plt.axis('image')
-        plt.show()
         plt.draw()
+
+    def choose_corr(self):
+        """ choose a corresponence point """
+        if self.pt_idx is not None and self.pt_idx < 0:
+            self.pt_idx = len(self.points[0])
+            for img_pts in self.points:
+                img_pts.append(None)
+        self.draw()
+
+        print('Image ' + str(self.img_idx) + ' Point ' + str(self.pt_idx) + '? (left click to select, right click for none)')
 
     def start(self):
         """ startup the clicker UI. blocks until figure is closed """
@@ -131,8 +135,9 @@ class CorrClicker:
             self.pt_idx = 0
         else:
             self.pt_idx = None
-        self.choose_corr()
-
+        self.draw()
+        plt.show()
+        #self.choose_corr()
 
 
 def main():
@@ -140,8 +145,8 @@ def main():
 
     #data_dir = '/data/janus/Ahmed_Ahmed/good/images'
     #output_dir = '/data/janus/Ahmed_Ahmed/good'
-    data_dir = '/data/janus/Akiko_Morigami/good/images'
-    output_dir = '/data/janus/Akiko_Morigami/good'
+    data_dir = '/home/dec/VSI/janus/data/Kirsten_Dunst/good/images'
+    output_dir = '/home/dec/VSI/janus/data/Kirsten_Dunst/good'
     img_fnames = glob.glob(data_dir + '/*.jpg')
     img_fnames.sort()
 
