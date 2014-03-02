@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import io_utils
 import glob
+import argparse
+import os.path
 
 
 class CorrClicker:
@@ -10,8 +12,10 @@ class CorrClicker:
 
     def __init__(self, img_filenames):
         """ constructor """
+        if len(img_filenames) == 0:
+            raise Exception('At least one image file needed')
         self.img_filenames = img_filenames
-        self.points = [[],]*len(img_filenames)
+        self.points = [[] for _ in range(len(img_filenames))]
         self.fig = plt.figure()
         self.ax = self.fig.add_subplot(111)
         self.click_cid = self.fig.canvas.mpl_connect('button_press_event', self.onclick)
@@ -142,19 +146,21 @@ class CorrClicker:
 
 def main():
     """ main method """
+    parser = argparse.ArgumentParser(description='Simple Image Correspondence Clicker Application')
+    parser.add_argument('image_glob', help='Input image filenames (glob form, use quotes to avoid shell expansion)')
+    parser.add_argument('output_filename', help='Output filename')
+    args = parser.parse_args()
 
-    #data_dir = '/data/janus/Ahmed_Ahmed/good/images'
-    #output_dir = '/data/janus/Ahmed_Ahmed/good'
-    data_dir = '/home/dec/VSI/janus/data/Kirsten_Dunst/good/images'
-    output_dir = '/home/dec/VSI/janus/data/Kirsten_Dunst/good'
-    img_fnames = glob.glob(data_dir + '/*.jpg')
+    img_glob = os.path.expandvars(os.path.expanduser(args.image_glob))
+    img_fnames = glob.glob(img_glob)
     img_fnames.sort()
 
-    corr_fname = output_dir + '/points.txt'
+    corr_fname = args.output_filename
 
     clicker = CorrClicker(img_fnames)
-    # load up existing corresponences
-    clicker.read_corrs(corr_fname)
+    # load up existing corresponences if file exists
+    if os.path.exists(corr_fname):
+        clicker.read_corrs(corr_fname)
     # this will block until clicker is quit
     clicker.start()
 
