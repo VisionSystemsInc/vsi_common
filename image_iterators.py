@@ -25,6 +25,8 @@ class Point2D(object):
 # 
 # NOTE if pixel_stride > pixels_per_cell/2, it is possible to leave data unseen on the
 # right/bottom boarder of an image
+#
+# this is similar to matlab's im2col
 class IterateOverWindows(object):
     def __init__(self, pixels_per_cell, pixel_stride=None, image=None,
             mode='constant', cval=0,
@@ -123,10 +125,10 @@ class IterateOverWindows(object):
         # NOTE could iterate over the interior of the image without bounds checking
         # for additional speedup
 
-        # iterate around the boarder of the image
         BoundingBox = namedtuple("BoundingBox", "min_x max_x min_y max_y")
         pixels_per_half_cell = self.pixels_per_cell[0]//2, self.pixels_per_cell[1]//2
         ystrides_per_image, xstrides_per_image = self.shape()
+        # iterate around the boarder of the image
         for r in xrange(ystrides_per_image):
             for c in xrange(xstrides_per_image):
                 # chip out pixels in this sliding window
@@ -141,6 +143,9 @@ class IterateOverWindows(object):
                 chip = self.image[min_y:max_y, min_x:max_x, ...]
                 
                 # couch chip in a fixed-size window
+                # REVIEW I could refactor handling the boarder into pad_image(). then mode wouldn't 
+                # be necessary here and I could simply loop over the image.
+                # RE this is more efficient though
                 if self.mode == 'constant' or self.mode == 'reflect':
                     chunk = np.empty(
                             self.pixels_per_cell + ((self.image.shape[2],) if self.image.ndim == 3 else ()),
