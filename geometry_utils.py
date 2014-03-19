@@ -124,6 +124,12 @@ def quaternion_to_matrix(q):
     return R
 
 
+def rotate_vector(v, axis, angle):
+    """ rotate the vector v around axis by angle radians """
+    R = axis_angle_to_matrix(axis,angle)
+    return np.dot(R,v)
+
+
 def spherical_to_euclidian(azimuth,elevation):
     """ convert az,el to euclidean vector
     assumes: azimuth is measured in radians east of north
@@ -151,6 +157,14 @@ def patch_corners_3d(c, xv, yv):
 def unitize(v):
     """ return the unit vector in the same direction as v """
     return v / np.sqrt(np.dot(v,v))
+
+
+def nonhomogeneous(pt_homg):
+    """ convert from homogeneous coordinates to non-homogenous """
+    tolerance = 1e-6
+    if abs(pt_homg[-1]) < tolerance:
+        raise Exception('Cannot convert ideal point to non-homogenous coordinates')
+    return pt_homg[0:-1] / pt_homg[-1]
 
 
 def intersect_plane_ray(plane, ray_origin, ray_vector):
