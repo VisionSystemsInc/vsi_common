@@ -1,5 +1,6 @@
 """ Utility classes for modeling cameras """
 import numpy as np
+import geometry_utils
 
 
 def construct_K(focal_len, image_size):
@@ -84,6 +85,12 @@ class PinholeCamera(ProjectiveCamera):
         unit_rays = rays_np / ray_lens  # use broadcasting to divide by magnitudes
         unit_rays_list = [unit_rays[:,i] for i in range(N)]
         return unit_rays_list
+
+    def viewing_ray(self, pt_2d):
+        """ backproject the 2d image point (convenience wrapper around viewing_rays) """
+        pts = [pt_2d,]
+        rays = self.viewing_rays(pts)
+        return rays[0]
 
     def backproject_points_plane(self, pts_2d, plane):
         """ backproject a point onto a 3-d plane """
@@ -201,7 +208,7 @@ class PinholeCamera(ProjectiveCamera):
         return
 
 
-def triangulate_point(cameras, projections):
+def triangulate_point(cameras, projections, return_homogeneous=True):
     """ Triangulate a 3-d point given it's projection in two images """
     num_obs = len(cameras)
     if len(projections) != num_obs:
@@ -216,6 +223,9 @@ def triangulate_point(cameras, projections):
     V = Vh.conj().transpose()
 
     point = V[:,-1]
+
+    if not return_homogeneous:
+        point = geometry_utils.nonhomogeneous(point)
 
     return point
 
