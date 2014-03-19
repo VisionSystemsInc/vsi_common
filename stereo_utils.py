@@ -254,21 +254,12 @@ def disparity_to_depth(disparity_image, cam0, cam1):
     # add offset of (disparity, 0) to each pixel to get its correspondence in second image
     pts_2d_img1 = [p + np.array((disp,0)) if not np.isnan(disp) else None for p,disp in zip(pts_2d_img0, disparity_image.reshape(-1))]
 
-    valid_mask = np.array([pts_2d_img1 is not None])
+    # perform the triangulation for each point
+    pts_3d = [camera_utils.triangulate_point((cam0,cam1), (pt0,pt1)) if pt1 is not None else np.zeros(4) for pt0,pt1 in zip(pts_2d_img0, pts_2d_img1)]
 
-    # perform the triangulation for each point - set invalid points to (1,1,1,1) for now
-    pts_3d = np.array([camera_utils.triangulate_point((cam0,cam1), (pt0,pt1)) if pt1 is not None else np.ones(4) for pt0,pt1 in zip(pts_2d_img0, pts_2d_img1)])
-
-    # convert to non-homogeneous
-    pts_3d = (pts_3d.T / pts_3d[:,3]).T
-
-    # set invalid points to nan
-    pts_3d[valid_mask] = np.array((np.nan,)*4)
-
-    # convert back to x,y,z images
-    ximg = np.reshape(pts_3d[:,0], img_shape)
-    yimg = np.reshape(pts_3d[:,1], img_shape)
-    zimg = np.reshape(pts_3d[:,2], img_shape)
+    ximg = np.array([p[0]/p[3] if p[3] else np.nan for p in pts_3d]).reshape(img_shape)
+    yimg = np.array([p[1]/p[3] if p[3] else np.nan for p in pts_3d]).reshape(img_shape)
+    zimg = np.array([p[2]/p[3] if p[3] else np.nan for p in pts_3d]).reshape(img_shape)
 
     return ximg, yimg, zimg
 
