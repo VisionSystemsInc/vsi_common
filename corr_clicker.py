@@ -58,33 +58,6 @@ class CorrClicker:
             self.choose_corr()
 
 
-    def read_corrs(self, filename):
-        """ read the corresppondences out to file """
-        try:
-            fd = open(filename,'r')
-        except IOError:
-            print('Error opening file ' + filename)
-            return
-
-        tokgen = io_utils.read_token(fd, ignore_char='#')
-
-        num_images = int(next(tokgen))
-        num_points = int(next(tokgen))
-        print(str(num_images) + ' images')
-        print(str(num_points) + ' points')
-        if num_images != len(self.img_filenames):
-            raise Exception("ERROR: wrong number of images: expecting %d, corr file has %d" % (len(self.img_filenames), num_images))
-            
-        self.points = [[],]*num_images
-        for i in range(num_images):
-            img_pts = []
-            for _ in range(num_points):
-                x = float(next(tokgen))
-                y = float(next(tokgen))
-                img_pts.append(np.array((x,y)))
-            self.points[i] = img_pts
-        fd.close()
-
     def write_corrs(self, filename):
         """ save the corresppondences out to file """
         try:
@@ -144,6 +117,29 @@ class CorrClicker:
         #self.choose_corr()
 
 
+def read_corrs(filename):
+    """ read the corresppondences from a file """
+    with open(filename,'r') as fd:
+
+        tokgen = io_utils.read_token(fd, ignore_char='#')
+
+        num_images = int(next(tokgen))
+        num_points = int(next(tokgen))
+        print(str(num_images) + ' images')
+        print(str(num_points) + ' points')
+            
+        points = [[] for _ in range(num_images)]
+        for i in range(num_images):
+            img_pts = []
+            for _ in range(num_points):
+                x = float(next(tokgen))
+                y = float(next(tokgen))
+                img_pts.append(np.array((x,y)))
+            points[i] = img_pts
+
+        return points
+
+
 def main():
     """ main method """
     parser = argparse.ArgumentParser(description='Simple Image Correspondence Clicker Application')
@@ -160,7 +156,10 @@ def main():
     clicker = CorrClicker(img_fnames)
     # load up existing corresponences if file exists
     if os.path.exists(corr_fname):
-        clicker.read_corrs(corr_fname)
+        points = read_corrs(corr_fname)
+        if len(points) != len(img_fnames):
+            raise Exception('Expecting %d images in %s, found %d' % (len(points),corr_fname,len(img_fnames)))
+        clicker.points = points
     # this will block until clicker is quit
     clicker.start()
 
