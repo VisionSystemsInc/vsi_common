@@ -117,6 +117,19 @@ class PinholeCamera(ProjectiveCamera):
 
         return pts_3d
 
+    def backproject_depthmap(self, dmap):
+        """ convert a depthmap image to x,y,z """
+        x,y = np.meshgrid(np.arange(dmap.shape[1]), np.arange(dmap.shape[0]))
+        pts_2d_h_np = np.vstack((x.flat, y.flat, np.ones_like(dmap).flat))
+        rays_np = np.dot(self.KRinv, pts_2d_h_np)
+        ray_lens = np.sqrt((rays_np * rays_np).sum(0))
+        unit_rays = rays_np / ray_lens  # use broadcasting to divide by magnitudes
+        pts_3d = self.center.reshape((3,1)) + unit_rays * dmap.flat
+        x = pts_3d[0,:].reshape(dmap.shape).copy()
+        y = pts_3d[1,:].reshape(dmap.shape).copy()
+        z = pts_3d[2,:].reshape(dmap.shape).copy()
+        return x,y,z
+
     def backproject_point(self, pt_2d, depth):
         """ convenience wrapper around backproject_points """
         pts = self.backproject_points((pt_2d,), (depth,))
