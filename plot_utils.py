@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
+import skimage.color
 
 def groupedBar(features, bar_labels=None, group_labels=None, ax=None, colors=None):
     '''
@@ -246,4 +247,19 @@ def imshow_row(images,*args,**kwargs):
         axi.imshow(imgi,*args,**kwargs)
     return fig,ax
 
+def overlay_heatmap(image, heatmap):
+    """ create a visualization of the image with overlaid heatmap """
+    img_gray = image
+    if len(image.shape) == 3:
+        img_gray = skimage.color.rgb2gray(image)
+    elif len(image.shape) != 2:
+        raise Exception('Image should be grayscale or rgb')
+
+    img_gray_3d = img_gray.reshape(np.append(img_gray.shape, 1))
+    heatmap_norm = (heatmap - heatmap.min()) / (heatmap.max() - heatmap.min())
+    cmap = mpl.cm.get_cmap('jet')
+    heatmap_vis = cmap(heatmap_norm)
+    heatmap_vis = 0.6 * heatmap_vis + 0.4 * np.repeat(img_gray_3d, 4, axis=2)
+
+    return heatmap_vis
 
