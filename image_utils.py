@@ -19,7 +19,9 @@ def sk_resize(img, nsize=None, nscale=None, **kwargs):
     # no need to resize
     # REVIEW maybe should return a copy since that is the normal behavior of
     # this function
-    if all(np.array(img.shape[0:2]) == nsize): return img
+    if (len(nsize) !=2) and (len(nsize) != len(img.shape)):
+        raise Exception('Unexpected nsize ' + str(nsize))
+    if np.all(np.array(img.shape[0:2]) == nsize): return img.copy()
 
     # resize() rescales pos integer images to between 0 and 1, however, it
     # clips neg values at 0
