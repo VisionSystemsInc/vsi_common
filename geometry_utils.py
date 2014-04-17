@@ -215,6 +215,7 @@ def rasterize_plane(grid_origin, grid_dims, vox_len, plane):
                 p[d2] = k
                 yield p
 
+
 class Box2D(object):
     """  a 2-d axis-aligned box """
 
@@ -241,9 +242,15 @@ class Box2D(object):
         """ dimensions of the box """
         return self.max_pt - self.min_pt
 
+    def __str__(self):
+        """ return human-readable string representation """
+        return 'box: (' + str(self.min_pt) + ', ' + str(self.max_pt) + ')'
+
 
 def intersection(box0, box1):
     """ intersection of two bounding boxes """
+    if box0 is None or box1 is None:
+        return None
     min_pt = np.max((box0.min_pt, box1.min_pt), axis=0)
     max_pt = np.min((box0.max_pt, box1.max_pt), axis=0)
     return Box2D(min_pt, max_pt)
@@ -251,10 +258,14 @@ def intersection(box0, box1):
 
 def union(box0, box1):
     """ union of two bounding boxes """
+    if box0 is None:
+        return box1
+    if box1 is None:
+        return box0
     min_pt = np.min((box0.min_pt, box1.min_pt), axis=0)
     max_pt = np.max((box0.max_pt, box1.max_pt), axis=0)
     return Box2D(min_pt, max_pt)
-    
+
 
 def compute_bounding_box(pts):
     """ compute the bounding box of a list of points
