@@ -271,5 +271,5 @@ def overlay_heatmap(image, heatmap):
     img_gray_3plane = np.repeat(img_gray.reshape(np.append(img_gray.shape, 1)), 3, axis=2)
     heatmap_overlay = 0.6 * heatmap_vis[:,:,0:3] + 0.4 * img_gray_3plane
 
-    return heatmap_overlay, heatmap_vis, img_gray_3plane
+    return heatmap_overlay
 
