@@ -60,6 +60,30 @@ class ProjectiveCamera(object):
         pts = self.project_vectors((vecs_3d,))
         return pts[0]
 
+    def backproject_point_plane(self, pt_2d, plane, return_homogeneous=False):
+        """ backproject a point onto a 3-d plane """
+        A = np.zeros((3,4))
+        A[0,:] = self.P[0,:] - self.P[2,:]*pt_2d[0]
+        A[1,:] = self.P[1,:] - self.P[2,:]*pt_2d[1]
+        A[2,:] = plane.reshape((1,4))
+
+        _, _, Vh = np.linalg.svd(A)
+        V = Vh.conj().transpose()
+
+        point = V[:,-1]
+
+        if not return_homogeneous:
+            point = geometry_utils.nonhomogeneous(point)
+
+        return point 
+
+    def backproject_points_plane(self, pts_2d, plane, return_homogeneous=False):
+        """ backproject a list of points onto a 3-d plane
+            mostly here to mimic interface to PinholeCamera 
+        """
+        pts_3d = [self.backproject_point_plane(p, plane, return_homogeneous) for p in pts_2d]
+        return pts_3d
+
 
 class PinholeCamera(ProjectiveCamera):
     """ Models a pinhole camera, i.e. one with a single center of projection and no lens distortion """
