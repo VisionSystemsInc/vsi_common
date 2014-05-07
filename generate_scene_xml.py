@@ -1,126 +1,68 @@
-# file: generate_scene_xml.py
-# author: Daniel Crispell <dan@visionsystemsinc.com>
-# 
-# Generates a scene.xml file describing a boxm2 voxel model
-#
-################################## parameters #############################################
-# base model directory
-model_dir = '/home/dec/MBC/models/NTC'
-# directory where the .bin files will be stored
-data_path = model_dir + '/bin'
-# name of file to generate
-filename = model_dir + '/scene.xml'
-
-# the appearance model type to use
-appearance_model = 'boxm2_mog3_grey'
-# the number of independent appearance models the model contains
-num_bins = 1
-# finest subdivision level (1 = no subdivision, 2=2x2x2, 3=4x4x4, 4=8x8x8, etc.)
-max_level = 3
-
-# NTC/Galactica
-lvcs_og_lat = 35.3307
-lvcs_og_lon = -116.5210
-lvcs_og_hae = 720.0
-
-# the south-western most point of the voxel model, in local coordinates
-local_og_x = -400.0
-local_og_y = -400.0
-local_og_z = -20.0
-
-# the number of blocks in the model
-n_blocks_x = 8 
-n_blocks_y = 8 
-n_blocks_z = 1
-
-# how many subblocks (i.e. voxels, before any subdivision) in each block 
-n_subblocks_x = 50
-n_subblocks_y = 50
-n_subblocks_z = 50
-
-# the size of each subblock (in meters)
-subblock_size = 2.0
-
-# Providence
-"""
-# the origin of the local coordinate system
-#lvcs_og_lat = 41.8247
-#lvcs_og_lon = -71.4127
-#lvcs_og_hae = -30.0
+#! /usr/bin/env python
+""" Generate a boxm2-style scene.xml file """
+import argparse
+import sys
 
 
-# the south-western most point of the voxel model, in local coordinates
-local_og_x = -100
-local_og_y = -225.0
-local_og_z = -10.0
+def generate_scene_xml(output_file, model_dir, num_blocks, num_subblocks, subblock_size, appearance_model='boxm2_mog3_grey', num_bins=1, max_level=3, lvcs_og=None, local_og=None):
+    """ write the scene.xml file
+    lvcs_og is a tuple stored as (lon, lat, hae)  (hae -> height above ellipsoid)
+    """
 
-# the number of blocks in the model
-n_blocks_x = 6
-n_blocks_y = 5
-n_blocks_z = 1
+    if lvcs_og is None:
+        lvcs_og = (0,0,0)
 
-# how many subblocks (i.e. voxels, before any subdivision) in each block 
-n_subblocks_x = 50
-n_subblocks_y = 50
-n_subblocks_z = 75
+    if local_og is None:
+        local_og = (0,0,0)
 
-# the size of each subblock (in meters)
-subblock_size = 2.0
+    output_file.write('<scene>\n')
+    output_file.write('  <lvcs cs_name="wgs84" origin_lat="' + str(lvcs_og[1]) + '" origin_lon="' + str(lvcs_og[0]) + '" origin_elev="' + str(lvcs_og[2]) + '" local_XYZ_unit="meters" geo_angle_unit="degrees">\n')
+    output_file.write('  </lvcs>\n')
+    output_file.write('  <local_origin x="' + str(local_og[0]) + '" y="' + str(local_og[1]) + '" z="' + str(local_og[2]) +'">\n')
+    output_file.write('  </local_origin>\n')
+    output_file.write('  <scene_paths path="' + model_dir + '/">\n')
+    output_file.write('  </scene_paths>\n')
+    output_file.write('  <version number="2">\n')
+    output_file.write('  </version>\n')
+    output_file.write('  <appearance apm="' + appearance_model + '">\n')
+    output_file.write('  </appearance>\n')
+    output_file.write('  <appearance apm="boxm2_num_obs">\n')
+    output_file.write('  </appearance>\n')
+    output_file.write('  <appearance num_illumination_bins="'+str(num_bins)+'">\n')
+    output_file.write('  </appearance>\n')
 
-# Ft Drum: center of orbit site
-lvcs_og_lat = 44.1264
-lvcs_og_lon = -75.6389 
-lvcs_og_hae = 152.0
+    for i in range(0, num_blocks[0]):
+        for j in range(0, num_blocks[1]):
+            for k in range(0, num_blocks[2]):
+                block_og_x = local_og[0] + (i * num_subblocks[0] * subblock_size)
+                block_og_y = local_og[1] + (j * num_subblocks[1] * subblock_size)
+                block_og_z = local_og[2] + (k * num_subblocks[2] * subblock_size)
+                output_file.write('  <block id_i="' +str(i) + '" id_j="' + str(j) + '" id_k="' + str(k) + '" ')
+                output_file.write('origin_x="' + str(block_og_x) + '" origin_y="' + str(block_og_y) + '" origin_z="' + str(block_og_z) + '" ')
+                output_file.write('dim_x="' + str(subblock_size) + '" dim_y="' + str(subblock_size) + '" dim_z="' + str(subblock_size) + '" ')
+                output_file.write('num_x="' + str(num_subblocks[0]) + '" num_y="' + str(num_subblocks[1]) + '" num_z="' + str(num_subblocks[2]) + '" ')
+                output_file.write('init_level="1" max_level="' + str(max_level) + '" max_mb="1200.0" p_init="0.001000" random="0">\n')
+                output_file.write('  </block>\n')
+    output_file.write('</scene>')
 
-# the south-western most point of the voxel model, in local coordinates
-local_og_x = -400.0
-local_og_y = -400.0
-local_og_z = -10.0
 
-# the number of blocks in the model
-n_blocks_x = 8
-n_blocks_y = 8
-n_blocks_z = 1
+def main():
+    """ main """
+    parser = argparse.ArgumentParser()
+    parser.add_argument('output_file', nargs='?', type=argparse.FileType('w'), default=sys.stdout)
+    parser.add_argument('--model_dir', default='.')
+    parser.add_argument('--num_blocks', nargs=3, type=int, default=(1,1,1))
+    parser.add_argument('--num_subblocks', nargs=3, type=int, default=(100,100,100))
+    parser.add_argument('--subblock_size', type=float, default=1.0)
+    parser.add_argument('--appearance_model', default='boxm2_mog3_grey')
+    parser.add_argument('--num_bins', type=int, default=1)
+    parser.add_argument('--max_level', type=int, default=3)
+    parser.add_argument('--lvcs_origin', nargs=3, type=float, help='LVCS origin in form lon lat hae', default=None)
+    parser.add_argument('--local_origin', nargs=3, type=float, help='Local origin in form x y z', default=None)
+    args = parser.parse_args()
 
-# how many subblocks (i.e. voxels, before any subdivision) in each block 
-n_subblocks_x = 50
-n_subblocks_y = 50
-n_subblocks_z = 50
+    generate_scene_xml(args.output_file, args.model_dir, args.num_blocks, args.num_subblocks, args.subblock_size, args.appearance_model, args.num_bins, args.max_level, args.lvcs_origin, args.local_origin)
 
-# the size of each subblock (in meters)
-subblock_size = 2.0
-"""
-#######################################################################################
 
-fd = open(filename,'w')
-fd.write('<scene>\n')
-fd.write('<lvcs cs_name="wgs84" origin_lat="' + str(lvcs_og_lat) + '" origin_lon="' + str(lvcs_og_lon) + '" origin_elev="' + str(lvcs_og_hae) + '" local_XYZ_unit="meters" geo_angle_unit="degrees">\n')
-fd.write('</lvcs>\n')
-fd.write('<local_origin x="' + str(local_og_x) + '" y="' + str(local_og_y) + '" z="' + str(local_og_z) +'">\n')
-fd.write('</local_origin>\n')
-fd.write('<scene_paths path="' + data_path + '/">\n')
-fd.write('</scene_paths>\n')
-fd.write('<version number="2">\n')
-fd.write('</version>\n')
-fd.write('<appearance apm="' + appearance_model + '">\n')
-fd.write('</appearance>\n')
-fd.write('<appearance apm="boxm2_num_obs">\n')
-fd.write('</appearance>\n')
-fd.write('<appearance num_illumination_bins="'+str(num_bins)+'">\n')
-fd.write('</appearance>\n')
-
-for i in range(0,n_blocks_x):
-  for j in range(0,n_blocks_y):
-
-    for k in range(0,n_blocks_z):
-      block_og_x = local_og_x + (i * n_subblocks_x * subblock_size)
-      block_og_y = local_og_y + (j * n_subblocks_y * subblock_size)
-      block_og_z = local_og_z + (k * n_subblocks_z * subblock_size)
-      fd.write('<block id_i="' +str(i) + '" id_j="' + str(j) + '" id_k="' + str(k) + '" ')
-      fd.write('origin_x="' + str(block_og_x) + '" origin_y="' + str(block_og_y) + '" origin_z="' + str(block_og_z) + '" ')
-      fd.write('dim_x="' + str(subblock_size) + '" dim_y="' + str(subblock_size) + '" dim_z="' + str(subblock_size) + '" ')
-      fd.write('num_x="' + str(n_subblocks_x) + '" num_y="' + str(n_subblocks_y) + '" num_z="' + str(n_subblocks_z) + '" ')
-      fd.write('init_level="1" max_level="' + str(max_level) + '" max_mb="1200.0" p_init="0.001000" random="0">\n')
-      fd.write('</block>\n')
-fd.write('</scene>')
-fd.close()
+if __name__ == '__main__':
+    main()
