@@ -32,7 +32,7 @@ def sk_resize(img, nsize=None, nscale=None, **kwargs):
         
     # resize() expects floating-point images to be scaled between 0 and 1
     # (otherwise it clips image!!). scale and rescale to prevent
-    min_val = img.min(); max_val = img.max() - min_val
+    min_val = np.nanmin(img); max_val = np.nanmax(img) - min_val
     img = (img - min_val) / max_val
     # WARNING this is not equivilent to PIL.resize(), which at least downsamples 
     # by selecting entire rows/cols when order=0 (nearest-neighbor interp)
