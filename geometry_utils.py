@@ -244,7 +244,11 @@ class Box2D(object):
 
     def __str__(self):
         """ return human-readable string representation """
-        return 'box: (' + str(self.min_pt) + ', ' + str(self.max_pt) + ')'
+        return 'Box2D: (' + str(self.min_pt) + ', ' + str(self.max_pt) + ')'
+
+    def __repr__(self):
+        """ return string representation """
+        return '%s(%s, %s)' % (self.__class__, self.min_pt, self.max_pt)
 
 
 def intersection(box0, box1):
