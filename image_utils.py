@@ -13,9 +13,9 @@ def sk_resize(img, nsize=None, nscale=None, **kwargs):
 
     assert nsize is not None or nscale is not None, 'either nsize or nscale must be set'
     if nsize is None:
-    	nrows, ncols = img.shape[0:2]
+        nrows, ncols = img.shape[0:2]
         nsize = round(nscale[0]*nrows), round(nscale[1]*ncols)
-    
+
     # no need to resize
     # REVIEW maybe should return a copy since that is the normal behavior of
     # this function
@@ -28,20 +28,21 @@ def sk_resize(img, nsize=None, nscale=None, **kwargs):
     in_type = img.dtype
     if issubclass(in_type.type, np.integer):
         # REVIEW dont always need to use double here...
-        img = img.astype(dtype=np.double) # copies array
-        
+        img = img.astype(dtype=np.double)  # copies array
+
     # resize() expects floating-point images to be scaled between 0 and 1
     # (otherwise it clips image!!). scale and rescale to prevent
-    min_val = img.min(); max_val = img.max() - min_val
+    min_val = np.nanmin(img)
+    max_val = np.nanmax(img) - min_val
     img = (img - min_val) / max_val
-    # WARNING this is not equivilent to PIL.resize(), which at least downsamples 
+    # WARNING this is not equivilent to PIL.resize(), which at least downsamples
     # by selecting entire rows/cols when order=0 (nearest-neighbor interp)
     img_scaled = skimage.transform.resize(img, nsize, **kwargs)
     img_scaled = img_scaled * max_val + min_val
 
     if issubclass(in_type.type, np.integer):
         img_scaled = np.round(img_scaled)
-        img_scaled = img_scaled.astype(dtype=in_type) # will copy array
+        img_scaled = img_scaled.astype(dtype=in_type)  # will copy array
 
     return img_scaled
 
