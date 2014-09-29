@@ -98,3 +98,20 @@ def colorize_verts_ply(ply_in_filename, ply_out_filename, image, camera):
     writer.Write()
 
 
+def get_ply_vertices(ply_filename):
+    """ read a ply file, return vertices in form of 3xN numpy array """
+    # read in PLY file
+    reader = vtk.vtkPLYReader()
+    reader.SetFileName(ply_filename)
+    reader.Update()
+    data = reader.GetOutput()
+
+    num_pts = data.GetNumberOfPoints()
+    vert_matrix = np.zeros((3,num_pts))
+    for n in range(num_pts):
+        pt3d = data.GetPoint(n)
+        vert_matrix[:,n] = pt3d
+
+    return vert_matrix
+
+
