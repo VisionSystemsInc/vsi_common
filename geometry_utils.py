@@ -216,8 +216,8 @@ def rasterize_plane(grid_origin, grid_dims, vox_len, plane):
                 yield p
 
 
-class Box2D(object):
-    """  a 2-d axis-aligned box """
+class AxisAlignedBox(object):
+    """  an N-D axis-aligned box """
 
     def __init__(self, min_pt, max_pt):
         """ constructor """
@@ -241,6 +241,18 @@ class Box2D(object):
     def dims(self):
         """ dimensions of the box """
         return self.max_pt - self.min_pt
+
+    def __str__(self):
+        """ return human-readable string representation """
+        return 'Box2D: (' + str(self.min_pt) + ', ' + str(self.max_pt) + ')'
+
+    def __repr__(self):
+        """ return string representation """
+        return '%s(%s, %s)' % (self.__class__, self.min_pt, self.max_pt)
+
+
+class Box2D(AxisAlignedBox):
+    """ an 2-D axis-aligned bounding box """
 
     def __str__(self):
         """ return human-readable string representation """
@@ -352,3 +364,43 @@ def volume_corners(vol_origin, vol_extent):
                 corners.append(vol_origin + vol_extent*np.array((xi,yi,zi)))
     return corners
 
+
+def compute_2D_affine_xform(from_points, to_points):
+    """ find H such that:
+    to_points = H * from_points, H is of form [a b c; d e f; 0 0 1]
+    """
+    from_points_M = np.vstack((np.array(from_points).T, np.ones(len(from_points))))
+    to_points_M = np.vstack((np.array(to_points).T, np.ones(len(to_points))))
+
+    if from_points_M.shape != to_points_M.shape:
+        raise Exception('number of points do not match')
+
+    #condition points
+    m = np.mean(from_points_M, axis=1)
+    maxstd = np.max(np.std(from_points_M, axis=1))
+    C1 = np.diag([1/maxstd, 1/maxstd, 1]) 
+    C1[0:2, 2] = -m[0:2]/maxstd
+    fp_cond = np.dot(C1,from_points_M)
+
+    #-to points-
+    m = np.mean(to_points_M, axis=1)
+    C2 = C1.copy() #must use same scaling for both point sets
+    C2[0:2, 2] = -m[0:2]/maxstd
+    tp_cond = np.dot(C2,to_points_M)
+
+    #conditioned points have mean zero, so translation is zero
+    A = np.concatenate((fp_cond[:2],tp_cond[:2]), axis=0)
+    U,S,V = np.linalg.svd(A.T)
+
+    #create B and C matrices as Hartley-Zisserman (2nd ed) p 130.
+    tmp = V[:2].T
+    B = tmp[:2]
+    C = tmp[2:4]
+
+    tmp2 = np.concatenate((np.dot(C,np.linalg.pinv(B)),np.zeros((2,1))), axis=1) 
+    H = np.vstack((tmp2,[0,0,1]))
+
+    #decondition
+    H = np.dot(np.linalg.inv(C2),np.dot(H,C1))
+
+    return H / H[2,2]
