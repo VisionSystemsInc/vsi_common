@@ -124,6 +124,44 @@ def quaternion_to_matrix(q):
     return R
 
 
+def matrix_to_Euler_angles(M, order=(0,1,2), repeat=False, parity_even=True, from_S=True):
+    """ Convert a rotation matrix to Euler angles (X,Y,Z) order
+    From Graphics Gems tog.acm.org/resources/GraphicsGems/gemsiv/euler_angles
+    dec: Not tested for anything other than default args!
+    """
+    i = order[0]
+    j = order[1]
+    k = order[2]
+    euler = np.zeros(3)
+    if repeat:
+        sy = np.sqrt(M[i,j]*M[i,j] + M[i,k]*M[i,k]);
+        if sy > 1e-6:
+            euler[0] = np.arctan2(M[i,j], M[i,k]);
+            euler[1] = np.arctan2(sy, M[i,i]);
+            euler[2] = np.arctan2(M[j,i], -M[k,i]);
+        else:
+            euler[0] = atan2(-M[j,k], M[j,j]);
+            euler[1] = atan2(sy, M[i,i]);
+            euler[2] = 0;
+
+    else:
+        cy = np.sqrt(M[i,i]*M[i,i] + M[j,i]*M[j,i])
+        if cy > 1e-6:
+            euler[0] = np.arctan2(M[k,j], M[k,k])
+            euler[1] = np.arctan2(-M[k,i], cy)
+            euler[2] = np.arctan2(M[j,i], M[i,i])
+        else:
+            euler[0] = np.arctan2(-M[j,k], M[j,j])
+            euler[1] = np.arctan2(-M[k,i], cy)
+            euler[2] = 0
+
+    if not parity_even:
+        euler *= -1
+    if not from_S:
+        euler = np.array((euler[2], euler[1], euler[0]))
+    return euler
+
+
 def rotate_vector(v, axis, angle):
     """ rotate the vector v around axis by angle radians """
     R = axis_angle_to_matrix(axis,angle)
