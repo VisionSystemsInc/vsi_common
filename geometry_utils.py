@@ -123,10 +123,54 @@ def quaternion_to_matrix(q):
 
     return R
 
+def Euler_angles_to_matrix(angles, order=(0,1,2), repeat=False, parity_even=True, from_S=True):
+    """ Convert a rotation matrix to Euler angles (X,Y,Z) order
+    From Graphics Gems tog.acm.org/resources/GraphicsGems/gemsiv/euler_angle
+    dec: Not tested for anything other than default args!
+    """
+    if not from_S:
+        # swap angle order
+        angles = (angles[2], angles[1], angles[0])
+
+    if not parity_even:
+        # negate angles
+        angles = (-angles[0], -angles[1], -angles[2])
+
+    ti = angles[0]
+    tj = angles[1]
+    th = angles[2]
+
+    ci = np.cos(ti)
+    cj = np.cos(tj)
+    ch = np.cos(th)
+
+    si = np.sin(ti)
+    sj = np.sin(tj)
+    sh = np.sin(th)
+
+    cc = ci*ch
+    cs = ci*sh
+    sc = si*ch
+    ss = si*sh
+
+    i,j,k = order
+
+    M = np.zeros((3,3))
+    if repeat:
+        M[i,i] = cj;     M[i,j] =  sj*si;    M[i,k] =  sj*ci
+        M[j,i] = sj*sh;  M[j,j] = -cj*ss+cc; M[j,k] = -cj*cs-sc
+        M[k,i] = -sj*ch; M[k,j] =  cj*sc+cs; M[k,k] =  cj*cc-ss
+    else:
+        M[i,i] = cj*ch; M[i,j] = sj*sc-cs; M[i,k] = sj*cc+ss
+        M[j,i] = cj*sh; M[j,j] = sj*ss+cc; M[j,k] = sj*cs-sc
+        M[k,i] = -sj;   M[k,j] = cj*si;    M[k,k] = cj*ci
+
+    return M
+
 
 def matrix_to_Euler_angles(M, order=(0,1,2), repeat=False, parity_even=True, from_S=True):
     """ Convert a rotation matrix to Euler angles (X,Y,Z) order
-    From Graphics Gems tog.acm.org/resources/GraphicsGems/gemsiv/euler_angles
+    From Graphics Gems tog.acm.org/resources/GraphicsGems/gemsiv/euler_angle
     dec: Not tested for anything other than default args!
     """
     i = order[0]
