@@ -23,11 +23,7 @@ def read_token(file_obj, tok=None, ignore_char=None):
 
 def read_list(filename):
     """ read a list of strings from file, one per line """
-    try:
-        fd = open(filename,'r')
-    except IOError:
-        print('Error opening file ' + filename)
-        return []
+    fd = open(filename,'r')
     lines = []
     for line in fd:
         lines.append(line.strip())
