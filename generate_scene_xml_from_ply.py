@@ -6,7 +6,7 @@ import mesh_utils
 import sys
 import numpy as np
 
-def generate_scene_xml_from_ply(ply_filename, output_filename, model_dir, num_blocks, max_num_subblocks, appearance_model, num_bins, max_level, lvcs_origin ):
+def generate_scene_xml_from_ply(ply_filename, output_filename, model_dir_rel, num_blocks, max_num_subblocks, appearance_models, num_bins, max_level, lvcs_origin ):
     """ generate the scene.xml to fit geometry defined in the ply file """
     # get the mesh vertices in numpy matrix form
     verts = mesh_utils.get_ply_vertices(ply_filename)
@@ -26,24 +26,24 @@ def generate_scene_xml_from_ply(ply_filename, output_filename, model_dir, num_bl
     print('num_subblocks = ' + str(num_subblocks))
 
     output_fd = open(output_filename, 'w')
-    generate_scene_xml.generate_scene_xml(output_fd, model_dir, num_blocks, num_subblocks, subblock_size, appearance_model, num_bins, max_level, lvcs_origin, local_origin)
+    generate_scene_xml.generate_scene_xml(output_fd, model_dir_rel, num_blocks, num_subblocks, subblock_size, appearance_models, num_bins, max_level, lvcs_origin, local_origin)
 
 def main():
     """ main """
     parser = argparse.ArgumentParser()
     parser.add_argument('ply_filename', nargs='?', type=argparse.FileType('r'), default=sys.stdin)
     parser.add_argument('output_filename', nargs='?', type=argparse.FileType('w'), default=sys.stdout)
-    parser.add_argument('--model_dir', default='.')
+    parser.add_argument('--model_dir_rel', default='.')
     parser.add_argument('--num_blocks', nargs=3, type=int, default=(1,1,1))
     parser.add_argument('--num_subblocks', nargs=3, type=int, default=(100,100,100))
-    parser.add_argument('--appearance_model', default='boxm2_mog3_grey')
+    parser.add_argument('--appearance_models', nargs='+', default=('boxm2_mog3_grey',))
     parser.add_argument('--num_bins', type=int, default=1)
     parser.add_argument('--max_level', type=int, default=3)
     parser.add_argument('--lvcs_origin', nargs=3, type=float, help='LVCS origin in form lon lat hae', default=None)
     args = parser.parse_args()
 
 
-    generate_scene_xml_from_ply(args.ply_filename, args.output_file, args.model_dir, args.num_blocks, args.num_subblocks, args.appearance_model, args.num_bins, args.max_level, args.lvcs_origin, args.local_origin)
+    generate_scene_xml_from_ply(args.ply_filename, args.output_file, args.model_dir_rel, args.num_blocks, args.num_subblocks, args.appearance_models, args.num_bins, args.max_level, args.lvcs_origin)
 
 
 if __name__ == '__main__':
