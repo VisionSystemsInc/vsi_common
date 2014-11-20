@@ -20,7 +20,7 @@ def generate_scene_xml(output_file, model_dir_rel, num_blocks, num_subblocks, su
     output_file.write('  </lvcs>\n')
     output_file.write('  <local_origin x="' + str(local_og[0]) + '" y="' + str(local_og[1]) + '" z="' + str(local_og[2]) +'">\n')
     output_file.write('  </local_origin>\n')
-    output_file.write('  <scene_paths path="' + model_dir_rel + '/" is_model_local="true/">\n')
+    output_file.write('  <scene_paths path="' + model_dir_rel + '/" is_model_local="true">\n')
     output_file.write('  </scene_paths>\n')
     output_file.write('  <version number="2">\n')
     output_file.write('  </version>\n')
