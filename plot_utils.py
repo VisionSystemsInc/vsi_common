@@ -8,16 +8,16 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
 import skimage.color
 
-def groupedBar(features, bar_labels=None, group_labels=None, ax=None, colors=None):
+def grouped_bar(features, bar_labels=None, group_labels=None, ax=None, colors=None):
     '''
     features.shape like np.array([n_bars, n_groups])
     
     >>> bars = np.random.rand(5,3)
-    >>> groupedBar(bars)
+    >>> grouped_bar(bars)
     
     >>> group_labels = ['group%d' % i for i in range(bars.shape[1])]
     >>> bar_labels = ['bar%d' % i for i in range(bars.shape[0])]
-    >>> groupedBar(bars, group_labels=group_labels, bar_labels=bar_labels)
+    >>> grouped_bar(bars, group_labels=group_labels, bar_labels=bar_labels)
     '''
     
     n_bars, n_groups = features.shape[0:2]
@@ -48,6 +48,9 @@ def groupedBar(features, bar_labels=None, group_labels=None, ax=None, colors=Non
         ax.set_xticklabels(group_labels, rotation=0.0)
         for item in (ax.get_xticklabels() + ax.get_yticklabels()):
             item.set_fontsize(14)
+
+def groupedBar(*args, **kwargs):
+    grouped_bar(*args, **kwargs)
 
 def lblshow(label_img, labels_str=None, f=None, ax=None, cmap=None, *args, **kwargs):
     ''' display a labeled image with associated legend
@@ -136,7 +139,6 @@ def plot_vector(x, axis, axis_order, *args, **kwargs):
     else:
         axis.plot(x[axis_order[0],:], x[axis_order[1],:], x[axis_order[2],:], *args, **kwargs)
 
-
 def plot_rectangle(min_pt, max_pt, axis=None, *args, **kwargs):
     """ plot a 2-d box """
     x,y = min_pt
@@ -146,7 +148,6 @@ def plot_rectangle(min_pt, max_pt, axis=None, *args, **kwargs):
     if axis is None:
         axis = plt.gca()
     axis.plot(xvec, yvec, *args, **kwargs)
-
 
 def plot_cube(x, y, z, width, height, depth, *args, **kwargs):
     """ plot a 3-d cube """
