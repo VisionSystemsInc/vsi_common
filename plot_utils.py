@@ -36,30 +36,43 @@ def groupedBar(features, bar_labels=None, group_labels=None, ax=None, colors=Non
 
     for j,group in enumerate(features):
         label = bar_labels[j] if bar_labels is not None else None
-        ax.bar(index + j*bar_width, group, bar_width, color=colors[j], label=label, alpha=0.4)
+        ax.bar(index + j*bar_width - bar_width*n_bars/2.0, 
+            group, bar_width, color=colors[j], label=label, alpha=0.4)
+        ax.margins(0.05,0.0) # so the bar graph is nicely padded
 
     if bar_labels is not None:
         ax.legend(loc='upper left', bbox_to_anchor=(1.0,1.02), fontsize=14)
 
     if group_labels is not None:
-        ax.set_xticks(index + (n_bars/2.)*bar_width)
-        ax.set_xticklabels(group_labels)
+        ax.set_xticks(index + (n_bars/2.)*bar_width - bar_width*n_bars/2.0)
+        ax.set_xticklabels(group_labels, rotation=0.0)
         for item in (ax.get_xticklabels() + ax.get_yticklabels()):
             item.set_fontsize(14)
 
-def lblshow(label_img, labels_str, f=None, cmap=None, *args, **kwargs):
+def lblshow(label_img, labels_str=None, f=None, ax=None, cmap=None, *args, **kwargs):
     ''' display a labeled image with associated legend
 
 	Parameters
 	----------
 	label_img : labeled image [nrows, ncols] = numpy.array.shape
-	labels_str : a list of labels
+	labels_str : a complete list of labels
     f : (optional) a figure handle
     cmap : the color of each label (optional). like a list of colors, e.g.,
             ['Red','Green',...] or a matplotlib.colors.ListedColormap)
     '''
 
-    f,ax = plt.subplots(1,1) if f is None else (f, f.gca())
+    if labels_str is None:
+        labels_str = [str(i) for i in np.unique(label_img)]
+
+    if ax is None:
+        if f is None:
+            f,ax = plt.subplots(1,1)
+            f.set_size_inches(9,6)
+        else:
+            ax = f.gca()
+    elif f is None:
+        f = ax.get_figure() 
+
 
     nlabels = len(labels_str)
     if type(cmap) is mpl.colors.ListedColormap:
