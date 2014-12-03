@@ -298,3 +298,26 @@ def read_vsfm_nvm_file(filename):
 
     return img_fnames, fs, Rs, Ts, pts, colors
 
+# from http://stackoverflow.com/questions/260273/most-efficient-way-to-search-the-last-x-lines-of-a-file-in-python.
+# surprisingly, this was not the accepted answer.
+def reversed_lines(file):
+    """ generate the lines of file in reverse order """
+    part = ''
+    for block in reversed_blocks(file):
+        for c in reversed(block):
+            if c == '\n' and part:
+                yield part[::-1]
+                part = ''
+            part += c
+    if part: yield part[::-1]
+
+def reversed_blocks(file, blocksize=4096):
+    """ generate blocks of file's contents in reverse order """
+    file.seek(0, os.SEEK_END)
+    here = file.tell()
+    while 0 < here:
+        delta = min(blocksize, here)
+        here -= delta
+        file.seek(here, os.SEEK_SET)
+        yield file.read(delta)
+
