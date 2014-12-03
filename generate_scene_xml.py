@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 """ Generate a boxm2-style scene.xml file """
 import argparse
-import sys
+import sys, os.path
 
 
 def generate_scene_xml(output_file, model_dir_rel, num_blocks, num_subblocks, subblock_size, appearance_models=('boxm2_mog3_grey','boxm2_num_obs'), num_bins=1, max_level=3, lvcs_og=None, local_og=None):
@@ -20,7 +20,7 @@ def generate_scene_xml(output_file, model_dir_rel, num_blocks, num_subblocks, su
     output_file.write('  </lvcs>\n')
     output_file.write('  <local_origin x="' + str(local_og[0]) + '" y="' + str(local_og[1]) + '" z="' + str(local_og[2]) +'">\n')
     output_file.write('  </local_origin>\n')
-    output_file.write('  <scene_paths path="' + model_dir_rel + '/" is_model_local="true">\n')
+    output_file.write('  <scene_paths path="' + os.path.join(model_dir_rel,'') + '" is_model_local="true">\n')
     output_file.write('  </scene_paths>\n')
     output_file.write('  <version number="2">\n')
     output_file.write('  </version>\n')
@@ -40,8 +40,7 @@ def generate_scene_xml(output_file, model_dir_rel, num_blocks, num_subblocks, su
                 output_file.write('origin_x="' + str(block_og_x) + '" origin_y="' + str(block_og_y) + '" origin_z="' + str(block_og_z) + '" ')
                 output_file.write('dim_x="' + str(subblock_size) + '" dim_y="' + str(subblock_size) + '" dim_z="' + str(subblock_size) + '" ')
                 output_file.write('num_x="' + str(num_subblocks[0]) + '" num_y="' + str(num_subblocks[1]) + '" num_z="' + str(num_subblocks[2]) + '" ')
-                output_file.write('init_level="1" max_level="' + str(max_level) + '" max_mb="1200.0" p_init="0.001000" random="0">\n')
-                output_file.write('  </block>\n')
+                output_file.write('init_level="1" max_level="' + str(max_level) + '" max_mb="1200.0" p_init="0.001000" random="0"/>\n')
     output_file.write('</scene>')
 
 
