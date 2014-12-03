@@ -4,10 +4,13 @@ import argparse
 import sys, os.path
 
 
-def generate_scene_xml(output_file, model_dir_rel, num_blocks, num_subblocks, subblock_size, appearance_models=('boxm2_mog3_grey','boxm2_num_obs'), num_bins=1, max_level=3, lvcs_og=None, local_og=None):
+def generate_scene_xml(output_file, model_dir_rel, num_blocks, num_subblocks, subblock_size, appearance_models=None, num_bins=1, max_level=3, lvcs_og=None, local_og=None):
     """ write the scene.xml file
     lvcs_og is a tuple stored as (lon, lat, hae)  (hae -> height above ellipsoid)
     """
+
+    if appearance_models is None:
+        appearance_models = ('boxm2_mog3_grey','boxm2_num_obs')
 
     if lvcs_og is None:
         lvcs_og = (0,0,0)
@@ -52,7 +55,7 @@ def main():
     parser.add_argument('--num_blocks', nargs=3, type=int, default=(1,1,1))
     parser.add_argument('--num_subblocks', nargs=3, type=int, default=(100,100,100))
     parser.add_argument('--subblock_size', type=float, default=1.0)
-    parser.add_argument('--appearance_model', default='boxm2_mog3_grey')
+    parser.add_argument('--appearance_model', nargs='*', default=['boxm2_mog3_grey','boxm2_num_obs'])
     parser.add_argument('--num_bins', type=int, default=1)
     parser.add_argument('--max_level', type=int, default=3)
     parser.add_argument('--lvcs_origin', nargs=3, type=float, help='LVCS origin in form lon lat hae', default=None)
