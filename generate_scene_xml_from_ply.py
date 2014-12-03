@@ -10,13 +10,14 @@ def generate_scene_xml_from_ply(ply_filename, output_filename, model_dir_rel, nu
     """ generate the scene.xml to fit geometry defined in the ply file """
     # get the mesh vertices in numpy matrix form
     verts = mesh_utils.get_ply_vertices(ply_filename)
-    # local origin is the minimum of the vertices
-    local_origin = verts.min(axis=1)
-    print('local_origin = ' + str(local_origin))
     # compute subblock size needed to contain all vertices
     bbox_size = verts.max(axis=1) - verts.min(axis=1)
     # add some padding to avoid points right on the boundary of the volume
-    bbox_size += 0.01 * bbox_size
+    bbox_pad = 0.04 * bbox_size
+    bbox_size += 2.0 * bbox_pad
+    # local origin is the minimum of the vertices
+    local_origin = verts.min(axis=1) - bbox_pad
+    print('local_origin = ' + str(local_origin))
     max_total_num_subblocks = np.array(num_blocks) * max_num_subblocks
     subblock_size = np.max(bbox_size / max_total_num_subblocks )
     block_size = bbox_size / np.array(num_blocks)
