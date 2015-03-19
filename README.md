@@ -7,7 +7,7 @@ In order to use these directories, all you have to do is
 ```
 #!bash
 
-source env.bash
+source env.bsh
 
 ```
 * Windows (batch)
