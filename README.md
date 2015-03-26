@@ -29,11 +29,28 @@ env.bat
 * Dependencies
 * Database configuration
 * How to run tests
+    * To run all the unit tests for python
+```
+#!bash
+            python -m unittest discover -s {vsi_python_dir}
+```
+
 * Deployment instructions
 
 ### Contribution guidelines ###
 
 * Writing tests
+    * Python
+        * Write tests for your modules using the unittest
+        * Tests should be stored separately in files names "test_*.py"
+```
+#!python
+            import unittest
+            class MyTestClass(unittest.TestCase):
+              def test_something(self): #This function MUST start with "test_"
+                doSomething();
+                self.assertEqual('abc', 'a'+'bc')
+```
 * Code review
 * Other guidelines
 
