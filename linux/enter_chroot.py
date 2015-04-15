@@ -21,7 +21,7 @@
 #
 # Requirments:
 #  Host - python (at least 2.5)
-#  
+#
 
 from __future__ import with_statement #2.5 compatibility
 
@@ -31,10 +31,14 @@ import os
 #import argparse python 2.6 compatibility
 from optparse import OptionParser #2.3
 from subprocess import Popen, PIPE #2.4
-from distutils.dir_util import mkpath #?
+from distutils.dir_util import mkpath, copy_tree #?
 from distutils.file_util import copy_file #?
+from distutils.errors import DistutilsFileError
 from glob import glob #Pre 2.5
 import re #pre 1.5.2
+
+import logging
+logger = logging.getLogger(__name__)
 
 DEFAULT_USER='user'
 DEFAULT_GROUP='workgroup'
@@ -42,8 +46,11 @@ DEFAULT_UID=1000
 DEFAULT_GID=1000
 
 def call(*cmd):
+  logger.info('Running command: %s', cmd)
   pid = Popen(cmd, stdout=PIPE, stderr=PIPE)
   (dout, derr) = pid.communicate()
+  logger.debug('stdout: %s', dout)
+  logger.debug('stderr: %s', derr)
   return (dout, derr, pid.wait())
 
 def uidFromName(name):
@@ -120,12 +127,26 @@ if __name__=='__main__':
   parser.add_option("--gid", help="gid to use in the chroot")
   parser.add_option("--openclinit", help="opencl init executable. Use something like ls to disable")
   parser.add_option("--hostmodules", help="Dir for /lib/modules/{kernelversion})")
+  parser.add_option("--log", dest='loglevel', default='WARNING', help="Logging level")
+  parser.add_option("--ssh", help="Alternative ssh folder used for copying ssh keys from. Default is ~user/.ssh/")
   (options, args) = parser.parse_args()
 
+  logger.setLevel(getattr(logging, options.loglevel.upper(), None))
+  console = logging.StreamHandler()
+  logger.addHandler(console)
+
   if os.getuid() != 0:
-    raise Exception("You must be root to chroot!")
+    import sys
+    logger.info("You aren't root, running command under sudo")
+    cmd = ['sudo', os.path.abspath(__file__), os.path.abspath(sys.argv[1])] + sys.argv[2:]
+    logger.info("Elevation command: %s", cmd)
+    os.execlp('sudo', *cmd)
+#    raise Exception("You must be root to chroot!")
 
   chroot_dir = os.path.abspath(args[0])
+  if not os.path.isdir(chroot_dir):
+    logger.critical("Chroot dir '%s' does not exist!" % chroot_dir)
+    exit(2)
 
   # Determine who should be the user in the chroot
   if options.simple:  #Just be root
@@ -201,6 +222,17 @@ if __name__=='__main__':
       mkpath(unchroot_home)
       os.chown(unchroot_home, chroot_uid, chroot_gid)
 
+    sshDir = options.ssh
+    if options.ssh is None:
+      sshDir = os.path.expanduser(path_join('~%s' % chroot_user, '.ssh'))
+      if os.path.exists(sshDir) and os.path.isdir(sshDir):
+        logger.info('Copying ssh dir %s', sshDir)
+        unchroot_ssh = path_join(unchroot_home, '.ssh')
+        copy_tree(sshDir, unchroot_ssh)
+        os.chown(unchroot_ssh, chroot_uid, chroot_gid)
+        for f in glob(path_join(unchroot_ssh, '*')):
+          os.chown(f, chroot_uid, chroot_gid)
+
   #Reset the home dir ownership, in case it did exist
   if chroot_user != 'root' and not options.simple:
     current_ownership = call('stat', '-c' '%u:%g', unchroot_home)[0].strip()
@@ -212,13 +244,17 @@ if __name__=='__main__':
       #Much safer
       call('chown', '-R', '-h', '-P', '--from', current_ownership, unchroot_home)
 
-  #Needed for dns support. Does not work with (ubuntu's on by default) stupid dnsmasq shit
-  copy_file('/etc/resolv.conf', path_join(chroot_dir, 'etc'))
+  try:
+    #Needed for dns support. Does not work with (ubuntu's on by default) stupid dnsmasq shit
+    copy_file('/etc/resolv.conf', path_join(chroot_dir, 'etc'))
+  except DistutilsFileError:
+    logger.warning('Resolv.conf not copied. This is probably a dnsmasq issue. Solution unknown')
   
   if host_modules:
     mount_bind(host_modules, unchroot_host_modules)  
   mount_bind('/proc', path_join(chroot_dir, 'proc'))
   mount_bind('/dev', path_join(chroot_dir, 'dev'))
+  mount_bind('/sys', path_join(chroot_dir, 'sys'))
   mount_bind('/dev/pts', path_join(chroot_dir, 'dev', 'pts'))
   mount_bind(dev_shm, unchroot_dev_shm);
 
@@ -271,17 +307,21 @@ if __name__=='__main__':
       env['XAUTHORITY'] = path_join(chroot_home, os.path.basename(env['XAUTHORITY']))
 
   #print chroot_user, chroot_group, chroot_uid, chroot_gid, chroot_home, host_modules, os_distro, dev_shm
-
-  Popen(['chroot', '--userspec', '%d:%d' % (chroot_uid, chroot_gid), chroot_dir] + args[1:]).wait()
+  cmd = ['chroot', '--userspec', '%d:%d' % (chroot_uid, chroot_gid), chroot_dir] + args[1:]
+  logger.info('Chroot command: %s', cmd)
+  Popen(cmd).wait()
 
   chroot_in_use = False
   chroot_stat = os.stat(chroot_dir)
   for proc in glob('/proc/[0-9]*'):
-    proc_stat = os.stat(path_join(proc, 'root'))
-    if chroot_stat.st_ino == proc_stat.st_ino and \
-       chroot_stat.st_dev == proc_stat.st_dev:
-      chroot_in_use=True
-      break
+    try: #In case pid ceases to exist
+      proc_stat = os.stat(path_join(proc, 'root'))
+      if chroot_stat.st_ino == proc_stat.st_ino and \
+         chroot_stat.st_dev == proc_stat.st_dev:
+        chroot_in_use=True
+        break
+    except:
+      pass
 
   if not chroot_in_use:
     umount(unchroot_host_modules)
