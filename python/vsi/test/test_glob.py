@@ -34,29 +34,24 @@ class GlobTest(unittest.TestCase):
     else:
       self.extra = 0
 
-    testData = [[os.path.join(self.tempdir, 'test*', '*'),    3,            4+self.extra, None],
-                [os.path.join(self.tempdir, '*', '*.txt'),    1+self.extra, 4+self.extra, None],
-                [os.path.join(self.tempdir, '?e*1', '*1*x*'), 1,            2+self.extra, None],
-                [os.path.join(self.tempdir, '?e*', '*1*x*'),  1,            3+self.extra, None],
-                [os.path.join(self.tempdir, 'test*'),         2,            4+self.extra, None],
-                [os.path.join(self.tempdir, 'test*')+os.path.sep, 1,        2+self.extra, None],
-                [self.test1.upper(),                          0,            1+self.extra, None],
-                [self.test1,                                  1,            1+self.extra, None],
-                [self.test1.upper()+os.path.sep,              0,            1+self.extra, None],
-                [self.test1+os.path.sep,                      1,            1+self.extra, None],
-                [os.path.join(self.test1, 'file1.txt').upper(), 0,          1+self.extra, None],
-                [os.path.join(self.test1, 'file1.txt'),       1,            1+self.extra, None],
-                ['*',                                         3,            3,      self.test1], 
-                [os.path.join(os.path.curdir, '*'),           3,            3,      self.test1],
-                [os.path.join(os.path.pardir, '*'),           5,            5,      self.test1],]
-
-    (self.testPatterns, 
-     self.testResultsSensitive, 
-     self.testResultsInsensitive, 
-     self.testDir)                = zip(*testData) 
-
+    self.testData = [[os.path.join(self.tempdir, 'test*', '*'),    3,            4+self.extra, None],
+                     [os.path.join(self.tempdir, '*', '*.txt'),    1+self.extra, 4+self.extra, None],
+                     [os.path.join(self.tempdir, '?e*1', '*1*x*'), 1,            2+self.extra, None],
+                     [os.path.join(self.tempdir, '?e*', '*1*x*'),  1,            3+self.extra, None],
+                     [os.path.join(self.tempdir, 'test*'),         2,            4+self.extra, None],
+                     [os.path.join(self.tempdir, 'test*')+os.path.sep, 1,        2+self.extra, None],
+                     [self.test1.upper(),                          0,            1+self.extra, None],
+                     [self.test1,                                  1,            1+self.extra, None],
+                     [self.test1.upper()+os.path.sep,              0,            1+self.extra, None],
+                     [self.test1+os.path.sep,                      1,            1+self.extra, None],
+                     [os.path.join(self.test1, 'file1.txt').upper(), 0,          1+self.extra, None],
+                     [os.path.join(self.test1, 'file1.txt'),       1,            1+self.extra, None],
+                     ['*',                                         3,            3,      self.test1], 
+                     [os.path.join(os.path.curdir, '*'),           3,            3,      self.test1],
+                     [os.path.join(os.path.pardir, '*'),           5,            5,      self.test1],]
+    
   def test_runAllTests(self):
-    for (pattern, result, resultI, testDir) in zip(self.testPatterns, self.testResultsSensitive, self.testResultsInsensitive, self.testDir):
+    for (pattern, result, resultI, testDir) in self.testData:
       if testDir is not None:
         with Chdir(self.test1):
           self.run_test(pattern, result, resultI)

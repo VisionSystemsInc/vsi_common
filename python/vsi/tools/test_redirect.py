@@ -2,9 +2,9 @@ import unittest
 import sys
 import os
 
-from .redirect import Redirect
+from .redirect import Redirect, Capture
 
-class RedirectTest(unittest.TestCase):
+class CaptureTest(unittest.TestCase):
   def test_system(self):
     ''' Test if the os.system test even WORKS '''
     r = os.system('echo stderr test 1>&2')
@@ -20,11 +20,31 @@ class RedirectTest(unittest.TestCase):
     #This won't work for csh. Maybe this will work better?
     #dummy=os.system('whoami impossibleusernamethatshoulodneverbeusedZZZ') and counts Z instead?
 
-  def test_simpleoutJoint(self):
-    ''' Test if stdout redirect works '''
-    with Redirect() as r:
+  def test_redirect(self):
+    from StringIO import StringIO
+    stdout_c = StringIO()
+    stdout_py = StringIO()
+    stderr_c = StringIO()
+    stderr_py = StringIO()
+    
+    with Redirect(stdout_c=stdout_c, stderr_c=stderr_c, stdout_py=stdout_py, stderr_py=stderr_py):
       self.__simple()
-    #theres NO guarentee the io doesn't intermingle, so counting is best
+
+    stdout_c.seek(0, 0)
+    stderr_c.seek(0, 0)
+    stdout_py.seek(0, 0)
+    stderr_py.seek(0, 0)
+    
+    print 1, repr(stdout_c.read())
+    print 2, repr(stderr_c.read())
+    print 3, repr(stdout_py.read())
+    print 4, repr(stderr_py.read())
+
+  def test_simpleoutGroup(self):
+    ''' Test if stdout capture works '''
+    with Capture() as r:
+      self.__simple()
+    #theres NO guarentee the io doesn't interleave, so counting is best
     self.assertEqual(r.stdout_py.count('a'), 3)
     self.assertEqual(r.stdout_c.count('c'), 3)
     self.assertEqual(r.stderr_py.count('b'), 3)
@@ -36,9 +56,9 @@ class RedirectTest(unittest.TestCase):
     self.assertIs(r.stdout, r.stderr_c)
     self.assertIs(r.stdout, r.stderr_py)
 
-  def test_simpleDisJoint(self):
-    ''' Test if stdout redirect works, when they are all separte streams'''
-    with Redirect(joint=False) as r:
+  def test_simpleUngroup(self):
+    ''' Test if stdout capture works, when they are all separte streams'''
+    with Capture(group=False) as r:
       self.__simple()
     #theres NO guarentee the io doesn't intermingle, so counting is best
 
@@ -57,8 +77,8 @@ class RedirectTest(unittest.TestCase):
     self.assertIsNot(r.stdout_py, r.stderr_py)
 
   def test_simpleStdoutC(self):
-    ''' Test if stdout c only redirect works'''
-    with Redirect(                stdout_py=None,
+    ''' Test if stdout c only capture works'''
+    with Capture(               stdout_py=None,
                   stderr_c=None, stderr_py=None) as r:
       self.__simple()
     #theres NO guarentee the io doesn't intermingle, so counting is best
@@ -73,8 +93,8 @@ class RedirectTest(unittest.TestCase):
     self.assertEqual(r.stderr_c.count('d'), 0)
 
   def test_simpleStdoutPy(self):
-    ''' Test if stdout py only redirect works'''
-    with Redirect(stdout_c=None,
+    ''' Test if stdout py only capture works'''
+    with Capture(stdout_c=None,
                   stderr_c=None, stderr_py=None) as r:
       self.__simple()
     #theres NO guarentee the io doesn't intermingle, so counting is best
@@ -85,8 +105,8 @@ class RedirectTest(unittest.TestCase):
     self.assertEqual(r.stderr_c.count('d'), 0)
 
   def test_simpleStderrC(self):
-    ''' Test if stderr c only redirect works'''
-    with Redirect(stdout_c=None, stdout_py=None,
+    ''' Test if stderr c only capture works'''
+    with Capture(stdout_c=None, stdout_py=None,
                                   stderr_py=None) as r:
       self.__simple()
     #theres NO guarentee the io doesn't intermingle, so counting is best
@@ -97,8 +117,8 @@ class RedirectTest(unittest.TestCase):
     self.assertEqual(r.stderr_c.count('d'), 3)
 
   def test_simpleStderrPy(self):
-    ''' Test if stderr py only redirect works'''
-    with Redirect(stdout_c=None, stdout_py=None,
+    ''' Test if stderr py only capture works'''
+    with Capture(stdout_c=None, stdout_py=None,
                   stderr_c=None                 ) as r:
       self.__simple()
     #theres NO guarentee the io doesn't intermingle, so counting is best

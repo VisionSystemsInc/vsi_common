@@ -106,7 +106,6 @@ def iglob(pathname, case=None):
 # takes a literal basename (so it only has to check for its existence).
 
 def glob0(dirname, basename, case=None):
-###  print 'Still need me "%s" "%s"' % (dirname, basename) 
   if dirname == '':
     dirname = os.curdir
   # `os.path.split()` returns an empty basename for paths ending with a
