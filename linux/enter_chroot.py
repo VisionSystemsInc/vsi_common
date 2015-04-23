@@ -329,4 +329,4 @@ if __name__=='__main__':
     umount(unchroot_dev_shm)
     umount(path_join(chroot_dir, 'dev', 'pts'))
     umount(path_join(chroot_dir, 'dev'))
-
+    umount(path_join(chroot_dir, 'sys'))
