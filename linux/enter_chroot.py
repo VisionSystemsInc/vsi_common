@@ -88,6 +88,9 @@ def mount_bind(fromDir, toDir):
   if not isMountPoint(toDir):
     call('mount', '--bind', fromDir, toDir)
 
+def make_readonly_mount(mountDir):
+  call('mount', '-o', 'remount,ro', mountDir)
+
 def umount(toDir):
   if isMountPoint(toDir):
     call('umount', toDir);
@@ -251,7 +254,8 @@ if __name__=='__main__':
     logger.warning('Resolv.conf not copied. This is probably a dnsmasq issue. Solution unknown')
   
   if host_modules:
-    mount_bind(host_modules, unchroot_host_modules)  
+    mount_bind(host_modules, unchroot_host_modules)
+    make_readonly_mount(unchroot_host_modules)
   mount_bind('/proc', path_join(chroot_dir, 'proc'))
   mount_bind('/dev', path_join(chroot_dir, 'dev'))
   mount_bind('/sys', path_join(chroot_dir, 'sys'))
