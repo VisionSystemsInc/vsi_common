@@ -12,7 +12,12 @@ class RedirectBase(object):
     sys.stderr.flush()  
 
 class Logger(object):
-  ''' File object wrapper for logger'''
+  ''' File object wrapper for logger.
+  
+      Careful when using this, if the logging out goes to a stream that is 
+      redireted, you have an infinite capture loop and does not go well
+      
+      Use PopenRediret instead of Redirect in that case'''
   def __init__(self, logger, lvl=logging.INFO):
     ''' Create a wrapper for logger using lvl level '''
 
@@ -25,10 +30,124 @@ class Logger(object):
     if str:
       self.logger.log(self.lvl, str)
 
+class FileRedirect(object):
+  ''' Redirect a real file object to any object with .write
+
+      Some function need a REAL file object with file number and all. This
+      class wraps a pair of pipes per output and so what everytime the pipe
+      is written to, output.write is called.
+  
+      Only supports one way communication. You can write to the file object 
+      via any valid call, and the other end of the pipe performs "readlines"
+      and calls output.write() It would be possible to expand this to two way,
+      but not currently needed.
+      
+      Primarily used in a with expresstion:
+      
+      >>> from StringIO import StringIO
+      >>> s = StringIO()
+      >>> with FileRedirect([s]) as f:
+      >>>   f.wids[0].write('hiya')
+      >>> s.seek(0); print s.read()
+      
+      IF you call __enter__ manually, you only need to close the wids file
+      objects, and the rest of the threads and file objects are cleaned up,
+      of course it would be better to call __exit__ in that case.
+      '''
+  def __init__(self, outputs=[]):
+    ''' Create a FileRedirect
+    
+        outputs - list of outputs objects to write to. For every output in 
+                  outputs, an rid in self.rids and wid in self.wids is created
+                  when call with with '''
+    self.outputs = outputs
+
+  def __enter__(self):
+    ''' Create the pipes and monitoring threads '''
+    self.rids = []
+    self.wids = []
+    self.tids = [];
+    
+    for index, output in enumerate(self.outputs):
+      r, w = os.pipe()
+      self.rids.append(os.fdopen(r, 'rb'))
+      self.wids.append(os.fdopen(w, 'wb'))
+      
+      self.startMonitor(index)
+    
+    return self
+  
+  def __exit__(self, exc_type=None, exc_value=None, traceback=None):
+    ''' Closes the write ends of the pipes, and join with monitoring threads
+    
+        The read pipes are automatically closed by the monitors'''
+    for wid in self.wids:
+      wid.close()
+      
+    for tid in self.tids:
+      tid.join()
+
+  def __bleed(self, streamIndex):
+    ''' Function to read all the data and write to output
+     
+        Automactically closes read pipe when done. Can only be stopped by
+        closing the write end of pipe.'''
+    rid = self.rids[streamIndex]
+    wid = self.wids[streamIndex]
+    output = self.outputs[streamIndex]
+
+    #do-while
+    chunk = True
+    while chunk: #while rid isn't closed
+      chunk = rid.readline(64*1024) #read a chunk
+      output.write(chunk) #write chunk
+    rid.close()
+
+  def startMonitor(self, stream_index):
+    ''' Start a new thread to monitor the stream
+    
+        Should only be called once per stream_index'''
+    self.tids.append(threading.Thread(target=self.__bleed, args=(stream_index,)))
+    self.tids[-1].start()
+
+class PopenRedirect(FileRedirect):
+  ''' Version FileRedirect object geared towards redirecting for Popen commands
+  
+      >>> from StringIO import StringIO
+      >>> from subprocess import Popen
+      >>> out = StringIO(); err = StringIO()
+      >>> with PopenRedirect(out, err) as f:
+      >>>   Popen(['whoami'], stdout=f.stdout, stderr=f.stderr).wait()
+      >>>   Popen(['whoami', 'non user'], stdout=f.stdout, stderr=f.stderr).wait()
+      >>> out.seek(0); err.seek(0)
+      >>> print out.read(), err.read()
+  '''
+  def __init__(self, stdout=type('Foo', (object,), {'write':lambda x,y:None})(),
+                     stderr=type('Bar', (object,), {'write':lambda x,y:None})()):
+    ''' Create PopenRedirect object  
+    
+        Parameters:
+        stdout - Stdout File like object, must have .write method
+        stderr - Stderr File like object, must have .write method
+        
+        
+        '''
+    self.stdout_output = stdout
+    self.stderr_output = stderr
+    
+    super(PopenRedirect, self).__init__([stdout, stderr])
+
+  @property
+  def stdout(self):
+    return self.wids[0]
+
+  @property
+  def stderr(self):
+    return self.wids[1]
+
 class Redirect(RedirectBase): #Version 2
   ''' Similar to Capture class, except it redirect to file like objects
   
-
       There are times in python when using "those kind of libraries" 
       where you have to capture either stdout or stderr, and many 
       situations are tricky. This class will help you, by using a with
