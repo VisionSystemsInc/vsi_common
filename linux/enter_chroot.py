@@ -80,7 +80,21 @@ def getKernelVersion():
   return call('uname', '-r')[0].strip()
 
 def isMountPoint(dirName):
-  return not call('mountpoint', '-q', dirName)[2];
+  try:
+    with open('/etc/mtab', 'r') as fid:
+      for mount in fid:
+        if dirName in mount.decode('string_escape'):
+          return True
+  except:
+    pass
+  try:
+    with open('/proc/mounts', 'r') as fid:
+      for mount in fid:
+        if dirName in mount.decode('string_escape'):
+          return True
+  except:
+    pass
+  return not call('mountpoint', '-q', dirName)[2]
 
 def mount_bind(fromDir, toDir):
   if not os.path.exists(toDir):
@@ -91,8 +105,8 @@ def mount_bind(fromDir, toDir):
 def make_readonly_mount(mountDir):
   call('mount', '-o', 'remount,ro', mountDir)
 
-def umount(toDir):
-  if isMountPoint(toDir):
+def umount(toDir, force=False):
+  if isMountPoint(toDir) or force:
     call('umount', toDir);
 
 '''def setGroup(chroot_dir, group, gid):
@@ -328,9 +342,9 @@ if __name__=='__main__':
       pass
 
   if not chroot_in_use:
-    umount(unchroot_host_modules)
-    umount(path_join(chroot_dir, 'proc'))
-    umount(unchroot_dev_shm)
-    umount(path_join(chroot_dir, 'dev', 'pts'))
-    umount(path_join(chroot_dir, 'dev'))
-    umount(path_join(chroot_dir, 'sys'))
+    umount(unchroot_host_modules, True)
+    umount(path_join(chroot_dir, 'proc'), True)
+    umount(unchroot_dev_shm, True)
+    umount(path_join(chroot_dir, 'dev', 'pts'), True)
+    umount(path_join(chroot_dir, 'dev'), True)
+    umount(path_join(chroot_dir, 'sys'), True)
