@@ -275,6 +275,9 @@ if __name__=='__main__':
   mount_bind('/sys', path_join(chroot_dir, 'sys'))
   mount_bind('/dev/pts', path_join(chroot_dir, 'dev', 'pts'))
   mount_bind(dev_shm, unchroot_dev_shm);
+  if os.path.exists('/selinux') and \
+     os.path.exists(path_join(chroot_dir, 'selinux')):
+    mount_bind('/selinux', path_join(chroot_dir, 'selinux'))
 
   env['HISTFILE'] = path_join(chroot_home, '.bash_history')
   env['HOME'] = chroot_home
@@ -348,3 +351,4 @@ if __name__=='__main__':
     umount(path_join(chroot_dir, 'dev', 'pts'), True)
     umount(path_join(chroot_dir, 'dev'), True)
     umount(path_join(chroot_dir, 'sys'), True)
+    umount(path_join(chroot_dir, 'selinux'))
