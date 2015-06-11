@@ -42,7 +42,7 @@ class FileRedirect(object):
       and calls output.write() It would be possible to expand this to two way,
       but not currently needed.
       
-      Primarily used in a with expresstion:
+      Primarily used in a with expression:
       
       >>> from StringIO import StringIO
       >>> s = StringIO()
