@@ -3,6 +3,7 @@ import numpy as np
 import io_utils
 import vtk
 import glob
+import os.path
 
 
 def write_grid_vtk(image_stack_glob, output_filename, origin=(0,0,0), vox_len=1.0):
@@ -98,11 +99,17 @@ def colorize_verts_ply(ply_in_filename, ply_out_filename, image, camera):
     writer.Write()
 
 
-def get_ply_vertices(ply_filename):
+def get_mesh_vertices(mesh_filename):
     """ read a ply file, return vertices in form of 3xN numpy array """
     # read in PLY file
-    reader = vtk.vtkPLYReader()
-    reader.SetFileName(ply_filename)
+    mesh_ext = os.path.splitext(mesh_filename)[1].lower()
+    if mesh_ext == '.ply':
+        reader = vtk.vtkPLYReader()
+    elif mesh_ext == '.obj':
+        reader = vtk.vtkOBJReader()
+    else:
+        raise Exception('Unsupported filename extension ' + mesh_ext)
+    reader.SetFileName(mesh_filename)
     reader.Update()
     data = reader.GetOutput()
 
