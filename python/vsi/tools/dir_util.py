@@ -6,7 +6,23 @@ from tempfile import mkdtemp
 
 class Chdir(object):
   ''' Simple helper function to change dir and guarantee you get back to your 
-      original directory '''
+      original directory 
+      
+      Example:
+      
+      >>> import os
+      >>> import tempfile
+      >>> from vsi.tools.dir_util import Chdir
+      >>> os.chdir(os.path.abspath(os.sep))
+      >>> print(os.getcwd())
+      /
+      >>> with Chdir(tempfile.tempdir):
+      ...   print(os.getcwd())
+      /tmp
+      >>> print(os.getcwd())
+      /
+
+      '''
   def __init__(self, dir, create=False, error_on_exit=False):
     ''' Create Chdir object
     
@@ -48,8 +64,19 @@ class Chdir(object):
 class TempDir(object):
   ''' Create and clean up a temp director 
   
-      Does not generate random name, use something like tempfile.mkdtemp for 
-      that'''
+      The most common usage for this would be to create a random directory
+      each time. The mkdtemp flag was added to facilitate this.
+      
+      Example:
+      
+      >>> from vsi.tools.dir_util import TempDir
+      >>> import tempfile
+      >>> from glob import glob
+      >>> with TempDir(tempfile.tempdir, mkdtemp=True) as tempDir:
+      ...   print(tempDir)
+      ...   print(glob(tempDir))
+      >>> print(glob(tempDir))
+  '''
 
   def __init__(self, dir=None, cd=False, delete=True, mkdtemp=False, 
                delete_if_not_create=False, *args, **kwargs):
@@ -88,7 +115,8 @@ class TempDir(object):
   def __enter__(self):
     if self.mkdtemp:
       self.dir = mkdtemp(dir=self.base_dir)
-      self.cd.dir = self.dir #<-- hack
+      if self.cd:
+        self.cd.dir = self.dir #<-- hack
       self.created_dir = True
     else:
       #These two are separate variables incase with is called twice on the
@@ -111,5 +139,4 @@ class TempDir(object):
     #Imagine running remove tree on / or /home/user? BAD THINGS.
     #It is up to the dev to make sure he knows what he is doing
     if self.delete and (self.created_dir or self.delete_if_not_create):
-      print self.delete, self.created_dir, self.delete_if_not_create
       remove_tree(self.dir)

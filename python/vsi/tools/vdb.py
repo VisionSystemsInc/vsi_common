@@ -5,6 +5,7 @@ from bdb import BdbQuit
 import os
 import signal
 from functools import partial
+import traceback
 
 if os.name == 'nt':
   from vsi.windows.named_pipes import Pipe
@@ -58,9 +59,9 @@ class Vdb(IPython.core.debugger.Pdb):
   def _settrace(self):
     sys.settrace(self.trace_dispatch)
 
-delattr(IPython.core.debugger.OldPdb, 'do_r');
-delattr(IPython.core.debugger.OldPdb, 'do_q');
 try:
+  delattr(IPython.core.debugger.OldPdb, 'do_r');
+  delattr(IPython.core.debugger.OldPdb, 'do_q');
   delattr(IPython.core.debugger.Pdb, 'do_q'); #New quit in newer ipython
 except:
   pass
@@ -107,17 +108,25 @@ def get_colors(colors=None):
      colors = ip.colors
   return colors
 
-def set_trace(frame=None, colors=None):
+def find_frame(frame, depth=0):
+  if not frame:
+    frame = sys._getframe()
+  for d in range(depth):
+    if frame.f_back is None:
+      break
+    frame = frame.f_back  
+  return frame
+  
+def set_trace(frame=None, colors=None, depth=None):
   ''' Helper function, like pdb.set_trace
 
       set colors = "NoColor", "Linux", or "LightBG"  ''' 
   colors=get_colors(colors)
-  if not frame:
-    frame = sys._getframe().f_back
+  frame = find_frame(frame, depth if depth is not None else 2 if frame is None else 0)
   Tracer(skipInput=False, colors=colors).debugger.set_trace(frame)
 
 def post_mortem(tb=None, colors=None):
-  ''' Helper function, like pdb.post_mortem ''' 
+  ''' Helper function, like pdb.post_mortem '''
   # handling the default
   if tb is None:
     # sys.exc_info() returns (type, value, traceback) if an exception is
@@ -130,21 +139,7 @@ def post_mortem(tb=None, colors=None):
   tracer = Tracer(skipInput=False, colors=colors)
   tracer.debugger.reset()
   tracer.debugger.interaction(None, tb)
-
-def rpdb_post_mortem(tb=None, pwd='vsi'):
-  import rpbd2
-  #NO idea how to do this right now...
-
-def rpdb_exception_hook(type, value, tb):
-  import rpbd2
-  #NO idea what to do here...
-
-def rpdb_set_trace(_rpdb2_pwd='vsi', *args, **kwargs):
-  ''' Works, but without the other parts, it's far from auto '''
-  import rpdb2
-  print 'Starting rpdb2...'
-  rpdb2.start_embedded_debugger(_rpdb2_pwd, *args, **kwargs)
-  
+ 
 def set_attach(db_cmd=None):
   ''' Set up this process to be "debugger attachable" 
   
@@ -163,7 +158,7 @@ def set_attach(db_cmd=None):
     thread.start()
   #print(os.getpid())
   
-def attach(pid, rdpb=True):
+def attach(pid):
   ''' Trigger a python pid that's been already run set_attach
   
       This is the second part of attaching to a python process. Once 
@@ -206,32 +201,44 @@ def dbstop_exception_hook(type, value, tb, colors=None):
     # device, so we call the default hook
       sys.__excepthook__(type, value, tb)
     else:
-      import traceback, pdb
       #we are NOT in interactive mode, print the exception
       traceback.print_exception(type, value, tb)
-      #print
       # ...then start the debugger in post-mortem mode.
-      # pdb.pm() # deprecated
-      post_mortem(tb, colors=colors) # more "modern"
+      post_mortem(tb, colors=colors)
 
 def main():
   import argparse
   parser = argparse.ArgumentParser()
   parser.add_argument('--pid', '-p', type=int, default=None)
-  parser.add_argument('--rpdb', '--rpdb2', '-r', type=bool, default=False, action='store_true')
+  db = parser.add_mutually_exclusive_group(required=False)
+  db.add_argument('--rpdb2', '-r', default=False, action='store_true',
+                  help='Attach using rpdb2')
+  db.add_argument('--rpdb', default=False, action='store_true',
+                  help='Attach using rpdb (Client not implemented, use putty)')
+  db.add_argument('--winpdb', '--gui', '-g', default=False, action='store_true',
+                  help='Attach using winpdb')
+  parser.add_argument('--ip', default='127.0.0.1',
+                      help='Set ip address for rpdb/rpdb2/winpdb to attach on')
+  parser.add_argument('--port', default=4444, type=int,
+                      help='Set port for rpdb to attach on')
   parser.add_argument('--password', '--pw', default='vsi')
-  #Add * args here
+  parser.add_argument('args', nargs='*', 
+                      help='Command to run with vdb attached. Not implemented yet')
   args = parser.parse_args()
   
   if args.pid:
     #attach to a pid
-    if args.rpdb:
-      import rpdb2
-      #This is going to take some trickery... need --pwd, --attach {pid#} exposed...
+    if args.rpdb2 or args.winpdb:
+      from .vdb_rpdb2 import attach as rpdb2_attach
+      rpdb2_attach(args.pid, password=args.password, ip=args.ip, gui=args.winpdb)
+    elif args.rpdb:
+      from .vdb_rpdb import attach as rpdb_attach
+      rpdb_attach(args.pid, ip=args.ip, port=args.port)
     else:
       attach(args.pid)
   else:
     pass #Do whatever pdb does to run the command
+    #Copy pdb.main or ipdb.main
 
 if __name__=='__main__':
   main()
