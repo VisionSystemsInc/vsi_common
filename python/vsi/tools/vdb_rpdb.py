@@ -9,20 +9,27 @@ import traceback
 DEFAULT_IP = '127.0.0.1'
 DEFAULT_PORT = 4444
 
-def dbstop_if_error(ip=DEFAULT_IP, port=DEFAULT_PORT):
-  ''' Run this to auto start the debugger on an exception. '''
-  sys.excepthook = partial(dbstop_exception_hook, ip=ip, port=port)
+dbclear_if_error = vdb.dbclear_if_error
 
-def dbstop_exception_hook(type, value, tb, ip=DEFAULT_IP, port=DEFAULT_PORT):
-  if hasattr(sys, 'ps1') or not sys.stderr.isatty():
-  # we are in interactive mode or we don't have a tty-like
-  # device, so we call the default hook
-    sys.__excepthook__(type, value, tb)
-  else:
-    #we are NOT in interactive mode, print the exception
-    traceback.print_exception(type, value, tb)
-    # ...then start the debugger in post-mortem mode.
-    post_mortem(tb, ip=ip, port=port)
+class RpdbPostMortemHook(vdb.PostMortemHook):
+  @staticmethod
+  def set_post_mortem(interactive=False, ip=DEFAULT_IP, port=DEFAULT_PORT):
+    sys.excepthook = partial(vdb.dbstop_exception_hook, 
+                             interactive=interactive,
+                             post_mortem=partial(post_mortem, 
+                                                 ip=ip, port=port))
+
+
+def dbstop_if_error(interactive=False, ip=DEFAULT_IP, port=DEFAULT_PORT):
+  ''' Run this to auto start the debugger on an exception.
+
+      Optional arguments:
+      interactive - see vsi.tools.vdb.dbstop_if_error
+      ip - Default 127.0.0.1 - Ip to bind to for remote debugger
+      port - Default 4444 - Port to bind to for remote debugger'''
+
+  RpdbPostMortemHook.dbstop_if_error(interactive=interactive, 
+                                     ip=ip, port=port);
 
 def post_mortem(tb=None, ip=DEFAULT_IP, port=DEFAULT_PORT):
   if tb is None:
@@ -32,7 +39,6 @@ def post_mortem(tb=None, ip=DEFAULT_IP, port=DEFAULT_PORT):
     if tb is None:
       raise ValueError("A valid traceback must be passed if no "
                        "exception is being handled")
-  print 'Its %s:%d' % (ip, port)
   r = rpdb.Rpdb(addr=ip, port=port)
   r.reset()
   r.interaction(None, tb)

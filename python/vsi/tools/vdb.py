@@ -7,6 +7,8 @@ import signal
 from functools import partial
 import traceback
 
+from vsi.tools import staticvar
+
 if os.name == 'nt':
   from vsi.windows.named_pipes import Pipe
   import threading
@@ -172,7 +174,7 @@ def attach(pid):
     os.kill(pid, ATTACH_SIGNAL)
 
 def pipe_server():
-  ''' Part of attach/set_attach '''
+  ''' Part of attach/set_attach for Windows '''
   while 1:
     pipe = Pipe('vdb_%d' % os.getpid(), server=True)
     knock = pipe.read(3)
@@ -191,12 +193,55 @@ def handle_db(sig, frame, db_cmd=None):
     else: #default behavior
       set_trace(frame)
 
-def dbstop_if_error(colors=None):
-  ''' Run this to auto start the debugger on an exception. '''
-  sys.excepthook = partial(dbstop_exception_hook, colors=colors)
+class PostMortemHook(object):
+  original_excepthook = None
+  
+  @staticmethod
+  def dbclear_if_error():
+    if PostMortemHook.original_excepthook != None:
+      sys.excepthook = PostMortemHook.original_excepthook
+      PostMortemHook.original_excepthook = None
 
-def dbstop_exception_hook(type, value, tb, colors=None):
-    if hasattr(sys, 'ps1') or not sys.stderr.isatty():
+  @classmethod
+  def dbstop_if_error(cls, interactive=False, *args, **kwargs):
+    if PostMortemHook.original_excepthook == None:
+      PostMortemHook.original_excepthook = sys.excepthook
+    cls.set_post_mortem(interactive, *args, **kwargs)
+
+  @staticmethod
+  def set_post_mortem(interactive=False):
+    ''' Overrite this function for each debugger '''
+    raise Exception('Not implemented')
+    
+class VdbPostMortemHook(PostMortemHook):
+  @staticmethod
+  def set_post_mortem(interactive=False, colors=None):
+    sys.excepthook = partial(dbstop_exception_hook, 
+                             post_mortem=partial(post_mortem, colors=colors),
+                             interactive=interactive)
+
+
+def dbclear_if_error():
+  VdbPostMortemHook.dbclear_if_error()
+
+def dbstop_if_error(interactive=False, colors=None):
+  ''' Run this to auto start the vdb debugger on an exception. 
+      
+      Optional arguments:
+      interactive - Default False. dbstop if console is interactive. You are
+                    still able to print and run commands in the debugger, just
+                    listing code declared interactively will not work. Does
+                    not appear to work in ipython. Use %debug instead. This
+                    will not help in the multithread case in ipython... 
+                    ipython does too much, just don't try that. Unless
+                    someone adds a way to override ipython's override.
+      colors - Default None. Set ipython debugger color scheme'''
+  VdbPostMortemHook.dbstop_if_error(interactive=interactive, colors=colors)
+
+def dbstop_exception_hook(type, value, tb, 
+                          post_mortem=partial(post_mortem, colors=None),
+                          interactive=False):
+    if not interactive and (hasattr(sys, 'ps1') or not sys.stderr.isatty()):
     # we are in interactive mode or we don't have a tty-like
     # device, so we call the default hook
       sys.__excepthook__(type, value, tb)
@@ -204,8 +249,105 @@ def dbstop_exception_hook(type, value, tb, colors=None):
       #we are NOT in interactive mode, print the exception
       traceback.print_exception(type, value, tb)
       # ...then start the debugger in post-mortem mode.
-      post_mortem(tb, colors=colors)
+      post_mortem(tb)
 
+def break_pool_worker():
+  ''' Setup the ThreadPool to break when an exception occurs (so that it can 
+      be debugged)
+  
+      The ThreadPool class (and the Pool class too, but not useful here) 
+      always catches any exception and raises it in the main thread. This
+      is nice for normal behavior, but for debugging, it makes it impossible
+      to do post mortem debugging. In order to automatically attach a post
+      mortem debugger, the exception has to be thrown. An exception being
+      thrown WILL BREAK the pool call, and not allow your main function to
+      continue, however you can now attach a debugger post_mortem. Useful
+      with dbstop_if_error
+      
+      Threading has a "bug" where exceptions are also automatically caught.
+      http://bugs.python.org/issue1230540
+      In order to make THIS work, call add_threading_excepthook too
+      
+      Example:
+      >>> from multiprocessing.pool import ThreadPool
+      >>> import vsi.tools.vdb as vdb
+      >>> def a(b):
+      ...   print(b)
+      ...   if b==3:
+      ...     does_not_exist()
+      >>> vdb.dbstop_if_error()
+      >>> vdb.break_pool_worker()
+      >>> vdb.add_threading_excepthook()
+      >>> tp = ThreadPool(3)
+      >>> tp.map(a, range(10))
+      '''
+  import multiprocessing.pool
+  
+  def worker(inqueue, outqueue, initializer=None, initargs=(), maxtasks=None):
+    assert maxtasks is None or (type(maxtasks) == int and maxtasks > 0)
+    put = outqueue.put
+    get = inqueue.get
+    if hasattr(inqueue, '_writer'):
+      inqueue._writer.close()
+      outqueue._reader.close()
+
+    if initializer is not None:
+      initializer(*initargs)
+
+    completed = 0
+    while maxtasks is None or (maxtasks and completed < maxtasks):
+      try:
+        task = get()
+      except (EOFError, IOError):
+        multiprocessing.pool.debug('worker got EOFError or IOError -- exiting')
+        break
+
+      if task is None:
+        multiprocessing.pool.debug('worker got sentinel -- exiting')
+        break
+
+      job, i, func, args, kwds = task
+#      try:
+      result = (True, func(*args, **kwds))
+#      except Exception, e:
+#        result = (False, e)
+      try:
+        put((job, i, result))
+      except Exception as e:
+        wrapped = multiprocessing.pool.MaybeEncodingError(e, result[1])
+        multiprocessing.pool.debug("Possible encoding error while sending result: %s" % (wrapped))
+        put((job, i, (False, wrapped)))
+      completed += 1
+    multiprocessing.pool.debug('worker exiting after %d tasks' % completed)
+  multiprocessing.pool.worker = worker
+
+def add_threading_excepthook():
+  """
+  Workaround for sys.excepthook thread bug
+  From
+  http://spyced.blogspot.com/2007/06/workaround-for-sysexcepthook-bug.html
+ 
+  (https://sourceforge.net/tracker/?func=detail&atid=105470&aid=1230540&group_id=5470).
+  Call once from __main__ before creating any threads.
+  If using psyco, call psyco.cannotcompile(threading.Thread.run)
+  since this replaces a new-style class method.
+  """
+  import threading, sys
+  init_old = threading.Thread.__init__
+  def init(self, *args, **kwargs):
+    import sys
+    init_old(self, *args, **kwargs)
+    run_old = self.run
+    def run_with_except_hook(*args, **kw):
+      try:
+        run_old(*args, **kw)
+      except (KeyboardInterrupt, SystemExit):
+        raise
+      except:
+        sys.excepthook(*sys.exc_info())
+    self.run = run_with_except_hook
+  threading.Thread.__init__ = init
+      
 def main():
   import argparse
   parser = argparse.ArgumentParser()

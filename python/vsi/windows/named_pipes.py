@@ -1,3 +1,4 @@
+#Can this be replaced with multiprocessing.connections.PipeListener, and PipeClient?!
 
 #based off of http://code.activestate.com/lists/python-list/446422/
 
