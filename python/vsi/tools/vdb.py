@@ -206,7 +206,6 @@ class PostMortemHook(object):
   def dbstop_if_error(cls, interactive=False, *args, **kwargs):
     if PostMortemHook.original_excepthook == None:
       PostMortemHook.original_excepthook = sys.excepthook
-    print '***calling', cls.set_post_mortem
     cls.set_post_mortem(interactive, *args, **kwargs)
 
   @staticmethod
@@ -265,6 +264,11 @@ class DbStopIfErrorGeneric(object):
 
   @classmethod
   def set_continue_exception(cls):
+    ''' Continue running code after exception
+
+        After the with statement scope failes, if this is called, python will
+        continue running as if there was no error. Can be useful, can also be
+        dangerous. So don't abuse it!'''
     cls.ignore_exception = True
 
 
@@ -294,7 +298,6 @@ class DbStopIfError(DbStopIfErrorGeneric):
       add_threading_excepthook()
 
       self.original_excepthook = sys.excepthook
-      print '***wtf', self.get_post_mortem_class().set_post_mortem
       self.get_post_mortem_class().set_post_mortem(*self.args, **self.kwargs)
 
   def __exit__(self, exc_type, exc_value, tb):
@@ -310,7 +313,6 @@ class DbStopIfError(DbStopIfErrorGeneric):
     return VdbPostMortemHook
 
   def get_post_mortem(self):
-    print '*** bad gpm'
     return post_mortem
 
 

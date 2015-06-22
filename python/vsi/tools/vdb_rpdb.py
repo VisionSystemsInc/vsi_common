@@ -45,8 +45,9 @@ def post_mortem(tb=None, ip=DEFAULT_IP, port=DEFAULT_PORT):
 
 class DbStopIfError(vdb.DbStopIfError):
   def get_post_mortem(self):
-    print '***Called good gpm'
     return post_mortem
+  def get_post_mortem_class(self):
+    return RpdbPostMortemHook
 
 
 def set_trace(frame=None, depth=None, ip=DEFAULT_IP, port=DEFAULT_PORT):
