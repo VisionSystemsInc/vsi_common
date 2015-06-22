@@ -206,12 +206,13 @@ class PostMortemHook(object):
   def dbstop_if_error(cls, interactive=False, *args, **kwargs):
     if PostMortemHook.original_excepthook == None:
       PostMortemHook.original_excepthook = sys.excepthook
+    print '***calling', cls.set_post_mortem
     cls.set_post_mortem(interactive, *args, **kwargs)
 
   @staticmethod
   def set_post_mortem(interactive=False):
     ''' Overrite this function for each debugger '''
-    raise Exception('Not implemented')
+    raise Exception('Purely virtual function')
     
 class VdbPostMortemHook(PostMortemHook):
   @staticmethod
@@ -220,13 +221,12 @@ class VdbPostMortemHook(PostMortemHook):
                              post_mortem=partial(post_mortem, colors=colors),
                              interactive=interactive)
 
-
 def dbclear_if_error():
   VdbPostMortemHook.dbclear_if_error()
 
 def dbstop_if_error(interactive=False, colors=None):
   ''' Run this to auto start the vdb debugger on an exception. 
-      
+
       Optional arguments:
       interactive - Default False. dbstop if console is interactive. You are
                     still able to print and run commands in the debugger, just
@@ -237,6 +237,82 @@ def dbstop_if_error(interactive=False, colors=None):
                     someone adds a way to override ipython's override.
       colors - Default None. Set ipython debugger color scheme'''
   VdbPostMortemHook.dbstop_if_error(interactive=interactive, colors=colors)
+
+class DbStopIfErrorGeneric(object):
+  ''' With statement for local dbstop situations '''
+
+  ignore_exception = False
+
+  def __init__(self, *args, **kwargs):
+    self.args = args
+    self.kwargs = kwargs
+
+  def __enter__(self):
+    pass
+
+  def __exit__(self, exc_type, exc_value, tb):
+    if tb is not None:
+      print 'Exception detected!!!'
+      pm = self.get_post_mortem()
+      pm(tb, *self.args, **self.kwargs)
+      if self.ignore_exception:
+        return True
+
+  def get_post_mortem(self):
+    ''' Should return a function that takes a traceback as the first argument
+        and any additional args/kwargs sent to __init__ after that'''
+    raise Exception('Purely virtual function')
+
+  @classmethod
+  def set_continue_exception(cls):
+    cls.ignore_exception = True
+
+
+class DbStopIfError(DbStopIfErrorGeneric):
+  ''' With statement for local dbstop situations '''
+  def __init__(self, threading_support=False, *args, **kwargs):
+    ''' Optional arguments:
+        threading_support - Support the threading module and patch a bug 
+                            preventing catching exceptions in other threads.
+                            See add_threading_excepthook for more info. Only
+                            neccesary if you want to catch exceptions not on
+                            the main thread. This is only patched after 
+                            __enter__ unpatched at __exit__
+
+        All other args from db_stop_if_error()'''
+    self.threading_support=threading_support
+
+    super(DbStopIfError, self).__init__(*args, **kwargs)
+
+  #This is all needed JUST for threading. It uses syshook instead of __exit__
+  def __enter__(self):
+    super(DbStopIfError, self).__enter__()
+
+    if self.threading_support:
+      import threading
+      self.threading_init = threading.Thread.__init__
+      add_threading_excepthook()
+
+      self.original_excepthook = sys.excepthook
+      print '***wtf', self.get_post_mortem_class().set_post_mortem
+      self.get_post_mortem_class().set_post_mortem(*self.args, **self.kwargs)
+
+  def __exit__(self, exc_type, exc_value, tb):
+    if self.threading_support:
+      import threading
+      threading.Thread.__init__ = self.threading_init
+      sys.excepthook = self.original_excepthook
+
+    super(DbStopIfError, self).__exit__(exc_type, exc_value, tb)
+
+  def get_post_mortem_class(self):
+    ''' Get post mortem class for Vdb '''
+    return VdbPostMortemHook
+
+  def get_post_mortem(self):
+    print '*** bad gpm'
+    return post_mortem
+
 
 def dbstop_exception_hook(type, value, tb, 
                           post_mortem=partial(post_mortem, colors=None),

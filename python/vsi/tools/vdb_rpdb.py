@@ -43,6 +43,12 @@ def post_mortem(tb=None, ip=DEFAULT_IP, port=DEFAULT_PORT):
   r.reset()
   r.interaction(None, tb)
 
+class DbStopIfError(vdb.DbStopIfError):
+  def get_post_mortem(self):
+    print '***Called good gpm'
+    return post_mortem
+
+
 def set_trace(frame=None, depth=None, ip=DEFAULT_IP, port=DEFAULT_PORT):
   ''' Wrapper function to keep the same import x; x.set_trace() interface. 
   

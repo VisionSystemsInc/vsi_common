@@ -20,6 +20,10 @@ def dbstop_if_error(_rpdb2_pwd='vsi', fAllowUnencrypted=True,
       time"'''
   rpdb2.start_embedded_debugger(_rpdb2_pwd, fAllowUnencrypted, fAllowRemote,
                                 timeout, source_provider, fDebug, depth)
+
+#I'm not even going to attempt a DbStopIfError class, since this profiler does
+#not have a Post Mortem equivalent... yet. Need to find a way to push the pm
+#data into whatever the analyze command uses, so that it can be faked out
  
 """ I can't get this working yet either. rpdb uses the profiler to catch exceptions, NOT excepthook
   #old_excepthook = rpdb2.__excepthook
