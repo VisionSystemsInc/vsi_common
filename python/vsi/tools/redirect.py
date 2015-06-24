@@ -170,7 +170,23 @@ class Redirect(RedirectBase): #Version 2
       Most python functions use the python stdout/stderr, controlled by
       sys.stdout and sys.stderr. However c embedded calls are used the 
       c stdout/stderr, usually fd 1 and 2. Because of this, there are 4
-      streams to consider'''
+      streams to consider
+
+      Known bugs: In windows, after stdout_c is done being redirected, stdout
+      buffering appears to no longer be disabled in interactive mode. What this
+      means is typing
+      >>> print 123
+      No longer returns 123 right away, without a 
+      >>> sys.stdout.flush()
+      Why? I'm guessing os.dup2 breaks the buffered mode. The fix is to
+      >>> sys.stdout = os.fdopen(sys.__stdout__.fileno(), 'w', 0)
+      However this can only be done once or twice, and then starts failing.
+
+      Work around is to redirect stdout when calling the command. 
+      For example 'python | find /v ""' Mostly works.
+
+      Basically don't do this in Windows Command line
+      '''
 
   def __init__(self, 
                all=None,
@@ -212,7 +228,7 @@ class Redirect(RedirectBase): #Version 2
               doing some IPython/colorama redirecting, or any other library 
               that messes with sys.stdout/sys.stderr
               ''' 
-    #copy original file informatio
+    #copy original file information
     self.stdout_c_fd=stdout_c_fd
     self.stderr_c_fd=stderr_c_fd
     self.stdout_py_module=stdout_py_module
@@ -329,10 +345,14 @@ class Redirect(RedirectBase): #Version 2
     #Flush
     self.flush()
 
-    for writer_fid, inputs_c, inputs_py_module, inputs_py_name, copies_c, copies_py in zip(self.writer_fids, self.inputs_c, self.inputs_py_module, self.inputs_py_name, self.copies_c, self.copies_py):
+    for writer_fid, inputs_c, inputs_py_module, \
+        inputs_py_name, copies_c, copies_py in \
+        zip(self.writer_fids, self.inputs_c, self.inputs_py_module, 
+            self.inputs_py_name, self.copies_c, self.copies_py):
       writer_fid.close()
       
-      for input_module, input_name, copy_py in reversed(zip(inputs_py_module, inputs_py_name, copies_py)):
+      for input_module, input_name, copy_py in \
+          reversed(zip(inputs_py_module, inputs_py_name, copies_py)):
         setattr(input_module, input_name, copy_py)
       
       for input_c, copy_c in reversed(zip(inputs_c, copies_c)):

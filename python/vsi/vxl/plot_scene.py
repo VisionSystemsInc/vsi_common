@@ -52,10 +52,10 @@ def plot_scene(scene, cameras):
   pylab.plot(camera_centers[:,0], camera_centers[:,1], camera_centers[:,2], 'or')
 
   for camera in cameras:
-#    if scene is not None:
-#      l = (bbox['z_min'] - camera.camera_center())/camera.direction()[2]
-#    else:
-    l = 1
+    if scene is not None:
+      l = (bbox['z_min'] - camera.camera_center())/camera.direction()[2]
+    else:
+      l = 100
     line = np.array([camera.camera_center(), camera.camera_center() + camera.direction()*l])
     pylab.plot(line[:,0], line[:,1], line[:,2], 'k')
   pylab.hold('off')
