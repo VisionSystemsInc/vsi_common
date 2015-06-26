@@ -11,7 +11,7 @@ REM Windows can't handle this in () because... I have no clue.
 REM I bet it has something to do with lengths
 
 if defined PYTHONPATH (
-  set PYTHONPATH=%PYTHONPATH%;%~dp0python
+  set PYTHONPATH=%PYTHONPATH%;%~dp0python:%~dp0python/python_util
 ) else (
   set PYTHONPATH=%~dp0python
 )
