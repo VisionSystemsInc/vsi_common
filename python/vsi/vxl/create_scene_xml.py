@@ -29,7 +29,8 @@ from StringIO import StringIO
 
 import argparse
 
-from vsi.tools import Redirect
+from vsi.tools.redirect import PopenRedirect, Redirect
+
 
 def main():
   parser = argparse.ArgumentParser()
@@ -77,8 +78,8 @@ def main():
   args = parser.parse_args()
   
   #Force all output to stderr so that if the output_file is stdout, it's clean
-  #with Redirect(all=sys.stderr):
-  create_scene_xml(args.device, args.refine, args.gsd, lla1=args.lla1, 
+  with Redirect(all=sys.stderr):
+    create_scene_xml(args.device, args.refine, args.gsd, lla1=args.lla1, 
                      lla2=args.lla2, lvcs1=args.lvcs1, lvcs2=args.lvcs2,
                      origin=args.origin, output_file=args.output_file, 
                      model_dir=args.modeldir,
@@ -87,9 +88,17 @@ def main():
 # INTERNAL ---------
 def gpu_memory(gpu_device):
   stdout = StringIO()
-  with Redirect(stdout_c=stdout):
-    ocl_info()
-    import time; time.sleep(1)
+  if os.name == 'nt':
+    with PopenRedirect(stdout) as redirect:
+      pid = Popen(['python', '-c', 'import boxm2_adaptor as b; b.ocl_info()'], 
+            stdout=redirect.stdout)
+      pid.wait()
+  else:      
+    #DOES NOT WORK IN WINDOWS when real stdout is used first (aka on Console)
+    with Redirect(stdout_c=stdout):
+      ocl_info()
+      import time; time.sleep(1)
+
   stdout.seek(0,0)
   stdout = stdout.read()
 
