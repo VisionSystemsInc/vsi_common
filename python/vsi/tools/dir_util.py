@@ -2,7 +2,7 @@ import os
 
 from distutils.dir_util import mkpath, remove_tree
 
-from tempfile import mkdtemp
+from tempfile import mkdtemp, tempdir
 
 class Chdir(object):
   ''' Simple helper function to change dir and guarantee you get back to your 
@@ -84,10 +84,15 @@ class TempDir(object):
 
         Arguments
 
-        dir - dir must exist
+        dir - Base dir must exist. Default is None. None will only work if 
+              mkdtemp is true.
         cd - Change into the temp dir (and change back). Default: false
         mkdtemp - Call mkdtemp in dir to create a temp dir. Default: false
-                  Try and use this INSTEAD of delete_if_not_create, much safer
+                  Try and use this INSTEAD of delete_if_not_create, much safer.
+                  The class must call mkdtemp for you, or else it will not have
+                  "created" the directory, thus introducing unsafe situations
+                  where a directory may be inadvertently deleted if you
+                  accidentally tell it to be.
         delete - Delete on exit. Default: true
         delete_if_not_create - Default: false. Delete the directory "dir" 
                                even if it was not created by TempDir. ONLY 
@@ -104,6 +109,9 @@ class TempDir(object):
     self.base_dir= dir
     
     self.mkdtemp = mkdtemp
+
+    if self.mkdtemp and not self.base_dir:
+      self.base_dir = tempdir
 
     self.cd = Chdir(self.base_dir, *args, **kwargs) if cd else None
     
