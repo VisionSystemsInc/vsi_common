@@ -312,7 +312,7 @@ if __name__=='__main__':
             parts = re.split('\s+', line)
             if parts[0] == chroot_user:
               line = '%s ALL=(ALL) NOPASSWD:ALL\n' % chroot_user
-              lines[l] = l
+              lines[l] = line
               found = True
               break
           if not found:
@@ -330,7 +330,8 @@ if __name__=='__main__':
   #print chroot_user, chroot_group, chroot_uid, chroot_gid, chroot_home, host_modules, os_distro, dev_shm
   cmd = ['chroot', '--userspec', '%d:%d' % (chroot_uid, chroot_gid), chroot_dir] + args[1:]
   logger.info('Chroot command: %s', cmd)
-  Popen(cmd).wait()
+  pid = Popen(cmd)
+  rv = pid.wait()
 
   chroot_in_use = False
   chroot_stat = os.stat(chroot_dir)
@@ -352,3 +353,4 @@ if __name__=='__main__':
     umount(path_join(chroot_dir, 'dev'), True)
     umount(path_join(chroot_dir, 'sys'), True)
     umount(path_join(chroot_dir, 'selinux'))
+  exit(rv)
