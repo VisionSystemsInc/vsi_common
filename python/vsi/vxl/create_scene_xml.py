@@ -103,9 +103,9 @@ def gpu_memory(gpu_device):
   stdout = stdout.read()
 
   # cpu devices are possible, but don't look for them
-  gpu_id_re = re.compile('gpu(\d\d?)')
+  gpu_id_re = re.compile('[cg]pu(\d\d?)')
   # cpu devices are possible, but don't look for them
-  device_id_re = re.compile('gpu(\d\d?),  Device Description:')
+  device_id_re = re.compile('[cg]pu(\d\d?),  Device Description:')
   device_name_re = re.compile(' Device Name : (.+)')
   global_memory_re = re.compile('\s*Total global memory: (\S+) ([GM]Bytes)')
 
