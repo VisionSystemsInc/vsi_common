@@ -262,7 +262,7 @@ if __name__=='__main__':
       call('chown', '-R', '-h', '-P', '--from', current_ownership, unchroot_home)
 
   try:
-    #Needed for dns support. Does not work with (ubuntu's on by default) stupid dnsmasq shit
+    #Needed for dns support. Does not work with (ubuntu's on by default) stupid dnsmasq
     copy_file('/etc/resolv.conf', path_join(chroot_dir, 'etc'))
   except DistutilsFileError:
     logger.warning('Resolv.conf not copied. This is probably a dnsmasq issue. Solution unknown')
