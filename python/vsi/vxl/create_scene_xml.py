@@ -88,16 +88,11 @@ def main():
 # INTERNAL ---------
 def gpu_memory(gpu_device):
   stdout = StringIO()
-  if os.name == 'nt':
-    with PopenRedirect(stdout) as redirect:
-      pid = Popen(['python', '-c', 'import boxm2_adaptor as b; b.ocl_info()'], 
-            stdout=redirect.stdout)
-      pid.wait()
-  else:      
-    #DOES NOT WORK IN WINDOWS when real stdout is used first (aka on Console)
-    with Redirect(stdout_c=stdout):
-      ocl_info()
-      import time; time.sleep(1)
+  
+  with PopenRedirect(stdout) as redirect:
+    pid = Popen([sys.executable, '-c', 'import boxm2_adaptor as b; b.ocl_info()'], 
+          stdout=redirect.stdout)
+    pid.wait()
 
   stdout.seek(0,0)
   stdout = stdout.read()

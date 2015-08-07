@@ -17,7 +17,7 @@ class Logger(object):
       Careful when using this, if the logging out goes to a stream that is 
       redireted, you have an infinite capture loop and does not go well
       
-      Use PopenRediret instead of Redirect in that case'''
+      Use PopenRedirect instead of Redirect in that case'''
   def __init__(self, logger, lvl=logging.INFO):
     ''' Create a wrapper for logger using lvl level '''
 
@@ -146,7 +146,12 @@ class PopenRedirect(FileRedirect):
     return self.wids[1]
 
 class Redirect(RedirectBase): #Version 2
-  ''' Similar to Capture class, except it redirect to file like objects
+  ''' FAILED EXPERIMENT! You can use this, but I don't recommend it for
+      anything that matters. There are too many situations where buffered
+      output or multiple stdouts in windows cause this to not behave 100%
+      right. Best to just not use it. PopenRedirect is good
+
+      Similar to Capture class, except it redirect to file like objects
   
       There are times in python when using "those kind of libraries" 
       where you have to capture either stdout or stderr, and many 
