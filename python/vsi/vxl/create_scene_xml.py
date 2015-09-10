@@ -46,6 +46,9 @@ def main():
   parser.add_argument('-m', '--modeldir', default='.', help='Model directory')
   parser.add_argument('-d', '--device', default='gpu0', 
       help='OpenCL Device to process on')
+  parser.add_argument('--mem', default=None, 
+      help="""Override the block size (in GB) instead of querying the GPU 
+              device. Probably most useful for CPU OpenCL""")
   parser.add_argument('-r', '--refine', default=3, choices=range(4), type=int, 
       help="""Promise: a scene will be refined at most [0,3] times is fully 
               refined after three subdivisions, although, because a cell must 
@@ -83,7 +86,8 @@ def main():
                      lla2=args.lla2, lvcs1=args.lvcs1, lvcs2=args.lvcs2,
                      origin=args.origin, output_file=args.output_file, 
                      model_dir=args.modeldir,
-                     appearance_models=args.appearance, number_bins=args.bins)
+                     appearance_models=args.appearance, number_bins=args.bins,
+                     block_size=args.mem)
 
 # INTERNAL ---------
 def gpu_memory(gpu_device):
@@ -139,7 +143,8 @@ def gpu_memory(gpu_device):
 def create_scene_xml(gpu_device, refinements, gsd, 
                      lla1=None, lla2=None, lvcs1=None, lvcs2=None,
                      origin=None, output_file=sys.stdout, model_dir = ".", 
-                     appearance_models=None, number_bins=1):
+                     appearance_models=None, number_bins=1,
+                     n_bytes_gpu=None):
   ''' Create a scene xml file based off of input parameters
 
       Required arguments:
@@ -166,6 +171,8 @@ def create_scene_xml(gpu_device, refinements, gsd,
       appearance_models - Tuple of appearance models to be used. 
                           Default: ('boxm2_mog3_grey','boxm2_num_obs')
       number_bins - Sets the num_illumination_bins. Default: 1
+      n_bytes_gpu - Optional override gpu_device memory size. Useful for CPU
+                    OpenCL
       '''
   
   #impose mutually exclusive constraint
@@ -195,8 +202,11 @@ def create_scene_xml(gpu_device, refinements, gsd,
 
   lvcs_size = map(lambda x,y:y-x, lvcs1, lvcs2)
 
+  if n_bytes_gpu==None:
+    n_bytes_gpu = gpu_memory(gpu_device)
+
   (n_blocks, n_subblocks, subblock_len) = calculate_block_parameters(
-      gpu_device, refinements, gsd, lvcs_size)
+      n_bytes_gpu, refinements, gsd, lvcs_size)
 
   generate_scene_xml(output_file, model_dir,
       num_blocks=n_blocks, num_subblocks=n_subblocks, 
@@ -229,11 +239,9 @@ def subblocks_per_block(n_refinement_passes, n_bytes_gpu):
   return max_n_subblocks_xyz, max_bytes_block
 
 
-def calculate_block_parameters(gpu_device, n_refinement_passes, gsd, 
+def calculate_block_parameters(n_bytes_gpu, n_refinement_passes, gsd, 
                                scene_length):
   (lx,ly,lz) = scene_length
-
-  n_bytes_gpu = gpu_memory(gpu_device)
 
   max_n_subblocks_xyz, max_bytes_block = subblocks_per_block(
       n_refinement_passes, n_bytes_gpu)
