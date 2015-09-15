@@ -23,12 +23,12 @@ def get_file(fid, mode='rb'):
   
   return fid 
 
-def staticvar(**kwargs):
+def static(**kwargs):
   ''' Decorator for easily defining static variables
   
       Example:
       
-      @staticvar(count=0)
+      @static(count=0)
       def test(a, b):
         test.count += 1
         print a+b, test.count

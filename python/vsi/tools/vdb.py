@@ -7,7 +7,7 @@ import signal
 from functools import partial
 import traceback
 
-from vsi.tools import staticvar
+#from vsi.tools import static
 
 if os.name == 'nt':
   from vsi.windows.named_pipes import Pipe
