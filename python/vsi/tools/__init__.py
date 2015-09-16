@@ -1,2 +1,2 @@
 from .redirect import Redirect
-from .misc import *
+from .python import *

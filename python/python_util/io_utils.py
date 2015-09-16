@@ -9,7 +9,7 @@ try:
     has_tifffile = True
 except ImportError:
     has_tifffile = False
-
+import vsi.tools
 
 def read_token(file_obj, tok=None, ignore_char=None):
     """ return a generator that seperates file based on whitespace, or optionally, tok """
@@ -80,7 +80,7 @@ def write_vectors_float(vector_list, filename):
     write_list(str_list, filename)
     return str_list
 
-
+@vsi.tools.WarningDecorator('Depricated. See vsi.io.image')
 def imread(filename):
     """ read the image to a numpy array """
     _, ext = os.path.splitext(filename)
@@ -96,7 +96,7 @@ def imread(filename):
             img_np = np.array(img)
     return img_np
 
-
+@vsi.tools.WarningDecorator('Depricated. See vsi.io.image')
 def imwrite(img, filename):
     """ write the numpy array as an image """
     _, ext = os.path.splitext(filename)
@@ -111,7 +111,7 @@ def imwrite(img, filename):
         pilImg.save(filename)
     return
 
-
+@vsi.tools.WarningDecorator('Depricated. See vsi.io.image')
 def imwrite_byte(img, vmin, vmax, filename):
     """ write the 2-d numpy array as an image, scale to byte range first """
     img_byte = np.uint8(np.zeros_like(img))

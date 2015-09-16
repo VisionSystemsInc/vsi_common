@@ -1,3 +1,5 @@
+import sys
+
 class Try(object):
   ''' Try catch helper for cases when you want to ignore certain exceptions '''
   def __init__(self, default_ignore=Exception, *other_ignore):
@@ -34,3 +36,92 @@ def reloadModules(pattern='.*', skipPattern='^IPython'):
        not skipPattern.search(m):
       with Try():
         reload(sys.modules[m])
+
+def is_string_like(obj):
+  """
+  Check whether obj behaves like a string.
+
+  Copied from numpy
+  """
+  try:
+    obj + ''
+  except (TypeError, ValueError):
+    return False
+  return True
+
+def get_file(fid, mode='rb'):
+  ''' Helper function to take either a filename or fid
+  
+      Keyword Arguments:
+      fid - File object or filename
+      mode - Optional, file mode to open file if filename supplied
+             Default rb'''
+
+  if is_string_like(fid):
+    fid = open(fid, mode);
+  
+  return fid 
+
+def static(**kwargs):
+  ''' Decorator for easily defining static variables
+  
+      Example:
+      
+      @static(count=0)
+      def test(a, b):
+        test.count += 1
+        print a+b, test.count
+  '''
+  def decorate(func):
+    for k in kwargs:
+      setattr(func, k, kwargs[k])
+    return func
+  return decorate
+
+class WarningDecorator(object):
+  ''' Decorator to add to a function to print a message out when called 
+      
+      Usage:
+
+      @WarningDecorator
+      def my_prototype(x, y):
+        print x/y
+
+      @WarningDecorator('Warning: Unstable Code')
+      def my_prototype(x, y):
+        print x/y
+
+      @WarningDecorator(output_stream=sys.stdout)
+      def my_prototype(x, y):
+        print x/y
+
+  '''
+  def __init__(self, *args, **kwargs):
+    ''' Initilize decorator
+    
+        Arguments:
+          message, output_stream
+         or
+          no arguments (no '()' either)
+    '''
+    if hasattr(args[0], '__call__'): #duck typing
+      self.init1(*args, **kwargs)
+    else:
+      self.init2(*args, **kwargs)
+
+  def init1(self, fun):
+    self.fun = fun
+    self.message = 'Warning'
+    self.output_stream=sys.stderr
+    
+  def init2(self, message='Warning', output_stream=sys.stderr):
+    self.message = message
+    self.output_stream = output_stream
+  
+  def __call__(self, *args, **kwargs):
+    if hasattr(self, 'fun'):
+      print >>self.output_stream, self.message
+      return self.fun(*args, **kwargs)
+    else:
+      self.fun = args[0]
+      return self
