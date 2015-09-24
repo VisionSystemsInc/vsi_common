@@ -201,6 +201,8 @@ with Try(ImportError):
 
     def load(self, mode=gdal.GA_ReadOnly, *args, **kwargs):
       self.object = gdal.Open(self.filename, mode, *args, **kwargs)
+      if self.object is None:
+        raise Exception('Gdal can not determine driver')
       self._dataset = self.object
 
     def raster(self, segment=0, *args, **kwargs):
