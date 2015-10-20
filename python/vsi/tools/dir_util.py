@@ -130,6 +130,9 @@ class TempDir(object):
 
   def __enter__(self):
     if self.mkdtemp:
+      if not os.path.exists(self.base_dir):
+        mkpath(self.base_dir)
+
       self.dir = mkdtemp(dir=self.base_dir)
       if self.cd:
         self.cd.dir = self.dir #<-- hack
