@@ -83,8 +83,15 @@ class Krt(object):
   def camera_center(self):
     return -self.r.T.dot(self.t)
 
+  def get_matrix(self):
+    return self.k.dot(self.r.dot(np.concatenate((np.eye(3), -self.t.reshape((3,1))), axis=1)))
+
   def direction(self):
-    return self.r.T.dot([0,0,1])
+    return self.r[2,:]
+    #return self.r.T.dot([0,0,1])
+    #P = self.get_matrix()
+    #dir2 = P[2,0:3]/np.linalg.norm(P[2,0:3])
+    #return dir2
 
 # class Krts(object):
 #   def __init__(self):
