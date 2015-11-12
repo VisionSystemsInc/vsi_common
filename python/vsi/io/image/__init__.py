@@ -169,6 +169,7 @@ with Try(ImportError):
     
 
     def shape(self, segment=0):
+      #shape is height, width, bands
       self.object.seek(segment)
       shape = self.object.size
       return (shape[1], shape[0])+shape[2:]
