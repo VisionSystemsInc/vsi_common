@@ -2,7 +2,7 @@ import os
 
 from distutils.dir_util import mkpath, remove_tree
 
-from tempfile import mkdtemp as mkdtemp_orig, tempdir
+from tempfile import mkdtemp as mkdtemp_orig, gettempdir
 
 from shutil import Error, copy2, copystat, rmtree
 
@@ -119,7 +119,7 @@ class TempDir(object):
     self.mkdtemp = mkdtemp
 
     if self.mkdtemp and not self.base_dir:
-      self.base_dir = tempdir
+      self.base_dir = gettempdir()
 
     self.cd = Chdir(self.base_dir, *args, **kwargs) if cd else None
     
