@@ -78,6 +78,47 @@ def static(**kwargs):
     return func
   return decorate
 
+def OptionalArgumentDecorator(cls):
+  ''' Decorator for easily defining a decorator class that may take arguments
+      
+      Write a decorator class as normal, that would always take arguments, and
+      make sure they all have default values. Then just add this decorator and
+      both notations will work
+
+      @Test
+      def myfun():
+        pass
+
+      @Test(17, 'ok')
+      def myfun2():
+        pass
+
+      Example:
+
+      @OptionalArgumentDecorator
+      class Test(object):
+        def __init__(self, arg1=15, arg2='whatever'):
+          self.arg1_name = arg1
+          self.arg2_name = arg2
+
+        #@test
+        def __call__(self, *args, **kwargs):
+          self.fun = args[0]
+          return self.__inner_call__
+
+        def __inner_call__(self, *args, **kwargs):
+          #pre wrap code
+          result = self.fun(*args, **kwargs)
+          #postwrap code
+          return result '''
+  def inner(*args, **kwargs):
+    if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
+      return cls()(*args, **kwargs)
+    else:
+      return cls(*args, **kwargs)
+  return inner
+
+
 class WarningDecorator(object):
   ''' Decorator to add to a function to print a message out when called 
       
