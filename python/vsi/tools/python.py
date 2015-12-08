@@ -78,46 +78,99 @@ def static(**kwargs):
     return func
   return decorate
 
-def OptionalArgumentDecorator(cls):
+class OptionalArgumentDecorator(object):
   ''' Decorator for easily defining a decorator class that may take arguments
       
       Write a decorator class as normal, that would always take arguments, and
       make sure they all have default values. Then just add this decorator and
       both notations will work
 
-      @Test
-      def myfun():
-        pass
+      '''
+  def __init__(self, *args):
+    if len(args)==1:
+      #normal use
+      self.cls = args[0]
+    else:
+      #inheritance 
+      #args = (class_name_str, (parent_class,), {'__module__': module_name})
+      parents = tuple(x.cls if type(x) == OptionalArgumentDecorator else x 
+                      for x in args[1])
+      self.cls = type(args[0], parents, args[2])
 
-      @Test(17, 'ok')
-      def myfun2():
-        pass
+  def __call__(self, *args, **kwargs):
+    if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
+      return self.cls()(args[0])
+    else:
+      return self.cls(*args, **kwargs)
+
+class _BasicDecorator(object):
+  ''' A basic decorator class that does not take arguments'''
+  def __init__(self, fun):
+    ''' No need to rewrite this '''
+    self.fun = fun
+
+  def __call__(self, *args, **kwargs):
+    '''re-write this. No need for super'''
+    #pre wrap code
+    result = self.fun(*args, **kwargs)
+    #postwrap code
+    return result
+
+class _BasicArgumentDecorator(object):
+  ''' A basic decorator class that takes arguments
+
+      It's best to define __init__ with a proper signature when inheriting'''
+
+  def __call__(self, fun):
+    ''' No need to rewrite this '''
+    self.fun = fun
+    return self.__inner_call__
+
+  def __inner_call__(self, *args, **kwargs):
+    '''re-write this. No need for super'''
+    #pre wrap code
+    result = self.fun(*args, **kwargs)
+    #postwrap code
+    return result
+
+@OptionalArgumentDecorator
+class BasicDecorator(_BasicArgumentDecorator):
+  ''' A basic decorator class that can optionally take arguments
+
+      It's best to define __init__ with a proper signature when inheriting
+
+      Define __inner_call__(self, *args, **kwargs) to add your wrapper magic
+
+      Usage: Define a new class that inherits from OptionalArgumentDecorator.
+      There is logic to support inheritance as long as the classes are 
+      decorated by OptionalArgumentDecorator ONLY. Any additional decorators
+      will probably break the inheritance logic. If this is needed, than 
+      inherit from _BasicArgumentDecorator instead and Add the 
+      @OptionalArgumentDecorator decorator yourself, and don't inherit from 
+      that.
 
       Example:
 
-      @OptionalArgumentDecorator
-      class Test(object):
-        def __init__(self, arg1=15, arg2='whatever'):
-          self.arg1_name = arg1
-          self.arg2_name = arg2
+      class MyDecor(BasicDecorator):
+        def __init__(self, name='Default'):
+          self.name = name
+        def __inner_call__(self, first_arg, *args, **kwargs):
+          result = self.fun(first_arg, *args, **kwargs)
+          print self.name, first_arg, result
+          return result
+          
+      @MyDecor
+      def test1(x, y):
+        return x+y
 
-        #@test
-        def __call__(self, *args, **kwargs):
-          self.fun = args[0]
-          return self.__inner_call__
+      @MyDecor('not default')
+      def test2(x, y):
+        return x+y
 
-        def __inner_call__(self, *args, **kwargs):
-          #pre wrap code
-          result = self.fun(*args, **kwargs)
-          #postwrap code
-          return result '''
-  def inner(*args, **kwargs):
-    if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
-      return cls()(*args, **kwargs)
-    else:
-      return cls(*args, **kwargs)
-  return inner
+      test1(11,22)
+      test2(10,2)
 
+      '''
 
 class WarningDecorator(object):
   ''' Decorator to add to a function to print a message out when called 
