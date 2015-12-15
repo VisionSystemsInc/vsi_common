@@ -123,6 +123,13 @@ def quaternion_to_matrix(q):
 
     return R
 
+def compose_quaternions(q1,q2):
+    """ return the composition of q1 and q2
+    """
+    re = q1[3]*q2[3] - np.dot(q1[0:3],q2[0:3])
+    imag = np.cross(q1[0:3],q2[0:3]) + q2[0:3]*q1[3] + q1[0:3]*q2[3]
+    return np.array((imag[0], imag[1], imag[2], re))
+
 def Euler_angles_to_matrix(angles, order=(0,1,2), repeat=False, parity_even=True, from_S=True):
     """ Convert a rotation matrix to Euler angles (X,Y,Z) order
     From Graphics Gems tog.acm.org/resources/GraphicsGems/gemsiv/euler_angle
