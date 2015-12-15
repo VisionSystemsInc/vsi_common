@@ -1,5 +1,22 @@
 """ Utility Functions for various geometric operations """
 import numpy as np
+import re
+
+
+#for testing validity of axis order arguments
+axis_order_re = re.compile('[XYZ][XYZ][XYZ]')
+
+def axis_order_is_valid(order):
+    """ return true if the axis order has valid form, e.g. 'XYZ'
+    """
+    if not axis_order_re.match(order):
+        return False
+    # check for repeats
+    if order[0] == order[1] or order[0] == order[2]:
+        return False
+    if order[1] == order[2]:
+        return False
+    return True
 
 
 def fit_plane_3_points(points):
@@ -95,6 +112,75 @@ def axis_angle_to_quaternion(axis, theta):
     return q
 
 
+def axis_from_string(axis_string):
+    if axis_string == 'X':
+        return np.array((1,0,0))
+    elif axis_string == 'Y':
+        return np.array((0,1,0))
+    elif axis_string == 'Z':
+        return np.array((0,0,1))
+    else:
+        raise Exception('Expecting one of [X,Y,Z], got ' + axis_string)
+
+
+def Euler_angles_to_quaternion(theta1, theta2, theta3, order='XYZ'):
+    """ default order applies rotation around x axis first, y second, and z third.
+    """
+    if not axis_order_is_valid(order):
+        raise Exception('Invalid order string: ' + str(order))
+
+    e1 = axis_from_string(order[0])
+    e2 = axis_from_string(order[1])
+    e3 = axis_from_string(order[2])
+
+    e = np.sign(np.dot(np.cross(e3,e2),e1))
+
+    c1 = np.cos(theta1/2.0)
+    c2 = np.cos(theta2/2.0)
+    c3 = np.cos(theta3/2.0)
+    s1 = np.sin(theta1/2.0)
+    s2 = np.sin(theta2/2.0)
+    s3 = np.sin(theta3/2.0)
+
+    q_re = c3*c2*c1 - e*s3*s3*s1
+    q_imag = e1*(c3*c2*s1 + e*s3*s2*c1) + e2*(c3*s2*c1 - e*s3*c2*s1) + e3*(s3*c2*c1 + e*c3*s2*s1)
+
+    return np.array((q_imag[0],q_imag[1],q_imag[2],q_re))
+
+
+def quaternion_to_Euler_angles(q, order='XYZ'):
+    """ convert q to Euler angles """
+    if not axis_order_is_valid(order):
+        raise Exception('Invalid order string: ' + str(order))
+    p0 = q[3]  # real component
+    p1 = q[0]
+    if order[0] == 'Y':
+        p1 = q[1]
+    elif order[0] == 'Z':
+        p1 = q[2]
+    p2 = q[1]
+    if order[1] == 'X':
+        p2 = q[0]
+    elif order[1] == 'Z':
+        p2 = q[2]
+    p3 = q[2]
+    if order[2] == 'X':
+        p3 = q[0]
+    elif order[2] == 'Y':
+        p3 = q[1]
+
+    e1 = axis_from_string(order[0])
+    e2 = axis_from_string(order[1])
+    e3 = axis_from_string(order[2])
+    e = np.sign(np.dot(np.cross(e3,e2),e1))
+
+    theta3 = np.arctan2(2.0*(p0*p3 - e*p1*p2), 1 - 2.0*(p2*p2 + p3*p3))
+    theta2 = np.arcsin(2.0*(p0*p2 + e*p1*p3))
+    theta1 = np.arctan2(2.0*(p0*p1 - e*p2*p3),1 - 2.0*(p1*p1 + p2*p2))
+
+    return theta1, theta2, theta3
+
+
 def quaternion_to_matrix(q):
     """ Convert a quaternion to an orthogonal rotation matrix """
     # normalize quaternion
@@ -123,94 +209,81 @@ def quaternion_to_matrix(q):
 
     return R
 
-def compose_quaternions(q1,q2):
-    """ return the composition of q1 and q2
+
+def matrix_to_quaternion(rot):
+    """ convert rotation matrix rot to quaternion
+        Adapted from vnl_quaternion.txx in vxl
     """
-    re = q1[3]*q2[3] - np.dot(q1[0:3],q2[0:3])
-    imag = np.cross(q1[0:3],q2[0:3]) + q2[0:3]*q1[3] + q1[0:3]*q2[3]
-    return np.array((imag[0], imag[1], imag[2], re))
+    d0 = rot[0,0]
+    d1 = rot[1,1]
+    d2 = rot[2,2]
+    xx = 1.0 + d0 - d1 - d2
+    yy = 1.0 - d0 + d1 - d2
+    zz = 1.0 - d0 - d1 + d2
+    rr = 1.0 + d0 + d1 + d2
 
-def Euler_angles_to_matrix(angles, order=(0,1,2), repeat=False, parity_even=True, from_S=True):
-    """ Convert a rotation matrix to Euler angles (X,Y,Z) order
-    From Graphics Gems tog.acm.org/resources/GraphicsGems/gemsiv/euler_angle
-    dec: Not tested for anything other than default args!
+    vals = (xx,yy,zz,rr)
+    imax = np.argmax(np.abs(vals))
+
+    q_re = 0
+    q_im = [0,0,0]
+
+    if 3 == imax:
+        r4 = np.sqrt(rr)*2;
+        q_re = r4 / 4
+        ir4 = 1.0 / r4
+        q_im[0] = (rot[2,1] - rot[1,2]) * ir4
+        q_im[1] = (rot[0,2] - rot[2,0]) * ir4
+        q_im[2] = (rot[1,0] - rot[0,1]) * ir4
+
+    elif 0 == imax:
+        x4 = np.sqrt(xx)*2
+        q_im[0] = x4 / 4
+        ix4 = 1.0 / x4
+        q_im[1] = (rot[1,0] + rot[0,1]) * ix4
+        q_im[2] = (rot[2,0] + rot[0,2]) * ix4
+        q_re = (rot[2,1] - rot[1,2]) * ix4
+
+    elif 1 == imax:
+        y4 = np.sqrt(yy)*2
+        q_im[1] = y4 / 4
+        iy4 = 1.0 / y4
+        q_im[0] = (rot[1,0] + rot[0,1]) * iy4
+        q_im[2] = (rot[2,1] + rot[1,2]) * iy4
+        q_re = (rot[0,2] - rot[2,0]) * iy4
+
+    elif 2 == imax:
+        z4 = np.sqrt(zz)*2
+        q_im[2] = z4 / 4
+        iz4 = 1.0 / z4
+        q_im[0] = (rot[2,0] + rot[0,2]) * iz4
+        q_im[1] = (rot[2,1] + rot[1,2]) * iz4
+        q_re = (rot[1,0] - rot[0,1]) * iz4
+
+    return np.array((q_im[0], q_im[1], q_im[2], q_re))
+
+
+def compose_quaternions(quaternion_list):
+    """ return the composition of a list of quaternions
     """
-    if not from_S:
-        # swap angle order
-        angles = (angles[2], angles[1], angles[0])
-
-    if not parity_even:
-        # negate angles
-        angles = (-angles[0], -angles[1], -angles[2])
-
-    ti = angles[0]
-    tj = angles[1]
-    th = angles[2]
-
-    ci = np.cos(ti)
-    cj = np.cos(tj)
-    ch = np.cos(th)
-
-    si = np.sin(ti)
-    sj = np.sin(tj)
-    sh = np.sin(th)
-
-    cc = ci*ch
-    cs = ci*sh
-    sc = si*ch
-    ss = si*sh
-
-    i,j,k = order
-
-    M = np.zeros((3,3))
-    if repeat:
-        M[i,i] = cj;     M[i,j] =  sj*si;    M[i,k] =  sj*ci
-        M[j,i] = sj*sh;  M[j,j] = -cj*ss+cc; M[j,k] = -cj*cs-sc
-        M[k,i] = -sj*ch; M[k,j] =  cj*sc+cs; M[k,k] =  cj*cc-ss
-    else:
-        M[i,i] = cj*ch; M[i,j] = sj*sc-cs; M[i,k] = sj*cc+ss
-        M[j,i] = cj*sh; M[j,j] = sj*ss+cc; M[j,k] = sj*cs-sc
-        M[k,i] = -sj;   M[k,j] = cj*si;    M[k,k] = cj*ci
-
-    return M
+    qtotal = np.array((0,0,0,1))
+    for q in quaternion_list:
+        re = qtotal[3]*q[3] - np.dot(qtotal[0:3],q[0:3])
+        imag = np.cross(qtotal[0:3],q[0:3]) + q[0:3]*qtotal[3] + qtotal[0:3]*q[3]
+        qtotal = np.array((imag[0], imag[1], imag[2], re))
+    return qtotal
 
 
-def matrix_to_Euler_angles(M, order=(0,1,2), repeat=False, parity_even=True, from_S=True):
-    """ Convert a rotation matrix to Euler angles (X,Y,Z) order
-    From Graphics Gems tog.acm.org/resources/GraphicsGems/gemsiv/euler_angle
-    dec: Not tested for anything other than default args!
+def Euler_angles_to_matrix(theta1, theta2, theta3, order='XYZ'):
+    """ Convert Euler angles to a rotation matrix. Angles are specified in the order of application.
     """
-    i = order[0]
-    j = order[1]
-    k = order[2]
-    euler = np.zeros(3)
-    if repeat:
-        sy = np.sqrt(M[i,j]*M[i,j] + M[i,k]*M[i,k]);
-        if sy > 1e-6:
-            euler[0] = np.arctan2(M[i,j], M[i,k]);
-            euler[1] = np.arctan2(sy, M[i,i]);
-            euler[2] = np.arctan2(M[j,i], -M[k,i]);
-        else:
-            euler[0] = atan2(-M[j,k], M[j,j]);
-            euler[1] = atan2(sy, M[i,i]);
-            euler[2] = 0;
+    return quaternion_to_matrix(Euler_angles_to_quaternion(theta1, theta2, theta3, order))
 
-    else:
-        cy = np.sqrt(M[i,i]*M[i,i] + M[j,i]*M[j,i])
-        if cy > 1e-6:
-            euler[0] = np.arctan2(M[k,j], M[k,k])
-            euler[1] = np.arctan2(-M[k,i], cy)
-            euler[2] = np.arctan2(M[j,i], M[i,i])
-        else:
-            euler[0] = np.arctan2(-M[j,k], M[j,j])
-            euler[1] = np.arctan2(-M[k,i], cy)
-            euler[2] = 0
 
-    if not parity_even:
-        euler *= -1
-    if not from_S:
-        euler = np.array((euler[2], euler[1], euler[0]))
-    return euler
+def matrix_to_Euler_angles(M, order='XYZ'):
+    """ Convert a rotation matrix to Euler angles. Angles are returned in the order of application.
+    """
+    return quaternion_to_Euler_angles(matrix_to_quaternion(M))
 
 
 def rotate_vector(v, axis, angle):
