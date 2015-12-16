@@ -140,7 +140,11 @@ def Euler_angles_to_quaternion(theta1, theta2, theta3, order='XYZ'):
 
 
 def quaternion_to_Euler_angles(q, order='XYZ'):
-    """ convert q to Euler angles """
+    """ convert q to Euler angles
+        angles are returned in the order of application, specified by order
+        adapted and generalized based on code available at the following url:
+        http://bediyap.com/programming/convert-quaternion-to-euler-rotations/
+    """
     if not axis_order_is_valid(order):
         raise Exception('Invalid order string: ' + str(order))
     p0 = q[3]  # real component
@@ -160,27 +164,15 @@ def quaternion_to_Euler_angles(q, order='XYZ'):
     elif order[2] == 'Y':
         p3 = q[1]
 
-    p0,p1,p2,p3 = q[3],q[0],q[1],q[2]
-
     e1 = axis_from_string(order[0])
     e2 = axis_from_string(order[1])
     e3 = axis_from_string(order[2])
 
     e = np.sign(np.dot(np.cross(e3,e2),e1))
-    print('e = ' + str(e))
 
-    if order == 'XYZ':
-        # e = -1
-        theta1 = np.arctan2(-2*(p2*p3 - p0*p1), p0*p0 - p1*p1 - p2*p2 + p3*p3)
-        theta2 = np.arcsin(2*(p1*p3 + p0*p2))
-        theta3 = np.arctan2(-2*(p1*p2 - p0*p3), p0*p0 + p1*p1 - p2*p2 - p3*p3)
-    elif order == 'YXZ':
-        # e = 1
-        theta1 = np.arctan2(2*(p1*p3 + p0*p2), p0*p0 - p1*p1 - p2*p2 + p3*p3)
-        theta2 = np.arcsin(-2*(p2*p3 - p0*p1))
-        theta3 = np.arctan2(2*(p1*p2 + p0*p3), p0*p0 - p1*p1 + p2*p2 - p3*p3)
-    else:
-        raise Exception('unsupported rotation order')
+    theta1 = np.arctan2(e*2*(p2*p3 + e*p0*p1), p0*p0 - p1*p1 - p2*p2 + p3*p3)
+    theta2 = np.arcsin(-e*2*(p1*p3 - e*p0*p2))
+    theta3 = np.arctan2(e*2*(p1*p2 + e*p0*p3), p0*p0 + p1*p1 - p2*p2 - p3*p3)
 
     return theta1, theta2, theta3
 
