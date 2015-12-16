@@ -122,7 +122,6 @@ def axis_from_string(axis_string):
     else:
         raise Exception('Expecting one of [X,Y,Z], got ' + axis_string)
 
-
 def Euler_angles_to_quaternion(theta1, theta2, theta3, order='XYZ'):
     """ default order applies rotation around x axis first, y second, and z third.
     """
@@ -133,19 +132,11 @@ def Euler_angles_to_quaternion(theta1, theta2, theta3, order='XYZ'):
     e2 = axis_from_string(order[1])
     e3 = axis_from_string(order[2])
 
-    e = np.sign(np.dot(np.cross(e3,e2),e1))
+    q1 = np.append(e1 * np.sin(theta1/2.0), np.cos(theta1/2.0))
+    q2 = np.append(e2 * np.sin(theta2/2.0), np.cos(theta2/2.0))
+    q3 = np.append(e3 * np.sin(theta3/2.0), np.cos(theta3/2.0))
 
-    c1 = np.cos(theta1/2.0)
-    c2 = np.cos(theta2/2.0)
-    c3 = np.cos(theta3/2.0)
-    s1 = np.sin(theta1/2.0)
-    s2 = np.sin(theta2/2.0)
-    s3 = np.sin(theta3/2.0)
-
-    q_re = c3*c2*c1 - e*s3*s3*s1
-    q_imag = e1*(c3*c2*s1 + e*s3*s2*c1) + e2*(c3*s2*c1 - e*s3*c2*s1) + e3*(s3*c2*c1 + e*c3*s2*s1)
-
-    return np.array((q_imag[0],q_imag[1],q_imag[2],q_re))
+    return compose_quaternions((q1,q2,q3))
 
 
 def quaternion_to_Euler_angles(q, order='XYZ'):
@@ -169,14 +160,27 @@ def quaternion_to_Euler_angles(q, order='XYZ'):
     elif order[2] == 'Y':
         p3 = q[1]
 
+    p0,p1,p2,p3 = q[3],q[0],q[1],q[2]
+
     e1 = axis_from_string(order[0])
     e2 = axis_from_string(order[1])
     e3 = axis_from_string(order[2])
-    e = np.sign(np.dot(np.cross(e3,e2),e1))
 
-    theta3 = np.arctan2(2.0*(p0*p3 - e*p1*p2), 1 - 2.0*(p2*p2 + p3*p3))
-    theta2 = np.arcsin(2.0*(p0*p2 + e*p1*p3))
-    theta1 = np.arctan2(2.0*(p0*p1 - e*p2*p3),1 - 2.0*(p1*p1 + p2*p2))
+    e = np.sign(np.dot(np.cross(e3,e2),e1))
+    print('e = ' + str(e))
+
+    if order == 'XYZ':
+        # e = -1
+        theta1 = np.arctan2(-2*(p2*p3 - p0*p1), p0*p0 - p1*p1 - p2*p2 + p3*p3)
+        theta2 = np.arcsin(2*(p1*p3 + p0*p2))
+        theta3 = np.arctan2(-2*(p1*p2 - p0*p3), p0*p0 + p1*p1 - p2*p2 - p3*p3)
+    elif order == 'YXZ':
+        # e = 1
+        theta1 = np.arctan2(2*(p1*p3 + p0*p2), p0*p0 - p1*p1 - p2*p2 + p3*p3)
+        theta2 = np.arcsin(-2*(p2*p3 - p0*p1))
+        theta3 = np.arctan2(2*(p1*p2 + p0*p3), p0*p0 - p1*p1 + p2*p2 - p3*p3)
+    else:
+        raise Exception('unsupported rotation order')
 
     return theta1, theta2, theta3
 
@@ -268,8 +272,10 @@ def compose_quaternions(quaternion_list):
     """
     qtotal = np.array((0,0,0,1))
     for q in quaternion_list:
-        re = qtotal[3]*q[3] - np.dot(qtotal[0:3],q[0:3])
-        imag = np.cross(qtotal[0:3],q[0:3]) + q[0:3]*qtotal[3] + qtotal[0:3]*q[3]
+        q1 = qtotal
+        q2 = q
+        re = q1[3]*q2[3] - np.dot(q1[0:3],q2[0:3])
+        imag = np.cross(q1[0:3],q2[0:3]) + q2[0:3]*q1[3] + q1[0:3]*q2[3]
         qtotal = np.array((imag[0], imag[1], imag[2], re))
     return qtotal
 
