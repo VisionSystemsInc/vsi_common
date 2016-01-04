@@ -13,7 +13,7 @@ def generate_scene_xml_from_mesh(mesh_filename, output_filename, model_dir_rel, 
     # compute subblock size needed to contain all vertices
     bbox_size = verts.max(axis=1) - verts.min(axis=1)
     # add some padding to avoid points right on the boundary of the volume
-    pad_amount = 0.05*bbox_size
+    pad_amount = 0.1*bbox_size
     bbox_size += 2.0*pad_amount
     # local origin is the minimum of the vertices
     local_origin = verts.min(axis=1) - pad_amount
