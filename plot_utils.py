@@ -287,3 +287,7 @@ def overlay_heatmap(image, heatmap):
 
     return heatmap_overlay
 
+def make_random_colormap():
+    """ return a random colormap (useful for segmentation displays) """
+    return mpl.colors.ListedColormap( np.random.rand(256,3))
+
