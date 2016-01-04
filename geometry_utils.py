@@ -275,13 +275,13 @@ def compose_quaternions(quaternion_list):
 def Euler_angles_to_matrix(theta1, theta2, theta3, order='XYZ'):
     """ Convert Euler angles to a rotation matrix. Angles are specified in the order of application.
     """
-    return quaternion_to_matrix(Euler_angles_to_quaternion(theta1, theta2, theta3, order))
+    return quaternion_to_matrix(Euler_angles_to_quaternion(theta1, theta2, theta3, order=order))
 
 
 def matrix_to_Euler_angles(M, order='XYZ'):
     """ Convert a rotation matrix to Euler angles. Angles are returned in the order of application.
     """
-    return quaternion_to_Euler_angles(matrix_to_quaternion(M))
+    return quaternion_to_Euler_angles(matrix_to_quaternion(M),order=order)
 
 
 def rotate_vector(v, axis, angle):
