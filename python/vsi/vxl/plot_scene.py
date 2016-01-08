@@ -18,6 +18,11 @@ class PlotScene(object):
     self.figure.clf()
     self.axes = self.figure.add_subplot(1, 1, 1, projection='3d')
 
+  def set_limits(self, xmin, xmax, ymin, ymax, zmin, zmax):
+    self.axes.set_xlim(xmin, xmax)
+    self.axes.set_ylim(ymin, ymax)
+    self.axes.set_zlim(zmin, zmax)
+
   def clear_plot(self):
     self.axes.clf()
 
@@ -27,7 +32,7 @@ class PlotScene(object):
             [x for y in scene.bbox for x in y])}
     self.draw_cube(**bbox)
 
-  def draw_cameras(self, cameras, z_min=None):
+  def draw_cameras(self, cameras, z_min=None, color='k'):
     camera_centers = np.array(map(lambda x:x.camera_center(), cameras))
 
     self.axes.hold('on')
@@ -40,7 +45,7 @@ class PlotScene(object):
       else:
         l = 100
       line = np.array([camera.camera_center(), camera.camera_center() + camera.direction()*l])
-      self.axes.plot(line[:,0], line[:,1], line[:,2], 'k')
+      self.axes.plot(line[:,0], line[:,1], line[:,2], color)
 
     self.axes.hold('off')
 
@@ -85,6 +90,14 @@ def parse_args():
   aa('--cameras', '-c', default=None, nargs='+', 
      help='List of cameras to be plotted, can be camera filenames '
           'or glob expressions')
+  aa('--diff', '-d', default=None, nargs='+', 
+     help='List of cameras to be compared, can be camera filenames '
+          'or glob expressions')
+  aa('--limits', '-l', default=None, nargs=6, 
+     help='Set axis manually, '
+          'takes 6 arguments: xmin xmax ymin ymax zmin zmax')
+ 
+
   args = parser.parse_args()
   return args
 
@@ -94,11 +107,20 @@ def main():
 
   plot_scene = PlotScene()
 
+  if args.limits:
+   xyz = [float(i) for i in args.limits]
+   plot_scene.set_limits(xyz[0], xyz[1],\
+                         xyz[2], xyz[3],\
+                         xyz[4], xyz[5])
+
   z_min = None
   if args.scene:
     scene = boxm2_scene_adaptor(args.scene,  'cpp');
     plot_scene.draw_scene_box(scene)
     z_min = scene.bbox[0][2]
+
+  if (args.limits and not z_min):
+    z_min= xyz[4]
 
   if args.cameras:
     cameras = []
@@ -107,10 +129,18 @@ def main():
     for camera_file in camera_files:
       krt = Krt.load(camera_file)
       cameras.append(krt)
-
     plot_scene.draw_cameras(cameras, z_min)
-  
-  plot_scene.show()
+
+  if args.cameras and args.diff:
+    cameras = []
+    camera_files = [x for y in map(lambda x: glob(x), args.diff) for x in y]
+    camera_files = natural_sorted(camera_files)
+    for camera_file in camera_files:
+      krt = Krt.load(camera_file)
+      cameras.append(krt)
+    plot_scene.draw_cameras(cameras, z_min, 'g')
+
+  plt.show()
 
 if __name__=='__main__':
 #  import vsi.tools.vdb as vdb; vdb.dbstop_if_error()
