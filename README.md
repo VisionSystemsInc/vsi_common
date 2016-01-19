@@ -12,6 +12,22 @@ In order to use these directories, all you have to do is
 		#!batch
 		call env.bat
 
+* Python
+
+    python setup.py install
+
+or use pip
+
+    pip install . #Doesn't work because I'm not using a standard dir structure yet
+
+or for development
+
+    python setup.py develop
+
+or using pip for development
+
+    pip install -e .
+
 ### What is this repository for? ###
 
 * Common tools we use at VSI for any project/effort where we can use this "VSI" asset
