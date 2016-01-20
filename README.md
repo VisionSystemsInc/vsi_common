@@ -9,24 +9,24 @@ In order to use these directories, all you have to do is
 
 * Windows (batch)
 
-		#!batch
-		call env.bat
+        #!batch
+        call env.bat
 
 * Python
+    * Prefered
 
-    python setup.py install
+            git clone git@bitbucket.org:visionsystemsinc/vsi_common.git .
+            pip install -e .
 
-or use pip
+      This will install an editable version of the library is installed in your python environment. The vsi_common library is the same as the git clone that you can edit and commit.
+    * Other options
 
-    pip install . #Doesn't work because I'm not using a standard dir structure yet
+            pip install .
+            python setup.py install
+            python setup.py develop
+            pip install https://bitbucket.org/visionsystemsinc/vsi_common.git
 
-or for development
-
-    python setup.py develop
-
-or using pip for development
-
-    pip install -e .
+    * python_util - You still need to import the corresponding `env` script to add python_util to the PYTHONPATH
 
 ### What is this repository for? ###
 

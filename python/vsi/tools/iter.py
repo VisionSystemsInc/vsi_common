@@ -21,6 +21,39 @@ def sub_block(data, block=3, overlap=0, subok=False):
                    function could use these values to sublock over them too.
                    In the 2D case, there would be 3 groups of windows, in 3D 
                    case 6 groups of windows, etc...
+
+      Usage Example:
+
+      >> qq = np.arange(25).reshape(5,5)
+      >> q,r = sub_block(qq, block=3,overlap=(2,1))
+      >> q
+
+      array([[[[ 0,  1,  2],
+               [ 5,  6,  7],
+               [10, 11, 12]],
+
+              [[ 2,  3,  4],
+               [ 7,  8,  9],
+               [12, 13, 14]]],
+
+
+             [[[ 5,  6,  7],
+               [10, 11, 12],
+               [15, 16, 17]],
+
+              [[ 7,  8,  9],
+               [12, 13, 14],
+               [17, 18, 19]]],
+
+
+             [[[10, 11, 12],
+               [15, 16, 17],
+               [20, 21, 22]],
+
+              [[12, 13, 14],
+               [17, 18, 19],
+               [22, 23, 24]]]])
+
        '''
   
   try:
