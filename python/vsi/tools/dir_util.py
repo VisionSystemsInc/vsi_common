@@ -1,6 +1,6 @@
 import os
 
-from distutils.dir_util import mkpath, remove_tree
+from distutils.dir_util import remove_tree
 
 from tempfile import mkdtemp as mkdtemp_orig, gettempdir
 
@@ -53,7 +53,7 @@ class Chdir(object):
   def __enter__(self):
     self.oldDir = os.getcwd()
     if self.create and not os.path.exists(self.dir):
-      mkpath(self.dir)
+      os.makedirs(self.dir)
     os.chdir(self.dir)
   
   def __exit__(self, exc_type, exc_value, traceback):
@@ -131,7 +131,7 @@ class TempDir(object):
   def __enter__(self):
     if self.mkdtemp:
       if not os.path.exists(self.base_dir):
-        mkpath(self.base_dir)
+        os.makedirs(self.base_dir)
 
       self.dir = mkdtemp(dir=self.base_dir)
       if self.cd:
@@ -143,7 +143,7 @@ class TempDir(object):
       self.dir = self.base_dir
     
     if not os.path.exists(self.dir):
-      mkpath(self.dir)
+      os.makedirs(self.dir)
       self.created_dir = True
 
     if self.cd:
@@ -159,6 +159,22 @@ class TempDir(object):
     #It is up to the dev to make sure he knows what he is doing
     if self.delete and (self.created_dir or self.delete_if_not_create):
       remove_tree(self.dir)
+
+def checksum_dir(checksum, checksum_depth=2, base_dir=None):
+  ''' Generate checksum directory name
+
+      For example, if the checksum was 1234567890abcdef, and the depth was 3, 
+      you would get 12/34/56/1234567890abcdef
+
+      An optional base_dir will be prefixed'''
+
+  dir_parts = [checksum[x:x+2] if x<checksum_depth*2 else checksum \
+               for x in range(0,checksum_depth*2+1,2)]
+  if base_dir:
+    return os.path.join(base_dir, *dir_parts)
+  else:
+    return os.path.join(*dir_parts)
+
 
 #copy from shutil actually
 def copytree(src, dst, symlinks=False, ignore=None):

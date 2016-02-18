@@ -248,7 +248,7 @@ with Try(ImportError):
   from osgeo.gdal_array import codes as gdal_codes
 
   class GdalWriter(Writer):
-    gdal_array_types = {v:k for k,v in gdal_codes.iteritems()}
+    gdal_array_types = {np.dtype(v):k for k,v in gdal_codes.iteritems()}
     def save(self, filename, driver=None, *args, **kwargs):
 
       if driver is None:
@@ -261,7 +261,7 @@ with Try(ImportError):
       bands = self.array.shape[2] if len(self.array.shape)>2 else 1
 
       self.object = driver.Create(filename, self.array.shape[1], 
-          self.array.shape[0], bands, GdalWriter.gdal_array_types[self.dtype])
+          self.array.shape[0], bands, GdalWriter.gdal_array_types[np.dtype(self.dtype)])
 
       if bands==1:
         self.object.GetRasterBand(1).WriteArray(self.array)
@@ -307,6 +307,18 @@ def imwrite(img, filename, *args, **kwargs):
             pilImg.convert('I')  # convert to 32 bit signed mode
         pilImg.save(filename)
     return
+
+def imwrite_geotiff(img, filename, transform, wkt_projection=None):
+  if wkt_projection == None:
+    import osr
+    projection = osr.SpatialReference()
+    projection.SetWellKnownGeogCS('WGS84')
+    wkt_projection = projection.ExportToWkt()
+
+  gdal_writer = GdalWriter(img)
+  gdal_writer.save(filename)
+  gdal_writer.object.SetGeoTransform(transform)
+  gdal_writer.object.SetProjection(wkt_projection)
 
 def imwrite_byte(img, vmin, vmax, filename):
   """ write the 2-d numpy array as an image, scale to byte range first """
