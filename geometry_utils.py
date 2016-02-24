@@ -6,6 +6,7 @@ import re
 #for testing validity of axis order arguments
 axis_order_re = re.compile('[XYZ][XYZ][XYZ]')
 
+
 def axis_order_is_valid(order):
     """ return true if the axis order has valid form, e.g. 'XYZ'
     """
@@ -122,6 +123,7 @@ def axis_from_string(axis_string):
     else:
         raise Exception('Expecting one of [X,Y,Z], got ' + axis_string)
 
+
 def Euler_angles_to_quaternion(theta1, theta2, theta3, order='XYZ'):
     """ default order applies rotation around x axis first, y second, and z third.
     """
@@ -225,7 +227,7 @@ def matrix_to_quaternion(rot):
     q_im = [0,0,0]
 
     if 3 == imax:
-        r4 = np.sqrt(rr)*2;
+        r4 = np.sqrt(rr)*2
         q_re = r4 / 4
         ir4 = 1.0 / r4
         q_im[0] = (rot[2,1] - rot[1,2]) * ir4
@@ -538,13 +540,13 @@ def compute_2D_affine_xform(from_points, to_points):
     #condition points
     m = np.mean(from_points_M, axis=1)
     maxstd = np.max(np.std(from_points_M, axis=1))
-    C1 = np.diag([1/maxstd, 1/maxstd, 1]) 
+    C1 = np.diag([1/maxstd, 1/maxstd, 1])
     C1[0:2, 2] = -m[0:2]/maxstd
     fp_cond = np.dot(C1,from_points_M)
 
     #-to points-
     m = np.mean(to_points_M, axis=1)
-    C2 = C1.copy() #must use same scaling for both point sets
+    C2 = C1.copy()  # must use same scaling for both point sets
     C2[0:2, 2] = -m[0:2]/maxstd
     tp_cond = np.dot(C2,to_points_M)
 
@@ -557,7 +559,7 @@ def compute_2D_affine_xform(from_points, to_points):
     B = tmp[:2]
     C = tmp[2:4]
 
-    tmp2 = np.concatenate((np.dot(C,np.linalg.pinv(B)),np.zeros((2,1))), axis=1) 
+    tmp2 = np.concatenate((np.dot(C,np.linalg.pinv(B)),np.zeros((2,1))), axis=1)
     H = np.vstack((tmp2,[0,0,1]))
 
     #decondition
