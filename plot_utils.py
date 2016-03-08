@@ -270,7 +270,7 @@ def imshow_row(images,*args,**kwargs):
     return fig,ax
 
 
-def overlay_heatmap(image, heatmap, cmap='jet', vmin=0, vmax=1):
+def overlay_heatmap(image, heatmap, cmap='jet', vmin=0, vmax=1, img_ratio=0.4):
     """ create a visualization of the image with overlaid heatmap """
     img_gray = image
     if len(image.shape) == 3:
@@ -282,7 +282,7 @@ def overlay_heatmap(image, heatmap, cmap='jet', vmin=0, vmax=1):
     cmap = mpl.cm.get_cmap(cmap)
     heatmap_vis = cmap(heatmap_norm)
     img_gray_3plane = np.repeat(img_gray.reshape(np.append(img_gray.shape, 1)), 3, axis=2)
-    heatmap_overlay = 0.6 * heatmap_vis[:,:,0:3] + 0.4 * img_gray_3plane
+    heatmap_overlay = (1.0 - img_ratio) * heatmap_vis[:,:,0:3] + img_ratio * img_gray_3plane
 
     return heatmap_overlay
 
