@@ -219,3 +219,69 @@ class WarningDecorator(object):
     else:
       self.fun = args[0]
       return self
+
+def args_to_kwargs(function, args, kwargs):
+  '''return a dict of all the args and kwargs as the keywords they would
+     be received in a real function call.  It does not call function.
+     
+     Only works for python2. need to use signature instead of getargspec for 
+     python3.
+     
+     Based on:
+     https://github.com/merriam/dectools/blob/master/dectools/dectools.py'''
+
+  import inspect
+
+  if inspect.isclass(function):
+    function = function.__init__
+    args = (None,)+args #Dummy for self
+  #TODO
+  #handle bound function
+  #handle unbound function
+  #handle instance with __call__
+  #handle static method
+  #handle class method
+  #elif hasattr(function, '__call__'):
+  #  func = function.__call__
+  #  function = (None,)+args
+    
+  names, args_name, kwargs_name, defaults = inspect.getargspec(function)
+    
+  # assign basic args
+  params = {}
+  if args_name:
+      basic_arg_count = len(names)
+      params.update(zip(names[:], args))  # zip stops at shorter sequence
+      params[args_name] = args[basic_arg_count:]
+  else:
+      params.update(zip(names, args))    
+
+  # assign kwargs given
+  if kwargs_name:
+      params[kwargs_name] = {}
+      for kw, value in kwargs.iteritems():
+          if kw in names:
+              params[kw] = value
+          else:
+              params[kwargs_name][kw] = value
+  else:
+      params.update(kwargs)
+
+  # assign defaults
+  if defaults:
+      for pos, value in enumerate(defaults):
+          if names[-len(defaults) + pos] not in params:
+              params[names[-len(defaults) + pos]] = value
+
+  # check we did it correctly.  Each param and only params are set
+  assert set(params.iterkeys()) == (set(names)|set([args_name])|set([kwargs_name])
+                                    )-set([None])
+
+  return params
+
+def command_list_to_string(cmd):
+  try:
+    from shlex import quote
+  except:
+    from pipes import quote
+  return ' '.join([quote(x) for x in cmd])
