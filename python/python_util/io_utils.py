@@ -12,7 +12,7 @@ except ImportError:
 import vsi.tools
 
 def read_token(file_obj, tok=None, ignore_char=None):
-    """ return a generator that seperates file based on whitespace, or optionally, tok """
+    """ return a generator that separates file based on whitespace, or optionally, tok """
     for line in file_obj:
         for token in line.split(tok):
             if len(token) == 0 or (ignore_char is not None and token[0] == ignore_char):
@@ -31,7 +31,7 @@ def read_list(filename):
 
 
 def write_list(thelist, filename):
-    """ write each element to a seperate line in the file """
+    """ write each element to a separate line in the file """
     try:
         fd = open(filename,'w')
     except IOError:
@@ -55,7 +55,7 @@ def read_vector_float(filename):
 
 
 def read_vectors_float(filename):
-    """ read each line as a seperate vector of floats """
+    """ read each line as a separate vector of floats """
     lines = read_list(filename)
     vectors = []
     for line in lines:
@@ -70,7 +70,7 @@ def read_vectors_float(filename):
 
 
 def write_vectors_float(vector_list, filename):
-    """ write each vector of floats to a seperate line """
+    """ write each vector of floats to a separate line """
     str_list = []
     for v in vector_list:
         v_str = ''
@@ -80,7 +80,7 @@ def write_vectors_float(vector_list, filename):
     write_list(str_list, filename)
     return str_list
 
-@vsi.tools.WarningDecorator('Depricated. See vsi.io.image')
+@vsi.tools.WarningDecorator('Deprecated. See vsi.io.image')
 def imread(filename):
     """ read the image to a numpy array """
     _, ext = os.path.splitext(filename)
@@ -96,7 +96,7 @@ def imread(filename):
             img_np = np.array(img)
     return img_np
 
-@vsi.tools.WarningDecorator('Depricated. See vsi.io.image')
+@vsi.tools.WarningDecorator('Deprecated. See vsi.io.image')
 def imwrite(img, filename):
     """ write the numpy array as an image """
     _, ext = os.path.splitext(filename)
@@ -111,7 +111,7 @@ def imwrite(img, filename):
         pilImg.save(filename)
     return
 
-@vsi.tools.WarningDecorator('Depricated. See vsi.io.image')
+@vsi.tools.WarningDecorator('Deprecated. See vsi.io.image')
 def imwrite_byte(img, vmin, vmax, filename):
     """ write the 2-d numpy array as an image, scale to byte range first """
     img_byte = np.uint8(np.zeros_like(img))
