@@ -178,6 +178,22 @@ def read_camera_KRT(filename):
     return K, R, T
 
 
+def write_camera_KRT(K,R,T, filename):
+    """ write a KRT camera from text file """
+    if K.shape != (3,3):
+        raise Exception('K matrix should be 3x3')
+    if R.shape != (3,3):
+        raise Exception('R matrix should be 3x3')
+    if T.shape != (3,):
+        raise Exception('T vector should have length 3')
+    with open(filename,'w') as fd:
+        for row in K:
+            fd.write('%f %f %f\n' % (row[0],row[1],row[2]))
+        for row in R:
+            fd.write('%f %f %f\n' % (row[0],row[1],row[2]))
+        fd.write('%f %f %f\n' % (T[0],T[1],T[2]))
+
+
 def read_bundler_file(filename):
     """ read an output file from the 'bundler' program.  Return the cameras and points """
     lines = read_list(filename)
