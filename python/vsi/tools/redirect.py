@@ -151,6 +151,10 @@ class Redirect(RedirectBase): #Version 2
       output or multiple stdouts in windows cause this to not behave 100%
       right. Best to just not use it. PopenRedirect is good
 
+      MORE FAILURES! It looks like when extending python with C, too many
+      cout/flushes can result in a deadlock, I'm guess the GIL does something
+      weird
+
       Similar to Capture class, except it redirect to file like objects
   
       There are times in python when using "those kind of libraries" 
@@ -638,6 +642,54 @@ class Capture(RedirectBase): #version 1
       self.stdout = self.stdout_c
     if self.group_err:
       self.stderr = self.stderr_c
+
+class StdRedirect(object):
+  ''' Redirect stdout and stderr to a file object (must have a working fileno)
+  
+      This is very stable and safe to use. The only caveat to remember is that
+      C can have unflushed data in the buffer, and it will not be captured 
+      after the StdRedirect with statement. This is not vulnerable to the 
+      deadlock that the GIL can introduce with the pipe methods that need extra
+      threads.
+      
+      Primarily used in a with expression:
+      
+      >>> test = open('test.txt', 'w')
+      >>> with StdRedirect(test):
+      ...   boxm2_batch.print_db()
+      
+      Supports stdout and stderr, and stderr can be set to StdRedirect.STDOUT
+      to use the same output as stdout'''
+      
+  
+  STDOUT = -1
+  def __init__(self, stdout=None, stderr=None):
+    self.new_stdout = stdout
+    self.new_stderr = stderr
+
+    self.stdout_c_fd = 1
+    self.stderr_c_fd = 2
+
+  def __enter__(self):
+    if self.new_stdout:
+      self.old_stdout = os.dup(self.stdout_c_fd)
+      os.dup2(self.new_stdout.fileno(), self.stdout_c_fd)
+      
+    if self.new_stderr:
+      self.old_stderr = os.dup(self.stderr_c_fd)
+      if self.new_stderr == StdRedirect.STDOUT and self.new_stdout is not None:
+        os.dup2(self.new_stdout.fileno(), self.stderr_c_fd)
+      else:
+        os.dup2(self.new_stderr.fileno(), self.stderr_c_fd)
+
+  def __exit__(self, exc_type=None, exc_value=None, traceback=None):
+    if self.new_stdout:
+      os.dup2(self.old_stdout, self.stdout_c_fd)
+      os.close(self.old_stdout)
+    
+    if self.new_stderr:
+      os.dup2(self.old_stderr, self.stderr_c_fd)
+      os.close(self.old_stderr)
       
 if __name__=='__main__':
   with Redirect(group=False) as rid:
