@@ -250,28 +250,28 @@ def args_to_kwargs(function, args, kwargs):
   # assign basic args
   params = {}
   if args_name:
-      basic_arg_count = len(names)
-      params.update(zip(names[:], args))  # zip stops at shorter sequence
-      params[args_name] = args[basic_arg_count:]
+    basic_arg_count = len(names)
+    params.update(zip(names[:], args))  # zip stops at shorter sequence
+    params[args_name] = args[basic_arg_count:]
   else:
-      params.update(zip(names, args))    
+    params.update(zip(names, args))
 
   # assign kwargs given
   if kwargs_name:
-      params[kwargs_name] = {}
-      for kw, value in kwargs.iteritems():
-          if kw in names:
-              params[kw] = value
-          else:
-              params[kwargs_name][kw] = value
+    params[kwargs_name] = {}
+    for kw, value in kwargs.iteritems():
+      if kw in names:
+        params[kw] = value
+      else:
+        params[kwargs_name][kw] = value
   else:
       params.update(kwargs)
 
   # assign defaults
   if defaults:
-      for pos, value in enumerate(defaults):
-          if names[-len(defaults) + pos] not in params:
-              params[names[-len(defaults) + pos]] = value
+    for pos, value in enumerate(defaults):
+      if names[-len(defaults) + pos] not in params:
+        params[names[-len(defaults) + pos]] = value
 
   # check we did it correctly.  Each param and only params are set
   assert set(params.iterkeys()) == (set(names)|set([args_name])|set([kwargs_name])
