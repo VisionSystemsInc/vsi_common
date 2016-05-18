@@ -30,15 +30,15 @@ def open(name, server=False):
   ''' Helper open function
   
       Give it the look and feel of python's open command'''
-  pipe = Pipe(name, server);
+  pipe = Pipe(name, server)
   return pipe
   
 class Pipe(object):
   ''' Windows Named Pipe class similar to File objects '''
   def __init__(self, name, server=False):
-    self.server = server;
+    self.server = server
     self.name = PIPE_PREFIX+name
-    self.open();
+    self.open()
 
   def open(self):
     if self.server:
@@ -70,7 +70,7 @@ class Pipe(object):
         
       
       dwMode = c_ulong(PIPE_READMODE_MESSAGE)
-      fSuccess = windll.kernel32.SetNamedPipeHandleState(self.hPipe, byref(dwMode), None, None);
+      fSuccess = windll.kernel32.SetNamedPipeHandleState(self.hPipe, byref(dwMode), None, None)
       if (not fSuccess):
         raise PipeException('SetNamedPipeHandleState failed')
 

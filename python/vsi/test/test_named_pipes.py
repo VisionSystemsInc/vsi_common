@@ -35,11 +35,11 @@ class PipeTest(unittest.TestCase):
 
     
   def start_server_thread(self):
-    self.server_thread = threading.Thread(target=self.server, name='server');
+    self.server_thread = threading.Thread(target=self.server, name='server')
     self.server_thread.start()
     
   def server(self):
     pipe = Pipe('test_named_pipes', server=True)
     self.assertEqual(pipe.read(), 'clientToServer')
     pipe.write('serverToClient')
-    pipe.close();
+    pipe.close()

@@ -29,7 +29,7 @@ def dbstop_if_error(interactive=False, ip=DEFAULT_IP, port=DEFAULT_PORT):
       port - Default 4444 - Port to bind to for remote debugger'''
 
   RpdbPostMortemHook.dbstop_if_error(interactive=interactive, 
-                                     ip=ip, port=port);
+                                     ip=ip, port=port)
 
 def post_mortem(tb=None, ip=DEFAULT_IP, port=DEFAULT_PORT):
   if tb is None:

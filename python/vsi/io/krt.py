@@ -38,11 +38,11 @@ class Krt(object):
     
     fid = get_file(filename, 'w')
 
-    np.savetxt(fid, self.k);
-    fid.write('\n');
-    np.savetxt(fid, self.r);
-    fid.write('\n');
-    np.savetxt(fid, self.t.reshape((1,3)));
+    np.savetxt(fid, self.k)
+    fid.write('\n')
+    np.savetxt(fid, self.r)
+    fid.write('\n')
+    np.savetxt(fid, self.t.reshape((1,3)))
     
   @classmethod
   def load(cls, fid):
@@ -57,11 +57,11 @@ class Krt(object):
        t - 3, numpy array
        '''
     
-    data = np.loadtxt(fid);
+    data = np.loadtxt(fid)
   
-    k = data[0:3, :];
-    r = data[3:6, :];
-    t = data[6, :];
+    k = data[0:3, :]
+    r = data[3:6, :]
+    t = data[6, :]
     
     return cls(k=k, r=r, t=t)
   

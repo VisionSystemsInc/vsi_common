@@ -58,7 +58,7 @@ def get_file(fid, mode='rb'):
              Default rb'''
 
   if is_string_like(fid):
-    fid = open(fid, mode);
+    fid = open(fid, mode)
   
   return fid 
 

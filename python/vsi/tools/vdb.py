@@ -32,14 +32,14 @@ class Tracer(IPython.core.debugger.Tracer):
 class Vdb(IPython.core.debugger.Pdb):
   ''' VSI Debugger '''
   def __init__(self, skipInput=True, *args, **kwargs):
-    self.__ignore_next_user_return = skipInput;
-    IPython.core.debugger.Pdb.__init__(self, *args, **kwargs);
+    self.__ignore_next_user_return = skipInput
+    IPython.core.debugger.Pdb.__init__(self, *args, **kwargs)
     self.prompt = 'vdb> '
 
   #Modifications to skip initial user input
   def user_return(self, frame, return_value):
     if self.__ignore_next_user_return:
-      self.__ignore_next_user_return = False;
+      self.__ignore_next_user_return = False
       self.onecmd('c')#continue, effectively ignoring the first input
     else:
       IPython.core.debugger.Pdb.interaction(self, frame, None)
@@ -62,8 +62,8 @@ class Vdb(IPython.core.debugger.Pdb):
     sys.settrace(self.trace_dispatch)
 
 try:
-  delattr(IPython.core.debugger.OldPdb, 'do_r');
-  delattr(IPython.core.debugger.OldPdb, 'do_q');
+  delattr(IPython.core.debugger.OldPdb, 'do_r')
+  delattr(IPython.core.debugger.OldPdb, 'do_q')
   delattr(IPython.core.debugger.Pdb, 'do_q'); #New quit in newer ipython
 except:
   pass
@@ -86,12 +86,12 @@ def runpdb(lines, debugger=None):
     lines + ' ' #Is str like
     lines = [lines] #make it a lise
   except:
-    pass;
+    pass
 
   if not debugger:
-    debugger = Tracer().debugger;
+    debugger = Tracer().debugger
     
-  debugger._pre_settrace(frame=sys._getframe().f_back);
+  debugger._pre_settrace(frame=sys._getframe().f_back)
   
   for line in lines:
     debugger.onecmd(line)

@@ -66,7 +66,7 @@ class FileRedirect(object):
     ''' Create the pipes and monitoring threads '''
     self.rids = []
     self.wids = []
-    self.tids = [];
+    self.tids = []
     
     for index, output in enumerate(self.outputs):
       r, w = os.pipe()
@@ -305,7 +305,7 @@ class Redirect(RedirectBase): #Version 2
         self.inputs_py_module[-1].append(self.stderr_py_module)
         self.inputs_py_name[-1].append(self.stderr_py_name)
     
-    super(Redirect, self).__init__();
+    super(Redirect, self).__init__()
 
   def __enter__(self):
     ''' enter function for with statement. 
@@ -522,7 +522,7 @@ class Capture(RedirectBase): #version 1
         
     self.buffers = [''] * len(self.std_cs)
     
-    super(Capture, self).__init__();
+    super(Capture, self).__init__()
     
   def __bleed(self, fid, bufferIndex):
     ''' Read all date from fid and store in buffer[bufferIndex]

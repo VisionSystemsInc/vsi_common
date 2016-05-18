@@ -115,7 +115,7 @@ def main():
 
   z_min = None
   if args.scene:
-    scene = boxm2_scene_adaptor(args.scene,  'cpp');
+    scene = boxm2_scene_adaptor(args.scene,  'cpp')
     plot_scene.draw_scene_box(scene)
     z_min = scene.bbox[0][2]
 

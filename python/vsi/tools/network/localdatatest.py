@@ -188,7 +188,7 @@ if __name__=='__main__':
   port = args.port
   ip = args.ip
   if not args.server and not testConnect(ip, port):
-    ip = scanSubnet(ip, port);
+    ip = scanSubnet(ip, port)
 
   if args.server or ip is None:
     logger.info('No client found, serving data test server on %d', port)

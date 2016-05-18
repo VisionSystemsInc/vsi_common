@@ -58,23 +58,23 @@ def uidFromName(name):
     uid = call('id', '-u', name)[0]
     return int(uid.strip())
   except ValueError:
-    return int(env.get('SUDO_UID', DEFAULT_UID));
+    return int(env.get('SUDO_UID', DEFAULT_UID))
 
 def gidFromName(name):
   try:
     gid = call('id', '-g', name)[0]
     return int(gid.strip())
   except ValueError:
-    return int(env.get('SUDO_GID', DEFAULT_GID));
+    return int(env.get('SUDO_GID', DEFAULT_GID))
 
 def groupFromName(name):
   try:
     group = call('id', '-gn', name)[0].strip()
     if len(group)==0:
-      raise ValueError("Empty string");
+      raise ValueError("Empty string")
     return group.strip()
   except ValueError:
-    return DEFAULT_GROUP;
+    return DEFAULT_GROUP
 
 def getKernelVersion():
   return call('uname', '-r')[0].strip()
@@ -98,7 +98,7 @@ def isMountPoint(dirName):
 
 def mount_bind(fromDir, toDir):
   if not os.path.exists(toDir):
-    mkpath(toDir);
+    mkpath(toDir)
   if not isMountPoint(toDir):
     call('mount', '--bind', fromDir, toDir)
 
@@ -107,11 +107,11 @@ def make_readonly_mount(mountDir):
 
 def umount(toDir, force=False):
   if isMountPoint(toDir) or force:
-    call('umount', toDir);
+    call('umount', toDir)
 
 '''def setGroup(chroot_dir, group, gid):
   with open(path_join(chroot_dir, 'etc', 'group'), 'r') as fid:
-    groups = fid.readlines();
+    groups = fid.readlines()
 
   #Find and set the existing one
   for g in range(len(groups)):
@@ -120,7 +120,7 @@ def umount(toDir, force=False):
       group_line[2] = str(gid)
       groups[g] = ':'.join(group_line)
       with open(path_join(chroot_dir, 'etc', 'group'), 'w') as fid:
-        fid.writelines(groups);
+        fid.writelines(groups)
       return
 
   #else add a new one
@@ -130,7 +130,7 @@ def umount(toDir, force=False):
   groups.append(':'.join(group_line))
 
   with open(path_join(chroot_dir, 'etc', 'group'), 'w') as fid:
-    fid.writelines(groups);
+    fid.writelines(groups)
   return'''
 
 if __name__=='__main__':
@@ -177,11 +177,11 @@ if __name__=='__main__':
     if chroot_user is None:
       chroot_user = env.get('SUDO_USER', DEFAULT_USER)
     if chroot_group is None:
-      chroot_group = groupFromName(chroot_user);
+      chroot_group = groupFromName(chroot_user)
     if chroot_uid is None:
-      chroot_uid = uidFromName(chroot_user);
+      chroot_uid = uidFromName(chroot_user)
     if chroot_gid is None:
-      chroot_gid = gidFromName(chroot_user);
+      chroot_gid = gidFromName(chroot_user)
 
   if chroot_user == 'root' or int(chroot_uid)==0: 
   #incase the specified user is rootish, reset to BE root
@@ -274,7 +274,7 @@ if __name__=='__main__':
   mount_bind('/dev', path_join(chroot_dir, 'dev'))
   mount_bind('/sys', path_join(chroot_dir, 'sys'))
   mount_bind('/dev/pts', path_join(chroot_dir, 'dev', 'pts'))
-  mount_bind(dev_shm, unchroot_dev_shm);
+  mount_bind(dev_shm, unchroot_dev_shm)
   if os.path.exists('/selinux') and \
      os.path.exists(path_join(chroot_dir, 'selinux')):
     mount_bind('/selinux', path_join(chroot_dir, 'selinux'))
@@ -308,7 +308,7 @@ if __name__=='__main__':
           lines = fid.readlines()
           found = False
           for l in range(len(lines)):
-            line = lines[l];
+            line = lines[l]
             parts = re.split('\s+', line)
             if parts[0] == chroot_user:
               line = '%s ALL=(ALL) NOPASSWD:ALL\n' % chroot_user

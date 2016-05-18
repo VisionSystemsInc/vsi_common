@@ -178,15 +178,15 @@ def matrix_to_Euler_angles(M, order=(0,1,2), repeat=False, parity_even=True, fro
     k = order[2]
     euler = np.zeros(3)
     if repeat:
-        sy = np.sqrt(M[i,j]*M[i,j] + M[i,k]*M[i,k]);
+        sy = np.sqrt(M[i,j]*M[i,j] + M[i,k]*M[i,k])
         if sy > 1e-6:
-            euler[0] = np.arctan2(M[i,j], M[i,k]);
-            euler[1] = np.arctan2(sy, M[i,i]);
-            euler[2] = np.arctan2(M[j,i], -M[k,i]);
+            euler[0] = np.arctan2(M[i,j], M[i,k])
+            euler[1] = np.arctan2(sy, M[i,i])
+            euler[2] = np.arctan2(M[j,i], -M[k,i])
         else:
-            euler[0] = atan2(-M[j,k], M[j,j]);
-            euler[1] = atan2(sy, M[i,i]);
-            euler[2] = 0;
+            euler[0] = atan2(-M[j,k], M[j,j])
+            euler[1] = atan2(sy, M[i,i])
+            euler[2] = 0
 
     else:
         cy = np.sqrt(M[i,i]*M[i,i] + M[j,i]*M[j,i])

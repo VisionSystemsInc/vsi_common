@@ -71,7 +71,7 @@ Next''')
 
 class Pgrep(object):
   def __init__(self, args=[], get=['/all']):
-    self.args = args;
+    self.args = args
     self.cmd = ['wmic', 'path', 'win32_process']
     self.cmd += args
     self.cmd += ['get', ','.join(get), '/FORMAT:rawxml']
