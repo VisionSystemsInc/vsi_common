@@ -6,6 +6,30 @@ from tempfile import mkdtemp as mkdtemp_orig, gettempdir
 
 from shutil import Error, copy2, copystat, rmtree
 
+def is_subdir(path, base_dir):
+  ''' Determines if the path is in the base_dir
+
+      Returns a tuple containing (True/False, and remainder (relative) of path)
+      Remainder - Windows - If the paths are on two different drives, entire
+                            path is returned
+
+      This will NOT work with Junctions in Windows... I'm not sure what else'''
+
+  path = os.path.normcase(os.path.normpath(os.path.abspath(os.path.realpath(
+      path))))
+  base_dir = os.path.normcase(os.path.normpath(os.path.abspath(
+      os.path.realpath(base_dir))))
+
+  try:
+    relative = os.path.relpath(path, base_dir)
+  except ValueError:
+    return (False, path)
+
+  if relative.startswith(os.pardir):
+    return (False, relative)
+
+  return (True, relative)
+
 def mkdtemp(*args, **kwargs):
   ''' Version of tempfile.mkdtemp that is r/w by uid and gid'''
   tempdir = mkdtemp_orig(*args, **kwargs)
