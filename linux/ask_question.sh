@@ -9,9 +9,20 @@ function ask_question()
   else
     local default_response=
   fi
+
+  #Check to see if the variable already has been set. This way the input is 
+  #skipped. This is great for automating ask_question
+  if [ "${!2=}" != "" ]; then
+    local override=${!2}
+  fi
+
   while true; do
     #Prompt user
-    if [ "$default_response" == "" ]; then
+    if [ "${override=}" != "" ]; then
+      echo "$1 ${!2}"
+      ans=$override
+      override="" #Prevent infinite loop
+    elif [ "$default_response" == "" ]; then
       read -r -p "$1 " ans
     else
       read -r -p "$1 ($default_response) " ans
