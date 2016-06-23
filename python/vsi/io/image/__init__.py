@@ -45,7 +45,7 @@ with Try(ImportError):
       return self.object.asarray(key=segment, **kwargs)
 
     def shape(self, segment=0):
-      return tuple(self.object.pages[segment]['shape'])
+      return tuple(self.object.pages[segment].shape)
 
     def dtype(self, segment=0):
       return self.object.series[0]['dtype']
