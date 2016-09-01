@@ -283,6 +283,8 @@ def overlay_heatmap(image, heatmap, cmap='jet', vmin=0, vmax=1, img_ratio=0.4):
     heatmap_vis = cmap(heatmap_norm)
     img_gray_3plane = np.repeat(img_gray.reshape(np.append(img_gray.shape, 1)), 3, axis=2)
     heatmap_overlay = (1.0 - img_ratio) * heatmap_vis[:,:,0:3] + img_ratio * img_gray_3plane
+    mask = np.isnan(heatmap)
+    heatmap_overlay[mask] = img_gray_3plane[mask]
 
     return heatmap_overlay
 
