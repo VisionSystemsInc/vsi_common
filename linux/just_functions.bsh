@@ -1,0 +1,140 @@
+#!/usr/bin/env false
+#Source this script for
+
+: ${DRYRUN=0}
+: ${DUSTIFY_SEPARATOR='--'}
+
+JUST_FUNCTIONS_FILE=${BASH_SOURCE[0]}
+
+print_help_from_file()
+{
+  grep -E '^ +[a-z0-9|\-]+\)|^ +[_a-z0-9|\-]+\) *#' $1 | sed -r 's| *([0-9|_a-z-]*)\) *#? *(.*)|\1 --- \2|' \
+  | awk -F '---' '
+   { printf "%-'$(($indent-1))'s ", $1
+    n = split($2,x," ")
+    len = '${indent}'
+    for(i=1;i<=n;i++){
+     if(len+length(x[i])>='$(tput cols)'){printf("\n%'$indent's", ""); len = '${indent}'}
+     printf "%s ",x[i]
+     len += 1+length(x[i])
+    }
+    printf "\n"
+  }' #c/o http://unix.stackexchange.com/a/280205/123413
+}
+
+print_help()
+{
+  echo "List of possible $(basename $0) commands:"
+  echo "-----------------------------------"
+  cols=$(tput cols)
+  indent=21
+  #Only find lines with _ if there is a comment at the end.
+  print_help_from_file $0
+  print_help_from_file ${JUST_FUNCTIONS_FILE}
+}
+
+defaultify()
+{
+  arg=$1
+  shift 1
+  case $arg in
+    -dryrun|--n) #Dryrun flag. Used to echo instead of run commands
+      DRYRUN=1
+      ;;
+    -separator) #Commands that can take an undefined number of additional arguments use the -- separator to start and end the extra arguments. If you need -- for other things, specify a custom separator. For example "dustify build -- --build-arg=x=16 -- run" could become "dustify -separator xx build xx --build-arg=x=16 -- xx run"
+      DUSTIFY_SEPARATOR=$1
+      extra_args=1
+      ;;
+    help) #Print help
+      print_help
+      ;;
+    *)
+      echo "I don't understand $arg"
+      exit 1
+      ;;
+  esac
+}
+
+justify()
+{ #caseify needs to be written by the main script, and set the number
+  #of extra arguments it consumes to extra_args
+  while (( $# > 0 )); do
+    extra_args=0
+    caseify "${@}"
+    shift $extra_args
+    shift 1
+  done
+}
+
+find_in()
+{
+  local val=$1
+  local x
+  shift 1
+  for x in $(seq 1 "${#@}"); do
+    if [ "${!x}" == "${val}" ]; then
+      return ${x}
+    fi
+  done
+
+  return 0
+}
+
+callify()
+{
+  # local cmd next_break
+  # if (( $# >= 2 )) && [ "$2" == "${DUSTIFY_SEPARATOR}" ]; then
+  #   cmd=$1
+  #   shift 2 #Shift the command and -- out
+  #   next_break=0
+  #   find_in "${DUSTIFY_SEPARATOR}" ${@+"${@}"} || next_break=$? #look to see if there is another --
+  #   if [ "${next_break}" == 0 ]; then
+  #     $cmd ${@+"${@}"} #Send all remaining args, if there are any
+  #     extra_args=$(($#+1))
+  #   else
+  #     $cmd ${@+"${@:1:$((${next_break}-1))}"}
+  #     extra_args=$(($next_break+1))
+  #   fi
+  # else
+  #   $1 #Just execute the command
+  # fi
+
+  local cmd next_break
+  cmd=$1
+  shift 1
+  get_args
+  $cmd ${args+"${args[@]}"}
+}
+
+get_args()
+{
+  args=()
+  extra_args=0
+  if (( $# >= 1 )); then
+    if [ "$1" == "${DUSTIFY_SEPARATOR}" ]; then
+      shift 1
+      next_break=0
+      find_in "${DUSTIFY_SEPARATOR}" ${@+"${@}"} || next_break=$? #look to see if there is another --
+      if [ "${next_break}" == 0 ]; then
+        extra_args=$(($#+1))
+        args=("${@:1}")
+      else
+        extra_args=$(($next_break+1))
+        args=("${@:1:$(($next_break-1))}")
+      fi
+    else
+      extra_args=1
+      args=("${1}")
+    fi
+  fi
+}
+
+safe_load() #Loads a very simple safe config file, and sets environment variables accordingly
+{ #File should alternate lines: variable name, value. 
+  local key=foobar
+  while : ; do
+    IFS='' read -r key || return 0
+    IFS='' read -r $key || :
+    #echo $key is ${!key}
+  done < $1
+}
