@@ -20,22 +20,17 @@ get_label() # Get the value of a label ($2) from container/image ($1)
     return 1
   fi
 
-  value=$(echo $value | perl -wpe 's#\%?(\w+)\%# $ENV{$1} // $& #ge;')
+  value=$(echo "${value}" | perl -wpe 's#\%?(\w+)\%# $ENV{$1} // $& #ge;')
 
   return 0
 }
 
 Docker() #Helper function to execute the right docker command, or just echo
 {
-  local cmd
-
-  if [ "${DRYRUN}" == "1" ]; then
-    cmd="echo "
-  fi
   if [ "${NVIDIA_DOCKER}" == "1" ]; then
-    cmd="${cmd-}nvidia-docker"
+    cmd="${DRYRUN} nvidia-docker"
   else
-    cmd="${cmd-}docker"
+    cmd="${DRYRUN} docker"
   fi
 
   command $cmd "${@}"
@@ -78,7 +73,14 @@ caseify() #Main justify core
     build) #Build a docker image
       build()
       {
-        Docker build -t ${IMAGENAME} ${@+"${@}"} -f ${DOCKERFILE} ${CONTEXT}
+        local unique=tmp_$(head -c 16 /dev/urandom | xxd -pu)
+        Docker build -t ${unique} ${@+"${@}"} -f ${DOCKERFILE} ${CONTEXT}
+        Docker tag ${unique} ${IMAGENAME}
+        if [ "${DRYRUN}" == "" ]; then
+          Docker rmi ${unique} > /dev/null
+        else
+          Docker rmi ${unique}
+        fi
       }
       callify build ${@+"${@}"}
       ;;
@@ -106,6 +108,9 @@ caseify() #Main justify core
       }
       callify run ${@+"${@}"}
       ;;
+    runlast) #Runs the image of the last exited container. This is useful when building, as this will be the last snapshot before a failed build
+      docker run -it --rm $(docker ps -a --filter=status=exited --format '{{.Image}}' | head -n 1) bash
+      ;;
     daemon) #Runs a docker container as a daemon
       daemon()
       {
@@ -114,7 +119,13 @@ caseify() #Main justify core
       callify daemon ${@+"${@}"}
       ;;
     enter) #Conveniently start an interactive bash in a running container
-      docker ps --filter=label=dustify.image=${IMAGENAME} --format="{{.Names}}"
+      Docker ps --filter=label=dustify.image=${IMAGENAME} --format="{{.Names}}"
+      ;;
+    push)
+      Docker push ${IMAGENAME}
+      ;;
+    pull)
+      Docker pull ${IMAGENAME}
       ;;
     *)
       defaultify $arg ${@+"${@}"}

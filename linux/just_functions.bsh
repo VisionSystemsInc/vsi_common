@@ -1,7 +1,7 @@
 #!/usr/bin/env false
 #Source this script for
 
-: ${DRYRUN=0}
+: ${DRYRUN=}
 : ${DUSTIFY_SEPARATOR='--'}
 
 JUST_FUNCTIONS_FILE=${BASH_SOURCE[0]}
@@ -39,7 +39,7 @@ defaultify()
   shift 1
   case $arg in
     -dryrun|--n) #Dryrun flag. Used to echo instead of run commands
-      DRYRUN=1
+      export DRYRUN="echo"
       ;;
     -separator) #Commands that can take an undefined number of additional arguments use the -- separator to start and end the extra arguments. If you need -- for other things, specify a custom separator. For example "dustify build -- --build-arg=x=16 -- run" could become "dustify -separator xx build xx --build-arg=x=16 -- xx run"
       DUSTIFY_SEPARATOR=$1
@@ -102,7 +102,7 @@ callify()
   local cmd next_break
   cmd=$1
   shift 1
-  get_args
+  get_args "${@}"
   $cmd ${args+"${args[@]}"}
 }
 
@@ -123,8 +123,8 @@ get_args()
         args=("${@:1:$(($next_break-1))}")
       fi
     else
-      extra_args=1
-      args=("${1}")
+      extra_args=0
+      args=()
     fi
   fi
 }
@@ -135,6 +135,35 @@ safe_load() #Loads a very simple safe config file, and sets environment variable
   while : ; do
     IFS='' read -r key || return 0
     IFS='' read -r $key || :
+    export $key
     #echo $key is ${!key}
   done < $1
+}
+
+choseify()
+{
+  :
+}
+
+find_dockerfiles()
+{
+  (cd ${CURDIR}; ls *.Dockerfile)
+  #If this contains spaces, then it won't be a valid image name, so I won't bother checking check
+}
+
+image_names()
+{
+  local prefix=${1-library}
+  local images
+  local i
+
+  images=($(find_dockerfiles))
+  for i in "${!images[@]}"; do
+    if [ "${images[$i]}" == "Dockerfile" ]; then
+      images[$i]=latest.Dockerfile
+    fi
+  done
+  images=("${images[@]/%.Dockerfile/}")
+  images=("${images[@]/#/${prefix}/$(basename ${CURDIR-$(pwd)}):}")
+  echo "${images[@]}"
 }
