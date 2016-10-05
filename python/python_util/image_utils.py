@@ -49,8 +49,11 @@ def sk_resize(img, nsize=None, nscale=None, **kwargs):
 
 def rgb2gray(rgb):
     """ convert an rgb image stored as a numpy array to grayscale """
-    gr = np.dot(rgb[..., :3], [0.299, 0.587, 0.144]).astype(rgb.dtype)
-    return gr
+    gr = np.dot(rgb[..., :3].astype(np.float), [0.299, 0.587, 0.144])
+    if rgb.dtype == np.uint8:
+        gr[gr > 255] = 255
+        gr[gr < 0] = 0
+    return gr.astype(rgb.dtype)
 
 
 def weighted_smooth(image, weights, pyramid_min_dim=50, convergence_thresh=0.01, max_its=1000):

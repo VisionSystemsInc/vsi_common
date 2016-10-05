@@ -101,18 +101,28 @@ class ProjectiveCamera(object):
     def plane2image(self, plane_origin, plane_x, plane_y):
         """ compute the transformation from points on a 3-d plane to image coordinates
         """
+        # normalize plane_x and plane_y to unit vectors
         plane_xlen = np.sqrt(np.dot(plane_x, plane_x))
         plane_ylen = np.sqrt(np.dot(plane_y, plane_y))
         plane_xu = plane_x / plane_xlen
         plane_yu = plane_y / plane_ylen
+
+        # compute plane normal
         plane_normal = np.cross(plane_xu, plane_yu)
+
+        # compute rotation and translation components of the transformation
         plane2world_R = np.vstack((plane_xu, plane_yu, plane_normal)).transpose()
         plane2world_T = plane_origin
+
+        # put x,y scale back in in case plane_x and plane_y were not unit vectors
         plane_xy_scale = np.eye(4)
         np.fill_diagonal(plane_xy_scale, (plane_xlen, plane_ylen, 1.0, 1.0))
+
+        # compose matrix mapping plane coordinates to world coordinates
         plane2world_RT = np.vstack((np.hstack((plane2world_R, plane2world_T.reshape(3,1))),np.array((0,0,0,1))))
         plane2world = np.dot(plane2world_RT, plane_xy_scale)
 
+        # compose matrix mapping plane coordinates to image coordinates
         plane2img = np.dot(self.P, plane2world)
         # we can remove the 3rd column since the "Z" coordinates of points on the plane are 0
         plane2img3x3 = plane2img[:,(0,1,3)]

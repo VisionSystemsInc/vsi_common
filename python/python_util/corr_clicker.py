@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """ record point correspondences """
 import matplotlib.pyplot as plt
 import numpy as np
