@@ -8,7 +8,6 @@ Script to convert a scene.xml file to a scene.kml file, which can be loaded in G
 import sys, os.path
 import argparse
 
-import boxm2_register as register
 import boxm2_adaptor as adaptor
 from boxm2_scene_adaptor import boxm2_scene_adaptor
 

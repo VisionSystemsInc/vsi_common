@@ -23,7 +23,9 @@ from subprocess import Popen, PIPE
 import math
 
 from .generate_scene_xml import generate_scene_xml
-import vpgl_adaptor
+
+import brl_init
+import vpgl_adaptor_boxm2_batch as vpgl_adaptor
 from boxm2_adaptor import create_scene_and_blocks, ocl_info
 from StringIO import StringIO
 
