@@ -1,0 +1,148 @@
+#!/usr/bin/env false
+#Source this script for colors
+
+function color_setup()
+{
+  local color
+
+  # The 8 Colors
+  COLOR_NAMES=(BLACK RED GREEN YELLOW BLUE MAGENTA CYAN WHITE)
+  COLORS=()
+  BLACK=0
+  RED=1
+  GREEN=2
+  YELLOW=3
+  BLUE=4
+  MAGENTA=5
+  CYAN=6
+  WHITE=7
+
+  local _normal=30
+  local _light=90
+  local _bg=10
+  local _reset=20
+
+  RESET=$'\e[0m'
+  NC=${RESET}
+  BOLD=$'\e[1m'
+  DIM=$'\e[2m'
+  ITALIC=$'\e[3m'
+  UNDERLINE=$'\e[4m'
+  BLINK=$'\e[5m'
+  OVERLINE=$'\e[6m'
+  REVERSE=$'\e[7m'
+  HIDDEN=$'\e[8m'
+  STRIKEOUT=$'\e[9m'
+
+  RESET_BOLD=$'\e[21m'
+  RESET_DIM=$'\e[22m'
+  RESET_ITALIC=$'\e[23m'
+  RESET_UNDERLINE=$'\e[24m'
+  RESET_BLINK=$'\e[25m'
+  RESET_OVERLINE=$'\e[26m'
+  RESET_REVERSE=$'\e[27m'
+  RESET_HIDDEN=$'\e[28m'
+  RESET_STRIKEOUT=$'\e[29m'
+
+  for color in "${COLOR_NAMES[@]}"; do
+    eval "LIGHT_${color}=$'\e[$((${_light}+${!color}))m'"
+    eval "${color}_BG=$'\e[$((${_normal}+${_bg}+${!color}))m'"
+    eval "LIGHT_${color}_BG=$'\e[$((${_bg}+${_light}+${!color}))m'"
+    eval "${color}=$'\e[$((${_normal}+${!color}))m'"
+    COLORS+=(${!color})
+  done
+}
+
+declare -A COLOR_DB=()
+_COLOR_INDEX=0
+
+function get_color()
+{ #1 - colored_name
+  if [ "${COLOR_DB[$1]-0}" == "0" ]; then
+    COLOR_DB[${1}]=${COLORS[$((${_COLOR_INDEX}%${#COLORS[@]}))]}
+    _COLOR_INDEX=$((${_COLOR_INDEX}+1))
+  fi
+  echo -n ${COLOR_DB[$1]}
+}
+
+#88/256 color support
+function FG()
+{
+  local c
+  for c in "${@}"; do
+    echo -n $'\e[38;5;'$c'm '
+  done
+}
+
+function BG()
+{
+  local c
+  for c in "${@}"; do
+    echo -n $'\e[48;5;'$c'm '
+  done
+}
+
+function number_colors()
+{
+  tput colors
+}
+
+function color_demo1()
+{
+  local x
+  local y
+
+  echo "Your terminal appears to support $(number_colors) colors"
+
+  echo "8 Foreground Colors"
+  
+  printf '%-16sNormal\tBold\tDim\tItalics\tUnderline\tBlink\tOverline\tReverse\tHidden\tStrikeout\n' Color
+
+  for x in "${COLOR_NAMES[@]}"; do
+    for y in ${x} LIGHT_${x} ${x}_BG LIGHT_${x}_BG; do
+      printf %-16s ${y}
+      printf "${!y}${x}${RESET}\t"
+      printf "${!y}${BOLD}${x}${RESET}\t"
+      printf "${!y}${DIM}${x}${RESET}\t"
+      printf "${!y}${ITALICS}${x}${RESET}\t"
+      printf "${!y}${UNDERLINE}${x}${RESET}\t\t"
+      printf "${!y}${BLINK}${x}${RESET}\t"
+      printf "${!y}${OVERLINE}${x}${RESET}\t\t"
+      printf "${!y}${REVERSE}${x}${RESET}\t"
+      printf "${!y}${HIDDEN}${x}${RESET}\t"
+      printf "${!y}${STRIKEOUT}${x}${RESET}\n"
+    done
+  done
+  echo ${RESET}
+}
+
+function color_demo2()
+{
+  local x
+
+  echo "Foreground colors"
+  for x in {0..255}; do
+    printf "$(FG $x)%-5d" $x
+    if (( $x%8 == 7 )); then
+      echo $RESET
+    fi
+  done
+  echo $RESET
+}
+
+function color_demo3()
+{
+  local x
+
+  echo "Background colors"
+  echo -n $WHITE
+  for x in {0..255}; do
+    printf "$(BG $x)%-5d" $x
+    if (( $x%8 == 7 )); then
+      echo $RESET
+    fi
+  done
+  echo $RESET
+}
+
+color_setup
