@@ -339,7 +339,7 @@ def prune_dir(directory, top_dir=None):
     try:
       os.rmdir(directory)
     except OSError as err:
-      if err.errno==39:
+      if err.errno==39 or err.errno == 13:
         break
       raise err
     directory = os.path.dirname(directory)
