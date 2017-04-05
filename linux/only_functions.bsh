@@ -1,0 +1,87 @@
+#!/usr/bin/env false
+#Source this script for
+
+: ${DOCKER=docker}
+: ${NVIDIA_DOCKER=nvidia-docker}
+: ${USE_NVIDIA_DOCKER=0}
+if ! hash ${NVIDIA_DOCKER} 2> /dev/null; then
+  NVIDIA_DOCKER=${DOCKER}
+fi
+
+if ! declare -p DOCKER_RUN_ARGS >& /dev/null; then
+  DOCKER_RUN_ARGS=()
+fi
+
+if declare -p EXTRA_DOCKER_RUN_ARGS >& /dev/null; then
+  DOCKER_RUN_ARGS+=("${EXTRA_DOCKER_RUN_ARGS[@]}")
+fi
+
+function Exec-Nvidia-Docker(){ DOCKER_EXEC=1 USE_NVIDIA_DOCKER=1 Docker "${@}";}
+function Nvidia-Docker(){ USE_NVIDIA_DOCKER=1 Docker "${@}";}
+function Exec-Docker(){ DOCKER_EXEC=1 Docker "${@}";}
+function Docker() #Helper function to execute the right docker command, or just echo
+{
+  local cmd
+
+  if [ "${USE_NVIDIA_DOCKER}" == "1" ]; then
+    cmd=(${DRYRUN} "${NVIDIA_DOCKER}")
+  else
+    cmd=(${DRYRUN} "${DOCKER}")
+  fi
+
+  if [ "$1" == "run" ]; then
+    cmd+=($1 ${DOCKER_RUN_ARGS+"${DOCKER_RUN_ARGS[@]}"})
+    shift 1
+  fi
+
+  if [ "${DOCKER_EXEC-}" == "" ] || [ "${DRYRUN}" != "" ]; then
+    "${cmd[0]}" "${cmd[@]:1}" ${@+"${@}"}
+  else
+    exec "${cmd[@]}" ${@+"${@}"}
+  fi
+}
+
+find_dockerfiles()
+{
+  (cd "${CURDIR-$(pwd)}"; ls *Dockerfile)
+  #If this contains spaces, then it won't be a valid image name, so I won't bother checking check
+}
+
+image_names()
+{
+  local prefix=${1-library}
+  local images
+  local i
+
+  images=($(find_dockerfiles))
+  for i in "${!images[@]}"; do
+    if [ "${images[$i]}" == "Dockerfile" ]; then
+      images[$i]=latest.Dockerfile
+    fi
+  done
+  images=("${images[@]/%.Dockerfile/}")
+  images=("${images[@]/#/${prefix}/$(basename "${CURDIR-$(pwd)}"):}")
+  echo "${images[@]}"
+}
+
+get_label() # Get the value of a label ($2) from container/image ($1)
+{ # All labels go through a perl filter that evaluate %name% using exported
+  # environment variables. This won't work on unexported variables
+  value=$(docker inspect -f "{{index .Config.Labels \"$2\"}}" $1)
+  if [ "${value}" == "" ]; then
+    return 1
+  fi
+
+  value=$(echo "${value}" | perl -wpe 's#\%?(\w+)\%# $ENV{$1} // $& #ge;')
+
+  return 0
+}
+
+has_label()
+{ #requires jq
+  if [ "$(docker inspect -f '{{json .Config.Labels }}' $1 | jq .\[\"$2\"\])" == "null" ]; then
+    return 1
+  else
+    return 0
+  fi
+}

@@ -5,40 +5,16 @@ set -eu
 
 SCRIPT_DIR=$(cd $(dirname ${BASH_SOURCE[0]}); pwd)
 . "${SCRIPT_DIR}/just_functions.bsh"
+. "${SCRIPT_DIR}/only_functions.bsh"
 
-if [ -f .onlyfile ]; then 
-  safe_load .onlyfile
+: ${ONLYFILE=.onlyfile}
+
+if [ -f "${ONLYFILE}" ]; then 
+  safe_load "${ONLYFILE}"
 fi
-
-### Functions
-
-get_label() # Get the value of a label ($2) from container/image ($1)
-{ # All labels go through a perl filter that evaluate %name% using exported
-  # environment variables. This won't work on unexported variables
-  value=$(docker inspect -f "{{index .Config.Labels \"$2\"}}" $1)
-  if [ "${value}" == "<no value>" ]; then
-    return 1
-  fi
-
-  value=$(echo "${value}" | perl -wpe 's#\%?(\w+)\%# $ENV{$1} // $& #ge;')
-
-  return 0
-}
-
-Docker() #Helper function to execute the right docker command, or just echo
-{
-  if [ "${NVIDIA_DOCKER}" == "1" ]; then
-    cmd="${DRYRUN} nvidia-docker"
-  else
-    cmd="${DRYRUN} docker"
-  fi
-
-  command $cmd "${@}"
-}
 
 ###### Default variables used in commands ######
 : ${DOCKERFILE=Dockerfile}
-: ${NVIDIA_DOCKER=0}
 : ${IMAGENAME=$(basename "$(pwd)")}
 : ${CONTEXT=$(pwd)}
 
@@ -72,7 +48,7 @@ caseify() #Main justify core
     build) #Build a docker image
       build()
       {
-        local unique=tmp_$(head -c 16 /dev/urandom | xxd -pu)
+        local unique=tmp_$(head -c 16 /dev/urandom | od -tx1 -An | tr -d '\n ')
         Docker build -t ${unique} ${@+"${@}"} -f ${DOCKERFILE} ${CONTEXT}
         Docker tag ${unique} ${IMAGENAME}
         if [ "${DRYRUN}" == "" ]; then
@@ -95,12 +71,25 @@ caseify() #Main justify core
         if get_label ${IMAGENAME} only.runargs; then
           run_args+=(${value})
         fi
+        if [ "$(uname)" == "Linux" ]; then
+          if get_label ${IMAGENAME} only.linux_runargs; then
+            run_args+=(${value})
+          fi
+        elif [ "$(uname)" == "Darwin" ]; then
+          if get_label ${IMAGENAME} only.mac_runargs; then
+            run_args+=(${value})
+          fi
+        else
+          if get_label ${IMAGENAME} only.windows_runargs; then
+            run_args+=(${value})
+          fi
+        fi
         if [ "${pre_args:+0}" == "0" ]; then
           run_args+=("${pre_args[@]}")
           unset pre_args
         fi
         if get_label ${IMAGENAME} com.nvidia.volumes.needed && [ "${value}" == "nvidia_driver" ]; then
-          NVIDIA_DOCKER=1
+          USE_NVIDIA_DOCKER=1
         fi
 
         Docker run -it --rm "${run_args[@]}" ${IMAGENAME} ${@+"${@}"}

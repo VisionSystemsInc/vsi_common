@@ -6,6 +6,16 @@
 
 JUST_FUNCTIONS_FILE=${BASH_SOURCE[0]}
 
+list_cases()
+{
+  local indent=${indent-'^ +'}
+  local cmd_pattern=${cmd_pattern-'["a-z0-9]?["_a-z0-9| \-]*'}
+  local oldIFS="${IFS}"
+  IFS=''
+  IFS=$'\n' read -d '' -r -a case_list <<< $(grep -E "${indent}${cmd_pattern}\)" "$1" | sed -E 's|'"${indent}(${cmd_pattern})"'\).*|\1|') || :
+  IFS="${oldIFS}"
+}
+
 print_help_from_file()
 {
   grep -E '^ +[a-z0-9|\-]+\)|^ +[_a-z0-9|\-]+\) *#' "$1" | sed -E 's| *([0-9|_a-z-]*)\) *#? *(.*)|\1 --- \2|' \
@@ -86,6 +96,7 @@ justify()
 
 find_in()
 {
+  #Find $1 in $2-n. Return 1 for $2, 2 for $3, etc... 0 for not found
   local val=$1
   local x
   shift 1
@@ -124,8 +135,10 @@ callify()
   $cmd ${args+"${args[@]}"}
 }
 
-get_args()
-{
+get_args() #Function used to consume a collection of arguments and store in args
+{ # -- $2 $3 $4 ... $n -- $n+2, $n+3 ... Only capture $2-$n and consumes n+1 
+  #(or $n if no trailing --)
+  #stores in array "args"
   args=()
   extra_args=0
   if (( $# >= 1 )); then
@@ -147,6 +160,66 @@ get_args()
   fi
 }
 
+get_args2() #Function used to consume two collections of arguments and store in args
+{ # -- $2 $3 $4 ... $n -- $n+2 $n+3 $n+4 ... $m -- $m+2, $m+3 ... 
+  pre_args=()
+  local pre_extra_args=0
+  get_args ${@+"${@}"}
+  if [ "$extra_args" -gt "0" ]; then
+    pre_args=(${args+"${args[@]}"})
+    pre_extra_args=$extra_args
+    shift $((pre_extra_args-1))
+    if [ "$1" == "${JUST_SEPARATOR}" ]; then
+      get_args "${@}"
+      extra_args=$(($extra_args-1))
+    else
+      extra_args=0
+      args=()
+    fi
+  fi
+  extra_args=$((${extra_args}+${pre_extra_args}))
+}
+
+# get_args2() #Function used to consume two collections of arguments and store in args
+# { # $1 $2 $3 ... $n -- $n+2 $n+3 $n+4 ... $m -- $m+2, $m+3 ... 
+#   # Captures $1-$n and $n+2-m consumes m+1 (or $m if no trailing --)
+#   #stores in array "pre_args" and "args"
+#   args=()
+#   pre_args=()
+#   extra_args=0
+#   local first_break=0
+#   local second_break=0
+
+#   if (( $# >= 1 )); then
+#     find_in "${JUST_SEPARATOR}" ${@+"${@}"} || first_break=$?
+#     if [ "${next_break}" == 0 ]; then
+#       extra_args=$(($#+1))
+#       pre_args=("${@:1}")
+#       return
+#     else
+#       find_in "${JUST_SEPARATOR}" ${@+"${@}"} || first_break=$?
+#     fi
+
+#     return
+#     if [ "$1" == "${JUST_SEPARATOR}" ]; then
+#       shift 1
+#       next_break=0
+#       find_in "${JUST_SEPARATOR}" ${@+"${@}"} || next_break=$? #look to see if there is another --
+#       if [ "${next_break}" == 0 ]; then
+#         extra_args=$(($#+1))
+#         args=("${@:1}")
+#       else
+#         extra_args=$(($next_break+1))
+#         args=("${@:1:$(($next_break-1))}")
+#       fi
+#     else
+#       extra_args=0
+#       args=()
+#     fi
+#   fi
+# }
+
+
 safe_load() #Loads a very simple safe config file, and sets environment variables accordingly
 { #File should alternate lines: variable name, value. 
   local key=foobar
@@ -161,27 +234,4 @@ safe_load() #Loads a very simple safe config file, and sets environment variable
 choseify()
 {
   :
-}
-
-find_dockerfiles()
-{
-  (cd "${CURDIR-$(pwd)}"; ls *.Dockerfile)
-  #If this contains spaces, then it won't be a valid image name, so I won't bother checking check
-}
-
-image_names()
-{
-  local prefix=${1-library}
-  local images
-  local i
-
-  images=($(find_dockerfiles))
-  for i in "${!images[@]}"; do
-    if [ "${images[$i]}" == "Dockerfile" ]; then
-      images[$i]=latest.Dockerfile
-    fi
-  done
-  images=("${images[@]/%.Dockerfile/}")
-  images=("${images[@]/#/${prefix}/$(basename "${CURDIR-$(pwd)}"):}")
-  echo "${images[@]}"
 }
