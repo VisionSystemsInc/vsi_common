@@ -160,65 +160,27 @@ get_args() #Function used to consume a collection of arguments and store in args
   fi
 }
 
-get_args2() #Function used to consume two collections of arguments and store in args
-{ # -- $2 $3 $4 ... $n -- $n+2 $n+3 $n+4 ... $m -- $m+2, $m+3 ... 
-  pre_args=()
-  local pre_extra_args=0
-  get_args ${@+"${@}"}
+get_additional_args()
+{ # Must be called after get_args with all arguments passed in. For example:
+  # get_args ${@+"${@}"}
+  # args1=(${args+"${args[@]}"})
+  # get_additional_args ${@+"${@}"}
+  # args2=(${args+"${args[@]}"})
+  # get_additional_args ${@+"${@}"}
+  # ...
+
   if [ "$extra_args" -gt "0" ]; then
-    pre_args=(${args+"${args[@]}"})
-    pre_extra_args=$extra_args
-    shift $((pre_extra_args-1))
+    local pre_extra_args=$((extra_args-1))
+    shift ${pre_extra_args}
     if [ "$1" == "${JUST_SEPARATOR}" ]; then
       get_args "${@}"
-      extra_args=$(($extra_args-1))
     else
-      extra_args=0
+      extra_args=1
       args=()
     fi
+    extra_args=$((${extra_args}+${pre_extra_args}))
   fi
-  extra_args=$((${extra_args}+${pre_extra_args}))
 }
-
-# get_args2() #Function used to consume two collections of arguments and store in args
-# { # $1 $2 $3 ... $n -- $n+2 $n+3 $n+4 ... $m -- $m+2, $m+3 ... 
-#   # Captures $1-$n and $n+2-m consumes m+1 (or $m if no trailing --)
-#   #stores in array "pre_args" and "args"
-#   args=()
-#   pre_args=()
-#   extra_args=0
-#   local first_break=0
-#   local second_break=0
-
-#   if (( $# >= 1 )); then
-#     find_in "${JUST_SEPARATOR}" ${@+"${@}"} || first_break=$?
-#     if [ "${next_break}" == 0 ]; then
-#       extra_args=$(($#+1))
-#       pre_args=("${@:1}")
-#       return
-#     else
-#       find_in "${JUST_SEPARATOR}" ${@+"${@}"} || first_break=$?
-#     fi
-
-#     return
-#     if [ "$1" == "${JUST_SEPARATOR}" ]; then
-#       shift 1
-#       next_break=0
-#       find_in "${JUST_SEPARATOR}" ${@+"${@}"} || next_break=$? #look to see if there is another --
-#       if [ "${next_break}" == 0 ]; then
-#         extra_args=$(($#+1))
-#         args=("${@:1}")
-#       else
-#         extra_args=$(($next_break+1))
-#         args=("${@:1:$(($next_break-1))}")
-#       fi
-#     else
-#       extra_args=0
-#       args=()
-#     fi
-#   fi
-# }
-
 
 safe_load() #Loads a very simple safe config file, and sets environment variables accordingly
 { #File should alternate lines: variable name, value. 
