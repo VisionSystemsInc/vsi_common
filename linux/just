@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+#J.U.S.T. - J.U.S.T. uncomplicated simple tasking
+
+set -euE
+
+function print_error(){ echo "$1: line $2: Returned $?";}
+trap 'print_error "${BASH_SOURCE[0]}" "${LINENO}"' ERR
+
+VSI_SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)
+
+source "${VSI_SCRIPT_DIR}/just_functions.bsh"
+
+: ${JUSTFILE=just_file}
+just_tmp_last_node=
+if [ "$(uname)" == "Darwin" ]; then
+  just_tmp_stat_command="stat -f %d:%i ."
+else
+  just_tmp_stat_command="stat -c %d:%i ."
+fi
+pushd . > /dev/null
+while [ "${just_tmp_last_node}" != "$(eval ${just_tmp_stat_command})" ]; do
+  if [ -f "${JUSTFILE}" ]; then
+    export JUST_DIR="$(cd "$(dirname "${JUSTFILE}")"; pwd)"
+    source ${JUSTFILE}
+    break
+  fi
+  just_tmp_last_node=$(eval ${just_tmp_stat_command})
+  cd ..
+done
+popd > /dev/null
+unset just_tmp_last_node
+unset just_tmp_stat_command
+
+if [ "${JUST_DIR-}" == "" ]; then
+  echo "Can't find a suitable configuration file in this directory or any"
+  echo "parent. Are you in the right directory?"
+  echo
+  echo "Supported filenames: ${JUSTFILE}"
+  exit 1
+fi
+
+justify ${@+"${@}"}

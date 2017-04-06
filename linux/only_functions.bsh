@@ -1,5 +1,6 @@
 #!/usr/bin/env false
-#Source this script for
+#Source this script for only features
+#This gets sourced after just_functions
 
 : ${DOCKER=docker}
 : ${NVIDIA_DOCKER=nvidia-docker}
@@ -43,25 +44,34 @@ function Docker() #Helper function to execute the right docker command, or just 
 
 find_dockerfiles()
 {
-  (cd "${CURDIR-$(pwd)}"; ls *Dockerfile)
+  IFS=$'\n'
+  dockerfiles=($(ls "${CURDIR-$(pwd)}"/*Dockerfile "${CURDIR-$(pwd)}"/*/*Dockerfile 2>/dev/null || :))
   #If this contains spaces, then it won't be a valid image name, so I won't bother checking check
 }
 
-image_names()
+docker_names()
 {
-  local prefix=${1-library}
-  local images
+  local imagename_prefix=${1-$(basename "${CURDIR-$(pwd)}")}
   local i
 
-  images=($(find_dockerfiles))
-  for i in "${!images[@]}"; do
-    if [ "${images[$i]}" == "Dockerfile" ]; then
-      images[$i]=latest.Dockerfile
+  find_dockerfiles
+  dockernames=()
+
+  for i in "${!dockerfiles[@]}"; do
+    if [ "$(basename ${dockerfiles[$i]})" == "Dockerfile" ]; then
+      dockernames[$i]="$(basename $(dirname ${dockerfiles[$i]})).Dockerfile"
+    else
+      dockernames[$i]="$(basename ${dockerfiles[$i]})"
     fi
   done
-  images=("${images[@]/%.Dockerfile/}")
-  images=("${images[@]/#/${prefix}/$(basename "${CURDIR-$(pwd)}"):}")
-  echo "${images[@]}"
+  dockernames=("${dockernames[@]/%.Dockerfile/}")
+  dockernames=("${dockernames[@]/#/${imagename_prefix}:}")
+}
+
+docker_compose_services()
+{
+  IFS=$'\n'
+  dockerservices=($(docker-compose config --services))
 }
 
 get_label() # Get the value of a label ($2) from container/image ($1)
