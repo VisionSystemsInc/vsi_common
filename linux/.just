@@ -51,12 +51,21 @@ _just()
   COMPREPLY=()   # Array variable storing the possible completions.
 
   # $1 - command aka $0
-  # $2 - current word on, can be "" if you just typed a space
+  # $2 - current word on, can be "" if you just_file typed a space
   # $3 - last work completed
   # COMP_WORDS - All args
 
   # Find Justfile
   local just_file=$(_just_find_justfile "${JUSTFILE-Justfile}")
+
+  if [ "${just_file}" == "" ]; then
+    echo 
+    echo "Can't find a suitable configuration file in this directory or any"
+    echo "parent. Are you in the right directory?"
+    echo
+    echo "Supported filenames: \"Justfile\" or value of \${JUSTFILE}"
+    return 0
+  fi
 
   #Get commands
   local just_commands=()
