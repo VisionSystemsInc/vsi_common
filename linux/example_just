@@ -2,17 +2,21 @@
 #J.U.S.T. - J.U.S.T. uncomplicated simple tasking
 
 set -euE
-function print_error(){ echo "$1: line $2: Returned $?";}
-trap 'print_error "${BASH_SOURCE[0]}" "${LINENO}"' ERR
 
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)
-. "${SCRIPT_DIR}/just_functions.bsh"
+export CWD="$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)"
 
-if [ -f .justfile ]; then
-  safe_load .justfile
-fi
+## Externally accessed variables, accessible via environment
+# I decided not to go with executing blind evals, for security reasons. Instead 
+# variables need to be added to example.env.
+# local.env, example.env, local_post.env are sourced in that order
+source_environment_files "${CWD}/example.env"
+# # Example of example.env
+# : ${MY_UID=$(id -u)
+# : ${MY_GID=$(id -g)
+# : ${MAGIC_THRESHOLD=3.141592653}
 
-###### Default variables used in commands ######
+
+###### Default variables used in only just commands ######
 : ${JUST_A_FILE=tmp.txt}
 : ${JUST_A_NAME=$(basename "$(pwd)")}
 
@@ -22,16 +26,6 @@ function just_a_function()
 {
   echo $JUST_A_FILE $1 $2
 }
-
-## Externally accessed variables, accessible via environment
-# I decided not to go with a blind eval, for security reasons. Instead 
-# variables need to be added  to this section instead, and hopefully be enough
-set -a #Turn on auto export
-
-: ${JUST_USER_ID=$(id -u)}
-: ${JUST_GROUP_ID=$(id -g)}
-
-set +a #Turn off auto export
 
 ## Just modules
 
@@ -84,5 +78,3 @@ function caseify()
       ;;
   esac
 }
-
-justify "${@}"
