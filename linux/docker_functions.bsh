@@ -1,0 +1,87 @@
+#!/usr/bin/env false
+#Source this script for docker specific helper functions for just or other
+
+### docker and nvidia-docker ###
+
+: ${DOCKER=docker}
+: ${NVIDIA_DOCKER=nvidia-docker}
+if ! hash ${NVIDIA_DOCKER} 2> /dev/null; then
+  NVIDIA_DOCKER=${DOCKER}
+fi
+
+#These 4 may need to be redone next time they are used
+function Exec-Nvidia-Docker(){ DOCKER_EXEC=1 USE_NVIDIA_DOCKER=1 Docker "${@}";}
+function Nvidia-Docker(){ USE_NVIDIA_DOCKER=1 Docker "${@}";}
+function Exec-Docker(){ DOCKER_EXEC=1 Docker "${@}";}
+function Docker() #Helper function to execute the right docker command, or just echo
+{
+  local cmd
+
+  if [ "${USE_NVIDIA_DOCKER-}" == "1" ]; then
+    cmd=(${DRYRUN} "${NVIDIA_DOCKER}")
+  else
+    cmd=(${DRYRUN} "${DOCKER}")
+  fi
+
+  if [ "$1" == "run" ]; then
+    cmd+=($1 "${DOCKER_RUN_ARGS[@]}")
+    shift 1
+  fi
+
+  if [ "${DOCKER_EXEC-}" == "" ] || [ "${DRYRUN}" != "" ]; then
+    "${cmd[0]}" "${cmd[@]:1}" "${@}"
+  else
+    exec "${cmd[@]}" "${@}"
+  fi
+}
+
+### docker-compose ###
+
+: ${DOCKER_COMPOSE=docker-compose}
+: ${DOCKER_COMPOSE_AUTOREMOVE=1}
+
+function Docker-compose()
+{
+  local parsed_args=()
+
+  if [ "${DOCKER_COMPOSE_AUTOREMOVE}" == "1" ]; then
+    while (( $# )); do
+      case "$1" in
+        run)
+          shift 1
+          ${DRYRUN} ${DOCKER_COMPOSE} ${parsed_args+"${parsed_args[@]}"} run --rm "${@}"
+          return
+          ;;
+        -f*|-p*|-H*)
+          if [ "${#1}" == 2 ]; then
+            parsed_args+=("$1" "$2")
+            shift 2
+          else
+            parsed_args+=("$1")
+            shift 1
+          fi
+          ;;
+        --file=*|--project-name=*|--host=*|\
+        --tlscacert=*|--tlscert=*|--tlskey=*|--project-directory=*|\
+        -v|--verbose|--tls|--skip-hostname-check|--tlsverify)
+          parsed_args+=("$1")
+          shift 1
+          ;;
+        --file|--project-name|--host|\
+        --tlscacert|--tlscert|--tlskey|--project-directory)
+          parsed_args+=("$1" "$2")
+          shift 2
+          ;;
+        *)
+          ${DRYRUN} ${DOCKER_COMPOSE} ${parsed_args+"${parsed_args[@]}"} "${@}"
+          return
+          ;;
+      esac
+    done
+    # If you get here, I'm PRETTY sure the command is ill-formed, but in case
+    # I'm wrong, here goes...
+    ${DRYRUN} ${DOCKER_COMPOSE} ${parsed_args+"${parsed_args[@]}"} "${@}"
+  else
+    ${DRYRUN} ${DOCKER_COMPOSE} "${@}"
+  fi
+}
