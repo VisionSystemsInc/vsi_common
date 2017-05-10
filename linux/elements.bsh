@@ -1,6 +1,14 @@
 #!/usr/bin/false
 # Source this file
 
+# Know bugs. Don't use arrays element_array variable 
+# - element_array_target_u3l
+# - element_array_target_qzx
+# - element_array_target_dsa
+# as the target. It will cause name collision
+
+source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
+
 # Dynamically set an array by name specified by a variable ($1).
 # >> dynamic_set_a my_array_name 11 "2 2" 33
 # executes 
@@ -8,10 +16,10 @@
 # NOTE: Does not clear the array "my_array_name". so if [4] was set, it still is
 function dynamic_set_a()
 {
-  target=$1
+  local element_array_target_dsa=$1
   shift 1
   for (( i=0; $#; i++ )); do
-    read "${target}[$i]" <<< "$1"
+    read -r "${element_array_target_dsa}[$i]" <<< "$1"
     shift 1
   done
 }
@@ -23,20 +31,38 @@ function dynamic_set_a()
 # >> my_array_name=(11 22)
 function remove_element_a()
 {
-  local target=${1}[@]
-  local t=()
+  local element_array_target_u3l=()
+
   if [ "${!1+set}" == "set" ]; then
-    t=( ${!target} )
+    local target=${1}[@]
+    element_array_target_u3l=( ${!target} )
+    unset target
+  else #If it's empty/does not exist, there is nothing to remove
+    return
   fi
   local i
-  
-  for i in "${!t[@]}"; do
-    if [ "${t[$i]}" == "$2" ]; then
-      unset t[$i]
+
+  for i in "${!element_array_target_u3l[@]}"; do
+    if [ "${element_array_target_u3l[$i]}" == "$2" ]; then
+      unset element_array_target_u3l[$i]
     fi
   done
-  unset $1
-  dynamic_set_a $1 ${t+"${t[@]}"}
+
+  # Do NOT use unset here. If you do that, you will lose "local" status. if the
+  # variable that $1 points to has it. This can have MANY unintended 
+  # consequences which is generally BAD! Gotta eval :(
+  # http://stackoverflow.com/questions/10497425/is-it-possible-to-use-array-in-bash#comment74842477_10497539
+  eval "${1}=()"
+
+  # You can't use ${t+"${t[@]}"} notation when there is a chance that the first
+  # element of an array has been unset. This will falsely trigger ${t} as not
+  # existing because ${t} REALLY means ${t[0]} which doesn't exist, but the rest
+  # of ${t[@]} DOES! Solution is to disable set -u if it's set, and then 
+  # re-enable it if and only if it was set before all this. set_flags contains
+  # this logic
+  unset_flag u
+  dynamic_set_a $1 "${element_array_target_u3l[@]}"
+  reset_flag u
 }
 
 #Same as remove_element_a, but for a string separated by IFS ELEMENT_SEPARATOR
@@ -44,12 +70,12 @@ function remove_element()
 {
   local IFS="${ELEMENT_SEPARATOR-:}"
   local target=$1
-  local t2=()
+  local element_array_target_qzx=()
   if [ "${!target+set}" == "set" ]; then
-    t2=( ${!target} )
+    element_array_target_qzx=( ${!target} )
   fi
-  remove_element_a t2 "$2"
-  export $target="${t2[*]}"
+  remove_element_a element_array_target_qzx "$2"
+  export $target="${element_array_target_qzx[*]}"
 }
 
 # Puts/adds an entry to the end of the array, removing any previous duplicates
@@ -61,11 +87,11 @@ function add_element_post_a()
 {
   remove_element_a $1 "$2"
   local target=$1[@]
-  local t=()
+  local element_array_target_u3l=()
   if [ "${!1+set}" == "set" ]; then
-    t=( ${!target} )
+    element_array_target_u3l=( ${!target} )
   fi
-  dynamic_set_a $1 ${t+"${t[@]}"} "$2"
+  dynamic_set_a $1 ${element_array_target_u3l+"${element_array_target_u3l[@]}"} "$2"
 }
 
 #Same as add_element_post_a, but for a string separated by IFS ELEMENT_SEPARATOR
@@ -73,12 +99,12 @@ function add_element_post ()
 {
   local IFS="${ELEMENT_SEPARATOR-:}"
   local target=$1
-  local t2=()
+  local element_array_target_qzx=()
   if [ "${!target+set}" == "set" ]; then
-    t2=( ${!target} )
+    element_array_target_qzx=( ${!target} )
   fi
-  add_element_post_a t2 "$2"
-  export $target="${t2[*]}"
+  add_element_post_a element_array_target_qzx "$2"
+  export $target="${element_array_target_qzx[*]}"
 }
 
 # Puts/adds an entry to the beginning of the array, removing any previous duplicates
@@ -90,11 +116,11 @@ function add_element_pre_a()
 {
   remove_element_a $1 "$2"
   local target=$1[@]
-  local t=()
+  local element_array_target_u3l=()
   if [ "${!1+set}" == "set" ]; then
-    t=( ${!target} )
+    element_array_target_u3l=( ${!target} )
   fi
-  dynamic_set_a $1 "$2" ${t+"${t[@]}"}
+  dynamic_set_a $1 "$2" ${element_array_target_u3l+"${element_array_target_u3l[@]}"}
 }
 
 #Same as add_element_pre_a, but for a string separated by IFS ELEMENT_SEPARATOR
@@ -102,10 +128,10 @@ function add_element_pre ()
 {
   local IFS="${ELEMENT_SEPARATOR-:}"
   local target=$1
-  local t2=()
+  local element_array_target_qzx=()
   if [ "${!target+set}" == "set" ]; then
-    t2=( ${!target} )
+    element_array_target_qzx=( ${!target} )
   fi
-  add_element_pre_a t2 "$2"
-  export $target="${t2[*]}"
+  add_element_pre_a element_array_target_qzx "$2"
+  export $target="${element_array_target_qzx[*]}"
 }
