@@ -85,3 +85,36 @@ function Docker-compose()
     ${DRYRUN} ${DOCKER_COMPOSE} "${@}"
   fi
 }
+
+### powershell setup ###
+# Cygwin bash is pretty bad. The new git bash (MINGW64) does not have a tty.
+# This is pretty bad for docker. Powershell does have a tty, buy can not run
+# bash scrips natively. The solution is to run bash in powershell. These functions
+# help with that.
+
+function is_powershell()
+{
+  if [ "${VSI_COMMON_IS_POWERSHELL-0}" == "1" ]; then
+    return 0
+  fi
+
+  local unique_title=$(head -c 16 /dev/urandom | xxd -pu)
+  echo -en "\033]0;${unique_title}\a"
+  if [ $(tasklist //fi "windowtitle eq ${unique_title}" | tail -n 1 | awk '{print $1}') == "powershell.exe" ]; then
+    return 0
+  else
+    return 1
+  fi
+}
+
+function setup_powershell()
+{ # Usage: setup_powershell ${@+"${@}"}
+  # This is designed to rerun a script being called from. Do not call from command line
+  if [ "${OS-notwindows}" == "Windows_NT" ] && ! is_powershell; then
+    if [ "${#@}" == "0" ]; then
+      setup_powershell _null
+    else
+      exec env VSI_COMMON_IS_POWERSHELL=1 start powershell "cmd /c color 07; bash \"$0\" ${@}; bash --rcfile \"${VSI_COMMON_DIR}/.winbashrc\""
+    fi
+  fi
+}
