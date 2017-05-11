@@ -15,17 +15,34 @@ get_just_subtargets()
   local subcommand="$1"
   shift 1
   just_subtargets+=($(type "${@}" | 
-                      grep -E '^ +'"${subcommand}"'_[a-z0-9\-]+\)' | 
-                      sed -E 's|^ +'"${subcommand}"'_([a-z0-9\-]+)\).*|\1|'))
+                      grep -E '^ *[a-zA-Z0-9_\-]+( \| [a-zA-Z0-9_\-]+)*\)' |
+                      sed -E 's# *([a-zA-Z0-9_| \-]+)\).*#\1#' |
+                      sed 's# | #\n#g' |
+                      # filter out only the matching subcommand
+                      grep -E '^'"${subcommand}"'_[a-zA-Z0-9\-\_]+' | 
+                      # sed out only the subtarget (second) part
+                      sed -E 's|^'"${subcommand}"'_([a-zA-Z0-9\-\_]+)|\1|'))
 }
 
 get_just_subcommands() # function name
 { #Searches function in memory for subcommands
   just_subcommands+=($(type "${@}" | 
-                       grep -E '^ +[a-z0-9\-]+_[a-z0-9\-]+\)' |
-                       sed -E 's|^ +([a-z0-9\-]+)_[a-z0-9\-]+\).*|\1|' | 
+                       # Grep for all case statements
+                       grep -E '^ *[a-zA-Z0-9_\-]+( \| [a-zA-Z0-9_\-]+)*\)' |
+                       # Remove the extra spaces and )
+                       sed -E 's# *([a-zA-Z0-9_| \-]+)\).*#\1#' |
+                       # All pipes are converted to ' | ' despite spaces in original file
+                       # convert these to newlines
+                       sed 's# | #\n#g' |
+                       # Grep for foo_bar pattern, where bar can have _
+                       grep -E '^[a-zA-Z0-9\-]+_[a-zA-Z0-9_\-]+' |
+                       # sed out only the subcommand (first) part
+                       sed -E 's|^([a-zA-Z0-9\-]+)_[a-zA-Z0-9\-\_]+|\1|' |
+                       # Not sure why this is here...
                        tr ' ' '\n' | 
+                       # Sort unique, removing repeats
                        sort -u | 
+                       # turn into single row for array format
                        tr '\n' ' '))
 }
 
@@ -163,6 +180,8 @@ justify()
   get_just_subcommands caseify
   local just_subtargets
 
+  declare -p just_subcommands
+
   while (( $# > 0 )); do
     extra_args=0
 
@@ -171,6 +190,8 @@ justify()
       #Get list of targets for subcommand
       just_subtargets=()
       get_just_subtargets "${1}" caseify
+
+      declare -p just_subtargets
 
       #If it's a valid target, call them, else use default caseify
       if (( $# >= 2 )) && isin "${2}" ${just_subtargets+"${just_subtargets[@]}"}; then
