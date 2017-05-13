@@ -1,0 +1,66 @@
+#!/usr/bin/env false
+#!This file should be sourced, NOT run
+
+_just_find_justfile()
+{
+  local just_tmp_last_node=
+  local just_tmp_stat_command=
+  if [ "$(\uname)" == "Darwin" ]; then
+    just_tmp_stat_command="stat -f %d:%i ."
+  else
+    just_tmp_stat_command="stat -c %d:%i ."
+  fi
+  \pushd . > /dev/null
+  while [ "${just_tmp_last_node}" != "$(\eval ${just_tmp_stat_command})" ]; do
+    if [ -f "${1}" ]; then
+      \echo "$(\cd "$(\dirname "${1}")"; \pwd)/$(\basename "${1}")"
+      break
+    fi
+    just_tmp_last_node=$(\eval ${just_tmp_stat_command})
+    \cd ..
+  done
+  \popd > /dev/null
+}
+
+# Function to get all the cases from a function in memory.
+# This is designed to work on a function with only one case statement in it to
+# prevent false matches
+_just_get_cases()
+{
+  # Cat a function on stdout
+  \type "${@}" | 
+  # Grep for all case statements
+  \grep -E '^ *[a-zA-Z0-9_\-]+( \| [a-zA-Z0-9_\-]+)*\)' |
+  # Remove the extra spaces and )
+  \sed -E 's# *([a-zA-Z0-9_| \-]+)\).*#\1#' |
+  # All pipes are converted to ' | ' despite spaces in original file
+  # convert these to newlines
+  \sed 's# | #\n#g'
+}
+
+_just_get_subcommands() # function name
+{ #Searches function in memory for subcommands
+  just_subcommands+=($(_just_get_cases "${@}" |
+                       # Grep for foo_bar pattern, where bar can have _
+                       \grep -E '^[a-zA-Z0-9\-]+_[a-zA-Z0-9_\-]+' |
+                       # sed out only the subcommand (first) part
+                       \sed -E 's|^([a-zA-Z0-9\-]+)_[a-zA-Z0-9\-\_]+|\1|' |
+                       # Not sure why this is here...
+                       \tr ' ' '\n' | 
+                       # Sort unique, removing repeats
+                       \sort -u | 
+                       # turn into single row for array format
+                       \tr '\n' ' '))
+}
+
+# Get every target for a single specified subcommand
+_just_get_subtargets()
+{
+  local subcommand="$1"
+  shift 1
+  just_subtargets+=($(_just_get_cases "${@}" | 
+                      # filter out only the matching subcommand
+                      \grep -E '^'"${subcommand}"'_[a-zA-Z0-9\-\_]+' | 
+                      # sed out only the subtarget (second) part
+                      \sed -E 's|^'"${subcommand}"'_([a-zA-Z0-9\-\_]+)|\1|'))
+}

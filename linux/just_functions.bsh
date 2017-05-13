@@ -4,48 +4,12 @@
 : ${DRYRUN=}
 : ${JUST_SEPARATOR='--'}
 : ${JUST_SAFE_LOAD_DELIMITER='='}
+: ${JUST_HELP_SEPARATOR='@#@'}
 
 JUST_FUNCTIONS_FILE=${BASH_SOURCE[0]}
 
 # A few functions are defines in .just for auto-complete. Sourced here for DRY
-. "$(dirname "${BASH_SOURCE[0]}")/.just"
-
-get_just_subtargets()
-{
-  local subcommand="$1"
-  shift 1
-  just_subtargets+=($(type "${@}" | 
-                      grep -E '^ *[a-zA-Z0-9_\-]+( \| [a-zA-Z0-9_\-]+)*\)' |
-                      sed -E 's# *([a-zA-Z0-9_| \-]+)\).*#\1#' |
-                      sed 's# | #\n#g' |
-                      # filter out only the matching subcommand
-                      grep -E '^'"${subcommand}"'_[a-zA-Z0-9\-\_]+' | 
-                      # sed out only the subtarget (second) part
-                      sed -E 's|^'"${subcommand}"'_([a-zA-Z0-9\-\_]+)|\1|'))
-}
-
-get_just_subcommands() # function name
-{ #Searches function in memory for subcommands
-  just_subcommands+=($(type "${@}" | 
-                       # Grep for all case statements
-                       grep -E '^ *[a-zA-Z0-9_\-]+( \| [a-zA-Z0-9_\-]+)*\)' |
-                       # Remove the extra spaces and )
-                       sed -E 's# *([a-zA-Z0-9_| \-]+)\).*#\1#' |
-                       # All pipes are converted to ' | ' despite spaces in original file
-                       # convert these to newlines
-                       sed 's# | #\n#g' |
-                       # Grep for foo_bar pattern, where bar can have _
-                       grep -E '^[a-zA-Z0-9\-]+_[a-zA-Z0-9_\-]+' |
-                       # sed out only the subcommand (first) part
-                       sed -E 's|^([a-zA-Z0-9\-]+)_[a-zA-Z0-9\-\_]+|\1|' |
-                       # Not sure why this is here...
-                       tr ' ' '\n' | 
-                       # Sort unique, removing repeats
-                       sort -u | 
-                       # turn into single row for array format
-                       tr '\n' ' '))
-}
-
+. "$(dirname "${BASH_SOURCE[0]}")/just_common.bsh"
 
 # list_cases()
 # {
@@ -83,9 +47,12 @@ load_justfile()
 print_help_from_file()
 {
   #grep -E '^ +[a-z0-9|\-]+\)|^ +[_a-z0-9|\-]+\) *#' "$1" | sed -E 's| *([0-9|_a-z-]*)\) *#? *(.*)|\1 --- \2|' \
-  grep -E '^ +[_a-z0-9|\-]+\) *#' "$1" | \
-    sed -E 's|^([^_]*)_(.*\))|\1 \2|;s| *([ _0-9|a-z-]*)\) *#? *(.*)|\1 --- \2|' | \
-    awk -F '---' '
+  # Look for all switch cases commands with a comment
+  grep -E '^ *#? ?[_a-z0-9|\-]+\) *#' "$1" | \
+  # Segment into "command JUST_HELP_SEPARATOR comment"
+  sed -E 's|^([^_]*)_(.*\))|\1 \2|;s|[ #]*([ _0-9|a-z-]*)\) *#? *(.*)|\1 '"${JUST_HELP_SEPARATOR}"' \2|' | \
+  # awk using ' JUST_HELP_SEPARATOR ' as the separator
+  awk -F " ${JUST_HELP_SEPARATOR} " '
    { printf "%-'$(($indent-1))'s ", $1
     n = split($2,x," ")
     len = '${indent}'
@@ -98,29 +65,131 @@ print_help_from_file()
   }' #c/o http://unix.stackexchange.com/a/280205/123413
 }
 
-# print_subcommand_help()
-# {
-#   local just_subcommands=()
-#   get_just_subcommands caseify
+pretty_print_help()
+{
+  # awk using ' JUST_HELP_SEPARATOR ' as the separator
+  awk -F " ${JUST_HELP_SEPARATOR} " '
+   { printf "%-'$(($indent-1))'s ", $1
+    n = split($2,x," ")
+    len = '${indent}'
+    for(i=1;i<=n;i++){
+     if(len+length(x[i])>='$(tput cols)'){printf("\n%'$indent's", ""); len = '${indent}'}
+     printf "%s ",x[i]
+     len += 1+length(x[i])
+    }
+    printf "\n"
+  }'
+}
 
-#   if (( ${#just_subcommands[@]} )); then
-#     echo
-#     echo "Subcommands"
-#     echo "-----------"
-#     local i
-#     local j
-#     local just_subtargets
-#     for i in ${!just_subcommands[@]}; do
-#       echo "${just_subcommands[$i]}"
-#       get_just_subtargets "${just_subcommands[$i]}" caseify
-#       for j in ${!just_subtargets[@]}; do
-#         echo "  ${just_subtargets[$j]}"
-#       done
-#     done
-#   fi
-# }
+parse_help_file()
+{
+  # Look for all switch cases commands with a comment
+  grep -E '^ *#? ?[_a-z0-9|\-]+\) *#' "$1" |
+          # Segment into "command JUST_HELP_SEPARATOR comment"
+  sed -E 's|[ #]*([ _0-9|a-z-]*)\) *#? *(.*)|\1 '"${JUST_HELP_SEPARATOR}"' \2|
+          :a #Label a
+          ## Converts aaa|bbb|ccc @#@ blah to aaa @#@ blah\nbbb @#@ blah\n...
+          s/\|(.* '"${JUST_HELP_SEPARATOR}"' (.*))/ '"${JUST_HELP_SEPARATOR}"' \2\n\1/
+          t a' # Goto a if last line matched. Else done!
+}
+
+print_subcommand_help()
+{
+  local just_subcommands=()
+  _just_get_subcommands "${1}"
+
+  if (( ${#just_subcommands[@]} )); then
+    local i
+    local j
+    local just_subtargets
+    for i in ${!just_subcommands[@]}; do
+      echo "${just_subcommands[$i]}"
+      just_subtargets=()
+      _just_get_subtargets "${just_subcommands[$i]}" caseify
+      for j in ${!just_subtargets[@]}; do
+        echo "  ${just_subtargets[$j]}"
+      done
+    done
+  fi
+}
 
 print_help()
+{
+  local cols=$(tput cols)
+  local indent=21
+  local parsed_help parsed_help_flags parsed_help_subcommands_commented
+  local parsed_help_a=()
+
+  echo "List of possible $(basename "$0") commands:"
+  echo "-----------------------------------"
+
+  # Get help data
+  parsed_help="$(parse_help_file "${JUSTFILE}")"
+###  echo "$parsed_help"
+  parsed_help+="$(parse_help_file "${JUST_FUNCTIONS_FILE}")"
+
+  # Create an array copy
+  IFS=$'\n' parsed_help_a=(${parsed_help})
+
+  ### Split up flags and commands
+  ###parsed_help_flags="$(grep ^- <<< "${parsed_help}")" || :
+  ###parsed_help_subcommands_commented="$(grep -E '^[a-zA-Z0-9\-]+ [a-zA-Z0-9\-]+' <<< "${parsed_help}")" || :
+  ###parsed_help="$(grep -E -v '^-|^[a-zA-Z0-9\-]+ [a-zA-Z0-9\-]+' <<< "${parsed_help}")" || :
+  ###Since any one of these sets could be empty, add || : to eval true
+
+  # Pretty print
+  ###( sort | pretty_print_help ) <<< "${parsed_help}"
+  # Print non-flag first and non-subcommand_subtargets
+  ( grep -E -v '^-|^[a-zA-Z0-9\-]+_[a-zA-Z0-9_\-]+' | 
+    sort | 
+    pretty_print_help ) <<< "${parsed_help_a[*]}"
+
+  # Print flags second
+  ( grep -E '^-[a-zA-Z0-9\-]+( |$)' | sort | pretty_print_help ) <<< "${parsed_help_a[*]}"
+
+  echo
+  echo "Subcommands"
+  echo "-----------"
+  
+  local just_subcommands=()
+  local just_subtargets
+  local subcommand
+  local subtarget
+  local parsed_help_subcommands=""
+
+declare -p just_subcommands
+  _just_get_subcommands caseify
+  # Sort the subcommands
+declare -p just_subcommands
+  if [ "${just_subcommands+set}" == "set" ]; then
+    IFS=$'\n' just_subcommands=($(sort <<<"${just_subcommands[*]}"))
+  fi
+
+declare -p just_subcommands
+  for subcommand in ${just_subcommands+"${just_subcommands[@]}"}; do
+    parsed_help_subcommands+="${subcommand}"$'\n'
+    
+    # Get list of subtargets
+    just_subtargets=()
+    _just_get_subtargets "${subcommand}" caseify
+    # Sort the subtargets
+    if [ "${just_subtargets+set}" == "set" ]; then
+      IFS=$'\n' just_subtargets=($(sort <<<"${just_subtargets[*]}"))
+    fi
+
+    for subtarget in ${just_subtargets+"${just_subtargets[@]}"}; do
+
+      parsed_help_subcommands+="    ${subtarget}"$'\n'
+    done
+  done
+
+  (grep -v '^$' | pretty_print_help ) <<< "${parsed_help_subcommands}"
+  echo ----
+  ### pretty_print_help <<< "${parsed_help_subcommands_commented}"
+
+}
+
+print_help_old()
 {
   echo "List of possible $(basename "$0") commands:"
   echo "-----------------------------------"
@@ -129,7 +198,10 @@ print_help()
   #Only find lines with _ if there is a comment at the end.
   print_help_from_file "${JUSTFILE}"
   print_help_from_file "${JUST_FUNCTIONS_FILE}"
-  # print_subcommand_help
+  echo
+  echo "Subcommands"
+  echo "-----------"
+  print_subcommand_help caseify
 }
 
 print_command()
@@ -177,10 +249,8 @@ justify()
 
   #Cache list of subcommands
   local just_subcommands=()
-  get_just_subcommands caseify
+  _just_get_subcommands caseify
   local just_subtargets
-
-  declare -p just_subcommands
 
   while (( $# > 0 )); do
     extra_args=0
@@ -189,9 +259,7 @@ justify()
     if isin "${1}" ${just_subcommands+"${just_subcommands[@]}"}; then
       #Get list of targets for subcommand
       just_subtargets=()
-      get_just_subtargets "${1}" caseify
-
-      declare -p just_subtargets
+      _just_get_subtargets "${1}" caseify
 
       #If it's a valid target, call them, else use default caseify
       if (( $# >= 2 )) && isin "${2}" ${just_subtargets+"${just_subtargets[@]}"}; then

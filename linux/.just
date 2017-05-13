@@ -1,38 +1,31 @@
 #!/usr/bin/env false
 #!This file should be sourced, NOT run
 
-_just_find_justfile()
+. "$(dirname "${BASH_SOURCE[0]}")/just_common.bsh"
+
+_just_all_commands()
 {
-  local just_tmp_last_node=
-  local just_tmp_stat_command=
-  if [ "$(\uname)" == "Darwin" ]; then
-    just_tmp_stat_command="stat -f %d:%i ."
-  else
-    just_tmp_stat_command="stat -c %d:%i ."
-  fi
-  \pushd . > /dev/null
-  while [ "${just_tmp_last_node}" != "$(\eval ${just_tmp_stat_command})" ]; do
-    if [ -f "${1}" ]; then
-      \echo "$(\cd "$(\dirname "${1}")"; \pwd)/$(\basename "${1}")"
-      break
-    fi
-    just_tmp_last_node=$(\eval ${just_tmp_stat_command})
-    \cd ..
-  done
-  \popd > /dev/null
+  #Replace \\\n with a space
+  \awk -v RS='\0' -v ORS= '{gsub(/\\\n/," ")}1' "${1}" |
+  # Match all commands lines
+  \grep -E '^ *[a-zA-Z0-9 |_\-]+\)' |
+  # Remove trailing and beginning 
+  \sed -E 's#^ *([a-zA-Z0-9 |_\-]+)\).*#\1#' |
+  # Convert | to newlines so I have a clean line per command
+  \sed 's# *| *#\n#g'
 }
 
 _just_commands()
 {
-  just_commands+=($(\grep -E '^ +[a-z0-9|\-]+\)|^ +[_a-z0-9|\-]+\) *#' "${1}" |
-                    \sed -E 's|^ *([_a-z0-9|\-]+)\).*|\1|' |
-                    \tr '|' ' '))
+  #Remove underscore commands, those are subcommands
+  just_commands+=($(_just_all_commands "${1}" | \grep -v _))
 }
 
 _just_add_subcommands()
 {
-  just_subcommands+=($(\grep -E '^ +[a-z0-9\-]+_[a-z0-9\-]+\)' "${1}" |
-                       \sed -E 's|^ +([a-z0-9\-]+)_([a-z0-9\-]+)\).*|\1\t\2|'))
+  just_subcommands+=($(_just_all_commands "${1}" | 
+                       \grep -E '^[a-z0-9\-]+_[a-z0-9_\-]+$' |
+                       \sed -E 's|^([a-z0-9\-]+)_([a-z0-9_\-]+)|\1\t\2|'))
 }
 
 _just_get_subtargets()
