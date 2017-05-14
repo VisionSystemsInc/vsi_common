@@ -1,7 +1,7 @@
 #!/usr/bin/env false
 #!This file should be sourced, NOT run
 
-. "$(dirname "${BASH_SOURCE[0]}")/just_common.bsh"
+. "${VSI_COMMON_DIR}//linux/just_common.bsh"
 
 _just_all_commands()
 {
@@ -77,7 +77,7 @@ _just()
   local i
   for i in $(seq 1 2 ${#just_subcommands[@]}); do
     _just_subcommands+=("${just_subcommands[$((i-1))]}")
-    _just_subtargets+=("${just_subcommands[$i]}")
+    _just_subcommands+=("${just_subcommands[$i]}")
   done
 
   #Make subcommand pattern for case statement
@@ -85,12 +85,9 @@ _just()
   just_subcommands="@(${just_subcommands::-1})" #remove trailing |
 
   #Call local .just if it exist
-  if [ -f "$(\dirname ${just_file})/.just" ]; then
-    local just_local=1
-    . "$(\dirname ${just_file})/.just"
-    if [ "${just_local}" == "0" ]; then
-      return 0
-    fi
+  local just_dir="$(\dirname ${just_file})"
+  if [ -f "${just_dir}/.just" ]; then
+    . "${just_dir}/.just"
   fi
 
   if [ "${just_subcommands}" != "" ]; then

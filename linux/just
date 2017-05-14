@@ -1,19 +1,118 @@
 #!/usr/bin/env bash
-#J.U.S.T. - J.U.S.T. uncomplicated simple tasking
+
+#****J* vsi/just
+# NAME
+#   just -- J.U.S.T. uncomplicated simple tasking
+# AUTHOR
+#   Andy Neff
+# PURPOSE
+#   When working on a project, it often becomes necessary to run many long 
+#   commands. Just like make, just gives you an easy way to create a set of 
+#   targets to execute easily. Unlike a makefile, it has two key distinctions
+#     * It's not a makefile. Bash is easier than make for simple tasks
+#     * It works on Windows (when git->bash is installed),  MacOS (bash 3.2)
+#       and Linux.
+#   To set up 
+# DESCRIPTION
+#   just supports a number of features:
+#   * Tab completion (.just)
+#   * Comment generated help
+#   * Subcommands
+#   * Executing multiple targets at once
+# USAGE
+#   just help
+# SEE ALSO
+#   Justfile, .just
+#***
+
+#****F* just/Justfile
+# NAME
+#   Justfile -- Like the Makefile for just
+# PURPOSE
+#   The file sourced by just. The primary purpose of the Justfile is to define
+#   the function caseify. caseify should try to match $1 and the number of 
+#   additional arguments used should be added to extra_args
+# EXAMPLE
+#   #!/usr/bin/false
+#   source_environment_files "${CWD}/my_project_name.env"
+#
+#   function caseify()
+#   {
+#     local just_arg=$1
+#     shift 1
+#     case ${just_arg} in
+#       foo) #ls foo files
+#         ls
+#         ;;
+#       two) # Target with two arguments
+#         echo $1 $2
+#         extra_args+=2
+#       
+#       *) 
+#         defaultify "${just_arg}" ${@+"${@}"} 
+#         ;;
+#     esac
+#   }
+# SEE ALSO
+#   source_environment_files, get_extra_args
+#***
+
+#****F* just/.just
+# NAME
+#   .just -- Tab completion script
+# USAGE
+#   source .just
+# SYNOPSIS
+#   Creates auto complete suggestions based on parsing the Justfile case 
+#   statements. 
+#
+#   To add customized tab completions, add a .just script next to project
+#   Justfile. Write what would normally go inside the complete function to the
+#   .just file (without the function header). This file will be sourced every 
+#   complete after the just_commands, _just_subcommands, _just_subcommands 
+#   arrays are populated.
+#***
+
+#****m* just/help
+# NAME
+#   just help -- Print help 
+# SYNOPSIS
+#   Print out basic help based on the comments it the Justfile
+# EXAMPLE
+#   Basic example: 
+#     foo) # Runs the foo routine
+#   Multiple targets at once:
+#     cat |\
+#     dog) # Routine for cat and dog
+#   Subcommand/subtarget example:
+#     foo_cat) # Runs the foo routine for cat
+#     foo_dog) # Runs the foo routine for dog
+#   Adding extra help targets:
+#     # foo_a) # Runs the foo routine for a
+#     # foo_b) # Runs the foo routine for b
+#     foo_*)
+#     ## foo_c) # Runs the foo routine for c, but don't tell anyone
+#   The foo_a and foo_b are added to tab complete and help, but using more than
+#   one # ignores it all together. So foo_c is ignored
+# NOTES
+#   The help message can only be one line long, but can be as long as you need
+#
+#   The same mechanism populates help and tab completion
+#***
 
 set -euE
 
 function print_error(){ echo "$1: line $2: Returned $?";}
 trap 'print_error "${BASH_SOURCE[0]}" "${LINENO}"' ERR
 
-VSI_SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)
+source "${VSI_COMMON_DIR}/linux/just_functions.bsh"
 
-source "${VSI_SCRIPT_DIR}/just_functions.bsh"
-
+date '+%s.%N'
 : ${JUSTFILE=Justfile}
 load_justfile "${JUSTFILE}"
+date '+%s.%N'
 
-if [ "${JUST_DIR-}" == "" ]; then
+if [ "${JUSTFILE}" = "" ]; then
   echo "Can't find a suitable configuration file in this directory or any"
   echo "parent. Are you in the right directory?"
   echo
