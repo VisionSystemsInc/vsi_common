@@ -185,13 +185,12 @@ function pretty_print_help()
 #***
 function parse_help_file()
 {
-  
   grep -E '^ *#? ?[_a-z0-9|\-]+\) *#' "$1" |
           # Segment into "command JUST_HELP_SEPARATOR comment"
   sed -E 's|[ #]*([ _0-9|a-z-]*)\) *#? *(.*)|\1 '"${JUST_HELP_SEPARATOR}"' \2|
           :a #Label a
           ## Converts aaa|bbb|ccc @#@ blah to aaa @#@ blah\nbbb @#@ blah\n...
-          s/\|(.* '"${JUST_HELP_SEPARATOR}"' (.*))/ '"${JUST_HELP_SEPARATOR}"' \2\n\1/
+          s/\|(.*_.* '"${JUST_HELP_SEPARATOR}"' (.*))/ '"${JUST_HELP_SEPARATOR}"' \2\n\1/
           t a' # Goto a if last line matched. Else done!
 }
 
@@ -216,15 +215,17 @@ function print_help()
   parsed_help+="$(parse_help_file "${JUST_FUNCTIONS_FILE}")"
 
   # Create an array copy
+  local OLD_IFS="${IFS}"
   IFS=$'\n' parsed_help_a=(${parsed_help})
 
   # Print non-flag first and non-subcommand_subtargets
-  ( grep -E -v '^-|^[a-zA-Z0-9\-]+_[a-zA-Z0-9_\-]+' | 
-    sort | 
+  ( grep -E -v '^-|^[a-zA-Z0-9\-]+_[a-zA-Z0-9_\-]+' |
+    sort |
     pretty_print_help ) <<< "${parsed_help_a[*]}"
 
   # Print flags second
-  ( grep -E '^-[a-zA-Z0-9\-]+( |$)' | sort | pretty_print_help ) <<< "${parsed_help_a[*]}"
+  ( grep -E '^-[a-zA-Z0-9\|\-]+( |$)' | sort | pretty_print_help ) <<< "${parsed_help_a[*]}"
+  IFS="${OLD_IFS}"
 
   echo
   echo "Subcommands"
@@ -240,7 +241,9 @@ function print_help()
   _just_get_subcommands caseify
   # Sort the subcommands
   if [ "${just_subcommands+set}" == "set" ]; then
-    IFS=$'\n' just_subcommands=($(sort <<<"${just_subcommands[*]}"))
+    IFS=$'\n'
+    just_subcommands=($(sort -u <<<"${just_subcommands[*]}"))
+    IFS="${OLD_IFS}"
   fi
 
   for subcommand in ${just_subcommands+"${just_subcommands[@]}"}; do
@@ -248,13 +251,26 @@ function print_help()
     
     # Get list of subtargets
     just_subtargets=()
+
+    # Get all the subtargets already parsed by the helpfile
+    for help_line in ${parsed_help_a+"${parsed_help_a[@]}"}; do
+      if [[ ${help_line} =~ ^${subcommand}_.* ]]; then
+        help_line=${help_line%% *}
+          just_subtargets+=(${help_line#*_})
+      fi
+    done
+
+    # 
     _just_get_subtargets "${subcommand}" caseify
     # Sort the subtargets
     if [ "${just_subtargets+set}" == "set" ]; then
-      IFS=$'\n' just_subtargets=($(sort <<<"${just_subtargets[*]}"))
+      IFS=$'\n'
+      just_subtargets=($(sort -u <<<"${just_subtargets[*]}"))
+      IFS="${OLD_IFS}"
     fi
 
     for subtarget in ${just_subtargets+"${just_subtargets[@]}"}; do
+
       for help_line in "${parsed_help_a[@]}"; do 
         if [[ ${help_line} =~ ^${subcommand}_${subtarget}.* ]]; then 
           parsed_help_subcommands+="    ${help_line#*_}"$'\n'
