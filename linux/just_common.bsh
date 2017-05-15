@@ -44,20 +44,22 @@ _just_get_cases()
             b noprint
             :print
             s# \| #\n#g
-            P
+            p
             :noprint'
 }
 
 _just_get_subcommands() # function name
 { #Searches function in memory for subcommands
   just_subcommands+=($(_just_get_cases "${@}" |
-                       # Grep for foo_bar pattern, where bar can have _
-                       \grep -E '^[a-zA-Z0-9\-]+_[a-zA-Z0-9_\-]+' |
-                       # sed out only the subcommand (first) part
-                       \sed -E 's|^([a-zA-Z0-9\-]+)_[a-zA-Z0-9\-\_]+|\1|' |
-                       # Not sure why this is here...
-                       \tr ' ' '\n' | 
-                       # Sort unique, removing repeats
+                       # Grep and sed out that subcommand names
+                       \sed -nE 's|^([a-zA-Z0-9\-]+)_[a-zA-Z0-9_\-]+|\1|
+                                 t print
+                                 b noprint
+                                 :print
+                                 s| |\n|g
+                                 p
+                                 :noprint' |
+                       # Sort and get unique listing
                        \sort -u))
 }
 
@@ -67,8 +69,11 @@ _just_get_subtargets()
   local subcommand="$1"
   shift 1
   just_subtargets+=($(_just_get_cases "${@}" | 
-                      # filter out only the matching subcommand
-                      \grep -E '^'"${subcommand}"'_[a-zA-Z0-9\-\_]+' | 
-                      # sed out only the subtarget (second) part
-                      \sed -E 's|^'"${subcommand}"'_([a-zA-Z0-9\-\_]+)|\1|'))
+                      # filter out only the matching subcommand and print targets
+                      \sed -nE 's|^'"${subcommand}"'_([a-zA-Z0-9\-\_]+)|\1|
+                                t print
+                                b noprint
+                                :print
+                                p
+                                :noprint'))
 }

@@ -86,7 +86,7 @@ JUST_FUNCTIONS_FILE=${BASH_SOURCE[0]}
 #   IFS="${oldIFS}"
 # }
 
-source_environment_files()
+function source_environment_files()
 {
   local project_dir="$(dirname $1)"
   for file in "${project_dir}/local.env" \
@@ -101,7 +101,7 @@ source_environment_files()
 }
 
 
-load_justfile()
+function load_justfile()
 {
   JUSTFILE=$(_just_find_justfile "${1}")
   if [ -f "${JUSTFILE}" ]; then
@@ -130,7 +130,7 @@ load_justfile()
 #   }' #c/o http://unix.stackexchange.com/a/280205/123413
 # }
 
-pretty_print_help()
+function pretty_print_help()
 {
   # awk using ' JUST_HELP_SEPARATOR ' as the separator
   awk -F " ${JUST_HELP_SEPARATOR} " '
@@ -146,7 +146,7 @@ pretty_print_help()
   }' #c/o http://unix.stackexchange.com/a/280205/123413
 }
 
-parse_help_file()
+function parse_help_file()
 {
   # Look for all switch cases commands with a comment
   grep -E '^ *#? ?[_a-z0-9|\-]+\) *#' "$1" |
@@ -158,7 +158,7 @@ parse_help_file()
           t a' # Goto a if last line matched. Else done!
 }
 
-print_subcommand_help()
+function print_subcommand_help()
 {
   local just_subcommands=()
   _just_get_subcommands "${1}"
@@ -178,7 +178,7 @@ print_subcommand_help()
   fi
 }
 
-print_help()
+function print_help()
 {
   local cols=$(tput cols)
   local indent=21
@@ -189,8 +189,7 @@ print_help()
   echo "-----------------------------------"
 
   # Get help data
-  parsed_help="$(parse_help_file "${JUSTFILE}")"
-###  echo "$parsed_help"
+  parsed_help="$(parse_help_file "${JUSTFILE}")"$'\n'
   parsed_help+="$(parse_help_file "${JUST_FUNCTIONS_FILE}")"
 
   # Create an array copy
@@ -221,16 +220,14 @@ print_help()
   local subcommand
   local subtarget
   local parsed_help_subcommands=""
+  local help_line
 
-declare -p just_subcommands
   _just_get_subcommands caseify
   # Sort the subcommands
-declare -p just_subcommands
   if [ "${just_subcommands+set}" == "set" ]; then
     IFS=$'\n' just_subcommands=($(sort <<<"${just_subcommands[*]}"))
   fi
 
-declare -p just_subcommands
   for subcommand in ${just_subcommands+"${just_subcommands[@]}"}; do
     parsed_help_subcommands+="${subcommand}"$'\n'
     
@@ -243,15 +240,20 @@ declare -p just_subcommands
     fi
 
     for subtarget in ${just_subtargets+"${just_subtargets[@]}"}; do
-
-      parsed_help_subcommands+="    ${subtarget}"$'\n'
+      for help_line in "${parsed_help_a[@]}"; do 
+        if [[ ${help_line} =~ ^${subcommand}_${subtarget}.* ]]; then 
+          parsed_help_subcommands+="    ${help_line#*_}"$'\n'
+          break
+        fi
+        help_line=
+      done
+      if [ "${help_line}" == "" ]; then
+        parsed_help_subcommands+="    ${subtarget}"$'\n'
+      fi
     done
   done
 
-  (grep -v '^$' | pretty_print_help ) <<< "${parsed_help_subcommands}"
-  echo ----
-  ### pretty_print_help <<< "${parsed_help_subcommands_commented}"
-
+  pretty_print_help <<< "${parsed_help_subcommands%$'\n'}"
 }
 
 # print_help_old()
@@ -269,7 +271,40 @@ declare -p just_subcommands
 #   print_subcommand_help caseify
 # }
 
-print_command()
+### powershell setup ###
+# Cygwin bash is pretty bad. The new git bash (MINGW64) does not have a tty.
+# This is pretty bad for docker. Powershell does have a tty, buy can not run
+# bash scrips natively. The solution is to run bash in powershell. These functions
+# help with that.
+
+function is_powershell()
+{
+  if [ "${VSI_COMMON_IS_POWERSHELL-0}" == "1" ]; then
+    return 0
+  fi
+
+  local unique_title=$(head -c 16 /dev/urandom | xxd -pu)
+  echo -en "\033]0;${unique_title}\a"
+  if [ $(tasklist //fi "windowtitle eq ${unique_title}" | tail -n 1 | awk '{print $1}') == "powershell.exe" ]; then
+    return 0
+  else
+    return 1
+  fi
+}
+
+function setup_powershell()
+{ # Usage: setup_powershell ${@+"${@}"}
+  # This is designed to rerun a script being called from. Do not call from command line
+  if [ "${OS-notwindows}" == "Windows_NT" ] && ! is_powershell; then
+    if [ "${#@}" == "0" ]; then
+      setup_powershell _null
+    else
+      exec env VSI_COMMON_IS_POWERSHELL=1 start powershell "cmd /c color 07; bash \"$0\" ${@}; bash --rcfile \"${VSI_COMMON_DIR}/.winbashrc\""
+    fi
+  fi
+}
+
+function print_command()
 { 
   if command -v python >& /dev/null; then
     python -c "import pipes as p; import sys as s; print(' '.join([p.quote(x) for x in s.argv[1:]]))" "${@}"
@@ -284,7 +319,7 @@ print_command()
   fi
 }
 
-defaultify()
+function defaultify()
 {
   arg=$1
   shift 1
@@ -299,6 +334,8 @@ defaultify()
     -h|--help|help) #Print help
       print_help
       ;;
+    _null)
+      ;;
     *)
       echo "I don't understand $arg"
       exit 1
@@ -308,7 +345,7 @@ defaultify()
 
 declare -i extra_args
 
-justify()
+function justify()
 { #caseify needs to be written by the main script, and set the number
   #of extra arguments it consumes to extra_args
 
@@ -350,7 +387,7 @@ justify()
   done
 }
 
-find_in()
+function find_in()
 {
   #Find $1 in $2-n. Return 1 for $2, 2 for $3, etc... 0 for not found
   local val=$1
@@ -365,7 +402,7 @@ find_in()
   return 0
 }
 
-callify()
+function callify()
 { # Takes: cmd -- $1 $2 $3 ... $n -- $m $m+1 ... 
   # and calls: cmd $1 $2 $3 ... $n and consumes n+2 args
   # Trailing -- is optional
@@ -376,7 +413,7 @@ callify()
   $cmd ${args+"${args[@]}"}
 }
 
-get_args() #Function used to consume a collection of arguments and store in args
+function get_args() #Function used to consume a collection of arguments and store in args
 { # -- $2 $3 $4 ... $n -- $n+2, $n+3 ... Only capture $2-$n and consumes n+1 
   #(or $n if no trailing --)
   #stores in array "args"
@@ -403,7 +440,7 @@ get_args() #Function used to consume a collection of arguments and store in args
   fi
 }
 
-get_additional_args()
+function get_additional_args()
 { # Must be called after get_args with all arguments passed in. For example:
   # get_args ${@+"${@}"}
   # args1=(${args+"${args[@]}"})
@@ -427,18 +464,7 @@ get_additional_args()
   fi
 }
 
-safe_load_old() #Loads a very simple safe config file, and sets environment variables accordingly
-{ #File should alternate lines: variable name, value. 
-  local key=foobar
-  while : ; do
-    IFS='' read -r key || return 0
-    IFS='' read -r $key || :
-    export $key
-    #echo $key is ${!key}
-  done < $1
-}
-
-safe_load() #Loads a very simple safe config file, and sets environment variables accordingly
+function safe_load() #Loads a very simple safe config file, and sets environment variables accordingly
 { #File should contain lines: key=value
   local safe_load_tmp_key=foobar
   local safe_load_tmp_value
@@ -447,10 +473,4 @@ safe_load() #Loads a very simple safe config file, and sets environment variable
     IFS="${JUST_SAFE_LOAD_DELIMITER}" read -r safe_load_tmp_key "$safe_load_tmp_key" <<< "$line"
     export "$safe_load_tmp_key"
   done < $1
-}
-
-
-choseify()
-{
-  :
 }
