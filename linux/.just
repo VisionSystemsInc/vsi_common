@@ -1,7 +1,7 @@
 #!/usr/bin/env false
 #!This file should be sourced, NOT run
 
-. "${VSI_COMMON_DIR}//linux/just_common.bsh"
+. "${VSI_COMMON_DIR}/linux/just_common.bsh"
 
 _just_all_commands()
 {
@@ -63,13 +63,14 @@ _just()
   #Get commands
   local just_commands=()
   _just_commands "${just_file}"
-  _just_commands "$(\dirname "${BASH_SOURCE[0]}")/just_functions.bsh"
+  _just_commands "${VSI_COMMON_DIR}/linux/just_functions.bsh"
+  declare -p just_commands
 
   #Get sub_commands
   local just_subcommands=()
   #$(\grep -E '^ +[a-z0-9\-]+_[a-z0-9\-]+\)' "${just_file}" | \sed -E 's|^ +([a-z0-9\-]+)_([a-z0-9\-]+)\).*|\1\t\2|'))
   _just_add_subcommands "${just_file}"
-  _just_add_subcommands "$(\dirname "${BASH_SOURCE[0]}")/just_functions.bsh"
+  _just_add_subcommands "${VSI_COMMON_DIR}/linux/just_functions.bsh"
   local _just_subtargets=()
   local _just_subcommands=()
 
@@ -79,7 +80,10 @@ _just()
     _just_subcommands+=("${just_subcommands[$((i-1))]}")
     _just_subcommands+=("${just_subcommands[$i]}")
   done
+  . 
 
+  _just_commands_from_file
+declare -p _just_subcommands
   #Make subcommand pattern for case statement
   just_subcommands=$(echo "${_just_subcommands[@]}" | \tr ' ' '\n' | \sort -u | \tr '\n' '|')
   just_subcommands="@(${just_subcommands::-1})" #remove trailing |
@@ -91,10 +95,12 @@ _just()
   fi
 
   if [ "${just_subcommands}" != "" ]; then
+    echo "Subcommand detected: $3"
     case "$3" in 
       ${just_subcommands})
         local subtargets=()
-        _just_get_subtargets "$3"
+        _just_get_subtargets "$3" caseify
+        declare -p just_subtargets
         COMPREPLY+=($(\compgen -W "${subtargets[*]}" -- $2))
         return 0
         ;;
@@ -104,7 +110,7 @@ _just()
   for (( i=${#COMP_WORDS[@]}; i>=0; i--)); do
     if isin "${COMP_WORDS[$i]}" "${_just_subcommands[@]}"; then
       local subtargets=()
-      _just_get_subtargets "${COMP_WORDS[$i]}"
+      _just_get_subtargets "${COMP_WORDS[$i]}" caseify
       just_commands+=("${subtargets[@]}")
       break
     fi

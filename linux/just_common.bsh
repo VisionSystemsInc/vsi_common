@@ -41,90 +41,166 @@ _just_find_justfile()
   \popd > /dev/null
 }
 
-#****if* just/_just_get_cases
+#****f* just/_just_commands_from_file
 # NAME
-#   _just_get_cases -- Parse an in memory function for case switch values
-# DESCRIPTION
-#   Function to get all the cases from a function in memory.
+#   _just_commands_from_file -- Parses Justfile for help comments on targets
+# SYNOPSIS
+#   Look for all case statements with a comment at the end. It will also parse
+#   commented case statements that exist for the purpose of populating the help
 # INPUTS
-#   $1 - The name of the function being parsed
-# RETURN VALUE
-#   echoes out a newline delimited list of all the case values that had comments
+#   $1 - Filename of Justfile to be parsed
+# SEE ALSO
+#   JUST_HELP_SEPARATOR, just/help
 # AUTHOR
 #   Andy Neff
 #***
-_just_get_cases()
+function _just_commands_from_file()
 {
-  # Cat a function on stdout
-  \type "${@}" |
-  #Don't print, match case switch statements
-  #if pattern matched, print, else don't
-  #It printing, all pipes are converted to ' | ' despite spaces in original file
-  #convert these to newlines
-  \sed -nE 's# *([a-zA-Z0-9_| \-]+)\).*#\1#
-            t print
-            b noprint
-            :print
-            s# \| #\n#g
-            p
-            :noprint'
+           # Segment into "command JUST_HELP_SEPARATOR comment"
+  sed -nE 's|^ *#? *([ _0-9|a-z-]*)\) *# *(.*)|\1 '"${JUST_HELP_SEPARATOR}"' \2|
+           t process # If there is a match, process it
+           b noprint # Else do not even print it. This replaces a grep
+           :process
+           # Converts aaa|bbb|ccc @#@ blah to aaa @#@ blah\nbbb @#@ blah\n...
+           s/\|(.*_.* '"${JUST_HELP_SEPARATOR}"' (.*))/ '"${JUST_HELP_SEPARATOR}"' \2\n\1/
+           t process # Continue processing until no matches
+           p
+           :noprint' $1
 }
 
-#****if* just/_just_get_subcommands
-# NAME
-#   _just_get_subcommands -- Searches a function in memory for subcommands
-# DESCRIPTION
-#   Gets all the subcommands from a function in memory.
-# INPUTS
-#   $1 - The name of the function being parsed
-# RETURN VALUE
-#   echoes out a newline delimited list of all the case values that had comments
-# AUTHOR
-#   Andy Neff
-#***
-_just_get_subcommands()
-{ 
-  just_subcommands+=($(_just_get_cases "${@}" |
-                       # Grep and sed out that subcommand names
-                       \sed -nE 's|^([a-zA-Z0-9\-]+)_[a-zA-Z0-9_\-]+|\1|
-                                 t print
-                                 b noprint
-                                 :print
-                                 s| |\n|g
-                                 p
-                                 :noprint' |
-                       # Sort and get unique listing
-                       \sort -u))
+#****f* just/_just_subcommands_from_array
+# USAGE
+#   IFS=$'\n'
+#   parsed_help_a=($(_just_commands_from_file "${JUSTFILE}"))
+#   _just_subcommands_from_array <<< "${parsed_help_a[*]}"
+function _just_subcommands_from_array()
+{
+  sed -nE 's|^(_?[a-zA-Z0-9\-]+)_.*|\1|p'
 }
 
-#****if* just/_just_get_subtargets
-# NAME
-#   _just_get_subtargets -- Searches a function in memory for subtargets
-# DESCRIPTION
-#   Gets all the subtargets for a particular subcommand from a function in memory.
+#****f* just/_just_subtargets_from_array
+# USAGE
+#   IFS=$'\n'
+#   parsed_help_a=($(_just_commands_from_file "${JUSTFILE}"))
+# 
+#   _just_subcommands_from_array <<< "${parsed_help_a[*]}"
 # INPUTS
-#   $1 - The name of the subcommand to list all the subtargets of
-#   $2 - The name of the function being parsed
+#   $1 - subcommand name
+#   $2..N - help_lines
 # RETURN VALUE
-#   just_subtargets is set to an array of subtargets
-# NOTES
-#   just_subtargets is not cleared on purpose, in case you need to parse multiple
-#   functions. Remember to set
-#       just_subtargets=()
-#   when you want to get a clean list of subtargets
-# AUTHOR
-#   Andy Neff
-#***
-_just_get_subtargets()
+#   just_subtargets - Adds to array
+function _just_subtargets_from_array()
 {
-  local subcommand="$1"
+  local help_line
+  local subcommand="${1}"
   shift 1
-  just_subtargets+=($(_just_get_cases "${@}" |
-                      # filter out only the matching subcommand and print targets
-                      \sed -nE 's|^'"${subcommand}"'_([a-zA-Z0-9\-\_]+)|\1|
-                                t print
-                                b noprint
-                                :print
-                                p
-                                :noprint'))
+
+  for help_line in ${@+"${@}"}; do
+    if [[ ${help_line} =~ ^${subcommand}_.* ]]; then
+      help_line=${help_line%% *}
+      just_subtargets+=(${help_line#*_})
+    fi
+  done
+}
+
+# #****if* just/_just_get_cases_memory
+# # NAME
+# #   _just_get_cases_memory -- Parse an in memory function for case switch values
+# # DESCRIPTION
+# #   Function to get all the cases from a function in memory.
+# # INPUTS
+# #   $1 - The name of the function being parsed
+# # RETURN VALUE
+# #   echoes out a newline delimited list of all the case values that had comments
+# # AUTHOR
+# #   Andy Neff
+# #***
+# _just_get_cases_memory()
+# {
+#   # Cat a function on stdout
+#   \type "${@}" |
+#   #Don't print, match case switch statements
+#   #if pattern matched, print, else don't
+#   #It printing, all pipes are converted to ' | ' despite spaces in original file
+#   #convert these to newlines
+#   \sed -nE 's# *([a-zA-Z0-9_| \-]+)\).*#\1#
+#             t print
+#             b noprint
+#             :print
+#             s# \| #\n#g
+#             p
+#             :noprint'
+# }
+
+# #****if* just/_just_get_subcommands_memory
+# # NAME
+# #   _just_get_subcommands_memory -- Searches a function in memory for subcommands
+# # DESCRIPTION
+# #   Gets all the subcommands from a function in memory.
+# # INPUTS
+# #   $1 - The name of the function being parsed
+# # RETURN VALUE
+# #   echoes out a newline delimited list of all the case values that had comments
+# # AUTHOR
+# #   Andy Neff
+# #***
+# _just_get_subcommands_memory()
+# { 
+#   just_subcommands+=($(_just_get_cases_memory "${@}" |
+#                        # Grep and sed out that subcommand names
+#                        \sed -nE 's|^([a-zA-Z0-9\-]+)_[a-zA-Z0-9_\-]+|\1|
+#                                  t print
+#                                  b noprint
+#                                  :print
+#                                  s| |\n|g
+#                                  p
+#                                  :noprint' |
+#                        # Sort and get unique listing
+#                        \sort -u))
+# }
+
+# #****if* just/_just_get_subtargets_memory
+# # NAME
+# #   _just_get_subtargets_memory -- Searches a function in memory for subtargets
+# # DESCRIPTION
+# #   Gets all the subtargets for a particular subcommand from a function in memory.
+# # INPUTS
+# #   $1 - The name of the subcommand to list all the subtargets of
+# #   $2 - The name of the function being parsed
+# # RETURN VALUE
+# #   just_subtargets is set to an array of subtargets
+# # NOTES
+# #   just_subtargets is not cleared on purpose, in case you need to parse multiple
+# #   functions. Remember to set
+# #       just_subtargets=()
+# #   when you want to get a clean list of subtargets
+# # AUTHOR
+# #   Andy Neff
+# #***
+# _just_get_subtargets_memory()
+# {
+#   local subcommand="$1"
+#   shift 1
+#   just_subtargets+=($(_just_get_cases_memory "${@}" |
+#                       # filter out only the matching subcommand and print targets
+#                       \sed -nE 's|^'"${subcommand}"'_([a-zA-Z0-9\-\_]+)|\1|
+#                                 t print
+#                                 b noprint
+#                                 :print
+#                                 p
+#                                 :noprint'))
+# }
+
+function _just_get_help_file()
+{
+           # Segment into "command JUST_HELP_SEPARATOR comment"
+  sed -nE 's|^ *#? *([ _0-9|a-z-]*)\) *#? *(.*)|\1 '"${JUST_HELP_SEPARATOR}"' \2|
+           t process # If there is a match, process it
+           b noprint # Else do not even print it. This replaces a grep
+           :process
+           # Converts aaa|bbb|ccc @#@ blah to aaa @#@ blah\nbbb @#@ blah\n...
+           s/\|(.*_.* '"${JUST_HELP_SEPARATOR}"' (.*))/ '"${JUST_HELP_SEPARATOR}"' \2\n\1/
+           t process # Continue processing until no matches
+           p
+           :noprint' $1
 }

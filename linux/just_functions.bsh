@@ -170,30 +170,6 @@ function pretty_print_help()
   }' #c/o http://unix.stackexchange.com/a/280205/123413
 }
 
-#****f* just/parse_help_file
-# NAME
-#   parse_help_file -- Parses Justfile for help comments on targets
-# SYNOPSIS
-#   Look for all case statements with a comment at the end. It will also parse
-#   commented case statements that exist for the purpose of populating the help
-# INPUTS
-#   $1 - Filename of Justfile to be parsed
-# SEE ALSO
-#   JUST_HELP_SEPARATOR, just/help
-# AUTHOR
-#   Andy Neff
-#***
-function parse_help_file()
-{
-  grep -E '^ *#? ?[_a-z0-9|\-]+\) *#' "$1" |
-          # Segment into "command JUST_HELP_SEPARATOR comment"
-  sed -E 's|[ #]*([ _0-9|a-z-]*)\) *#? *(.*)|\1 '"${JUST_HELP_SEPARATOR}"' \2|
-          :a #Label a
-          ## Converts aaa|bbb|ccc @#@ blah to aaa @#@ blah\nbbb @#@ blah\n...
-          s/\|(.*_.* '"${JUST_HELP_SEPARATOR}"' (.*))/ '"${JUST_HELP_SEPARATOR}"' \2\n\1/
-          t a' # Goto a if last line matched. Else done!
-}
-
 #****f* just/print_help
 # NAME
 #   print_help -- Prints the auto generated help info from Justfile
@@ -211,12 +187,14 @@ function print_help()
   echo "-----------------------------------"
 
   # Get help data
-  parsed_help="$(parse_help_file "${JUSTFILE}")"$'\n'
-  parsed_help+="$(parse_help_file "${JUST_FUNCTIONS_FILE}")"
+  local OLD_IFS="${IFS}"
+  IFS=$'\n'
+  parsed_help_a=($(_just_commands_from_file "${JUSTFILE}"))
+  parsed_help_a+=($(_just_commands_from_file "${JUST_FUNCTIONS_FILE}"))
 
   # Create an array copy
-  local OLD_IFS="${IFS}"
-  IFS=$'\n' parsed_help_a=(${parsed_help})
+  #parsed_help_a=(${parsed_help})
+  #declare parsed_help_a
 
   # Print non-flag first and non-subcommand_subtargets
   ( grep -E -v '^-|^[a-zA-Z0-9\-]+_[a-zA-Z0-9_\-]+' |
@@ -238,7 +216,10 @@ function print_help()
   local parsed_help_subcommands=""
   local help_line
 
-  _just_get_subcommands caseify
+  IFS=$'\n'
+  just_subcommands=($(_just_subcommands_from_array <<< "${parsed_help_a[*]}"))
+  IFS="${OLD_IFS}"
+
   # Sort the subcommands
   if [ "${just_subcommands+set}" == "set" ]; then
     IFS=$'\n'
@@ -251,17 +232,9 @@ function print_help()
     
     # Get list of subtargets
     just_subtargets=()
-
     # Get all the subtargets already parsed by the helpfile
-    for help_line in ${parsed_help_a+"${parsed_help_a[@]}"}; do
-      if [[ ${help_line} =~ ^${subcommand}_.* ]]; then
-        help_line=${help_line%% *}
-          just_subtargets+=(${help_line#*_})
-      fi
-    done
+    _just_subtargets_from_array "${subcommand}" ${parsed_help_a+"${parsed_help_a[@]}"}
 
-    # 
-    _just_get_subtargets "${subcommand}" caseify
     # Sort the subtargets
     if [ "${just_subtargets+set}" == "set" ]; then
       IFS=$'\n'
@@ -398,17 +371,24 @@ function justify()
 
   #Cache list of subcommands
   local just_subcommands=()
-  _just_get_subcommands caseify
   local just_subtargets
+
+  local parsed_help_a
+  local OLD_IFS="${IFS}"
+  IFS=$'\n'
+  parsed_help_a=($(_just_commands_from_file "${JUSTFILE}"))
+  parsed_help_a+=($(_just_commands_from_file "${JUST_FUNCTIONS_FILE}"))
+  just_subcommands=($(_just_subcommands_from_array <<< "${parsed_help_a[*]}"))
+  IFS="${OLD_IFS}"
 
   while (( $# > 0 )); do
     extra_args=0
 
     #If it's a subcommand
     if isin "${1}" ${just_subcommands+"${just_subcommands[@]}"}; then
-      #Get list of targets for subcommand
       just_subtargets=()
-      _just_get_subtargets "${1}" caseify
+      #Get all the subtargets already parsed by the helpfile
+      _just_subtargets_from_array "${1}" ${parsed_help_a+"${parsed_help_a[@]}"}
 
       #If it's a valid target, call them, else use default caseify
       if (( $# >= 2 )) && isin "${2}" ${just_subtargets+"${just_subtargets[@]}"}; then
