@@ -9,6 +9,57 @@ if ! hash ${NVIDIA_DOCKER} 2> /dev/null; then
   NVIDIA_DOCKER=${DOCKER}
 fi
 
+
+function is_dir_and_not_exist()
+{ #Simplifies checking if a string is a relative or absolute directory name,
+ #and does not exist. This is needed because of a directory is replaced with
+ #a volume name, it should not be created.
+
+ local dir_name="$1"
+
+ if ( [ "${dir_name:0:1}" == "/" ] || \
+      ( (( ${#dir_name} >= 2 )) && [ "${dir_name:0:2}" == "./" ] ) ) && \
+    [ ! -d "${dir_name}" ] && [ ! -e "${dir_name}" ]; then
+    return 0 #TRUE!
+ fi
+ return 1 #False :(
+}
+
+
+function docker_sanitize_volume()
+{ #Convenient wrapper to deal with all the MINGW screw ups
+ #Create all the volume argument for the -v argument for docker. What a pain
+ #first argument is the host dir
+ #second argument is the docker dir (optional. If omitted, copies host dir)
+
+ if (( $# < 2 )); then
+   set -- "$1" "$1"
+ fi
+
+ #Create the directory before docker, or else it will be owned by ROOT! :(
+ #Assume it's a directory because well... docker would too
+ if is_dir_and_not_exist "$1"; then #if not a file or dir
+   mkdir -p "$1" #make the dir
+   chmod 777 "$1" #Blow open permissions
+ fi
+
+ if [ "${OS-notwindows}" == "Windows_NT" ]; then
+   if command -v cygpath &> /dev/null ; then
+     echo "$(cygpath -w "$1"):${WIN}$2"
+     #Bash 4 in mingw64 includes cygpath for some reason
+     #Cygpath converts / -> \
+     #^/{single letter} -> {single letter}:\
+     #^/{single letter}/ -> {single letter}:\\ #bug?
+     #else ^/ -> {git_directory}
+   else
+     echo "$1:${WIN}$2"
+   fi
+ else
+   echo "$1:$2"
+ fi
+}
+
+
 #These 4 may need to be redone next time they are used
 function Exec-Nvidia-Docker(){ DOCKER_EXEC=1 USE_NVIDIA_DOCKER=1 Docker "${@}";}
 function Nvidia-Docker(){ USE_NVIDIA_DOCKER=1 Docker "${@}";}
