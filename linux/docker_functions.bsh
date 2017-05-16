@@ -59,6 +59,65 @@ function docker_sanitize_volume()
  fi
 }
 
+#****f* docker/docker-compose-volumes
+# NAME
+#   docker-compose-volumes - Get volume flags from docker-compose config
+# PURPOSE
+#   Reformats the output from docker-compose config to an array with -v flags
+#   for use in passing to another docker or docker-compose run command.
+# INPUTS
+#   $1 - name of service of interest
+# OUTPUTS
+#   DOCKER_VOLUME_FLAGS - Array of the docker flags, including necessary -v's
+# EXAMPLE
+#  docker-compose.yml
+#    version: "3.2"
+#    services:
+#      nb:
+#        image : blah
+#        volumes:
+#          - /tmp:/mnt
+#
+#  docker-compose-volumes nb < <(docker-compose config)
+#  # Or
+#  # docker-compose-volumes nb <<< "$(docker-compose config)"
+#
+#  declare -p DOCKER_VOLUME_FLAGS
+#  > declare -a DOCKER_VOLUME_FLAGS='([0]="-v" [1]="/tmp:/mnt:rw")'
+# NOTES
+#   Useful for working around docker/compose#4728
+# AUTHOR
+#   Andy Neff
+#***
+function docker-compose-volumes()
+{
+  local OLD_IFS="${IFS}"
+  IFS=$'\n'
+  DOCKER_VOLUME_FLAGS=(\
+    $(sed -nE '/^services:$/b services
+               d
+               :services
+               n
+               /^  '"${1}"':$/b found # Search for the service entry
+               /^ /b services
+               d
+               :found
+               n #Clear pattern buffer and read next line
+               /^    volumes:/b volumes # Read volumes: found
+               /^    /b found # Search all of the service entry
+               d # Volumes were not found, give up
+               :volumes
+               n # Read in a new line
+               /^    -/{ # match this new line for an indented(4) list
+                 H # Add these lines to the hold buffer
+                 b volumes #Repeat
+               }
+               x # switch the hold and pattern buffer
+               s|\n    - |\n-v\n|g # Format indented list to look like docker flags
+               #s|^\n|| # Remove the first blank line - Not needed with array magic
+               p # Print out that pretty pattern!'))
+  IFS="${OLD_IFS}"
+}
 
 #These 4 may need to be redone next time they are used
 function Exec-Nvidia-Docker(){ DOCKER_EXEC=1 USE_NVIDIA_DOCKER=1 Docker "${@}";}
