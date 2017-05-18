@@ -2,10 +2,13 @@
 #!This file should be sourced, NOT run
 
 . "${VSI_COMMON_DIR}/linux/just_common.bsh"
+. "${VSI_COMMON_DIR}/linux/isin"
 
 _just()
 {
+  local JUST_HELP_FILES=("${VSI_COMMON_DIR}/linux/just_functions.bsh" ${JUST_HELP_FILES+"${JUST_HELP_FILES[@]}"})
   shopt -s extglob
+
 
   COMPREPLY=()   # Array variable storing the possible completions.
 
@@ -16,6 +19,7 @@ _just()
 
   # Find Justfile
   local just_file=$(_just_find_justfile "${JUSTFILE-Justfile}")
+  JUST_HELP_FILES+=("${just_file}")
 
   if [ "${just_file}" == "" ]; then
     echo 
@@ -27,27 +31,23 @@ _just()
   fi
 
   # Get all command info once
-  local all_commands
-  local OLD_IFS="${IFS}"
-  IFS=$'\n|'
-  all_commands=($(_just_commands_from_file "${just_file}"))
-  all_commands+=($(_just_commands_from_file "${VSI_COMMON_DIR}/linux/just_functions.bsh"))
-  IFS="${OLD_IFS}"
+  local parsed_help_a
+  _just_parse_helps
   #Get just command names
-  all_commands=("${all_commands[@]%% *}") #Remove everything after the space in every entry
-  
-  
+  parsed_help_a=("${parsed_help_a[@]%% *}") #Remove everything after the space in every entry
+ 
   #Get main commands only
   local just_commands=()
+  local OLD_IFS="${IFS}"
   IFS=$'\n'
   # Remove all entries containing an _, and sort them and remove duplicates
-  just_commands=($(sort -u <<< "${all_commands[*]//*_*}"))
+  just_commands=($(sort -u <<< "${parsed_help_a[*]//*_*}"))
   IFS="${OLD_IFS}"
 
   #Get sub_commands
   local just_subcommands
   IFS=$'\n'
-  just_subcommands=($((_just_subcommands_from_array | sort -u ) <<< "${all_commands[*]}"))
+  just_subcommands=($((_just_subcommands_from_array | sort -u ) <<< "${parsed_help_a[*]}"))
   IFS="${OLD_IFS}"
 
   #Call local .just if it exist
@@ -59,7 +59,7 @@ _just()
   # If the last word completed is a subcommand, only match subtargets
   if isin "$3" ${just_subcommands+"${just_subcommands[@]}"} ]; then
     local just_subtargets=()
-    _just_subtargets_from_array "${3}" ${all_commands+"${all_commands[@]}"}
+    _just_subtargets_from_array "${3}" ${parsed_help_a+"${parsed_help_a[@]}"}
     COMPREPLY+=($(\compgen -W "${just_subtargets[*]}" -- $2))
     return 0
   fi
@@ -69,7 +69,7 @@ _just()
   for (( i=${#COMP_WORDS[@]}; i>=0; i--)); do
     if isin "${COMP_WORDS[$i]}" "${just_subcommands[@]}"; then
       local just_subtargets=()
-      _just_subtargets_from_array "${COMP_WORDS[$i]}" ${all_commands+"${all_commands[@]}"}
+      _just_subtargets_from_array "${COMP_WORDS[$i]}" ${parsed_help_a+"${parsed_help_a[@]}"}
       just_commands+=("${just_subtargets[@]}")
       break
     fi

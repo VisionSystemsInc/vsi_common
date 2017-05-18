@@ -67,8 +67,60 @@
 #***
 : ${JUST_HELP_SEPARATOR='@#@'} #This pattern needs to be regex clean, or else bad things will happen
 
-#This file
-JUST_FUNCTIONS_FILE=${BASH_SOURCE[0]}
+#****** just/plugin
+# DESCRIPTION
+#   To allow commonly used functionality to be added to the targets for just,
+#   Add the case function names to the array JUST_DEFAULTIFY_FUNCTIONS
+#
+#   Must return non-zero if the argument is not used, and return 0 on consumption
+#   of a variable
+# EXAMPLE
+#   Source just_example_functions.bsh, which should contain:
+#
+#   JUST_DEFAULTIFY_FUNCTIONS+=(just_example_defaultify)
+#   JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
+#   function just_example_defaultify()
+#   {
+#     arg=$1
+#     shift 1
+#     case $arg in
+#       foo|bar) :#Foobar test
+#         echo "Foo or bar: $1"
+#         extra_args+=1
+#         ;;
+#       *)
+#         return 1
+#         ;;
+#     esac
+#     return 0
+#   }
+# BUGS
+#   Tab complete currently has no way of discovering which plugins are enabled.
+#   To get around this, have whatever scipt you use to setup your environment
+#   (typically: source setup.env), and add JUST_HELP_FILES=(<list of plugin files>)
+#***
+
+#****d* plugin/JUST_DEFAULTIFY_FUNCTIONS
+# NAME
+#   JUST_DEFAULTIFY_FUNCTIONS - List of defaultify functions
+# DESCRIPTION
+#   The values of this array are executed as a command. Each plugin should have
+#   a unique name for the function, and is responsible for adding that function
+#   name to JUST_DEFAULTIFY_FUNCTIONS
+# AUTHOR
+#   Andy Neff
+#***
+JUST_DEFAULTIFY_FUNCTIONS=()
+
+#****d* plugin/JUST_HELP_FILES
+# NAME
+#   JUST_HELP_FILES - List of functions using in just
+# DESCRIPTION
+#   This should include just_functions.bsh, which ever Justfile is used, and
+#   any plugins. The plugin is responsible for adding itself to this array.
+# AUTHOR
+#   Andy Neff#***
+JUST_HELP_FILES=(${BASH_SOURCE[0]})
 
 # A few functions are defines in a common. Sourced here for DRY
 . "$(dirname "${BASH_SOURCE[0]}")/just_common.bsh"
@@ -131,6 +183,7 @@ function load_justfile()
 {
   JUSTFILE=$(_just_find_justfile "${1}")
   if [ -f "${JUSTFILE}" ]; then
+    JUST_HELP_FILES+=("${JUSTFILE}")
     source "${JUSTFILE}"
   fi
 }
@@ -170,6 +223,7 @@ function pretty_print_help()
   }' #c/o http://unix.stackexchange.com/a/280205/123413
 }
 
+
 #****f* just/print_help
 # NAME
 #   print_help -- Prints the auto generated help info from Justfile
@@ -186,16 +240,11 @@ function print_help()
   echo "List of possible $(basename "$0") commands:"
   echo "-----------------------------------"
 
-  # Get help data
+  # Get help data => parsed_help_a
+  _just_parse_helps
+
   local OLD_IFS="${IFS}"
   IFS=$'\n'
-  parsed_help_a=($(_just_commands_from_file "${JUSTFILE}"))
-  parsed_help_a+=($(_just_commands_from_file "${JUST_FUNCTIONS_FILE}"))
-
-  # Create an array copy
-  #parsed_help_a=(${parsed_help})
-  #declare parsed_help_a
-
   # Print non-flag first and non-subcommand_subtargets
   ( grep -E -v '^-|^[a-zA-Z0-9\-]+_[a-zA-Z0-9_\-]+' |
     sort |
@@ -341,6 +390,14 @@ function print_command()
 
 function defaultify()
 {
+  local arg
+  # Loop through the plugins, and call them
+  for arg in ${JUST_DEFAULTIFY_FUNCTIONS+"${JUST_DEFAULTIFY_FUNCTIONS[@]}"}; do
+    if ${arg} ${@+"${@}"};  then
+      return
+    fi
+  done
+
   arg=$1
   shift 1
   case $arg in
@@ -374,10 +431,11 @@ function justify()
   local just_subtargets
 
   local parsed_help_a
+  # Get help data => parsed_help_a
+  _just_parse_helps
+
   local OLD_IFS="${IFS}"
   IFS=$'\n'
-  parsed_help_a=($(_just_commands_from_file "${JUSTFILE}"))
-  parsed_help_a+=($(_just_commands_from_file "${JUST_FUNCTIONS_FILE}"))
   just_subcommands=($(_just_subcommands_from_array <<< "${parsed_help_a[*]}"))
   IFS="${OLD_IFS}"
 
