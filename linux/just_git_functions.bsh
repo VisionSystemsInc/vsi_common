@@ -1,0 +1,119 @@
+JUST_DEFAULTIFY_FUNCTIONS+=(git_defaultify)
+JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
+
+# BUGS
+#   Globs do not work. Too hard
+function submodule-helper-list()
+{
+  local submodule_data="$(git config -l -f .gitmodules | sed -nE 's|^submodule.(.*).path=(.*)|\1\t\2|p')"
+  local IFS=$'\n'
+
+  submodule_names=($(awk '{print $1}' <<< "${submodule_data}" ))
+  submodule_paths=($(awk '{print $2}' <<< "${submodule_data}" ))
+
+  if (( $# )); then
+    local i
+    local j
+    local git_root_dir="$(git rev-parse --show-toplevel)"
+    local submodules=${#submodule_names[@]}
+    local pattern
+
+    # Loop through submodules
+    for ((i=0; i<$submodules; i++)); do
+      # loop through all arguments
+      for j in "${@}"; do
+        # Get pattern. If cd fails, make sure pwd is not returned, so it's ""
+        pattern=$(cd ${j} && pwd) >&/dev/null
+        # If pattern is empty, don't check it. means the directory probably 
+        # doesn't exits
+        if [ "${pattern}" != "" ] && [[ ${git_root_dir}/${submodule_paths[$i]}// =~ ${pattern}/.*/ ]]; then
+          continue 2
+        fi
+      done
+      # Remove them if the continue 2 doesn't cause a skip
+      unset submodule_names[$i]
+      unset submodule_paths[$i]
+    done
+
+    if (( ${#submodule_names[@]} )); then # If not empty
+      # Reset the arrays, so that they are contiguous
+      submodule_names=("${submodule_names[@]}")
+      submodule_paths=("${submodule_paths[@]}")
+    fi
+  fi
+}
+
+function git_defaultify()
+{
+  arg=$1
+  shift 1
+  case $arg in
+    git_submodule-update) # Git fun
+#set -xv
+#local PS4='+ \w $LINENO[$?] '
+      local i
+      pushd "$(pwd)" > /dev/null
+        git submodule sync
+
+        local submodule_names
+        local submodule_paths
+        # Call "close enough" bash equivalent to git submodule--helper list/name
+        submodule-helper-list ${@}
+        for ((i=0; i<${#submodule_paths[@]}; i++)); do
+          name="${submodule_names[$i]}"
+          sm_path="${submodule_paths[$i]}"
+          if ! git config submodule."$name".url; then
+            echo "Submodule $name is not initialized!"
+            continue
+          fi
+          if test -z "$(git config submodule."$name".url)" ||
+          {
+             ! test -d "$sm_path"/.git &&
+             ! test -f "$sm_path"/.git
+          }
+          then
+            if ! [ "$(git config -f .gitmodules submodule.${name}.update)" == "none" ]; then
+              echo "Submodule $name is not checked out! Initializing and updating..."
+              git submodule update --init "${sm_path}"
+            fi
+            continue
+          fi
+          pushd "${sm_path}" > /dev/null
+            if ! git diff --no-ext-diff --quiet; then
+              echo "Uncommited tracked files in ${sm_path}"
+              popd > /dev/null
+              (git -c submodule.${name}.update='!git merge --ff-only' submodule update "${sm_path}" ||
+               read -n1 -r -p "YOU need to add/discard(checkout) files and resolve any conflicts in the submodule! And then try again" key)
+              continue
+            fi
+            if ! git diff --no-ext-diff --cached --quiet; then
+              echo "Staged tracked files in ${sm_path}"
+              read -n1 -r -p "YOU need to commit/reset files and resolve any conflicts in the submodule! And then try again" key
+              popd > /dev/null
+              continue
+            fi
+            if git ls-files --others --exclude-standard --directory --no-empty-directory --error-unmatch -- ':/*' >/dev/null 2>/dev/null; then
+              echo "Untracked files in ${sm_path}"
+              popd > /dev/null
+              (git -c submodule.${name}.update='!git merge --ff-only' submodule update "${sm_path}" ||
+               read -n1 -r -p "YOU need to resolve any conflicts in the submodule! And then try again" key)
+              continue
+            fi
+          popd > /dev/null
+          (git -c submodule.${name}.update='!git merge --ff-only' submodule update "${sm_path}" ||
+           read -n1 -r -p "YOU need to resolve any conflicts in the submodule! And then try again" key)
+        done
+      popd > /dev/null
+
+      if [ "${key+set}" == "set" ]; then
+        echo "After resolving some conflicts, you may need to update the main repo"
+      fi
+
+      extra_args+=1
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+  return 0
+}
