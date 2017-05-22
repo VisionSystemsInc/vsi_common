@@ -1,20 +1,43 @@
 JUST_DEFAULTIFY_FUNCTIONS+=(git_defaultify)
 JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 
-# BUGS
-#   Globs do not work. Too hard
+#****just/just_git_functions*
+# DESCRIPTION
+#   git plugin for just
+# AUTHOR
+#   Andy Neff
+#***
+
+#****f* just_git_functions/submodule-helper-list
+# NAME
+#   submodule-helper-list - "git submodule--helper list" bash port
+# DESCRIPTION
+#   Reproduces that git submodule--helper list does. Not all versions of git 
+#   are modern enough to have this feature. Currently, the first three columns
+#   of information nor --prefix are reproduced because they are not needed.
+# INPUTS
+#   [$1...] - Glob expressions to be matched, just like git-submodule--helper
+# OUTPUTS
+#   submodule_names - array of submodules names (matched if filters supplied)
+#   submodule_paths - corresponding array of submodule paths
+# AUTHOR
+#   Andy Neff
+#***
 function submodule-helper-list()
 {
+  # Get submodule data
   local submodule_data="$(git config -l -f .gitmodules | sed -nE 's|^submodule.(.*).path=(.*)|\1\t\2|p')"
   local IFS=$'\n'
-
+  # Parse submodule data
   submodule_names=($(awk '{print $1}' <<< "${submodule_data}" ))
   submodule_paths=($(awk '{print $2}' <<< "${submodule_data}" ))
 
+  # If there are any argument, filter out unmatched submodules
   if (( $# )); then
     local i
     local j
     local git_root_dir="$(git rev-parse --show-toplevel)"
+    #Store array size, since the length changes in the loop
     local submodules=${#submodule_names[@]}
     local pattern
 
@@ -22,11 +45,11 @@ function submodule-helper-list()
     for ((i=0; i<$submodules; i++)); do
       # loop through all arguments
       for j in "${@}"; do
-        # Get pattern. If cd fails, make sure pwd is not returned, so it's ""
-        pattern=$(cd ${j} && pwd) >&/dev/null
-        # If pattern is empty, don't check it. means the directory probably 
-        # doesn't exits
-        if [ "${pattern}" != "" ] && [[ ${git_root_dir}/${submodule_paths[$i]}// =~ ${pattern}/.*/ ]]; then
+        # Check to see if the pattern matches. The two slashes on the LHS are
+        # to match the RHS /*/. /*/ allows additional pattern matching only for
+        # full subdirectories names, and nothing else, since that is how
+        # git-submodule--helper already works.
+        if [[ ${submodule_paths[$i]}// == ${j}/*/ ]]; then
           continue 2
         fi
       done
@@ -43,14 +66,18 @@ function submodule-helper-list()
   fi
 }
 
+#****f* just_git_functions/git_defaultify
+# NAME
+#   git_defaultify - Git plugin for just
+# AUTHOR
+#   Andy Neff
+#***
 function git_defaultify()
 {
   arg=$1
   shift 1
   case $arg in
     git_submodule-update) # Git fun
-#set -xv
-#local PS4='+ \w $LINENO[$?] '
       local i
       pushd "$(pwd)" > /dev/null
         git submodule sync
@@ -58,7 +85,7 @@ function git_defaultify()
         local submodule_names
         local submodule_paths
         # Call "close enough" bash equivalent to git submodule--helper list/name
-        submodule-helper-list ${@}
+        submodule-helper-list ${@+"${@}"}
         for ((i=0; i<${#submodule_paths[@]}; i++)); do
           name="${submodule_names[$i]}"
           sm_path="${submodule_paths[$i]}"
