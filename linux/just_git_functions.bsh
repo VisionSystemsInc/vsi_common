@@ -66,6 +66,108 @@ function submodule-helper-list()
   fi
 }
 
+#****if* safe_git_submodule_update/_checkout_git_submodule
+# NAME
+#   _checkout_git_submodule - Helper function for safe_git_submodule_update
+# INPUTS
+#   $1 - Submodule name
+#   $2 - Submodule path (relative)
+#   $3 - Message to print out if submodule update fail
+# OUTPUTS
+#   key - set variable key on failure
+#*
+function _checkout_git_submodule()
+{
+  popd > /dev/null
+
+  if git -c submodule.${1}.update='!git merge --ff-only' submodule update "${2}"; then
+    if [ -f "${2}/.gitmodules" ]; then
+      pushd "${2}" &>/dev/null
+      safe_git_submodule_update
+      popd &>/dev/null
+    fi
+  else
+    read -n1 -r -p "${3} Any key to continue." key
+    echo
+  fi
+}
+
+#****f* just_git_functions/safe_git_submodule_update
+# NAME
+#   safe_git_submodule_update - Update git submodules in a smart way
+# DESCRIPTION
+#   git submodules are already confusing enough to work with. When a project gets
+#   big and complicated, add to that the potential of losing changes that you've
+#   already committed, and the default behavior of submodules is enough to have 
+#   anyone committed!
+#
+#   A git submodule update should update a submodule if and only if it is a 
+#   ff-only merge, and the submodule is clean (enough). Also, non-conflicting
+#   unstaged changes are also ok too.
+# BUGS
+#   If the committer of the main repository changes submodules in a non-fast 
+#   forward way, this would confuse safe_git_submodule_update because that isn't
+#   very smart.
+#*
+function safe_git_submodule_update()
+{
+  local i
+  pushd "$(pwd)" > /dev/null
+    local submodule_names
+    local submodule_paths
+    # Call "close enough" bash equivalent to git submodule--helper list/name
+    submodule-helper-list ${@+"${@}"}
+    for ((i=0; i<${#submodule_paths[@]}; i++)); do
+      name="${submodule_names[$i]}"
+      sm_path="${submodule_paths[$i]}"
+      if ! git config submodule."$name".url; then
+        echo "Skipping uninitialized submodule $name..."
+        continue
+      fi
+      if test -z "$(git config submodule."$name".url)" ||
+      {
+         ! test -d "$sm_path"/.git &&
+         ! test -f "$sm_path"/.git
+      }
+      then
+        if ! [ "$(git config -f .gitmodules submodule.${name}.update)" == "none" ]; then
+          echo "Submodule $name is not checked out! Initializing and updating..."
+          git submodule update --init "${sm_path}"
+        fi
+        continue
+      fi
+      pushd "${sm_path}" > /dev/null
+        if ! git diff --no-ext-diff --quiet; then
+          echo "Uncommited tracked files in ${sm_path}"
+          _checkout_git_submodule ${name} "${sm_path}" \
+            "YOU need to add/discard(checkout) files and resolve any conflicts in the submodule! And then try again."
+          continue
+        fi
+        if ! git diff --no-ext-diff --cached --quiet; then
+          echo "Staged tracked files in ${sm_path}"
+          read -n1 -r -p "YOU need to commit/reset files and resolve any conflicts in the submodule! And then try again." key
+          popd > /dev/null
+          continue
+        fi
+        if git ls-files --others --exclude-standard --directory --no-empty-directory --error-unmatch -- ':/*' >/dev/null 2>/dev/null; then
+          echo "Untracked files in ${sm_path}"
+          _checkout_git_submodule ${name} "${sm_path}" \
+            "YOU need to resolve any conflicts in the submodule! And then try again."
+          continue
+        fi
+        _checkout_git_submodule ${name} "${sm_path}" \
+          "YOU need to resolve any conflicts in the submodule! And then try again"
+    done
+  popd > /dev/null
+
+  if [ "${key+set}" == "set" ]; then
+    echo
+    echo "All done smart updating submodules. However something went wrong:"
+    echo "After resolving some conflicts, you may need to update the main repo."
+    echo "If this is not working for you, just run 'git submodule update --recursive'"
+  fi
+}
+
 #****f* just_git_functions/git_defaultify
 # NAME
 #   git_defaultify - Git plugin for just
@@ -77,65 +179,9 @@ function git_defaultify()
   arg=$1
   shift 1
   case $arg in
-    git_submodule-update) # Git fun
-      local i
-      pushd "$(pwd)" > /dev/null
-        git submodule sync
-
-        local submodule_names
-        local submodule_paths
-        # Call "close enough" bash equivalent to git submodule--helper list/name
-        submodule-helper-list ${@+"${@}"}
-        for ((i=0; i<${#submodule_paths[@]}; i++)); do
-          name="${submodule_names[$i]}"
-          sm_path="${submodule_paths[$i]}"
-          if ! git config submodule."$name".url; then
-            echo "Submodule $name is not initialized!"
-            continue
-          fi
-          if test -z "$(git config submodule."$name".url)" ||
-          {
-             ! test -d "$sm_path"/.git &&
-             ! test -f "$sm_path"/.git
-          }
-          then
-            if ! [ "$(git config -f .gitmodules submodule.${name}.update)" == "none" ]; then
-              echo "Submodule $name is not checked out! Initializing and updating..."
-              git submodule update --init "${sm_path}"
-            fi
-            continue
-          fi
-          pushd "${sm_path}" > /dev/null
-            if ! git diff --no-ext-diff --quiet; then
-              echo "Uncommited tracked files in ${sm_path}"
-              popd > /dev/null
-              (git -c submodule.${name}.update='!git merge --ff-only' submodule update "${sm_path}" ||
-               read -n1 -r -p "YOU need to add/discard(checkout) files and resolve any conflicts in the submodule! And then try again" key)
-              continue
-            fi
-            if ! git diff --no-ext-diff --cached --quiet; then
-              echo "Staged tracked files in ${sm_path}"
-              read -n1 -r -p "YOU need to commit/reset files and resolve any conflicts in the submodule! And then try again" key
-              popd > /dev/null
-              continue
-            fi
-            if git ls-files --others --exclude-standard --directory --no-empty-directory --error-unmatch -- ':/*' >/dev/null 2>/dev/null; then
-              echo "Untracked files in ${sm_path}"
-              popd > /dev/null
-              (git -c submodule.${name}.update='!git merge --ff-only' submodule update "${sm_path}" ||
-               read -n1 -r -p "YOU need to resolve any conflicts in the submodule! And then try again" key)
-              continue
-            fi
-          popd > /dev/null
-          (git -c submodule.${name}.update='!git merge --ff-only' submodule update "${sm_path}" ||
-           read -n1 -r -p "YOU need to resolve any conflicts in the submodule! And then try again" key)
-        done
-      popd > /dev/null
-
-      if [ "${key+set}" == "set" ]; then
-        echo "After resolving some conflicts, you may need to update the main repo"
-      fi
-
+    git_submodule-update) # Smart git submodule update. Only useful when going forward in history. Only updates submodules by going forward in history. No chance of removing commits by accident.
+      git submodule sync --recursive
+      safe_git_submodule_update ${@+"${@}"}
       extra_args+=$#
       ;;
     *)
