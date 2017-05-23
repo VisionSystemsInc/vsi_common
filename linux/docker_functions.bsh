@@ -67,6 +67,7 @@ function docker_sanitize_volume()
 #   for use in passing to another docker or docker-compose run command.
 # INPUTS
 #   $1 - name of service of interest
+#   [$2] - prefix to volume names
 # OUTPUTS
 #   DOCKER_VOLUME_FLAGS - Array of the docker flags, including necessary -v's
 # EXAMPLE
@@ -77,13 +78,16 @@ function docker_sanitize_volume()
 #        image : blah
 #        volumes:
 #          - /tmp:/mnt
+#          - test:/opt
+#    volumes:
+#      test:
 #
-#  docker-compose-volumes nb < <(docker-compose config)
+#  docker-compose-volumes nb test_prefix_ < <(docker-compose config)
 #  # Or
 #  # docker-compose-volumes nb <<< "$(docker-compose config)"
 #
 #  declare -p DOCKER_VOLUME_FLAGS
-#  > declare -a DOCKER_VOLUME_FLAGS='([0]="-v" [1]="/tmp:/mnt:rw")'
+#  > declare -a DOCKER_VOLUME_FLAGS='([0]="-v" [1]="/tmp:/mnt:rw" [2]="-v" [3]="test_prefix_test:/opt")'
 # NOTES
 #   Useful for working around docker/compose#4728
 # AUTHOR
@@ -92,6 +96,7 @@ function docker_sanitize_volume()
 function docker-compose-volumes()
 {
   local OLD_IFS="${IFS}"
+  local PREFIX="${2-}"
   IFS=$'\n'
   DOCKER_VOLUME_FLAGS=(\
     $(sed -nE '/^services:$/b services
@@ -109,6 +114,7 @@ function docker-compose-volumes()
                :volumes
                n # Read in a new line
                /^    -/{ # match this new line for an indented(4) list
+                 s|^    - ([^./])|    - '"${PREFIX}"'\1|
                  H # Add these lines to the hold buffer
                  b volumes #Repeat
                }
