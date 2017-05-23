@@ -188,6 +188,54 @@ function load_justfile()
   fi
 }
 
+#****f* just/set_temp_array
+# NAME
+#   set_temp_array - set array to default values if not already set
+# DESCRIPTION
+#   In bash, when setting a variable to a default value if it has not already 
+#   been set, it is typical to follow the pattern:
+#
+#     : ${MY_VAR=default}
+#
+#   However, this syntax does not work for an array. Bash 3.2 does not give an
+#   equivalent 1 line version of this. To cover this scenario, set_temp_array is
+#   used to set a default value if an array is not already set. Using 
+#   set_temp_array, an array can be set to a default value if not already set in
+#   two lines
+#
+#   It works by checking if an array is set. If it is set, it copies all the
+#   values to the array VSI_TEMP_ARRAY. If it is not set, it will copy the rest
+#   of the arguments (the default values) to VSI_TEMP_ARRAY. When using this
+#   function with set -u turned on, it is best to reference VSI_TEMP_ARRAY by
+#   (${VSI_TEMP_ARRAY+"${VSI_TEMP_ARRAY[@]}"}) in case the array is empty, as
+#   this triggers Bash's unbound variable test.
+# EXAMPLE
+#   set_temp_array MY_ARRAY default1 deafult2 "default 3"
+#   MY_ARRAY=(${VSI_TEMP_ARRAY+"${VSI_TEMP_ARRAY[@]}"})
+#
+#   # And when done, clean up
+#   unset VSI_TEMP_ARRAY
+# INPUTS
+#   $1 - Name of array to check if it is already set
+#   $2... - Default values of the array
+# OUTPUTS
+#   VSI_TEMP_ARRAY - Destination for all the values set
+# AUTHOR
+#   Andy Neff
+#*
+function set_temp_array()
+{
+  local default="$1"
+  shift
+  if declare -p $default >& /dev/null; then
+    default="${default}[@]"
+    VSI_TEMP_ARRAY=(${!default+"${!default}"})
+  else
+    VSI_TEMP_ARRAY=(${@+"${@}"})
+  fi
+}
+
+
 #****f* just/pretty_print_help
 # NAME
 #   pretty_print_help -- Restructures text to indented properly on wrap around
