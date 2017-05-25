@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+
+set -eu
+
+#****F* vsi/bin_utils
+# NAME
+#   bin_utils - A collection of binary utilities
+# DESCRIPTION
+#   This file can be sourced to load the functions, or executed for a one time
+#   call.
+#
+#   Functions:
+#   - object_bits - Print out the number of bits in an object file (requires nm)
+# INPUTS
+#   --bits - Call object_bits with on $2
+# OUTPUT
+#   --bits - Stdout - number of bits in object file
+# AUTHOR
+#   Andy Neff
+#***
+
+#****f* bin_utils/object_bits
+# NAME
+#   object_bits - Prints out the number of bits (typically 32 or 64) in a file
+# INPUTS
+#   $1 - Filename (.o, .a, .so, executable, etc...)
+# OUTPUT
+#   stdout - Prints the number of bits
+# USES
+#   nm - Most OSes have this installed already. Sometimes a binutils package
+#        needs to be installed to get this
+# AUTHOR
+#   Andy Neff
+#***
+function object_bits()
+{
+  nm -D "${1}" | sed -En '/^[0-9A-Fa-f]{8,}/ {p; q}' | awk '{print length($1)*4}'
+}
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  arg=$1
+  shift 1
+
+  case $arg in
+    --bits)
+      object_bits "${@}"
+      ;;
+    *)
+      echo "Unknown argument $arg"
+      exit 1
+      ;;
+  esac
+fi
+
+#****f* bin_utils/lwhich
+# NAME
+#   lwhich - which for shared libraries
+# DESCRIPTION
+#   Searches for a library using the same ld resolution method as the OS. First
+#   LD_LIBRARY_PATH is searched, then ldconfig -p for a match to a filename.
+# INPUTS
+#   $1 - The library to search for. Must match the beginning of the the basename
+#        of the library, but may also contain extended (grep) regex.
+#   LWHICH_INSENSITIVE - Environment variable to disable case sensitivity. 
+#                        Set to 1
+# OUTPUT
+#   matches - Full path array of matching filenames
+# EXAMPLE
+#   lwhich 64 libSDL
+#   lwhich 32 'libc\.so'
+#   lwhich 64 '(libSDL|libOpenGL)'
+# USES
+#   nm - Most OSes have this installed already. Sometimes a binutils package
+#        needs to be installed to get this
+# BUGS
+#   The purpose of this was to match the beginning of filename. But the regex 
+#   can be tricked.
+#
+#   Normally if an "or" operation can be used via
+#
+#     lwhich 32 '(libc\.|ld-linux\.)'
+#
+#   But the line beginning can be tricked by removing the parentheses
+#
+#     lwhich 32 '$|d-linux\.so'
+#
+#   And this will match ld-linux still.
+# AUTHOR
+#   Andy Neff
+#***
+function lwhich()
+{
+  local bits=$1
+  shift 1
+  matches=()
+  local filenames=()
+  local case_insensitive=''
+  if [ "${LWHICH_INSENSITIVE-0}" != "0" ]; then
+    case_insensitive='-i'
+  fi
+
+  if [ -n "${LD_LIBRARY_PATH+${LD_LIBRARY_PATH}}" ]; then
+    #set -f
+    #IFS_OLD="${IFS}"
+    IFS=:
+    LIBRARY_PATHS=("$LD_LIBRARY_PATH")
+    IFS=$'\n' #I don't want splitting arrays on space or tab... JUST in case?
+
+    for d in "${LIBRARY_PATHS[@]}"; do
+      for match in $(ls "$d" | grep "${case_insensitive}" -E "^$1"); do
+        if [ -e "$d/$match" ] && isxbit ${bits} "$d/$match" && ! isin "$(basename "$d/$match")" ${filenames+"${filenames[@]}"}; then
+          matches+=("$d/$match")
+          filenames+=("$match")
+        fi
+      done
+    done
+  fi
+
+  #This only complicated the wildcard idea, and I don't CARE about this case
+  for match in $(ldconfig -p | grep "${case_insensitive}" -E $'^\t'"$1" | awk '{print $(NF)}'); do
+    if isxbit ${bits} "${match}" && ! isin "$(basename "$match")" ${filenames+"${filenames[@]}"}; then
+      matches+=("${match}")
+      filenames+=("$(basename "$match")")
+    fi
+  done
+}

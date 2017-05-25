@@ -1,20 +1,46 @@
 #!/usr/bin/false
 # Source this file
 
-# Know bugs. Don't use arrays element_array variable 
-# - element_array_target_u3l
-# - element_array_target_qzx
-# - element_array_target_dsa
-# as the target. It will cause name collision
+#****F* vsi/elements.bsh
+# NAME
+#   elements.bsh - Set of -euE safe functions to make bash array manipulation easy
+# SYNOPSIS
+#   Set of functions for deleting, pre-pending and appending without repetition.
+#   Versions using actual Bash arrays are suffixed with a _a, else it works on
+#   delimiter(ELEMENT_SEPARATOR) separated string
+#
+#   Most of these functions use variable indirection when possible to make using
+#   them friendlier
+# BUGS
+#   Don't use arrays element_array variable 
+#   - element_array_target_u3l
+#   - element_array_target_qzx
+#   - element_array_target_dsa
+#   as the target. It will cause name collision
+#***
 
 : ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
 source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
 
-# Dynamically set an array by name specified by a variable ($1).
-# >> dynamic_set_a my_array_name 11 "2 2" 33
-# executes 
-# >> my_array_name=(11 "2 2" 33)
-# NOTE: Does not clear the array "my_array_name". so if [4] was set, it still is
+#****f* elements.bsh/dynamic_set_a
+# NAME
+#   dynamic_set_a - Dynamically set an array to values from arguments
+# INPUTS
+#   $1 - Name of array to be set
+#   [$2...] - Values to set 
+# EXAMPLE
+#   dynamic_set_a my_array_name 11 "2 2" 33
+#   # Is like executing 
+#   # my_array_name=(11 "2 2" 33)
+# NOTES
+#   Does not clear the array names by $1. So if the array had 4 elements in it
+#   and dynamic_set_a is called with 3 elements, the 4th  element is still set
+#
+#   This is not a bug, but by design. "unset" the array prior to calling 
+#   dynamic_set_a.
+# AUTHOR
+#   Andy Neff
+#***
 function dynamic_set_a()
 {
   local element_array_target_dsa=$1
@@ -25,11 +51,22 @@ function dynamic_set_a()
   done
 }
 
-# Removes an element from an array
-# >> my_array_name=(11 66 22)
-# >> remove_element_a my_array_name 66
-# results in
-# >> my_array_name=(11 22)
+#****f* elements.bsh/remove_element_a
+# NAME
+#   remove_element_a - Removes all instances of a value from an array
+# INPUTS
+#   $1 - Name of array to be set
+#   $2 - Value to be removes 
+# EXAMPLE
+#   x=(11 22 33 22 44)
+#   remove_element_a x 22
+#   # declare -a x='([0]="11" [1]="33" [2]="44")'
+# NOTES
+#   The resulting array does is sequentially indexed, which is not typical in
+#   bash when removing elements from an array
+# AUTHOR
+#   Andy Neff
+#***
 function remove_element_a()
 {
   local element_array_target_u3l=()
@@ -66,7 +103,16 @@ function remove_element_a()
   reset_flag u
 }
 
-#Same as remove_element_a, but for a string separated by IFS ELEMENT_SEPARATOR
+#****f* elements.bsh/remove_element
+# NAME
+#   remove_element - String version of remove_element_a
+# INPUTS
+#   ELEMENT_SEPARATOR - IFS Seperator used
+#   $1 - Name of array to be set
+#   $2 - Value to be removes 
+# AUTHOR
+#   Andy Neff
+#***
 function remove_element()
 {
   local IFS="${ELEMENT_SEPARATOR-:}"
@@ -79,11 +125,25 @@ function remove_element()
   export $target="${element_array_target_qzx[*]}"
 }
 
-# Puts/adds an entry to the end of the array, removing any previous duplicates
-# >> aaa=(22 11 22 33)
-# >> add_element_post_a aaa 22
-# Results in
-# >> aaa=(11 33 22)
+#****f* elements.bsh/add_element_post_a
+# NAME
+#   add_element_post_a - Add a value to the end of an array
+# SYNOPSIS
+#   Removes all copies of the value from the array first, and then appends to
+#   the end of he array
+# INPUTS
+#   $1 - Name of array to be set
+#   $2 - Value to be appended 
+# EXAMPLE
+#   x=(22 11 22 33)
+#   add_element_post_a x 22
+#   declare -p x
+#   # declare -a x='([0]="11" [1]="33" [2]="22")'
+# NOTES
+#   The resulting array does is sequentially indexed
+# AUTHOR
+#   Andy Neff
+#***
 function add_element_post_a()
 {
   remove_element_a $1 "$2"
@@ -95,7 +155,16 @@ function add_element_post_a()
   dynamic_set_a $1 ${element_array_target_u3l+"${element_array_target_u3l[@]}"} "$2"
 }
 
-#Same as add_element_post_a, but for a string separated by IFS ELEMENT_SEPARATOR
+#****f* elements.bsh/add_element_post
+# NAME
+#   add_element_post - String version of add_element_post_a
+# INPUTS
+#   ELEMENT_SEPARATOR - IFS Seperator used
+#   $1 - Name of array to be set
+#   $2 - Value to be appended 
+# AUTHOR
+#   Andy Neff
+#***
 function add_element_post ()
 {
   local IFS="${ELEMENT_SEPARATOR-:}"
@@ -108,11 +177,25 @@ function add_element_post ()
   export $target="${element_array_target_qzx[*]}"
 }
 
-# Puts/adds an entry to the beginning of the array, removing any previous duplicates
-# >> aaa=(11 22 33 22)
-# >> add_element_pre_a aaa 22
-# Results in
-# >> aaa=(22 11 33)
+#****f* elements.bsh/add_element_pre_a
+# NAME
+#   add_element_pre_a - Add a value to the beginning of an array
+# SYNOPSIS
+#   Removes all copies of the value from the array first, and then prepends to
+#   the beginning of he array
+# INPUTS
+#   $1 - Name of array to be set
+#   $2 - Value to be prepended
+# EXAMPLE
+#   x=(11 22 33 22)
+#   add_element_pre_a x 22
+#   declare -p x
+#   # declare -a x='([0]="22" [1]="11" [2]="33")'
+# NOTES
+#   The resulting array does is sequentially indexed
+# AUTHOR
+#   Andy Neff
+#***
 function add_element_pre_a()
 {
   remove_element_a $1 "$2"
@@ -124,7 +207,16 @@ function add_element_pre_a()
   dynamic_set_a $1 "$2" ${element_array_target_u3l+"${element_array_target_u3l[@]}"}
 }
 
-#Same as add_element_pre_a, but for a string separated by IFS ELEMENT_SEPARATOR
+#****f* elements.bsh/add_element_pre
+# NAME
+#   add_element_pre - String version of add_element_post_a
+# INPUTS
+#   ELEMENT_SEPARATOR - IFS Seperator used
+#   $1 - Name of array to be set
+#   $2 - Value to be appended 
+# AUTHOR
+#   Andy Neff
+#***
 function add_element_pre ()
 {
   local IFS="${ELEMENT_SEPARATOR-:}"

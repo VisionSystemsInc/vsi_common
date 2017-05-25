@@ -2,10 +2,30 @@
 #!This file should be sourced, NOT run
 
 : ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
-
 . "${VSI_COMMON_DIR}/linux/just_common.bsh"
 . "${VSI_COMMON_DIR}/linux/isin"
 
+#****F* just/.just
+# NAME
+#   .just - Auto complete for bash
+# USAGE
+#   source .just
+# DESCRIPTION
+#   Creates auto complete suggestions based on parsing the Justfile case 
+#   statements. 
+#
+#   To add customized tab completions, add a .just script next to project
+#   Justfile. Write what would normally go inside the complete function to the
+#   .just file (without the function header). This file will be sourced every 
+#   complete after the just_commands, _just_subcommands, _just_subcommands 
+#   arrays are populated.
+# NOTES
+#   Source automatically in Bash when sourcing env.bsh
+# BUGS
+#   Does not work in zsh
+# AUTHOR
+#   Andy Neff
+#***
 _just()
 {
   local JUST_HELP_FILES=("${VSI_COMMON_DIR}/linux/just_functions.bsh" ${JUST_HELP_FILES+"${JUST_HELP_FILES[@]}"})

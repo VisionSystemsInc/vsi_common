@@ -1,20 +1,68 @@
 #!/usr/bin/env false
 #Source this script for docker specific helper functions for just or other
 
-### docker and nvidia-docker ###
+#****F* vsi/docker_functions.bsh
+# NAME
+#   docker_functions.bsh - Set of functions to make using dockers easier
+# AUTHOR
+#   Andy Neff
+#***
 
+#****d* docker_functions.bsh/DOCKER
+# NAME
+#   DOCKER - Name/path of docker executable
+# SYNOPSIS
+#   Instead of hard-coding "docker" everywhere, use the variable DOCKER so that
+#   when the need comes, it is easier to switch which executable gets called
+# AUTHOR
+#   Andy Neff
+#***
 : ${DOCKER=docker}
+#****d* docker_functions.bsh/NVIDIA_DOCKER
+# NAME
+#   NVIDIA_DOCKER - Name/path of nvidia-docker executable
+# SYNOPSIS
+#   Instead of hard-coding "nvidia-docker" everywhere, use the variable 
+#   NVIDIA_DOCKER so that when the need comes, it is easier to switch which
+#   executable gets called. Default to DOCKER if nvidia-docker executable is not
+#   in the path (hash-able)
+# AUTHOR
+#   Andy Neff
+#***
 : ${NVIDIA_DOCKER=nvidia-docker}
 if ! hash ${NVIDIA_DOCKER} 2> /dev/null; then
   NVIDIA_DOCKER=${DOCKER}
 fi
 
 
+#****d* docker_functions.bsh/is_dir_and_not_exist
+# NAME
+#   is_dir_and_not_exist - See if the string looks like a non-existing directory
+# DESCRIPTION
+#   Docker currently creates directories that do not exist when mounting. This
+#   has a few bad side effects, such as the directories end up being own by root.
+#   In order to work around this "bug", this function identifies if docker will
+#   assume a string is a directory/file or an internal mount. 
+# INPUTS
+#   $1 - String to check
+# OUTPUT
+#   Returns 0 for is a directory, and 1 for not a directory (is an internal
+#   mount)
+# EXAMPLE
+#   is_dir_and_not_exist this_looks_like_a_mount
+#   is_dir_and_not_exist ./this_looks/like_a/directory
+#   is_dir_and_not_exist /this_also_looks/like_a/directory
+#
+#   if is_dir_and_not_exist ${my_mount}; then
+#     mkdir -p ${my_mount}
+#   fi
+# AUTHOR
+#   Andy Neff
+# SEE ALSO
+#   docker_functions.bsh/docker_sanitize_volume
+#***
 function is_dir_and_not_exist()
-{ #Simplifies checking if a string is a relative or absolute directory name,
- #and does not exist. This is needed because of a directory is replaced with
- #a volume name, it should not be created.
-
+{
  local dir_name="$1"
 
  if ( [ "${dir_name:0:1}" == "/" ] || \
@@ -25,21 +73,52 @@ function is_dir_and_not_exist()
  return 1 #False :(
 }
 
+
+#****f* docker_functions.bsh/get_label
+# NAME
+#   get_label - Get a label value from a docker container
+# INPUTS
+#   $1 - Container name
+#   $2 - Label name
+# OUTPUT
+#   stdout - Prints out the label value (and evaluates environment variables)
+#   Return 1 for label is blank (possibly not set), 0 for label found
+# AUTHOR
+#   Andy Neff
+#***
 function get_label() # Get the value of a label ($2) from container/image ($1)
 { # All labels go through a perl filter that evaluate %name% using exported
   # environment variables. This won't work on unexported variables
-  value=$(docker inspect -f "{{index .Config.Labels \"$2\"}}" $1)
+  local value=$(docker inspect -f "{{index .Config.Labels \"$2\"}}" $1)
   if [ "${value}" == "" ]; then
     return 1
   fi
 
-  value=$(echo "${value}" | perl -wpe 's#\%?(\w+)\%# $ENV{$1} // $& #ge;')
+  echo "${value}" | perl -wpe 's#\%?(\w+)\%# $ENV{$1} // $& #ge;'
 
   return 0
 }
 
+
+#****f* docker_functions.bsh/has_label
+# NAME
+#   has_label - Check to see if a container contains a certain label
+# SYNOPSIS
+#   docker_functions.bsh/get_label can not tell whether a container has a label
+#   or not when the label is blank. The go template filter does not 
+#   differentiate. This will verify that a blank label is set or unset.
+# INPUTS
+#   $1 - Container name
+#   $2 - Label name
+# OUTPUT
+#   Return 1 for label is unset, 0 for label is set
+# NOTES
+#   Requires jq be installed
+# AUTHOR
+#   Andy Neff
+#***
 function has_label()
-{ #requires jq
+{
   if [ "$(docker inspect -f '{{json .Config.Labels }}' $1 | jq .\[\"$2\"\])" == "null" ]; then
     return 1
   else
@@ -47,12 +126,31 @@ function has_label()
   fi
 }
 
-function docker_sanitize_volume()
-{ #Convenient wrapper to deal with all the MINGW screw ups
- #Create all the volume argument for the -v argument for docker. What a pain
- #first argument is the host dir
- #second argument is the docker dir (optional. If omitted, copies host dir)
 
+#****f* docker_functions.bsh/docker_sanitize_volume
+# NAME
+#   docker_sanitize_volume - Convenient wrapper to deal with the MINGW screw ups
+# DESCRIPTION
+#   A number of things can go wrong with something as simple as mounting a 
+#   directory. If the directory doesn't exist, root will end up owning the 
+#   directory (which is often not desired). Also, on MINGW Linux/Windows path
+#   expansion ends up being an error to docker on windows. So this function will
+#   take care of both of these problems in an OS agnostic way.
+#
+#   Then it returns  all the volume argument for the -v argument for docker.
+# INPUTS
+#   $1 - The host directory/volume name
+#   [$2] - The docker docker directory (optional. If omitted, copies host 
+#          directory)
+# OUTPUT
+#   stdout - The argument that should go with the -v for mounting
+# BUGS
+#   The docker directory is not optional if the host mount is a volume
+# AUTHOR
+#   Andy Neff
+#***
+function docker_sanitize_volume()
+{
  if (( $# < 2 )); then
    set -- "$1" "$1"
  fi
@@ -156,11 +254,45 @@ function docker-compose-volumes()
   IFS="${OLD_IFS}"
 }
 
-#These 4 may need to be redone next time they are used
+#****f* docker_functions.bsh/Exec-Nvidia-Docker
+# NAME
+#   Exec-Nvidia-Docker - Version of Docker for Nvidia and exec's
+# AUTHOR
+#   Andy Neff
+#***
 function Exec-Nvidia-Docker(){ DOCKER_EXEC=1 USE_NVIDIA_DOCKER=1 Docker "${@}";}
+#****f* docker_functions.bsh/Nvidia-Docker
+# NAME
+#   Nvidia-Docker - Version of Docker for Nvidia
+# AUTHOR
+#   Andy Neff
+#***
 function Nvidia-Docker(){ USE_NVIDIA_DOCKER=1 Docker "${@}";}
+#****f* docker_functions.bsh/Exec-Docker
+# NAME
+#   Exec-Nvidia-Docker - Version of Docker that exec's command rather than call
+# AUTHOR
+#   Andy Neff
+#***
 function Exec-Docker(){ DOCKER_EXEC=1 Docker "${@}";}
-function Docker() #Helper function to execute the right docker command, or just echo
+#****f* docker_functions.bsh/Docker
+# NAME
+#   Docker - Helper function to execute the right docker command, or just dryrun
+# DESCRIPTION
+#   Instead of calling the docker command directly, the Docker command should be
+#   called instead (for all dryrun-able activities. Simple commands like 
+#   inspect, ps, etc. don't make as much sense to dryrun, as the reset of the
+#   script will never be executed, thus rendering dryrun useless.)
+# INPUTS
+#   DRYRUN - Optional variable inserted at the beginning of all docker commands.
+#            Useful for setting to "echo" or similar for dryrun mode
+#   $1.. - Arguments to be sent to docker command
+# OUTPUT
+#   Runs docker command
+# AUTHOR
+#   Andy Neff
+#***
+function Docker()
 {
   local cmd
 
@@ -184,9 +316,52 @@ function Docker() #Helper function to execute the right docker command, or just 
 
 ### docker-compose ###
 
+#****d* docker_functions.bsh/DOCKER_COMPOSE
+# NAME
+#   DOCKER_COMPOSE - Name/path of docker-compose executable
+# SYNOPSIS
+#   Instead of hard-coding "docker-compose" everywhere, use the variable 
+#   DOCKER_COMPOSE so that when the need comes, it is easier to switch which
+#   executable gets called
+# AUTHOR
+#   Andy Neff
+#***
 : ${DOCKER_COMPOSE=docker-compose}
+#****d* docker_functions.bsh/DOCKER_COMPOSE_AUTOREMOVE
+# NAME
+#   DOCKER_COMPOSE_AUTOREMOVE - Add --rm to docker-compose run commands
+# SYNOPSIS
+#   Flag to to automatically add the --rm flag to docker-compose run commands
+#   when using the Docker-compose helper function
+# AUTHOR
+#   Andy Neff
+#***
 : ${DOCKER_COMPOSE_AUTOREMOVE=1}
 
+#****f* docker_functions.bsh/Docker-compose
+# NAME
+#   Docker-compose - Helper function to execute the right docker command, or just dryrun
+# DESCRIPTION
+#   Instead of calling the docker-compose command directly, the Docker-compose 
+#   command should be called instead (for all dryrun-able activities. Simple 
+#   commands like ps, etc. don't make as much sense to dryrun, as the reset of
+#   the script will never be executed, thus rendering dryrun useless.)
+# INPUTS
+#   DOCKER_COMPOSE_EXTRA_ARGS - Array of arguments to be added to docker-compose
+#                               (Before the command)
+#   DOCKER_COMPOSE_EXTRA_COMMAND_ARGS - Array of arguments to be added to 
+#                                       docker-compose (after the command)
+#   DOCKER_COMPOSE_EXTRA_RUN_ARGS - Array of arguments to be added to
+#                                   docker-compose (after the run command only)
+#   DOCKER_COMPOSE_AUTOREMOVE - See docker_functions.bsh/DOCKER_COMPOSE_AUTOREMOVE
+#   DRYRUN - Optional variable inserted at the beginning of all docker commands.
+#            Useful for setting to "echo" or similar for dryrun mode
+#   $1.. - Arguments to be sent to docker command
+# OUTPUT
+#   Runs docker command
+# AUTHOR
+#   Andy Neff
+#***
 function Docker-compose()
 {
   local docker_compose_args=()
@@ -204,6 +379,7 @@ function Docker-compose()
         docker_compose_auto_command_args+=(${DOCKER_COMPOSE_EXTRA_RUN_ARGS+"${DOCKER_COMPOSE_EXTRA_RUN_ARGS[@]}"})
         break
         ;;
+      #Insert other commands here for command specific EXTRA_<command>_ARGS
       -f*|-p*|-H*)
         if [ "${#1}" == 2 ]; then
           docker_compose_args+=("$1" "$2")

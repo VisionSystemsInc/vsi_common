@@ -7,8 +7,8 @@
 # SYNOPSIS
 #   ${DRYRUN} <command>
 # PURPOSE
-#   Key commands that can be echoed out instead of executing. This is conveniently
-#   set for you using the -n/--dryrun argument. Default: <Null>
+#   Key commands that can be echoed out instead of executing. This is 
+#   conveniently set by using the -n/--dryrun argument. Default: <Null>
 # AUTHOR
 #   Andy Neff
 # EXAMPLE
@@ -41,7 +41,7 @@
 # NAME
 #   JUST_SAFE_LOAD_DELIMITER -- Separator used for safe_load
 # PURPOSE
-#   safe_load reads a key:value file, and this variable is used to seprate the
+#   safe_load reads a key:value file, and this variable is used to separate the
 #   keys and values. Default: =
 # AUTHOR
 #   Andy Neff
@@ -65,7 +65,7 @@
 # SEE ALSO
 #   just/safe_load
 #***
-: ${JUST_HELP_SEPARATOR='@#@'} #This pattern needs to be regex clean, or else bad things will happen
+: ${JUST_HELP_SEPARATOR='@#@'}
 
 #****** just/plugin
 # DESCRIPTION
@@ -96,8 +96,9 @@
 #   }
 # BUGS
 #   Tab complete currently has no way of discovering which plugins are enabled.
-#   To get around this, have whatever scipt you use to setup your environment
-#   (typically: source setup.env), and add JUST_HELP_FILES=(<list of plugin files>)
+#   To get around this, edit whatever script is used to setup the environment
+#   (typically: source setup.env), and add 
+#   JUST_HELP_FILES=(<list of plugin files>)
 #***
 
 #****d* plugin/JUST_DEFAULTIFY_FUNCTIONS
@@ -139,9 +140,9 @@ JUST_HELP_FILES=(${BASH_SOURCE[0]})
 #   2. The project file. This file should ideally contain all the default values
 #      necessary to run without any local.env settings. 
 #   3. Last, ${project_dir}/local_post.env. This file should never be added to
-#      version control. It is rarely used, but in situations where you need to
-#      set the value of a variable based off of another variable. This is why
-#      it is loaded last.
+#      version control. It is rarely used, except in situations where the value
+#      of a variable based off of another variable. This is why it is loaded
+#      last.
 # INPUTS
 #   $1 - The project environment filename
 # NOTES
@@ -358,18 +359,13 @@ function print_help()
   pretty_print_help <<< "${parsed_help_subcommands%$'\n'}"
 }
 
-### powershell setup ###
-# Cygwin bash is pretty bad. The new git bash (MINGW64) does not have a tty.
-# This is pretty bad for docker. Powershell does have a tty, buy can not run
-# bash scrips natively. The solution is to run bash in powershell. These functions
-# help with that.
 
 #****f* just/is_powershell
 # NAME
 #   is_powershell -- Check if the current command windows is powershell
 # SYNOPSIS
-#   Using a Window title trick, determine if you are running in powershell, or 
-#   not, for example command prompt windows, cygwin or git bash
+#   Using a Window title trick, determine if the shell is running in powershell, 
+#   or not, for example command prompt windows, cygwin or git bash
 # AUTHOR
 #   Andy Neff
 #***
@@ -391,8 +387,12 @@ function is_powershell()
 #****f* just/setup_powershell
 # NAME
 #   setup_powershell -- Pops up a new powershell window and runs just
-# SYNOPSIS
-#   This is designed to rerun a script being called from
+# DESCRIPTION
+#   Cygwin bash is pretty bad. The new git bash (MINGW64) does not have a tty.
+#   This is a problem for docker. Powershell does have a tty, buy can not run
+#   bash scrips natively. The solution is to run bash in powershell (which is
+#   not as straight forward as it sounds). This function is designed to 
+#   reexecute in a new powershell on Windows if not in powershell
 # USAGE
 #   setup_powershell ${@+"${@}"}
 # AUTHOR
@@ -416,9 +416,11 @@ function setup_powershell()
 #   If python is available, accurately echoes out a properly escaped
 #   representation of the arguments. Else, it echoes out an approximation just
 #   adding quotes
+# USES
+#   python - Python 2/3 has a pipes.quote command to do the formatting correctly
 # BUGS
-#   If python is not available, arguments with ' in them will not be printed out
-#   perfectly
+#   If python is not available, arguments with quotes in them may not be printed
+#   out perfectly
 # AUTHOR
 #   Andy Neff
 #***
@@ -437,6 +439,24 @@ function print_command()
   fi
 }
 
+#****if* just/defaultify
+# NAME
+#   defaultify - Default commands for just
+# DESCRIPTION
+#   Handles a few default commands for just:
+#   - Calls plugins specified in JUST_DEFAULTIFY_FUNCTIONS
+#   - --dryrun|-n - Sets DRYRUN to print_command. This way ${DRYRUN} can be put
+#                   in front of any command and be printed instead of executed 
+#                   when in dryrun mode
+#   - --separator - Used to override the JUST_SEPARATOR (default --) to anything
+#                   else. This only affect commands that use get_args
+#   - -h|--help|help - Prints out help using print_help
+#   - _null - A target that does nothing. This is seldom needed.
+#   - * - For all other commands not captured yet, called unknownify (which can
+#         be overridden for other behavior) to print an error message.
+# AUTHOR
+#   Andy Neff
+#***
 function defaultify()
 {
   local arg
@@ -453,7 +473,7 @@ function defaultify()
     --dryrun|-n) #Dryrun flag. Used to echo instead of run commands
       export DRYRUN=print_command
       ;;
-    --separator) #Commands that can take an undefined number of additional arguments use the -- separator to start and end the extra arguments. If you need -- for other things, specify a custom separator
+    --separator) #Commands that can take an undefined number of additional arguments use the -- separator to start and end the extra arguments. If -- is needed for other things, specify a custom separator
       JUST_SEPARATOR=$1
       extra_args+=1
       ;;
@@ -463,14 +483,90 @@ function defaultify()
     _null)
       ;;
     *)
-      echo "I don't understand $arg"
-      exit 1
+      unknownify $arg ${@+"${@}"}
       ;;
   esac
 }
 
+#****f* just/unknownify
+# NAME
+#   unknownify - The function executed when an unknown target is specified
+# SYNOPSIS
+#   The default behavior is to print an error and exit 1. However, a custom
+#   unknownify can be declares in Justfile to override this behavior
+# AUTHOR
+#   Andy Neff
+#***
+function unknownify()
+{
+  echo "I don't understand: $1"
+  exit 1
+}
+
+#****d* just/extra_args
+# NAME
+#   extra_args - The number of additional arguments consumed in a caseify target
+# DESCRIPTION
+#   When writing a caseify target, by default one argument is consumed. This is
+#   enough for any simple target. However some targets need additional arguments.
+#
+#   There are really three situation when extra arguments are needed
+#   - 1. A fixed number of arguments. For example, if 3 arguments are needed,
+#        just use $1, $2, $3, and set extra_args+=3
+#   - 2. The rest of the arguments are going to be consumed. In this case, use
+#        all the arguments (typically by $@) and set extra_args+=$#
+#   - 3. An unknown number of arguments need to be used, and maybe multiple 
+#        groups of unknown arguments. This is the case where JUST_SEPARATOR is
+#        used. (See EXAMPLE)
+# EXAMPLE
+#   #Lets say we call: 
+#
+#     just test -- 11 22 33 -- aa bb cc dd -- _null
+#
+#   #And I have a target test that takes two sets of arguments of unknown length
+#
+#   test)
+#     get_args ${@+"${@}"}
+#     first=${args+"${args[@]}"}
+#     get_additional_args ${@+"${@}"}
+#     second=${args+"${args[@]}"}
+#     ;;
+#
+#   In this case, there is no need to add extra_args, get_args does this already
+#  
+# NOTES
+#   extra_args should be added to, never set.
+# BUGS
+#   It is possible to call one just target from another by invoking justify.
+#   However, due to the nature of extra_args, justify needs to be called is in a
+#   subshell:
+#
+#   (justify other-target arg1)
+#
+#   If for for some reason, this needs to be called in the current shell,
+#   extra_args will have to be manually copied before the justify call, and 
+#   refreshed afterwards.
+# AUTHOR
+#   Andy Neff
+#***
 declare -i extra_args
 
+#****if* just/justify
+# NAME
+#   justify - The main loop of just
+# DESCRIPTION
+#   Handles determining what subcommands are, and calling commands and 
+#   subcommands.
+#
+#   When one target is called from another target, justify should be used to do
+#   the calling in a subshell, for example:
+#
+#     (justify target2)
+# INPUTS
+#   $1... - list of targets
+# AUTHOR
+#   Andy Neff
+#***
 function justify()
 { #caseify needs to be written by the main script, and set the number
   #of extra arguments it consumes to extra_args
@@ -502,7 +598,7 @@ function justify()
         local target="${1}_"
         shift 1
 
-        #execute all targets
+        #execute all subtargets
         while (( $# > 0 )) && isin "${1}" ${just_subtargets+"${just_subtargets[@]}"}; do
           extra_args=0
           caseify "${target}${@}"
@@ -521,51 +617,82 @@ function justify()
   done
 }
 
-function find_in()
-{
-  #Find $1 in $2-n. Return 1 for $2, 2 for $3, etc... 0 for not found
-  local val=$1
-  local x
-  shift 1
-  for ((x=1; x<=${#@}; x++)); do
-    if [ "${!x}" == "${val}" ]; then
-      return ${x}
-    fi
-  done
-
-  return 0
-}
-
+#****f* just/callify
+# NAME
+#   callify - Helper for consuming arguments and calling a function with them
+# DESCRIPTION
+#   Takes: cmd -- $1 $2 $3 ... $n -- $m $m+1 ... 
+#   and calls: cmd $1 $2 $3 ... $n and consumes n+2 args
+#   Trailing -- is optional
+# EXAMPLE
+#   target)
+#     callify python ${@+"${@}"}
+#     ;;
+#
+#   just target -- -c "print 1+3"
+# NOTES
+#   Not sure this is worth keeping
+# AUTHOR
+#   Andy Neff
+#***
 function callify()
-{ # Takes: cmd -- $1 $2 $3 ... $n -- $m $m+1 ... 
-  # and calls: cmd $1 $2 $3 ... $n and consumes n+2 args
-  # Trailing -- is optional
-  local cmd next_break
+{ 
+  local cmd
   cmd=$1
   shift 1
   get_args "${@}"
   $cmd ${args+"${args[@]}"}
 }
 
-function get_args() #Function used to consume a collection of arguments and store in args
-{ # -- $2 $3 $4 ... $n -- $n+2, $n+3 ... Only capture $2-$n and consumes n+1 
-  #(or $n if no trailing --)
-  #stores in array "args"
+#****f* just/get_args
+# NAME
+#   get_args - Get and consume an unknown collection of arguments
+# DESCRIPTION
+#   Gets an unknown number of arguments. The beginning and ending of the group
+#   of arguments are annotated with the JUST_SEPARATOR. The trailing annotation
+#   is optional. 
+# INPUTS
+#   $@ - All the unconsumed arguments
+# OUTPUT
+#   args - Array of unknown number of arguments consumed 
+# NOTES
+#   While the trailing annotation is optional, if the leading annotation is
+#   missing, no arguments will be used.
+#
+#   Maybe this should be re-written so that the leading annotation is no longer
+#   needed nor allowed.
+# AUTHOR
+#   Andy Neff
+#***
+function get_args()
+{
+  local next_break
+
+  #Since this is not used often, only source in this function
+  if ! decalre -f findin >& /dev/null; then
+    source "${VSI_COMMON_DIR-"$(dirname "${BASH_SOURCE[0]}")/.."}/linux/findin"
+  fi
+  
   args=()
   : ${extra_args=0}
   args_used=${pre_args_used-0}
   if (( $# >= 1 )); then
     if [ "$1" == "${JUST_SEPARATOR}" ]; then
+      #skip --
       shift 1
-      next_break=0
-      find_in "${JUST_SEPARATOR}" ${@+"${@}"} || next_break=$? #look to see if there is another --
-      if [ "${next_break}" == 0 ]; then
-        args_used=$((${args_used}+$#+1))
-        extra_args+=$#+1
+      extra_args+=1
+      #look to see if there is another --
+      next_break=$(findin "${JUST_SEPARATOR}" ${@+"${@}"})
+      #If no -- was found, then use up all the args
+      if [ "${next_break}" == -1 ]; then
+        args_used=$((${args_used}+$#+1)) #This line probably isn't necessary,
+        # but good accounting never hurt
         args=("${@:1}")
-      else
-        args_used=$((${args_used}+${next_break}+1))
-        args=("${@:1:$(($next_break-1))}")
+        extra_args+=$#
+      else # consume only the new args
+        args_used=$((${args_used}+${next_break}+2))
+        args=("${@:1:$(($next_break))}")
+        # Plus one since the index count starts from 0, not 1
         extra_args+=${next_break}+1
       fi
     else
@@ -574,15 +701,34 @@ function get_args() #Function used to consume a collection of arguments and stor
   fi
 }
 
+#****f* just/get_additional_args
+# NAME
+#   get_additional_args - Get and consume additional collections of arguments
+# DESCRIPTION
+#   get_args can only be called once, but get_additional_args can be called
+#   continuously after the first call of get_args
+# EXAMPLE
+#   Must be called after get_args with all arguments passed in. For example:
+#
+#   target)
+#     get_args ${@+"${@}"}
+#     args1=(${args+"${args[@]}"})
+#     get_additional_args ${@+"${@}"}
+#     args2=(${args+"${args[@]}"})
+#     get_additional_args ${@+"${@}"}
+#     args3=(${args+"${args[@]}"})
+#     ;;
+#
+#  just target -- 11 22 33 -- aa bb cc -- '!!' '@@' '##'
+#
+#  #args1=(11 22 33)
+#  #args2=(aa bb cc)
+#  #args3=(!! @@ ##)
+# AUTHOR
+#   Andy Neff
+#***
 function get_additional_args()
-{ # Must be called after get_args with all arguments passed in. For example:
-  # get_args ${@+"${@}"}
-  # args1=(${args+"${args[@]}"})
-  # get_additional_args ${@+"${@}"}
-  # args2=(${args+"${args[@]}"})
-  # get_additional_args ${@+"${@}"}
-  # ...
-
+{ 
   local pre_args_used
 
   if [ "${args_used}" -gt "0" ]; then
@@ -598,6 +744,26 @@ function get_additional_args()
   fi
 }
 
+#****f* just/safe_load
+# NAME
+#   safe_load - A non-eval method for loading and exporting a text file of key/values
+# INPUTS
+#   $1 - Filename of file to be loaded.
+#   JUST_SAFE_LOAD_DELIMITER - By default, = is use between key and value. If
+#                              = is needed, than this environment variable can
+#                              override the delimiter
+# OUTPUT
+#   All keys are set as environment variables, and exported
+# EXAMPLE
+#   key1=value_one
+#   key2=this is another value
+# NOTES
+#   Does not support comments, blank lines, or anything else other than key=value
+# BUGS
+#   As with anything in a language like Bash, it's not guaranteed that an 
+#   arbitrary command won't be executed with this, but as far as is known, there
+#   are no known issues with this function.
+#***
 function safe_load() #Loads a very simple safe config file, and sets environment variables accordingly
 { #File should contain lines: key=value
   local safe_load_tmp_key=foobar
