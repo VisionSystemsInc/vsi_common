@@ -25,6 +25,27 @@ function is_dir_and_not_exist()
  return 1 #False :(
 }
 
+function get_label() # Get the value of a label ($2) from container/image ($1)
+{ # All labels go through a perl filter that evaluate %name% using exported
+  # environment variables. This won't work on unexported variables
+  value=$(docker inspect -f "{{index .Config.Labels \"$2\"}}" $1)
+  if [ "${value}" == "" ]; then
+    return 1
+  fi
+
+  value=$(echo "${value}" | perl -wpe 's#\%?(\w+)\%# $ENV{$1} // $& #ge;')
+
+  return 0
+}
+
+function has_label()
+{ #requires jq
+  if [ "$(docker inspect -f '{{json .Config.Labels }}' $1 | jq .\[\"$2\"\])" == "null" ]; then
+    return 1
+  else
+    return 0
+  fi
+}
 
 function docker_sanitize_volume()
 { #Convenient wrapper to deal with all the MINGW screw ups
