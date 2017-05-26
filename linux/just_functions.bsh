@@ -648,19 +648,13 @@ function callify()
 # NAME
 #   get_args - Get and consume an unknown collection of arguments
 # DESCRIPTION
-#   Gets an unknown number of arguments. The beginning and ending of the group
-#   of arguments are annotated with the JUST_SEPARATOR. The trailing annotation
-#   is optional. 
+#   Gets an unknown number of arguments. The ending of the collection of 
+#   arguments is annotated with the JUST_SEPARATOR. The trailing annotation
+#   is optional as long as there are no more just commands following
 # INPUTS
 #   $@ - All the unconsumed arguments
 # OUTPUT
 #   args - Array of unknown number of arguments consumed 
-# NOTES
-#   While the trailing annotation is optional, if the leading annotation is
-#   missing, no arguments will be used.
-#
-#   Maybe this should be re-written so that the leading annotation is no longer
-#   needed nor allowed.
 # AUTHOR
 #   Andy Neff
 #***
@@ -675,29 +669,23 @@ function get_args()
   
   args=()
   : ${extra_args=0}
-  args_used=${pre_args_used-0}
+  declare -ig args_used=${pre_args_used-0}
   if (( $# >= 1 )); then
-    if [ "$1" == "${JUST_SEPARATOR}" ]; then
-      #skip --
-      shift 1
-      extra_args+=1
       #look to see if there is another --
       next_break=$(findin "${JUST_SEPARATOR}" ${@+"${@}"})
-      #If no -- was found, then use up all the args
       if [ "${next_break}" == -1 ]; then
-        args_used=$((${args_used}+$#+1)) #This line probably isn't necessary,
-        # but good accounting never hurt
-        args=("${@:1}")
+        args=("${@}")
+        args_used+=$#
         extra_args+=$#
-      else # consume only the new args
-        args_used=$((${args_used}+${next_break}+2))
-        args=("${@:1:$(($next_break))}")
+      else
+        # When you slice @, the default ${@:1} (which is the same as ${@})
+        # becomes ${@:0:x}, so you have to specify ${@:1:x}. @ is "special".
+        # That's why I can't say ${@::$next_break}
+        args=("${@:1:${next_break}}")
         # Plus one since the index count starts from 0, not 1
+        args_used+=${next_break}+1
         extra_args+=${next_break}+1
       fi
-    else
-      args=()
-    fi
   fi
 }
 
@@ -719,7 +707,7 @@ function get_args()
 #     args3=(${args+"${args[@]}"})
 #     ;;
 #
-#  just target -- 11 22 33 -- aa bb cc -- '!!' '@@' '##'
+#  just target 11 22 33 -- aa bb cc -- '!!' '@@' '##'
 #
 #  #args1=(11 22 33)
 #  #args2=(aa bb cc)
@@ -732,15 +720,11 @@ function get_additional_args()
   local pre_args_used
 
   if [ "${args_used}" -gt "0" ]; then
-    pre_args_used=$((${args_used}-1))
-    shift ${pre_args_used} # Go back one arg wrt last args call
-    extra_args+=-1         # to get the beginning --
-    if [ "$1" == "${JUST_SEPARATOR}" ]; then # It should start with --. Use get_args as normal
-      get_args "${@}"
-    else # Else there is no --, and basically abort get_additional_args. 
-      extra_args+=1
-      args=()
-    fi
+    #Copy this var so get_args knows it's not being called for the first time
+    pre_args_used=${args_used}
+    #Skip the args already used last time get_args/get_additional_args was called
+    shift ${args_used}
+    get_args "${@}"
   fi
 }
 
