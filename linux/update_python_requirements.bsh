@@ -18,6 +18,12 @@ fi
 #comma separated list of binary only packages
 PIP_BINARY_ONLY="entrypoints,bash_kernel"
 
+# BUGS
+#   A package path cannot contain spaces. URLs typically do not, they contain %20
+#   but if a local path does, it will bug out. It is possible to change the regex
+#   to s|Collecting ([^ =<>~!]+)[^\n(]*from ([^ \n]*)( \(from [^\n]*)?|\2|g but
+#   this can also falsely match a patch that say " (from <stuff>)", so I choose
+#   to just not allow spaces, which should work for the intended use case.
 function get_packages()
 {
   : ${PIP=${PIP2}}
@@ -32,8 +38,10 @@ function get_packages()
              /^Successfully downloaded /{
              # Start processing the entire hold buffer
              x
-             # Extract the url, making sure the word from is not in ()
-             s|Collecting ([^ =<>~!]+)[^\n(]*from ([^\n]*)|\2|g
+             # Extract the url, making sure the word from is not in (), make 
+             # sure the name has no spaces, after the from <word> is possibly a
+             # (from <blah>) block
+             s|Collecting [^ =<>~!]+[^\n(]*from ([^ \n]*)[^\n]*|\1@|g
              # Else, extract the version from the next line, which is a Using
              s|Collecting ([^ =<>~!]+)[^\n]*\n  Using version ([^ ]*)[^\n]*|\1@\2|g
              p
@@ -65,6 +73,7 @@ function update_requirements()
   shift 2
   echo "Checking ${input}"
   for package in $(get_packages -r "${input}" ${@+"${@}"}); do
+#    echo "${package}"
     write_requirement "${output}" "${package}"
   done 2>&3
 }
