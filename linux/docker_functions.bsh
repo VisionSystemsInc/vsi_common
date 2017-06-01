@@ -1,6 +1,9 @@
 #!/usr/bin/env false
 #Source this script for docker specific helper functions for just or other
 
+: ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
+source "${VSI_COMMON_DIR}/linux/mount_tools.bsh"
+
 #****F* vsi/docker_functions.bsh
 # NAME
 #   docker_functions.bsh - Set of functions to make using dockers easier
@@ -415,4 +418,104 @@ function Docker-compose()
       ${DOCKER_COMPOSE_EXTRA_COMMAND_ARGS+"${DOCKER_COMPOSE_EXTRA_COMMAND_ARGS[@]}"} \
       ${@+"${@}"}
   return $?
+}
+
+#****f* docker_functions.bsh/nfs_patch
+# NAME
+#   nfs-patch - Just specific took for fixing nfs mounts
+# DESCRIPTION
+#   Loops through the an array in the same docker-compose-volumes output format
+#   and checks if they are nfs mount and not the mount point itself. This is the
+#   scenario where volume mounting in docker fails due to squash_root.
+#
+#   1. First the mount point is determined (via df)
+#   2. Then file system is identify (using mount)
+#   3. If there is a nfs mount that is not the mount point, then the mount point
+#      is mounted instead. The docker location is changed to match the same
+#      mount point, with a prefix added.
+#
+#   It is assumed (and not checked) that the docker mount directory is the same
+#   as the host directory, with the prefix added.
+#
+#   Also see Docker-compose-nfs description
+# EXAMPLE
+#   For example, if /mnt/volume1 is a nfs mount, assuming DOCKER_VOLUME_FLAGS is
+#   (-v /mnt/volume1/project/dodo:/mnt/volume1/project/dodo:rw) then after
+#   nfs_patch, it will be
+#   (-v /mnt/volume1:/mnt/volume1:rw)
+# INPUTS
+#   [$1] - Docker prefix. Default: /mnt
+#   DOCKER_VOLUME_FLAGS - Docker volume flags from docker-compose-volumes
+# NOTES
+#   This does not remove repeats, but docker-compose should be robust to this.
+#   This function is pretty specific to just usage
+# USES
+#   df, mount
+# SEE ALSO
+#   Docker-compose-nfs
+#***
+function nfs_patch()
+{
+  local host
+  local docker
+  local flags
+  local prefix="${1-/mnt}"
+  for ((i=1; i<${#DOCKER_VOLUME_FLAGS[@]}; i+=2)); do
+    host=${DOCKER_VOLUME_FLAGS[$i]%%:*}
+    flags=${DOCKER_VOLUME_FLAGS[$i]#*:}
+    docker=${flags%%:*}
+    flags=:${flags#*:}
+    #if they are the same, then there are no flags
+    if [ "${flags}" == ":${docker}" ]; then
+      flags=""
+    fi
+    host_mount_point="$(mount_point "${host}")"
+    #If the mount point isn't already the same as the mount, check to see if 
+    #it's nfs
+    if [ "${host_mount_point}" != "${host}" ] && \
+       is_nfs "$(mount_type "${host_mount_point}")"; then
+      # Rewrite this volume
+      DOCKER_VOLUME_FLAGS[$i]="${host_mount_point}:${prefix}${host_mount_point}${flags}"
+    fi
+  done
+}
+
+#****d* docker_functions.bsh/Docker-compose-nfs
+# NAME
+#   Docker-compose-nfs - Docker compose with NFS protection
+# DESCRIPTION
+#   When using squash_root on nfs, docker as root is unable to check. Since 
+#   docker is not going to remove this feature due to backwards compatibility
+#   reason, this will continue to break. Docker as squashed root checks if a
+#   a directory exists. It won't (permission denied?) and will try to mkdir the
+#   directory, and fail (permission denied).
+#
+#   The current work around is to identify all the directories and check if they
+#   are nfs. If they are indeed nfs, then make mount the mount point of the
+#   directory instead.
+# INPUTS
+#   $1... - Args to docker-compose
+#   COMPOSE_PROJECT_NAME - Name of compose project. Used for prefix to docker 
+#                          volumes
+#   [EXTRA_VOLUMES] - Array of extra volumes to check and add
+# AUTHOR
+#   Andy Neff
+#***
+function Docker-compose-nfs()
+{
+  local i
+
+  local DOCKER_COMPOSE_EXTRA_RUN_ARGS=(${DOCKER_COMPOSE_EXTRA_RUN_ARGS+"${DOCKER_COMPOSE_EXTRA_RUN_ARGS[@]}"})
+
+  if [ "${EXTRA_VOLUMES+set}" == "set" ] ; then
+    docker-compose-volumes builder ${COMPOSE_PROJECT_NAME}_ < <(docker-compose config) # process substitution
+    nfs_patch
+    DOCKER_COMPOSE_EXTRA_RUN_ARGS+=(${DOCKER_VOLUME_FLAGS+"${DOCKER_VOLUME_FLAGS[@]}"})
+
+    # convert volumes in EXTRA_VOLUMES to -v <VOLUME> flags
+    for v in ${EXTRA_VOLUMES+"${EXTRA_VOLUMES[@]}"}; do
+      DOCKER_COMPOSE_EXTRA_RUN_ARGS+=(-v "$(docker_sanitize_volume "${v%:*}" "${v##*:}")")
+    done
+  fi
+  Docker-compose "${@}"
 }
