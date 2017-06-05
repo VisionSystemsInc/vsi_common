@@ -462,6 +462,10 @@ function nfs_patch()
   local prefix="${1-/mnt}"
   for ((i=1; i<${#DOCKER_VOLUME_FLAGS[@]}; i+=2)); do
     host=${DOCKER_VOLUME_FLAGS[$i]%%:*}
+    if [[ ! ${host:0:1} =~ [./] ]]; then
+      #skip because host is an internal mount
+      continue
+    fi
     flags=${DOCKER_VOLUME_FLAGS[$i]#*:}
     docker=${flags%%:*}
     flags=:${flags#*:}
@@ -508,7 +512,7 @@ function Docker-compose-nfs()
   local DOCKER_COMPOSE_EXTRA_RUN_ARGS=(${DOCKER_COMPOSE_EXTRA_RUN_ARGS+"${DOCKER_COMPOSE_EXTRA_RUN_ARGS[@]}"})
 
   if [ "${EXTRA_VOLUMES+set}" == "set" ] ; then
-    docker-compose-volumes builder ${COMPOSE_PROJECT_NAME}_ < <(docker-compose config) # process substitution
+    docker-compose-volumes builder ${COMPOSE_PROJECT_NAME}_ < <(${DOCKER_COMPOSE} config) # process substitution
     nfs_patch
     DOCKER_COMPOSE_EXTRA_RUN_ARGS+=(${DOCKER_VOLUME_FLAGS+"${DOCKER_VOLUME_FLAGS[@]}"})
 
