@@ -120,9 +120,20 @@ function safe_git_submodule_update()
     for ((i=0; i<${#submodule_paths[@]}; i++)); do
       name="${submodule_names[$i]}"
       sm_path="${submodule_paths[$i]}"
+
       if ! git config submodule."$name".url; then
-        echo "Skipping uninitialized submodule $name..."
-        continue
+        if [ "$(git ls-tree HEAD:"$(dirname "${sm_path}")" "$(basename "${sm_path}")" | awk '{print $2}')" == "commit" ]; then
+          echo "Uninitialized submodule $name...Initializing"
+          git submodule init $sm_path
+        else
+          # There are cases where noobs remove a submodule and forget to remove
+          # it from the .gitmodules files. In this case, it will show up in
+          # submodule-helper-list but shouldn't be checked out. Either it will
+          # have no entry from ls-tree (empty), or it will not be a commit (eg 
+          # tree).
+          echo "Skipping phantom submodule $name"
+          continue
+        fi
       fi
       if test -z "$(git config submodule."$name".url)" ||
       {
