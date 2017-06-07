@@ -118,3 +118,12 @@ In order to use these directories, all you have to do is
 
 * Repo owner or admin
 * Other community or team contact
+
+### Building documentation
+
+```
+docker run --rm -v `pwd`:/src \
+                -v `pwd`/docs:/doc \
+                andyneff/robodoc:latest \
+                --rc //src/robodoc.rc
+```

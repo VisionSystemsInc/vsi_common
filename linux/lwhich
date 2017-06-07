@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+
+#****F* lwhich/lwhich
+# NAME
+#   lwhich - Bash CLI version of bin_utils/lwhich
+# INPUTS
+#   [-i] - Disable case sensitivity
+#   [32|--32|64|--64] - Search 32 or 64 bit. 64 by default
+#   $1 - The library being searched for. Must match the beginning of the the
+#        basename of the library, but may also contain extended (grep) regex.
+# OUTPUT
+#   stdout - Newline separates list of full paths of matching filenames
+# USES
+#   nm - Most OSes have this installed already. Sometimes a binutils package
+#        needs to be installed to get this
+# AUTHOR
+#   Andy Neff
+#***
+set -eu
+
+: ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
+source "${VSI_COMMON_DIR}/linux/isin"
+source "${VSI_COMMON_DIR}/linux/bin_utils"
+
+function isxbit()
+{
+  [ "$(object_bits "${2}")" == "${1}" ]
+  return $?
+}
+
+function usage()
+{
+  echo "usage: $(basename $0) [--32|32|--64|64] <extended regex beginning of library filename>"
+  echo
+  echo "Defaults to searching 64 bit libraries"
+  echo
+  echo "Example:"
+  echo "  $(basename $0) --64 'libc\.'"
+  echo
+}
+
+if [[ ${BASH_SOURCE[0]} == ${0} ]] || [[ $(basename ${BASH_SOURCE[0]}) == ${0} ]]; then
+  if (( $# )); then 
+    bits=64
+    while (( $# )); do
+      case $1 in
+        -i)
+          LWHICH_INSENSITIVE=1
+          ;;
+        --32|32)
+          bits=32
+          ;;
+        --64|64)
+          bits=64
+          ;;
+        -h|--help)
+          usage
+          exit 1
+          ;;
+        *)
+          break
+          ;;
+      esac
+      shift 1
+    done
+    lwhich ${bits} "${@}"
+  else
+    usage
+    exit 1
+  fi
+
+  for match in ${matches+"${matches[@]}"}; do
+    echo "$match"
+  done
+fi

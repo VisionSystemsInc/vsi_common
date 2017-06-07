@@ -1,52 +1,36 @@
 #!/usr/bin/env false
 #!This file should be sourced, NOT run
 
-_just_find_justfile()
-{
-  local just_tmp_last_node=
-  local just_tmp_stat_command=
-  if [ "$(\uname)" == "Darwin" ]; then
-    just_tmp_stat_command="stat -f %d:%i ."
-  else
-    just_tmp_stat_command="stat -c %d:%i ."
-  fi
-  \pushd . > /dev/null
-  while [ "${just_tmp_last_node}" != "$(\eval ${just_tmp_stat_command})" ]; do
-    if [ -f "${1}" ]; then
-      \echo "$(\cd "$(\dirname "${1}")"; \pwd)/$(\basename "${1}")"
-      break
-    fi
-    just_tmp_last_node=$(\eval ${just_tmp_stat_command})
-    \cd ..
-  done
-  \popd > /dev/null
-}
+: ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
+. "${VSI_COMMON_DIR}/linux/just_common.bsh"
+. "${VSI_COMMON_DIR}/linux/isin"
 
-_just_commands()
-{
-  just_commands+=($(\grep -E '^ +[a-z0-9|\-]+\)|^ +[_a-z0-9|\-]+\) *#' "${1}" |
-                    \sed -E 's|^ *([_a-z0-9|\-]+)\).*|\1|' |
-                    \tr '|' ' '))
-}
-
-_just_add_subcommands()
-{
-  just_subcommands+=($(\grep -E '^ +[a-z0-9\-]+_[a-z0-9\-]+\)' "${1}" |
-                       \sed -E 's|^ +([a-z0-9\-]+)_([a-z0-9\-]+)\).*|\1\t\2|'))
-}
-
-_just_get_subtargets()
-{
-  for i in "${!_just_subtargets[@]}"; do
-    if [ "${_just_subcommands[$i]}" == "$1" ]; then
-      subtargets+=("${_just_subtargets[$i]}")
-    fi
-  done
-}
-
+#****F* just/.just
+# NAME
+#   .just - Auto complete for bash
+# USAGE
+#   source .just
+# DESCRIPTION
+#   Creates auto complete suggestions based on parsing the Justfile case 
+#   statements. 
+#
+#   To add customized tab completions, add a .just script next to project
+#   Justfile. Write what would normally go inside the complete function to the
+#   .just file (without the function header). This file will be sourced every 
+#   complete after the just_commands, _just_subcommands, _just_subcommands 
+#   arrays are populated.
+# NOTES
+#   Source automatically in Bash when sourcing env.bsh
+# BUGS
+#   Does not work in zsh
+# AUTHOR
+#   Andy Neff
+#***
 _just()
 {
+  local JUST_HELP_FILES=("${VSI_COMMON_DIR}/linux/just_functions.bsh" ${JUST_HELP_FILES+"${JUST_HELP_FILES[@]}"})
   shopt -s extglob
+
 
   COMPREPLY=()   # Array variable storing the possible completions.
 
@@ -57,6 +41,7 @@ _just()
 
   # Find Justfile
   local just_file=$(_just_find_justfile "${JUSTFILE-Justfile}")
+  JUST_HELP_FILES+=("${just_file}")
 
   if [ "${just_file}" == "" ]; then
     echo 
@@ -67,61 +52,53 @@ _just()
     return 0
   fi
 
-  #Get commands
+  # Get all command info once
+  local parsed_help_a
+  _just_parse_helps
+  #Get just command names
+  parsed_help_a=("${parsed_help_a[@]%% *}") #Remove everything after the space in every entry
+ 
+  #Get main commands only
   local just_commands=()
-  _just_commands "${just_file}"
-  _just_commands "$(\dirname "${BASH_SOURCE[0]}")/just_functions.bsh"
+  local OLD_IFS="${IFS}"
+  IFS=$'\n'
+  # Remove all entries containing an _, and sort them and remove duplicates
+  just_commands=($(sort -u <<< "${parsed_help_a[*]//*_*}"))
+  IFS="${OLD_IFS}"
 
   #Get sub_commands
-  local just_subcommands=()
-  #$(\grep -E '^ +[a-z0-9\-]+_[a-z0-9\-]+\)' "${just_file}" | \sed -E 's|^ +([a-z0-9\-]+)_([a-z0-9\-]+)\).*|\1\t\2|'))
-  _just_add_subcommands "${just_file}"
-  _just_add_subcommands "$(\dirname "${BASH_SOURCE[0]}")/just_functions.bsh"
-  local _just_subtargets=()
-  local _just_subcommands=()
-
-  #Determine sub commands' targets
-  local i
-  for i in $(seq 1 2 ${#just_subcommands[@]}); do
-    _just_subcommands+=("${just_subcommands[$((i-1))]}")
-    _just_subtargets+=("${just_subcommands[$i]}")
-  done
-
-  #Make subcommand pattern for case statement
-  just_subcommands=$(echo "${_just_subcommands[@]}" | \tr ' ' '\n' | \sort -u | \tr '\n' '|')
-  just_subcommands="@(${just_subcommands::-1})" #remove trailing |
+  local just_subcommands
+  IFS=$'\n'
+  just_subcommands=($((_just_subcommands_from_array | sort -u ) <<< "${parsed_help_a[*]}"))
+  IFS="${OLD_IFS}"
 
   #Call local .just if it exist
-  if [ -f "$(\dirname ${just_file})/.just" ]; then
-    local just_local=1
-    . "$(\dirname ${just_file})/.just"
-    if [ "${just_local}" == "0" ]; then
-      return 0
-    fi
+  local just_dir="$(\dirname ${just_file})"
+  if [ -f "${just_dir}/.just" ]; then
+    . "${just_dir}/.just"
   fi
 
-  if [ "${just_subcommands}" != "" ]; then
-    case "$3" in 
-      ${just_subcommands})
-        local subtargets=()
-        _just_get_subtargets "$3"
-        COMPREPLY+=($(\compgen -W "${subtargets[*]}" -- $2))
-        return 0
-        ;;
-    esac
+  # If the last word completed is a subcommand, only match subtargets
+  if isin "$3" ${just_subcommands+"${just_subcommands[@]}"} ]; then
+    local just_subtargets=()
+    _just_subtargets_from_array "${3}" ${parsed_help_a+"${parsed_help_a[@]}"}
+    COMPREPLY+=($(\compgen -W "${just_subtargets[*]}" -- $2))
+    return 0
   fi
 
+  # search for the last subcommand used. If a match is found, add it to the total
+  # list of just_commands
   for (( i=${#COMP_WORDS[@]}; i>=0; i--)); do
-    if isin "${COMP_WORDS[$i]}" "${_just_subcommands[@]}"; then
-      local subtargets=()
-      _just_get_subtargets "${COMP_WORDS[$i]}"
-      just_commands+=("${subtargets[@]}")
+    if isin "${COMP_WORDS[$i]}" "${just_subcommands[@]}"; then
+      local just_subtargets=()
+      _just_subtargets_from_array "${COMP_WORDS[$i]}" ${parsed_help_a+"${parsed_help_a[@]}"}
+      just_commands+=("${just_subtargets[@]}")
       break
     fi
   done
 
   # Simply just auto complete all commands
-  COMPREPLY+=($(\compgen -o bashdefault -W "${just_commands[*]} ${_just_subcommands[*]}" -- $2))
+  COMPREPLY+=($(\compgen -o bashdefault -W "${just_commands[*]} ${just_subcommands[*]}" -- $2))
 
   return 0
 

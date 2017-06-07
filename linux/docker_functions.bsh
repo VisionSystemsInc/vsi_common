@@ -1,19 +1,301 @@
 #!/usr/bin/env false
 #Source this script for docker specific helper functions for just or other
 
-### docker and nvidia-docker ###
+: ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
+source "${VSI_COMMON_DIR}/linux/mount_tools.bsh"
 
+#****F* vsi/docker_functions.bsh
+# NAME
+#   docker_functions.bsh - Set of functions to make using dockers easier
+# AUTHOR
+#   Andy Neff
+#***
+
+#****d* docker_functions.bsh/DOCKER
+# NAME
+#   DOCKER - Name/path of docker executable
+# SYNOPSIS
+#   Instead of hard-coding "docker" everywhere, use the variable DOCKER so that
+#   when the need comes, it is easier to switch which executable gets called
+# AUTHOR
+#   Andy Neff
+#***
 : ${DOCKER=docker}
+#****d* docker_functions.bsh/NVIDIA_DOCKER
+# NAME
+#   NVIDIA_DOCKER - Name/path of nvidia-docker executable
+# SYNOPSIS
+#   Instead of hard-coding "nvidia-docker" everywhere, use the variable 
+#   NVIDIA_DOCKER so that when the need comes, it is easier to switch which
+#   executable gets called. Default to DOCKER if nvidia-docker executable is not
+#   in the path (hash-able)
+# AUTHOR
+#   Andy Neff
+#***
 : ${NVIDIA_DOCKER=nvidia-docker}
 if ! hash ${NVIDIA_DOCKER} 2> /dev/null; then
   NVIDIA_DOCKER=${DOCKER}
 fi
 
-#These 4 may need to be redone next time they are used
+
+#****d* docker_functions.bsh/is_dir_and_not_exist
+# NAME
+#   is_dir_and_not_exist - See if the string looks like a non-existing directory
+# DESCRIPTION
+#   Docker currently creates directories that do not exist when mounting. This
+#   has a few bad side effects, such as the directories end up being own by root.
+#   In order to work around this "bug", this function identifies if docker will
+#   assume a string is a directory/file or an internal mount. 
+# INPUTS
+#   $1 - String to check
+# OUTPUT
+#   Returns 0 for is a directory, and 1 for not a directory (is an internal
+#   mount)
+# EXAMPLE
+#   is_dir_and_not_exist this_looks_like_a_mount
+#   is_dir_and_not_exist ./this_looks/like_a/directory
+#   is_dir_and_not_exist /this_also_looks/like_a/directory
+#
+#   if is_dir_and_not_exist ${my_mount}; then
+#     mkdir -p ${my_mount}
+#   fi
+# AUTHOR
+#   Andy Neff
+# SEE ALSO
+#   docker_functions.bsh/docker_sanitize_volume
+#***
+function is_dir_and_not_exist()
+{
+ local dir_name="$1"
+
+ if ( [ "${dir_name:0:1}" == "/" ] || \
+      ( (( ${#dir_name} >= 2 )) && [ "${dir_name:0:2}" == "./" ] ) ) && \
+    [ ! -d "${dir_name}" ] && [ ! -e "${dir_name}" ]; then
+    return 0 #TRUE!
+ fi
+ return 1 #False :(
+}
+
+
+#****f* docker_functions.bsh/get_label
+# NAME
+#   get_label - Get a label value from a docker container
+# INPUTS
+#   $1 - Container name
+#   $2 - Label name
+# OUTPUT
+#   stdout - Prints out the label value (and evaluates environment variables)
+#   Return 1 for label is blank (possibly not set), 0 for label found
+# AUTHOR
+#   Andy Neff
+#***
+function get_label() # Get the value of a label ($2) from container/image ($1)
+{ # All labels go through a perl filter that evaluate %name% using exported
+  # environment variables. This won't work on unexported variables
+  local value=$(docker inspect -f "{{index .Config.Labels \"$2\"}}" $1)
+  if [ "${value}" == "" ]; then
+    return 1
+  fi
+
+  echo "${value}" | perl -wpe 's#\%?(\w+)\%# $ENV{$1} // $& #ge;'
+
+  return 0
+}
+
+
+#****f* docker_functions.bsh/has_label
+# NAME
+#   has_label - Check to see if a container contains a certain label
+# SYNOPSIS
+#   docker_functions.bsh/get_label can not tell whether a container has a label
+#   or not when the label is blank. The go template filter does not 
+#   differentiate. This will verify that a blank label is set or unset.
+# INPUTS
+#   $1 - Container name
+#   $2 - Label name
+# OUTPUT
+#   Return 1 for label is unset, 0 for label is set
+# NOTES
+#   Requires jq be installed
+# AUTHOR
+#   Andy Neff
+#***
+function has_label()
+{
+  if [ "$(docker inspect -f '{{json .Config.Labels }}' $1 | jq .\[\"$2\"\])" == "null" ]; then
+    return 1
+  else
+    return 0
+  fi
+}
+
+
+#****f* docker_functions.bsh/docker_sanitize_volume
+# NAME
+#   docker_sanitize_volume - Convenient wrapper to deal with the MINGW screw ups
+# DESCRIPTION
+#   A number of things can go wrong with something as simple as mounting a 
+#   directory. If the directory doesn't exist, root will end up owning the 
+#   directory (which is often not desired). Also, on MINGW Linux/Windows path
+#   expansion ends up being an error to docker on windows. So this function will
+#   take care of both of these problems in an OS agnostic way.
+#
+#   Then it returns  all the volume argument for the -v argument for docker.
+# INPUTS
+#   $1 - The host directory/volume name
+#   [$2] - The docker docker directory (optional. If omitted, copies host 
+#          directory)
+# OUTPUT
+#   stdout - The argument that should go with the -v for mounting
+# BUGS
+#   The docker directory is not optional if the host mount is a volume
+# AUTHOR
+#   Andy Neff
+#***
+function docker_sanitize_volume()
+{
+ if (( $# < 2 )); then
+   set -- "$1" "$1"
+ fi
+
+ #Create the directory before docker, or else it will be owned by ROOT! :(
+ #Assume it's a directory because well... docker would too
+ if is_dir_and_not_exist "$1"; then #if not a file or dir
+   mkdir -p "$1" #make the dir
+   chmod 777 "$1" #Blow open permissions
+ fi
+
+ if [ "${OS-notwindows}" == "Windows_NT" ]; then
+   if command -v cygpath &> /dev/null ; then
+     echo "$(cygpath -w "$1"):${WIN}$2"
+     #Bash 4 in mingw64 includes cygpath for some reason
+     #Cygpath converts / -> \
+     #^/{single letter} -> {single letter}:\
+     #^/{single letter}/ -> {single letter}:\\ #bug?
+     #else ^/ -> {git_directory}
+   else
+     echo "$1:${WIN}$2"
+   fi
+ else
+   echo "$1:$2"
+ fi
+}
+
+#****f* docker/docker-compose-volumes
+# NAME
+#   docker-compose-volumes - Get volume flags from docker-compose config
+# PURPOSE
+#   Reformats the output from docker-compose config to an array with -v flags
+#   for use in passing to another docker or docker-compose run command.
+# INPUTS
+#   $1 - name of service of interest
+#   [$2] - prefix to volume names
+# OUTPUT
+#   DOCKER_VOLUME_FLAGS - Array of the docker flags, including necessary -v's
+# EXAMPLE
+#  docker-compose.yml
+#    version: "3.2"
+#    services:
+#      nb:
+#        image : blah
+#        volumes:
+#          - /tmp:/mnt
+#          - test:/opt
+#    volumes:
+#      test:
+#
+#  docker-compose-volumes nb test_prefix_ < <(docker-compose config)
+#  # Or
+#  # docker-compose-volumes nb <<< "$(docker-compose config)"
+#
+#  declare -p DOCKER_VOLUME_FLAGS
+#  > declare -a DOCKER_VOLUME_FLAGS='([0]="-v" [1]="/tmp:/mnt:rw" [2]="-v" [3]="test_prefix_test:/opt")'
+# NOTES
+#   Useful for working around docker/compose#4728
+# AUTHOR
+#   Andy Neff
+#***
+function docker-compose-volumes()
+{
+  local OLD_IFS="${IFS}"
+  local PREFIX="${2-}"
+  IFS=$'\n'
+  DOCKER_VOLUME_FLAGS=(\
+    $(sed -nE '/^services:$/b services
+               d
+               :services
+               n
+               # Search for the service entry
+               /^  '"${1}"':$/b found
+               /^ /b services
+               d
+               :found
+               n #Clear pattern buffer and read next line
+               # Read volumes: found
+               /^    volumes:/b volumes
+               # Search all of the service entry
+               /^    /b found
+               d # Volumes were not found, give up
+               :volumes
+               # Read in a new line
+               n
+               # match this new line for an indented(4) list
+               /^    -/{
+                 s|^    - ([^./])|    - '"${PREFIX}"'\1|
+                 # Add these lines to the hold buffer
+                 H
+                 #Repeat
+                 b volumes
+               }
+               # switch the hold and pattern buffer
+               x
+               # Format indented list to look like docker flags
+            '$'s|\\\n    - |\\\n-v\\\n|g''
+               #s|^\n|| # Remove the first blank line - Not needed with array magic
+               # Print out that pretty pattern!
+               p'))
+  IFS="${OLD_IFS}"
+}
+
+#****f* docker_functions.bsh/Exec-Nvidia-Docker
+# NAME
+#   Exec-Nvidia-Docker - Version of Docker for Nvidia and exec's
+# AUTHOR
+#   Andy Neff
+#***
 function Exec-Nvidia-Docker(){ DOCKER_EXEC=1 USE_NVIDIA_DOCKER=1 Docker "${@}";}
+#****f* docker_functions.bsh/Nvidia-Docker
+# NAME
+#   Nvidia-Docker - Version of Docker for Nvidia
+# AUTHOR
+#   Andy Neff
+#***
 function Nvidia-Docker(){ USE_NVIDIA_DOCKER=1 Docker "${@}";}
+#****f* docker_functions.bsh/Exec-Docker
+# NAME
+#   Exec-Nvidia-Docker - Version of Docker that exec's command rather than call
+# AUTHOR
+#   Andy Neff
+#***
 function Exec-Docker(){ DOCKER_EXEC=1 Docker "${@}";}
-function Docker() #Helper function to execute the right docker command, or just echo
+#****f* docker_functions.bsh/Docker
+# NAME
+#   Docker - Helper function to execute the right docker command, or just dryrun
+# DESCRIPTION
+#   Instead of calling the docker command directly, the Docker command should be
+#   called instead (for all dryrun-able activities. Simple commands like 
+#   inspect, ps, etc. don't make as much sense to dryrun, as the reset of the
+#   script will never be executed, thus rendering dryrun useless.)
+# INPUTS
+#   DRYRUN - Optional variable inserted at the beginning of all docker commands.
+#            Useful for setting to "echo" or similar for dryrun mode
+#   $1.. - Arguments to be sent to docker command
+# OUTPUT
+#   Runs docker command
+# AUTHOR
+#   Andy Neff
+#***
+function Docker()
 {
   local cmd
 
@@ -37,84 +319,288 @@ function Docker() #Helper function to execute the right docker command, or just 
 
 ### docker-compose ###
 
+#****d* docker_functions.bsh/DOCKER_COMPOSE
+# NAME
+#   DOCKER_COMPOSE - Name/path of docker-compose executable
+# SYNOPSIS
+#   Instead of hard-coding "docker-compose" everywhere, use the variable 
+#   DOCKER_COMPOSE so that when the need comes, it is easier to switch which
+#   executable gets called
+# AUTHOR
+#   Andy Neff
+#***
 : ${DOCKER_COMPOSE=docker-compose}
+#****d* docker_functions.bsh/DOCKER_COMPOSE_AUTOREMOVE
+# NAME
+#   DOCKER_COMPOSE_AUTOREMOVE - Add --rm to docker-compose run commands
+# SYNOPSIS
+#   Flag to to automatically add the --rm flag to docker-compose run commands
+#   when using the Docker-compose helper function
+# AUTHOR
+#   Andy Neff
+#***
 : ${DOCKER_COMPOSE_AUTOREMOVE=1}
 
+#****f* docker_functions.bsh/Docker-compose
+# NAME
+#   Docker-compose - Helper function to execute the right docker command, or just dryrun
+# DESCRIPTION
+#   Instead of calling the docker-compose command directly, the Docker-compose 
+#   command should be called instead (for all dryrun-able activities. Simple 
+#   commands like ps, etc. don't make as much sense to dryrun, as the reset of
+#   the script will never be executed, thus rendering dryrun useless.)
+# INPUTS
+#   DOCKER_COMPOSE_EXTRA_ARGS - Array of arguments to be added to docker-compose
+#                               (Before the command)
+#   DOCKER_COMPOSE_EXTRA_COMMAND_ARGS - Array of arguments to be added to 
+#                                       docker-compose (after the command)
+#   DOCKER_COMPOSE_EXTRA_RUN_ARGS - Array of arguments to be added to
+#                                   docker-compose (after the run command only)
+#   DOCKER_COMPOSE_AUTOREMOVE - See docker_functions.bsh/DOCKER_COMPOSE_AUTOREMOVE
+#   DRYRUN - Optional variable inserted at the beginning of all docker commands.
+#            Useful for setting to "echo" or similar for dryrun mode
+#   $1.. - Arguments to be sent to docker command
+# OUTPUT
+#   Runs docker command
+# AUTHOR
+#   Andy Neff
+#***
 function Docker-compose()
 {
-  local parsed_args=()
+  local docker_compose_args=()
+  local docker_compose_auto_command_args=()
+  local docker_compose_command
 
-  if [ "${DOCKER_COMPOSE_AUTOREMOVE}" == "1" ]; then
-    while (( $# )); do
-      case "$1" in
-        run)
-          shift 1
-          ${DRYRUN} ${DOCKER_COMPOSE} ${parsed_args+"${parsed_args[@]}"} run --rm "${@}"
-          return
-          ;;
-        -f*|-p*|-H*)
-          if [ "${#1}" == 2 ]; then
-            parsed_args+=("$1" "$2")
-            shift 2
-          else
-            parsed_args+=("$1")
-            shift 1
-          fi
-          ;;
-        --file=*|--project-name=*|--host=*|\
-        --tlscacert=*|--tlscert=*|--tlskey=*|--project-directory=*|\
-        -v|--verbose|--tls|--skip-hostname-check|--tlsverify)
-          parsed_args+=("$1")
-          shift 1
-          ;;
-        --file|--project-name|--host|\
-        --tlscacert|--tlscert|--tlskey|--project-directory)
-          parsed_args+=("$1" "$2")
+  while (( $# )); do
+    case "$1" in
+      run)
+        docker_compose_command="$1"
+        shift 1
+        if [ "${DOCKER_COMPOSE_AUTOREMOVE}" == "1" ]; then
+          docker_compose_auto_command_args+=(--rm)
+        fi
+        docker_compose_auto_command_args+=(${DOCKER_COMPOSE_EXTRA_RUN_ARGS+"${DOCKER_COMPOSE_EXTRA_RUN_ARGS[@]}"})
+        break
+        ;;
+      #Insert other commands here for command specific EXTRA_<command>_ARGS
+      -f*|-p*|-H*)
+        if [ "${#1}" == 2 ]; then
+          docker_compose_args+=("$1" "$2")
           shift 2
-          ;;
-        *)
-          ${DRYRUN} ${DOCKER_COMPOSE} ${parsed_args+"${parsed_args[@]}"} "${@}"
-          return
-          ;;
-      esac
-    done
-    # If you get here, I'm PRETTY sure the command is ill-formed, but in case
-    # I'm wrong, here goes...
-    ${DRYRUN} ${DOCKER_COMPOSE} ${parsed_args+"${parsed_args[@]}"} "${@}"
-  else
-    ${DRYRUN} ${DOCKER_COMPOSE} "${@}"
-  fi
+        else
+          docker_compose_args+=("$1")
+          shift 1
+        fi
+        ;;
+      --file=*|--project-name=*|--host=*|\
+      --tlscacert=*|--tlscert=*|--tlskey=*|--project-directory=*|\
+      -v|--verbose|--tls|--skip-hostname-check|--tlsverify)
+        docker_compose_args+=("$1")
+        shift 1
+        ;;
+      --file|--project-name|--host|\
+      --tlscacert|--tlscert|--tlskey|--project-directory)
+        docker_compose_args+=("$1" "$2")
+        shift 2
+        ;;
+      *)
+        docker_compose_command="$1"
+        shift 1
+        break
+        ;;
+    esac
+  done
+  ${DRYRUN} ${DOCKER_COMPOSE} \
+      ${DOCKER_COMPOSE_EXTRA_ARGS+"${DOCKER_COMPOSE_EXTRA_ARGS[@]}"} \
+      ${docker_compose_args+"${docker_compose_args[@]}"} \
+      ${docker_compose_command} \
+      ${docker_compose_auto_command_args+"${docker_compose_auto_command_args[@]}"} \
+      ${DOCKER_COMPOSE_EXTRA_COMMAND_ARGS+"${DOCKER_COMPOSE_EXTRA_COMMAND_ARGS[@]}"} \
+      ${@+"${@}"}
+  return $?
 }
 
-### powershell setup ###
-# Cygwin bash is pretty bad. The new git bash (MINGW64) does not have a tty.
-# This is pretty bad for docker. Powershell does have a tty, buy can not run
-# bash scrips natively. The solution is to run bash in powershell. These functions
-# help with that.
-
-function is_powershell()
+#****f* docker_functions.bsh/nfs_patch
+# NAME
+#   nfs-patch - Just specific took for fixing nfs mounts
+# DESCRIPTION
+#   Loops through the an array in the same docker-compose-volumes output format
+#   and checks if they are nfs mount and not the mount point itself. This is the
+#   scenario where volume mounting in docker fails due to squash_root.
+#
+#   1. First the mount point is determined (via df)
+#   2. Then file system is identify (using mount)
+#   3. If there is a nfs mount that is not the mount point, then the mount point
+#      is mounted instead. The docker location is changed to match the same
+#      mount point, with a prefix added.
+#
+#   It is assumed (and not checked) that the docker mount directory is the same
+#   as the host directory, with the prefix added.
+#
+#   Also see Docker-compose-nfs description
+# EXAMPLE
+#   For example, if /mnt/volume1 is a nfs mount, assuming DOCKER_VOLUME_FLAGS is
+#   (-v /mnt/volume1/project/dodo:/mnt/volume1/project/dodo:rw) then after
+#   nfs_patch, it will be
+#   (-v /mnt/volume1:/mnt/volume1:rw)
+# INPUTS
+#   [$1] - Docker prefix. Default: /mnt
+#   DOCKER_VOLUME_FLAGS - Docker volume flags from docker-compose-volumes
+# NOTES
+#   This does not remove repeats, but docker-compose should be robust to this.
+#   This function is pretty specific to just usage
+# USES
+#   df, mount
+# SEE ALSO
+#   Docker-compose-nfs
+#***
+function nfs_patch()
 {
-  if [ "${VSI_COMMON_IS_POWERSHELL-0}" == "1" ]; then
-    return 0
-  fi
-
-  local unique_title=$(head -c 16 /dev/urandom | xxd -pu)
-  echo -en "\033]0;${unique_title}\a"
-  if [ $(tasklist //fi "windowtitle eq ${unique_title}" | tail -n 1 | awk '{print $1}') == "powershell.exe" ]; then
-    return 0
-  else
-    return 1
-  fi
+  local host
+  local docker
+  local flags
+  local prefix="${1-/mnt}"
+  for ((i=1; i<${#DOCKER_VOLUME_FLAGS[@]}; i+=2)); do
+    host=${DOCKER_VOLUME_FLAGS[$i]%%:*}
+    if [[ ! ${host:0:1} =~ [./] ]]; then
+      #skip because host is an internal mount
+      continue
+    fi
+    flags=${DOCKER_VOLUME_FLAGS[$i]#*:}
+    docker=${flags%%:*}
+    flags=:${flags#*:}
+    #if they are the same, then there are no flags
+    if [ "${flags}" == ":${docker}" ]; then
+      flags=""
+    fi
+    host_mount_point="$(mount_point "${host}")"
+    #If the mount point isn't already the same as the mount, check to see if 
+    #it's nfs
+    if [ "${host_mount_point}" != "${host}" ] && \
+       is_nfs "$(mount_type "${host_mount_point}")"; then
+      # Rewrite this volume
+      DOCKER_VOLUME_FLAGS[$i]="${host_mount_point}:${prefix}${host_mount_point}${flags}"
+    fi
+  done
 }
 
-function setup_powershell()
-{ # Usage: setup_powershell ${@+"${@}"}
-  # This is designed to rerun a script being called from. Do not call from command line
-  if [ "${OS-notwindows}" == "Windows_NT" ] && ! is_powershell; then
-    if [ "${#@}" == "0" ]; then
-      setup_powershell _null
-    else
-      exec env VSI_COMMON_IS_POWERSHELL=1 start powershell "cmd /c color 07; bash \"$0\" ${@}; bash --rcfile \"${VSI_COMMON_DIR}/.winbashrc\""
-    fi
+#****d* docker_functions.bsh/Docker-compose-nfs
+# NAME
+#   Docker-compose-nfs - Docker compose with NFS protection
+# DESCRIPTION
+#   When using squash_root on nfs, docker as root is unable to check. Since 
+#   docker is not going to remove this feature due to backwards compatibility
+#   reason, this will continue to break. Docker as squashed root checks if a
+#   a directory exists. It won't (permission denied?) and will try to mkdir the
+#   directory, and fail (permission denied).
+#
+#   The current work around is to identify all the directories and check if they
+#   are nfs. If they are indeed nfs, then make mount the mount point of the
+#   directory instead.
+# INPUTS
+#   $1 - name of service of interest
+#   $2... - Args to docker-compose
+#   [COMPOSE_PROJECT_NAME] - Name of compose project. Used for prefix to docker 
+#                          volumes
+#   [EXTRA_VOLUMES] - Array of extra volumes to check and add
+#   [NFS_PREFIX] - Prefix added to nfs volumes
+# AUTHOR
+#   Andy Neff
+#***
+function Docker-compose-nfs()
+{
+  local run_service_name=$(get_run_service_name ${@+"${@}"})
+
+  if [ "${run_service_name:+set}" == "set" ]; then
+    local v
+    local DOCKER_COMPOSE_EXTRA_RUN_ARGS=(${DOCKER_COMPOSE_EXTRA_RUN_ARGS+"${DOCKER_COMPOSE_EXTRA_RUN_ARGS[@]}"})
+
+    docker-compose-volumes ${run_service_name} ${COMPOSE_PROJECT_NAME+${COMPOSE_PROJECT_NAME}_} < <(${DOCKER_COMPOSE} config) # process substitution
+    nfs_patch ${NFS_PREFIX-}
+    DOCKER_COMPOSE_EXTRA_RUN_ARGS+=(${DOCKER_VOLUME_FLAGS+"${DOCKER_VOLUME_FLAGS[@]}"})
+
+    # convert volumes in EXTRA_VOLUMES to -v <VOLUME> flags
+    for v in ${EXTRA_VOLUMES+"${EXTRA_VOLUMES[@]}"}; do
+      DOCKER_COMPOSE_EXTRA_RUN_ARGS+=(-v "$(docker_sanitize_volume "${v%:*}" "${v##*:}")")
+    done
   fi
+
+  Docker-compose "${@}"
+}
+
+#****f* docker_functions.bsh/get_run_service_name
+# NAME
+#   get_run_service_name - Extract service name from list of arguments
+# INPUTS
+#   $1... - Arguments to docker-compose command
+# OUTPUT
+#   stdout - Name of service
+# EXAMPLE
+#   For the command "docker-compose -f test.yml run -p500 -p 600 -e a=b -ec=d
+#   --user=aaa --user bbb test_service a b c" running
+#
+#   get_run_service_name docker-compose -f test.yml run -p500 -p 600 -e a=b\
+#   -ec=d--user=aaa --user bbb test_service a b c
+#
+#   Returns: "test_service"
+# NOTES
+#   Works on run commands only for docker-compose 1.13   
+# AUTHOR
+#   Andy Neff
+#***
+function get_run_service_name()
+{
+  while (( $# )); do
+    case "$1" in
+      #Insert other commands here to work on other commands
+      run)
+        shift 1
+        break
+        ;;
+      -f|-p|-H)
+        docker_compose_args+=("$1" "$2")
+        shift 2
+        ;;
+      -f*|-p*|-H*)
+        if [ "${#1}" == 2 ]; then
+          docker_compose_args+=("$1" "$2")
+          shift 2
+        else
+          docker_compose_args+=("$1")
+          shift 1
+        fi
+        ;;
+      --file=*|--project-name=*|--host=*|\
+      --tlscacert=*|--tlscert=*|--tlskey=*|--project-directory=*|\
+      -v|--verbose|--tls|--skip-hostname-check|--tlsverify)
+        docker_compose_args+=("$1")
+        shift 1
+        ;;
+      --file|--project-name|--host|\
+      --tlscacert|--tlscert|--tlskey|--project-directory)
+        docker_compose_args+=("$1" "$2")
+        shift 2
+        ;;
+      *)
+        # Not a run command
+        return
+        ;;
+    esac
+  done
+
+  while (( $# )); do
+    case "$1" in
+      --name|-e|--user|-u|--publish|-p|-v|--volume|-w|--workdir)
+        shift 2
+        ;;
+      --name=*|-e*|--user=|-u*|-d|--no-deps|--rm|--publish=*|-p*|--service-ports|-v*|--volume=|-T|-w*|--workdir=)
+        shift 1
+        ;;
+      *)
+        #Service name!
+        echo "$1"
+        return
+        ;;
+    esac
+  done
 }

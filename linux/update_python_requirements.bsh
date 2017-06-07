@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-source "$(dirname "${BASH_SOURCE[0]}")"/ask_question.sh
+source "$(dirname "${BASH_SOURCE[0]}")"/ask_question
 
 #Requires ca-certificates wget
 
@@ -18,27 +18,39 @@ fi
 #comma separated list of binary only packages
 PIP_BINARY_ONLY="entrypoints,bash_kernel"
 
+# BUGS
+#   A package path cannot contain spaces. URLs typically do not, they contain %20
+#   but if a local path does, it will bug out. It is possible to change the regex
+#   to s|Collecting ([^ =<>~!]+)[^\n(]*from ([^ \n]*)( \(from [^\n]*)?|\2|g but
+#   this can also falsely match a patch that say " (from <stuff>)", so I choose
+#   to just not allow spaces, which should work for the intended use case.
 function get_packages()
 {
   : ${PIP=${PIP2}}
   ${PIP} download -v -d /tmp "${@}" --no-binary :all: --only-binary "${PIP_BINARY_ONLY}" |
+#    tee /dev/stderr |
     tee >(cat 1>&2) |
-    #this is a nasty tee hack due to https://github.com/docker/docker/issues/6880
-    
-    grep -E '^  Using version |^Collecting' |
-    #Grep only the lines with useful information, pip 8.1.2 specific!
-
-    sed -E -e 's|^Collecting ([^ =<>~!]+).*|\1|' | 
-    #Remove all but the package name, including any "extra"s but not including version restraint
-
-    sed '$!N;s|\n  Using||;P;D' | 
-    #Combine lines starting with Using
-
-    awk '{print $1 "@" $3}'
-    #Print out the package name from the first sed and the version number which 
-    #comes after [Using] version
+    #this is a nasty tee hack due to https://github.com/docker/docker/issues/31243
+    sed -En '# Add collecting and using lines to the buffer
+             /^Collecting/H
+             /^  Using /H
+             # When you hit Successfully downloaded <name>, you are at the end
+             /^Successfully downloaded /{
+             # Start processing the entire hold buffer
+             x
+             # Extract the url, making sure the word from is not in (), make 
+             # sure the name has no spaces, after the from <word> is possibly a
+             # (from <blah>) block
+             s|Collecting [^ =<>~!]+[^\n(]*from ([^ \n]*)[^\n]*|\1@|g
+             # Else, extract the version from the next line, which is a Using
+             s|Collecting ([^ =<>~!]+)[^\n]*\n  Using version ([^ ]*)[^\n]*|\1@\2|g
+             p
+             }'
+  # There are two types of "Collecting" lines, the special wheel case, and 
+  # Collecting Django==1.11.1 from https://pypi.python.org/packages/2b/2c/019d6d5f7ed2889082ed96f849bf462c57265087a3a568a19b0d4c53bc55/Django-1.11.1-py2.py3-none-any.whl
+  # Collecting pytz (from Django==1.11.1)
+  #   Using version 2017.2 (newest of versions: 2005.post0, 2009.post0, 2013.6, 2013.7, 2013.8, 2013.9, 2014.1, 2014.1.1, 2014.2, 2014.3, 2014.4, 2014.7, 2014.9, 2014.10, 2015.2, 2015.4, 2015.6, 2015.7, 2016.1, 2016.2, 2016.3, 2016.4, 2016.6, 2016.6.1, 2016.7, 2016.10, 2017.2)
 }
-
 #I do NOT use the --pre option for any of the pip commands, so pre-releases are
 #not considered. The easiest way to add a pre-release is to use the custom
 #requirements file
@@ -61,6 +73,7 @@ function update_requirements()
   shift 2
   echo "Checking ${input}"
   for package in $(get_packages -r "${input}" ${@+"${@}"}); do
+#    echo "${package}"
     write_requirement "${output}" "${package}"
   done 2>&3
 }
@@ -159,7 +172,7 @@ function update_python_requirements()
   fi
 }
 
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+if [[ ${BASH_SOURCE[0]} == ${0} ]] || [[ $(basename ${BASH_SOURCE[0]}) == ${0} ]]; then
   update_python_requirements
   exit $?
 fi
