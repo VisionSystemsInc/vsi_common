@@ -145,6 +145,10 @@ JUST_HELP_FILES=(${BASH_SOURCE[0]})
 #      last.
 # INPUTS
 #   $1 - The project environment filename
+#   JUST_LOCAL_SETTINGS - Path of local settings file, default is 
+#                         ${same_dir}/local.env
+#   JUST_LOCAL_SETTINGS_POST - Path of post local settings file, default is 
+#                              ${same_dir}/local_post.env
 # NOTES
 #   Certain exceptions make sense for not storing values in the project file,
 #   such as credentials, encryption keys, etc... information that should not be
@@ -160,9 +164,10 @@ JUST_HELP_FILES=(${BASH_SOURCE[0]})
 function source_environment_files()
 {
   local project_dir="$(dirname $1)"
-  for file in "${project_dir}/local.env" \
+
+  for file in "${JUST_LOCAL_SETTINGS:-${project_dir}/local.env}" \
               "$1" \
-              "${project_dir}/local_post.env"; do
+              "${JUST_LOCAL_SETTINGS_POST:-${project_dir}/local_post.env}"; do
     if [ -f "$file" ]; then
       set -a
       . "${file}"
@@ -654,7 +659,12 @@ function callify()
 # INPUTS
 #   $@ - All the unconsumed arguments
 # OUTPUT
-#   args - Array of unknown number of arguments consumed 
+#   args - Array of unknown number of arguments consumed
+# BUGS
+#   This will update extra_args inside of caseify. If you are calling from 
+#   another function, this will produce incorrect behavior, therefore 
+#   extra_args should be made a local variable in the calling function when not
+#   using caseify
 # AUTHOR
 #   Andy Neff
 #***
@@ -666,7 +676,7 @@ function get_args()
   if ! decalre -f findin >& /dev/null; then
     source "${VSI_COMMON_DIR-"$(dirname "${BASH_SOURCE[0]}")/.."}/linux/findin"
   fi
-  
+
   args=()
   : ${extra_args=0}
   declare -ig args_used=${pre_args_used-0}
