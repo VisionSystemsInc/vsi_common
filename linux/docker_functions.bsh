@@ -264,17 +264,17 @@ function docker-compose-volumes()
 # AUTHOR
 #   Andy Neff
 #***
-function Exec-Nvidia-Docker(){ DOCKER_EXEC=1 USE_NVIDIA_DOCKER=1 Docker "${@}";}
+function Exec-Nvidia-Docker(){ DOCKER_EXEC=1 Nvidia-Docker "${@}";}
 #****f* docker_functions.bsh/Nvidia-Docker
 # NAME
 #   Nvidia-Docker - Version of Docker for Nvidia
 # AUTHOR
 #   Andy Neff
 #***
-function Nvidia-Docker(){ USE_NVIDIA_DOCKER=1 Docker "${@}";}
+function Nvidia-Docker(){ DOCKER="${NVIDIA_DOCKER}" Docker "${@}";}
 #****f* docker_functions.bsh/Exec-Docker
 # NAME
-#   Exec-Nvidia-Docker - Version of Docker that exec's command rather than call
+#   Exec-Docker - Version of Docker that exec's command rather than call
 # AUTHOR
 #   Andy Neff
 #***
@@ -300,14 +300,10 @@ function Docker()
 {
   local cmd
 
-  if [ "${USE_NVIDIA_DOCKER-}" == "1" ]; then
-    cmd=(${DRYRUN} "${NVIDIA_DOCKER}")
-  else
-    cmd=(${DRYRUN} "${DOCKER}")
-  fi
+  cmd=(${DRYRUN} "${DOCKER}")
 
   if [ "$1" == "run" ]; then
-    cmd+=($1 "${DOCKER_RUN_ARGS[@]}")
+    cmd+=($1 ${DOCKER_RUN_ARGS+"${DOCKER_RUN_ARGS[@]}"})
     shift 1
   fi
 
@@ -342,6 +338,13 @@ function Docker()
 #***
 : ${DOCKER_COMPOSE_AUTOREMOVE=1}
 
+#****f* docker_functions.bsh/Exec-Docker-compose
+# NAME
+#   Exec-Docker-compose - Version of Docker-compose that exec's the command
+# AUTHOR
+#   Andy Neff
+#***
+function Exec-Docker-compose(){ DOCKER_EXEC=1 Docker-compose "${@}";}
 #****f* docker_functions.bsh/Docker-compose
 # NAME
 #   Docker-compose - Helper function to execute the right docker command, or just dryrun
@@ -371,6 +374,11 @@ function Docker-compose()
   local docker_compose_args=()
   local docker_compose_auto_command_args=()
   local docker_compose_command
+
+  local cmd=(${DRYRUN} ${DOCKER_COMPOSE})
+  if [ "${DOCKER_EXEC-}" != "" ] && [ "${DRYRUN}" == "" ]; then
+    cmd=(exec ${DOCKER_COMPOSE})
+  fi
 
   while (( $# )); do
     case "$1" in
@@ -411,7 +419,7 @@ function Docker-compose()
         ;;
     esac
   done
-  ${DRYRUN} ${DOCKER_COMPOSE} \
+  "${cmd[@]}" \
       ${DOCKER_COMPOSE_EXTRA_ARGS+"${DOCKER_COMPOSE_EXTRA_ARGS[@]}"} \
       ${docker_compose_args+"${docker_compose_args[@]}"} \
       ${docker_compose_command} \
@@ -419,6 +427,25 @@ function Docker-compose()
       ${DOCKER_COMPOSE_EXTRA_COMMAND_ARGS+"${DOCKER_COMPOSE_EXTRA_COMMAND_ARGS[@]}"} \
       ${@+"${@}"}
   return $?
+}
+
+#****f* docker_functions.bsh/service_running
+# NAME
+#   service_running - Checks to see if a docker-compose service is running
+# INPUTS
+#   [$1...] - service names, if none are provided, all are used
+#   COMPOSE_FILE - Colon delimited file listing docker-compose files to use
+# OUTPUT
+#   stdout - State of service running, Up/Exited/Creating/etc...
+# RETURN VALUE
+#   0 - Service found
+#   1 - Service not found
+# AUTHOR
+#   Andy Neff
+#***
+function service_running()
+{
+  ${DOCKER} inspect -f '{{.State.Status}}' $(${DOCKER_COMPOSE} ps -q) 2>/dev/null
 }
 
 #****f* docker_functions.bsh/nfs_patch
