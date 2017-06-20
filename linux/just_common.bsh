@@ -132,7 +132,7 @@ function _just_commands_from_file()
            '$'s|\\\\\\n *||''
               t combine
             }
-            s|^ *#? *([ _0-9|a-z-]*)\) *# *(.*)|\1 '"${JUST_HELP_SEPARATOR}"' \2|
+            s|^ *#? *([ _0-9|a-zA-Z{}-]*)\) *# *(.*)|\1 '"${JUST_HELP_SEPARATOR}"' \2|
             # If there is a match, process it
             t process
             # Else do not even print it. This replaces a grep
@@ -197,9 +197,24 @@ function _just_parse_helps()
 {
   local filename
   local IFS=$'\n'
+  local i
+  local target
+  local target_array
   parsed_help_a=()
 
   for filename in ${JUST_HELP_FILES+"${JUST_HELP_FILES[@]}"}; do
     parsed_help_a+=($(_just_commands_from_file "${filename}"))
+  done
+
+  # Target expansion magic
+  for i in "${!parsed_help_a[@]}"; do
+    if [[ ${parsed_help_a[$i]} =~ (^.*_)\{(.*)\}(\ ${JUST_HELP_SEPARATOR}\ .*) ]]; then
+      unset parsed_help_a[$i]
+      target_array="${BASH_REMATCH[2]}[@]"
+      target_array=(${!target_array+"${!target_array}"})
+      for target in "${target_array[@]}"; do
+        parsed_help_a+=("${BASH_REMATCH[1]}${target}${BASH_REMATCH[3]} ${target}")
+      done
+    fi
   done
 }
