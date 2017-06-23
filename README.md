@@ -118,6 +118,16 @@ In order to use these directories, all you have to do is
 * Code review
 * Other guidelines
 
+### Documentation ###
+
+Documentation uses [robodoc](https://rfsber.home.xs4all.nl/Robo/). To compile
+documentation, run
+
+```
+cd docs
+docker-compose run --rm robodoc
+```
+
 ### Who do I talk to? ###
 
 * Repo owner or admin
