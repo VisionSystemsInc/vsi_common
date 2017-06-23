@@ -15,18 +15,22 @@ In order to use these directories, all you have to do is
 * Python
     * Prefered
 
-            git clone git@bitbucket.org:visionsystemsinc/vsi_common.git .
-            pip install -e .
+            pip install git+https://bitbucket.org/visionsystemsinc/vsi_common.git
 
-      This will install an editable version of the library is installed in your python environment. The vsi_common library is the same as the git clone that you can edit and commit.
     * Other options
-
+	
+            git clone git@bitbucket.org:visionsystemsinc/vsi_common.git .
+			
+      and one of
+	  
             pip install .
             python setup.py install
+			
+      Developers of a module should install an editable version of the library in your python environment by
+	  cloning the repo and running one of
+	  
             python setup.py develop
-            pip install https://bitbucket.org/visionsystemsinc/vsi_common.git
-
-    * python_util - You still need to import the corresponding `env` script to add python_util to the PYTHONPATH
+            pip install -e .
 
 ### What is this repository for? ###
 

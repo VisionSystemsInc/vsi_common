@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# TODO ldd should recursively list dependencies of all shared objects (in a breadth first fashion)
+#
+# surprisingly, matlab includes a version of ldd: <MATLAB_ROOT>/bin/ldd
+#
+# REVIEW doesnt exactly replicate ldd on linux; even disregarding that @rpath,
+# @loader_path, and @executable_path don't exist on linux.
+# @loader_path and @executable_path are eponymous symbols that are replaced by
+# DYLD at load-time. @rpath is another symbol that is expanded into a set
+# of runtime paths defined by the target (either at compilation time via the
+# -rpath flag or later using install_name_tool). the rpath's of a target can
+# be inspected with my function 'rpath'.
+#
+# NOTE in OS X, an install name can include a path, partial path, or symbol. i
+# don't think this is the case on linux
+#
+# an install name is given to a library when it is built which is used by the
+# linker to define a target's dynamic library dependencies. As such, sometimes
+# it is assumed that the relative location of the library to the target is known
+# a priori. this may seem backwards, but is quite common when building app bundles.
+
+# $ ldd /Users/sgrichar/VMR/segmentation/WeiTas/scalpel/scalpel/+vlx/vlx_hikmeanspush.mexmaci
+#        @loader_path/libmx.dylib (compatibility version 0.0.0, current version 0.0.0)
+# here @loader_path seems to be the matlab execuatble. however,
+# $ ldd /Users/sgrichar/VMR/segmentation/WeiTas/scalpel/scalpel/+vlx/vlx_hikmeanspush.mexmaci64
+#        @rpath/thirdparty/vlfeat-0.9.16/bin/maci64/libvl.dylib (compatibility version 0.9.16, current version 0.9.16)
+# and querying the target's rpath,
+# $ rpath /Users/sgrichar/VMR/segmentation/WeiTas/scalpel/scalpel/+vlx/vlx_hikmeanspush.mexmaci64
+#        @loader_path/../../ (offset 12)
+# then, @loader_path seems to refer to the location of the mex file...
+
+#set -xv
+
+if [ "$#" -eq 0 ] ; then echo "usage: $0 DYLIB" ; exit ; fi
+
+for arg in "$@" ; do
+  if [ ! -f "${arg}" ] ; then
+    echo ldd "${arg}:" No such file or directory
+    continue
+  fi
+
+  if [ "$#" -ne 1 ] ; then echo ${arg}: ; fi
+
+  basepath="$(dirname "${arg}")"
+  #abspath=$( cd "$(dirname "${arg}")" ; find $(pwd) -dpeth 1 -name "$(basename "${arg}")" ; )
+  abspath=`fp "${arg}"`
+
+  # create a subshell and cd to the directory of the argument so that relative
+  # path's are tested corectly
+  ( cd "${basepath}"
+
+  # iterator that handles spaces
+  otool -L "${abspath}" | tail -n +2 | while read record ; do
+
+    file=`echo "${record}" | awk '{ print $1 }'`
+    compatibility=`echo -n "${record}" | awk '{ print substr($0, index($0,$2)) }'`
+
+    # does the dependency contain a special symbol which cannot be expanded at this time
+    if [[ "${file}" =~ '@loader_path' ]] ||
+       [[ "${file}" =~ '@executable_path' ]] ||
+       [[ "${file}" =~ '@rpath' ]] ; then
+      echo "        ${record}"
+
+    # does the file exist AND is it a soft link
+    elif [ -L "${file}" ] ; then
+      r=`find -L "${file}" -type l -ls`
+      link=`ls -l "${file}" | awk '{ print substr($0, index($0,$9)) }'`
+      if [ "x${r}" == "x" ] ; then
+        echo "        ${link} ${compatibility}"
+      else
+        echo "        (not found) ${link}"
+      fi
+
+    # does the file exist
+    elif [ -e "${file}" ] ; then
+      echo "        ${record}"
+
+    # TODO search the target's rpath for any dependencies defined with the special @rpath symbol
+
+    else
+      found=0
+      while read -d: path ; do
+      #for path in ${DYLD_LIBRARY_PATH//:/ } ; do
+
+        # does the file exist on DYLD_LIBRARY_PATH
+        if [ -e "${path}/${file}" ] ; then
+          echo "        ${file} => ${path}/${file} ${compatibility}"
+          found=1
+          break
+        fi
+      done <<< "${DYLD_LIBRARY_PATH}:"
+      # NOTE <<< "STRING" presents the string as a file and is a handy replacement
+      # for the usual echo "foo bar" | grep "bar" scenario. I believe this is called
+      # a "here string"
+      # NOTE if i dont use the <<< operator, variables dont escape the scope. no idea why.
+
+      # the file doesnt exist anywhere
+      if [ ${found} -eq 0 ] ; then
+        echo "        (not found) ${file}" ;
+      fi
+
+    fi
+  done
+  )
+done
