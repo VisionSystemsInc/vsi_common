@@ -1,0 +1,69 @@
+#****F* vsi/docker_accounts.bsh
+# NAME
+#   docker_accounts.bsh - Functions to help write docker entrypoints
+#***
+function docker_setup_user()
+{
+  . "$(dirname "${BASH_SOURCE[0]}")/linux_accounts.bsh"
+
+  : ${DOCKER_ACCOUNTS_CREATE_USER=1}
+  : ${DOCKER_ACCOUNTS_CREATE_GROUPS=1}
+  : ${DOCKER_ACCOUNTS_POSIX_GROUPS=${DOCKER_ACCOUNTS_CREATE_GROUPS}}
+
+  : ${DOCKER_USERNAME=user}
+  : ${DOCKER_UID=1000}
+  : ${DOCKER_GROUP_NAMES=user}
+  : ${DOCKER_GIDS=1000}
+  : ${DOCKER_HOME=/home/${DOCKER_USERNAME}}
+
+  if [ "${DOCKER_ACCOUNTS_POSIX_GROUPS}" == "1" ]; then
+    #Remove non-posix characters
+    DOCKER_GROUP_NAMES=$(sed 's|[^0-9a-zA-Z._ -]||g' <<< "${DOCKER_GROUP_NAMES}")
+  fi
+
+  #Convert to arrays
+  DOCKER_GIDS=(${DOCKER_GIDS})
+  DOCKER_GROUP_NAMES=(${DOCKER_GROUP_NAMES})
+
+  if [ "${DOCKER_ACCOUNTS_CREATE_USER}" == "1" ]; then
+    add_user ${DOCKER_USERNAME} ${DOCKER_UID} ${DOCKER_GIDS[0]} "${DOCKER_HOME}"
+
+    mkdir -p "${DOCKER_HOME}"
+  fi
+
+  if [ "${DOCKER_ACCOUNTS_CREATE_GROUPS}" == "1" ]; then
+    local group
+    local gshadow
+    read_group_data
+
+    LINUX_ACCOUNTS_AUTOSAVE=0 add_group ${DOCKER_GROUP_NAMES[0]} ${DOCKER_GIDS[0]}
+
+    local i
+    local users
+    users=(${DOCKER_USERNAME})
+    for ((i=1; i<${#DOCKER_GIDS[@]}; i++)); do
+      LINUX_ACCOUNTS_AUTOSAVE=0 add_group ${DOCKER_GROUP_NAMES[$i]} ${DOCKER_GIDS[$i]}
+    done
+
+    write_group_data
+  fi
+
+  #Set owner of home directory
+  if [ "${DOCKER_ACCOUNTS_CREATE_USER}" == "1" ]; then
+    if [ "${DOCKER_ACCOUNTS_CREATE_GROUPS}" == "1" ]; then
+      chown ${DOCKER_USERNAME}:${DOCKER_GROUP_NAMES[0]} "${DOCKER_HOME}"
+    else
+      chown ${DOCKER_USERNAME} "${DOCKER_HOME}"
+    fi
+  fi
+}
+
+function clean_docker_setup_user()
+(
+  docker_setup_user ${@+"${@}"}
+)
+
+if [[ ${BASH_SOURCE[0]} == ${0} ]] || [[ $(basename ${BASH_SOURCE[0]}) == ${0} ]]; then
+  docker_setup_user ${@+"${@}"}
+  exit $?
+fi
