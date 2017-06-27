@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
 #****F* vsi/linux_accounts.bsh
+# NAME
+#   linux_accounts.bsh - Functions for manipulating linux user/groups
 # NOTES
 #   Works on tested (all?) versions centos, ubuntu, debian, fedora, alpine,
 #   busybox, cirros, amazonlinux, and clearlinux
@@ -11,19 +13,21 @@
 #   around by setting they passwd/etc... arrays yourself before calling 
 #   add_user/add_group, but this too may not be the desired outcome.
 #
-#   Arrays with the first element unset may have unpredictable behavior 
+#   - Arrays with the first element unset may have unpredictable behavior 
+#   - If the passwd file exists and the shadow does not, it will not be detected
+#   - If the group file exists and the ghshdow does not, it will not be detected
 #***
 
 #****f* linux_accounts.bsh/read_file
 # NAME
-#   read_file - Read contents /etc/passwd/group into an array
+#   read_file - Read contents /etc/passwd or similar files into an array
 # INPUTS
 #   $1 - Filename
 #   $2 - array_name
 # OUTPUT
 #   ${!2[@]} - Array of contents of the file, a line per element
 # NOTE
-#   This is designed to work on : separated line files like /etc/passwd,
+#   This is designed to work on newline separated files like /etc/passwd,
 #   /etc/group, etc...
 # AUTHOR
 #   Andy Neff
@@ -50,14 +54,15 @@ function read_file()
     done < "${1}"
   fi
 }
+
 #****f* linux_accounts.bsh/write_file
 # NAME
-#   write_file - Write contents /etc/passwd/group from an array
+#   write_file - Write contents /etc/passwd or similar from an array
 # INPUTS
 #   $1 - Filename
 #   $2... - Lines to write
 # NOTE
-#   This is designed to work on : separated line files like /etc/passwd,
+#   This is designed to work on newline separated files like /etc/passwd,
 #   /etc/group, etc...
 # AUTHOR
 #   Andy Neff
@@ -71,134 +76,23 @@ function write_file()
   echo "${*}" > "${filename}"
 }
 
-# INPUTS
-#   $1 - Group name
-#   $2 - GID
-#   groups - List of group lines
-#   [users] - Set users to the default list of uses to add to the group
-#   [suffix] - optional number to add to group_name. For internal use
-function add_group()
-{
-  #Read in the group array if it doesn't exist already 
-  if ! declare -p group&>/dev/null; then
-    local group
-    read_file /etc/group group
-  fi
-
-  # The second test is for OS's like clearlinux which contain no user/group files
-  # until after an additional user/group is created.
-  if [ -e /etc/gshadow ] || ( [ ! -e /etc/passwd ] && getent gshadow &>/dev/null ); then
-    #Read in the gshadow array if it doesn't exist already 
-    if ! declare -p gshadow&>/dev/null; then
-      local gshadow
-      read_file /etc/gshadow gshadow
-    fi
-
-    add_to_group "$1" "$2" 'x'
-    add_to_gshadow "$1" '!'
-  else
-    add_to_group "$1" "$2" 'x'
-  fi
-
-  if [ "${LINUX_ACCOUNTS_AUTOSAVE-1}" == "1" ]; then
-    write_group_data
-  fi
-}
-
-#****f* linux_accounts.bsh/add_to_group
+#****f* linux_accounts.bsh/add_user
 # NAME
-#   add_to_group - Adds a group to the /etc/group file
-# INPUTS
-#   $1 - Group name
-#   $2 - GID
-#   [$3] - Encrypted password. Defaults to "x" (disabled)
-#   group - List of group lines
-#   [users] - Set users to the default list of uses to add to the group
-#   [suffix] - optional number to add to group_name. For internal use
-# NOTES
-#   Works on Debian, Centos, Alpine, etc... Only odd Linuces with more than 4 
-#   column in /etc/group will fail.
-#***
-function add_to_group()
-{
-  local IFS=:
-  local group_name=${1}${suffix-}
-
-  local group_info
-  local line
-
-  for line in "${group[@]}"; do
-    #Group Name[0], password[1], GID[2], comma separates user list[3]
-    group_info=(${line})
-
-    #If name already existed
-    if [ "${group_info[0]}" == "${group_name}" ]; then
-      #and if the id is the same
-      if [ "${group_info[2]}" == "${2}" ]; then
-        #do nothing
-        return
-      fi
-      #try again with a different suffix
-      suffix=$((${suffix-0}+1)) add_to_group "${@}"
-      return
-    fi
-  done
-
-  #Add as second last. Many OSes have a special group in the last spot, +:::
-  group=("${group[@]::${#group[@]}-1}"
-         "${group_name}:${3-x}:${2}:${users-}"
-         "${group[${#group[@]}-1]}" )
-}
-
-function read_group_data()
-{
-  read_file /etc/group group
-  read_file /etc/gshadow gshadow
-}
-
-function write_group_data()
-{
-  write_file /etc/group ${group+"${group[@]}"}
-  if declare -p gshadow &>/dev/null; then
-    write_file /etc/gshadow ${gshadow+"${gshadow[@]}"}
-  fi
-}
-
+#   add_user - Adds a new user to the OS
 # INPUTS
 #   $1 - User name
-#   $2 - Encrypted password (* for none)
-#   [users] - Set users to the default list of uses to add to the group
-function add_to_gshadow()
-{
-  local IFS=:
-  local group_info
-  local i
-
-  local new_gshadow="${1}:${2}::${users-}"
-
-  for i in "${!gshadow[@]}"; do
-    #User Name[0], password[1], admins[2], members[3]
-    group_info=(${gshadow[$i]})
-
-    #If name already exists, replace it
-    if [ "${group_info[0]}" == "$1" ]; then
-      gshadow[$i]="${new_gshadow}"
-      return
-    fi
-  done
-  gshadow=("${gshadow[@]::${#gshadow[@]}-1}"
-           "${new_gshadow}"
-           "${gshadow[${#gshadow[@]}-1]}" )
-
-}
-
-# INPUTS
-#   $1 - User name
-#   $2 - UID
-#   $3 - GID
+#   [$2] - UID. Default: 1000
+#   [$3] - GID. Default: 1000
 #   [$4] - User home (defaults to /home/$1)
-#   [passwd] - List of passwd lines
-#   [shadow] - List of shadow lines
+#   [passwd] - List of passwd lines. Auto loaded if not defined
+#   [shadow] - List of shadow lines. Auto loaded if not defined and exists
+#   [LINUX_ACCOUNTS_AUTOSAVE] - Auto writes out passwd/shadow file. Default: 1
+# NOTES
+#   Will write a new passwd to /etc/passwd. If it is determined that the OS uses
+#   /etc/shadow too, then that will be written to also.
+# AUTHOR
+#   Andy Neff
+#***
 function add_user()
 {
   #Read in the passwd array if it doesn't exist already 
@@ -217,7 +111,7 @@ function add_user()
     fi
 
     #Add the user
-    add_to_passwd "$1" x "$2" "$3" "${4-/home/$1}"
+    add_to_passwd "$1" x "${2-1000}" "${3-1000}" "${4-/home/$1}"
     add_to_shadow "$1" '*'
 
     if [ "${LINUX_ACCOUNTS_AUTOSAVE}" == "1" ]; then
@@ -225,7 +119,7 @@ function add_user()
     fi
   else
     #Add the user
-    add_to_passwd "$1" '*' "$2" "$3" "${4-/home/$1}"
+    add_to_passwd "$1" '*' "${2-1000}" "${3-1000}" "${4-/home/$1}"
   fi
 
   if [ "${LINUX_ACCOUNTS_AUTOSAVE-1}" == "1" ]; then
@@ -233,9 +127,56 @@ function add_user()
   fi
 }
 
+
+#****f* linux_accounts.bsh/add_to_passwd
+# NAME
+#   add_to_passwd - Adds entry to passwd array
+# INPUTS
+#   $1 - User name
+#   [$2] - Encrypted password (x for none). Default: x
+#   [$3] - UID. Default: 1000
+#   [$4] - GID. Default: 1000
+#   [$5] - User home: Default: /home/$1
+#   [$6] - Default shell. Default: bash or sh
+#   passwd - List of passwd lines
+# NOTES
+#   If the username already exists, it is replaced.
+# BUGS
+#   I imagine bad things would happen if you "add_to_passwd root"
+# AUTHOR
+#   Andy Neff
+#***
+function add_to_passwd()
+{
+  local IFS=:
+  local user_info
+  local i
+
+  local new_passwd="$1:${2-x}:${3-1000}:${4-1000}::${5-/home/$1}:${6-$(command -v bash || command -v sh)}"
+
+  for i in "${!passwd[@]}"; do
+    #User Name[0], x[1], UID[2], GID[3], FullName,RoomNumber,WorkPhone,HomePhone,Other[4], Home Dir[5], Shell[6]
+    user_info=(${passwd[$i]})
+
+    #If name already exists, replace it
+    if [ "${user_info[0]}" == "$1" ]; then
+      passwd[$i]="${new_passwd}"
+      return
+    fi
+  done
+  passwd=("${new_passwd}"
+          ${passwd+"${passwd[@]}"} )
+}
+
+#****f* linux_accounts.bsh/add_to_shadow
+# NAME
+#   add_to_shadow - Adds entry to shadow array
 # INPUTS
 #   $1 - User name
 #   $2 - Encrypted password (* for none)
+# AUTHOR
+#   Andy Neff
+#***
 function add_to_shadow()
 {
   local IFS=:
@@ -254,51 +195,226 @@ function add_to_shadow()
       return
     fi
   done
-  shadow=("${shadow[@]::${#shadow[@]}-1}"
-          "${new_shadow}"
-          "${shadow[${#shadow[@]}-1]}" )
+  shadow=("${new_shadow}"
+          ${shadow+"${shadow[@]}"} )
 }
 
-# INPUTS
-#   $1 - User name
-#   $2 - Encrypted password (x for none)
-#   $3 - UID
-#   $4 - GID
-#   $5 - User home
-#   passwd - List of passwd lines
-function add_to_passwd()
-{
-  local IFS=:
-  local user_info
-  local i
-
-  local new_passwd="$1:$2:$3:$4::$5:$(command -v bash || command -v sh)"
-
-  for i in "${!passwd[@]}"; do
-    #User Name[0], x[1], UID[2], GID[3], FullName,RoomNumber,WorkPhone,HomePhone,Other[4], Home Dir[5], Shell[6]
-    user_info=(${passwd[$i]})
-
-    #If name already exists, replace it
-    if [ "${user_info[0]}" == "$1" ]; then
-      passwd[$i]="${new_passwd}"
-      return
-    fi
-  done
-  passwd=("${passwd[@]::${#passwd[@]}-1}"
-          "${new_passwd}"
-          "${passwd[${#passwd[@]}-1]}" )
-}
-
+#****f* linux_accounts.bsh/read_user_data
+# NAME
+#   read_user_data - Helper function to read passwd/shadow
+# OUTPUT
+#   passwd - Array of passwd entries
+#   shadow - Array of shadow entries. Undefined if shadow does not exist
+# AUTHOR
+#   Andy Neff
+#***
 function read_user_data()
 {
   read_file /etc/passwd passwd
   read_file /etc/shadow shadow
 }
 
+#****f* linux_accounts.bsh/write_user_data
+# NAME
+#   write_user_data - Helper function to write passwd/shadow
+# INPUTS
+#   passwd - Array of passwd entries
+#   [shadow] - Array of shadow entries. If undefined, shadow is not written
+# AUTHOR
+#   Andy Neff
+#***
 function write_user_data()
 {
   write_file /etc/passwd ${passwd+"${passwd[@]}"}
   if [ "${shadow+set}" == "set" ]; then
     write_file /etc/shadow ${shadow+"${shadow[@]}"}
   fi
+}
+
+#****f* linux_accounts.bsh/add_group
+# NAME
+#   add_group - Adds a new group to the OS
+# INPUTS
+#   $1 - Group name
+#   $2 - GID
+#   groups - List of group lines
+#   [users] - Set users to the default list of uses to add to the group
+#   [suffix] - optional number to add to group_name. For internal use
+#   [LINUX_ACCOUNTS_AUTOSAVE] - Auto writes out group/gshadow file. Default: 1
+#   [fifo_buffer] - A FIFO buffer used for capturing stdout. This is an advanced
+#                   feature used only to speed up adding multiple groups
+# NOTES
+#   Will write a new group to /etc/group. If it is determined that the OS uses
+#   /etc/gshadow too, then that will be written to also.
+# AUTHOR
+#   Andy Neff
+#***
+function add_group()
+{
+  local group_name
+  #Read in the group array if it doesn't exist already 
+  if ! declare -p group&>/dev/null; then
+    local group
+    read_file /etc/group group
+  fi
+
+  # The second test is for OS's like clearlinux which contain no user/group files
+  # until after an additional user/group is created.
+  if [ -e /etc/gshadow ] || ( [ ! -e /etc/group ] && getent gshadow &>/dev/null ); then
+    #Read in the gshadow array if it doesn't exist already 
+    if ! declare -p gshadow&>/dev/null; then
+      local gshadow
+      read_file /etc/gshadow gshadow
+    fi
+
+    # Setup a fifo buffer for one use
+    if ! declare -p fifo_buffer&>/dev/null; then
+      echo huh
+      local delete_buffer=1
+      local fifo_buffer="$(mktemp -u -p /dev/shm)"
+      mkfifo "${fifo_buffer}"
+    fi
+
+    # Redirect 3 to the fifo buffer
+    exec 3<>"${fifo_buffer}"
+
+    # Create a new group, and redirect stdout to 
+    add_to_group "$1" "$2" 'x' >&3
+    # Read from fd 3 into group_name
+    read -u3 group_name
+    add_to_gshadow ${group_name} '!'
+
+    # Delete that fifo buffer after one use
+    if [ "${delete_buffer-}" == "1" ]; then
+      rm "${fifo_buffer}"
+    fi
+  else
+    # Just add a group, discard echoed name
+    add_to_group "$1" "$2" 'x' > /dev/null
+  fi
+
+  if [ "${LINUX_ACCOUNTS_AUTOSAVE-1}" == "1" ]; then
+    write_group_data
+  fi
+}
+
+#****f* linux_accounts.bsh/read_group_data
+# NAME
+#   read_group_data - Helper function to read group/gshadow
+# OUTPUT
+#   group - Array of groups
+#   gshadow - Array of gshadow entries. Undefined if gshadow does not exist
+# AUTHOR
+#   Andy Neff
+#***
+function read_group_data()
+{
+  read_file /etc/group group
+  read_file /etc/gshadow gshadow
+}
+
+#****f* linux_accounts.bsh/write_group_data
+# NAME
+#   write_group_data - Helper function to write group/gshadow
+# INPUTS
+#   group - Array of groups
+#   gshadow - Array of gshadow entries. If undefined, gshadow is not written
+# AUTHOR
+#   Andy Neff
+#***
+function write_group_data()
+{
+  write_file /etc/group ${group+"${group[@]}"}
+  if declare -p gshadow &>/dev/null; then
+    write_file /etc/gshadow ${gshadow+"${gshadow[@]}"}
+  fi
+}
+
+#****f* linux_accounts.bsh/add_to_group
+# NAME
+#   add_to_group - Adds entry to group array
+# INPUTS
+#   $1 - Group name
+#   $2 - GID
+#   [$3] - Encrypted password. Defaults to "x" (disabled)
+#   group - List of group lines
+#   [users] - Set users to the default list of uses to add to the group
+#   [suffix] - optional number to add to group_name. For internal use
+# OUTPUT
+#   stdin - group name used
+# NOTES
+#   Works on Debian, Centos, Alpine, etc... Only odd Linuces with more than 4 
+#   column in /etc/group will fail.
+# AUTHOR
+#   Andy Neff
+#***
+function add_to_group()
+{
+  local IFS=:
+  local group_name=${1}${suffix-}
+
+  local group_info
+  local i
+
+  for i in "${!group[@]}"; do
+    #Group Name[0], password[1], GID[2], comma separates user list[3]
+    group_info=(${group[$i]})
+
+    #If name already existed
+    if [ "${group_info[0]}" == "${group_name}" ]; then
+      #and if the id is the same
+      if [ "${group_info[2]}" == "${2}" ]; then
+        #Just modify the line
+        if [ "${#group_info}" == "3" ]; then
+          group_info[4]=${users-}
+        else
+          group_info[4]=${group_info[4]}${users:+,${users-}}
+        fi
+        group[$i]="${group_info[*]}"
+        echo ${group_info[0]}
+        return
+      fi
+      #try again with a different suffix
+      suffix=$((${suffix-0}+1)) add_to_group "${@}"
+      return
+    fi
+  done
+  echo "${group_name}"
+  #Add as first. Many OSes have a special group in the last spot, +:::
+  #It's common to add as the second last sometimes, but first is easier
+  group=("${group_name}:${3-x}:${2}:${users-}"
+         ${group+"${group[@]}"} )
+}
+
+#****f* linux_accounts.bsh/add_to_gshadow
+# NAME
+#   add_to_gshadow - Adds entry to gshadow array
+# INPUTS
+#   $1 - Group name
+#   [$2] - Encrypted password (! or * for none). Default: !
+#   [users] - Set users to the default list of uses to add to the entry
+# AUTHOR
+#   Andy Neff
+#***
+function add_to_gshadow()
+{
+  local IFS=:
+  local group_info
+  local i
+
+  local new_gshadow="${1}:${2-!}::${users-}"
+
+  for i in "${!gshadow[@]}"; do
+    #Group Name[0], password[1], admins[2], members[3]
+    group_info=(${gshadow[$i]})
+
+    #If name already exists, replace it
+    if [ "${group_info[0]}" == "$1" ]; then
+      gshadow[$i]="${new_gshadow}"
+      return
+    fi
+  done
+  gshadow=("${new_gshadow}"
+           ${gshadow+"${gshadow[@]}"} )
+
 }
