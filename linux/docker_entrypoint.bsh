@@ -14,7 +14,7 @@
 # AUTHOR
 #   Andy Neff
 #***
-set -eu
+
 : ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
 source "${VSI_COMMON_DIR}/linux/linux_accounts.bsh"
 
@@ -109,7 +109,24 @@ function docker_setup_user()
   fi
 }
 
+# INPUTS
+#   [DOCKER_LINK_MOUNTS_FORCE] - Default: 0
+function docker_link_mounts()
+{
+  local IFS=:
+  local options='-s'
+  if [ "${DOCKER_LINK_MOUNTS_FORCE-0}" == "1" ]; then
+    options+='-f'
+  fi
+
+  DOCKER_ENTRYPOINT_LINKS=(${DOCKER_ENTRYPOINT_LINKS+${DOCKER_ENTRYPOINT_LINKS}})
+  for ((x=0; x+1<${#DOCKER_ENTRYPOINT_LINKS[@]}; x+=2)); do
+    ln ${options} "${DOCKER_ENTRYPOINT_LINKS[$((x+1))]}" "${DOCKER_ENTRYPOINT_LINKS[$x]}" || :
+  done
+}
+
 if [[ ${BASH_SOURCE[0]} == ${0} ]] || [[ $(basename ${BASH_SOURCE[0]}) == ${0} ]]; then
-  docker_setup_user ${@+"${@}"}
-  exit $?
+  set -eu
+  docker_setup_user ${@+"${@}"} && \
+  docker_link_mounts ${@+"${@}"}
 fi

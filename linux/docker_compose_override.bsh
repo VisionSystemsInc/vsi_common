@@ -1,0 +1,163 @@
+#!/usr/bin/env bash
+
+: ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
+source "${VSI_COMMON_DIR}/linux/mount_tools.bsh"
+
+LOKI_SERVICES=(nginx builder vxl)
+LOKI_SERVICES=(builder)
+LOKI_ALL_VOLUMES=(/dev/shm)
+LOKI_NGINX_VOLUMES=(/dev/shm/aa '$LOKI_TEST' /dev/shm/cc/foo/bar:/here )
+LOKI_VXL_VOLUMES=(/dev/shm/11 /dev/shm/22 /dev/shm/33:/everywhere:ro foobar:/fubar)
+
+LOKI_BUILDER_VOLUMES+=(${LOKI_BUILD_DIR}:${LOKI_BUILD_DIR_DOCKER} 
+                       ${LOKI_SOURCE_DIR}:${LOKI_SOURCE_DIR_DOCKER} 
+                       ${LOKI_DATA_DIR}:${LOKI_DATA_DIR_DOCKER}
+                       ${LOKI_DATA_DIR})
+LOKI_BUILDER_VOLUMES+=(/mnt/fd2:/woot /mnt/fd2/nga_p2/cuda /mnt/fd2/isos:/isos)
+
+#WHY this is a BAD
+LOKI_BUILDER_VOLUMES+=(/mnt/fd2/a:/a /mnt/fd2/a/b:/a/dd /mnt/fd2/a/b/c:/a/b/c)
+LOKI_TEST=/dev/shm/look/at/me/now
+
+#****fI*
+# INPUTS
+#   1 - String of variable name, such as $blah.
+# USAGE
+#   Assumes the string is a variable expression, so the first letter is assumed
+#   to be a $, and is not checked
+# EXAMPLE
+#   indirect=var_sub '${hi}'
+#   indirect=var_sub '$hi'
+function _docker_compose_override_var_sub()
+{
+  # support ${blah} notation
+  if [ "${1:1:1}" == "{" ]; then
+    echo ${1:2:${#1}-3}
+  else #support $blah notation
+    echo ${1:1:${#1}-1}
+  fi
+}
+
+# Document
+# _DOCKER
+# _HOST
+# COMPOSE_VERSION - Default: 3.2
+# EXPORT_DOCKER - Default: 0
+# MOUNT_PREFIX - Default: /host_mnt
+
+function generate_compose()
+{
+  local services_name
+  local volumes_name
+  local volume
+  local volumes
+  local indirect
+
+  services_name="${1}_SERVICES[@]"
+  local services_up=($(sed 's|.*|\U&|' <<< ${!services_name}))
+  local i
+
+  # Save old IFS
+  local OLD_IFS="${IFS}"
+  local IFS
+  local volume_info
+
+  local DOCKER_ENTRYPOINT_LINKS
+
+  echo "version: '${COMPOSE_VERSION-3.2}'"
+  echo "services:"
+  for i in "${!services_up[@]}"; do
+    services_name="${1}_SERVICES[$i]"
+    echo "  ${!services_name}:"
+    echo "    volumes:"
+
+    # clear list for this service
+    DOCKER_ENTRYPOINT_LINKS=()
+
+    # Indirect fun
+    volumes_name="${1}_${services_up[$i]}_VOLUMES"
+    indirect="${volumes_name}[@]"
+    volumes=()
+    for volume in ${!volumes_name+"${!indirect}"}; do
+      IFS=:
+      volume_info=(${volume})
+      IFS="${OLD_IFS}"
+
+      if [ "${#volume_info[@]}" == 1 ]; then
+        volume_info+=("${volume_info[0]}")
+      fi
+
+      # Evaluate variables
+      if [ "${volume_info[0]:0:1}" == "$" ]; then
+        indirect=$(_docker_compose_override_var_sub ${volume_info[0]})
+        volume_info[0]="${!indirect}"
+        declare "${indirect}_DOCKER=${volume_info[0]}"
+      fi
+      if [ "${volume_info[1]:0:1}" == "$" ]; then
+        indirect=$(_docker_compose_override_var_sub ${volume_info[1]})
+        volume_info[1]="${!indirect}"
+        declare "${indirect}_DOCKER=${volume_info[1]}"
+      fi
+
+      # If it doesn't exist, attempt to make it as this user. Better than root
+      if [ ! -e "${volume_info[0]}" ]; then
+        mkdir -p "${volume_info[0]}"
+      fi
+
+      if [[ ${volume_info[0]:0:1} =~ [./] ]]; then
+        host_mount_point="$(mount_point "${volume_info[0]}")"
+        # If the mount point isn't already the same as the mount, check to see 
+        # if it's nfs
+        if [ "${host_mount_point}" != "${volume_info[0]}" ] && \
+            is_nfs "$(mount_type "${host_mount_point}")"; then
+          
+          # Add to the entrypoint list
+          DOCKER_ENTRYPOINT_LINKS+=("${volume_info[1]}" 
+                                    "${MOUNT_PREFIX-/host_mnt}${volume_info[0]}")
+          # Rewrite this volume
+          volume_info[0]="${host_mount_point}"
+          volume_info[1]="${MOUNT_PREFIX-/host_mnt}${host_mount_point}"
+        fi
+      fi
+
+      IFS=:
+      volumes+=("      - ${volume_info[*]}")
+    done
+    # remove duplicated, docker-compose doesn't like them
+    IFS=$'\n'
+    volumes=($(sort -u <<< "${volumes[*]}"))  
+    echo "${volumes[*]}"
+    IFS="${OLD_IFS}"
+
+    echo "    environment:"
+    if [ "${DOCKER_ENTRYPOINT_LINKS+set}" == "set" ]; then
+      IFS=:
+      echo "      - DOCKER_ENTRYPOINT_LINKS=${DOCKER_ENTRYPOINT_LINKS[*]}"
+      IFS="${OLD_IFS}"
+    fi
+    for var in $(compgen -A variable); do
+      # For project variables ending in _DOCKER, handle these specially
+      if [[ $var =~ ^${1}_.*_DOCKER$ ]]; then
+        indirect=${var%_DOCKER}
+
+        if declare -p ${indirect}&>/dev/null; then
+          echo "      - ${indirect}_HOST=${!indirect}"
+        fi
+        if declare -p ${var}&>/dev/null; then
+          echo "      - ${indirect}=${!var}"
+          if [ "${EXPORT_DOCKER-0}" == "1" ]; then
+            echo "      - ${indirect}_DOCKER=${!var}"
+          fi
+        fi
+      # For project variables ending in _HOST, pass them along as-is
+      elif [[ $var =~ ^${1}_.*_HOST$ ]]; then
+        echo "      - ${var}=${!var}"
+      fi
+    done
+  done
+}
+
+if [[ ${BASH_SOURCE[0]} == ${0} ]] || [[ $(basename ${BASH_SOURCE[0]}) == ${0} ]]; then
+  set -eu
+  generate_compose ${@+"${@}"}
+fi
