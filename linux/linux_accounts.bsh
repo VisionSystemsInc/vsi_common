@@ -16,6 +16,8 @@
 #   - Arrays with the first element unset may have unpredictable behavior 
 #   - If the passwd file exists and the shadow does not, it will not be detected
 #   - If the group file exists and the ghshdow does not, it will not be detected
+# AUTHOR
+#   Andy Neff
 #***
 
 #****f* linux_accounts.bsh/read_file
@@ -113,10 +115,6 @@ function add_user()
     #Add the user
     add_to_passwd "$1" x "${2-1000}" "${3-1000}" "${4-/home/$1}"
     add_to_shadow "$1" '*'
-
-    if [ "${LINUX_ACCOUNTS_AUTOSAVE}" == "1" ]; then
-      write_file /etc/shadow "${shadow[@]}"
-    fi
   else
     #Add the user
     add_to_passwd "$1" '*' "${2-1000}" "${3-1000}" "${4-/home/$1}"
@@ -231,6 +229,26 @@ function write_user_data()
   fi
 }
 
+#****f* linux_accounts.bsh/find_open_fd
+# NAME
+#   find_open_fd - Find the first open fd
+# EXAMPLE
+#   my_fd=$(find_open_fd)
+#   exec 
+function find_open_fd()
+{
+  local fd
+
+  found=none
+  for ((fd=3; fd<$(ulimit -n); fd++)); do
+    if ! : 2>/dev/null >&${fd}; then
+      echo ${fd}
+      break
+    fi
+  done
+  return 1
+}
+
 #****f* linux_accounts.bsh/add_group
 # NAME
 #   add_group - Adds a new group to the OS
@@ -275,13 +293,19 @@ function add_group()
       mkfifo "${fifo_buffer}"
     fi
 
+    local fd=$(find_open_fd)
+
     # Redirect 3 to the fifo buffer
-    exec 3<>"${fifo_buffer}"
+    eval "exec ${fd}<>'${fifo_buffer}'"
 
     # Create a new group, and redirect stdout to 
     add_to_group "$1" "$2" 'x' >&3
     # Read from fd 3 into group_name
     read -u3 group_name
+
+    eval "exec ${fd}>&-"
+
+    # Add gshadow entry
     add_to_gshadow ${group_name} '!'
 
     # Delete that fifo buffer after one use
