@@ -1,0 +1,79 @@
+#!/usr/bin/false
+
+#****f* linux_accounts.bsh/find_open_fd
+# NAME
+#   find_open_fd - Find the first open file descriptor
+# OUTPUT
+#   fd - Value of next unused file descriptor
+# USAGE
+#   This is for backwards compatibility. In bash 4.1 or newer, this isn't
+#   necessary, as:
+#
+#     exec {fd}<>${some_buffer}
+#     echo "hi" >&${fd}
+#     read -u${fd} some_var
+#     exec {fd}>&-
+#
+#   is better.
+# BUGS
+#   Probably not thread safe
+# SEE ALSO
+#   open_fd, close_fd
+# AUTHOR
+#   Andy Neff
+#***
+function find_open_fd()
+{
+  for ((fd=3; fd<$(ulimit -n); fd++)); do
+    if ! : 2>/dev/null >&${fd}; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# INPUTS
+#   [1] - File descriptor number. Default: Find next open fd
+#   [fifo_buffer] - FIFO buffer used
+# OUTPUT
+#   fd - The fd number
+# BUGS
+#   You can't do
+#
+#     output=$(open_fd)
+#
+#   Because open_fd will be executed in a subshell, and thus the opened fd will
+#   be useless. This is the design decision behind storing the file descriptor
+#   in the fd variable
+function open_fd()
+{
+  # Get fd
+  if ! (( $# )); then
+    find_open_fd
+  else
+    fd=$1
+  fi
+
+  # Setup a fifo buffer for one use
+  if ! declare -p fifo_buffer&>/dev/null; then
+    FILE_TOOLS_DELETE_BUFFER=1
+    fifo_buffer="$(mktemp -u -p /tmp)"
+    mkfifo "${fifo_buffer}"
+  fi
+
+  # Redirect 3 to the fifo buffer
+  eval "exec ${fd}<>'${fifo_buffer}'"
+}
+
+# INPUTS
+#   1 - fd number
+function close_fd()
+{
+  eval "exec ${1}>&-"
+
+  # Delete that fifo buffer after one use
+  if [ "${FILE_TOOLS_DELETE_BUFFER-}" == "1" ]; then
+    rm "${fifo_buffer}"
+    unset FILE_TOOLS_DELETE_BUFFER
+  fi
+}
