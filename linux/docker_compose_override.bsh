@@ -5,7 +5,7 @@ source "${VSI_COMMON_DIR}/linux/mount_tools.bsh"
 
 LOKI_SERVICES=(nginx builder vxl)
 LOKI_SERVICES=(builder)
-LOKI_ALL_VOLUMES=(/dev/shm)
+LOKI__VOLUMES=(/dev/shm:/hostdevshm )
 LOKI_NGINX_VOLUMES=(/dev/shm/aa '$LOKI_TEST' /dev/shm/cc/foo/bar:/here )
 LOKI_VXL_VOLUMES=(/dev/shm/11 /dev/shm/22 /dev/shm/33:/everywhere:ro foobar:/fubar)
 
@@ -15,11 +15,11 @@ LOKI_BUILDER_VOLUMES+=(${LOKI_BUILD_DIR}:${LOKI_BUILD_DIR_DOCKER}
                        ${LOKI_DATA_DIR})
 LOKI_BUILDER_VOLUMES+=(/mnt/fd2:/woot /mnt/fd2/nga_p2/cuda /mnt/fd2/isos:/isos)
 
-#WHY this is a BAD
+# Failure demonstration
 LOKI_BUILDER_VOLUMES+=(/mnt/fd2/a:/a /mnt/fd2/a/b:/a/dd /mnt/fd2/a/b/c:/a/b/c)
 LOKI_TEST=/dev/shm/look/at/me/now
 
-#****fI*
+#****fI* docker_compose_override.bsh/_docker_compose_override_var_sub
 # INPUTS
 #   1 - String of variable name, such as $blah.
 # USAGE
@@ -28,6 +28,7 @@ LOKI_TEST=/dev/shm/look/at/me/now
 # EXAMPLE
 #   indirect=var_sub '${hi}'
 #   indirect=var_sub '$hi'
+#***
 function _docker_compose_override_var_sub()
 {
   # support ${blah} notation
@@ -52,6 +53,9 @@ function generate_compose()
   local volume
   local volumes
   local indirect
+  local volumes_name_all
+  local indirect_all
+  local host_mount_point
 
   services_name="${1}_SERVICES[@]"
   local services_up=($(sed 's|.*|\U&|' <<< ${!services_name}))
@@ -73,12 +77,15 @@ function generate_compose()
 
     # clear list for this service
     DOCKER_ENTRYPOINT_LINKS=()
+    volumes=()
 
     # Indirect fun
     volumes_name="${1}_${services_up[$i]}_VOLUMES"
     indirect="${volumes_name}[@]"
-    volumes=()
-    for volume in ${!volumes_name+"${!indirect}"}; do
+    volumes_name_all="${1}__VOLUMES"
+    indirect_all="${volumes_name_all}[@]"
+
+    for volume in ${!volumes_name_all+"${!indirect_all}"} ${!volumes_name+"${!indirect}"}; do
       IFS=:
       volume_info=(${volume})
       IFS="${OLD_IFS}"
