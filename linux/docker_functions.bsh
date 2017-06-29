@@ -3,6 +3,7 @@
 
 : ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
 source "${VSI_COMMON_DIR}/linux/mount_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/docker_compose_override"
 
 #****F* vsi/docker_functions.bsh
 # NAME
@@ -423,6 +424,84 @@ function Docker-compose()
   return $?
 }
 
+#****f* docker_functions.bsh/Just-docker-compose
+# NAME
+#   Just-docker-compose - Docker-compose with advance just features
+# INPUTS
+#   $1... - Arguments to docker-compose
+#   Uses JUST_PROJECT_PREFIX
+# DESCRIPTION
+#   To provide a smoother just experience, advanced features are baked into
+#   Just-docker-compose to work with Just and docker_entrypoint.bsh to cover the
+#   last mile in getting docker starter and setup with a predictable environment
+#   user permissions, mounts (and more...)
+#
+#   This function will:
+#   - Create a docker override yaml file and extend the current docker-compose
+#     configuration with:
+#     - Environment variables ${JUST_PROJECT_PREFIX}_.*_HOST are copied to the
+#       docker environment exactly as it.
+#     - For every environment variable ${JUST_PROJECT_PREFIX}_.*_DOCKER
+#       - ${JUST_PROJECT_PREFIX}_.*_DOCKER variables are copied as 
+#         ${JUST_PROJECT_PREFIX}_.*
+#       - ${JUST_PROJECT_PREFIX}_.* variables are copied as 
+#         ${JUST_PROJECT_PREFIX}_.*_HOST
+# BUGS
+#   A temp file is left behind in dryrun mode, so that dryrun mode will actually
+#   work. As long as the dryrun commands are executed, the temp file will be 
+#   cleaned up. So ultimately, this is by design.
+# AUTHOR
+#   Andy Neff
+#***
+function Just-docker-compose()
+{
+  if [ ! "${JUST_PROJECT_PREFIX+set}" == "set" ]; then
+    echo "You need to define JUST_PROJECT_PREFIX for this to work. Please add"
+    echo "JUST_PROJECT_PREFIX to your environment script, typically the project"
+    echo "name in caps."
+    exit 1
+  fi
+
+  local override_file="$(mktemp)"
+  local compose_file_override
+
+  # Add the override  
+  if [ "${COMPOSE_FILE+set}" == "set" ]; then
+    compose_file_override="${COMPOSE_FILE}:${override_file}"
+  else
+    local f
+    #mimic docker-compose's default behavior
+    compose_file_override=
+    for f in docker-compose.yml docker-compose.yaml docker-compose.override.yml docker-compose.override.yaml; do
+      [ -e "${f}" ] && compose_file_override+="${f}"
+    done
+
+    compose_file_override+=":${override_file}"
+  fi
+
+  #Auto detect compose version (PURE BASH, WHAT?!)
+  if [ "${COMPOSE_VERSION+set}" != "set" ]; then
+    while IFS='' read -r line || [[ -n "${line}" ]]; do
+      if [[ $line =~ ^version\ *:\ *[\'\"](.*)[\'\"] ]]; then
+        local COMPOSE_VERSION=${BASH_REMATCH[1]}
+        break
+      fi
+    done < "${compose_file_override%%:*}"
+  fi
+
+  generate_docker_compose_override ${JUST_PROJECT_PREFIX} > "${override_file}"
+
+  # Fail later behavior for set -eu. This should guarantee the override_file
+  # is deleted. If this isn't enough, investigate adding cleanup to a trap
+  local rv=0
+  if [ "${DRYRUN-}" != "" ]; then 
+    echo -n "env COMPOSE_FILE=\"${compose_file_override}\" "
+  fi
+  COMPOSE_FILE="${compose_file_override}" Docker-compose ${@+"${@}"} || rv=$?
+  ${DRYRUN} rm "${override_file}"
+  return $rv
+}
+
 #****f* docker_functions.bsh/service_running
 # NAME
 #   service_running - Checks to see if a docker-compose service is running
@@ -440,189 +519,4 @@ function Docker-compose()
 function service_running()
 {
   ${DOCKER} inspect -f '{{.State.Status}}' $(${DOCKER_COMPOSE} ps -q) 2>/dev/null
-}
-
-# #****f* docker_functions.bsh/nfs_patch
-# # NAME
-# #   nfs-patch - Just specific took for fixing nfs mounts
-# # DESCRIPTION
-# #   Loops through the an array in the same docker-compose-volumes output format
-# #   and checks if they are nfs mount and not the mount point itself. This is the
-# #   scenario where volume mounting in docker fails due to squash_root.
-# #
-# #   1. First the mount point is determined (via df)
-# #   2. Then file system is identify (using mount)
-# #   3. If there is a nfs mount that is not the mount point, then the mount point
-# #      is mounted instead. The docker location is changed to match the same
-# #      mount point, with a prefix added.
-# #
-# #   It is assumed (and not checked) that the docker mount directory is the same
-# #   as the host directory, with the prefix added.
-# #
-# #   Also see Docker-compose-nfs description
-# # EXAMPLE
-# #   For example, if /mnt/volume1 is a nfs mount, assuming DOCKER_VOLUME_FLAGS is
-# #   (-v /mnt/volume1/project/dodo:/mnt/volume1/project/dodo:rw) then after
-# #   nfs_patch, it will be
-# #   (-v /mnt/volume1:/mnt/volume1:rw)
-# # INPUTS
-# #   [$1] - Docker prefix. Default: /mnt
-# #   DOCKER_VOLUME_FLAGS - Docker volume flags from docker-compose-volumes
-# # NOTES
-# #   This does not remove repeats, but docker-compose should be robust to this.
-# #   This function is pretty specific to just usage
-# # USES
-# #   df, mount
-# # SEE ALSO
-# #   Docker-compose-nfs
-# #***
-# function nfs_patch()
-# {
-#   local host
-#   local docker
-#   local flags
-#   local prefix="${1-/mnt}"
-#   for ((i=1; i<${#DOCKER_VOLUME_FLAGS[@]}; i+=2)); do
-#     host=${DOCKER_VOLUME_FLAGS[$i]%%:*}
-#     if [[ ! ${host:0:1} =~ [./] ]]; then
-#       #skip because host is an internal mount
-#       continue
-#     fi
-#     flags=${DOCKER_VOLUME_FLAGS[$i]#*:}
-#     docker=${flags%%:*}
-#     flags=:${flags#*:}
-#     #if they are the same, then there are no flags
-#     if [ "${flags}" == ":${docker}" ]; then
-#       flags=""
-#     fi
-#     host_mount_point="$(mount_point "${host}")"
-#     #If the mount point isn't already the same as the mount, check to see if
-#     #it's nfs
-#     if [ "${host_mount_point}" != "${host}" ] && \
-#        is_nfs "$(mount_type "${host_mount_point}")"; then
-#       # Rewrite this volume
-#       DOCKER_VOLUME_FLAGS[$i]="${host_mount_point}:${prefix}${host_mount_point}${flags}"
-#     fi
-#   done
-# }
-#
-# #****d* docker_functions.bsh/Docker-compose-nfs
-# # NAME
-# #   Docker-compose-nfs - Docker compose with NFS protection
-# # DESCRIPTION
-# #   When using squash_root on nfs, docker as root is unable to check. Since
-# #   docker is not going to remove this feature due to backwards compatibility
-# #   reason, this will continue to break. Docker as squashed root checks if a
-# #   a directory exists. It won't (permission denied?) and will try to mkdir the
-# #   directory, and fail (permission denied).
-# #
-# #   The current work around is to identify all the directories and check if they
-# #   are nfs. If they are indeed nfs, then make mount the mount point of the
-# #   directory instead.
-# # INPUTS
-# #   $1 - name of service of interest
-# #   $2... - Args to docker-compose
-# #   [COMPOSE_PROJECT_NAME] - Name of compose project. Used for prefix to docker
-# #                          volumes
-# #   [EXTRA_VOLUMES] - Array of extra volumes to check and add
-# #   [NFS_PREFIX] - Prefix added to nfs volumes
-# # AUTHOR
-# #   Andy Neff
-# #***
-# function Docker-compose-nfs()
-# {
-#   local run_service_name=$(get_run_service_name ${@+"${@}"})
-#
-#   if [ "${run_service_name:+set}" == "set" ]; then
-#     local v
-#     local DOCKER_COMPOSE_EXTRA_RUN_ARGS=(${DOCKER_COMPOSE_EXTRA_RUN_ARGS+"${DOCKER_COMPOSE_EXTRA_RUN_ARGS[@]}"})
-#
-#     docker-compose-volumes ${run_service_name} ${COMPOSE_PROJECT_NAME+${COMPOSE_PROJECT_NAME}_} < <(${DOCKER_COMPOSE} config) # process substitution
-#     nfs_patch ${NFS_PREFIX-}
-#     DOCKER_COMPOSE_EXTRA_RUN_ARGS+=(${DOCKER_VOLUME_FLAGS+"${DOCKER_VOLUME_FLAGS[@]}"})
-#
-#     # convert volumes in EXTRA_VOLUMES to -v <VOLUME> flags
-#     for v in ${EXTRA_VOLUMES+"${EXTRA_VOLUMES[@]}"}; do
-#       DOCKER_COMPOSE_EXTRA_RUN_ARGS+=(-v "$(docker_sanitize_volume "${v%:*}" "${v##*:}")")
-#     done
-#   fi
-#
-#   Docker-compose "${@}"
-# }
-
-#****f* docker_functions.bsh/get_run_service_name
-# NAME
-#   get_run_service_name - Extract service name from list of arguments
-# INPUTS
-#   $1... - Arguments to docker-compose command
-# OUTPUT
-#   stdout - Name of service
-# EXAMPLE
-#   For the command "docker-compose -f test.yml run -p500 -p 600 -e a=b -ec=d
-#   --user=aaa --user bbb test_service a b c" running
-#
-#   get_run_service_name docker-compose -f test.yml run -p500 -p 600 -e a=b\
-#   -ec=d--user=aaa --user bbb test_service a b c
-#
-#   Returns: "test_service"
-# NOTES
-#   Works on run commands only for docker-compose 1.13
-# AUTHOR
-#   Andy Neff
-#***
-function get_run_service_name()
-{
-  while (( $# )); do
-    case "$1" in
-      #Insert other commands here to work on other commands
-      run)
-        shift 1
-        break
-        ;;
-      -f|-p|-H)
-        docker_compose_args+=("$1" "$2")
-        shift 2
-        ;;
-      -f*|-p*|-H*)
-        if [ "${#1}" == 2 ]; then
-          docker_compose_args+=("$1" "$2")
-          shift 2
-        else
-          docker_compose_args+=("$1")
-          shift 1
-        fi
-        ;;
-      --file=*|--project-name=*|--host=*|\
-      --tlscacert=*|--tlscert=*|--tlskey=*|--project-directory=*|\
-      -v|--verbose|--tls|--skip-hostname-check|--tlsverify)
-        docker_compose_args+=("$1")
-        shift 1
-        ;;
-      --file|--project-name|--host|\
-      --tlscacert|--tlscert|--tlskey|--project-directory)
-        docker_compose_args+=("$1" "$2")
-        shift 2
-        ;;
-      *)
-        # Not a run command
-        return
-        ;;
-    esac
-  done
-
-  while (( $# )); do
-    case "$1" in
-      --name|-e|--user|-u|--publish|-p|-v|--volume|-w|--workdir)
-        shift 2
-        ;;
-      --name=*|-e*|--user=|-u*|-d|--no-deps|--rm|--publish=*|-p*|--service-ports|-v*|--volume=|-T|-w*|--workdir=)
-        shift 1
-        ;;
-      *)
-        #Service name!
-        echo "$1"
-        return
-        ;;
-    esac
-  done
 }

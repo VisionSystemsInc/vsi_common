@@ -1,6 +1,14 @@
 #!/usr/bin/env false
 #Source this script to access just functionality
 
+: ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
+
+# A few functions are defines in a common. Sourced here for DRY
+source "${VSI_COMMON_DIR}/linux/just_common.bsh"
+# Preload some files
+source "${VSI_COMMON_DIR}/linux/isin"
+source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
+
 #****d* just/DRYRUN
 # NAME
 #   DRYRUN - Print out some commands instead of executing
@@ -135,12 +143,6 @@ JUST_HELP_FILES=(${BASH_SOURCE[0]})
 #   Andy Neff
 #***
 
-# A few functions are defines in a common. Sourced here for DRY
-. "$(dirname "${BASH_SOURCE[0]}")/just_common.bsh"
-
-# Preload some files
-. "$(dirname "${BASH_SOURCE[0]}")/isin"
-
 #****f* just/source_environment_files
 # NAME
 #   source_environment_files -- Convenience function for sourcing environments
@@ -160,6 +162,10 @@ JUST_HELP_FILES=(${BASH_SOURCE[0]})
 #                         ${same_dir}/local.env
 #   JUST_LOCAL_SETTINGS_POST - Path of post local settings file, default is 
 #                              ${same_dir}/local_post.env
+#   [JUST_FILTER_DOCKER] - If this is set to 1, and this script is being 
+#                          executed inside a docker, then 
+#                          ${JUST_PROJECT_PREFIX}_.*_DOCKER variables are unset,
+#                          assuming JUST_PROJECT_PREFIX is set
 # NOTES
 #   Certain exceptions make sense for not storing values in the project file,
 #   such as credentials, encryption keys, etc... information that should not be
@@ -175,16 +181,30 @@ JUST_HELP_FILES=(${BASH_SOURCE[0]})
 function source_environment_files()
 {
   local project_dir="$(dirname $1)"
+  local x
 
-  for file in "${JUST_LOCAL_SETTINGS:-${project_dir}/local.env}" \
-              "$1" \
-              "${JUST_LOCAL_SETTINGS_POST:-${project_dir}/local_post.env}"; do
-    if [ -f "$file" ]; then
-      set -a
-      . "${file}"
-      set +a
+  set_flag a
+  for x in "${JUST_LOCAL_SETTINGS:-${project_dir}/local.env}" \
+           "$1" \
+           "${JUST_LOCAL_SETTINGS_POST:-${project_dir}/local_post.env}"; do
+    if [ -f "${x}" ]; then
+      . "${x}"
     fi
   done
+  reset_flag a
+
+  # ##### Environment Variable Filtering #####
+  # This will filter out environment variables LOKI_*_DOCKER in the docker.
+     # I must be in a docker
+  if [ -e /.dockerenv ] && \
+     # Project prefix was set
+     [ "${JUST_PROJECT_PREFIX+set}" == "set" ] && \
+     # This feature was enabled
+     [ "${JUST_FILTER_DOCKER-0}" == "1" ]; then
+    for x in $(compgen -A variable | grep '^${JUST_PROJECT_PREFIX}_.*_DOCKER$'); do
+      unset "${LOKI_TEMP_VAR}"
+    done
+  fi
 }
 
 #****f* just/load_justfile
