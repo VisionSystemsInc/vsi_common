@@ -3,6 +3,17 @@
 : ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
 source "${VSI_COMMON_DIR}/linux/mount_tools.bsh"
 
+#****F* just/docker_compose_override.bsh
+# NAME
+#   docker_compose_override.bsh - Generate docker compose override file
+# USAGE
+#   Can be called or sourced for finer control
+# SEE ALSO
+#   docker_compose_override.bsh/generate_docker_compose_override
+# AUTHOR
+#   Andy Neff
+#***
+
 #****fI* docker_compose_override.bsh/_docker_compose_override_var_sub
 # INPUTS
 #   1 - String of variable name, such as $blah.
@@ -10,8 +21,10 @@ source "${VSI_COMMON_DIR}/linux/mount_tools.bsh"
 #   Assumes the string is a variable expression, so the first letter is assumed
 #   to be a $, and is not checked
 # EXAMPLE
-#   indirect=var_sub '${hi}'
-#   indirect=var_sub '$hi'
+#   indirect=$(_docker_compose_override_var_sub '${hi}')
+#   indirect=$(_docker_compose_override_var_sub '$hi')
+# AUTHOR
+#   Andy Neff
 #***
 function _docker_compose_override_var_sub()
 {
@@ -23,13 +36,63 @@ function _docker_compose_override_var_sub()
   fi
 }
 
-# Document
-# _DOCKER
-# _HOST
-# COMPOSE_VERSION - Default: 3.2
-# EXPORT_DOCKER - Default: 0
-# MOUNT_PREFIX - Default: /host_mnt
-
+#****f* docker_compose_override.bsh/generate_docker_compose_override
+# NAME
+#   generate_docker_compose_override - Creates override yaml for just features
+# INPUTS
+#   $1 - Prefix used in many of the just features, such as ${1}_SERVICES,
+#        ${1}_.*_DOCKER/HOST variables, etc...
+#   [COMPOSE_VERSION] - Docker compose version used. Default: 3.2
+#   [EXPORT_DOCKER] - Optionally adds ${1}_.*_DOCKER as is too when using the
+#                     transparent variable swap feature. Default: 0
+#   [JUST_DISABLE_ENVIRONMENT_SWAP] - Optionally disables the transparent 
+#                                     variable swap feature. Default: 0
+#   [MOUNT_PREFIX] - Some mounted file systems will not allow subdirectories to
+#                    be mounted by root, such as nfs with squash root turned on.
+#                    In this case, generate_docker_compose_override will mount
+#                    the base mount point in a side location, and symlink the 
+#                    subdirectory in where it was supposed to be mounted. This
+#                    may be slightly less than ideal, but this is the best that
+#                    can be done with these file systems. The MOUNT_PREFIX is
+#                    the location where these mount points are mounted. This 
+#                    mount points are not intended to be used by the apps 
+#                    running in the container. Default: /host_mnt
+# OUTPUT
+#   stdout - docker-compose yaml files
+# DESCIRPTION
+#   Create a docker override yaml file and extend the current docker-compose
+#   configuration with:
+#   - Volume features:
+#     - Volumes can be added to the services listed in 
+#       ${1}_SERVICES
+#       - Volumes listed in ${1}_VOLUMES are added to every
+#         service in ${1}_SERVICES
+#       - Volumes list in ${1}_<upper(service_name)>_VOLUMES
+#         are added just to that service.
+#       - NOTE: If the yaml file uses anchors, this will not be reflected in
+#         this auto generated file. You will have to set the value of
+#         ${1}_<other_service_name>_VOLUMES too
+#   - Environment features:
+#     - For the volumes that couldn't be mounted in the right locations (mostly
+#       due to nfs limitations), the variables JUST_DOCKER_ENTRYPOINT_LINKS is
+#       set in a colon delimited string (used by 
+#       docker_entrypoints.bsh/docker_link_mounts).
+#     - Environment variables ${1}_.*_HOST are copied to the docker environment
+#       exactly as is.
+#     - Normal transparent swap feature:
+#       - For every environment variable ${1}_.*_DOCKER
+#         - ${1}_.* variables are copied as ${1}_.*_HOST
+#         - ${1}_.*_DOCKER variables are copied as ${1}_.*
+#       - This is a transparency feature. Only _DOCKER variables should use 
+#         _DOCKER variables.
+#     - The transparency swap feature can be disabled by setting 
+#       JUST_DISABLE_ENVIRONMENT_SWAP=1. In which case:
+#       - For ever environment variable ${1}_.*_DOCKER
+#         - ${1}_.*_DOCKER is copied exactly as is
+#         - ${1}_.* is copied exactly as is if it exists
+# SEE ALSO
+#   docker_entrypoints.bsh/docker_link_mounts
+#***
 function generate_docker_compose_override()
 {
   local services_name
@@ -40,33 +103,32 @@ function generate_docker_compose_override()
   local volumes_name_all
   local indirect_all
   local host_mount_point
+  local i
+  local volume_info
+  local just_docker_entrypoint_links
 
   services_name="${1}_SERVICES[@]"
-  local services_up=($(sed 's|.*|\U&|' <<< ${!services_name}))
-  local i
+  local services_upper=($(sed 's|.*|\U&|' <<< ${!services_name}))
 
   # Save old IFS
   local OLD_IFS="${IFS}"
   local IFS
-  local volume_info
-
-  local DOCKER_ENTRYPOINT_LINKS
 
   echo "version: '${COMPOSE_VERSION-3.2}'"
   echo "services:"
-  for i in "${!services_up[@]}"; do
+  for i in "${!services_upper[@]}"; do
     services_name="${1}_SERVICES[$i]"
     echo "  ${!services_name}:"
     echo "    volumes:"
 
     # clear list for this service
-    DOCKER_ENTRYPOINT_LINKS=()
+    just_docker_entrypoint_links=()
     volumes=()
 
     # Indirect fun
-    volumes_name="${1}_${services_up[$i]}_VOLUMES"
+    volumes_name="${1}_${services_upper[$i]}_VOLUMES"
     indirect="${volumes_name}[@]"
-    volumes_name_all="${1}__VOLUMES"
+    volumes_name_all="${1}_VOLUMES"
     indirect_all="${volumes_name_all}[@]"
 
     for volume in ${!volumes_name_all+"${!indirect_all}"} ${!volumes_name+"${!indirect}"}; do
@@ -103,8 +165,8 @@ function generate_docker_compose_override()
             is_nfs "$(mount_type "${host_mount_point}")"; then
           
           # Add to the entrypoint list
-          DOCKER_ENTRYPOINT_LINKS+=("${volume_info[1]}" 
-                                    "${MOUNT_PREFIX-/host_mnt}${volume_info[0]}")
+          just_docker_entrypoint_links+=("${volume_info[1]}" 
+                                         "${MOUNT_PREFIX-/host_mnt}${volume_info[0]}")
           # Rewrite this volume
           volume_info[0]="${host_mount_point}"
           volume_info[1]="${MOUNT_PREFIX-/host_mnt}${host_mount_point}"
@@ -121,9 +183,9 @@ function generate_docker_compose_override()
     IFS="${OLD_IFS}"
 
     echo "    environment:"
-    if [ "${DOCKER_ENTRYPOINT_LINKS+set}" == "set" ]; then
+    if [ "${just_docker_entrypoint_links+set}" == "set" ]; then
       IFS=:
-      echo "      - DOCKER_ENTRYPOINT_LINKS=${DOCKER_ENTRYPOINT_LINKS[*]}"
+      echo "      - JUST_DOCKER_ENTRYPOINT_LINKS=${just_docker_entrypoint_links[*]}"
       IFS="${OLD_IFS}"
     fi
     for var in $(compgen -A export); do
@@ -132,9 +194,15 @@ function generate_docker_compose_override()
         indirect=${var%_DOCKER}
 
         if declare -p ${indirect}&>/dev/null; then
-          echo "      - ${indirect}_HOST=${!indirect}"
+          if [ "${JUST_DISABLE_ENVIRONMENT_SWAP-}" == "1" ]; then
+            echo "      - ${indirect}=${!indirect}"
+          else
+            echo "      - ${indirect}_HOST=${!indirect}"
+          fi
         fi
-        if declare -p ${var}&>/dev/null; then
+        if [ "${JUST_DISABLE_ENVIRONMENT_SWAP-}" == "1" ]; then
+          echo "      - ${var}=${!var}"
+        else
           echo "      - ${indirect}=${!var}"
           if [ "${EXPORT_DOCKER-0}" == "1" ]; then
             echo "      - ${indirect}_DOCKER=${!var}"

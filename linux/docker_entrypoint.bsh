@@ -1,13 +1,13 @@
-#****F* vsi/docker_entrypoints.bsh
+#****F* just/docker_entrypoint.bsh
 # NAME
-#   docker_entrypoints.bsh - Functions to help write docker entrypoints
+#   docker_entrypoint.bsh - Functions to help write docker entrypoints
 # INPUTS
 #   See inputs for other SEE ALSO
 # EXAMPLE
-#   docker_entrypoints.bsh
+#   docker_entrypoint.bsh
 # USAGE
 #   Can also be sourced to call individual functions. By default, calling 
-#   docker_entrypoints.bsh runs
+#   docker_entrypoint.bsh runs
 #   - docker_setup_user
 # SEE ALSO
 #   docker_setup_user
@@ -18,7 +18,7 @@
 : ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
 source "${VSI_COMMON_DIR}/linux/linux_accounts.bsh"
 
-#****f* docker_entrypoints.bsh/docker_setup_user
+#****f* docker_entrypoint.bsh/docker_setup_user
 # NAME
 #   docker_setup_user - Create user/group
 # INPUTS
@@ -109,8 +109,24 @@ function docker_setup_user()
   fi
 }
 
+#****f* docker_entrypoint.bsh/docker_link_mounts
+# NAME
+#   docker_link_mounts - Create symlinks based on JUST_DOCKER_ENTRYPOINT_LINKS
+# USAGE
+#   Automatically called when docker_entrypoint.bsh is called. If
+#   docker_entrypoint.bsh is sourced, then docker_link_mounts would need to be
+#   called separately.
+# DESCRIPTION
+#   When Just-docker-compose / generate_docker_compose_override processes
+#   mounts, in cases such as nfs with squash root, the desired mount will not
+#   be possible, instead a base mount point is mounted into the container and a
+#   symlink needs to link the desired locations. This function creates these
+#   symlinks based on the colon separated string JUST_DOCKER_ENTRYPOINT_LINKS.
 # INPUTS
 #   [DOCKER_LINK_MOUNTS_FORCE] - Default: 0
+# AUTHOR
+#   Andy Neff
+#***
 function docker_link_mounts()
 {
   local IFS=:
@@ -119,14 +135,14 @@ function docker_link_mounts()
     options+='-f'
   fi
 
-  DOCKER_ENTRYPOINT_LINKS=(${DOCKER_ENTRYPOINT_LINKS+${DOCKER_ENTRYPOINT_LINKS}})
-  for ((x=0; x+1<${#DOCKER_ENTRYPOINT_LINKS[@]}; x+=2)); do
-    mkdir -p "$(dirname "${DOCKER_ENTRYPOINT_LINKS[$x]}")"
-    ln ${options} "${DOCKER_ENTRYPOINT_LINKS[$((x+1))]}" "${DOCKER_ENTRYPOINT_LINKS[$x]}" || : # \
+  JUST_DOCKER_ENTRYPOINT_LINKS=(${JUST_DOCKER_ENTRYPOINT_LINKS+${JUST_DOCKER_ENTRYPOINT_LINKS}})
+  for ((x=0; x+1<${#JUST_DOCKER_ENTRYPOINT_LINKS[@]}; x+=2)); do
+    mkdir -p "$(dirname "${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}")"
+    ln ${options} "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}" "${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}" || : # \
     # This gosu version only covers a small corner case, and will only work once
     # without error. It was deemed not worth including in the final cut. Will
     # revisit if it is deemed desired
-    #gosu ${DOCKER_USERNAME} ln ${options} "${DOCKER_ENTRYPOINT_LINKS[$((x+1))]}" "${DOCKER_ENTRYPOINT_LINKS[$x]}" || :
+    #gosu ${DOCKER_USERNAME} ln ${options} "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}" "${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}" || :
   done
 }
 
