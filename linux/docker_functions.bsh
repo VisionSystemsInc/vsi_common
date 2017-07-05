@@ -86,7 +86,9 @@ function is_dir_and_not_exist()
 #   $2 - Label name
 # OUTPUT
 #   stdout - Prints out the label value (and evaluates environment variables)
-#   Return 1 for label is blank (possibly not set), 0 for label found
+#   Return 1 if label is blank (possibly not set), 0 for label found
+# NOTES
+#   Requires perl be installed
 # AUTHOR
 #   Andy Neff
 #***
@@ -140,13 +142,11 @@ function has_label()
 #   directory (which is often not desired). Also, on MINGW Linux/Windows path
 #   expansion ends up being an error to docker on windows. So this function will
 #   take care of both of these problems in an OS agnostic way.
-#
-#   Then it returns  all the volume argument for the -v argument for docker.
 # INPUTS
 #   $1 - The host directory/volume name
 #   [$2] - The docker directory (optional. If omitted, copies host directory)
 # OUTPUT
-#   stdout - The argument that should go with the -v for mounting
+#   stdout - The argument that should go with the -v to docker for mounting
 # BUGS
 #   The docker directory is not optional if the host mount is a volume
 # AUTHOR
@@ -349,7 +349,7 @@ function Docker()
 #   the script will never be executed, thus rendering dryrun useless.)
 # INPUTS
 #   DOCKER_COMPOSE_EXTRA_ARGS - Array of arguments to be added to docker-compose
-#                               (Before the command)
+#                               (before the command)
 #   DOCKER_COMPOSE_EXTRA_COMMAND_ARGS - Array of arguments to be added to
 #                                       docker-compose (after the command)
 #   DOCKER_COMPOSE_EXTRA_RUN_ARGS - Array of arguments to be added to
@@ -361,8 +361,8 @@ function Docker()
 # OUTPUT
 #   Runs docker command
 # BUGS
-#   Docker-compose should not be exec like Docker was. Since fifo buffers are
-#   created in common usage of Docker-compose, `exec Docker-compose` would 
+#   Docker-compose should not be exec'd like Docker was. Since fifo buffers are
+#   created in common usage of Docker-compose, `exec Docker-compose` would
 #   result in fifo buffers being left behind in /tmp
 # AUTHOR
 #   Andy Neff
@@ -443,17 +443,18 @@ function Docker-compose()
 #   user permissions, mounts (and more...)
 #
 #   Creates a docker override yaml file and extends the current docker-compose
-#   configuration. 
+#   configuration.
 #
-#   See docker_compose_override/generate_docker_compose_override for more 
+#   See docker_compose_override/generate_docker_compose_override for more
 #   information
 #
-#   Determines which docker compose yaml files to use by either COMPOSE_FILE or
-#   by mimicking the default behavior of docker-compose
+#   Determines which docker compose yaml files to use by mimicking the default
+#   behavior of docker-compose, which includes querying the COMPOSE_FILE
+#   environment variable
 # BUGS
-#   A temp file is left behind in dryrun mode, so that dryrun mode will actually
-#   work. As long as the dryrun commands are executed, the temp file will be 
-#   cleaned up, as one of the commands is rm. So ultimately, this is by design.
+#   A temp file is left behind in dryrun mode so that dryrun mode will actually
+#   work. As long as the commands echo'd by dryrun are executed, the temp file
+#    will be cleaned up, as one of them is rm. So ultimately, this is by design.
 # SEE ALSO
 #   docker_compose_override/generate_docker_compose_override
 # AUTHOR
@@ -471,7 +472,7 @@ function Just-docker-compose()
   local override_file="$(mktemp)"
   local compose_file_override
 
-  # Add the override  
+  # Add the override
   if [ "${COMPOSE_FILE+set}" == "set" ]; then
     compose_file_override="${COMPOSE_FILE}:${override_file}"
   else
@@ -500,7 +501,7 @@ function Just-docker-compose()
   # Fail later behavior for set -eu. This should guarantee the override_file
   # is deleted. If this isn't enough, investigate adding cleanup to a trap
   local rv=0
-  if [ "${DRYRUN-}" != "" ]; then 
+  if [ "${DRYRUN-}" != "" ]; then
     echo -n "env COMPOSE_FILE=\"${compose_file_override}\" "
   fi
   COMPOSE_FILE="${compose_file_override}" Docker-compose ${@+"${@}"} || rv=$?

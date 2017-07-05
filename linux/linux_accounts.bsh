@@ -7,16 +7,16 @@ source "${VSI_COMMON_DIR}/linux/file_tools.bsh"
 # NAME
 #   linux_accounts.bsh - Functions for manipulating linux user/groups
 # NOTES
-#   Works on tested (all?) versions centos, ubuntu, debian, fedora, alpine,
-#   busybox, cirros, amazonlinux, and clearlinux
+#   Works on tested (all?) versions CentOS, Ubuntu, Debian, Fedora, Alpine,
+#   BusyBox, CirrOS, Amazon Linux, and Clear Linux
 # BUGS
-#   On operating systems like clearlinux, (and other more complicated setups 
+#   On operating systems like Clear Linux, (and other more complicated setups
 #   like LDAP/NIS/etc...) where the user/group lists come from multiple places,
 #   the non-duplication code may not work as expected. This could be worked
-#   around by setting they passwd/etc... arrays yourself before calling 
+#   around by setting they passwd/etc... arrays yourself before calling
 #   add_user/add_group, but this too may not be the desired outcome.
 #
-#   - Arrays with the first element unset may have unpredictable behavior 
+#   - Arrays with the first element unset may have unpredictable behavior
 #   - If the passwd file exists and the shadow does not, it will not be detected
 #   - If the group file exists and the ghshdow does not, it will not be detected
 # AUTHOR
@@ -25,12 +25,12 @@ source "${VSI_COMMON_DIR}/linux/file_tools.bsh"
 
 #****f* linux_accounts.bsh/read_file
 # NAME
-#   read_file - Read contents /etc/passwd or similar files into an array
+#   read_file - Read contents of /etc/passwd or similar files into an array
 # INPUTS
 #   $1 - Filename
 #   $2 - array_name
 # OUTPUT
-#   ${!2[@]} - Array of contents of the file, a line per element
+#   ${!2[@]} - Array of contents of the file; one line per element
 # NOTE
 #   This is designed to work on newline separated files like /etc/passwd,
 #   /etc/group, etc...
@@ -47,7 +47,7 @@ function read_file()
 
   #Read file into array
   #CONTENT=($(<${1}))
-  
+
   #Clear array
   unset $2
 
@@ -91,7 +91,7 @@ function write_file()
 #   [$3] - GID. Default: 1000
 #   [$4] - User home (defaults to /home/$1)
 #   [passwd] - List of passwd lines. Auto loaded if not defined
-#   [shadow] - List of shadow lines. Auto loaded if not defined and exists
+#   [shadow] - List of shadow lines. Auto loaded if not defined and it exists
 #   [LINUX_ACCOUNTS_AUTOSAVE] - Auto writes out passwd/shadow file. Default: 1
 # NOTES
 #   Will write a new passwd to /etc/passwd. If it is determined that the OS uses
@@ -101,7 +101,7 @@ function write_file()
 #***
 function add_user()
 {
-  #Read in the passwd array if it doesn't exist already 
+  #Read in the passwd array if it doesn't exist already
   if ! declare -p passwd&>/dev/null; then
     local passwd
     read_file /etc/passwd passwd
@@ -110,7 +110,7 @@ function add_user()
   # The second test is for OS's like clearlinux which contain no user/group files
   # until after an additional user/group is created.
   if [ -e /etc/shadow ] || ( [ ! -e /etc/passwd ] && getent shadow &>/dev/null ); then
-    #Read in the shadow array if it doesn't exist already 
+    #Read in the shadow array if it doesn't exist already
     if ! declare -p shadow &>/dev/null; then
       local shadow
       read_file /etc/shadow shadow
@@ -240,8 +240,8 @@ function write_user_data()
 #   $1 - Group name
 #   $2 - GID
 #   groups - List of group lines
-#   [users] - Set users to the default list of uses to add to the group
-#   [suffix] - optional number to add to group_name. For internal use
+#   [users] - List of users to add to the group
+#   [suffix] - Suffix to add to group_name if there is a name clash. For internal use
 #   [LINUX_ACCOUNTS_AUTOSAVE] - Auto writes out group/gshadow file. Default: 1
 #   [fifo_buffer] - A FIFO buffer used for capturing stdout. This is an advanced
 #                   feature used only to speed up adding multiple groups
@@ -254,7 +254,7 @@ function write_user_data()
 function add_group()
 {
   local group_name
-  #Read in the group array if it doesn't exist already 
+  #Read in the group array if it doesn't exist already
   if ! declare -p group&>/dev/null; then
     local group
     read_file /etc/group group
@@ -263,7 +263,7 @@ function add_group()
   # The second test is for OS's like clearlinux which contain no user/group files
   # until after an additional user/group is created.
   if [ -e /etc/gshadow ] || ( [ ! -e /etc/group ] && getent gshadow &>/dev/null ); then
-    #Read in the gshadow array if it doesn't exist already 
+    #Read in the gshadow array if it doesn't exist already
     if ! declare -p gshadow&>/dev/null; then
       local gshadow
       read_file /etc/gshadow gshadow
@@ -272,7 +272,7 @@ function add_group()
     local fd
     open_fd
 
-    # Create a new group, and redirect stdout to 
+    # Create a new group, and redirect stdout to
     add_to_group "$1" "$2" 'x' >&${fd}
     # Read from fd ${fd} into group_name
     read -u${fd} group_name
@@ -336,13 +336,13 @@ function write_group_data()
 #   $2 - GID
 #   [$3] - Encrypted password. Defaults to "x" (disabled)
 #   group - List of group lines
-#   [users] - Set users to the default list of uses to add to the group
-#   [suffix] - optional number to add to group_name. For internal use
+#   [users] - List of users to add to the group
+#   [suffix] - Suffix to add to group_name if there is a name clash. For internal use
 # OUTPUT
 #   stdin - group name used
 # NOTES
-#   Works on Debian, Centos, Alpine, etc... Only odd Linuces with more than 4 
-#   column in /etc/group will fail.
+#   Works on Debian, Centos, Alpine, etc... Only odd Linuxes with more than 4
+#   columns in /etc/group will fail.
 # AUTHOR
 #   Andy Neff
 #***
@@ -390,7 +390,7 @@ function add_to_group()
 # INPUTS
 #   $1 - Group name
 #   [$2] - Encrypted password (! or * for none). Default: !
-#   [users] - Set users to the default list of uses to add to the entry
+#   [users] - List of users to add to the entry
 # AUTHOR
 #   Andy Neff
 #***
@@ -414,5 +414,4 @@ function add_to_gshadow()
   done
   gshadow=("${new_gshadow}"
            ${gshadow+"${gshadow[@]}"} )
-
 }
