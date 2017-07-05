@@ -59,7 +59,8 @@ fi
 #   Searches for a library using the same ld resolution method as the OS. First
 #   LD_LIBRARY_PATH is searched, then ldconfig -p for a match to a filename.
 # INPUTS
-#   $1 - The library to search for. Must match the beginning of the the basename
+#   $1 - The number of bits in the architecture to match
+#   $2 - The library to search for. Must match the beginning of the the basename
 #        of the library, but may also contain extended (grep) regex.
 #   LWHICH_INSENSITIVE - Set environment variable to 1 to enable case
 #                         insensitivity; case sensitive by default
@@ -73,12 +74,25 @@ fi
 #   nm - Most OSes have this installed already. Sometimes a binutils package
 #        needs to be installed to get this
 # BUGS
-#   The purpose of this was to match from the beginning of filename (cf. the
-#   full pathname). But the regex can be tricked by abusing the "or" operator:
+#   The purpose of this is to match from the beginning of basename (cf. the
+#   full pathname). This is done by using $2 as a partial regex which can cause
+#   some undesired behavior. This can occur when using the or '|' operator. This
+#   is why the example has parentheses in the '(libSDL|libOpenGL)' expression,
+#   so that it works as expected.
 #
-#     lwhich 32 '$|d-linux\.so' # NOTE '$|<pattern>' doesn't include parentheses
+#   This behavior can be taken advantage of by using the or '|' operator without 
+#   parentheses to do an partial path search.
 #
-#   This will match ld-linux.
+#     lwhich 64 '$|local'
+#
+#   The $ will short-circuit the normal lwhich behavior, and now matches any 
+#   path containing local, for example all the libraries in /usr/local/lib
+#
+#   Or to find any library with the word linux in the basename:
+#
+#     lwhich 32 '$|linux[^/]*\.so'
+#
+#   (This will find common libraries such as ld-linux.so and libselinux.so)
 # AUTHOR
 #   Andy Neff
 #***
