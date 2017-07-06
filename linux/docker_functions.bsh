@@ -496,7 +496,22 @@ function Just-docker-compose()
     done < "${compose_file_override%%:*}"
   fi
 
-  generate_docker_compose_override ${JUST_PROJECT_PREFIX} > "${override_file}"
+  # Get complete list of unique service names
+  local service_names=()
+  local OLD_IFS="${IFS}"
+  local IFS=":"
+  local compose_files=(${compose_file_override})
+  IFS="${OLD_IFS}"
+  local compose_file
+  for compose_file in "${compose_files}"; do
+    service_names+=($(docker_compose_service_names ${compose_file}))
+  done
+  #unique it
+  IFS=$'\n'
+  service_names=($(sort -u <<< ${service_names+"${service_names[*]}"}))
+  IFS="${OLD_IFS}"
+
+  generate_docker_compose_override ${JUST_PROJECT_PREFIX} ${service_names+"${service_names[@]}"} > "${override_file}"
 
   # Fail later behavior for set -eu. This should guarantee the override_file
   # is deleted. If this isn't enough, investigate adding cleanup to a trap
@@ -526,4 +541,35 @@ function Just-docker-compose()
 function docker_service_running()
 {
   ${DOCKER} inspect -f '{{.State.Status}}' $(${DOCKER_COMPOSE} ps -q) 2>/dev/null
+}
+
+#****f* docker_functions.bsh/docker_compose_service_names
+# NAME
+#   docker_compose_service_names - Get service names from compose yaml file
+# INPUTS
+#   $1 - docker compose yaml file
+# OUTPUT
+#   stdout - New line separated list of service names
+# AUTHOR
+#   Andy Neff
+#***
+function docker_compose_service_names()
+{
+           #Skip (d) all lines until services: is matched
+  sed -nE '/^services:/b services
+           d
+           :services
+           #read next line
+           n
+           # Two space only indent is a service name
+           /^  [^ ]*:.*/{
+             #Remove leading spaces and :.*
+             s|^  ([^ ]*):.*|\1|
+             p
+             b services
+           }
+           # As soon as a line not starting with a space is encountered, the
+           # service section is over, so (q)uit
+           /^[^ ]/q
+           b services' "${1}"
 }
