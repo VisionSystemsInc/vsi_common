@@ -28,9 +28,11 @@
 #***
 _just()
 {
-  local JUST_HELP_FILES=("${VSI_COMMON_DIR}/linux/just_functions.bsh" ${JUST_HELP_FILES+"${JUST_HELP_FILES[@]}"})
-  shopt -s extglob
+  local JUST_HELP_FILES=("${VSI_COMMON_DIR}/linux/just_functions.bsh")
+  local JUST_PLUGINS
+  local just_plugin
 
+  shopt -s extglob # Why is this needed?
 
   COMPREPLY=()   # Array variable storing the possible completions.
 
@@ -51,6 +53,14 @@ _just()
     echo "Supported filenames: \"Justfile\" or value of \${JUSTFILE}"
     return 0
   fi
+
+  local just_dir="$(\dirname ${just_file})"
+
+  #Load plugins
+  _just_get_plugins "${just_dir}"
+  for just_plugin in ${JUST_PLUGINS+"${JUST_PLUGINS[@]}"}; do
+    JUST_HELP_FILES+=("${just_plugin}")
+  done
 
   # Get all command info once
   local parsed_help_a
@@ -73,7 +83,6 @@ _just()
   IFS="${OLD_IFS}"
 
   #Call local .just if it exist
-  local just_dir="$(\dirname ${just_file})"
   if [ -f "${just_dir}/.just" ]; then
     . "${just_dir}/.just"
   fi

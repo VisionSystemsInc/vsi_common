@@ -205,6 +205,8 @@ function _just_subcommands_from_array()
 #   $2..N - help_lines
 # RETURN VALUE
 #   just_subtargets - Adds to array
+# AUTHOR
+#   Andy Neff
 #***
 function _just_subtargets_from_array()
 {
@@ -254,4 +256,63 @@ function _just_parse_helps()
       done
     fi
   done
+}
+
+#****f* just_plugins/_just_get_plugins()
+# NAME
+#   _just_get_plugins()
+# INPUTS
+#   [$1] - Default directory to look for JUST_PLUGIN_FILE in
+#   [JUST_PLUGIN_FILE] - Optional override the name of the just plugins file.
+#                        Default: .justplugins
+# OUTPUT
+#   JUST_PLUGINS - (Possibly empty) array of plugins filenames
+# NOTES
+#   _just_get_plugins adds to JUST_PLUGINS if it already exists. If you want to
+#   replace JUST_PLUGINS, unset JUST_PLUGINS before calling _just_get_plugins.
+# SEE ALSO
+#   just/just_plugins, just_plugins/.justplugins
+# AUTHOR
+#   Andy Neff
+#***
+function _just_get_plugins()
+{
+  local line
+  local JUST_PLUGIN_FILE=${JUST_PLUGIN_FILE:-.justplugins}
+  local base_dir=${1-.}
+  
+  # Set JUST_PLUGINS to an empty array if it doesn't exist already
+  if ! \declare -p JUST_PLUGINS &>/dev/null; then
+    JUST_PLUGINS=()
+  fi
+
+  # Prepend the directory if it doesn't exist
+  if [ ! -f "${JUST_PLUGIN_FILE}" ]; then
+    JUST_PLUGIN_FILE="${1}/${JUST_PLUGIN_FILE}"
+  fi
+
+  # Make base_dir absolute
+  if [ "${base_dir:0:1}" != "/" ]; then
+    base_dir="$(cd "${base_dir}"; pwd)"
+  fi
+
+  # Read in the plugin file
+  if [ -f "${JUST_PLUGIN_FILE}" ]; then
+    while IFS='' \read -r line; do
+      # Skip blank lines
+      if [[ ${line} =~ ^[[:blank:]]*$ ]]; then
+        continue
+      fi
+      # Skip comments
+      if  [[ ${line} =~ ^[[:blank:]]*# ]]; then
+        continue
+      fi
+
+      if [ "${line:0:1}" != "/" ]; then
+        line="${base_dir}/${line}"
+      fi
+
+      JUST_PLUGINS+=("${line}")
+    done < "${JUST_PLUGIN_FILE}"
+  fi
 }

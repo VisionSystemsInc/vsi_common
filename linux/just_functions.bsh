@@ -74,15 +74,29 @@ source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
 #***
 : ${JUST_HELP_SEPARATOR='@#@'}
 
-#****** just/plugin
-# DESCRIPTION
-#   Add the case function names to the array JUST_DEFAULTIFY_FUNCTIONS to
-#   allow commonly used functionality to be added to the targets for just
+#****h* just/just_plugins
+# NAME
+#   just_plugins - Plugin system for just
+# USAGE
+#   Certain just targets can be used for many different projects, and rather
+#   then repeating this code, just_plugins give a way to expose the common code
+#   of these targets to many different projects.
 #
-#   Must return non-zero if the argument is not used, and return 0 on consumption
-#   of a variable
+#   To add a plugins to your project, simply add the plugin filenames to your
+#   .justplugins file.
+# DESCRIPTION
+#   When writing a new plugin, you need to follow a few rules:
+#
+#   1. A case statement in a defaultify function should be written, but with a
+#      unique name that should not be likely to be used anywhere else. All
+#      plugin functions will have to exist in the same namespace.
+#   2. Adds the case function names to the array JUST_DEFAULTIFY_FUNCTIONS to
+#      allow commonly used functionality to be added to the targets for just
+#   3. Add the plugin filename to the array JUST_HELP_FILES
+#   4. Must return non-zero if the argument is not mached, and return 0 on
+#      target match
 # EXAMPLE
-#   source just_example_functions.bsh, which looks something like:
+#   Source code of a just_example_functions.bsh, which looks something like:
 #
 #   JUST_DEFAULTIFY_FUNCTIONS+=(just_example_defaultify)
 #   JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
@@ -91,7 +105,7 @@ source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
 #     arg=$1
 #     shift 1
 #     case $arg in
-#       foo|bar) :#Foobar test
+#       foo|bar) #Foobar test
 #         echo "Foo or bar: $1"
 #         extra_args+=1
 #         ;;
@@ -101,14 +115,29 @@ source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
 #     esac
 #     return 0
 #   }
-# BUGS
-#   Tab complete currently has no way of discovering which plugins are enabled.
-#   To get around this, edit whatever script is used to setup the environment
-#   (typically: source setup.env), and add
-#   JUST_HELP_FILES=(<list of plugin files>)
 #***
 
-#****d* plugin/JUST_DEFAULTIFY_FUNCTIONS
+#****F* just_plugins/.justplugins
+# NAME
+#   .justplugins - Plugin file
+# DESCRIPTION
+#   The filename defaults to .justplugins, next to your Justfile, but can be
+#   overridden by exporting the environment variable JUST_PLUGIN_FILE.
+#
+#   Lists the various plugin files. Blank lines and # comment lines are allowed
+#***
+
+#****d* just_plugins/JUST_PLUGIN_FILE
+# NAME
+#   JUST_PLUGIN_FILE - name of the just plugin file
+# DESCRIPTION
+#   Defaults to .justplugin in the same directory as the Justfile. Can be 
+#   override to another filename/path by exporting to this variable
+# AUTHOR
+#   Andy Neff
+#***
+
+#****d* just_plugins/JUST_DEFAULTIFY_FUNCTIONS
 # NAME
 #   JUST_DEFAULTIFY_FUNCTIONS - List of defaultify functions
 # DESCRIPTION
@@ -120,7 +149,7 @@ source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
 #***
 JUST_DEFAULTIFY_FUNCTIONS=()
 
-#****d* plugin/JUST_HELP_FILES
+#****d* just_plugins/JUST_HELP_FILES
 # NAME
 #   JUST_HELP_FILES - Array of just plugin files used in just
 # DESCRIPTION
@@ -152,7 +181,7 @@ JUST_HELP_FILES=("${BASH_SOURCE[0]}")
 # NAME
 #   source_environment_files -- Convenience function for sourcing environments
 # DESCRIPTION
-#   The just system works be sourcing three environment files
+#   The just system works be sourcing environment files
 #   1. First ${project_dir}/local.env. This file should never be added to version
 #      control. It should contain customizations for that particular install
 #   2. The project file. This file should ideally contain all the default values
@@ -161,6 +190,7 @@ JUST_HELP_FILES=("${BASH_SOURCE[0]}")
 #      version control. It is rarely used, except in situations where the value
 #      of a variable is based off of another variable. This is why it is loaded
 #      last.
+#   4. Any plugins that are identified, are also sourced
 # INPUTS
 #   $1 - The project environment filename
 #   JUST_LOCAL_SETTINGS - Path of local settings file, default is
@@ -180,6 +210,8 @@ JUST_HELP_FILES=("${BASH_SOURCE[0]}")
 #   sometimes its better to add default behavior of create keys if possible.
 #   Such as using openssl to create ssl certs in a default location (that is
 #   ignored by version control)
+# SEE ALSO
+#   just/_just_get_plugins
 # AUTHOR
 #   Andy Neff
 #***
@@ -197,6 +229,12 @@ function source_environment_files()
     fi
   done
   reset_flag a
+
+  #Load plugins
+  _just_get_plugins "${project_dir}"
+  for just_plugin in ${JUST_PLUGINS+"${JUST_PLUGINS[@]}"}; do
+    source "${just_plugin}"
+  done
 
   # ##### Environment Variable Filtering #####
   # This will filter out environment variables LOKI_*_DOCKER in the docker.
@@ -324,7 +362,7 @@ function pretty_print_help()
 function print_help()
 {
   local cols=$(tput cols)
-  local indent=5
+  local indent=4
   local parsed_help parsed_help_flags parsed_help_subcommands_commented
   local parsed_help_a
   local help_line
@@ -825,5 +863,5 @@ function safe_load() #Loads a very simple safe config file, and sets environment
     IFS="${JUST_SAFE_LOAD_DELIMITER}" read -r safe_load_tmp_key safe_load_tmp_value <<< "$line"
     IFS="${JUST_SAFE_LOAD_DELIMITER}" read -r safe_load_tmp_key "$safe_load_tmp_key" <<< "$line"
     export "$safe_load_tmp_key"
-  done < $1
+  done < "$1"
 }
