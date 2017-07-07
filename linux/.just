@@ -64,7 +64,7 @@ _just()
 
   # Get all command info once
   local parsed_help_a
-  _just_parse_helps
+  _just_parse_helps ${JUST_HELP_FILES+"${JUST_HELP_FILES[@]}"}
   #Get just command names
   parsed_help_a=("${parsed_help_a[@]%% *}") #Remove everything after the space in every entry
  
