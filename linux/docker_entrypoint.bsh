@@ -122,7 +122,7 @@ function docker_setup_user()
 #   with squash root. Instead the base mount point is mounted into the
 #   container and a symlink is created to link the desired locations. This
 #   function creates these symlinks based on the colon separated string
-#   JUST_DOCKER_ENTRYPOINT_LINKS.
+#   JUST_DOCKER_ENTRYPOINT_LINKS. Links within other links are not created.
 # INPUTS
 #   [DOCKER_LINK_MOUNTS_FORCE] - Default: 0
 # AUTHOR
@@ -130,19 +130,61 @@ function docker_setup_user()
 #***
 function docker_link_mounts()
 {
-  local IFS=:
+  local IFS
   local options
   if [ "${DOCKER_LINK_MOUNTS_FORCE-0}" == "1" ]; then
     options='-f'
   fi
 
+  IFS=:
   JUST_DOCKER_ENTRYPOINT_LINKS=(${JUST_DOCKER_ENTRYPOINT_LINKS+${JUST_DOCKER_ENTRYPOINT_LINKS}})
+
+  # convert to an array of destination:source
+  IFS=
+  local link_destination_and_source=()
   for ((x=0; x+1<${#JUST_DOCKER_ENTRYPOINT_LINKS[@]}; x+=2)); do
-    mkdir -p "$(dirname "${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}")"
-    ln -T -s ${options-} "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}" "${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}" || : # \
+    link_destination_and_source+=($(echo "${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}":"${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}"))
+  done
+
+  # Sort the array
+  # per sort's man page:
+  # The locale specified by the environment affects sort order.  Set LC_ALL=C
+  # to get the traditional sort order that uses native byte values.
+  local OLD_LC_ALL="${LC_ALL}"
+  LC_ALL=C
+  # https://stackoverflow.com/q/7442417
+  IFS=$'\n'
+  # only sort by the first column
+  local sorted_links=($(sort -t: -k1,1 <<< "${link_destination_and_source[*]}"))
+  LC_ALL="${OLD_LC_ALL}"
+
+  IFS=:
+  sorted_links=(${sorted_links[@]})
+
+  # Filter out destinations that are sub-directories of another directory;
+  # these links may fail anyway if the directory already exists. We also
+  # don't want to make symlinks in host directories if we can help it. symlinks
+  # are strictly worse than bind mounts; don't try to make them as capable.
+  local filtered_links=()
+  for ((x=0; x+1<${#sorted_links[@]}; x+=2)); do
+    local should_keep=1
+    for ((y=0; y+1<${#filtered_links[@]}; y+=2)); do
+      if [[ ${sorted_links[$x]} == "${filtered_links[$y]}/"* ]]; then
+        should_keep=0
+        break
+      fi
+    done
+    if [ "${should_keep}" == "1" ]; then
+      filtered_links+=("${sorted_links[$x]}" "${sorted_links[$((x+1))]}")
+    fi
+  done
+
+  for ((x=0; x+1<${#filtered_links[@]}; x+=2)); do
+    mkdir -p "$(dirname "${filtered_links[$x]}")" && \
+    ln -T -s ${options-} "${filtered_links[$((x+1))]}" "${filtered_links[$x]}" || : # \
     # This gosu version only covers a small corner case. It was deemed not worth
     # including in the final cut. Will revisit if it is deemed desired
-    #gosu ${DOCKER_USERNAME} ln -T -s ${options-} "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}" "${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}" || :
+    #gosu ${DOCKER_USERNAME} ln -T -s ${options-} "${filtered_links[$((x+1))]}" "${filtered_links[$x]}" || :
   done
 }
 
