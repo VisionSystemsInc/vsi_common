@@ -164,20 +164,19 @@ function docker_link_mounts()
   # these links may fail anyway if the directory already exists. We also
   # don't want to make symlinks in host directories if we can help it. symlinks
   # are strictly worse than bind mounts; don't try to make them as capable.
-  local filtered_links=()
   for x in ${!link_destinations[@]}; do
-    for y in ${!filtered_links[@]}; do
-      if [[ ${link_destinations[$x]} == "${filtered_links[$y]}/"* ]]; then
-        continue 2
+    for ((y=0; y<x; y++)); do
+      if [[ ${link_destinations[$x]} == "${link_destinations[$y]}/"* ]]; then
+        unset link_destinations[$x]
+        break
       fi
     done
-    filtered_links+=("${link_destinations[$x]}")
   done
 
-  for y in ${!filtered_links[@]}; do
+  for y in ${!link_destinations[@]}; do
     # Last link wins; this matches docker-compose behavior
     for ((x=${#JUST_DOCKER_ENTRYPOINT_LINKS[@]}-2; x>=0; x-=2)); do
-      if [ "${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}" == "${filtered_links[$y]}" ]; then
+      if [ "${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}" == "${link_destinations[$y]}" ]; then
         mkdir -p "$(dirname "${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}")" && \
         ln -T -s ${options-} "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}" "${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}" || : # \
         # This gosu version only covers a small corner case. It was deemed not worth
