@@ -29,7 +29,7 @@
 _just()
 {
   local JUST_HELP_FILES=("${VSI_COMMON_DIR}/linux/just_functions.bsh")
-  local JUST_PLUGINS
+  local JUST_PLUGINS=()
   local just_plugin
 
   shopt -s extglob # Why is this needed?
