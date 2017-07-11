@@ -31,14 +31,17 @@ TRASHDIR="$TMPDIR/$(basename "$0")-$$"
 # keep track of num tests and failures
 tests=0
 failures=0
+allowed_failures=0
 
 # this runs at process exit
 atexit () {
-    rm -rf "$TRASHDIR"
-    if [ $failures -gt 0 ]
-    then exit 1
-    else exit 0
-    fi
+  rm -rf "$TRASHDIR"
+
+  if [ $failures -gt 0 ]; then
+    exit 1
+  else
+    exit 0
+  fi
 }
 
 # create the trash dir
@@ -48,41 +51,59 @@ cd "$TRASHDIR"
 
 # Mark the beginning of a test. A subshell should immediately follow this
 # statement.
-begin_test () {
-    test_status=$?
-    [ -n "$test_description" ] && end_test $test_status
-    unset test_status
+function _begin_common_test () 
+{
+  test_status=$?
+  [ -n "$test_description" ] && end_test $test_status
+  unset test_status
 
-    tests=$(( tests + 1 ))
-    test_description="$1"
+  tests=$(( tests + 1 ))
+  test_description="$1"
 
-    exec 3>&1 4>&2
-    out="$TRASHDIR/out"
-    err="$TRASHDIR/err"
-    exec 1>"$out" 2>"$err"
+  exec 3>&1 4>&2
+  out="$TRASHDIR/out"
+  err="$TRASHDIR/err"
+  exec 1>"$out" 2>"$err"
 
-    # allow the subshell to exit non-zero without exiting this process
-    set -x +e
+  # allow the subshell to exit non-zero without exiting this process
+  set -x +e
+}
+
+function begin_test ()
+{
+  allowed_failure=0
+  _begin_common_test ${@+"${@}"}
+}
+
+function begin_fail_test()
+{
+  allowed_failure=1
+  _begin_common_test ${@+"${@}"}
 }
 
 # Mark the end of a test.
-end_test () {
-    test_status="${1:-$?}"
-    set +x -e
-    exec 1>&3 2>&4
+function end_test () 
+{
+  test_status="${1:-$?}"
+  set +x -e
+  exec 1>&3 2>&4
 
-    if [ "$test_status" -eq 0 ]; then
-        printf "test: %-60s OK\n" "$test_description ..."
-    else
-        failures=$(( failures + 1 ))
-        printf "test: %-60s FAILED\n" "$test_description ..."
-        (
-            echo "-- stdout --"
-            sed 's/^/    /' <"$TRASHDIR/out"
-            echo "-- stderr --"
-            grep -v -e '^\+ end_test' -e '^+ set +x' <"$TRASHDIR/err" |
-                sed 's/^/    /'
-        ) 1>&2
-    fi
-    unset test_description
+  if [ "$test_status" -eq 0 ]; then
+    printf "test: %-60s OK\n" "$test_description ..."
+  elif [ "${allowed_failure}" -eq "1" ]; then
+    printf "test: %-60s FAIL OK\n" "$test_description ..."
+    allowed_failures=$(( allowed_failures + 1 ))
+  else
+    failures=$(( failures + 1 ))
+    printf "test: %-60s FAILED\n" "$test_description ..."
+    (
+      echo "-- stdout --"
+      sed 's/^/    /' <"$TRASHDIR/out"
+      echo "-- stderr --"
+      grep -v -e '^\+ end_test' -e '^+ set +x' <"$TRASHDIR/err" |
+        sed 's/^/    /'
+    ) 1>&2
+  fi
+  unset test_description
 }
+
