@@ -61,6 +61,8 @@ atexit ()
     teardown
   fi
 
+  \rm -r "$TRASHDIR"
+
   if [ $failures -gt 0 ]; then
     exit 1
   else
