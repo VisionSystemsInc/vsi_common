@@ -141,21 +141,12 @@ function generate_docker_compose_override()
       IFS=:
       volume_info=(${volume})
       IFS="${OLD_IFS}"
-
-      if [ "${#volume_info[@]}" == 1 ]; then
-        volume_info+=("${volume_info[0]}")
-      fi
-
-      # Evaluate variables
+ 
+      # Variable substitution of host volume
       if [ "${volume_info[0]:0:1}" == "$" ]; then
         indirect=$(_docker_compose_override_var_sub ${volume_info[0]})
         volume_info[0]="${!indirect}"
         declare "${indirect}_DOCKER=${volume_info[0]}"
-      fi
-      if [ "${volume_info[1]:0:1}" == "$" ]; then
-        indirect=$(_docker_compose_override_var_sub ${volume_info[1]})
-        volume_info[1]="${!indirect}"
-        declare "${indirect}_DOCKER=${volume_info[1]}"
       fi
 
       # If it doesn't exist, attempt to make it as this user. Better than root
@@ -163,6 +154,25 @@ function generate_docker_compose_override()
         mkdir -p "${volume_info[0]}"
       fi
 
+      # If the volume is relative, in 
+      if [[ ${volume_info[0]:0:1} =~ \. ]]; then
+        volume_info[0]=$(real_path "${volume_info[0]}")
+      fi
+
+      # If there is not a docker volume path, copy host path 
+      if [ "${#volume_info[@]}" == 1 ]; then
+        volume_info+=("${volume_info[0]}")
+      fi
+
+      # Variable substitution of docker side volume path
+      if [ "${volume_info[1]:0:1}" == "$" ]; then
+        indirect=$(_docker_compose_override_var_sub ${volume_info[1]})
+        volume_info[1]="${!indirect}"
+        declare "${indirect}_DOCKER=${volume_info[1]}"
+      fi
+
+
+      # Check to see that the volume is not a docker volume
       if [[ ${volume_info[0]:0:1} =~ [./] ]]; then
         host_mount_point="$(mount_point "${volume_info[0]}")"
         # If the mount point isn't already the same as the mount, check to see
