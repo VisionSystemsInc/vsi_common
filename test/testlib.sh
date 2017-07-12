@@ -40,8 +40,7 @@
 set -e
 
 # create a temporary work space
-TMPDIR="$(cd "$(dirname "$0")"/.. && pwd)"/tmp
-TRASHDIR="$TMPDIR/$(basename "$0")-$$"
+TRASHDIR="$(mktemp -d -t $(basename "$0")-$$.XXXXXXXX)"
 
 # keep track of num tests and failures
 tests=0
@@ -82,7 +81,6 @@ atexit ()
 
 # create the trash dir
 trap "atexit" EXIT
-mkdir -p "$TRASHDIR"
 PS4=$'+${BASH_SOURCE[0]}:${LINENO})\t'
 
 # Common code for begin tests
