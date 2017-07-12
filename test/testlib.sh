@@ -63,6 +63,10 @@ allowed_failures=0
 #***
 atexit ()
 {
+  test_status=$?
+  [ -n "$test_description" ] && end_test $test_status
+  unset test_status
+
   if type -t teardown &>/dev/null; then
     teardown
   fi
@@ -84,8 +88,10 @@ PS4=$'+${BASH_SOURCE[0]}:${LINENO})\t'
 # Common code for begin tests
 _begin_common_test ()
 {
-  test_status=$?
   pushd "$TRASHDIR" >& /dev/null
+  # This make calling end_test between tests "optional", end_test does have to
+  # be called after the last test, especially if teardown is defined after the
+  # last test
   [ -n "$test_description" ] && end_test $test_status
   unset test_status
 
@@ -112,8 +118,10 @@ _begin_common_test ()
 #***
 begin_test ()
 {
-  allowed_failure=0
+  test_status=$? # Must be first command
   _begin_common_test ${@+"${@}"}
+  # This needs to be after _begin_common_test in order to keep end_test optional
+  allowed_failure=0
 }
 
 #****f* testlib.sh/begin_fail_test
@@ -126,8 +134,10 @@ begin_test ()
 #***
 begin_fail_test()
 {
-  allowed_failure=1
+  test_status=$? # Must be first command
   _begin_common_test ${@+"${@}"}
+  # This needs to be after _begin_common_test in order to keep end_test optional
+  allowed_failure=1
 }
 
 #****f* testlib.sh/begin_test
