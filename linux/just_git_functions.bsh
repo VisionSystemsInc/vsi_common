@@ -83,9 +83,7 @@ function _checkout_git_submodule()
   if git -c submodule.${1}.update='!git merge --ff-only' submodule update "${2}"; then
     if [ -f "${2}/.gitmodules" ]; then
       pushd "${2}" &>/dev/null
-      local key
-      unset key
-      safe_git_submodule_update
+      safe_git_submodule_update 1
       popd &>/dev/null
     fi
   else
@@ -110,6 +108,11 @@ function _checkout_git_submodule()
 #   If the committer of the main repository changes submodules in a non-fast
 #   forward way, this would confuse safe_git_submodule_update because that isn't
 #   very smart.
+#   Update: It will at least tell you which repositories are behind now.
+# INPUTS
+#   $1 - For internal use. Disables error summary messages
+# AUTHOR
+#   Andy Neff
 #***
 function safe_git_submodule_update()
 {
@@ -128,11 +131,11 @@ function safe_git_submodule_update()
           echo "Uninitialized submodule $name...Initializing"
           git submodule init $sm_path
         else
-          # There are cases where noobs remove a submodule and forget to remove
-          # it from the .gitmodules files. In this case, it will show up in
-          # submodule-helper-list but shouldn't be checked out. Either it will
-          # have no entry from ls-tree (empty), or it will not be a commit (eg
-          # tree).
+          # There are cases where novices remove a submodule and forget to
+          # remove it from the .gitmodules files. In this case, it will show up
+          # in submodule-helper-list but shouldn't be checked out. Either it
+          # will have no entry from ls-tree (empty), or it will not be a commit
+          # (eg tree).
           echo "Skipping phantom submodule $name"
           continue
         fi
@@ -173,11 +176,24 @@ function safe_git_submodule_update()
     done
   popd > /dev/null
 
-  if [ "${key+set}" == "set" ]; then
-    echo
-    echo "All done smart updating submodules. However something went wrong:"
-    echo "After resolving some conflicts, you may need to update the main repo."
-    echo "If this is not working for you, just run 'git submodule update --init --recursive'"
+  if [ "$#" == "0" ]; then
+    if [ "${key+set}" == "set" ]; then
+      echo
+      echo "******************************************************************"
+      echo "All done smart updating submodules. However something went wrong:"
+      echo "After resolving some conflicts, you may need to update the main repo."
+      echo "If this is not working for you, just run 'git submodule update --init --recursive'"
+    fi
+
+    local IFS=$'\n'
+    for i in $(git submodule status --recursive | \grep ^+); do
+      i="${i% *}"
+      i="${i#* }"
+      echo
+      echo "******************************************************************"
+      echo "Repository $i appears to be ahead. Don't forget to commit often so"
+      echo "that the team can benefit from your amazing work!"
+    done
   fi
 }
 
