@@ -29,7 +29,13 @@
 # AUTHOR
 #   Ryan Tomayko
 # MODIFICATION HISTORY
-#   Andy Neff - Added allowed_failures and teardown, removed PATH, added robodoc
+#   Andy Neff - Added begin_fail_test
+#               Added optional teardown
+#               Removed PATH
+#               Added robodoc documentation
+#               Use pushd/popd for each test instead of cd
+#               Auto prepend filename to description
+#               Added custom PS4
 #***
 set -e
 
@@ -55,13 +61,13 @@ allowed_failures=0
 # MODIFICATION HISTORY
 #   Andy Neff - Added teardown
 #***
-atexit () 
+atexit ()
 {
   if type -t teardown &>/dev/null; then
     teardown
   fi
 
-  \rm -r "$TRASHDIR"
+  rm -rf "$TRASHDIR"
 
   if [ $failures -gt 0 ]; then
     exit 1
@@ -73,17 +79,18 @@ atexit ()
 # create the trash dir
 trap "atexit" EXIT
 mkdir -p "$TRASHDIR"
-cd "$TRASHDIR"
+PS4=$'+${0}:${LINENO})\t'
 
 # Common code for begin tests
-_begin_common_test () 
+_begin_common_test ()
 {
+  pushd "$TRASHDIR" >& /dev/null
   test_status=$?
   [ -n "$test_description" ] && end_test $test_status
   unset test_status
 
   tests=$(( tests + 1 ))
-  test_description="$1"
+  test_description="$0 - $1"
 
   exec 3>&1 4>&2
   out="$TRASHDIR/out"
@@ -131,11 +138,12 @@ begin_fail_test()
 # AUTHOR
 #   Ryan Tomayko
 #***
-end_test () 
+end_test ()
 {
-  test_status="${1:-$?}"
+  test_status="${1:-$?}" #This MUST be the first line of this function
   set +x -e
   exec 1>&3 2>&4
+  popd >& /dev/null
 
   if [ "$test_status" -eq 0 ]; then
     printf "test: %-60s OK\n" "$test_description ..."
@@ -149,9 +157,12 @@ end_test ()
       echo "-- stdout --"
       sed 's/^/    /' <"$TRASHDIR/out"
       echo "-- stderr --"
-      grep -v -e '^\+ end_test' -e '^+ set +x' <"$TRASHDIR/err" |
+      grep -v -e $'^\+[^\t]*\tend_test' \
+              -e $'^\+[^\t]*\tset +x -e' <"$TRASHDIR/err" |
+        column -c1 -s $'\t' -t |
         sed 's/^/    /'
     ) 1>&2
+    echo "-- EOF $test_description --"
   fi
   unset test_description
 }
