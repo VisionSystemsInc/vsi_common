@@ -46,6 +46,7 @@ TRASHDIR="$(mktemp -d -t $(basename "$0")-$$.XXXXXXXX)"
 tests=0
 failures=0
 allowed_failures=0
+must_failures=0
 
 #****f* testlib.sh/atexit
 # NAME
@@ -72,6 +73,9 @@ atexit ()
 
   rm -rf "$TRASHDIR"
 
+  printf '%s summary: %d test ran, %d failures, %d allowed failured, %d must fails\n' \
+         "$0" "${tests}" "${failures}" "${allowed_failures}" "${must_failures}"
+
   if [ $failures -gt 0 ]; then
     exit 1
   else
@@ -81,7 +85,12 @@ atexit ()
 
 # create the trash dir
 trap "atexit" EXIT
-PS4=$'+${BASH_SOURCE[0]}:${LINENO})\t'
+if declare -p BASH_SOURCE &>/dev/null; then
+  PS4=$'+${BASH_SOURCE[0]}:${LINENO})\t'
+else
+  #Not as accurate, but better than nothing
+  PS4=$'+${0}:${LINENO})\t'
+fi
 
 # Common code for begin tests
 _begin_common_test ()
@@ -92,6 +101,12 @@ _begin_common_test ()
   # last test
   [ -n "$test_description" ] && end_test $test_status
   unset test_status
+
+  # Set flag defaults that could be overrideable in certain test types
+  # This needs to be after end_test call above in order to keep end_test
+  # optional
+  allowed_failure=0
+  must_fail=0
 
   tests=$(( tests + 1 ))
   test_description="$0 - $1"
@@ -118,8 +133,6 @@ begin_test ()
 {
   test_status=$? # Must be first command
   _begin_common_test ${@+"${@}"}
-  # This needs to be after _begin_common_test in order to keep end_test optional
-  allowed_failure=0
 }
 
 #****f* testlib.sh/begin_fail_test
@@ -134,9 +147,26 @@ begin_fail_test()
 {
   test_status=$? # Must be first command
   _begin_common_test ${@+"${@}"}
-  # This needs to be after _begin_common_test in order to keep end_test optional
+  # Override _begin_common_test default
   allowed_failure=1
 }
+
+#****f* testlib.sh/begin_must_fail_test
+# NAME
+#   begin_must_fail_test - Beginning of fail required test demarcation
+# USAGE
+#   Define the beginning of a test that is required to fail
+# AUTHOR
+#   Andy Neff
+#***
+begin_must_fail_test()
+{
+  test_status=$? # Must be first command
+  _begin_common_test ${@+"${@}"}
+  # Override _begin_common_test default
+  must_fail=1
+}
+
 
 #****f* testlib.sh/begin_test
 # NAME
@@ -153,9 +183,12 @@ end_test ()
   exec 1>&3 2>&4
   popd >& /dev/null
 
-  if [ "$test_status" -eq 0 ]; then
+  if [ "${must_fail}" -eq 1 ] && [ "$test_status" -ne 0 ]; then
+    printf "test: %-60s FAILED OK\n" "$test_description ..."
+    must_failures=$((must_failures+1))
+  elif [ "${must_fail}" -eq 0 ] && [ "$test_status" -eq 0 ]; then
     printf "test: %-60s OK\n" "$test_description ..."
-  elif [ "${allowed_failure}" -eq "1" ]; then
+  elif [ "${allowed_failure}" -eq 1 ]; then
     printf "test: %-60s FAIL OK\n" "$test_description ..."
     allowed_failures=$(( allowed_failures + 1 ))
   else
@@ -169,8 +202,8 @@ end_test ()
               -e $'^\+[^\t]*\tset +x -e' <"$TRASHDIR/err" |
         column -c1 -s $'\t' -t |
         sed 's/^/    /'
+      echo "-- EOF $test_description --"
     ) 1>&2
-    echo "-- EOF $test_description --"
   fi
   unset test_description
 }
