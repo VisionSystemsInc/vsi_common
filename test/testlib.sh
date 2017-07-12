@@ -79,13 +79,13 @@ atexit ()
 # create the trash dir
 trap "atexit" EXIT
 mkdir -p "$TRASHDIR"
-PS4=$'+${0}:${LINENO})\t'
+PS4=$'+${BASH_SOURCE[0]}:${LINENO})\t'
 
 # Common code for begin tests
 _begin_common_test ()
 {
-  pushd "$TRASHDIR" >& /dev/null
   test_status=$?
+  pushd "$TRASHDIR" >& /dev/null
   [ -n "$test_description" ] && end_test $test_status
   unset test_status
 
