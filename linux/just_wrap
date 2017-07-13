@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+
+#****F* just/just_wrap
+# NAME
+#   just_warp - Wrap files to create just environment
+# USAGE
+#   There are a total of four way to use this script.
+#   - 
+# INPUTS
+#   $1 - The project environment filename. Argument to source_environment_files
+# EXAMPLE
+#   If you have a ./wrap scipt in your main project repository, and for example,
+#   have the vsi_common submodule checked out in ./external/vsi_common, you're
+#   wrap script would look something like this:
+#
+#   #!/usr/bin/env bash
+#   . "$(dirname "${BASH_SOURCE[0]}")"/external/vsi_common/linux/just_wrap "${BASH_SOURCE[0]}" my_project.env ${@+"${@}"}
+#
+#   where my_project.env is the main project settings file.
+# AUTHOR
+#   Andy Neff
+#***
+
+#If not being sourced with no args
+if [ "${BASH_SOURCE[1]}" == "${0}" ] && [ "$#" -le "1" ]; then
+  export PS1="(loki)[\u@\h \W]\$ "
+  unset PROMPT_COMMAND
+  # Thanks bash for making this hard! https://unix.stackexchange.com/q/187369
+  if [[ ${OSTYPE} == darwin* ]]; then
+    exec bash --rcfile "$0"
+  else
+    ENV=<(echo "set +o posix; source '$0'") exec bash --posix
+  fi
+fi
+
+. "$(dirname "${BASH_SOURCE[0]}")"/just_functions.bsh
+source_environment_files "${1}"
+shift 1
+
+#This works as long as you don't name this script 'bash'... SO DON'T CALL YOUR SCIPT BASH!!!
+if [[ "${BASH_SOURCE[1]}" == "${0}" ]]; then #If not being sourced
+  if [ "$(type -t "$1")" == "file" ] || [ "$(type -t "$1")" == "alias" ]; then
+    exec "${@}"
+  fi
+  "${@}"
+fi
