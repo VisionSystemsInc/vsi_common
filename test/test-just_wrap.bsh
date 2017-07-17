@@ -170,26 +170,32 @@ begin_test "Unwrapped test source"
 (
   set -eu
 
-  (
-    . "${VSI_COMMON_DIR}/linux/just_wrap" "${TRASHDIR}/project1.env"
-    check_values
-  )
+  # Need to export some functions so that the bash full shell can finish
+  export -f check_values check_a
+  # Since this is an "unwrapped" test, I need to make sure that just_wrap
+  # doesn't think THIS file is the second layer wrapper! To do this, call a new
+  # bash shell. Copy PS4 for nice error messages
+  PS4="${PS4}" bash -c "set -euxv
+                        . '${VSI_COMMON_DIR}/linux/just_wrap' '${TRASHDIR}/project1.env'
+                        check_values"
 
   (
     cd other_dir
-    . "${VSI_COMMON_DIR}/linux/just_wrap" ../project1.env
-    check_values
+    PS4="${PS4}" bash -c "set -euxv
+                          . '${VSI_COMMON_DIR}/linux/just_wrap' '../project1.env'
+                          check_values"
   )
 )
 end_test
-
 
 begin_test "Unwrapped test run"
 (
   set -eu
 
   setup_test
-  . "${VSI_COMMON_DIR}/linux/just_wrap" "${TRASHDIR}/project1.env"
 
+  # Need to export some functions so that the bash full shell can finish
+  export -f check_values check_a
+  bash -eu "${VSI_COMMON_DIR}/linux/just_wrap" "${TRASHDIR}/project1.env" check_values
 )
 end_test

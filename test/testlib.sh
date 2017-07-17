@@ -125,7 +125,7 @@ atexit ()
 # create the trash dir
 trap "atexit" EXIT
 if declare -p BASH_SOURCE &>/dev/null; then
-  PS4=$'+${BASH_SOURCE[0]}:${LINENO})\t'
+  PS4=$'+${BASH_SOURCE-null}:${LINENO})\t'
 else
   #Not as accurate, but better than nothing
   PS4=$'+${0}:${LINENO})\t'
