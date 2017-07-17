@@ -11,13 +11,13 @@
 # USAGE
 #   source .just
 # DESCRIPTION
-#   Creates auto complete suggestions based on parsing the Justfile case 
-#   statements. 
+#   Creates auto complete suggestions based on parsing the Justfile case
+#   statements.
 #
 #   To add customized tab completions, add a .just script next to project
 #   Justfile. Write what would normally go inside the complete function to the
-#   .just file (without the function header). This file will be sourced every 
-#   complete after the just_commands, _just_subcommands, _just_subcommands 
+#   .just file (without the function header). This file will be sourced every
+#   complete after the just_commands, _just_subcommands, _just_subcommands
 #   arrays are populated.
 # NOTES
 #   Source automatically in Bash when sourcing env.bsh
@@ -46,7 +46,7 @@ _just()
   JUST_HELP_FILES+=("${just_file}")
 
   if [ "${just_file}" == "" ]; then
-    echo 
+    echo
     echo "Can't find a suitable configuration file in this directory or any"
     echo "parent. Are you in the right directory?"
     echo
@@ -67,7 +67,7 @@ _just()
   _just_parse_helps ${JUST_HELP_FILES+"${JUST_HELP_FILES[@]}"}
   #Get just command names
   parsed_help_a=("${parsed_help_a[@]%% *}") #Remove everything after the space in every entry
- 
+
   #Get main commands only
   local just_commands=()
   local OLD_IFS="${IFS}"
