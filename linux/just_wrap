@@ -4,14 +4,28 @@
 # NAME
 #   just_warp - Wrap files to create just environment
 # USAGE
-#   There are a total of four way to use this script.
-#   - 
+#   just_wrap is typically used to write a one line (but long line) script. This
+#   wrap script is then used every time you want to use your project environment
+#
+#   There are a total of four ways to use this wrap script.
+#   - Calling a command in your project environment. e.g.: "./wrap ls"
+#   - exec-ing a command in your project environment. This correctly results in
+#     no children processes. The exception to this is when you use built in bash
+#     commands (i.e. declare), in which case the child is not exec-ed.
+#     For example: "exec ./wrap ls"
+#   - Sourcing your environment into your current environment. e.g.: ". ./wrap"
+#   - Run a new bash shell session and have your project environment in the new
+#     session. For example: "./wrap" with no arguments.
 # INPUTS
 #   $1 - The project environment filename. Argument to source_environment_files
+#   [JUST_WRAP_NO_PS1] - When running a new bash shell, PS1 is exported to have
+#                        (just) in it to let you know you are in the shell. To
+#                        disable this behavior, set JUST_WRAP_NO_PS1 to 1.
+#                        Default: 0
 # EXAMPLE
-#   If you have a ./wrap scipt in your main project repository, and for example,
-#   have the vsi_common submodule checked out in ./external/vsi_common, you're
-#   wrap script would look something like this:
+#   If you have a ./wrap script in your main project repository, and for
+#   example, have the vsi_common submodule checked out in ./external/vsi_common,
+#   you're wrap script would look something like this:
 #
 #   #!/usr/bin/env bash
 #   . "$(dirname "${BASH_SOURCE[0]}")"/external/vsi_common/linux/just_wrap "${BASH_SOURCE[0]}" my_project.env ${@+"${@}"}
@@ -21,24 +35,50 @@
 #   Andy Neff
 #***
 
-#If not being sourced with no args
-if [ "${BASH_SOURCE[1]}" == "${0}" ] && [ "$#" -le "1" ]; then
-  export PS1="(loki)[\u@\h \W]\$ "
-  unset PROMPT_COMMAND
+being_sourced=
+
+   # If wrapped and not being sourced
+if ( [ "${BASH_SOURCE[1]}" == "${0}" ] || \
+   # Or not being wrapped              and not being sourced
+     ( [ "${#BASH_SOURCE[@]}" == "1" ] && [ "${BASH_SOURCE[0]}" == "${0}" ] ) ) && \
+   # With no argument (other than the environment variable)
+   [ "$#" -le "1" ]; then
+
+  if [ "${JUST_WRAP_NO_PS1-}" != "1" ]; then
+    export PS1="(just)[\u@\h \W]\$ "
+    unset PROMPT_COMMAND
+  fi
+
+  # If just_wrap was called directly
+  if [ "${#BASH_SOURCE[@]}" == "1" ]; then
+    # Source this script and the env file with it.
+    rc_file_line="source '${0}' '${1}'"
+  else
+    # The wrapped script does not need to have the environment file passed back
+    # to it, ${0} will point to that script, which will still have the
+    # environment argument in it
+    rc_file_line="source '${0}'"
+  fi
+
   # Thanks bash for making this hard! https://unix.stackexchange.com/q/187369
   if [[ ${OSTYPE} == darwin* ]]; then
-    exec bash --rcfile "$0"
+    exec bash --rcfile <(echo "${rc_file_line}")
   else
-    ENV=<(echo "set +o posix; source '$0'") exec bash --posix
+    ENV=<(echo "set +o posix; ${rc_file_line}") exec bash --posix
   fi
 fi
 
+#Source the environment
 . "$(dirname "${BASH_SOURCE[0]}")"/just_functions.bsh
 source_environment_files "${1}"
-shift 1
+shift 1 # Toss that argument away, you're done with it
 
 #This works as long as you don't name this script 'bash'... SO DON'T CALL YOUR SCIPT BASH!!!
-if [[ "${BASH_SOURCE[1]}" == "${0}" ]]; then #If not being sourced
+#If main wrapper script was not source
+if [ "${BASH_SOURCE[1]}" == "${0}" ] || \
+  # Or if there is no main wrapper script, and this script was not source
+   ( [ "${#BASH_SOURCE[@]}" == "1" ] && [ "${BASH_SOURCE[0]}" == "${0}" ] ); then
+  #Then execute the arguments!
   if [ "$(type -t "$1")" == "file" ] || [ "$(type -t "$1")" == "alias" ]; then
     exec "${@}"
   fi

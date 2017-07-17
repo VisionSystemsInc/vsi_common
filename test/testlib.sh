@@ -30,7 +30,8 @@
 #   Ryan Tomayko
 # MODIFICATION HISTORY
 #   Andy Neff - Added begin_fail_test
-#               Added optional teardown
+#               Added optional setup/teardown functions
+#               Added SETUPDIR
 #               Removed PATH
 #               Added robodoc documentation
 #               Use pushd/popd for each test instead of cd
@@ -41,12 +42,45 @@ set -e
 
 # create a temporary work space
 TRASHDIR="$(mktemp -d -t $(basename "$0")-$$.XXXXXXXX)"
+SETUPDIR="$(mktemp -d -t $(basename "$0")-$$.XXXXXXXX)"
 
 # keep track of num tests and failures
 tests=0
 failures=0
 allowed_failures=0
 must_failures=0
+
+#****f* testlib.sh/setup
+# NAME
+#   setup - Function run before the first test
+# NOTES
+#   A directory SETUPDIR is created for setup, right before running setup().
+#   Unlike TRASHDIR, this single directory is used for all the tests in the
+#   file.
+#
+#   Setup is not run if no tests are ever run
+# AUTHOR
+#   Andy Neff
+#***
+
+#****f* testlib.sh/teardown
+# NAME
+#   teardown - Function run after the last test
+# NOTES
+#   Teardown is not run if no tests are ever run
+# AUTHOR
+#   Andy Neff
+#***
+
+#****d* testlib.sh/TEST_KEEP_TEMP_DIRS
+# NAME
+#   TEST_KEEP_TEMP_DIRS - Keep the trashdir/setup dir
+# DESCRIPTION
+#   Debug flag to keep the temporary directories generated when testing. Set to
+#   1 to keep directories. Default: 0
+# AUTHOR
+#   Andy Neff
+#***
 
 #****f* testlib.sh/atexit
 # NAME
@@ -59,7 +93,9 @@ must_failures=0
 # AUTHOR
 #   Ryan Tomayko
 # MODIFICATION HISTORY
-#   Andy Neff - Added teardown
+#   Andy Neff - Added setup cleanup
+#               Added teardown
+#               Added TEST_KEEP_TEMP_DIRS flags
 #***
 atexit ()
 {
@@ -67,11 +103,14 @@ atexit ()
   [ -n "$test_description" ] && end_test $test_status
   unset test_status
 
-  if type -t teardown &>/dev/null; then
+  if [ "${tests}" -ne "0" ] && type -t teardown &>/dev/null; then
     teardown
   fi
 
-  rm -rf "$TRASHDIR"
+  if [ "${TEST_KEEP_TEMP_DIRS}" != "1" ]; then
+    rm -rf "$TRASHDIR"
+    rm -rf "$SETUPDIR"
+  fi
 
   printf '%s summary: %d test ran, %d failures, %d allowed failured, %d must fails\n' \
          "$0" "${tests}" "${failures}" "${allowed_failures}" "${must_failures}"
@@ -107,6 +146,11 @@ _begin_common_test ()
   # optional
   allowed_failure=0
   must_fail=0
+
+  # Run setup if this is the first test
+  if [ "${tests}" -eq "0" ] && type -t setup &>/dev/null; then
+    setup
+  fi
 
   tests=$(( tests + 1 ))
   test_description="$0 - $1"
@@ -200,6 +244,7 @@ end_test ()
       echo "-- stderr --"
       grep -v -e $'^\+[^\t]*\tend_test' \
               -e $'^\+[^\t]*\tset +x -e' <"$TRASHDIR/err" |
+        sed $'s|^[^+]| \t&|' |
         column -c1 -s $'\t' -t |
         sed 's/^/    /'
       echo "-- EOF $test_description --"
