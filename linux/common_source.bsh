@@ -78,8 +78,8 @@ esac
 # done
 
 if [ -f /etc/os-release ]; then
-  #DISTRO:VERSION:MIDDLE_DISTRO:MIDDLE_VERSION:CORE_DISTRO
-  DISTRO=$( . /etc/os-release;
+  # Run in a sub-shell so I can source os-release
+  VSI_DISTRO=$( . /etc/os-release;
             # Capture ubuntu derivatives are debian derived
             if [ "${ID_LIKE}" == "ubuntu" ]; then
               ID_CORE=debian
@@ -87,6 +87,7 @@ if [ -f /etc/os-release ]; then
             elif [ "${ID_LIKE}" != "${ID_LIKE%% *}" ]; then
               ID_CORE=${ID_LIKE#* }
               ID_LIKE=${ID_LIKE%% *}
+            # Scientific Linux doesn't capture itself for some reason
             elif [ "${NAME}" == "Scientific Linux" ]; then
               ID_CORE=${ID_LIKE}
               ID_LIKE=${ID}
@@ -104,126 +105,137 @@ if [ -f /etc/os-release ]; then
             : ${ID_CORE=${ID_LIKE}}
             : ${VERSION_CORE=${VERSION_LIKE}}
 
-            # Pass it out
+            # Pass the results out out
             echo ${ID}:${VERSION_ID}:${ID_LIKE}:${VERSION_LIKE}:${ID_CORE}:${VERSION_CORE}
           )
+  #DISTRO:VERSION:MIDDLE_DISTRO:MIDDLE_VERSION:CORE_DISTRO:CORE_VERSION
   # Parse the answer
-  VERSION_CORE=${DISTRO##*:}
-  DISTRO=${DISTRO%:*}
-  DISTRO_CORE=${DISTRO##*:}
-  DISTRO=${DISTRO%:*}
-  VERSION_LIKE=${DISTRO##*:}
-  DISTRO=${DISTRO%:*}
-  DISTRO_LIKE=${DISTRO##*:}
-  DISTRO=${DISTRO%:*}
-  VERSION=${DISTRO##*:}
-  DISTRO=${DISTRO%:*}
+  VSI_VERSION_CORE=${VSI_DISTRO##*:}
+  VSI_DISTRO=${VSI_DISTRO%:*}
+  VSI_DISTRO_CORE=${VSI_DISTRO##*:}
+  VSI_DISTRO=${VSI_DISTRO%:*}
+  VSI_VERSION_LIKE=${VSI_DISTRO##*:}
+  VSI_DISTRO=${VSI_DISTRO%:*}
+  VSI_DISTRO_LIKE=${VSI_DISTRO##*:}
+  VSI_DISTRO=${VSI_DISTRO%:*}
+  VSI_VERSION=${VSI_DISTRO##*:}
+  VSI_DISTRO=${VSI_DISTRO%:*}
 
   # If a debian derivative
-  if [ "${DISTRO}" != "${DISTRO_CORE}" ] && [ "${DISTRO_CORE}" == "debian" ]; then
+  if [ "${VSI_DISTRO}" != "${VSI_DISTRO_CORE}" ] && [ "${VSI_DISTRO_CORE}" == "debian" ]; then
     # Read the debian version here
-    read VERSION_CORE < /etc/debian_version
+    read VSI_VERSION_CORE < /etc/debian_version
   fi
+
 # Remove this special case after 30 Nov 2020
 # Older redhats don't have os-release. Read it here
 elif [ -f /etc/redhat-release ]; then
-  read DISTRO < /etc/redhat-release
-  if [[ ${DISTRO} =~ "Scientific Linux" ]]; then
-    VERSION=${DISTRO#* * * }
+  read VSI_DISTRO < /etc/redhat-release
+  if [[ ${VSI_DISTRO} =~ "Scientific Linux" ]]; then
+    VSI_VERSION=${VSI_DISTRO#* * * }
   else
-    VERSION=${DISTRO#* * }
+    VSI_VERSION=${VSI_DISTRO#* * }
   fi
 
-  VERSION=${VERSION%% *}
-  DISTRO=$(echo ${DISTRO%% *} | sed s'|.*|\L&|')
+  # Remove all but the first part (the version)
+  VSI_VERSION=${VSI_VERSION%% *}
+  #get distro (lowercased)
+  VSI_DISTRO=$(echo ${VSI_DISTRO%% *} | sed s'|.*|\L&|')
   # Need to be remain sh parsable compatible
-  #DISTRO=$(sed s'|.*|\L&|' <<< ${DISTRO%% *})
+  #VSI_DISTRO=$(sed s'|.*|\L&|' <<< ${VSI_DISTRO%% *})
+
 # Remove this special case after 31 Mar 2022
 # Older sles doesn't have an os-release. Read it here
 elif [ -f /etc/SuSE-release ]; then
   {
-    read DISTRO
-    read VERSION
-    read VERSION_LIKE
+    read VSI_DISTRO
+    read VSI_VERSION
+    read VSI_VERSION_LIKE
   }< /etc/SuSE-release
 
-  if [[ $DISTRO =~ 'SUSE Linux Enterprise Server' ]]; then
-    DISTRO=sles
+  # simplify
+  if [[ $VSI_DISTRO =~ 'SUSE Linux Enterprise Server' ]]; then
+    VSI_DISTRO=sles
   fi
-  VERSION=${VERSION##* }.${VERSION_LIKE##* }
-  VERSION_LIKE=${VERSION}
+  # Parse the version number out, and put it together
+  VSI_VERSION=${VSI_VERSION##* }.${VSI_VERSION_LIKE##* }
+  VSI_VERSION_LIKE=${VSI_VERSION}
+
+# Special case for clearlinux
 elif [ -f /usr/share/clear/version ]; then
-  DISTRO='clearlinux'
-  read VERSION < /usr/share/clear/version
+  VSI_DISTRO='clearlinux'
+  read VSI_VERSION < /usr/share/clear/version
+
+# Special case for busybox
 elif command -v busybox &>/dev/null; then
-  DISTRO=$(busybox | head -n 1)
-  VERSION=${DISTRO#* v}
-  VERSION=${VERSION%% *}
-  DISTRO=$(echo ${DISTRO%% *} | tr '[A-Z]' '[a-z]')
+  VSI_DISTRO=$(busybox | head -n 1)
+  VSI_VERSION=${VSI_DISTRO#* v}
+  VSI_VERSION=${VSI_VERSION%% *}
+  VSI_DISTRO=$(echo ${VSI_DISTRO%% *} | tr '[A-Z]' '[a-z]')
 fi
 
 # Handle rhel intricacies
-if [ "${DISTRO}" == "centos" ] || [ "${DISTRO}" == "scientific" ] || [ "${DISTRO}" == "rhel" ]; then
-  DISTRO_CORE=fedora
+if [ "${VSI_DISTRO}" == "centos" ] || [ "${VSI_DISTRO}" == "scientific" ] || [ "${VSI_DISTRO}" == "rhel" ]; then
+  VSI_DISTRO_CORE=fedora
 
-  case ${VERSION} in
-    4*) VERSION_CORE=3 ;; #Mostly EOL
-    5*) VERSION_CORE=6 ;; #Extended EOL
-    6*) VERSION_CORE="13 14" ;; # EOL Nov 30, 2020
-    7*) VERSION_CORE=19 ;; # EOL Jun 30, 2024
-    *) VERSION_CORE='?' ;;
+  case ${VSI_VERSION} in
+    4*) VSI_VERSION_CORE=3 ;; #Mostly EOL
+    5*) VSI_VERSION_CORE=6 ;; #Extended EOL
+    6*) VSI_VERSION_CORE="13 14" ;; # EOL Nov 30, 2020
+    7*) VSI_VERSION_CORE=19 ;; # EOL Jun 30, 2024
+    *) VSI_VERSION_CORE='?' ;;
   esac
 
-  if [ "${DISTRO}" == "centos" ] || [ "${DISTRO}" == "scientific" ]; then
-    : ${DISTRO_LIKE=rhel}
-  elif [ "${DISTRO}" == "rhel" ]; then
-    DISTRO_LIKE=${DISTRO_CORE}
+  if [ "${VSI_DISTRO}" == "centos" ] || [ "${VSI_DISTRO}" == "scientific" ]; then
+    : ${VSI_DISTRO_LIKE=rhel}
+  elif [ "${VSI_DISTRO}" == "rhel" ]; then
+    VSI_DISTRO_LIKE=${VSI_DISTRO_CORE}
   fi
 fi
 
 # Turn debian codenames to numbers
-if [ "${DISTRO_CORE}" == "debian" ]; then
+if [ "${VSI_DISTRO_CORE}" == "debian" ]; then
   # Remove the /sid for some debian derivatives
-  VERSION_CORE=${VERSION_CORE%/sid}
+  VSI_VERSION_CORE=${VSI_VERSION_CORE%/sid}
   # turn codenames to numbers
-  case ${VERSION_CORE} in
-    squeeze)  VERSION_CORE=6  ;; #EOL Feb 29 2016
-    wheezy)   VERSION_CORE=7  ;; #EOL May 2018
-    jessie)   VERSION_CORE=8  ;; #EOL ~June 6 2020
-    stretch)  VERSION_CORE=9  ;; #EOL 2022
-    buster)   VERSION_CORE=10 ;; #Release ?
-    bullseye) VERSION_CORE=11 ;; #Release ?
+  case ${VSI_VERSION_CORE} in
+    squeeze)  VSI_VERSION_CORE=6  ;; #EOL Feb 29 2016
+    wheezy)   VSI_VERSION_CORE=7  ;; #EOL May 2018
+    jessie)   VSI_VERSION_CORE=8  ;; #EOL ~June 6 2020
+    stretch)  VSI_VERSION_CORE=9  ;; #EOL 2022
+    buster)   VSI_VERSION_CORE=10 ;; #Release ?
+    bullseye) VSI_VERSION_CORE=11 ;; #Release ?
   esac
 fi
 
 # Fix the case when OSes like mint are like ubuntu but use the codename
-if [ "${DISTRO_LIKE}" == "ubuntu" ]; then
-  case ${VERSION_LIKE} in
-    precise) VERSION_LIKE=12.04 ;; #EOL April 28, 2017
-    trusty)  VERSION_LIKE=14.04 ;; #EOL April, 2019
-    utopic)  VERSION_LIKE=14.10 ;; #EOL July 23,  2015
-    vivid)   VERSION_LIKE=15.04 ;; #EOL Feb 4, 2016
-    wily)    VERSION_LIKE=15.10 ;; #EOL July 28, 2016
-    xenial)  VERSION_LIKE=16.04 ;; #EOL ~July 2021
-    yakkety) VERSION_LIKE=16.10 ;; #EOL July 20, 2017
-    zesty)   VERSION_LIKE=17.04 ;; #EOL Jan 2018
-    artful)  VERSION_LIKE=17.10 ;; #Release Oct 2017
-    busy)    VERSION_LIKE=18.04 ;; #Probably not right, Release April 2018
+if [ "${VSI_DISTRO_LIKE}" == "ubuntu" ]; then
+  case ${VSI_VERSION_LIKE} in
+    precise) VSI_VERSION_LIKE=12.04 ;; #EOL April 28, 2017
+    trusty)  VSI_VERSION_LIKE=14.04 ;; #EOL April, 2019
+    utopic)  VSI_VERSION_LIKE=14.10 ;; #EOL July 23,  2015
+    vivid)   VSI_VERSION_LIKE=15.04 ;; #EOL Feb 4, 2016
+    wily)    VSI_VERSION_LIKE=15.10 ;; #EOL July 28, 2016
+    xenial)  VSI_VERSION_LIKE=16.04 ;; #EOL ~July 2021
+    yakkety) VSI_VERSION_LIKE=16.10 ;; #EOL July 20, 2017
+    zesty)   VSI_VERSION_LIKE=17.04 ;; #EOL Jan 2018
+    artful)  VSI_VERSION_LIKE=17.10 ;; #Release Oct 2017
+    busy)    VSI_VERSION_LIKE=18.04 ;; #Probably not right, Release April 2018
   esac
 fi
 
 # Copy unknowns right
-: ${DISTRO_LIKE=${DISTRO}}
-: ${VERSION_LIKE=${VERSION}}
-: ${DISTRO_CORE=${DISTRO_LIKE}}
-: ${VERSION_CORE=${VERSION_LIKE}}
+: ${VSI_DISTRO_LIKE=${VSI_DISTRO}}
+: ${VSI_VERSION_LIKE=${VSI_VERSION}}
+: ${VSI_DISTRO_CORE=${VSI_DISTRO_LIKE}}
+: ${VSI_VERSION_CORE=${VSI_VERSION_LIKE}}
 
 # This makes copying version left easy
-if [ "${DISTRO_CORE}" == "${DISTRO_LIKE}" ]; then
-  VERSION_LIKE=${VERSION_CORE}
+if [ "${VSI_DISTRO_CORE}" == "${VSI_DISTRO_LIKE}" ]; then
+  VSI_VERSION_LIKE=${VSI_VERSION_CORE}
 fi
 
-echo $DISTRO - $VERSION, $DISTRO_LIKE - $VERSION_LIKE, $DISTRO_CORE - $VERSION_CORE
+echo $VSI_DISTRO - $VSI_VERSION, $VSI_DISTRO_LIKE - $VSI_VERSION_LIKE, $VSI_DISTRO_CORE - $VSI_VERSION_CORE
 
 #****d* common_source.bsh/VSI_NUMBER_CORES
 # NAME
