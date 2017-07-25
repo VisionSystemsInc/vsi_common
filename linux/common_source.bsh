@@ -45,9 +45,185 @@ case "$OSTYPE" in
     ;;
 esac
 
-#TODO: OS Distro
+#Tested versions
+# OSES=(clearlinux
+# amazonlinux
+# debian:7
+# debian:9
+# ubuntu:14.04
+# ubuntu:17.04
+# fedora:24
+# fedora:26
+# fedora:rawhide
+# centos:7
+# centos:6
+# centos:5
+# gidikern/rhel-oracle-jre
+# mstormo/suse:11.3
+# opensuse:13.2
+# opensuse:tumbleweed
+# vcatechnology/linux-mint:17 #IMAGE FAIL?
+# vcatechnology/linux-mint:18.1
+# ringo/scientific:6.3
+# ringo/scientific:7.2)
+# OSESSH=(busybox
+# alpine)
+# for os in "${OSES[@]}"; do
+#   echo $os
+#   docker run -v `pwd`:/vsi --rm $os bash -c ". /vsi/linux/common_source.bsh"
+# done
+# for os in "${OSESSH[@]}"; do
+#   echo $os
+#   docker run -v `pwd`:/vsi --rm $os sh -c ". /vsi/linux/common_source.bsh"
+# done
 
-#TODO: OS Version
+if [ -f /etc/os-release ]; then
+  #DISTRO:VERSION:MIDDLE_DISTRO:MIDDLE_VERSION:CORE_DISTRO
+  DISTRO=$( . /etc/os-release;
+            # Capture ubuntu derivatives are debian derived
+            if [ "${ID_LIKE}" == "ubuntu" ]; then
+              ID_CORE=debian
+            # If there is a space, this is like centos that says "rhel fedora"
+            elif [ "${ID_LIKE}" != "${ID_LIKE%% *}" ]; then
+              ID_CORE=${ID_LIKE#* }
+              ID_LIKE=${ID_LIKE%% *}
+            elif [ "${NAME}" == "Scientific Linux" ]; then
+              ID_CORE=${ID_LIKE}
+              ID_LIKE=${ID}
+              ID=scientific
+            fi
+
+            # Some distros like mint store the like version here
+            if [ "${UBUNTU_CODENAME+set}" == "set" ]; then
+              : ${VERSION_LIKE=${UBUNTU_CODENAME}}
+            fi
+
+            # copy right
+            : ${ID_LIKE=${ID}}
+            : ${VERSION_LIKE=${VERSION_ID}}
+            : ${ID_CORE=${ID_LIKE}}
+            : ${VERSION_CORE=${VERSION_LIKE}}
+
+            # Pass it out
+            echo ${ID}:${VERSION_ID}:${ID_LIKE}:${VERSION_LIKE}:${ID_CORE}:${VERSION_CORE}
+          )
+  # Parse the answer
+  VERSION_CORE=${DISTRO##*:}
+  DISTRO=${DISTRO%:*}
+  DISTRO_CORE=${DISTRO##*:}
+  DISTRO=${DISTRO%:*}
+  VERSION_LIKE=${DISTRO##*:}
+  DISTRO=${DISTRO%:*}
+  DISTRO_LIKE=${DISTRO##*:}
+  DISTRO=${DISTRO%:*}
+  VERSION=${DISTRO##*:}
+  DISTRO=${DISTRO%:*}
+
+  # If a debian derivative
+  if [ "${DISTRO}" != "${DISTRO_CORE}" ] && [ "${DISTRO_CORE}" == "debian" ]; then
+    # Read the debian version here
+    read VERSION_CORE < /etc/debian_version
+  fi
+# Remove this special case after 30 Nov 2020
+# Older redhats don't have os-release. Read it here
+elif [ -f /etc/redhat-release ]; then
+  read DISTRO < /etc/redhat-release
+  if [[ ${DISTRO} =~ "Scientific Linux" ]]; then
+    VERSION=${DISTRO#* * * }
+  else
+    VERSION=${DISTRO#* * }
+  fi
+
+  VERSION=${VERSION%% *}
+  DISTRO=$(echo ${DISTRO%% *} | sed s'|.*|\L&|')
+  # Need to be remain sh parsable compatible
+  #DISTRO=$(sed s'|.*|\L&|' <<< ${DISTRO%% *})
+# Remove this special case after 31 Mar 2022
+# Older sles doesn't have an os-release. Read it here
+elif [ -f /etc/SuSE-release ]; then
+  {
+    read DISTRO
+    read VERSION
+    read VERSION_LIKE
+  }< /etc/SuSE-release
+
+  if [[ $DISTRO =~ 'SUSE Linux Enterprise Server' ]]; then
+    DISTRO=sles
+  fi
+  VERSION=${VERSION##* }.${VERSION_LIKE##* }
+  VERSION_LIKE=${VERSION}
+elif [ -f /usr/share/clear/version ]; then
+  DISTRO='clearlinux'
+  read VERSION < /usr/share/clear/version
+elif command -v busybox &>/dev/null; then
+  DISTRO=$(busybox | head -n 1)
+  VERSION=${DISTRO#* v}
+  VERSION=${VERSION%% *}
+  DISTRO=$(echo ${DISTRO%% *} | tr '[A-Z]' '[a-z]')
+fi
+
+# Handle rhel intricacies
+if [ "${DISTRO}" == "centos" ] || [ "${DISTRO}" == "scientific" ] || [ "${DISTRO}" == "rhel" ]; then
+  DISTRO_CORE=fedora
+
+  case ${VERSION} in
+    4*) VERSION_CORE=3 ;; #Mostly EOL
+    5*) VERSION_CORE=6 ;; #Extended EOL
+    6*) VERSION_CORE="13 14" ;; # EOL Nov 30, 2020
+    7*) VERSION_CORE=19 ;; # EOL Jun 30, 2024
+    *) VERSION_CORE='?' ;;
+  esac
+
+  if [ "${DISTRO}" == "centos" ] || [ "${DISTRO}" == "scientific" ]; then
+    : ${DISTRO_LIKE=rhel}
+  elif [ "${DISTRO}" == "rhel" ]; then
+    DISTRO_LIKE=${DISTRO_CORE}
+  fi
+fi
+
+# Turn debian codenames to numbers
+if [ "${DISTRO_CORE}" == "debian" ]; then
+  # Remove the /sid for some debian derivatives
+  VERSION_CORE=${VERSION_CORE%/sid}
+  # turn codenames to numbers
+  case ${VERSION_CORE} in
+    squeeze)  VERSION_CORE=6  ;; #EOL Feb 29 2016
+    wheezy)   VERSION_CORE=7  ;; #EOL May 2018
+    jessie)   VERSION_CORE=8  ;; #EOL ~June 6 2020
+    stretch)  VERSION_CORE=9  ;; #EOL 2022
+    buster)   VERSION_CORE=10 ;; #Release ?
+    bullseye) VERSION_CORE=11 ;; #Release ?
+  esac
+fi
+
+# Fix the case when OSes like mint are like ubuntu but use the codename
+if [ "${DISTRO_LIKE}" == "ubuntu" ]; then
+  case ${VERSION_LIKE} in
+    precise) VERSION_LIKE=12.04 ;; #EOL April 28, 2017
+    trusty)  VERSION_LIKE=14.04 ;; #EOL April, 2019
+    utopic)  VERSION_LIKE=14.10 ;; #EOL July 23,  2015
+    vivid)   VERSION_LIKE=15.04 ;; #EOL Feb 4, 2016
+    wily)    VERSION_LIKE=15.10 ;; #EOL July 28, 2016
+    xenial)  VERSION_LIKE=16.04 ;; #EOL ~July 2021
+    yakkety) VERSION_LIKE=16.10 ;; #EOL July 20, 2017
+    zesty)   VERSION_LIKE=17.04 ;; #EOL Jan 2018
+    artful)  VERSION_LIKE=17.10 ;; #Release Oct 2017
+    busy)    VERSION_LIKE=18.04 ;; #Probably not right, Release April 2018
+  esac
+fi
+
+# Copy unknowns right
+: ${DISTRO_LIKE=${DISTRO}}
+: ${VERSION_LIKE=${VERSION}}
+: ${DISTRO_CORE=${DISTRO_LIKE}}
+: ${VERSION_CORE=${VERSION_LIKE}}
+
+# This makes copying version left easy
+if [ "${DISTRO_CORE}" == "${DISTRO_LIKE}" ]; then
+  VERSION_LIKE=${VERSION_CORE}
+fi
+
+echo $DISTRO - $VERSION, $DISTRO_LIKE - $VERSION_LIKE, $DISTRO_CORE - $VERSION_CORE
 
 #****d* common_source.bsh/VSI_NUMBER_CORES
 # NAME
@@ -67,6 +243,8 @@ case "${VSI_OS}" in
   *)
     if command -v nproc &>/dev/null; then
       VSI_NUMBER_CORES=$(nproc)
+    elif [ -f /proc/cpuinfo ]; then
+      VSI_NUMBER_CORES=$(grep processor /proc/cpuinfo | wc -l)
     else
       echo "Warning: unable to determine number of cores" >&2
       VSI_NUMBER_CORES=4
