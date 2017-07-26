@@ -1,0 +1,89 @@
+. "$(dirname ${BASH_SOURCE[0]})/testlib.sh"
+. "$(dirname ${BASH_SOURCE[0]})/test_utils.bsh"
+
+VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+
+COMMON_SOURCE_OSES=(
+  clearlinux
+  amazonlinux
+  debian:7
+  debian:9
+  ubuntu:14.04
+  ubuntu:17.04
+  fedora:24
+  fedora:26
+  fedora:rawhide
+  centos:7
+  centos:6
+  centos:5
+  gidikern/rhel-oracle-jre
+  mstormo/suse:11.3
+  opensuse:13.2
+  opensuse@sha256:e10fd654d988208fb02db36fc701ec001e03a8b9ac809566ac080667fdf6228e
+  vcatechnology/linux-mint:17
+  vcatechnology/linux-mint:18.1
+  ringo/scientific:6.3
+  ringo/scientific:7.2
+  busybox
+  alpine
+  vbatts/slackware:14.2
+  gentoo/stage3-amd64:20170726
+  binhex/arch-base:20170510-01
+)
+
+COMMON_SOURCE_ANSWERS=(
+  "clearlinux - 16520, clearlinux - 16520, clearlinux - 16520"
+  "amzn - 2017.03, rhel - 2017.03, fedora - 2017.03"
+  "debian - 7, debian - 7, debian - 7"
+  "debian - 9, debian - 9, debian - 9"
+  "ubuntu - 14.04, debian - 8, debian - 8"
+  "ubuntu - 17.04, debian - 9, debian - 9"
+  "fedora - 24, fedora - 24, fedora - 24"
+  "fedora - 26, fedora - 26, fedora - 26"
+  "fedora - 27, fedora - 27, fedora - 27"
+  "centos - 7, rhel - 7, fedora - 19"
+  "centos - 6.9, rhel - 6.9, fedora - 13 14"
+  "centos - 5.11, rhel - 5.11, fedora - 6"
+  "rhel - 7.1, fedora - 19, fedora - 19"
+  "sles - 11.3, sles - 11.3, sles - 11.3"
+  "opensuse - 13.2, suse - 13.2, suse - 13.2"
+  "opensuse - 20170710, suse - 20170710, suse - 20170710" # Rolling release
+  "linuxmint - 17.3, ubuntu - 14.04, debian - 8"
+  "linuxmint - 18.1, ubuntu - 16.04, debian - 9"
+  "scientific - 6.3, rhel - 6.3, fedora - 13 14"
+  "scientific - 7.2, rhel - 7.2, fedora - 19"
+  "busybox - 1.26.2, busybox - 1.26.2, busybox - 1.26.2"
+  "alpine - 3.6.2, alpine - 3.6.2, alpine - 3.6.2"
+  "slackware - 14.2, slackware - 14.2, slackware - 14.2"
+  "gentoo - 2.3, gentoo - 2.3, gentoo - 2.3" #Not sure this even makes sense
+  "arch - ?, arch - ?, arch - ?" # Arch, like gentoo is a rolling release
+)
+
+: ${COMMON_SOURCE_DOCKER=docker}
+
+for common_source_index in "${!COMMON_SOURCE_OSES[@]}"; do
+  common_source_os="${COMMON_SOURCE_OSES[$common_source_index]}"
+  common_source_ans="${COMMON_SOURCE_ANSWERS[$common_source_index]}"
+
+  if ! command -v "${COMMON_SOURCE_DOCKER}" >/dev/null 2>&1; then
+    skip_next_test
+  fi
+  begin_test "Distribution name for $common_source_os Linux"
+  (
+    check_skip
+
+    [ "$("${COMMON_SOURCE_DOCKER}" run -v "${VSI_COMMON_DIR}:/vsi" --rm $common_source_os sh -c \
+               ". /vsi/linux/common_source.bsh;
+                echo \$VSI_DISTRO      - \$VSI_DISTRO_VERSION, \
+                     \$VSI_DISTRO_LIKE - \$VSI_DISTRO_VERSION_LIKE, \
+                     \$VSI_DISTRO_CORE - \$VSI_DISTRO_VERSION_CORE")" = "${common_source_ans}" ]
+  )
+  end_test
+done
+
+unset COMMON_SOURCE_OSES
+unset COMMON_SOURCE_ANSWERS
+unset COMMON_SOURCE_DOCKER
+unset common_source_os
+unset common_source_ans
+unset common_source_index
