@@ -31,6 +31,10 @@
 # AUTHOR
 #   Andy Neff
 #***
+
+# In general sh doesn't set OSTYPE, bash always does
+: ${OSTYPE=$(uname | tr '[A-Z]' '[a-z]')}
+
 case "$OSTYPE" in
   linux*)
     VSI_OS=linux
@@ -40,7 +44,7 @@ case "$OSTYPE" in
     VSI_DISTRO=darwin
     VSI_DISTRO_VERSION="$(sw_vers -productVersion)"
     ;;
-  win32*|cygwin*|msys*)
+  win32*|cygwin*|msys*|ming*)
     VSI_OS=windows
     VSI_DISTRO=windows
     VSI_DISTRO_VERSION="$(wmic os get version /format:list | (source /dev/stdin 2>/dev/null; echo $Version))"
@@ -221,14 +225,14 @@ if [ -f /etc/os-release ]; then
                 fi
 
                 # Capture ubuntu derivatives are debian derived
-                if [ "${ID_LIKE}" = "ubuntu" ]; then
+                if [ "${ID_LIKE-}" = "ubuntu" ]; then
                   ID_CORE=debian
                 # If there is a space, this is like centos that says "rhel fedora"
-                elif [ "${ID_LIKE}" != "${ID_LIKE%% *}" ]; then
+                elif [ "${ID_LIKE+set}" == "set" ] && [ "${ID_LIKE}" != "${ID_LIKE%% *}" ]; then
                   ID_CORE=${ID_LIKE#* }
                   ID_LIKE=${ID_LIKE%% *}
                 # Scientific Linux doesn't capture itself for some reason
-                elif [ "${NAME}" = "Scientific Linux" ]; then
+                elif [ "${NAME-}" = "Scientific Linux" ]; then
                   ID_CORE="${ID_LIKE}"
                   ID_LIKE="${ID}"
                   ID=scientific
@@ -318,7 +322,8 @@ elif [ -f /etc/arch-release ]; then
 # Special case for clearlinux
 elif [ -f /usr/share/clear/version ]; then
   VSI_DISTRO='clearlinux'
-  read VSI_DISTRO_VERSION < /usr/share/clear/version
+  read VSI_DISTRO_VERSION < /usr/share/clear/version || :
+  # EOF is reached, but that's ok
 
 # Special case for busybox
 elif command -v busybox >/dev/null 2>&1; then
@@ -327,8 +332,8 @@ elif command -v busybox >/dev/null 2>&1; then
   VSI_DISTRO_VERSION="${VSI_DISTRO_VERSION%% *}"
   VSI_DISTRO="$(echo "${VSI_DISTRO%% *}" | tr '[A-Z]' '[a-z]')"
 else
-  VSI_DISTRO=unknown
-  VSI_DISTRO_VERSION='?'
+  : ${VSI_DISTRO=unknown}
+  : ${VSI_DISTRO_VERSION='?'}
 fi
 
 # Handle rhel intricacies
