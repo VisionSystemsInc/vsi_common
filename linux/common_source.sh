@@ -1,6 +1,6 @@
-#****F* vsi/common_source.bsh
+#****F* vsi/common_source.sh
 # NAME
-#   common_source.bsh - Cross OS compatible common values files
+#   common_source.sh - Cross OS compatible common values files
 # DESCRIPTION
 #   There are many differences between bash scripts between Windows (using
 #   mingw/cygwin), MacOS (which uses a MODIFIED version of bash 3.2), and the
@@ -15,7 +15,7 @@
 #   Andy Neff
 #***
 
-#****d* common_source.bsh/VSI_OS
+#****d* common_source.sh/VSI_OS
 # NAME
 #   VSI_OS - Operating system name
 # DESCRIPTION
@@ -27,7 +27,7 @@
 #   Only systems that are not EOL are considered. For example, Windows 95
 #   doesn't have the wmic used, but is pass end-of-life, so it is not a concern.
 # SEE ALSO
-#   common_source.bsh/VSI_DISTRO, common_source.bsh/VSI_DISTRO_VERSION
+#   common_source.sh/VSI_DISTRO, common_source.sh/VSI_DISTRO_VERSION
 # AUTHOR
 #   Andy Neff
 #***
@@ -66,7 +66,7 @@ esac
 
 
 
-#****d* common_source.bsh/VSI_DISTRO
+#****d* common_source.sh/VSI_DISTRO
 # NAME
 #   VSI_DISTRO - Name of the distribution.
 # DESCRIPTION
@@ -88,12 +88,12 @@ esac
 #   Solaris | ${OS_TYPE} (expected solaris*)
 #   Mac     | darwin     (same as VSI_OS)
 # SEE ALSO
-#   common_source.bsh/VSI_DISTRO_LIKE common_source.bsh/VSI_DISTRO_CORE
+#   common_source.sh/VSI_DISTRO_LIKE common_source.sh/VSI_DISTRO_CORE
 # AUTHOR
 #   Andy Neff
 #***
 
-#****d* common_source.bsh/VSI_DISTRO_VERSION
+#****d* common_source.sh/VSI_DISTRO_VERSION
 # NAME
 #   VSI_DISTRO_VERSION - The version of the distribution
 # NOTES
@@ -129,12 +129,12 @@ esac
 #     1.02   Windows 1.02
 #     1.01   Windows 1.01
 # SEE ALSO
-#   common_source.bsh/VSI_VERSION_LIKE common_source.bsh/VSI_VERSION_CORE
+#   common_source.sh/VSI_VERSION_LIKE common_source.sh/VSI_VERSION_CORE
 # AUTHOR
 #   Andy Neff
 #***
 
-#****d* common_source.bsh/VSI_DISTRO_LIKE
+#****d* common_source.sh/VSI_DISTRO_LIKE
 # NAME
 #   VSI_DISTRO_LIKE - Name of the distribution this distribution is based off of
 # DESCRIPTION
@@ -146,12 +146,12 @@ esac
 #   This is not as useful as the VSI_DISTRO_CORE which is more useful in
 #   determining "should I use yum or apt, etc..."
 # SEE ALSO
-#   common_source.bsh/VSI_DISTRO common_source.bsh/VSI_DISTRO_CORE
+#   common_source.sh/VSI_DISTRO common_source.sh/VSI_DISTRO_CORE
 # AUTHOR
 #   Andy Neff
 #***
 
-#****d* common_source.bsh/VSI_DISTRO_VERSION_LIKE
+#****d* common_source.sh/VSI_DISTRO_VERSION_LIKE
 # NAME
 #   VSI_DISTRO_VERSION_LIKE - Version of VSI_DISTRO_LIKE
 # DESCRIPTION
@@ -161,12 +161,12 @@ esac
 #   _LIKE would be rhel, and _CORE would be fedora, and then all you would need
 #   to check is if the fedora version (VSI_DISTRO_VERSION_CORE) is >= 22 or not.
 # SEE ALSO
-#   common_source.bsh/VSI_DISTRO common_source.bsh/VSI_DISTRO_CORE
+#   common_source.sh/VSI_DISTRO common_source.sh/VSI_DISTRO_CORE
 # AUTHOR
 #   Andy Neff
 #***
 
-#****d* common_source.bsh/VSI_DISTRO_CORE
+#****d* common_source.sh/VSI_DISTRO_CORE
 # NAME
 #   VSI_DISTRO_CORE - Name of the distribution this distribution is based off of
 # DESCRIPTION
@@ -179,18 +179,18 @@ esac
 #   While _LIKE variables go one back, _CORE should go all the way back to the
 #   main distribution, typically debian, fedora, slackware, gentoo, etc...
 # SEE ALSO
-#   common_source.bsh/VSI_DISTRO_VERSION_CORE common_source.bsh/VSI_DISTRO
+#   common_source.sh/VSI_DISTRO_VERSION_CORE common_source.sh/VSI_DISTRO
 # AUTHOR
 #   Andy Neff
 #***
 
-#****d* common_source.bsh/VSI_DISTRO_VERSION_CORE
+#****d* common_source.sh/VSI_DISTRO_VERSION_CORE
 # NAME
 #   VSI_DISTRO_VERSION_CORE - Version of VSI_DISTRO_CORE
 # DESCRIPTION
 #   The version of the VSI_DISTRO_CORE that the distribution is based off of
 # SEE ALSO
-#   common_source.bsh/VSI_DISTRO_CORE
+#   common_source.sh/VSI_DISTRO_CORE
 # AUTHOR
 #   Andy Neff
 #***
@@ -389,25 +389,45 @@ if [ "${VSI_DISTRO_CORE}" = "${VSI_DISTRO_LIKE}" ]; then
   VSI_DISTRO_VERSION_LIKE="${VSI_DISTRO_VERSION_CORE}"
 fi
 
+#****d* common_source.sh/VSI_OS_VERSION
+# NAME
+#   VSI_OS_VERSION - Version of the operating system
+# DESCRIPTION
+#   For the Windows operating systems, this is the same as VSI_DISTRO_VERSION.
+#   For Linux/Unix based operating systems, this will evaluate to the kernel
+#   version
+# SEE ALSO
+#   common_source.sh/VSI_DISTRO_VERSION
+# AUTHOR
+#   Andy Neff
+#***
 case VSI_OS in
-  linux)
-     VSI_OS_VERSION="$(uname -r)"
+  windows)
+     VSI_OS_VERSION="${VSI_DISTRO_VERSION}"
      ;;
   *)
-     VSI_OS_VERSION="${VSI_DISTRO_VERSION}"
+     VSI_OS_VERSION="$(uname -r)"
      ;;
 esac
 
+#****d* common_source.sh/VSI_ARCH
+# NAME
+#   VSI_ARCH - System architecture
+# DESCRIPTION
+#   The architecture of the CPU in use (same as uname -m)
 # EXAMPLE
 #   Possible values include (but may not be limited to)
 #     i386 i686 x86_64 ia64 alpha amd64 arm armeb armel hppa m32r m68k mips
 #     mipsel powerpc ppc64 s390 s390x sh3 sh3eb sh4 sh4eb sparc
 #
 #   Typically found: x86_64
+# AUTHOR
+#   Andy Neff
+#***
 
 VSI_ARCH="$(uname -m)"
 
-#****d* common_source.bsh/VSI_NUMBER_CORES
+#****d* common_source.sh/VSI_NUMBER_CORES
 # NAME
 #   VSI_NUMBER_CORES - Number of CPU cores
 # DESCRIPTION
@@ -417,14 +437,23 @@ VSI_ARCH="$(uname -m)"
 #***
 case "${VSI_OS}" in
   darwin)
-    VSI_NUMBER_CORES="$(\sysctl -n hw.ncpu)"
+    if command -v sysctl >/dev/null 2>&1; then # normal darwin
+      VSI_NUMBER_CORES="$(\sysctl -n hw.ncpu)"
+    elif [ -f /Volumes/SystemRoot/proc/cpuinfo ]; then #darling
+      VSI_NUMBER_CORES="$(grep processor /Volumes/SystemRoot/proc/cpuinfo | wc -l)"
+      # Left trim white spaces
+      VSI_NUMBER_CORES="${VSI_NUMBER_CORES#"${VSI_NUMBER_CORES%%[![:space:]]*}"}"
+    else
+      echo "Warning: unable to determine number of cores" >&2
+      VSI_NUMBER_CORES=4
+    fi
     ;;
   windows)
     VSI_NUMBER_CORES="${NUMBER_OF_PROCESSORS}"
     ;;
   *)
     if command -v nproc >/dev/null 2>&1; then
-      VSI_NUMBER_CORES="$(nproc)"
+      VSI_NUMBER_CORES="$(\nproc)"
     elif [ -f /proc/cpuinfo ]; then
       VSI_NUMBER_CORES="$(grep processor /proc/cpuinfo | wc -l)"
     else
