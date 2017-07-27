@@ -1,0 +1,373 @@
+#!/usr/bin/env bash
+
+set -eu
+
+# I can tell you WHAT these commands do, not WHY. They redirect stdout to stderr,
+# and now the only way to write to stdout is to write to 3
+exec 3>&1 # I have NO IDEA why this comes before the next line
+exec 1>&2 # Redirect stdout to stderr
+
+: ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
+source "${VSI_COMMON_DIR}/linux/ask_question"
+
+#****F* just/new_just
+
+echo "Setting up a new project to use J.U.S.T."
+echo
+
+#****d* new_just/PROJECT_DIR
+
+: ${PROJECT_DIR="$(read -r -p "Project directory [${PWD}] " x; echo "$x")"}
+if [ "${PROJECT_DIR}" == "" ]; then
+  PROJECT_DIR="${PWD}"
+else
+  mkdir -p "${PROJECT_DIR}"
+  PROJECT_DIR="$(cd "${PROJECT_DIR}"; pwd)"
+fi
+
+#****d* new_just/PROJECT_NAME
+
+: ${PROJECT_NAME="$(read -r -p "Project name [$(basename "${PROJECT_DIR}")] " x; echo "$x")"}
+if [ "${PROJECT_NAME}" == "" ]; then
+  PROJECT_NAME="$(basename "${PROJECT_DIR}")"
+fi
+
+
+#****d* new_just/PROJECT_PREFIX
+
+default=$(echo "${PROJECT_NAME-}" | tr '[a-z]' '[A-Z]' | sed 's|[^A-Z0-9_]+||g')
+: ${PROJECT_PREFIX="$(read -r -p "Project veriable prefix [${default}] " x; echo $x)"}
+if [ "${PROJECT_PREFIX}" == "" ]; then
+  PROJECT_PREFIX=${default}
+else
+  PROJECT_PREFIX=$(echo "${PROJECT_PREFIX-}" | tr '[a-z]' '[A-Z]' | sed 's|[^A-Z0-9_]+||g')
+fi
+
+#****d* new_just/REPO_NAME
+default=$(echo "${PROJECT_NAME-}" | tr '[A-Z]' '[a-z]' | sed 's|[^a-z0-9_./-]+||g')
+: ${REPO_NAME="$(read -r -p "Docker Repo for images [${default}] " x; echo $x)"}
+if [ "${REPO_NAME}" == "" ]; then
+  REPO_NAME=${default}
+else
+  REPO_NAME=$(echo "${REPO_NAME-}" | tr '[A-Z]' '[a-z]' | sed 's|[^a-z0-9_./-]+||g')
+fi
+
+
+#****d* new_just/JUSTFILE
+
+: ${JUSTFILE="$(read -r -p "Just file name [Justfile] " x; echo "$x")"}
+if [ "${JUSTFILE}" == "" ]; then
+  JUSTFILE="Justfile"
+else
+  JUSTFILE="$(basename ${JUSTFILE})"
+fi
+
+
+#****d* new_just/SETUPFILE
+: ${SETUPFILE="$(read -r -p "Environment setup script file name [setup.env] " x; echo "$x")"}
+if [ "${SETUPFILE}" == "" ]; then
+  SETUPFILE="setup.env"
+else
+  SETUPFILE="$(basename ${SETUPFILE})"
+fi
+
+#****d* new_just/WRAPFILE
+: ${WRAPFILE="$(read -r -p "Wrap script file name [wrap] " x; echo "$x")"}
+if [ "${WRAPFILE}" == "" ]; then
+  WRAPFILE="wrap"
+else
+  WRAPFILE="$(basename ${WRAPFILE})"
+fi
+
+#****d* new_just/VSI_COMMON_DIR
+
+: ${VSI_DIR="$(read -r -p "VSI common module path [./external/vsi_common] " x; echo "$x")"}
+if [ "${VSI_DIR}" == "" ]; then
+  VSI_DIR="${PROJECT_DIR}/external/vsi_common"
+else
+  VSI_DIR="$(cd "${PROJECT_DIR}";
+             mkdir -p "${VSI_DIR}";
+             cd "${VSI_DIR}";
+             pwd)"
+fi
+
+echo "Summary"
+echo "======="
+printf "%-40s | %-40s\n" "Project Name" "${PROJECT_NAME}"
+printf "%-40s | %-40s\n" "Project Directory" "${PROJECT_DIR}"
+printf "%-40s | %-40s\n" "Project prefix" "${PROJECT_PREFIX}"
+printf "%-40s | %-40s\n" "Just file" "${JUSTFILE}"
+printf "%-40s | %-40s\n" "Environment setup script" "${SETUPFILE}"
+printf "%-40s | %-40s\n" "Wrap script" "${WRAPFILE}"
+printf "%-40s | %-40s\n" "Docker Repo" "${REPO_NAME}"
+printf "%-40s | %-40s\n" "VSI Common Directory" "${VSI_DIR}"
+echo
+# Ask y/n question
+ask_question "Continue?" CONTINUE y
+
+if [ "${CONTINUE}" != "1" ]; then
+  exit 1
+fi
+
+# Setup done, start making the new environment
+
+RELATIVE_PATH="$(python -c "import os; import os; print(os.path.relpath('${VSI_DIR}', '${PROJECT_DIR}'))")"
+
+# Make project dir
+mkdir -p "${PROJECT_DIR}"
+cd "${PROJECT_DIR}"
+
+# Make wrap script
+if [ ! -e "${WRAPFILE}" ]; then
+  echo '#!/usr/bin/env bash
+: "$(dirname "${BASH_SOURCE[0]}")"
+. "${_}"/'"${RELATIVE_PATH}"'/linux/just_wrap "${_}"/'"${PROJECT_NAME}"'.env ${@+"${@}"}' > "${WRAPFILE}"
+else
+  echo "${WRAPFILE} exists, skipping..."
+fi
+
+# Make setup script
+if [ ! -e "${SETUPFILE}" ]; then
+  echo 'export JUST_SETUP_SCRIPT="$(basename "${BASH_SOURCE[0]}")"
+unset JUST_VERSION
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)/'"${RELATIVE_PATH}"'/env.bsh"' > "${SETUPFILE}"
+else
+  echo "${SETUPFILE} exists, skipping..."
+fi
+
+
+# Make the project settings file
+
+if [ ! -e "${PROJECT_NAME}.env" ]; then
+  echo 'JUST_PROJECT_PREFIX='"${PROJECT_PREFIX}"'
+'"${PROJECT_PREFIX}"'_CWD="$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)"
+
+: ${'"${PROJECT_PREFIX}"'_DOCKERHUB_REPO='"${REPO_NAME}"'}
+
+: ${'"${PROJECT_PREFIX}"'_HOME=/home/user}
+: ${'"${PROJECT_PREFIX}"'_USERNAME=$(id -u -n)}
+: ${'"${PROJECT_PREFIX}"'_UID=$(id -u)}
+: ${'"${PROJECT_PREFIX}"'_GIDS=$(id -g)}
+
+: ${'"${PROJECT_PREFIX}"'_SOURCE_DIR="${'"${PROJECT_PREFIX}"'_CWD}"}
+: ${'"${PROJECT_PREFIX}"'_SOURCE_DIR_DOCKER="/src"}
+
+if [ "${VSI_OS}" = "linux" ]; then
+  '"${PROJECT_PREFIX}"'_VOLUMES=("/tmp/.X11-unix:/tmp/.X11-unix:ro"
+      ${'"${PROJECT_PREFIX}"'_VOLUMES+"${'"${PROJECT_PREFIX}"'_VOLUMES[@]}"})
+fi
+
+'"${PROJECT_PREFIX}"'_APP_VOLUMES=(
+    "${'"${PROJECT_PREFIX}"'_SOURCE_DIR}:${'"${PROJECT_PREFIX}"'_SOURCE_DIR_DOCKER}"
+    ${'"${PROJECT_PREFIX}"'_APP_VOLUMES+"${'"${PROJECT_PREFIX}"'_APP_VOLUMES[@]}"})
+
+' > "${PROJECT_NAME}.env"
+
+else
+  echo "${PROJECT_NAME}.env exists, skipping..."
+fi
+
+# Make default README
+if [ ! -e "README.md" ]; then
+  echo 'Just usage:
+
+```
+source "'"${SETUPFILE}"'"
+just help
+```
+' > README.md
+else
+  echo "README.md exists, skipping..."
+fi
+
+# Make Just file
+if [ ! -e "${JUSTFILE}" ]; then
+  echo '#!/usr/bin/env bash
+
+if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then #If being sourced
+  set -euE
+fi
+
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)/'"${WRAPFILE}"'"
+cd "${'"${PROJECT_PREFIX}"'_CWD}"
+
+source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
+
+function caseify()
+{
+  local just_arg=$1
+  shift 1
+  case ${just_arg} in
+    build) # Build Docker image
+      Docker-compose build base_app
+      Docker-compose build
+      ;;
+    run_app) # Run app 1
+      Just-docker-compose run app ${@+"${@}"}
+      extra_args+=$#
+      ;;
+    run_app2) # Run app 2
+      Just-docker-compose run app2 ${@+"${@}"}
+      extra_args+=$#
+      ;;
+    *)
+      defaultify "${just_arg}" ${@+"${@}"}
+      ;;
+  esac
+}
+
+if ! command -v justify &> /dev/null; then caseify ${@+"${@}"};fi
+' > "${JUSTFILE}"
+else
+  echo "${JUSTFILE} exists, skipping..."
+fi
+
+mkdir -p docker
+
+# Make default dockerfiles
+if [ ! -e "docker/base_app.Dockerfile" ]; then
+  echo 'FROM alpine:3.6
+
+SHELL ["sh", "-euxvc"]
+
+RUN apk --no-cache add curl
+
+RUN curl -L https://github.com/krallin/tini/releases/download/v0.10.0/tini -o /usr/local/bin/tini; \
+    chmod +x /usr/local/bin/tini; \
+    echo "1361527f39190a7338a0b434bd8c88ff7233ce7b9a4876f3315c22fce7eca1b0  /usr/local/bin/tini" | sha256sum -c -
+
+RUN curl -L https://github.com/tianon/gosu/releases/download/1.10/gosu-amd64 -o /usr/local/bin/gosu; \
+    chmod +x /usr/local/bin/gosu; \
+    echo "5b3b03713a888cee84ecbf4582b21ac9fd46c3d935ff2d7ea25dd5055d302d3c  /usr/local/bin/gosu" | sha256sum -c -
+
+RUN apk --no-cache add bash
+
+ADD '"${RELATIVE_PATH}"' /vsi
+ADD docker/app_entrypoint.bsh /
+RUN chmod 755 /app_entrypoint.bsh
+
+ENTRYPOINT ["/app_entrypoint.bsh"]
+
+CMD ["app"]' > docker/base_app.Dockerfile
+else
+  echo "docker/base_app.Dockerfile exists, skipping..."
+fi
+
+if [ ! -e "docker/app.Dockerfile" ]; then
+  echo "FROM ${REPO_NAME}:base_app" > docker/app.Dockerfile
+else
+  echo "docker/app.Dockerfile exists, skipping..."
+fi
+
+if [ ! -e "docker/app_entrypoint.bsh" ]; then
+  echo '#!/usr/bin/env bash
+
+set -eu
+
+if [ "${ALREADY_RUN_ONCE+set}" != "set" ]; then
+  # create the user and associated groups and handle nfs symlinks
+  bash -eu /vsi/linux/docker_entrypoint.bsh
+
+  # Rerun entrypoint as user now, (skipping the root part via ALREADY_RUN_ONCE)
+  ALREADY_RUN_ONCE=1 exec gosu ${DOCKER_USERNAME} $0 ${@+"${@}"}
+fi
+
+source "${'"${PROJECT_PREFIX}"'_SOURCE_DIR}/wrap"
+source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
+filter_docker_variables
+
+if [ "$1" == "app" ]; then
+  echo "Run app here: ${@+${@}}"
+else
+  exec "${@}"
+fi' > docker/app_entrypoint.bsh
+else
+  echo "docker/app_entrypoint.bsh exists, skipping..."
+fi
+
+
+# Make default docker-compose.yml
+if [ ! -e "docker-compose.yml" ]; then
+  echo 'version: "3.2"
+
+services:
+  base_app:
+    build:
+      context: .
+      dockerfile: docker/base_app.Dockerfile
+    image: ${'"${PROJECT_PREFIX}"'_DOCKERHUB_REPO}:base_app
+  app: &app_anchor
+    build:
+      context: .
+      dockerfile: docker/app.Dockerfile
+    # prevent different users from clobbering each others images
+    image: ${'"${PROJECT_PREFIX}"'_DOCKERHUB_REPO}:app_${'"${PROJECT_PREFIX}"'_USERNAME}
+    environment:
+      # Variables for docker_entrypoint.bsh
+      - DOCKER_UID=${'"${PROJECT_PREFIX}"'_UID}
+      - DOCKER_GIDS=${'"${PROJECT_PREFIX}"'_GIDS}
+      - DOCKER_USERNAME=user
+
+      #- DOCKER_HOME=${'"${PROJECT_PREFIX}"'_HOME}
+
+      - DISPLAY
+    cap_add:
+      - SYS_PTRACE #Useful for gdb
+#    volumes:
+#      - home-volume:${'"${PROJECT_PREFIX}"'_HOME} #home-volume should be overridable
+  app2:
+    <<: *app_anchor
+#volumes:
+#  home-volume:
+' > "docker-compose.yml"
+else
+  echo "docker-compose.yml exists, skipping..."
+fi
+
+###
+# Some final bookkeeping...
+###
+
+# Add executable permissions
+chmod 755 "${JUSTFILE}" "${WRAPFILE}"
+
+if [ ! -e .dockerignore ]; then
+  touch .dockerignore
+fi
+
+# Add .gitignore exceptions
+if ! grep -q local.env .gitignore 2>/dev/null; then
+  echo local.env >> .gitignore
+fi
+if ! grep -q local_post.env .gitignore 2>/dev/null; then
+  echo local_post.env >> .gitignore
+fi
+
+# Remove dummy vsi_common dir to make way for submodule setup
+rmdir -p "${VSI_DIR}" 2>/dev/null || :
+
+# ****************************************************************************
+# ****DONE****DONE****DONE****DONE****DONE****DONE****DONE****DONE****DONE****
+# ****************************************************************************
+echo 'Done!'
+echo
+echo
+echo "To complete your git initialization:"
+echo
+echo "cd '${PROJECT_DIR}'"
+if [ ! -e .git ]; then
+  echo "git init ." >&3
+fi
+echo "git submodule add git@github.com:visionsystemsinc/vsi_common.git" \
+                       "'${RELATIVE_PATH}'"  >&3
+echo "git add .gitignore .dockerignore .gitmodules README.md '${JUSTFILE}'" \
+     "'${SETUPFILE}' '${WRAPFILE}' '${PROJECT_NAME}.env'"  >&3
+echo "git commit -m 'Initial commit'"  >&3
+echo
+echo
+echo
+echo "To use your new just:"
+echo
+echo "cd '${PROJECT_DIR}'"
+echo ". '${SETUPFILE}'"
+echo "just help"
