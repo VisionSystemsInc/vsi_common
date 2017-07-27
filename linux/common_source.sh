@@ -326,6 +326,9 @@ elif command -v busybox >/dev/null 2>&1; then
   VSI_DISTRO_VERSION="${VSI_DISTRO#* v}"
   VSI_DISTRO_VERSION="${VSI_DISTRO_VERSION%% *}"
   VSI_DISTRO="$(echo "${VSI_DISTRO%% *}" | tr '[A-Z]' '[a-z]')"
+else
+  VSI_DISTRO=unknown
+  VSI_DISTRO_VERSION='?'
 fi
 
 # Handle rhel intricacies
@@ -348,11 +351,11 @@ if [ "${VSI_DISTRO}" = "centos" ] || [ "${VSI_DISTRO}" = "scientific" ] || \
 fi
 
 # Turn debian codenames to numbers
-if [ "${VSI_DISTRO_CORE}" = "debian" ]; then
+if [ "${VSI_DISTRO_CORE-}" = "debian" ]; then
   # Remove the /sid for some debian derivatives
   VSI_DISTRO_VERSION_CORE="${VSI_DISTRO_VERSION_CORE%/sid}"
   # turn codenames to numbers
-  case "${VSI_DISTRO_VERSION_CORE}" in
+  case "${VSI_DISTRO_VERSION_CORE-}" in
     squeeze)  VSI_DISTRO_VERSION_CORE=6  ;; # EOL Feb 29 2016
     wheezy)   VSI_DISTRO_VERSION_CORE=7  ;; # EOL May 2018
     jessie)   VSI_DISTRO_VERSION_CORE=8  ;; # EOL ~June 6 2020
@@ -363,8 +366,8 @@ if [ "${VSI_DISTRO_CORE}" = "debian" ]; then
 fi
 
 # Fix the case when OSes like mint are like ubuntu but use the codename
-if [ "${VSI_DISTRO_LIKE}" = "ubuntu" ]; then
-  case "${VSI_DISTRO_VERSION_LIKE}" in
+if [ "${VSI_DISTRO_LIKE-}" = "ubuntu" ]; then
+  case "${VSI_DISTRO_VERSION_LIKE-}" in
     precise) VSI_DISTRO_VERSION_LIKE=12.04 ;; # EOL April 28, 2017
     trusty)  VSI_DISTRO_VERSION_LIKE=14.04 ;; # EOL April, 2019
     utopic)  VSI_DISTRO_VERSION_LIKE=14.10 ;; # EOL July 23,  2015
