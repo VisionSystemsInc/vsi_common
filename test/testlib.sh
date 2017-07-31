@@ -49,6 +49,7 @@ tests=0
 failures=0
 allowed_failures=0
 must_failures=0
+skipped=0
 
 #****f* testlib.sh/setup
 # NAME
@@ -112,8 +113,8 @@ atexit ()
     rm -rf "$SETUPDIR"
   fi
 
-  printf '%s summary: %d test ran, %d failures, %d allowed failured, %d must fails\n' \
-         "$0" "${tests}" "${failures}" "${allowed_failures}" "${must_failures}"
+  printf '%s summary: %d test ran, %d failures, %d allowed failures, %d must fails, %d skipped\n' \
+         "$0" "${tests}" "${failures}" "${allowed_failures}" "${must_failures}" "${skipped}"
 
   if [ $failures -gt 0 ]; then
     exit 1
@@ -153,7 +154,10 @@ _begin_common_test ()
   fi
 
   tests=$(( tests + 1 ))
-  test_description="$0 - $1"
+  local test_file_name="$(basename "$0")"
+  test_file_name=${test_file_name%.*}
+  test_file_name=${test_file_name#test-}
+  test_description="$test_file_name - $1"
 
   exec 3>&1 4>&2
   out="$TRASHDIR/out"
@@ -227,17 +231,20 @@ end_test ()
   exec 1>&3 2>&4
   popd >& /dev/null
 
-  if [ "${must_fail}" -eq 1 ] && [ "$test_status" -ne 0 ]; then
-    printf "test: %-60s FAILED OK\n" "$test_description ..."
+  if [ "${skip_next_test-}" = "1" ] && [ "${test_status}" -eq 122 ]; then
+    printf "%-80s SKIPPED OK\n" "$test_description ..."
+    skipped=$((skipped+1))
+  elif [ "${must_fail}" -eq 1 ] && [ "$test_status" -ne 0 ]; then
+    printf "%-80s FAILED OK\n" "$test_description ..."
     must_failures=$((must_failures+1))
   elif [ "${must_fail}" -eq 0 ] && [ "$test_status" -eq 0 ]; then
-    printf "test: %-60s OK\n" "$test_description ..."
+    printf "%-80s OK\n" "$test_description ..."
   elif [ "${allowed_failure}" -eq 1 ]; then
-    printf "test: %-60s FAIL OK\n" "$test_description ..."
+    printf "%-80s FAIL OK\n" "$test_description ..."
     allowed_failures=$(( allowed_failures + 1 ))
   else
     failures=$(( failures + 1 ))
-    printf "test: %-60s FAILED\n" "$test_description ..."
+    printf "%-80s FAILED\n" "$test_description ..."
     (
       echo "-- stdout --"
       sed 's/^/    /' <"$TRASHDIR/out"
@@ -251,5 +258,50 @@ end_test ()
     ) 1>&2
   fi
   unset test_description
+  unset skip_next_test
 }
 
+#****f* testlib.sh/skip_next_test
+# NAME
+#   skip_next_test - Function to indicate the next test should be skipped
+# DESCRIPTION
+#   This is the first part to creating a skippable test, used in conjunction
+#   with check_skip
+# EXAMPLE
+#   For exampled, skip of docker command not found
+#
+#     if command -v docker > /dev/null 2>&1 ; then
+#       skip_next_test
+#     fi
+# SEE ALSO
+#   testlib.sh/check_skip
+# AUTHOR
+#   Andy Neff
+#***
+skip_next_test()
+{
+  skip_next_test=1
+}
+
+#****f* testlib.sh/check_skip
+# NAME
+#   check_skip - Check to see if this test should be skipped
+# DESCRIPTION
+#   This is the second part to creating a skippable test. Place at the beginning
+#   of a test
+# EXAMPLE
+#   skip_next_test
+#   begin_test "Skipping test"
+#   (
+#     check_skip
+#     #test code here
+#   )
+# AUTHOR
+#   Andy Neff
+#***
+check_skip()
+{
+  if [ "${skip_next_test-}" = "1" ]; then
+    exit 122
+  fi
+}
