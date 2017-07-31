@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+
+set -eu
+
+: ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
+source "${VSI_COMMON_DIR}/linux/ask_question"
+
+: ${NOTEBOOK_PORT="$(read -r -p "Notebook Port [8888] " x; echo "$x")"}
+if [ "${NOTEBOOK_PORT}" = "" ]; then
+  NOTEBOOK_PORT=8888
+fi
+
+: ${NOTEBOOK_DIR="$(read -r -p "The directory to use for notebooks [${HOME}/notebooks] " x; echo "$x")"}
+if [ "${NOTEBOOK_DIR}" = "" ]; then
+  "${NOTEBOOK_DIR}"=${HOME}/notebooks
+else
+  mkdir -p "${NOTEBOOK_DIR}"
+  NOTEBOOK_DIR="$(cd "${NOTEBOOK_DIR}"; pwd)"
+fi
+
+ask_question "Would you like to open the browser on notebook start?" OPEN_BROWSER n
+if [ "${OPEN_BROWSER}" == "0" ]; then
+  OPEN_BROWSER=False
+else
+  OPEN_BROWSER=True
+fi
+
+ask_question "Would you like to use a random token (else fixed)?" USE_RANDOM_TOKEN n
+if [ "${USE_RANDOM_TOKEN}" = "0" ]; then
+  : ${TOKEN="$(read -r -p "Token: (blank disables token) [''] " x; echo "$x")"}
+fi
+
+
+PYTHON2_VENV=.
+
+if which python3 &>/dev/null; then
+  TEMP_DIR3=$(mktemp -d)
+  PYTHONUSERBASE="${TEMP_DIR3}" python3 <(curl -L https://bootstrap.pypa.io/get-pip.py) --user virtualenv -U
+  PYTHONPATH=$(echo "${TEMP_DIR3}"/lib/python*/site-packages/) "${TEMP_DIR3}"/bin/virtualenv .
+  rm -rf "${TEMP_DIR3}"
+  PYTHON2_VENV=python2
+fi
+
+if which python2 &>/dev/null; then
+  TEMP_DIR2=$(mktemp -d)
+  PYTHONUSERBASE="${TEMP_DIR2}" python2 <(curl -L https://bootstrap.pypa.io/get-pip.py) --user virtualenv -U
+  PYTHONPATH=$(echo "${TEMP_DIR2}"/lib/python*/site-packages/) "${TEMP_DIR2}"/bin/virtualenv ${PYTHON2_VENV}
+  rm -rf "${TEMP_DIR2}"
+fi
+
+# Setup config dir inside virtual env dir by monkey patching python executable
+
+export JUPYTER_CONFIG_DIR="$(pwd)/jupyter_config"
+export JUPYTER_DATA_DIR="$(pwd)/jupyter_data"
+
+# Patch the executable so that calling jupyter without activating works as
+# expected
+function patch_python()
+{
+  set -xv
+  local REAL_PYTHON="$(realpath "$(command -v python)")"
+  local NEW_PTHON
+  mv "${REAL_PYTHON}" "$(dirname "${REAL_PYTHON}")"/real_python
+
+  echo "#!/usr/bin/env bash
+
+export JUPYTER_CONFIG_DIR='$(pwd)/jupyter_config'
+export JUPYTER_DATA_DIR='$(pwd)/jupyter_data'
+exec '$(cd "$(dirname "${REAL_PYTHON}")"; pwd)/real_python'"' "${@}"' >> "${REAL_PYTHON}"
+  chmod 755 "${REAL_PYTHON}"
+  set +xv
+}
+
+mkdir -p ${JUPYTER_CONFIG_DIR}
+echo "c.NotebookApp.ip = '*'
+c.NotebookApp.port = ${NOTEBOOK_PORT}
+c.NotebookApp.notebook_dir = '${NOTEBOOK_DIR}'
+c.NotebookApp.open_browser = ${OPEN_BROWSER}
+" > ${JUPYTER_CONFIG_DIR}/jupyter_notebook_config.py
+
+if [ "${USE_RANDOM_TOKEN}" == "0" ]; then
+  echo "c.NotebookApp.token = $(python -c "import sys; print(repr(sys.argv[1]))" "${TOKEN}")" >> ${JUPYTER_CONFIG_DIR}/jupyter_notebook_config.py
+fi
+
+VIRTUAL_ENV_DISABLE_PROMPT=1
+#This needs to be here for future use
+echo "export JUPYTER_CONFIG_DIR='${JUPYTER_CONFIG_DIR}'" >> ./bin/activate
+echo "export JUPYTER_DATA_DIR='${JUPYTER_DATA_DIR}'" >> ./bin/activate
+. bin/activate
+pip install notebook jupyter-contrib-nbextensions bash_kernel widgetsnbextension -U
+python -m ipykernel.kernelspec --user
+python -m bash_kernel.install --user
+
+jupyter contrib nbextension install --user
+jupyter nbextension enable --py --user widgetsnbextension
+
+patch_python
+deactivate
+
+# If both python3 and python2, setup second kernel
+if [ -d ./python2 ]; then
+  echo "c.MultiKernelManager.default_kernel_name = 'python2'" >> ${JUPYTER_CONFIG_DIR}/jupyter_notebook_config.py
+
+  #This needs to be here for future use
+  echo "export JUPYTER_CONFIG_DIR='${JUPYTER_CONFIG_DIR}'" >> ./python2/bin/activate
+  echo "export JUPYTER_DATA_DIR='${JUPYTER_DATA_DIR}'" >> ./python2/bin/activate
+  . ./python2/bin/activate
+  pip install ipykernel -U
+  python -m ipykernel.kernelspec --user --name python2
+
+  patch_python
+  deactivate
+fi
+
+echo
+echo "---------------------------------"
+echo
+echo "Notebook configured successfully!"
+echo
+echo 'Run "jupyter-notebook password" to secure your notebook with a password'
