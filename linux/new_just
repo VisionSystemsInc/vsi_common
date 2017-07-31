@@ -8,15 +8,55 @@ exec 3>&1 # I have NO IDEA why this comes before the next line
 exec 1>&2 # Redirect stdout to stderr
 
 : ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
-source "${VSI_COMMON_DIR}/linux/ask_question"
+if [ -f "${VSI_COMMON_DIR}/linux/ask_question" ]; then
+  source "${VSI_COMMON_DIR}/linux/ask_question"
+fi
 
 #****F* just/new_just
+# NAME
+#   new_just - Create a new just project
+# DESCRIPTION
+#   There are many moving pieces to set up a working just project, and use
+#   all the features. Just getting started is hard, without knowing where to
+#   start. This script will create all the files necessary to have a new
+#   docker-compose based just project up and running
+# USAGE
+#   By default, new_just will prompt the user for questions on the initial
+#   setup parameters. Default values are supplied for all questions, and enter
+#   can be pressed to accept all the defaults. All of the questions can be set
+#   using environment variables, too  provide a scriptable method.
+#
+#   After new_just is called, a few git commands need to be called. This is not
+#   done for you, in case it will break your existing repository. These
+#   commands are printed out on stdout, while everything else is printed on
+#   stderr, making them scriptable.
+#
+#   If any of the files writen to exist, they are not overwritten, and a warning
+#   message is printed out.
+# SEE ALSO
+#   new_just/PROJECT_DIR, new_just/PROJECT_NAME, new_just/PROJECT_PREFIX
+#   new_just/REPO_NAME, new_just/JUSTFILE, new_just/WRAPFILE, new_just/SETUPFILE
+#   new_just/VSI_DIR
+# AUTHOR
+#   Andy Neff
+#***
 
 echo "Setting up a new project to use J.U.S.T."
 echo
 
 #****d* new_just/PROJECT_DIR
-
+# NAME
+#   PROJECT_DIR - The main project directory
+# DESCRIPTION
+#   The project directory is typically the root directory of the main git
+#   repository. This is where all the just files will be stored by default.
+#
+#   The value is set by running new_just and being prompted for the answer. The
+#   default value is the current working directory. The question can be skipped
+#   by setting the environment variable PROJECT_DIR to the desired value.
+# AUTHOR
+#   Andy Neff
+#***
 : ${PROJECT_DIR="$(read -r -p "Project directory [${PWD}] " x; echo "$x")"}
 if [ "${PROJECT_DIR}" == "" ]; then
   PROJECT_DIR="${PWD}"
@@ -26,7 +66,21 @@ else
 fi
 
 #****d* new_just/PROJECT_NAME
-
+# NAME
+#   PROJECT_NAME - Name of the just project being created
+# DESCRIPTION
+#   The PROJECT_NAME is used to set the project environment file name used by
+#   source_environment_files. Specifically: ${PROJECT_DIR}/${PROJECT_NAME}.env
+#   PROJECT_NAME is also used for for determining other default values.
+#
+#   The value is set by running new_just and being prompted for the answer. The
+#   default value is basename of the PROJECT_DIR. The question can be skipped
+#   by setting the environment variable PROJECT_NAME to the desired value.
+# SEE ALSO
+#   just/source_environment_files
+# AUTHOR
+#   Andy Neff
+#***
 : ${PROJECT_NAME="$(read -r -p "Project name [$(basename "${PROJECT_DIR}")] " x; echo "$x")"}
 if [ "${PROJECT_NAME}" == "" ]; then
   PROJECT_NAME="$(basename "${PROJECT_DIR}")"
@@ -34,9 +88,23 @@ fi
 
 
 #****d* new_just/PROJECT_PREFIX
-
+# NAME
+#   PROJECT_PREFIX - The prefix of environment variables for this project
+# DESCRIPTION
+#   Used to set the value of JUST_PROJECT_PREFIX. Must contain only valid bash
+#   variables name characters: [A-Z0-9_]+
+#
+#   Does not need the trailing _ included, this will always be added when it is
+#   used.
+#
+#   The value is set by running new_just and being prompted for the answer. The
+#   default value is uppercase of the PROJECT_NAME. The question can be skipped
+#   by setting the environment variable PROJECT_PREFIX to the desired value.
+# SEE ALSO
+#   just/JUST_PROJECT_PREFIX
+#***
 default=$(echo "${PROJECT_NAME-}" | tr '[a-z]' '[A-Z]' | sed 's|[^A-Z0-9_]+||g')
-: ${PROJECT_PREFIX="$(read -r -p "Project veriable prefix [${default}] " x; echo $x)"}
+: ${PROJECT_PREFIX="$(read -r -p "Project variable prefix [${default}] " x; echo $x)"}
 if [ "${PROJECT_PREFIX}" == "" ]; then
   PROJECT_PREFIX=${default}
 else
@@ -44,6 +112,22 @@ else
 fi
 
 #****d* new_just/REPO_NAME
+# NAME
+#   REPO_NAME - Name of docker repository where images are stored
+# DESCRIPTION
+#   When docker images are built, they need to be named, or else the only way to
+#   access them is inconveniently though sha256 checksums.
+#
+#   The REPO_NAME should be an untagged docker repository name. Tag names will
+#   be added for each service. Docker image names must match the regex
+#   [a-zA-Z0-9][a-zA-Z0-9_.-]* or else docker will error
+#
+#   The value is set by running new_just and being prompted for the answer. The
+#   default value is lowercase of the PROJECT_NAME. The question can be skipped
+#   by setting the environment variable REPO_NAME to the desired value.
+# AUTHOR
+#   Andy Neff
+#***
 default=$(echo "${PROJECT_NAME-}" | tr '[A-Z]' '[a-z]' | sed 's|[^a-z0-9_./-]+||g')
 : ${REPO_NAME="$(read -r -p "Docker Repo for images [${default}] " x; echo $x)"}
 if [ "${REPO_NAME}" == "" ]; then
@@ -54,7 +138,22 @@ fi
 
 
 #****d* new_just/JUSTFILE
-
+# NAME
+#   JUSTFILE - Name of the justfile used
+# DESCRIPTION
+#   The default just file in just is "Justfile". If this is changed, the only
+#   way to inform just of this is by setting it in the SETUPFILE. This will be
+#   added to the SETUPFILE by new_just if anything other than the default is
+#   used.
+#
+#   The value is set by running new_just and being prompted for the answer. The
+#   default value is Justfile. The question can be skipped by setting the
+#   environment variable JUSTFILE to the desired value.
+# SEE ALSO
+#   new_just/SETUPFILE, just/Justfile
+# AUTHOR
+#   Andy Neff
+#***
 : ${JUSTFILE="$(read -r -p "Just file name [Justfile] " x; echo "$x")"}
 if [ "${JUSTFILE}" == "" ]; then
   JUSTFILE="Justfile"
@@ -64,6 +163,24 @@ fi
 
 
 #****d* new_just/SETUPFILE
+# NAME
+#   SETUPFILE - Name of the setup file sourced to setup just environment
+# DESCRIPTION
+#   The setup file is used to make the minimal necessary changes to the
+#   environment so that just works. This includes adding paths and setting a
+#   few environment variables. This is meant to be as unobtrusive as possible.
+#
+#   This file needs to be sourced every time a new terminal session is opened.
+#   The only time the setup script is not needed is when calling the WRAPFILE.
+#
+#   The value is set by running new_just and being prompted for the answer. The
+#   default value is setup.env. The question can be skipped by setting the
+#   environment variable SETUPFILE to the desired value.
+# SEE ALSO
+#   new_just/WRAPFILE
+# AUTHOR
+#   Andy Neff
+#***
 : ${SETUPFILE="$(read -r -p "Environment setup script file name [setup.env] " x; echo "$x")"}
 if [ "${SETUPFILE}" == "" ]; then
   SETUPFILE="setup.env"
@@ -72,6 +189,20 @@ else
 fi
 
 #****d* new_just/WRAPFILE
+# NAME
+#   WRAPFILE - The wrap filename that runs any command in the just environment
+# DESCRIPTION
+#   The wrap file can be used to run any command in the full just environment or
+#   to enter a bash session in this environment.
+#
+#   The value is set by running new_just and being prompted for the answer. The
+#   default value is wrap. The question can be skipped by setting the
+#   environment variable WRAPFILE to the desired value.
+# SEE ALSO
+#   just/just_wrap
+# AUTHOR
+#   Andy Neff
+#***
 : ${WRAPFILE="$(read -r -p "Wrap script file name [wrap] " x; echo "$x")"}
 if [ "${WRAPFILE}" == "" ]; then
   WRAPFILE="wrap"
@@ -79,8 +210,21 @@ else
   WRAPFILE="$(basename ${WRAPFILE})"
 fi
 
-#****d* new_just/VSI_COMMON_DIR
-
+#****d* new_just/VSI_DIR
+# NAME
+#   VSI_DIR - Location of the vsi_common submodule
+# DESCRIPTION
+#   The vsi_common repository is necessary for virtually all of the just
+#   capabilities. The correct way to deal with this is to add vsi_common as a
+#   submodule for your main project. This tells just were this submodule is
+#   located.
+#
+#   The value is set by running new_just and being prompted for the answer. The
+#   default value is external/vsi_common. The question can be skipped by setting
+#   the environment variable VSI_DIR to the desired value.
+# AUTHOR
+#   Andy Neff
+#***
 : ${VSI_DIR="$(read -r -p "VSI common module path [./external/vsi_common] " x; echo "$x")"}
 if [ "${VSI_DIR}" == "" ]; then
   VSI_DIR="${PROJECT_DIR}/external/vsi_common"
@@ -103,7 +247,14 @@ printf "%-40s | %-40s\n" "Docker Repo" "${REPO_NAME}"
 printf "%-40s | %-40s\n" "VSI Common Directory" "${VSI_DIR}"
 echo
 # Ask y/n question
-ask_question "Continue?" CONTINUE y
+if command -v ask_question &>/dev/null; then
+  ask_question "Continue?" CONTINUE y
+else
+  if [ "${CONTINUE-1}" != "1" ]; then
+    read -r -p "Press enter to continue"
+  fi
+  CONTINUE=1
+fi
 
 if [ "${CONTINUE}" != "1" ]; then
   exit 1
@@ -119,9 +270,12 @@ cd "${PROJECT_DIR}"
 
 # Make wrap script
 if [ ! -e "${WRAPFILE}" ]; then
-  echo '#!/usr/bin/env bash
-: "$(dirname "${BASH_SOURCE[0]}")"
-. "${_}"/'"${RELATIVE_PATH}"'/linux/just_wrap "${_}"/'"${PROJECT_NAME}"'.env ${@+"${@}"}' > "${WRAPFILE}"
+  echo '#!/usr/bin/env bash' > "${WRAPFILE}"
+  if [ "${JUSTFILE}" != "Justfile" ]; then
+    echo "export JUSTFILE=${JUSTFILE}" >> "${WRAPFILE}"
+  fi
+  echo ': "$(dirname "${BASH_SOURCE[0]}")"
+. "${_}"/'"${RELATIVE_PATH}"'/linux/just_wrap "${_}"/'"${PROJECT_NAME}"'.env ${@+"${@}"}' >> "${WRAPFILE}"
 else
   echo "${WRAPFILE} exists, skipping..."
 fi
@@ -131,6 +285,9 @@ if [ ! -e "${SETUPFILE}" ]; then
   echo 'export JUST_SETUP_SCRIPT="$(basename "${BASH_SOURCE[0]}")"
 unset JUST_VERSION
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)/'"${RELATIVE_PATH}"'/env.bsh"' > "${SETUPFILE}"
+  if [ "${JUSTFILE}" != "Justfile" ]; then
+    echo "export JUSTFILE=${JUSTFILE}" >> "${SETUPFILE}"
+  fi
 else
   echo "${SETUPFILE} exists, skipping..."
 fi
@@ -361,7 +518,9 @@ fi
 echo "git submodule add git@github.com:visionsystemsinc/vsi_common.git" \
                        "'${RELATIVE_PATH}'"  >&3
 echo "git add .gitignore .dockerignore .gitmodules README.md '${JUSTFILE}'" \
-     "'${SETUPFILE}' '${WRAPFILE}' '${PROJECT_NAME}.env'"  >&3
+     "'${SETUPFILE}' '${WRAPFILE}' '${PROJECT_NAME}.env'" \
+     "docker-compose.yml docker/app.Dockerfile docker/app_entrypoint.bsh" \
+     "docker/base_app.Dockerfile" >&3
 echo "git commit -m 'Initial commit'"  >&3
 echo
 echo
@@ -371,3 +530,8 @@ echo
 echo "cd '${PROJECT_DIR}'"
 echo ". '${SETUPFILE}'"
 echo "just help"
+echo
+echo "Get started with:"
+echo
+echo "just build"
+echo "just run app bash"
