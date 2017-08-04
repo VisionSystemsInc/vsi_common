@@ -265,10 +265,10 @@ end_test ()
 # NAME
 #   skip_next_test - Function to indicate the next test should be skipped
 # DESCRIPTION
-#   This is the first part to creating a skippable test, used in conjunction
+#   This is the first part of creating a skippable test, used in conjunction
 #   with check_skip
 # EXAMPLE
-#   For exampled, skip of docker command not found
+#   For example, skip if docker command not found
 #
 #     if command -v docker > /dev/null 2>&1 ; then
 #       skip_next_test
@@ -287,7 +287,7 @@ skip_next_test()
 # NAME
 #   check_skip - Check to see if this test should be skipped
 # DESCRIPTION
-#   This is the second part to creating a skippable test. Place at the beginning
+#   This is the second part of creating a skippable test. Place at the beginning
 #   of a test
 # EXAMPLE
 #   skip_next_test
