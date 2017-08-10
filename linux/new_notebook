@@ -136,16 +136,15 @@ fi
 # Disable PS1 stuff, so that set -eu doesn't error out
 VIRTUAL_ENV_DISABLE_PROMPT=1
 # Add the custom directories to the activate script so that it works
-### echo "export JUPYTER_CONFIG_DIR='${JUPYTER_CONFIG_DIR}'" >> ./bin/activate
-### echo "export JUPYTER_DATA_DIR='${JUPYTER_DATA_DIR}'" >> ./bin/activate
 patch_python_site lib/python*/site.py
 . bin/activate
-pip install notebook jupyter-contrib-nbextensions bash_kernel ipywidgets -U
-python -m ipykernel.kernelspec --user
-python -m bash_kernel.install --user
 
-jupyter contrib nbextension install --user
-jupyter nbextension enable --py --user widgetsnbextension
+  pip install notebook jupyter-contrib-nbextensions bash_kernel ipywidgets -U
+  python -m ipykernel.kernelspec --user
+  python -m bash_kernel.install --user
+
+  jupyter contrib nbextension install --user
+  jupyter nbextension enable --py --user widgetsnbextension
 
 deactivate
 
@@ -155,8 +154,9 @@ if [ -d ./python2 ]; then
 
   patch_python_site ./python2/lib/python*/site.py
   . ./python2/bin/activate
-  pip install ipykernel -U
-  python -m ipykernel.kernelspec --user --name python2
+
+    pip install ipykernel -U
+    python -m ipykernel.kernelspec --user --name python2
 
   deactivate
 fi
@@ -202,7 +202,10 @@ cat << EOF > ./bin/relocate
 
 set -eu
 
-full_path="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")/.."; pwd)"
+full_path="\$(cd "\${1-"\$(dirname "\${BASH_SOURCE[0]}")/.."}"; pwd)"
+
+VIRTUAL_ENV_DISABLE_PROMPT=1
+OLD_LOCATION=\$(source "\${full_path}/bin/activate"; echo "\${VIRTUAL_ENV}")
 
 # Make sure activate is bash/zsh compliant _\|
 sed -i 's|^VIRTUAL_ENV=.*|VIRTUAL_ENV="\$(cd "\$(dirname "\${BASH_SOURCE-"\$0"}")/.."; pwd)"|' "\${full_path}/bin/activate"
@@ -217,6 +220,10 @@ for f in "\${files[@]}"; do
     sed -i "1 s|#!.*/bin/|#!\${full_path}/bin/|" "\${f}"
   fi
 done
+
+find jupyter_data/ jupyter_config/ \( -name kernel.json -o -name jupyter_nbconvert_config.json \) \
+  -exec sed -i "s|\${OLD_LOCATION}|\${full_path}|" \\{\\} \\;
+
 EOF
 chmod 755 ./bin/relocate
 
