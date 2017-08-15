@@ -38,7 +38,16 @@
 #               Auto prepend filename to description
 #               Added custom PS4
 #***
+
+# The above must be the first command executed, or else it won't work. Use this
+# instead of BASH_SOURCE to maintain sh compatibility
+: ${VSI_COMMON_DIR="$(cd "$(dirname "$_")/.."; pwd)"}
+
 set -e
+
+if [ "${TESTLIB_SHOW_TIMING-0}" == "1" ]; then
+  . "${VSI_COMMON_DIR}/linux/time_tools.bsh"
+fi
 
 # create a temporary work space
 TRASHDIR="$(mktemp -d -t $(basename "$0")-$$.XXXXXXXX)"
@@ -79,6 +88,16 @@ skipped=0
 # DESCRIPTION
 #   Debug flag to keep the temporary directories generated when testing. Set to
 #   1 to keep directories. Default: 0
+# AUTHOR
+#   Andy Neff
+#***
+
+#****d* testlib.sh/TESTLIB_SHOW_TIMING
+# NAME
+#   TESTLIB_SHOW_TIMING - Display test time after each test
+# DESCRIPTION
+#   Debug flag to display time elapsed for each test. Set to 1 to enable.
+#   Default: 0
 # AUTHOR
 #   Andy Neff
 #***
@@ -159,6 +178,10 @@ _begin_common_test ()
   test_file_name=${test_file_name#test-}
   test_description="$test_file_name - $1"
 
+  if [ "${TESTLIB_SHOW_TIMING-0}" == "1" ]; then
+    _time_0=$(get_time_seconds)
+  fi
+
   exec 3>&1 4>&2
   out="$TRASHDIR/out"
   err="$TRASHDIR/err"
@@ -231,20 +254,26 @@ end_test ()
   exec 1>&3 2>&4
   popd >& /dev/null
 
-  if [ "${skip_next_test-}" = "1" ] && [ "${test_status}" -eq 122 ]; then
-    printf "%-80s SKIPPED OK\n" "$test_description ..."
+  local time_e=''
+  if [ "${TESTLIB_SHOW_TIMING-0}" == "1" ]; then
+    time_e=$(awk "BEGIN {print \"\t\" $(get_time_seconds)-${_time_0}}")
+  fi
+
+
+  if [ "${_skipping_test-}" = "1" ] && [ "${test_status}" -eq 122 ]; then
+    printf "%-80s SKIPPED OK%s\n" "${test_description}" "${time_e}"
     skipped=$((skipped+1))
   elif [ "${must_fail}" -eq 1 ] && [ "$test_status" -ne 0 ]; then
-    printf "%-80s FAILED OK\n" "$test_description ..."
+    printf "%-80s FAILED OK%s\n" "${test_description}" "${time_e}"
     must_failures=$((must_failures+1))
   elif [ "${must_fail}" -eq 0 ] && [ "$test_status" -eq 0 ]; then
-    printf "%-80s OK\n" "$test_description ..."
+    printf "%-80s OK%s\n" "${test_description}" "${time_e}"
   elif [ "${allowed_failure}" -eq 1 ]; then
-    printf "%-80s FAIL OK\n" "$test_description ..."
+    printf "%-80s FAIL OK%s\n" "${test_description}" "${time_e}"
     allowed_failures=$(( allowed_failures + 1 ))
   else
     failures=$(( failures + 1 ))
-    printf "%-80s FAILED\n" "$test_description ..."
+    printf "%-80s FAILED%s\n" "${test_description}" "${time_e}"
     (
       echo "-- stdout --"
       sed 's/^/    /' <"$TRASHDIR/out"
@@ -258,7 +287,7 @@ end_test ()
     ) 1>&2
   fi
   unset test_description
-  unset skip_next_test
+  unset _skipping_test
 }
 
 #****f* testlib.sh/skip_next_test
@@ -275,12 +304,15 @@ end_test ()
 #     fi
 # SEE ALSO
 #   testlib.sh/check_skip
+# NOTES
+#   This much be done outside of the test, or else the skip variable will not
+#   be set and detected by end_test
 # AUTHOR
 #   Andy Neff
 #***
 skip_next_test()
 {
-  skip_next_test=1
+  _skipping_test=1
 }
 
 #****f* testlib.sh/check_skip
@@ -296,12 +328,15 @@ skip_next_test()
 #     check_skip
 #     #test code here
 #   )
+# NOTES
+#   This must be done inside of the test subshell, as begin test can't simply
+#   say "skip the next group" in standards sh.
 # AUTHOR
 #   Andy Neff
 #***
 check_skip()
 {
-  if [ "${skip_next_test-}" = "1" ]; then
+  if [ "${_skipping_test-}" = "1" ]; then
     exit 122
   fi
 }
