@@ -1,5 +1,9 @@
 #!/usr/bin/env false
 
+: ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
+source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
+
+
 #****F* vsi/bin_utils
 # NAME
 #   bin_utils - A collection of binary utilities
@@ -100,6 +104,7 @@ function lwhich()
   shift 1
   matches=()
   local filenames=()
+  local files
   local case_insensitive=''
   if [ "${LWHICH_INSENSITIVE-0}" != "0" ]; then
     case_insensitive='-i'
@@ -113,10 +118,20 @@ function lwhich()
     IFS=$'\n' #I don't want splitting arrays on space or tab... JUST in case?
 
     for d in "${LIBRARY_PATHS[@]}"; do
-      for match in $(ls "$d" | grep ${case_insensitive} -E "^$1"); do
-        if [ -e "$d/$match" ] && isxbit ${bits} "$d/$match" && ! isin "$(basename "$d/$match")" ${filenames+"${filenames[@]}"}; then
-          matches+=("$d/$match")
-          filenames+=("$match")
+      files=("$d"/*)
+
+      for match in "${files[@]}"; do #$(ls "$d" | grep ${case_insensitive} -E "^$1"); do
+        if [ "${LWHICH_INSENSITIVE-0}" != "0" ]; then
+          set_optflag nocasematch
+        fi
+        if ! [[ "${match##*/}" =~ ^${1} ]]; then
+          reset_optflag nocasematch
+          continue
+        fi
+        reset_optflag nocasematch
+        if [ -e "$match" ] && isxbit ${bits} "$match" && ! isin "$(basename "$match")" ${filenames+"${filenames[@]}"}; then
+          matches+=("$match")
+          filenames+=("${match##*/}")
         fi
       done
     done
