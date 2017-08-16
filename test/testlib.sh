@@ -297,7 +297,7 @@ end_test ()
 #   This is the first part to creating a skippable test, used in conjunction
 #   with check_skip
 # EXAMPLE
-#   For exampled, skip of docker command not found
+#   For example, skip if docker command not found
 #
 #     if command -v docker > /dev/null 2>&1 ; then
 #       skip_next_test
@@ -305,7 +305,7 @@ end_test ()
 # SEE ALSO
 #   testlib.sh/check_skip
 # NOTES
-#   This much be done outside of the test, or else the skip variable will not
+#   This must be done outside of the test, or else the skip variable will not
 #   be set and detected by end_test
 # AUTHOR
 #   Andy Neff
@@ -329,8 +329,8 @@ skip_next_test()
 #     #test code here
 #   )
 # NOTES
-#   This must be done inside of the test subshell, as begin test can't simply
-#   say "skip the next group" in standards sh.
+#   This must be done inside of the test subshell, as begin_test can't simply
+#   say "skip the next group" in standard sh.
 # AUTHOR
 #   Andy Neff
 #***
