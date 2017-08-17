@@ -32,7 +32,7 @@
 #   Andy Neff
 #***
 
-# In general sh doesn't set OSTYPE, bash always does
+# In general, sh doesn't set OSTYPE; bash always does
 : ${OSTYPE=$(uname | tr '[A-Z]' '[a-z]')}
 
 case "$OSTYPE" in
@@ -74,10 +74,10 @@ esac
 # NAME
 #   VSI_DISTRO - Name of the distribution.
 # DESCRIPTION
-#   For the various Linux distributions, it is often to know what OS you are
-#   dealing with. VSI_DISTRO will tell you the name of the distribution, and is
-#   typically all lowercase (in all test cases). Many different versions store
-#   the distribution name in different locations, only most modern Linux
+#   For the various Linux distributions, it is often hard to know what OS you are
+#   dealing with. VSI_DISTRO will tell you the name of the distribution, which
+#   is typically all lowercase (in all test cases). Many different versions
+#   store the distribution name in different locations---only most modern Linux
 #   distributions use the standard /etc/os-release, but many LTS distributions
 #   that are not EOL (end-of-life) use less standard methods. This variable
 #   checks all of these known possibilities.
@@ -180,8 +180,8 @@ esac
 #   This is what really matters for a lot of logic that you would be using these
 #   variables in the first place.
 #
-#   While _LIKE variables go one back, _CORE should go all the way back to the
-#   main distribution, typically debian, fedora, slackware, gentoo, etc...
+#   While the _LIKE variable identifies the parent distribution, _CORE should identify
+#   the progenitor, typically debian, fedora, slackware, gentoo, etc...
 # SEE ALSO
 #   common_source.sh/VSI_DISTRO_VERSION_CORE common_source.sh/VSI_DISTRO
 # AUTHOR
@@ -382,7 +382,7 @@ if [ "${VSI_DISTRO_LIKE-}" = "ubuntu" ]; then
     yakkety) VSI_DISTRO_VERSION_LIKE=16.10 ;; # EOL July 20, 2017
     zesty)   VSI_DISTRO_VERSION_LIKE=17.04 ;; # EOL Jan 2018
     artful)  VSI_DISTRO_VERSION_LIKE=17.10 ;; # Release Oct 2017
-    busy)    VSI_DISTRO_VERSION_LIKE=18.04 ;; # Probably not right, Release April 2018
+    busy)    VSI_DISTRO_VERSION_LIKE=18.04 ;; # May change; Release April 2018
   esac
 fi
 
