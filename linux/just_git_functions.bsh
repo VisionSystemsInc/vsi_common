@@ -214,36 +214,21 @@ function git_defaultify()
   arg=$1
   shift 1
   case $arg in
-    git_submodule-update) # Smart git submodule update. Only useful when going \
-                          # forward in history. Only updates submodules by going \
-                          # forward in history. No chance of removing commits by \
-                          # accident.
+    git_submodule-update) # Safe git submodule update which is careful to not remove commits by accident. Only updates submodules by going forward in history.
       git submodule sync --recursive
       safe_git_submodule_update ${@+"${@}"}
       extra_args+=$#
       ;;
-    git_make-submodules-relative) # Reset the paths in git submodules to be \
-                                  # relative paths rather than absolute paths. \
-                                  # This is important for having portable \
-                                  # repositories, which is important for \
-                                  # mounting into a docker. Will reset git \
-                                  # modules to the directory you are in when \
-                                  # you run this, so you should be in the main \
-                                  # repo base directory. Requires: realpath with \
-                                  # --relative-to, perl, or python.
-      if ! realpath --relative-to=/ /tmp &>/dev/null; then
-        if ! command -v python &>/dev/null; then
-          if ! command -v perl &>/dev/null; then
-            echo "You must have perl or python for this to work on your OS"
-            exit 1
-          else
-            code='perl -e "use File::Spec; print File::Spec->abs2rel ('"'"'${submodule_path}'"'"', '"'"'.'"'"');"'
-          fi
-        else
-          code='python -c "import os.path;print(os.path.relpath('"'"'${submodule_path}'"'"', '"'"'.'"'"'))"'
-        fi
-      else
+    git_make-submodules-relative) # Reset the paths in git submodules to be relative paths rather than absolute paths. This is important for having portable repositories, which is important for mounting into a docker. Will reset git modules to the $(pwd) when you run this, so you should be in the main repo's base directory. Requires: realpath with --relative-to, python or perl.
+      if realpath --relative-to=/ /tmp &>/dev/null; then
         code='realpath --relative-to=. ${submodule_path}'
+      elif command -v python &>/dev/null; then
+        code='python -c "import os.path;print(os.path.relpath('"'"'${submodule_path}'"'"', '"'"'.'"'"'))"'
+      elif command -v perl &>/dev/null; then
+        code='perl -e "use File::Spec; print File::Spec->abs2rel ('"'"'${submodule_path}'"'"', '"'"'.'"'"');"'
+      else
+        echo "You must have realpath with --relative-to, python or perl for this to work on your OS"
+        exit 1
       fi
 
       git submodule foreach --recursive bash -c '
