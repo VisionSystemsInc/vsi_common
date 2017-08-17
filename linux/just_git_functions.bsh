@@ -83,7 +83,8 @@ function _checkout_git_submodule()
   if git -c submodule.${1}.update='!git merge --ff-only' submodule update "${2}"; then
     if [ -f "${2}/.gitmodules" ]; then
       pushd "${2}" &>/dev/null
-      safe_git_submodule_update 1
+      bypass_summary_message=1
+      safe_git_submodule_update
       popd &>/dev/null
     fi
   else
@@ -110,13 +111,16 @@ function _checkout_git_submodule()
 #   very smart.
 #   Update: It will at least tell you which repositories are behind now.
 # INPUTS
-#   $1 - For internal use. Disables error summary messages
+#   [$1..] - Specify submodule paths to update. None defaults to all
+#   $bypass_summary_message - For internal use. Disables error summary messages
 # AUTHOR
 #   Andy Neff
 #***
 function safe_git_submodule_update()
 {
   local i
+  local bypass_summary_message
+
   pushd "$(pwd)" > /dev/null
     local submodule_names
     local submodule_paths
@@ -176,7 +180,7 @@ function safe_git_submodule_update()
     done
   popd > /dev/null
 
-  if [ "$#" == "0" ]; then
+  if [ "${bypass_summary_message+set}" != "set" ]; then
     local IFS=$'\n'
     for i in $(git submodule status --recursive | \grep ^+); do
       i="${i% *}"
