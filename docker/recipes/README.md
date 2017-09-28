@@ -36,6 +36,15 @@ Tini is a process reaper, and should be used in docker that spawn new processes
 
 Sudo written with docker automation in mind (no passwords ever)
 
+## ep - envplate
+
+|Name|ep|
+|--|--|
+|Build Args|EP_VERSION - Release name downloaded|
+|Output files|/usr/local/bin/ep|
+
+Sudo written with docker automation in mind (no passwords ever)
+
 ## Amanda debian packages
 
 |Name|Amanda|

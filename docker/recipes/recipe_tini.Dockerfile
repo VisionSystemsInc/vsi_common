@@ -3,11 +3,9 @@ FROM alpine:latest
 ONBUILD ARG TINI_VERSION=v0.16.1
 ONBUILD RUN set -euxv; \
             apk add --no-cache --virtual .tini-deps gnupg curl ca-certificates; \
-
             # download tini
             curl -Lo /usr/local/bin/tini https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini; \
             chmod +x /usr/local/bin/tini; \
-
             # verify the signature
             curl -Lo /dev/shm/tini.asc https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini.asc; \
             export GNUPGHOME=/dev/shm; \
@@ -19,6 +17,5 @@ ONBUILD RUN set -euxv; \
                 gpg --keyserver "$server" --recv-keys 595E85A6B1B4779EA4DAAEC70B588DFF0527A9B7 && break || : ; \
             done; \
             gpg --batch --verify /dev/shm/tini.asc /usr/local/bin/tini; \
-
-            # clean, isle 4
+            # cleanup to keep intermediate image samell
             apk del .tini-deps
