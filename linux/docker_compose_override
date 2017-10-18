@@ -189,26 +189,30 @@ function generate_docker_compose_override()
       # Check to see that the volume is not a docker volume
       if [[ ${volume_info[0]:0:1} =~ [./] ]]; then
         host_mount_point="$(mount_point "${volume_info[0]}")"
-        # If the mount point isn't already the same as the mount, check to see
-        # if it's nfs
-        if [ "${host_mount_point}" != "${volume_info[0]}" ] && \
-            is_nfs "$(mount_type "${host_mount_point}")"; then
-
+        # If the mount point is nfs
+        if is_nfs "$(mount_type "${host_mount_point}")"; then
           # If the mount point will be overridden by another mount, don't bother
-          # trying to symlink it
+          # trying to add it
           should_add=1
-          for volume_will_mount in "${compose_volumes_reversed[@]}"; do
+          for volume_will_mount in ${compose_volumes_reversed+"${compose_volumes_reversed[@]}"}; do
             IFS=:
             # NOTE "${volume_will_mount_info[0]}" is prefixed with "      - "
             volume_will_mount_info=(${volume_will_mount})
             IFS="${OLD_IFS}"
 
-            if [ "${volume_will_mount_info[1]}" == "${volume_info[1]}" ]; then
-              should_add=0
+            volume_mount_point="$(mount_point "${volume_will_mount_info[1]}")"
+            if [ "${volume_mount_point}" == "${host_mount_point}" ]; then
+              should_add=0 # don't add the mount point
               break
             fi
           done
-          if [ "${should_add}" == "1" ]; then
+          # Corner case: if the mount point is already the same as the mount
+          # and will be overridden by another mount, skip it entirely
+          if [ "${should_add}" == "0" ] && \
+             [ "${host_mount_point}" == "${volume_info[0]}" ]; then
+              continue
+          elif [ "${should_add}" == "1" ] && \
+               [ "${host_mount_point}" != "${volume_info[0]}" ]; then
             # Add to the entrypoint list
             just_docker_entrypoint_links+=("${volume_info[1]}"
                                            "${MOUNT_PREFIX-/host_mnt}${volume_info[0]}")
