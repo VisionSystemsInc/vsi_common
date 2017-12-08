@@ -15,7 +15,7 @@ FROM debian:9 #My real docker image
 RUN echo stuff
 
 COPY --from=tini /usr/local/bin/tini /usr/local/bin/tini
-COPY --from=tini /usr/local/bin/tini /usr/local/bin/tini
+COPY --from=gosu /usr/local/bin/gosu /usr/local/bin/gosu
 ```
 
 ## tini
