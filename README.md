@@ -153,20 +153,10 @@ Documentation uses [robodoc](https://rfsber.home.xs4all.nl/Robo/). To compile
 documentation, run
 
 ```
-cd docs
-docker-compose run --rm robodoc
+./Justfile robodoc
 ```
 
 ### Who do I talk to? ###
 
 * Repo owner or admin
 * Other community or team contact
-
-### Building documentation
-
-```
-docker run --rm -v `pwd`:/src \
-                -v `pwd`/docs:/doc \
-                andyneff/robodoc:latest \
-                --rc //src/robodoc.rc
-```
