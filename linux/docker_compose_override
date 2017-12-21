@@ -38,6 +38,29 @@ function _docker_compose_override_var_sub()
   fi
 }
 
+#****fI* docker_compose_override.bsh/_env_echo
+# NAME
+#   _env_echo - Helper function for echoing environment variables
+# INPUTS
+#   * - arguments to echo
+# OUTPUT
+#   stdout - echo
+# USAGE
+#   The environment: should only be added once, and can only be added if there
+#   is at least one environment variable be set. In case there are none, this
+#   simple helper should be used.
+# AUTHOR
+#   Andy Neff
+#***
+function _env_echo()
+{
+  if [ "${new_environment}" == "1" ]; then
+    echo "    environment:"
+    new_environment=0
+  fi
+  echo ${@+"${@}"}
+}
+
 #****f* docker_compose_override.bsh/generate_docker_compose_override
 # NAME
 #   generate_docker_compose_override - Creates override yaml for just features
@@ -111,6 +134,7 @@ function generate_docker_compose_override()
   local i
   local volume_info
   local just_docker_entrypoint_links
+  local new_environment
 
   local project_prefix=$1
   shift 1
@@ -202,10 +226,10 @@ function generate_docker_compose_override()
     fi
     IFS="${OLD_IFS}"
 
-    echo "    environment:"
+    new_environment=1
     if [ "${just_docker_entrypoint_links+set}" == "set" ]; then
       IFS=:
-      echo "      - JUST_DOCKER_ENTRYPOINT_LINKS=${just_docker_entrypoint_links[*]}"
+      _env_echo "      - JUST_DOCKER_ENTRYPOINT_LINKS=${just_docker_entrypoint_links[*]}"
       IFS="${OLD_IFS}"
     fi
     for var in $(compgen -A export); do
@@ -215,22 +239,22 @@ function generate_docker_compose_override()
 
         if declare -p ${indirect}&>/dev/null; then
           if [ "${JUST_DISABLE_ENVIRONMENT_SWAP-}" == "1" ]; then
-            echo "      - ${indirect}=${!indirect}"
+            _env_echo "      - ${indirect}=${!indirect}"
           else
-            echo "      - ${indirect}_HOST=${!indirect}"
+            _env_echo "      - ${indirect}_HOST=${!indirect}"
           fi
         fi
         if [ "${JUST_DISABLE_ENVIRONMENT_SWAP-}" == "1" ]; then
-          echo "      - ${var}=${!var}"
+          _env_echo "      - ${var}=${!var}"
         else
-          echo "      - ${indirect}=${!var}"
+          _env_echo "      - ${indirect}=${!var}"
           if [ "${EXPORT_DOCKER-0}" == "1" ]; then
-            echo "      - ${indirect}_DOCKER=${!var}"
+            _env_echo "      - ${indirect}_DOCKER=${!var}"
           fi
         fi
       # For project variables ending in _HOST, pass them along as-is
       elif [[ $var =~ ^${project_prefix}_.*_HOST$ ]]; then
-        echo "      - ${var}=${!var}"
+        _env_echo "      - ${var}=${!var}"
       fi
     done
   done
