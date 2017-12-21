@@ -19,13 +19,13 @@ In order to use these directories, all you have to do is
   * Prefered
 
     ```bash
-    pip install git+https://bitbucket.org/visionsystemsinc/vsi_common.git
+    pip install git+https://github.com/visionsystemsinc/vsi_common.git
     ```
 
   * Other options
 
     ```bash
-    git clone git@bitbucket.org:visionsystemsinc/vsi_common.git .
+    git clone git@github.com:visionsystemsinc/vsi_common.git .
     ```
 
     and one of
