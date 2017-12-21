@@ -239,9 +239,9 @@ begin_must_fail_test()
 }
 
 
-#****f* testlib.sh/begin_test
+#****f* testlib.sh/end_test
 # NAME
-#   begin_test - End of a test demarcation
+#   end_test - End of a test demarcation
 # USAGE
 #   Mark the end of a test. Must be the first command after the test group, or
 #   else the return value will not be captured successfully.
