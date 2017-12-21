@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+#J.U.S.T. - J.U.S.T. uncomplicated simple tasking
+
+set -euE
+
+export CWD="$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)"
+
+## Externally accessed variables, accessible via environment
+# I decided not to go with executing blind evals, for security reasons. Instead
+# variables need to be added to example.env.
+# local.env, example.env, local_post.env are sourced in that order
+source_environment_files "${CWD}/example.env"
+# # Example of example.env
+# : ${MY_UID=$(id -u)
+# : ${MY_GID=$(id -g)
+# : ${MAGIC_THRESHOLD=3.141592653}
+
+
+###### Default variables used in only just commands ######
+: ${JUST_A_FILE=tmp.txt}
+: ${JUST_A_NAME=$(basename "$(pwd)")}
+
+### Functions
+#Put functions here
+function just_a_function()
+{
+  echo $JUST_A_FILE $1 $2
+}
+
+## Just modules
+
+function caseify()
+{
+  local just_arg=$1
+  shift 1
+  case ${just_arg} in
+    all) # Run all tests. A long help message can be continued to the next \
+         # line by ending it with a backslash (\) and starting the next \
+         # line with a #.
+      (justify a b)
+      (justify c 111 222)
+      (justify f1)
+      ;;
+    a|b) #Show how to safely re-call caseify
+      (justify ${just_arg}_a ${just_arg}_b)
+      ;;
+    a_a) #Show how to get [^_]*_ prefix removed
+      echo A part ${just_arg#*_}
+      ;;
+    a_*) #Show how to get [^_]*_ prefix removed on variable
+      ;;
+    b_*) #Show default pattern catch
+      echo "Caught b_ ${just_arg#*_}"
+      ;;
+    c) #Show how to consume extra arguments
+      just_a_function "$1" "$2"
+      extra_args+=2
+      ;;
+    d) #Show example on how to use .justfile
+      echo "JUST_A_FILE" > .justfile
+      echo "blah.txt" >> .justfile
+      ;;
+    f1) #Show what happens when a command is false
+      echo "Attempting to fail"
+      false
+      ;;
+    f2) #Show how not to call caseify For example try "./just_example f2 111"
+      echo "Don't do this, this is the wrong way to use justify and consume an"
+      echo "argument ($1). See f3 for the correct way"
+      justify c $1 $1
+      extra_args+=1
+      ;;
+    f3) #Show how to call caseify For example try "./just_example f3 111"
+      echo "Argument $1 being consumed correctly"
+      (justify c $1 $1)
+      extra_args+=1
+      ;;
+    *)
+      defaultify "${just_arg}" ${@+"${@}"}
+      ;;
+  esac
+}

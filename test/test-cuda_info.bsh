@@ -1,0 +1,82 @@
+. "$(dirname ${BASH_SOURCE[0]})/testlib.sh"
+. "$(dirname ${BASH_SOURCE[0]})/test_utils.bsh"
+
+VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+
+: ${NVIDIA_SMI=nvidia-smi}
+
+if ! command -v "${NVIDIA_SMI}" >/dev/null 2>&1; then
+  skip_next_test
+fi
+begin_test "Cuda discover"
+(
+  set -eu
+  check_skip
+
+  CUDA_DISCOVER=1
+  . "${VSI_COMMON_DIR}/linux/cuda_info.bsh"
+
+  (( ${#CUDA_CARD_FAMILIES[@]} > 0 ))
+  (( ${#CUDA_CARD_ARCHES[@]} > 0 ))
+  (( ${#CUDA_CARDS[@]} > 0 ))
+  (( ${#CUDA_VERSIONS[@]} > 0 ))
+)
+end_test
+
+begin_test "Cuda 7.5 test"
+(
+  set -eu
+  check_skip
+
+  # Setup
+  CUDA_VERSION=7.5.01
+  CUDA_CARD_ARCHES=(30 35 52 200)
+
+  # Run it
+  . "${VSI_COMMON_DIR}/linux/cuda_info.bsh"
+
+  # Test it
+  [ "${CUDA_VERSION}" = "7.5.01" ]
+  check_a CUDA_SUGGESTED_ARCHES 30 35 52
+  check_a CUDA_SUGGESTED_CODES 30 35 52
+  [ "$(cmake_cuda_flags)" = "3.0 3.5 5.2 5.3+PTX" ]
+)
+end_test
+
+begin_test "Cuda 9 test"
+(
+  set -eu
+  check_skip
+
+  # Setup
+  CUDA_VERSION=9.0.01
+  CUDA_CARD_ARCHES=(37 52 70)
+
+  # Run it
+  . "${VSI_COMMON_DIR}/linux/cuda_info.bsh"
+
+  # Test it
+  [ "${CUDA_VERSION}" = "9.0.01" ]
+  check_a CUDA_SUGGESTED_ARCHES 37 52 70
+  check_a CUDA_SUGGESTED_CODES 37 52 70
+  [ "$(cmake_cuda_flags)" = "3.7 5.2 7.0" ]
+
+  # Test the future flag
+  CUDA_SUGGESTED_PTX+=(${CUDA_SUGGESTED_PTX+"${CUDA_SUGGESTED_PTX[@]}"} "${CUDA_FORWARD_PTX}")
+  [ "$(cmake_cuda_flags)" = "3.7 5.2 7.0 7.0+PTX" ]
+)
+end_test
+
+: ${DARLING=darling}
+if ! command -v "${DARLING}" >/dev/null 2>&1; then
+  skip_next_test
+fi
+begin_test "No Cuda on Darwin"
+(
+  set -eu
+
+  check_skip
+
+  [ "$("${DARLING}" shell "/Volumes/SystemRoot${VSI_COMMON_DIR}/test/darling-test-cuda_info.bsh")" == "1" ]
+)
+end_test

@@ -27,9 +27,9 @@ def est_options(a):
   if a.dtype is np.dtype('float64'):
     precision = 15
   elif a.dtype is np.dtype('float32'):
-  	precision = 7
+    precision = 7
   else:
-  	precision = 7
+    precision = 7
 
   linewidth = ts.get_terminal_size()[0]
 
@@ -40,9 +40,9 @@ def est_options(a):
 def set_options(precision, linewidth, edgeitems):
   # set the percision
   np.set_printoptions(precision=precision)
-	# set the linewidth based on console width
+  # set the linewidth based on console width
   np.set_printoptions(linewidth=linewidth)
-	# set the number of enteries to print based on console width and dtype
+  # set the number of enteries to print based on console width and dtype
   np.set_printoptions(edgeitems=edgeitems)
 
 np.set_string_function(repr_g, repr=True)

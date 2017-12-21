@@ -1,0 +1,65 @@
+#!/usr/bin/false
+
+#****f* mount_tools.bsh/mount_point
+# NAME
+#   mount_point - Get the mount point of a path
+# INPUTS
+#   $1 - path of file/directory
+# OUTPUT
+#   stdout - Mount point containing file/directory
+# RETURN VALUE
+#   0 - Success
+#   1 - Failed
+# NOTES
+#   Works on Mac/Linux and Windows if you have a df that acts normally (MINGW
+#   or cygwin)
+# AUTHOR
+#   Andy Neff
+#***
+function mount_point()
+{
+  local line
+  local x
+  {
+    read -r line
+    x=${line%%Mounted on}
+    read -r line
+    echo ${line:${#x}}
+  } <<< "$(df "$1" 2>/dev/null)"
+}
+
+#****f* mount_tools.bsh/mount_type
+# NAME
+#   mount_type - Returns the mount type of a mount point
+# INPUTS
+#   $1 - Mount name (after running through mount_point)
+# SEE ALSO
+#   mount_point
+# NOTES
+#   Mac/Linux compatible. Works on Windows if you actually have a normal POSIX
+#   mount (MING/cygwin).
+# BUGS
+#   $1 is actually a regex. So make sure to escape it if it has special characters
+#   Windows 10 comes with a mount command that this will not currently work with
+#***
+function mount_type()
+{
+  mount | sed -En 's:^.* on '"$1"' (type |\()([^, ]*).*:\2:p'
+}
+
+#****f* mount_tools.bsh/is_nfs
+# NAME
+#   is_nfs - Checks whether mount type is one of the known nfs names
+# INPUTS
+#   $1 - mount type
+# RETURN VALUE
+#   0 - Yes
+#   1 - No
+# AUTHOR
+#   Andy Neff
+#***
+function is_nfs()
+{
+  if [ "$1" == "nfs" -o  "$1" == "nfs3" -o "$1" == "nfs4" ]; then return 0; fi
+  return 1
+}

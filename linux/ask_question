@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+#Can be sourced
+
+#****F* vsi/ask_question
+# NAME
+#   ask_question - Bash CLI version of ask_question
+# INPUTS
+#   $1 - The question
+#   [$2] - Default answer (when user presses enter only)
+# OUTPUT
+#   Returns 0 for yes, 1 for no
+# SEE ALSO
+#   ask_question/ask_question
+#***
+
+#****f* ask_question/ask_question
+# NAME
+#   ask_question - Pretty version of ask Y/N question with optional default value
+# INPUTS
+#   $1 - The question
+#   $2 - Variable to store answer in. 1 for yes, 0 for no
+#   [$3] - Default answer (when user presses enter only)
+#   [!2] - If the value of the variables named by $2 is set, then this will
+#          override the answer for the question asked. This is a good way to
+#          automate calling a script/function that contains ask_question and
+#          skip prompting the user for an answer.
+# OUTPUT
+#   Stores 1 for yes, and 0 for no in the variable specified by $2
+# EXAMPLE
+#   ask_question "Continue?"  y
+#   ask_question "Would you like to play a game?" play y
+#
+#   ans=y
+#   ask_question "This question will not wait, but answer yes for you." ans n
+# NOTES
+#   Only the first letter of the response matters. Accepted values are yYnN
+#   (and blank if a default answer is given), else the question is asked again
+#   until an appropriate response is give.
+# BUGS
+#   If the same variable is used for multiple ask_question calls, then the
+#   result from the first call will act as the override. Luckily it is a 1 or 0,
+#   so it won't give a valid answer. But the best practice is to use different
+#   variable names for consecutive ask_question's
+#***
+
+function ask_question()
+{ #(question) (optional default)
+  if [[ $# > 2 ]]; then
+    local default_response="$3"
+  else
+    local default_response=
+  fi
+
+  #Check to see if the variable already has been set. This way the input is
+  #skipped. This is great for automating ask_question
+  if [ "${!2=}" != "" ]; then
+    local override=${!2}
+  fi
+
+  while true; do
+    #Prompt user
+    if [ "${override=}" != "" ]; then
+      echo "$1 ${!2}"
+      ans=$override
+      override="" #Prevent infinite loop
+    elif [ "$default_response" == "" ]; then
+      read -r -p "$1 " ans
+    else
+      read -r -p "$1 ($default_response) " ans
+    fi
+
+    #Replace with default
+    if [ "$ans" == "" ]; then
+      ans="$default_response"
+    fi
+
+    #Check answers
+    case $ans in
+      [Yy]* ) eval $2=1; break;;
+      [Nn]* ) eval $2=0; break;;
+      * ) echo "Please answer yes or no (y/n)";;
+    esac
+  done
+}
+
+if [[ ${BASH_SOURCE[0]} == ${0} ]] || [[ $(basename ${BASH_SOURCE[0]}) == ${0} ]]; then
+  question="$1"
+  shift 1
+  ask_question "${question}" x "${@}"
+  [ "$x" == "1" ]
+  exit $?
+fi

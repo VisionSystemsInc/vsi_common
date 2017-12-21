@@ -220,9 +220,25 @@ class WarningDecorator(object):
       self.fun = args[0]
       return self
 
-def args_to_kwargs(function, args, kwargs):
-  '''return a dict of all the args and kwargs as the keywords they would
-     be received in a real function call.  It does not call function.
+ARGS=-1
+KWARGS=-2
+
+
+def args_to_kwargs(function, args=tuple(), kwargs={}):
+  '''returns a single dict of all the args and kwargs
+
+     Should handle: functions, classes (their __init__), bound and unbound 
+       versions of methods, class methods, and static methods. Furthermore,
+       if a class instance has a __call__ method, this is used.
+
+     It does not call the function.
+
+     The returned dictionary has the keywords that would be received in a real
+       function call. Leftover args are put into the key ARGS(-1), and leftover
+       KWARGS are placed in the key KWARGS(-2). While everything should behave
+       exactly as python would, certain failure situations are not reproduced,
+       for exampled it does not raise exception if you declare the same 
+       parameter in both *args and **kwargs)
      
      Only works for python2. need to use signature instead of getargspec for 
      python3.
@@ -232,38 +248,49 @@ def args_to_kwargs(function, args, kwargs):
 
   import inspect
 
+  pop_self = False
+
+  args=tuple(args)
+
   if inspect.isclass(function):
     function = function.__init__
     args = (None,)+args #Dummy for self
-  #TODO
-  #handle bound function
-  #handle unbound function
-  #handle instance with __call__
-  #handle static method
-  #handle class method
-  #elif hasattr(function, '__call__'):
-  #  func = function.__call__
-  #  function = (None,)+args
-    
+    pop_self = True
+  elif inspect.ismethod(function):
+    #check if bound/unbound doesn't seem to matter
+    #if function.im_self is not None
+    if hasattr(function, '__self__'):
+      #Check if class/normal method doesn't matter
+      #if inspect.isclass(function.__self__):
+      args = (None,)+args #Dummy for self/cls
+      pop_self = True
+    else:
+      #static method
+      pass
+  elif hasattr(function, '__call__') and inspect.ismethod(function.__call__):
+    function = function.__call__
+    args = (None,)+args
+    pop_self = True
+
   names, args_name, kwargs_name, defaults = inspect.getargspec(function)
-    
+
   # assign basic args
   params = {}
   if args_name:
     basic_arg_count = len(names)
     params.update(zip(names[:], args))  # zip stops at shorter sequence
-    params[args_name] = args[basic_arg_count:]
+    params[ARGS] = args[basic_arg_count:]
   else:
     params.update(zip(names, args))
 
   # assign kwargs given
   if kwargs_name:
-    params[kwargs_name] = {}
+    params[KWARGS] = {}
     for kw, value in kwargs.iteritems():
       if kw in names:
         params[kw] = value
       else:
-        params[kwargs_name][kw] = value
+        params[KWARGS][kw] = value
   else:
       params.update(kwargs)
 
@@ -274,10 +301,22 @@ def args_to_kwargs(function, args, kwargs):
         params[names[-len(defaults) + pos]] = value
 
   # check we did it correctly.  Each param and only params are set
-  assert set(params.iterkeys()) == (set(names)|set([args_name])|set([kwargs_name])
-                                    )-set([None])
+
+  assert set(params.iterkeys()) == (set(names)|
+                                    set([KWARGS if kwargs_name else None, 
+                                         ARGS if args_name else None]) \
+                                   -set([None]))
+  #Remove None, since if *args/**kwargs isn't used, it will have the value None
+  #And that is not used
+
+  if pop_self:
+    params.pop(names[0])
 
   return params
+
+def args_to_kwargs2(function, *args, **kwargs):
+  return args_to_kwargs(function, args, kwargs)
+
 
 def command_list_to_string(cmd):
   try:

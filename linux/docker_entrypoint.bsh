@@ -1,0 +1,195 @@
+#****F* just/docker_entrypoint.bsh
+# NAME
+#   docker_entrypoint.bsh - Functions to help write docker entrypoints
+# INPUTS
+#   See inputs for other SEE ALSO
+# EXAMPLE
+#   docker_entrypoint.bsh
+# USAGE
+#   Can also be sourced to call individual functions. By default, calling
+#   docker_entrypoint.bsh runs
+#   - docker_setup_user
+# SEE ALSO
+#   docker_setup_user
+# AUTHOR
+#   Andy Neff
+#***
+
+: ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
+source "${VSI_COMMON_DIR}/linux/linux_accounts.bsh"
+
+#****f* docker_entrypoint.bsh/docker_setup_user
+# NAME
+#   docker_setup_user - Create user/group
+# INPUTS
+#   DOCKER_ACCOUNTS_CREATE_USER - Enables the adding of a new user. If the
+#                                 particular username already exist, it is
+#                                 replaced. Default: 1
+#   DOCKER_ACCOUNTS_CREATE_GROUPS - Enables the adding of new groups. The first
+#                                   group is set as the user's primary group.
+#                                   Each subsequent group is set as an
+#                                   additional group, and the user is added as
+#                                   a member of each of these groups. If a group
+#                                   name already exists, an increasing number
+#                                   is appended until the name does not exist.
+#                                   if the GID already exists, it is just used
+#                                   again. Default: 1
+#   DOCKER_ACCOUNTS_POSIX_GROUPS - Enables filtering group names removing
+#                                  non-posix characters. This is important for
+#                                  operating systems like CentOS, etc... that
+#                                  actually follow the posix rules, unlike
+#                                  Debian. If 100% of the characters are
+#                                  non-posix, the name becomes simply "group".
+#                                  Default: 1
+#   DOCKER_USERNAME - The username used to create the new user. Default: user
+#   DOCKER_UID - The UID used when creating the new user. Default: 1000
+#   DOCKER_GROUP_NAMES - The group name(s) used when creating the groups for
+#                        the new user. IFS delimited string (default: space,
+#                        tab, newline). Default: user (only the primary group)
+#   DOCKER_GIDS - The GIDs used when creating the new groups. IFS delimited
+#                 string. Default: 1000
+#   DOCKER_HOME - The home directory used when creating a new user. When the new
+#                 directory is created, it is owned (non-recursively) by the
+#                 UID/GID. Default: /home/${DOCKER_USERNAME}
+# AUTHOR
+#   Andy Neff
+#***
+function docker_setup_user()
+{
+
+  : ${DOCKER_ACCOUNTS_CREATE_USER=1}
+  : ${DOCKER_ACCOUNTS_CREATE_GROUPS=1}
+  : ${DOCKER_ACCOUNTS_POSIX_GROUPS=${DOCKER_ACCOUNTS_CREATE_GROUPS}}
+
+  : ${DOCKER_USERNAME=user}
+  : ${DOCKER_UID=1000}
+  : ${DOCKER_GROUP_NAMES=user}
+  : ${DOCKER_GIDS=1000}
+  : ${DOCKER_HOME=/home/${DOCKER_USERNAME}}
+
+  if [ "${DOCKER_ACCOUNTS_POSIX_GROUPS}" == "1" ]; then
+    #Remove non-posix characters
+    DOCKER_GROUP_NAMES=$(sed 's|[^0-9a-zA-Z._ -]||g
+                              :t
+                              /  /{
+                                s|  | group |g
+                                b t
+                              }' <<< "${DOCKER_GROUP_NAMES}")
+  fi
+
+  #Convert to arrays
+  DOCKER_GIDS=(${DOCKER_GIDS})
+  DOCKER_GROUP_NAMES=(${DOCKER_GROUP_NAMES})
+
+  if [ "${DOCKER_ACCOUNTS_CREATE_USER}" == "1" ]; then
+    add_user ${DOCKER_USERNAME} ${DOCKER_UID} ${DOCKER_GIDS[0]} "${DOCKER_HOME}"
+
+    mkdir -p "${DOCKER_HOME}"
+    chown ${DOCKER_UID}:${DOCKER_GIDS[0]} "${DOCKER_HOME}"
+  fi
+
+  if [ "${DOCKER_ACCOUNTS_CREATE_GROUPS}" == "1" ]; then
+    local group
+    local gshadow
+    local fifo_buffer="$(mktemp -u -p /dev/shm)"
+    mkfifo "${fifo_buffer}"
+    read_group_data
+
+    LINUX_ACCOUNTS_AUTOSAVE=0 add_group ${DOCKER_GROUP_NAMES[0]} ${DOCKER_GIDS[0]}
+
+    local i
+    local users
+    users=(${DOCKER_USERNAME})
+    for ((i=1; i<${#DOCKER_GIDS[@]}; i++)); do
+      LINUX_ACCOUNTS_AUTOSAVE=0 add_group ${DOCKER_GROUP_NAMES[$i]} ${DOCKER_GIDS[$i]}
+    done
+
+    write_group_data
+    rm "${fifo_buffer}"
+  fi
+}
+
+#****f* docker_entrypoint.bsh/docker_link_mounts
+# NAME
+#   docker_link_mounts - Create symlinks based on JUST_DOCKER_ENTRYPOINT_LINKS
+# USAGE
+#   Automatically called when docker_entrypoint.bsh is called. If
+#   docker_entrypoint.bsh is sourced, then docker_link_mounts would need to be
+#   called separately.
+# DESCRIPTION
+#   When docker_compose_override/generate_docker_compose_override processes
+#   mounts, the desired mount will not be possible in some cases such as nfs
+#   with squash root. Instead the base mount point is mounted into the
+#   container and a symlink is created to link the desired locations. This
+#   function creates these symlinks based on the colon separated string
+#   JUST_DOCKER_ENTRYPOINT_LINKS. Links within other links are not created.
+# INPUTS
+#   [DOCKER_LINK_MOUNTS_FORCE] - Default: 0
+# AUTHOR
+#   Andy Neff
+#***
+function docker_link_mounts()
+{
+  local OLD_IFS="${IFS}"
+  local IFS
+  local options
+  local x
+  local y
+
+  if [ "${DOCKER_LINK_MOUNTS_FORCE-0}" == "1" ]; then
+    options='-f'
+  fi
+
+  #Convert to array, using colon as separator
+  IFS=:
+  JUST_DOCKER_ENTRYPOINT_LINKS=(${JUST_DOCKER_ENTRYPOINT_LINKS+${JUST_DOCKER_ENTRYPOINT_LINKS}})
+  IFS="${OLD_IFS}"
+
+  local link_destinations=()
+  for ((x=0; x+1<${#JUST_DOCKER_ENTRYPOINT_LINKS[@]}; x+=2)); do
+    # copy to an array of just destinations
+    link_destinations+=("${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}")
+  done
+
+  IFS=$'\n'
+  # Sort the array
+  # per sort's man page:
+  # The locale specified by the environment affects sort order. Set LC_ALL=C
+  # to get the traditional sort order that uses native byte values.
+  # We need it in this order so that base directories come before subdirectories.
+  link_destinations=($(LC_ALL=C sort -u <<< ${link_destinations+"${link_destinations[*]}"}))
+  IFS="${OLD_IFS}"
+
+  # Filter out destinations that are sub-directories of another directory;
+  # these links may fail anyway if the directory already exists. We also
+  # don't want to make symlinks in host directories if we can help it. symlinks
+  # are strictly worse than bind mounts; don't try to make them as capable.
+  for x in ${!link_destinations[@]}; do
+    for ((y=0; y<x; y++)); do
+      if [[ "${link_destinations[$y]+set}" == "set" && "${link_destinations[$x]}" == "${link_destinations[$y]}/"* ]]; then
+        unset link_destinations[$x]
+        break
+      fi
+    done
+  done
+
+  for y in ${!link_destinations[@]}; do
+    # Last link wins; this matches docker-compose behavior
+    for ((x=${#JUST_DOCKER_ENTRYPOINT_LINKS[@]}-2; x>=0; x-=2)); do
+      if [ "${link_destinations[$y]+set}" == "set" ] && [ "${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}" == "${link_destinations[$y]}" ]; then
+        mkdir -p "$(dirname "${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}")" && \
+        ln -T -s ${options-} "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}" "${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}" || : # \
+        # This gosu version only covers a small corner case. It was deemed not worth
+        # including in the final cut. Will revisit if it is deemed desired
+        # gosu ${DOCKER_USERNAME} ln -T -s ${options-} "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}" "${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}" || :
+        break
+      fi
+    done
+  done
+}
+
+if [[ ${BASH_SOURCE[0]} == ${0} ]] || [[ $(basename ${BASH_SOURCE[0]}) == ${0} ]]; then
+  set -eu
+  docker_setup_user ${@+"${@}"} && \
+  docker_link_mounts ${@+"${@}"}
+fi

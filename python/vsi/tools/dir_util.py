@@ -279,3 +279,67 @@ def copytree(src, dst, symlinks=False, ignore=None):
             errors.append((src, dst, str(why)))
     if errors:
         raise Error, errors
+
+def root_dir(directory):
+  ''' OS independent way of getting the root directory of a directory
+
+      On Windows
+      C:\tmp\blah.txt -> C:\
+      D:\Program Files\calc.exe -> D:\
+
+      On Linux/Darwin
+      /tmp/blah.txt -> /
+  '''
+  return os.path.splitdrive(directory)[0] + os.sep
+
+def samefile(path1, path2, normpath=True):
+  ''' OS independent version of os.path.samefile 
+
+      Optional normpath=True. In posix cases when you want symlinks to be
+      followed instead of normalized out, this would be useful to set to false.
+      For example
+      >> os.symlink('/usr/bin', '/tmp/blah')
+      >> samefile('/usr', '/tmp/blah/..')
+      False
+      >> samefile('/usr', '/tmp/blah/..', normpath=False)
+      True
+  '''
+  if normpath:
+    path1 = os.path.normpath(path1)
+    path2 = os.path.normpath(path2)
+
+  if hasattr(os.path, 'samefile'):
+    return os.path.samefile(path1, path2)
+  else:
+    return os.path.realpath(path1) == os.path.realpath(path2)
+
+def prune_dir(directory, top_dir=None):
+  ''' Remove directory and ancestor directories if they are empty 
+
+      Optional argument top_dir, prevents pruning below that directory'''
+
+  #Fill out default value
+  if top_dir is None:
+    top_dir = root_dir(directory)
+
+  #Sanitize inputs, and clean up so == below works
+  directory = os.path.normpath(directory)
+  top_dir = os.path.normpath(top_dir)
+
+  #Sanity checks
+  assert os.path.isdir(directory)
+  assert os.path.isdir(top_dir)
+  assert is_subdir(directory, top_dir)
+
+  for x in range(100): 
+  #prevent infinite loop, not that I think that's possible
+    if samefile(directory, top_dir):
+      #If reached top dir, stop! 
+      break
+    try:
+      os.rmdir(directory)
+    except OSError as err:
+      if err.errno==39 or err.errno == 13:
+        break
+      raise err
+    directory = os.path.dirname(directory)

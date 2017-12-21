@@ -1,0 +1,168 @@
+#!/usr/bin/env bash
+
+#****J* vsi/just
+# NAME
+#   just - J.U.S.T. uncomplicated simple tasking
+# AUTHOR
+#   Andy Neff
+# PURPOSE
+#   When working on a project, it often becomes necessary to run many long
+#   commands. Just like make, just gives an easy way to create a set of targets
+#   to execute easily. Unlike a makefile, it has two key distinctions
+#     * It's not a makefile. Bash is easier than make for simple tasks
+#     * It works on Windows (when git->bash is installed), MacOS (bash 3.2)
+#       and Linux with no additional dependencies.
+# DESCRIPTION
+#   just supports a number of features:
+#   * Tab completion (.just)
+#   * Comment generated help
+#   * Subcommands
+#   * Executing multiple targets at once
+# USAGE
+#   just help
+# SEE ALSO
+#   Justfile, .just
+# AUTHOR
+#   Andy Neff
+#***
+
+#****F* just/Justfile
+# NAME
+#   Justfile - Like the Makefile for just
+# PURPOSE
+#   The file sourced by just. The primary purpose of the Justfile is to define
+#   the function caseify. caseify should try to match $1 and the number of
+#   additional arguments used should be added to extra_args
+# EXAMPLE
+#   #!/usr/bin/false
+#   source_environment_files "${CWD}/my_project_name.env"
+#
+#   function caseify()
+#   {
+#     local just_arg=$1
+#     shift 1
+#     case ${just_arg} in
+#       foo) #ls foo files
+#         ls
+#         ;;
+#       two) # Target with two arguments
+#         echo $1 $2
+#         extra_args+=2
+#       group) # Two groups of args
+#         get_args ${@+"${@}"}
+#         echo ${args+"${args[@]}"}
+#         get_additional_args ${@+"${@}"}
+#         echo ${args+"${args[@]}"}
+#       # When a target starts with an _, it is hidden and is not included in
+#       # tab complete. It remains hidden from help unless a help comment is
+#       # added
+#       _hidden)
+#         ;;
+#       *)
+#         defaultify "${just_arg}" ${@+"${@}"}
+#         ;;
+#     esac
+#   }
+# SEE ALSO
+#   source_environment_files, get_extra_args, JUSTFILE
+# AUTHOR
+#   Andy Neff
+#***
+
+#****m* just/help
+# NAME
+#   help - Print help
+# SYNOPSIS
+#   Print out basic help based on the comments it the Justfile
+# EXAMPLE
+#   Basic example:
+#     foo) # Runs the foo routine
+#   Multiple targets at once:
+#     cat|dog) # Routine for cats and dogs
+#   Multiple targets:
+#     # cat) # Comment just for cat
+#     # dog) # Comment just for dog
+#     cat|\
+#     dog) # A comment here would be for both cat and dog
+#   Subcommand/subtarget example:
+#     foo_cat) # Runs the foo routine for cat
+#     foo_dog) # Runs the foo routine for dog
+#   Commenting extra help targets:
+#     # foo_a) # Runs the foo routine for a
+#     # foo_b) # Runs the foo routine for b
+#     foo_*)
+#     ## foo_c) # Runs the foo routine for c, but don't tell anyone
+#   Long comment lines:
+#     command) # To write a long help message, end the line in a backslash (\) \
+#              # and start the next line with a # to continue the comment. \
+#              # Can be as long as you want.
+#   The foo_a and foo_b are added to tab complete and help, but using more than
+#   one # ignores it all together. So foo_c is ignored
+#
+#   Advanced Expansion subtarget array:
+#     MY_ARRAY=(cat dog)
+#     # catch_{MY_ARRAY}) #Catch animal
+#     catch_*)
+#   Help, tab complete, etc. will automatically be expanded to cat and dog. Very
+#   useful for DRY and for programmatically determined subtargets
+# NOTES
+#   The help message can only be one line long, but can be as long as needed
+#
+#   The same mechanism populates help and tab completion
+# AUTHOR
+#   Andy Neff
+#***
+
+set -euE
+
+function print_error(){ echo "$1: line $2: Returned $?" >&2;}
+trap 'print_error "${BASH_SOURCE[0]}" "${LINENO}"' ERR
+
+#****id* just/JUST_IN_SCRIPT
+# NAME
+#   JUST_IN_SCRIPT - Unexported variable to indicated sources by just
+# DESCRIPTION
+#   Useful in other scripts for determining if they are being sourced by just or
+#   not.
+# USAGE
+#   Currently one use of this is dual purposing a file, so that it behaves
+#   differently when sourced by just or by a user on the prompts
+# AUTHOR
+#   Andy Neff
+#***
+JUST_IN_SCRIPT=1
+
+: ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
+source "${VSI_COMMON_DIR}/linux/just_functions.bsh"
+
+setup_powershell ${@+"${@}"}
+
+#****d* just/JUSTFILE
+# NAME
+#   JUSTFILE - Optional override variable for location of Justfile
+# DESCRIPTION
+#   The default just file that load_justfile searches for is called Justfile.
+#   In order change this default behavior, the environment variable JUSTFILE
+#   needs to be set so that just knows what file name to look for.
+# USAGE
+#   JUSTFILE must not be set in the project environment files, as it will not
+#   have the desired affect. Instead, it should either be manually set in the
+#   environment or set in the setup and wrap script
+# SEE ALSO
+#   just/load_justfile, just/_just_find_justfile, just/Just_wrap,
+#   new_just/SETUPFILE, new_just/JUSTFILE
+# AUTHOR
+#   Andy Neff
+#***
+: ${JUSTFILE=Justfile}
+load_justfile "${JUSTFILE}"
+
+if [ "${JUSTFILE}" = "" ]; then
+  echo "Can't find a suitable configuration file in this directory or any"
+  echo "parent. Are you in the right directory?"
+  echo
+  echo "Supported filenames: \"Justfile\" or value of \${JUSTFILE}"
+  exit 1
+fi
+
+justify ${@+"${@}"}
