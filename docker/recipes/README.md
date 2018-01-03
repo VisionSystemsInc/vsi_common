@@ -56,8 +56,8 @@ Complies debian packages for the tape backup software Amanda
 
 # J.U.S.T.
 
-To define the "build recipes" target, J.U.S.T. add this to your `Justfile`
+To define the "build recipes" target, add this to your `Justfile`
 
     source "${VSI_COMMON_DIR}/linux/just_docker_functions.bsh"
 
-And add `(justify build recipes)` do any fully automatic docker building targets
+And add `(justify build recipes)` to any Justfile target that is responsible for buildling docker images.
