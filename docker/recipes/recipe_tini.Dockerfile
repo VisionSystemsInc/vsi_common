@@ -1,8 +1,9 @@
 FROM alpine:latest
 
+SHELL ["sh", "-euxvc"]
+
 ONBUILD ARG TINI_VERSION=v0.16.1
-ONBUILD RUN set -euxv; \
-            apk add --no-cache --virtual .tini-deps gnupg curl ca-certificates; \
+ONBUILD RUN apk add --no-cache --virtual .tini-deps gnupg curl ca-certificates; \
             # download tini
             curl -Lo /usr/local/bin/tini https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini; \
             chmod +x /usr/local/bin/tini; \

@@ -1,8 +1,9 @@
 FROM alpine:latest
 
+SHELL ["sh", "-euxvc"]
+
 ONBUILD ARG GOSU_VERSION=1.10
-ONBUILD RUN set -euxv; \
-            apk add --no-cache --virtual .gosu-deps curl dpkg gnupg openssl; \
+ONBUILD RUN apk add --no-cache --virtual .gosu-deps curl dpkg gnupg openssl; \
 
             # download gosu
             dpkgArch="$(dpkg --print-architecture | awk -F- '{ print $NF }')"; \
