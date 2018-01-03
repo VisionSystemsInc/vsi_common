@@ -53,3 +53,11 @@ Sudo written with docker automation in mind (no passwords ever)
 |Output files|/amanda-backup-client_${AMANDA_VERSION}-1Debian82_amd64.deb<BR>/amanda-backup-server_${AMANDA_VERSION}-1Debian82_amd64.deb|
 
 Complies debian packages for the tape backup software Amanda
+
+# J.U.S.T.
+
+To define the "build recipes" target, J.U.S.T. add this to your `Justfile`
+
+    source "${VSI_COMMON_DIR}/linux/just_docker_functions.bsh"
+
+And add `(justify build recipes)` do any fully automatic docker building targets
