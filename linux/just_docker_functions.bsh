@@ -13,6 +13,29 @@ function docker_defaultify()
       Docker-compose build ${@+"${@}"}
       extra_args+=$#
       ;;
+    log) # Show logs from all service containers. Optionally specify service \
+      #names to only log specific containers. Bug: Does not pick up containers \
+      #that didn't exist when starting just log
+      # Override the log target in your Justfile and call __docker-compose-log
+      # if you need to set other
+      (justify __docker-compose-log ${@+"${@}"})
+      extra_args+=$#
+      ;;
+    __docker-compose-log)
+      function stop_logging(){ JUST_STOP_LOGGING=1; }
+      JUST_STOP_LOGGING=0
+      trap stop_logging INT
+      trap stop_logging TERM
+      while [ "${JUST_STOP_LOGGING}" == "0" ]; do
+        Docker-compose logs --tail=20 -f ${@+"${@}"} || echo $?
+        while [ "${JUST_STOP_LOGGING}" == "0" ] && ! docker_service_running | grep running > /dev/null; do
+          sleep 1
+        done
+      done
+      trap - INT
+      trap - TERM
+      extra_args+=$#
+      ;;
     *)
       return 1
       ;;
