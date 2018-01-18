@@ -133,10 +133,53 @@ function container_has_label()
   fi
 }
 
+#****f* docker_functions.bsh/docker_premkdir
+# NAME
+#   docker_premkdir - Convenient wrapper to deal with the MINGW screw ups
+# DESCRIPTION
+#   Preempt one of docker's annoying behaviors of creating directories that
+#   don't exist as root:root, and make the directory yourself. 
+# INPUTS
+#   $1 - Host directory name
+# OUTPUTS
+#   stdout - Linux version of directory
+# AUTHOR
+#   Andy Neff
+#***
+
+#****f* docker_functions.bsh/docker_native_dir
+# NAME
+#   docker_native_dir - Normalize POSIX path to native path
+# DESCRIPTION
+#   On Windows:
+#     Converts /d/foo/bar to D:\foo\bar using cygpath
+#   On everything else in the world:
+#     WYSIWYG
+# INPUTS
+#   $1 - Directory name
+# OUTPUTS
+#   stdout - Converted directory name
+# AUTHOR
+#   Andy Neff
+#***
+function docker_native_dir()
+{
+  if [ "${OS-notwindows}" == "Windows_NT" ] && command -v cygpath &> /dev/null ; then
+    echo "$(cygpath -w "$1")"
+    #Bash 4 in mingw64 includes cygpath for some reason
+    #Cygpath converts / -> \
+    #^/{single letter} -> {single letter}:\
+    #^/{single letter}/ -> {single letter}:\\ #bug? No longer on v2.9.0!
+    #else ^/ -> {git_directory}
+  else
+    echo "$1"
+  fi
+}
+
 
 #****f* docker_functions.bsh/docker_sanitize_volume
 # NAME
-#   docker_sanitize_volume - Convenient wrapper to deal with the MINGW screw ups
+#   docker_sanitize_volume - Create a directory before docker gets a chance to
 # DESCRIPTION
 #   A number of things can go wrong with something as simple as mounting a
 #   directory. If the directory doesn't exist, root will end up owning the
@@ -155,31 +198,29 @@ function container_has_label()
 #***
 function docker_sanitize_volume()
 {
- if (( $# < 2 )); then
-   set -- "$1" "$1"
- fi
+  if (( $# < 2 )); then
+    set -- "$1" "$1"
+  fi
 
- # Create the directory before docker, or else it will be owned by ROOT! :(
- # Assume it's a directory because well... docker would too
- if is_dir_and_not_exist "$1"; then #if not a file or dir
-   mkdir -p "$1" #make the dir
-   chmod 777 "$1" #Blow open permissions
- fi
+  local host_dir
+  local docker_dir
 
- if [ "${OS-notwindows}" == "Windows_NT" ]; then
-   if command -v cygpath &> /dev/null ; then
-     echo "$(cygpath -w "$1"):/$2"
-     #Bash 4 in mingw64 includes cygpath for some reason
-     #Cygpath converts / -> \
-     #^/{single letter} -> {single letter}:\
-     #^/{single letter}/ -> {single letter}:\\ #bug?
-     #else ^/ -> {git_directory}
-   else
-     echo "$1:/$2"
-   fi
- else
-   echo "$1:$2"
- fi
+  if [ "${OS-notwindows}" == "Windows_NT" ]; then
+    host_dir="$(docker_native_dir "${1}")"
+    docker_dir="/$2"
+  else
+    host_dir="$1"
+    docker_dir="$2"
+  fi
+
+  # Create the directory before docker, or else it will be owned by ROOT! :(
+  # Assume it's a directory because well... docker would too
+  if is_dir_and_not_exist "${host_dir}"; then #if not a file or dir
+    mkdir -p "${host_dir}" #make the dir
+    chmod 777 "${host_dir}" #Blow open permissions
+  fi
+
+  echo "${host_dir}:${docker_dir}"
 }
 
 #****f* docker/docker-compose-volumes
@@ -359,9 +400,9 @@ function Docker()
 #   DOCKER_COMPOSE_AUTOREMOVE - See docker_functions.bsh/DOCKER_COMPOSE_AUTOREMOVE
 #   DRYRUN - Optional variable inserted at the beginning of all docker commands.
 #            Useful for setting to "echo" or similar for dryrun mode
-#   $1.. - Arguments to be sent to docker command
+#   $1.. - Arguments to be sent to docker-compose command
 # OUTPUT
-#   Runs docker command
+#   Runs docker-compose command
 # BUGS
 #   Docker-compose should not be exec'd like Docker was. Since fifo buffers are
 #   created in common usage of Docker-compose, `exec Docker-compose` would
@@ -369,6 +410,71 @@ function Docker()
 # AUTHOR
 #   Andy Neff
 #***
+
+#****f* docker_functions.bsh/parse-docker-compose
+# NAME
+#   parse-docker-compose - Parse docker-compose arguments
+# DESCRIPTION
+#   Parse docker-compose's arguments and pull out a few important pieces of
+#   information (See OUTPUT)
+# INPUTS
+#   $1.. - Arguments to be sent to docker-compose command
+# OUTPUT
+#   docker_compose_args - Arguments to docker-compose, before the docker-compose
+#                         command (run, up, down, etc...)
+#   docker_compose_command - Docker compose command specified
+#   docker_compose_files - Array of docker compose files that are used
+#   docker_compose_project_name - Docker compose project name
+# USAGE
+#   Typically, in the calling function, you will define all the output variables
+#   as local, so that they are captured by the calling function only.
+# AUTHOR
+#   Andy Neff
+#***
+
+function parse-docker-compose()
+{
+  while (( $# )); do
+    case "$1" in
+      run)
+        docker_compose_command="$1"
+        shift 1
+        if [ "${DOCKER_COMPOSE_AUTOREMOVE}" == "1" ]; then
+          docker_compose_auto_command_args+=(--rm)
+        fi
+        docker_compose_auto_command_args+=(${DOCKER_COMPOSE_EXTRA_RUN_ARGS+"${DOCKER_COMPOSE_EXTRA_RUN_ARGS[@]}"})
+        break
+        ;;
+      # Insert other commands here for command specific EXTRA_<command>_ARGS
+      -f*|-p*|-H*)
+        if [ "${#1}" == 2 ]; then
+          docker_compose_args+=("$1" "$2")
+          shift 2
+        else
+          docker_compose_args+=("$1")
+          shift 1
+        fi
+        ;;
+      --file=*|--project-name=*|--host=*|\
+      --tlscacert=*|--tlscert=*|--tlskey=*|--project-directory=*|\
+      -v|--verbose|--tls|--skip-hostname-check|--tlsverify)
+        docker_compose_args+=("$1")
+        shift 1
+        ;;
+      --file|--project-name|--host|\
+      --tlscacert|--tlscert|--tlskey|--project-directory)
+        docker_compose_args+=("$1" "$2")
+        shift 2
+        ;;
+      *)
+        docker_compose_command="$1"
+        shift 1
+        break
+        ;;
+    esac
+  done
+}
+
 function Docker-compose()
 {
   local docker_compose_args=()
@@ -594,7 +700,7 @@ function docker_compose_service_names()
 #   filter_docker_variables - Helper function to remove variables in a docker
 # DESCRIPTION
 #   Filters out environment variables $1_*_DOCKER if JUST_FILTER_DOCKER is
-#   enabled
+#   enabled. Should be called from the entrypoint.
 # INPUTS
 #   [$1] - The prefix of the variables you want cleared, typically
 #          JUST_PROJECT_PREFIX. Default: ${JUST_PROJECT_PREFIX}

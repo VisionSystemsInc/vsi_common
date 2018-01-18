@@ -1,0 +1,33 @@
+
+. "$(dirname ${BASH_SOURCE[0]})/testlib.sh"
+. "$(dirname ${BASH_SOURCE[0]})/test_utils.bsh"
+
+VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+. "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
+
+setup()
+{
+  temp_dir="$(mktemp -d -u)"
+}
+
+begin_test "Santize Volumes"
+(
+  set -euE
+
+  ! [ -e "${temp_dir}" ]
+
+  if [ "${OS-notwindows}" == "Windows_NT" ]; then
+    [ "$(docker_sanitize_volume ${temp_dir})" == "$(cygpath -w "$1"):${temp_dir}" ]
+  else
+    [ "$(docker_sanitize_volume ${temp_dir})" == "${temp_dir}:${temp_dir}" ]
+  fi
+
+  [ -e "${temp_dir}" ]
+
+)
+end_test
+
+teardown()
+(
+  rmdir "${temp_dir}"
+)
