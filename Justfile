@@ -15,6 +15,10 @@ function caseify()
   local just_arg=$1
   shift 1
   case ${just_arg} in
+    test)
+      "${VSI_COMMON_DIR}/test/run_tests.bsh" ${@+"${@}"}
+      extra_args=$#
+      ;;
     *)
       defaultify "${just_arg}" ${@+"${@}"}
       ;;
