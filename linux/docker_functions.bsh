@@ -138,18 +138,23 @@ function container_has_label()
 #   docker_premkdir - Convenient wrapper to deal with the MINGW screw ups
 # DESCRIPTION
 #   Preempt one of docker's annoying behaviors of creating directories that
-#   don't exist as root:root, and make the directory yourself. 
+#   don't exist as root:root, and make the directory yourself.
 # INPUTS
 #   $1 - Host directory name
-# OUTPUTS
-#   stdout - Linux version of directory
 # AUTHOR
 #   Andy Neff
 #***
+function docker_premkdir()
+{
+  local host_dir="$(docker_host_dir "${1}")"
+  if [ ! -e "${host_dir}" ]; then
+    mkdir -p "${host_dir}"
+  fi
+}
 
-#****f* docker_functions.bsh/docker_native_dir
+#****f* docker_functions.bsh/docker_host_dir
 # NAME
-#   docker_native_dir - Normalize POSIX path to native path
+#   docker_host_dir - Normalize POSIX path to native path
 # DESCRIPTION
 #   On Windows:
 #     Converts /d/foo/bar to D:\foo\bar using cygpath
@@ -162,7 +167,7 @@ function container_has_label()
 # AUTHOR
 #   Andy Neff
 #***
-function docker_native_dir()
+function docker_host_dir()
 {
   if [ "${OS-notwindows}" == "Windows_NT" ] && command -v cygpath &> /dev/null ; then
     echo "$(cygpath -w "$1")"
@@ -206,7 +211,7 @@ function docker_sanitize_volume()
   local docker_dir
 
   if [ "${OS-notwindows}" == "Windows_NT" ]; then
-    host_dir="$(docker_native_dir "${1}")"
+    host_dir="$(docker_host_dir "${1}")"
     docker_dir="/$2"
   else
     host_dir="$1"
@@ -579,6 +584,12 @@ function Just-docker-compose()
 
   local override_file="$(mktemp)"
   local compose_file_override
+  local compose_ifs
+  if [ "${OS-NotWindows}" == "Windows_NT" ]; then
+    compose_ifs="${COMPOSE_PATH_SEPARATOR:-;}"
+  else
+    compose_ifs="${COMPOSE_PATH_SEPARATOR:-:}"
+  fi
 
   # Add the override
   if [ "${COMPOSE_FILE+set}" == "set" ]; then
@@ -586,7 +597,7 @@ function Just-docker-compose()
   else
     local f
     # Mimic docker-compose's default behavior
-    compose_file_override=
+    compose_file_override=()
     # The ./ is to fool MINGW64's path conversion[1]; On Windows, the ; path
     # separator is expected; however, if used, MINGW64 does not attempt path
     # conversion. Instead, use :, as expected by MINGW64, and specify all paths
@@ -595,8 +606,12 @@ function Just-docker-compose()
     # [1] http://www.mingw.org/wiki/Posix_path_conversion
     for f in ./docker-compose.yml ./docker-compose.yaml \
              ./docker-compose.override.yml ./docker-compose.override.yaml; do
-      [ -e "${f}" ] && compose_file_override+="${f}"
+       [ -e "${f}" ] && compose_file_override+=("${f}")
     done
+    local OLD_IFS="${IFS}"
+    IFS="${compose_ifs}"
+    compose_file_override="${compose_file_override[*]}"
+    IFS="${OLD_IFS}"
   fi
 
   # Auto detect compose version (PURE BASH, WHAT?!)
@@ -606,13 +621,13 @@ function Just-docker-compose()
         local COMPOSE_VERSION=${BASH_REMATCH[1]}
         break
       fi
-    done < "${compose_file_override%%:*}"
+    done < "${compose_file_override%%${compose_ifs}*}"
   fi
 
   # Get complete list of unique service names
   local service_names=()
   local OLD_IFS="${IFS}"
-  local IFS=":"
+  local IFS="${compose_ifs}"
   local compose_files=(${compose_file_override})
   IFS="${OLD_IFS}"
   local compose_file
@@ -627,8 +642,8 @@ function Just-docker-compose()
   generate_docker_compose_override ${JUST_PROJECT_PREFIX} \
       ${service_names+"${service_names[@]}"} > "${override_file}"
 
-  # Add the override file to compose files
-  compose_file_override+=":${override_file}"
+  #Add the override file to compose files
+  compose_file_override+="${compose_ifs}${override_file}"
 
   # "Fail later" behavior for set -eu. This should guarantee the override_file
   # is deleted. If this isn't enough, investigate adding cleanup to a trap
@@ -636,8 +651,10 @@ function Just-docker-compose()
   if [ "${DRYRUN-}" != "" ]; then
     echo -n "env COMPOSE_FILE=\"${compose_file_override}\" "
   fi
+  set -xv
   COMPOSE_FILE="${compose_file_override}" Docker-compose ${@+"${@}"} || rv=$?
   ${DRYRUN} rm "${override_file}"
+  set +xv
   return $rv
 }
 
