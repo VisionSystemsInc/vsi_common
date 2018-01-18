@@ -123,7 +123,7 @@ atexit ()
   [ -n "$test_description" ] && end_test $test_status
   unset test_status
 
-  if [ "${tests}" -ne "0" ] && type -t teardown &>/dev/null; then
+  if [ "${tests}" -ne "0" ] && type -t teardown &>/dev/null && [ "$(command -v teardown)" == "teardown" ]; then
     teardown
   fi
 
@@ -132,7 +132,14 @@ atexit ()
     rm -rf "$SETUPDIR"
   fi
 
-  printf '%s summary: %d test ran, %d failures, %d allowed failures, %d must fails, %d skipped\n' \
+  local BOLD_COLOR
+  if [ "${failures}" -eq 0 ]; then
+    BOLD_COLOR="${TEST_BOLD_COLOR}"
+  else
+    BOLD_COLOR="${TEST_BAD_COLOR}"
+  fi
+
+  printf "%s summary: %d test ran, ${BOLD_COLOR}%d failures${TEST_RESET_COLOR}, %d allowed failures, %d must fails, %d skipped\n" \
          "$0" "${tests}" "${failures}" "${allowed_failures}" "${must_failures}" "${skipped}"
 
   if [ $failures -gt 0 ]; then
@@ -168,7 +175,7 @@ _begin_common_test ()
   must_fail=0
 
   # Run setup if this is the first test
-  if [ "${tests}" -eq "0" ] && type -t setup &>/dev/null; then
+  if [ "${tests}" -eq "0" ] && type -t setup &>/dev/null && [ "$(command -v setup)" == "setup" ]; then
     setup
   fi
 
@@ -238,6 +245,27 @@ begin_must_fail_test()
   must_fail=1
 }
 
+#****d* testlib.sh/TEST_NO_COLOR
+# NAME
+#   TEST_NO_COLOR - Disable the use of ANSI colors
+# DESCRIPTION
+#   In order to disable color test testlib's failing cases, set TEST_NO_COLOR=1
+# SOURCE
+: ${TEST_GOOD_COLOR=$'\e[1;32m'}
+: ${TEST_BAD_COLOR=$'\e[1;31m'}
+: ${TEST_BOLD_COLOR=$'\e[1m'}
+: ${TEST_RESET_COLOR=$'\e[m'}
+
+if [ "${TEST_NO_COLOR-0}" == 1 ]; then
+  TEST_GOOD_COLOR=''
+  TEST_BAD_COLOR=''
+  r=''
+fi
+# AUTHOR
+#   Andy Neff
+#***
+# If it gets more complicated, *consider* using linux/colors.bsh
+
 
 #****f* testlib.sh/end_test
 # NAME
@@ -260,21 +288,24 @@ end_test ()
     time_e=$(awk "BEGIN {print \"\t\" $(get_time_seconds)-${_time_0}}")
   fi
 
-
   if [ "${_skipping_test-}" = "1" ] && [ "${test_status}" -eq 122 ]; then
-    printf "%-80s SKIPPED OK%s\n" "${test_description}" "${time_e}"
+    printf "%-80s ${TEST_GOOD_COLOR}SKIPPED OK${TEST_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
     skipped=$((skipped+1))
   elif [ "${must_fail}" -eq 1 ] && [ "$test_status" -ne 0 ]; then
-    printf "%-80s FAILED OK%s\n" "${test_description}" "${time_e}"
+    printf "%-80s ${TEST_GOOD_COLOR}FAILED OK${TEST_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
     must_failures=$((must_failures+1))
   elif [ "${must_fail}" -eq 0 ] && [ "$test_status" -eq 0 ]; then
-    printf "%-80s OK%s\n" "${test_description}" "${time_e}"
+    printf "%-80s ${TEST_GOOD_COLOR}OK${TEST_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
   elif [ "${allowed_failure}" -eq 1 ]; then
-    printf "%-80s FAIL OK%s\n" "${test_description}" "${time_e}"
+    printf "%-80s ${TEST_GOOD_COLOR}FAIL OK${TEST_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
     allowed_failures=$(( allowed_failures + 1 ))
   else
     failures=$(( failures + 1 ))
-    printf "%-80s FAILED%s\n" "${test_description}" "${time_e}"
+    if [ "${must_fail}" -eq 1 ]; then
+      printf "%-80s ${TEST_BAD_COLOR}SHOULD HAVE FAILED${TEST_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
+    else
+      printf "%-80s ${TEST_BAD_COLOR}FAILED${TEST_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
+    fi
     (
       echo "-- stdout --"
       sed 's/^/    /' <"$TRASHDIR/out"
