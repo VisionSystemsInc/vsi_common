@@ -16,7 +16,7 @@ function caseify()
   shift 1
   case ${just_arg} in
     test)
-      "${VSI_COMMON_DIR}/test/run_tests.bsh" ${@+"${@}"}
+      "${VSI_COMMON_DIR}/tests/run_tests.bsh" ${@+"${@}"}
       extra_args=$#
       ;;
     *)

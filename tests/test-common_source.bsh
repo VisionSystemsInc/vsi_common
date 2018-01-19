@@ -78,6 +78,9 @@ for i in "${!OSES[@]}"; do
 
     check_skip
 
+    if [ "${OS-}" = "Windows_NT" ]; then
+      VSI_COMMON_DIR="$(cygpath -w "${VSI_COMMON_DIR}")"
+    fi
     [ "$("${DOCKER}" run -v "${VSI_COMMON_DIR}:/vsi" --rm $os sh -euc \
                ". /vsi/linux/common_source.sh;
                 echo \$VSI_DISTRO      - \$VSI_DISTRO_VERSION, \
@@ -85,6 +88,9 @@ for i in "${!OSES[@]}"; do
                      \$VSI_DISTRO_CORE - \$VSI_DISTRO_VERSION_CORE")" = "${ans}" ]
   )
   end_test
+  if [ "${test_status}" -ne 0 ]; then
+    break
+  fi
 done
 
 : ${DARLING=darling}
@@ -101,3 +107,20 @@ begin_test "Distribution name for Darwin"
     "darwin - 10.12, darwin - 10.12, darwin - 10.12" ]
 )
 end_test
+
+if [ "${OS-}" != "Windows_NT" ]; then
+  skip_next_test
+fi
+begin_test "Distribution name for Windows"
+(
+  . "${VSI_COMMON_DIR}/linux/common_source.bsh"
+  
+  [ "${VSI_DISTRO}" = "windows" ]
+  [ "${VSI_DISTRO_CORE}" = "windows" ]
+  [ "${VSI_DISTRO_LIKE}" = "windows" ]
+  [ "${VSI_DISTRO_VERSION:0:5}" = "10.0." ]
+  [ "${VSI_DISTRO_VERSION_CORE:0:5}" = "10.0." ]
+  [ "${VSI_DISTRO_VERSION_LIKE:0:5}" = "10.0." ]
+)
+end_test
+
