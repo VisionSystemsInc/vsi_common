@@ -53,7 +53,7 @@ fi
 #   Returns 0 for is a directory, and 1 for not a directory (is an internal
 #   mount)
 # EXAMPLE
-#   is_dir_and_not_exist this_looks_like_a_mount
+#   is_dir_and_not_exist this_looks_like_an_internal_volume
 #   is_dir_and_not_exist ./this_looks/like_a/directory
 #   is_dir_and_not_exist /this_also_looks/like_a/directory
 #
@@ -70,7 +70,7 @@ function is_dir_and_not_exist()
  local dir_name="$1"
 
  if ( [ "${dir_name:0:1}" == "/" ] || \
-      ( (( ${#dir_name} >= 2 )) && [ "${dir_name:0:2}" == "./" ] ) ) && \
+      ( (( ${#dir_name} >= 2 )) && ( [ "${dir_name:0:2}" == "./" ] || [ "${dir_name:1:1}" == ":" ] ) ) ) && \
     [ ! -d "${dir_name}" ] && [ ! -e "${dir_name}" ]; then
     return 0 #TRUE!
  fi
@@ -139,16 +139,35 @@ function container_has_label()
 # DESCRIPTION
 #   Preempt one of docker's annoying behaviors of creating directories that
 #   don't exist as root:root, and make the directory yourself.
+#
+#   When the argument is a docker volume, nothing should happen. Docker auto
+#   creates those just fine.
 # INPUTS
-#   $1 - Host directory name
+#   $1 - host directory name or docker volume
+# NOTES
+#   Always creates the directory with 777 permission. This is to maximize the
+#   chances that it works. If you don't want this, the easy solution is to
+#   create the directory yourself. This is more of an emergency catch. For this
+#   reason, when the directory is created, a message is printed.
+#
+#   When a directory doesn't exist, it is assumed it is a directory, and not a
+#   file because this is the same behavior as docker.
 # AUTHOR
 #   Andy Neff
 #***
 function docker_premkdir()
 {
-  local host_dir="$(docker_host_dir "${1}")"
-  if [ ! -e "${host_dir}" ]; then
-    mkdir -p "${host_dir}"
+  local host_dir="${1}"
+
+  # In Windows (only), \'s are converted to /'s
+  if [ "${OS-notwindows}" == "Windows_NT" ]; then
+    host_dir="${host_dir//\\//}"
+  fi
+
+  if is_dir_and_not_exist "${host_dir}"; then #if not a file or dir
+    echo "Missing directory ${host_dir} created with 777" >&2
+    mkdir -p "${host_dir}" #make the dir
+    chmod 777 "${host_dir}" #Blow open permissions
   fi
 }
 
@@ -162,7 +181,7 @@ function docker_premkdir()
 #     WYSIWYG
 # INPUTS
 #   $1 - Directory name
-# OUTPUTS
+# OUTPUT
 #   stdout - Converted directory name
 # AUTHOR
 #   Andy Neff
@@ -182,6 +201,49 @@ function docker_host_dir()
 }
 
 
+
+#****f* docker_functions.bsh/docker_parse_volume_string
+# NAME
+#   docker_parse_volume_string - Split the docker volume string up
+# DESCRIPTION
+#   Docker volume strings can contain optional flags, and depending on windows
+#   or POSIX operating systems, have different rules, etc... This function will
+#   universially split the string up.
+# INPUTS
+#   $1 - The volume string
+# OUTPUT
+#   volume_info - Array size two of 
+#   volume_flags - 
+#   Return 1 if regex is not matched, else Return 0
+# NOTES
+#   Based off of docker 17.12 syntax. If new flags are added, the regex must be
+#   updated
+#
+#   Not actually a bug, but a string like "d:/test:ro" would be parsed as host
+#   path "D:\test" and docker path "ro", NOT internal volume "d", docker path
+#   "/test", and flag read-only. This is not a bug because you can't have a
+#   single letter docker volume, so this shouldn't work anyways.
+# AUTHOR
+#   Andy Neff
+#***
+function docker_parse_volume_string()
+{
+  local volume_pattern='^([^:](:[/\]+)?[^:]*):([^:](:[/\]+)?[^:]*)((:ro|:rw|:z|:Z|:r?shared|:r?slave|:r?private|:delegated|:cached|:consistent|:nocopy)*)$'
+  # Break the volume string up into BASH_REMATCH
+  # 1 - Host path
+  # 3 - Docker path
+  # 5 - flags
+
+  if [[ ${1} =~ ${volume_pattern} ]]; then
+    declare -p BASH_REMATCH
+    volume_info=("${BASH_REMATCH[1]}" "${BASH_REMATCH[3]}")
+    volume_flags="${BASH_REMATCH[5]}"
+    return 0
+  else
+    return 1
+  fi
+}
+
 #****f* docker_functions.bsh/docker_sanitize_volume
 # NAME
 #   docker_sanitize_volume - Create a directory before docker gets a chance to
@@ -196,6 +258,8 @@ function docker_host_dir()
 #   [$2] - The docker directory (optional. If omitted, copies host directory)
 # OUTPUT
 #   stdout - The argument that should go with the -v to docker for mounting
+# USAGE
+#   Mainly fo the docker and docker-compose CLI -v flags
 # BUGS
 #   The docker directory is not optional if the host mount is a volume
 # AUTHOR
@@ -212,18 +276,15 @@ function docker_sanitize_volume()
 
   if [ "${OS-notwindows}" == "Windows_NT" ]; then
     host_dir="$(docker_host_dir "${1}")"
+    # Add an extra / so that mingw doesn't attempt path conversion
     docker_dir="/$2"
   else
     host_dir="$1"
     docker_dir="$2"
   fi
 
-  # Create the directory before docker, or else it will be owned by ROOT! :(
-  # Assume it's a directory because well... docker would too
-  if is_dir_and_not_exist "${host_dir}"; then #if not a file or dir
-    mkdir -p "${host_dir}" #make the dir
-    chmod 777 "${host_dir}" #Blow open permissions
-  fi
+  # Create the directory before docker
+  docker_premkdir "${host_dir}"
 
   echo "${host_dir}:${docker_dir}"
 }
@@ -549,6 +610,10 @@ function Docker-compose()
 #                       the auto generated files. In order to bypass this, you
 #                       can specify the version number manually using this
 #                       variable.
+#   [COMPOSE_FILE_NT_PATH] - Tells this function that the docker compose files
+#                            are all in nt format (C:/foo/bar.yml) and not in
+#                            POSIX format (/c/foo/bar.yml). Default is disabled.
+#                            Set to 1 to enable.
 # DESCRIPTION
 #   To provide a smoother just experience, advanced features are baked into
 #   Just-docker-compose to work with Just and docker_entrypoint.bsh to cover the
@@ -567,7 +632,9 @@ function Docker-compose()
 # BUGS
 #   A temp file is left behind in dryrun mode so that dryrun mode will actually
 #   work. As long as the commands echo'd by dryrun are executed, the temp file
-#    will be cleaned up, as one of them is rm. So ultimately, this is by design.
+#   will be cleaned up, as one of them is rm. So ultimately, this is by design.
+#
+#   Using this function with windows paths is not currently supported
 # SEE ALSO
 #   docker_compose_override/generate_docker_compose_override
 # AUTHOR
@@ -585,7 +652,8 @@ function Just-docker-compose()
   local override_file="$(mktemp)"
   local compose_file_override
   local compose_ifs
-  if [ "${OS-NotWindows}" == "Windows_NT" ]; then
+  if [ "${COMPOSE_FILE_NT_PATH-}" == "1" ]; then
+    #compose_ifs="${COMPOSE_PATH_SEPARATOR:-;}"
     compose_ifs="${COMPOSE_PATH_SEPARATOR:-;}"
   else
     compose_ifs="${COMPOSE_PATH_SEPARATOR:-:}"
@@ -651,10 +719,8 @@ function Just-docker-compose()
   if [ "${DRYRUN-}" != "" ]; then
     echo -n "env COMPOSE_FILE=\"${compose_file_override}\" "
   fi
-  set -xv
   COMPOSE_FILE="${compose_file_override}" Docker-compose ${@+"${@}"} || rv=$?
   ${DRYRUN} rm "${override_file}"
-  set +xv
   return $rv
 }
 

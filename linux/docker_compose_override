@@ -146,6 +146,12 @@ function generate_docker_compose_override()
   local OLD_IFS="${IFS}"
   local IFS
 
+  local volume_pattern='^(.(:[/\]+)?[^:]*):(.(:[/\]+)?[^:]*)((:ro|:rw|:z|:Z|:r?shared|:r?slave|:r?private|:delegated|:cached|:consistent|:nocopy)*)$'
+  # Break the volume string up into BASH_REMATCH
+  # 1 - Host path
+  # 3 - Docker path
+  # 5 - flags
+
   echo "version: '${COMPOSE_VERSION-3.2}'"
   echo "services:"
   for i in "${!services_name[@]}"; do
@@ -162,9 +168,9 @@ function generate_docker_compose_override()
     indirect_all="${volumes_name_all}[@]"
 
     for volume in ${!volumes_name_all+"${!indirect_all}"} ${!volumes_name+"${!indirect}"}; do
-      IFS=:
-      volume_info=(${volume})
-      IFS="${OLD_IFS}"
+      [[ $volume =~ $volume_pattern ]]
+      volume_info=("${BASH_REMATCH[1]}" "${BASH_REMATCH[3]}")
+      volume_flags="${BASH_REMATCH[5]}"
 
       # Variable substitution of host volume
       if [ "${volume_info[0]:0:1}" == "$" ]; then
@@ -174,9 +180,7 @@ function generate_docker_compose_override()
       fi
 
       # If it doesn't exist, attempt to make it as this user. Better than root
-      if [ ! -e "${volume_info[0]}" ]; then
-        mkdir -p "${volume_info[0]}"
-      fi
+      docker_premkdir "${volume_info[0]}"
 
       # If the volume is a path, make it relative to $(pwd)
       if [[ ${volume_info[0]:0:1} =~ \. ]]; then
@@ -214,7 +218,8 @@ function generate_docker_compose_override()
       fi
 
       IFS=:
-      volumes+=("      - ${volume_info[*]}")
+      volumes+=("      - ${volume_info[*]}${volume_flags}")
+      IFS="${OLD_IFS}"
     done
     # remove duplicates https://unix.stackexchange.com/q/159695,
     # docker-compose doesn't like them

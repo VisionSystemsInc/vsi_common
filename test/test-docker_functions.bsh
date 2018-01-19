@@ -12,17 +12,56 @@ setup()
 
 begin_test "Santize Volumes"
 (
-  set -euE
+  set -eu
 
   ! [ -e "${temp_dir}" ]
 
   if [ "${OS-notwindows}" == "Windows_NT" ]; then
-    [ "$(docker_sanitize_volume ${temp_dir})" == "$(cygpath -w "$1"):${temp_dir}" ]
+    [ "$(docker_sanitize_volume ${temp_dir})" == "$(cygpath -w "${temp_dir}"):/${temp_dir}" ]
   else
     [ "$(docker_sanitize_volume ${temp_dir})" == "${temp_dir}:${temp_dir}" ]
   fi
 
   [ -e "${temp_dir}" ]
+
+)
+end_test
+
+begin_test "Docker volume string parsing"
+(
+  set -eu
+
+  host_paths=("/foo/bar"
+              "/foo/b  ar"
+              "D:/foo/bar"
+              "D:\foo\bar"
+              "vl"
+             )
+
+  docker_paths=("/test/this"
+                "/te st/th  is"
+                "z")
+  test_volume_flags=(""
+                     ":ro"
+                     ":ro:z"
+                     ":z:ro"
+                     ":Z:rshared:rw:nocopy")
+
+  if docker_parse_volume_string garbage; then
+    return 1
+  fi
+
+  for host_path in "${host_paths[@]}"; do
+    for docker_path in "${docker_paths[@]}"; do
+      for test_volume_flag in "${test_volume_flags[@]}"; do
+        docker_parse_volume_string "${host_path}:${docker_path}${test_volume_flag}"
+        [ "${volume_info[0]}" = "${host_path}" ]
+        [ "${volume_info[1]}" = "${docker_path}" ]
+        [ "${volume_flags}" = "${test_volume_flag}" ]
+      done
+    done
+  done
+
 
 )
 end_test
