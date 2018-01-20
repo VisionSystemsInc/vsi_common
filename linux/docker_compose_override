@@ -132,7 +132,9 @@ function generate_docker_compose_override()
   local indirect_all
   local host_mount_point
   local i
-  local volume_info
+  local volume_host
+  local volume_docker
+  local volume_flags
   local just_docker_entrypoint_links
   local new_environment
 
@@ -145,12 +147,6 @@ function generate_docker_compose_override()
   # Save old IFS
   local OLD_IFS="${IFS}"
   local IFS
-
-  local volume_pattern='^(.(:[/\]+)?[^:]*):(.(:[/\]+)?[^:]*)((:ro|:rw|:z|:Z|:r?shared|:r?slave|:r?private|:delegated|:cached|:consistent|:nocopy)*)$'
-  # Break the volume string up into BASH_REMATCH
-  # 1 - Host path
-  # 3 - Docker path
-  # 5 - flags
 
   echo "version: '${COMPOSE_VERSION-3.2}'"
   echo "services:"
@@ -168,57 +164,50 @@ function generate_docker_compose_override()
     indirect_all="${volumes_name_all}[@]"
 
     for volume in ${!volumes_name_all+"${!indirect_all}"} ${!volumes_name+"${!indirect}"}; do
-      [[ $volume =~ $volume_pattern ]]
-      volume_info=("${BASH_REMATCH[1]}" "${BASH_REMATCH[3]}")
-      volume_flags="${BASH_REMATCH[5]}"
+      docker_parse_volume_string "$volume"
 
       # Variable substitution of host volume
-      if [ "${volume_info[0]:0:1}" == "$" ]; then
-        indirect=$(_docker_compose_override_var_sub ${volume_info[0]})
-        volume_info[0]="${!indirect}"
-        declare "${indirect}_DOCKER=${volume_info[0]}"
+      if [ "${volume_host}" == "$" ]; then
+        indirect=$(_docker_compose_override_var_sub ${volume_host})
+        volume_host="${!indirect}"
+        declare "${indirect}_DOCKER=${volume_host}"
       fi
 
       # If it doesn't exist, attempt to make it as this user. Better than root
-      docker_premkdir "${volume_info[0]}"
+      docker_premkdir "${volume_host}"
 
       # If the volume is a path, make it relative to $(pwd)
-      if [[ ${volume_info[0]:0:1} =~ \. ]]; then
-        volume_info[0]=$(real_path "${volume_info[0]}")
-      fi
-
-      # If there is not a docker volume path, copy host path
-      if [ "${#volume_info[@]}" == 1 ]; then
-        volume_info+=("${volume_info[0]}")
+      if [[ ${volume_host:0:1} =~ \. ]]; then
+        volume_host=$(real_path "${volume_host}")
       fi
 
       # Variable substitution of docker side volume path
-      if [ "${volume_info[1]:0:1}" == "$" ]; then
-        indirect=$(_docker_compose_override_var_sub ${volume_info[1]})
-        volume_info[1]="${!indirect}"
-        declare "${indirect}_DOCKER=${volume_info[1]}"
+      if [ "${volume_docker:0:1}" == "$" ]; then
+        indirect=$(_docker_compose_override_var_sub ${volume_docker})
+        volume_docker="${!indirect}"
+        declare "${indirect}_DOCKER=${volume_docker}"
       fi
 
 
       # Check to see that the volume is not a docker volume
-      if [[ ${volume_info[0]:0:1} =~ [./] ]]; then
-        host_mount_point="$(mount_point "${volume_info[0]}")"
+      if [[ ${volume_host:0:1} =~ [./] ]]; then
+        host_mount_point="$(mount_point "${volume_host}")"
         # If the mount point isn't already the same as the mount, check to see
         # if it's nfs
-        if [ "${host_mount_point}" != "${volume_info[0]}" ] && \
+        if [ "${host_mount_point}" != "${volume_host}" ] && \
             is_nfs "$(mount_type "${host_mount_point}")"; then
 
           # Add to the entrypoint list
-          just_docker_entrypoint_links+=("${volume_info[1]}"
-                                         "${MOUNT_PREFIX-/host_mnt}${volume_info[0]}")
+          just_docker_entrypoint_links+=("${volume_docker}"
+                                         "${MOUNT_PREFIX-/host_mnt}${volume_host}")
           # Rewrite this volume
-          volume_info[0]="${host_mount_point}"
-          volume_info[1]="${MOUNT_PREFIX-/host_mnt}${host_mount_point}"
+          volume_host="${host_mount_point}"
+          volume_docker="${MOUNT_PREFIX-/host_mnt}${host_mount_point}"
         fi
       fi
 
       IFS=:
-      volumes+=("      - ${volume_info[*]}${volume_flags}")
+      volumes+=("      - ${volume_host}:${volume_docker}${volume_flags}")
       IFS="${OLD_IFS}"
     done
     # remove duplicates https://unix.stackexchange.com/q/159695,

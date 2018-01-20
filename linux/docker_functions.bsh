@@ -4,6 +4,7 @@
 : ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
 source "${VSI_COMMON_DIR}/linux/mount_tools.bsh"
 source "${VSI_COMMON_DIR}/linux/docker_compose_override"
+source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
 
 #****F* just/docker_functions.bsh
 # NAME
@@ -212,9 +213,10 @@ function docker_host_dir()
 # INPUTS
 #   $1 - The volume string
 # OUTPUT
-#   volume_info - Array size two of 
-#   volume_flags - 
-#   Return 1 if regex is not matched, else Return 0
+#   volume_host - Host path part of the string
+#   volume_docker - Docker path part of the string
+#   volume_flags - Extra optional flags part of the string. May be empty
+#   Returns 1 if regex is not matched, else return 0
 # NOTES
 #   Based off of docker 17.12 syntax. If new flags are added, the regex must be
 #   updated
@@ -236,7 +238,8 @@ function docker_parse_volume_string()
 
   if [[ ${1} =~ ${volume_pattern} ]]; then
     declare -p BASH_REMATCH
-    volume_info=("${BASH_REMATCH[1]}" "${BASH_REMATCH[3]}")
+    volume_host="${BASH_REMATCH[1]}"
+    volume_docker="${BASH_REMATCH[3]}"
     volume_flags="${BASH_REMATCH[5]}"
     return 0
   else
@@ -448,6 +451,161 @@ function Docker()
 #***
 : ${DOCKER_COMPOSE_AUTOREMOVE=1}
 
+#****f* docker_functions.bsh/parse-docker-compose
+# NAME
+#   parse-docker-compose - Parse docker-compose arguments
+# DESCRIPTION
+#   Parse docker-compose's arguments and pull out a few important pieces of
+#   information (See OUTPUT)
+# INPUTS
+#   $1.. - Arguments to be sent to docker-compose command
+# OUTPUT
+#   docker_compose_args - Arguments to docker-compose, before the docker-compose
+#                         command (run, up, down, etc...)
+#   docker_compose_command - Docker compose command specified
+#   docker_compose_command_args - Arguments for the specified command specified
+#   docker_compose_files - Array of docker compose files that are used
+#   docker_compose_project_name - Docker compose project name
+# USAGE
+#   Typically, in the calling function, you will define all the output variables
+#   as local, so that they are captured by the calling function only.
+#
+#   Original command can be thought of as:
+#     docker-compose "${docker_compose_args[@]}" "${docker_compose_command}" \
+#                    "${docker_compose_command_args[@]}"
+# AUTHOR
+#   Andy Neff
+#***
+
+function parse-docker-compose()
+{
+  docker_compose_files=()
+
+  while (( $# )); do
+    case "$1" in
+      -f|-p|-H)
+        docker_compose_args+=("$1" "$2")
+        case "$1" in
+          -f)
+            docker_compose_files+=("$2")
+            ;;
+          -p)
+            docker_compose_project_name="$2"
+            ;;
+        esac
+        shift 2
+        ;;
+      -f*|-p*|-H*)
+        docker_compose_args+=("$1")
+        case "$1" in
+          -f*)
+            docker_compose_files+=("${1:2:${#1}-2}")
+            ;;
+          -p*)
+            docker_compose_project_name="${1:2:${#1}-2}"
+            ;;
+        esac
+        shift 1
+        ;;
+      --file=*|--project-name=*|--host=*|\
+      --tlscacert=*|--tlscert=*|--tlskey=*|--project-directory=*|\
+      -v|--verbose|--tls|--skip-hostname-check|--tlsverify)
+        docker_compose_args+=("$1")
+        case "$1" in
+          --file=*)
+            docker_compose_files+=("${1:7:${#1}-7}")
+            ;;
+          --project-name=*)
+            docker_compose_project_name="${1:15:${#1}-15}"
+            ;;
+        esac
+        shift 1
+        ;;
+      --file|--project-name|--host|\
+      --tlscacert|--tlscert|--tlskey|--project-directory)
+        docker_compose_args+=("$1" "$2")
+        case "$1" in
+          --file)
+            docker_compose_files+=("${2}")
+            ;;
+          --project-name)
+            docker_compose_project_name="${2}"
+            ;;
+        esac
+        shift 2
+        ;;
+      # Anything else must be a docker compose command.
+      *)
+        docker_compose_command="$1"
+        shift 1
+        docker_compose_command_args=(${@+"${@}"})
+        break
+        ;;
+    esac
+  done
+
+  if [ ${#docker_compose_files[@]} -eq 0 ]; then
+    local OLD_IFS
+    local IFS="$(compose_path_separator)"
+    docker_compose_files+=(${COMPOSE_FILE})
+    IFS="${OLD_IFS}"
+  fi
+
+  if [ ${#docker_compose_files[@]} -eq 0 ]; then
+    local file_matches
+    parent_find_files docker-compose.yml docker-compose.yaml
+
+    docker_compose_files=(${file_matches+"${file_matches[@]}"})
+    if [ ${#docker_compose_files[@]} -ne 0 ]; then
+      local override
+      for override in "$(dirname "${docker_compose_files[0]}")/docker-compose.override.yml" \
+                      "$(dirname "${docker_compose_files[0]}")/docker-compose.override.yaml"; do
+        if [ -e "${override}" ]; then
+          docker_compose_files+=("${override}")
+        fi
+      done
+    fi
+  fi
+
+  # project name argument wins
+  if [ "${docker_compose_project_name+set}" != "set" ]; then
+    # Then environment variable,
+    if [ "${COMPOSE_PROJECT_NAME+set}" = "set" ]; then
+      docker_compose_project_name="${COMPOSE_PROJECT_NAME}"
+    else
+      docker_compose_project_name="$(basename "$(cd "$(dirname "${docker_compose_files[0]}")"; pwd)")"
+    fi
+  fi
+}
+
+#****f* docker_functions.bsh/compose_path_separator
+# NAME
+#   compose_path_separator - Reproduce docker-compose logic for pathsep
+# DESCRIPTION
+#   docker-compose uses some logic to determine the IFS separator for splitting
+#   up the COMPOSE_FILE environment variable. This should return the exact same
+#   result
+# OUTPUT
+#   stdout - IFS string
+# USAGE
+#   local OLD_IFS="${IFS}"
+#   local IFS="$(compose_path_separator)"
+#   ...
+#   IFS="${OLD_IFS}"
+# AUTHOR
+#   Andy Neff
+#***
+function compose_path_separator()
+{
+  if [ "${COMPOSE_PATH_SEPARATOR+set}" = "set" ]; then
+    echo "${COMPOSE_PATH_SEPARATOR}"
+  elif [ "${OS-notwindows}" = "Windows_NT" ]; then
+    echo ";"
+  else
+    echo ":"
+  fi
+}
+
 #****f* docker_functions.bsh/Docker-compose
 # NAME
 #   Docker-compose - Helper function to execute (dryrun) the right command
@@ -476,118 +634,26 @@ function Docker()
 # AUTHOR
 #   Andy Neff
 #***
-
-#****f* docker_functions.bsh/parse-docker-compose
-# NAME
-#   parse-docker-compose - Parse docker-compose arguments
-# DESCRIPTION
-#   Parse docker-compose's arguments and pull out a few important pieces of
-#   information (See OUTPUT)
-# INPUTS
-#   $1.. - Arguments to be sent to docker-compose command
-# OUTPUT
-#   docker_compose_args - Arguments to docker-compose, before the docker-compose
-#                         command (run, up, down, etc...)
-#   docker_compose_command - Docker compose command specified
-#   docker_compose_files - Array of docker compose files that are used
-#   docker_compose_project_name - Docker compose project name
-# USAGE
-#   Typically, in the calling function, you will define all the output variables
-#   as local, so that they are captured by the calling function only.
-# AUTHOR
-#   Andy Neff
-#***
-
-function parse-docker-compose()
-{
-  while (( $# )); do
-    case "$1" in
-      run)
-        docker_compose_command="$1"
-        shift 1
-        if [ "${DOCKER_COMPOSE_AUTOREMOVE}" == "1" ]; then
-          docker_compose_auto_command_args+=(--rm)
-        fi
-        docker_compose_auto_command_args+=(${DOCKER_COMPOSE_EXTRA_RUN_ARGS+"${DOCKER_COMPOSE_EXTRA_RUN_ARGS[@]}"})
-        break
-        ;;
-      # Insert other commands here for command specific EXTRA_<command>_ARGS
-      -f*|-p*|-H*)
-        if [ "${#1}" == 2 ]; then
-          docker_compose_args+=("$1" "$2")
-          shift 2
-        else
-          docker_compose_args+=("$1")
-          shift 1
-        fi
-        ;;
-      --file=*|--project-name=*|--host=*|\
-      --tlscacert=*|--tlscert=*|--tlskey=*|--project-directory=*|\
-      -v|--verbose|--tls|--skip-hostname-check|--tlsverify)
-        docker_compose_args+=("$1")
-        shift 1
-        ;;
-      --file|--project-name|--host|\
-      --tlscacert|--tlscert|--tlskey|--project-directory)
-        docker_compose_args+=("$1" "$2")
-        shift 2
-        ;;
-      *)
-        docker_compose_command="$1"
-        shift 1
-        break
-        ;;
-    esac
-  done
-}
-
 function Docker-compose()
 {
-  local docker_compose_args=()
-  local docker_compose_auto_command_args=()
+  local docker_compose_args
   local docker_compose_command
+  local docker_compose_command_args
+  local docker_compose_files
+  local docker_compose_project_name
 
   local cmd=(${DRYRUN} ${DOCKER_COMPOSE})
+  local docker_compose_auto_command_args=()
 
-  while (( $# )); do
-    case "$1" in
-      run)
-        docker_compose_command="$1"
-        shift 1
-        if [ "${DOCKER_COMPOSE_AUTOREMOVE}" == "1" ]; then
-          docker_compose_auto_command_args+=(--rm)
-        fi
-        docker_compose_auto_command_args+=(${DOCKER_COMPOSE_EXTRA_RUN_ARGS+"${DOCKER_COMPOSE_EXTRA_RUN_ARGS[@]}"})
-        break
-        ;;
-      # Insert other commands here for command specific EXTRA_<command>_ARGS
-      -f*|-p*|-H*)
-        if [ "${#1}" == 2 ]; then
-          docker_compose_args+=("$1" "$2")
-          shift 2
-        else
-          docker_compose_args+=("$1")
-          shift 1
-        fi
-        ;;
-      --file=*|--project-name=*|--host=*|\
-      --tlscacert=*|--tlscert=*|--tlskey=*|--project-directory=*|\
-      -v|--verbose|--tls|--skip-hostname-check|--tlsverify)
-        docker_compose_args+=("$1")
-        shift 1
-        ;;
-      --file|--project-name|--host|\
-      --tlscacert|--tlscert|--tlskey|--project-directory)
-        docker_compose_args+=("$1" "$2")
-        shift 2
-        ;;
-      *)
-        docker_compose_command="$1"
-        shift 1
-        break
-        ;;
-    esac
-  done
+  parse-docker-compose ${@+"${@}"}
+
+  if [ "${docker_compose_command}" = "run" ]; then
+    if [ "${DOCKER_COMPOSE_AUTOREMOVE}" == "1" ]; then
+      docker_compose_auto_command_args+=(--rm)
+    fi
+    docker_compose_auto_command_args+=(${DOCKER_COMPOSE_EXTRA_RUN_ARGS+"${DOCKER_COMPOSE_EXTRA_RUN_ARGS[@]}"})
+  fi
+
   "${cmd[@]}" \
       ${DOCKER_COMPOSE_EXTRA_ARGS+"${DOCKER_COMPOSE_EXTRA_ARGS[@]}"} \
       ${docker_compose_args+"${docker_compose_args[@]}"} \
@@ -653,7 +719,7 @@ function Just-docker-compose()
   local compose_file_override
   local compose_ifs
   if [ "${COMPOSE_FILE_NT_PATH-}" == "1" ]; then
-    #compose_ifs="${COMPOSE_PATH_SEPARATOR:-;}"
+    compose_ifs="${COMPOSE_PATH_SEPARATOR:-;}"
     compose_ifs="${COMPOSE_PATH_SEPARATOR:-;}"
   else
     compose_ifs="${COMPOSE_PATH_SEPARATOR:-:}"

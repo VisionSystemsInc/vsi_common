@@ -1,0 +1,45 @@
+#!/usr/bin/env false
+
+#****f* dir_tools.bsh/parent_find_files
+# NAME
+#   parent_find_files - Find files by search up parent tree
+# DESCRIPTION
+#   Searches for files to use. It starts by checking the current directory,
+#   and goes up. Just like git searches for a .git directory
+# INPUTS
+#   $1... - The names of the files being searched for
+# RETURN VALUE
+#   file_matches - array containing matches
+# SEE ALSO
+#   just/_just_find_justfile
+# AUTHOR
+#   Andy Neff
+#***
+parent_find_files()
+{
+  local name
+  file_matches=()
+  #speed improvement: if it's right there, echo it out right away
+  for name in "${@}"; do
+    if [ -f "${name}" ]; then
+      file_matches+=("${PWD}/${1}")
+    fi
+  done
+
+  \pushd . > /dev/null
+  #search for the file until some matched are found
+  while [ "${#file_matches[@]}" -eq 0 ]; do
+    for name in "${@}"; do
+      if [ -f "${name}" ]; then
+        file_matches+=("$(\cd "$(\dirname "${1}")"; \pwd)/$(\basename "${1}")")
+      fi
+    done
+
+    if [ "${PWD}" == "/" ]; then
+      break
+    fi
+
+    cd ..
+  done
+  \popd > /dev/null
+}
