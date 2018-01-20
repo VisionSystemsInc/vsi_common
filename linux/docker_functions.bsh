@@ -473,6 +473,12 @@ function Docker()
 #   Original command can be thought of as:
 #     docker-compose "${docker_compose_args[@]}" "${docker_compose_command}" \
 #                    "${docker_compose_command_args[@]}"
+# NOTES
+#   Since the -f argument overrides all other forms of choosing the compose file
+#   the docker_compose_args are modified to include the -f notation, if the
+#   other methods were used. This will not change the behavior of the
+#   docker-compose command run, but will make adding additional compose files
+#   a lot easier
 # AUTHOR
 #   Andy Neff
 #***
@@ -480,6 +486,7 @@ function Docker()
 function parse-docker-compose()
 {
   docker_compose_files=()
+  docker_compose_args=()
 
   while (( $# )); do
     case "$1" in
@@ -545,9 +552,9 @@ function parse-docker-compose()
   done
 
   if [ ${#docker_compose_files[@]} -eq 0 ]; then
-    local OLD_IFS
+    local OLD_IFS="${IFS}"
     local IFS="$(compose_path_separator)"
-    docker_compose_files+=(${COMPOSE_FILE})
+    docker_compose_files+=(${COMPOSE_FILE+"${COMPOSE_FILE[*]}"})
     IFS="${OLD_IFS}"
   fi
 
@@ -642,10 +649,16 @@ function Docker-compose()
   local docker_compose_files
   local docker_compose_project_name
 
-  local cmd=(${DRYRUN} ${DOCKER_COMPOSE})
   local docker_compose_auto_command_args=()
 
   parse-docker-compose ${@+"${@}"}
+
+  _Docker-compose
+}
+
+function _Docker-compose()
+{
+  local cmd=(${DRYRUN} ${DOCKER_COMPOSE})
 
   if [ "${docker_compose_command}" = "run" ]; then
     if [ "${DOCKER_COMPOSE_AUTOREMOVE}" == "1" ]; then
@@ -655,12 +668,12 @@ function Docker-compose()
   fi
 
   "${cmd[@]}" \
-      ${DOCKER_COMPOSE_EXTRA_ARGS+"${DOCKER_COMPOSE_EXTRA_ARGS[@]}"} \
       ${docker_compose_args+"${docker_compose_args[@]}"} \
+      ${DOCKER_COMPOSE_EXTRA_ARGS+"${DOCKER_COMPOSE_EXTRA_ARGS[@]}"} \
       ${docker_compose_command} \
       ${docker_compose_auto_command_args+"${docker_compose_auto_command_args[@]}"} \
       ${DOCKER_COMPOSE_EXTRA_COMMAND_ARGS+"${DOCKER_COMPOSE_EXTRA_COMMAND_ARGS[@]}"} \
-      ${@+"${@}"}
+      ${docker_compose_command_args+"${docker_compose_command_args[@]}"}
   return $?
 }
 
@@ -715,39 +728,17 @@ function Just-docker-compose()
     exit 1
   fi
 
+  local docker_compose_args
+  local docker_compose_command
+  local docker_compose_command_args
+  local docker_compose_files
+  local docker_compose_project_name
+
   local override_file="$(mktemp)"
-  local compose_file_override
-  local compose_ifs
-  if [ "${COMPOSE_FILE_NT_PATH-}" == "1" ]; then
-    compose_ifs="${COMPOSE_PATH_SEPARATOR:-;}"
-    compose_ifs="${COMPOSE_PATH_SEPARATOR:-;}"
-  else
-    compose_ifs="${COMPOSE_PATH_SEPARATOR:-:}"
-  fi
 
-  # Add the override
-  if [ "${COMPOSE_FILE+set}" == "set" ]; then
-    compose_file_override="${COMPOSE_FILE}"
-  else
-    local f
-    # Mimic docker-compose's default behavior
-    compose_file_override=()
-    # The ./ is to fool MINGW64's path conversion[1]; On Windows, the ; path
-    # separator is expected; however, if used, MINGW64 does not attempt path
-    # conversion. Instead, use :, as expected by MINGW64, and specify all paths
-    # using POSIX style (e.g., ./docker-compose.yml instead of
-    # docker-compose.yml).
-    # [1] http://www.mingw.org/wiki/Posix_path_conversion
-    for f in ./docker-compose.yml ./docker-compose.yaml \
-             ./docker-compose.override.yml ./docker-compose.override.yaml; do
-       [ -e "${f}" ] && compose_file_override+=("${f}")
-    done
-    local OLD_IFS="${IFS}"
-    IFS="${compose_ifs}"
-    compose_file_override="${compose_file_override[*]}"
-    IFS="${OLD_IFS}"
-  fi
+  parse-docker-compose ${@+"${@}"}
 
+  # 1. Get docker-compose version
   # Auto detect compose version (PURE BASH, WHAT?!)
   if [ "${COMPOSE_VERSION+set}" != "set" ]; then
     while IFS='' read -r line || [[ -n "${line}" ]]; do
@@ -755,37 +746,35 @@ function Just-docker-compose()
         local COMPOSE_VERSION=${BASH_REMATCH[1]}
         break
       fi
-    done < "${compose_file_override%%${compose_ifs}*}"
+    done < "${docker_compose_files[0]}"
   fi
 
+  # 2. Get service name list
   # Get complete list of unique service names
   local service_names=()
-  local OLD_IFS="${IFS}"
-  local IFS="${compose_ifs}"
-  local compose_files=(${compose_file_override})
-  IFS="${OLD_IFS}"
   local compose_file
-  for compose_file in "${compose_files}"; do
+  for compose_file in "${docker_compose_files}"; do
     service_names+=($(docker_compose_service_names ${compose_file}))
   done
-  # Unique it
-  IFS=$'\n'
+
+  # 3. Unique service name list
+  local OLD_IFS="${IFS}"
+  local IFS=$'\n'
   service_names=($(awk '!count[$0]++' <<< ${service_names+"${service_names[*]}"}))
   IFS="${OLD_IFS}"
 
+  # 4. Create override file
   generate_docker_compose_override ${JUST_PROJECT_PREFIX} \
       ${service_names+"${service_names[@]}"} > "${override_file}"
 
-  #Add the override file to compose files
-  compose_file_override+="${compose_ifs}${override_file}"
+  # 5. Add the override file to compose files
+  docker_compose_args+=(-f "${override_file}")
 
+  # 6. Call docker compose
   # "Fail later" behavior for set -eu. This should guarantee the override_file
   # is deleted. If this isn't enough, investigate adding cleanup to a trap
   local rv=0
-  if [ "${DRYRUN-}" != "" ]; then
-    echo -n "env COMPOSE_FILE=\"${compose_file_override}\" "
-  fi
-  COMPOSE_FILE="${compose_file_override}" Docker-compose ${@+"${@}"} || rv=$?
+  _Docker-compose || rv=$?
   ${DRYRUN} rm "${override_file}"
   return $rv
 }
