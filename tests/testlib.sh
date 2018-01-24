@@ -372,3 +372,78 @@ check_skip()
     exit 122
   fi
 }
+
+#****f* testlib.sh/not
+# NAME
+#   not - Returns true only when command fails
+# DESCRIPTION
+#   Since ! is ignored by "set -e", use not instead. This is just a helper to
+#   make unittests look nice and not need extra ifs everywhere
+# INPUTS
+#   $1... - Command and arguments
+# OUTPUT
+#   Return value
+#     0 - On non-zero return code evaluation
+#     1 - On zero return code
+# EXAMPLE
+#   # No good, always passes, even if ! true
+#   ! false
+#
+#   # good
+#   not false
+#   # equivalent to
+#   if ! false; then
+#     true
+#   else
+#     false
+#   fi
+# BUGS
+#   Complex statements do not work. [, [[ and ((, etc... should be avoided.
+#   [ ! -e /test ] should be used instead. Use nots instead
+# SEE ALSO
+#   testlib.sh/nots
+# AUTHOR
+#   Andy Neff
+#***
+not()
+{
+  local cmd="$1"
+  shift 1
+  if "${cmd}" ${@+"${@}"}; then
+    return 1
+  else
+    return 0
+  fi
+}
+
+# Testing this idea...
+#****f* testlib.sh/not
+# NAME
+#   nots - Returns true only when command fails
+# DESCRIPTION
+#   Since ! is ignored by "set -e", use not instead. This is just a helper to
+#   make unittests look nice and not need extra ifs everywhere
+# INPUTS
+#   $1 - Command/statement in a single string
+# OUTPUT
+#   Return value
+#     0 - On non-zero return code evaluation
+#     1 - On zero return code
+# EXAMPLES
+#   x=test
+#   y=t.st
+#   not2 '[[ $x =~ $y ]]' # <-- notice single quotes.
+#
+#   While the single quotes aren't necessary, they still work, and will handle
+#   the more complicated situations easier
+# NOTES
+#   Uses eval
+# SEE ALSO
+#   testlib.sh/not
+# AUTHOR
+#   Andy Neff
+#***
+nots()
+{
+  eval "if ${1}; then return 1; else return 0; fi"
+}
