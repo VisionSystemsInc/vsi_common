@@ -237,7 +237,6 @@ function docker_parse_volume_string()
   # 5 - flags
 
   if [[ ${1} =~ ${volume_pattern} ]]; then
-    declare -p BASH_REMATCH
     volume_host="${BASH_REMATCH[1]}"
     volume_docker="${BASH_REMATCH[3]}"
     volume_flags="${BASH_REMATCH[5]}"
@@ -458,6 +457,17 @@ function Docker()
 #   Parse docker-compose's arguments and pull out a few important pieces of
 #   information (See OUTPUT)
 # INPUTS
+#   [JUST_DOCKER_COMPOSE_DIR] - By default, the docker-compose files will start
+#                               being searched for in the JUSTFILE directory,
+#                               and search up the parent dirs until / is hit.
+#                               This should give a more predictable behavior when
+#                               running just from any subdirectory from the
+#                               project. However, if you wish to the disable this
+#                               behavior and start searching for a docker compose
+#                               file from the current directory where "just" is
+#                               called, then set to an empty string. You can also
+#                               set to a specific directory to start searching
+#                               from within that directory.
 #   $1.. - Arguments to be sent to docker-compose command
 # OUTPUT
 #   docker_compose_args - Arguments to docker-compose, before the docker-compose
@@ -473,6 +483,19 @@ function Docker()
 #   Original command can be thought of as:
 #     docker-compose "${docker_compose_args[@]}" "${docker_compose_command}" \
 #                    "${docker_compose_command_args[@]}"
+# EXAMPLE
+#   To start searching for docker-compose.yml in directory where "just" is called
+#   Justfile
+#
+#     target) # Test target
+#       JUST_DOCKER_COMPOSE_DIR="" Just-docker-compose run target
+#       ;;
+#
+#   To change the default search location for a project, in the project env file
+#   add
+#
+#   : ${JUST_DOCKER_COMPOSE_DIR="${PROJECT_CWD}/docker_dir"}
+#
 # NOTES
 #   Since the -f argument overrides all other forms of choosing the compose file
 #   the docker_compose_args are modified to include the -f notation, if the
@@ -557,12 +580,20 @@ function parse-docker-compose()
     local OLD_IFS="${IFS}"
     local IFS="$(compose_path_separator)"
     docker_compose_files+=(${COMPOSE_FILE+"${COMPOSE_FILE[*]}"})
+    for compose_file in "${docker_compose_files[@]}"; do
+      docker_compose_args+=(-f "${compose_file}")
+    done
     IFS="${OLD_IFS}"
   fi
 
   if [ ${#docker_compose_files[@]} -eq 0 ]; then
     local file_matches
-    parent_find_files docker-compose.yml docker-compose.yaml
+    # This is one of the few times the directory you are in matters. To create
+    # an expected default behavior, switch to the JUSTFILE dir before searching
+    # for the docker-compose file.
+    pushd "${JUST_DOCKER_COMPOSE_DIR-"$(dirname "${JUSTFILE}")"}" > /dev/null
+      parent_find_files docker-compose.yml docker-compose.yaml
+    popd > /dev/null
 
     docker_compose_files=(${file_matches+"${file_matches[@]}"})
     if [ ${#docker_compose_files[@]} -ne 0 ]; then
@@ -695,10 +726,6 @@ function _Docker-compose()
 #                       the auto generated files. In order to bypass this, you
 #                       can specify the version number manually using this
 #                       variable.
-#   [COMPOSE_FILE_NT_PATH] - Tells this function that the docker compose files
-#                            are all in nt format (C:/foo/bar.yml) and not in
-#                            POSIX format (/c/foo/bar.yml). Default is disabled.
-#                            Set to 1 to enable.
 # DESCRIPTION
 #   To provide a smoother just experience, advanced features are baked into
 #   Just-docker-compose to work with Just and docker_entrypoint.bsh to cover the
