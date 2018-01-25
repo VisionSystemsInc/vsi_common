@@ -288,7 +288,7 @@ end_test ()
     time_e=$(awk "BEGIN {print \"\t\" $(get_time_seconds)-${_time_0}}")
   fi
 
-  if [ "${_skipping_test-}" = "1" ] && [ "${test_status}" -eq 122 ]; then
+  if [ "${_skipping_test-}" = "1" ] && [ "${test_status}" -eq 0 ]; then
     printf "%-80s ${TEST_GOOD_COLOR}SKIPPED OK${TEST_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
     skipped=$((skipped+1))
   elif [ "${must_fail}" -eq 1 ] && [ "$test_status" -ne 0 ]; then
@@ -369,7 +369,7 @@ skip_next_test()
 check_skip()
 {
   if [ "${_skipping_test-}" = "1" ]; then
-    exit 122
+    exit 0
   fi
 }
 
@@ -398,10 +398,15 @@ check_skip()
 #     false
 #   fi
 # BUGS
-#   Complex statements do not work. [, [[ and ((, etc... should be avoided.
-#   [ ! -e /test ] should be used instead. Use nots instead
+#   Complex statements do not work, e.g. [, [[ and ((, etc...
+#   For example, you should use
+#     [ ! -e /test ]
+#   instead of
+#     not [ -e /test ]
+#   In cases where this is not easily worked around, you can use
+#     not_s '[ -e /test ]'
 # SEE ALSO
-#   testlib.sh/nots
+#   testlib.sh/not_s
 # AUTHOR
 #   Andy Neff
 #***
@@ -417,9 +422,9 @@ not()
 }
 
 # Testing this idea...
-#****f* testlib.sh/not
+#****f* testlib.sh/not_s
 # NAME
-#   nots - Returns true only when command fails
+#   not_s - Returns true only when string version of command fails
 # DESCRIPTION
 #   Since ! is ignored by "set -e", use not instead. This is just a helper to
 #   make unittests look nice and not need extra ifs everywhere
@@ -443,7 +448,7 @@ not()
 # AUTHOR
 #   Andy Neff
 #***
-nots()
+not_s()
 {
   eval "if ${1}; then return 1; else return 0; fi"
 }
