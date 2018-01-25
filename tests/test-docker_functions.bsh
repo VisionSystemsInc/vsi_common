@@ -4,6 +4,8 @@
 
 VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 . "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
+. "${VSI_COMMON_DIR}/linux/just_functions.bsh"
+. "${VSI_COMMON_DIR}/linux/elements.bsh"
 
 setup()
 {
@@ -75,25 +77,43 @@ end_test
 begin_test "Docker command"
 (
   set -eu
-  . "${VSI_COMMON_DIR}/linux/just_functions.bsh"
   export DRYRUN=print_command
 
   DOCKER_AUTOREMOVE=0
-  a=("'docker'" "'run'" "'-v'" "'/test  this/:blah'" "'debian:9'")
-  r=($(Docker run -v "/test  this/:blah" debian:9))
-
+  a=(docker run -v '/test  this/:blah' 'debian:9')
+  r="$(Docker run -v "/test  this/:blah" debian:9)"
+  eval "r=($r)"
+  cmp_elements_a a r
 )
 end_test
-begin_test "DOCKER_AUTOREMOVE"
+begin_test "DOCKER_AUTOREMOVE and DOCKER_EXTRA_*_ARGS"
 (
   set -eu
+  export DRYRUN=print_command
 
+  a=(docker run --rm -v '/test  this/:blah' 'debian:9')
+  r="$(Docker run -v "/test  this/:blah" debian:9)"
+  eval "r=($r)"
+  cmp_elements_a a r
 
+  DOCKER_EXTRA_RUN_ARGS=('aaa' 'bbb')
+  a=(docker run --rm aaa bbb -v '/test  this/:blah' 'debian:9')
+  r="$(Docker run -v "/test  this/:blah" debian:9)"
+  eval "r=($r)"
+  cmp_elements_a a r
 )
 end_test
-begin_test "Parse docker compose args"
+begin_test "DOCKER_EXTRA_ARGS"
 (
   set -eu
+  export DRYRUN=print_command
+
+  DOCKER_EXTRA_BUILD_ARGS=('aaa' 'bbb')
+  DOCKER_EXTRA_ARGS=(--config bl\ \ ah.json -l=debug -H 123)
+  a=(docker --tls "${DOCKER_EXTRA_ARGS[@]}" build aaa bbb -v '/test  this/:blah' 'debian:9')
+  r="$(Docker --tls build -v "/test  this/:blah" debian:9)"
+  eval "r=($r)"
+  cmp_elements_a a r
 )
 end_test
 
