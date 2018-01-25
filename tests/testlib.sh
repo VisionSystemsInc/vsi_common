@@ -161,7 +161,7 @@ fi
 # Common code for begin tests
 _begin_common_test ()
 {
-  pushd "$TRASHDIR" >& /dev/null
+  pushd "$TRASHDIR" &> /dev/null
   # This make calling end_test between tests "optional", end_test does have to
   # be called after the last test, especially if teardown is defined after the
   # last test
@@ -281,7 +281,7 @@ end_test ()
   test_status="${1:-$?}" #This MUST be the first line of this function
   set +x -e
   exec 1>&3 2>&4
-  popd >& /dev/null
+  popd &> /dev/null
 
   local time_e=''
   if [ "${TESTLIB_SHOW_TIMING-0}" == "1" ]; then
