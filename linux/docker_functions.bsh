@@ -475,6 +475,8 @@ function _Docker()
 #  declare -p DOCKER_VOLUME_FLAGS
 #  > declare -a DOCKER_VOLUME_FLAGS='([0]="-v" [1]="/tmp:/mnt:rw" [2]="-v"
 #                                     [3]="test_prefix_test:/opt")'
+# BUGS
+#   Currently only works on volume short format
 # NOTES
 #   Useful for working around docker/compose#4728
 # AUTHOR
@@ -507,8 +509,8 @@ function docker-compose-volumes()
                # Read in a new line
                n
                # Match this new line for an indented(4) list
-               /^    -/{
-                 s|^    - ([^./])|    - '"${PREFIX}"'\1|
+               /^      -/{
+                 s|^      - ([^./])|      - '"${PREFIX}"'\1|
                  # Add these lines to the hold buffer
                  H
                  # Repeat
@@ -517,7 +519,7 @@ function docker-compose-volumes()
                # Switch the hold and pattern buffer
                x
                # Format indented list to look like docker flags
-            '$'s|\\n    - |\\\n-v\\\n|g''
+            '$'s|\\n      - |\\\n-v\\\n|g''
                #s|^\n|| # Remove the first blank line - Not needed with array magic
                # Print out that pretty pattern!
                p'))
@@ -614,7 +616,7 @@ function parse-docker-compose()
         ;;
       --file=*|--project-name=*|--host=*|\
       --tlscacert=*|--tlscert=*|--tlskey=*|--project-directory=*|\
-      -v|--verbose|--tls|--skip-hostname-check|--tlsverify)
+      --no-ansi|-v|--verbose|--tls|--skip-hostname-check|--tlsverify)
         docker_compose_args+=("$1")
         case "$1" in
           --file=*)
@@ -984,10 +986,10 @@ function filter_docker_variables()
 #          a (user) specific project name
 # EXAMPLE
 #   docker_compose_sanitize_project_name 'project/A@1.1_2'
-#     projectA112
+#     A112
 #
 #   docker_compose_sanitize_project_name 'project/A@1.1_2' 'a-user:7'
-#     auser7projectA112
+#     auser7A112
 #
 #   docker_compose_sanitize_project_name '' 'a-user:7'
 #     auser7
