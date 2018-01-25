@@ -15,9 +15,16 @@ function caseify()
   local just_arg=$1
   shift 1
   case ${just_arg} in
-    test)
+    test) # Run unit and integration tests
       "${VSI_COMMON_DIR}/tests/run_tests.bsh" ${@+"${@}"}
       extra_args=$#
+      ;;
+    test_darling) # Run unit and integration tests using darline
+        (
+          cd "${VSI_COMMON_DIR}"
+          darling shell ./tests/run_tests.bsh ${@+"${@}"}
+        )
+        extra_args=$#
       ;;
     *)
       defaultify "${just_arg}" ${@+"${@}"}

@@ -120,7 +120,11 @@ skipped=0
 atexit ()
 {
   test_status=$?
-  [ -n "$test_description" ] && end_test $test_status
+  if [ -n "${test_description+_}" ]; then
+    end_test $test_status
+    echo "${TEST_BAD_COLOR}WARNING${TEST_RESET_COLOR}: end_test not added at end of last test." 1>&2
+    declare -p BASH_SOURCE
+  fi
   unset test_status
 
   if [ "${tests}" -ne "0" ] && type -t teardown &>/dev/null && [ "$(command -v teardown)" == "teardown" ]; then
@@ -162,10 +166,14 @@ fi
 _begin_common_test ()
 {
   pushd "$TRASHDIR" &> /dev/null
-  # This make calling end_test between tests "optional", end_test does have to
-  # be called after the last test, especially if teardown is defined after the
-  # last test
-  [ -n "$test_description" ] && end_test $test_status
+  # This makes calling end_test between tests "optional", but highly recommended,
+  # end_test does have to be called after the last test, especially if teardown
+  # is defined after the last test
+  if [ -n "${test_description+_}" ]; then
+    end_test $test_status
+    echo "${TEST_BAD_COLOR}WARNING${TEST_RESET_COLOR}: end_test not added at end of a test." 1>&2
+    declare -p BASH_SOURCE
+  fi
   unset test_status
 
   # Set flag defaults that could be overrideable in certain test types
@@ -259,7 +267,8 @@ begin_must_fail_test()
 if [ "${TEST_NO_COLOR-0}" == 1 ]; then
   TEST_GOOD_COLOR=''
   TEST_BAD_COLOR=''
-  r=''
+  TEST_BOLD_COLOR=''
+  TEST_RESET_COLOR=''
 fi
 # AUTHOR
 #   Andy Neff

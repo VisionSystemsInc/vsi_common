@@ -80,29 +80,31 @@ begin_test "Docker command"
   export DRYRUN=print_command
 
   DOCKER_AUTOREMOVE=0
-  a=(docker run -v '/test  this/:blah' 'debian:9')
+  a=($DOCKER run -v '/test  this/:blah' 'debian:9')
   r="$(Docker run -v "/test  this/:blah" debian:9)"
   eval "r=($r)"
   cmp_elements_a a r
 )
 end_test
+
 begin_test "DOCKER_AUTOREMOVE and DOCKER_EXTRA_*_ARGS"
 (
   set -eu
   export DRYRUN=print_command
 
-  a=(docker run --rm -v '/test  this/:blah' 'debian:9')
+  a=("${DOCKER}" run --rm -v '/test  this/:blah' 'debian:9')
   r="$(Docker run -v "/test  this/:blah" debian:9)"
   eval "r=($r)"
   cmp_elements_a a r
 
   DOCKER_EXTRA_RUN_ARGS=('aaa' 'bbb')
-  a=(docker run --rm aaa bbb -v '/test  this/:blah' 'debian:9')
+  a=("${DOCKER}" run --rm aaa bbb -v '/test  this/:blah' 'debian:9')
   r="$(Docker run -v "/test  this/:blah" debian:9)"
   eval "r=($r)"
   cmp_elements_a a r
 )
 end_test
+
 begin_test "DOCKER_EXTRA_ARGS"
 (
   set -eu
@@ -110,7 +112,7 @@ begin_test "DOCKER_EXTRA_ARGS"
 
   DOCKER_EXTRA_BUILD_ARGS=('aaa' 'bbb')
   DOCKER_EXTRA_ARGS=(--config bl\ \ ah.json -l=debug -H 123)
-  a=(docker --tls "${DOCKER_EXTRA_ARGS[@]}" build aaa bbb -v '/test  this/:blah' 'debian:9')
+  a=("${DOCKER}" --tls "${DOCKER_EXTRA_ARGS[@]}" build aaa bbb -v '/test  this/:blah' 'debian:9')
   r="$(Docker --tls build -v "/test  this/:blah" debian:9)"
   eval "r=($r)"
   cmp_elements_a a r
@@ -151,6 +153,7 @@ begin_test "Test DOCKER var"
   DOCKER="DoCkEr"
   [ "$(Docker run test)" == "DoCkEr run --rm test" ]
 )
+end_test
 
 begin_test "Test NVIDIA_DOCKER var"
 (
@@ -159,16 +162,45 @@ begin_test "Test NVIDIA_DOCKER var"
   NVIDIA_DOCKER="NvIdIa-DoCkEr"
   [ "$(Nvidia-docker run test)" == "NvIdIa-DoCkEr run --rm test" ]
 )
+end_test
 
 begin_test "is_dir_and_not_exist"
 (
   set -eu
   not is_dir_and_not_exist qwertyuiop
-  is_dir_and_not_exist /
+  not is_dir_and_not_exist /
+  is_dir_and_not_exist "$(mktemp -d -u)"
 )
+end_test
+
+
+if command -v "${DOCKER}" &> /dev/null; then
+  no_docker(){ return 1;}
+else
+  no_docker(){ return 0;}
+fi
+
+no_docker && skip_next_test
+
+begin_test "container get label"
+(
+  set -eu
+
+  check_skip
+
+  "${DOCKER}" create -l t1=15 -l "TEST=THIS=t h  a   t" -l blank --name test-docker-function alpine
+
+  [ "$(container_get_label test-docker-function t1)" == "15" ]
+  [ "$(container_get_label test-docker-function TEST)" == "THIS=t h  a   t" ]
+  [ "$(container_get_label test-docker-function blank)" == "" ]
+  [ "$(container_get_label test-docker-function none)" == "" ]
+)
+end_test
+
 
 teardown()
 (
+  ! ${DOCKER} rm test-docker-function &>/dev/null
   #remove all dirs. Trying to be safe here. Will fail if any dir is not empty
   find "${temp_dir}" -type d -depth -exec rmdir \{\} \;
 )
