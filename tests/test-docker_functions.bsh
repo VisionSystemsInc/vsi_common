@@ -366,20 +366,6 @@ begin_test "DOCKER_COMPOSE_EXTRA_ARGS"
 )
 end_test
 
-begin_fail_test "docker_service_running"
-(
-  set -eu
-  false
-)
-end_test
-
-begin_fail_test "docker_compose_service_names"
-(
-  set -eu
-  false todo
-)
-end_test
-
 begin_test "docker-compose service names"
 (
   set -eu
@@ -417,6 +403,39 @@ begin_test "Docker compose santize project names"
   [ "$(docker_compose_sanitize_project_name 'project/A@1.1_2')" = "a112" ]
   [ "$(docker_compose_sanitize_project_name 'project/A@1.1_2' 'auser:7')" = "auser7a112" ]
   [ "$(docker_compose_sanitize_project_name '' 'a-user:7')" = "auser7" ]
+)
+end_test
+
+begin_test "Just docker compose"
+(
+  JUST_PROJECT_PREFIX=TEST
+
+  compose_file="version: '3.2'
+services:
+  test_sleepy:
+    image: alpine
+    command: sh -c 'echo horse'"
+
+  [ "$(Just-docker-compose -f <(echo "${compose_file}") run test_sleepy)" = "horse" ]
+)
+end_test
+
+begin_test "Docker service running"
+(
+  compose_file="version: '3.2'
+services:
+  test_sleepy:
+    image: alpine
+    command: sleep 100"
+  "${DOCKER_COMPOSE}" -f <(echo "${compose_file}") rm -s -f
+  "${DOCKER_COMPOSE}" -f <(echo "${compose_file}") up -d test_sleepy
+  [ "$(COMPOSE_FILE=<(echo "${compose_file}") docker_service_running test_sleepy)" = "running" ]
+  [ "$(COMPOSE_FILE=<(echo "${compose_file}") docker_service_running test_sleepy2)" = "" ]
+  "${DOCKER_COMPOSE}" -f <(echo "${compose_file}") kill test_sleepy
+  [ "$(COMPOSE_FILE=<(echo "${compose_file}") docker_service_running test_sleepy)" = "exited" ]
+
+  #Clean up
+  "${DOCKER_COMPOSE}" -f <(echo "${compose_file}") rm -s -f
 )
 end_test
 
