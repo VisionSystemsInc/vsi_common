@@ -31,7 +31,6 @@
 # MODIFICATION HISTORY
 #   Andy Neff - Added begin_fail_test
 #               Added optional setup/teardown functions
-#               Added SETUPDIR
 #               Removed PATH
 #               Added robodoc documentation
 #               Use pushd/popd for each test instead of cd
@@ -51,7 +50,6 @@ fi
 
 # create a temporary work space
 TRASHDIR="$(mktemp -d -t $(basename "$0")-$$.XXXXXXXX)"
-SETUPDIR="$(mktemp -d -t $(basename "$0")-$$.XXXXXXXX)"
 
 # keep track of num tests and failures
 tests=0
@@ -64,9 +62,7 @@ skipped=0
 # NAME
 #   setup - Function run before the first test
 # NOTES
-#   A directory SETUPDIR is created for setup, right before running setup().
-#   Unlike TRASHDIR, this single directory is used for all the tests in the
-#   file.
+#   A directory TRASHDIR is created for setup, right before running setup().
 #
 #   Setup is not run if no tests are ever run
 # AUTHOR
@@ -127,13 +123,16 @@ atexit ()
   fi
   unset test_status
 
-  if [ "${tests}" -ne "0" ] && type -t teardown &>/dev/null && [ "$(command -v teardown)" == "teardown" ]; then
+  if [ "${tests}" -ne 0 ] && [ "${tracking_touched_files-}" = "1" ]; then
+    cleanup_touched_files
+  fi
+
+  if [ "${tests}" -ne 0 ] && type -t teardown &>/dev/null && [ "$(command -v teardown)" == "teardown" ]; then
     teardown
   fi
 
-  if [ "${TEST_KEEP_TEMP_DIRS}" != "1" ]; then
+  if [ "${TEST_KEEP_TEMP_DIRS-}" != "1" ]; then
     rm -rf "$TRASHDIR"
-    rm -rf "$SETUPDIR"
   fi
 
   local BOLD_COLOR
@@ -146,7 +145,7 @@ atexit ()
   printf "%s summary: %d test ran, ${BOLD_COLOR}%d failures${TEST_RESET_COLOR}, %d allowed failures, %d must fails, %d skipped\n" \
          "$0" "${tests}" "${failures}" "${allowed_failures}" "${must_failures}" "${skipped}"
 
-  if [ $failures -gt 0 ]; then
+  if [ "${failures}" -gt 0 ]; then
     exit 1
   else
     exit 0
@@ -327,6 +326,11 @@ end_test ()
       echo "-- EOF $test_description --"
     ) 1>&2
   fi
+
+  if [ "${tracking_touched_files-}" = "1" ]; then
+    process_touched_files
+  fi
+
   unset test_description
   unset _skipping_test
 }
@@ -460,4 +464,117 @@ not()
 not_s()
 {
   eval "if ${1}; then return 1; else return 0; fi"
+}
+
+#****f* testlib.sh/track_touched_files
+# NAME
+#   track_touched_files - Start tracking touched files
+# DESCRIPTION
+#   After running track_touched_files, any call to touch will cause that file
+#   to be added to the internal list (touched_files). Just prior to the teardown
+#   phase, all of these files will be automatically removed for your convenience.
+# EXAMPLES
+#   setup()
+#   {
+#     track_touched_files
+#   }
+#   begin_test Testing
+#   (
+#     touch /tmp/hiya
+#   )
+#   end_test
+# BUGS
+#   Does not work in sh, only bash. Uses array, and I didn't want to make this
+#   this use a string instead
+#
+#   If the buffer fills up, the pipe can't be written to. Instead of handing, a
+#   timeout of 100ms is used to determine failure.
+# SEE ALSO
+#   testlib.sh/process_touched_files testlib.sh/cleanup_touched_files
+# AUTHOR
+#   Andy Neff
+#***
+track_touched_files()
+{
+  local pipe
+  pipe="$(mktemp -u)"
+  mkfifo "${pipe}"
+  touched_files=("${pipe}")
+  exec 5<>"${pipe}"
+
+  tracking_touched_files=1
+
+#****if* testlib.sh/touch
+# NAME
+#   touch - Touch function that should feel like the original touch command
+# NOTES
+#   The only way to touch a file without tracking it is to run command -p touch.
+#   There are other non-touch alternatives, of course. echo > foo or
+#   printf "" > bar
+# SEE ALSO
+#   testlib.sh/tarack_touched_files
+# AUTHOR
+#   Andy Neff
+#***
+  touch()
+  {
+    local filename
+    local end_options=0
+
+    command -p touch "${@}"
+
+    # Skip all options
+    while [ $# -gt 0 ]; do
+      if [ "${end_options}" = "0" ] && [ "$1" = "--" ]; then
+        end_options=1
+        shift 1
+      elif [ "${end_options}" = "0" ] && [ ${#1} -gt 0 ] && [ "${1:0:1}" = "-" ]; then
+        shift 1
+      else
+        filename="$1"
+        # force to be absolute path
+        if [ "${filename:0:1}" != "/" ]; then
+          filename="$(pwd)/$1"
+        fi
+
+        timeout 0.1s echo "${filename}" >&5
+        shift 1
+      fi
+    done
+  }
+}
+#****if* testlib.sh/process_touched_files
+# NAME
+#   process_touched_files - Process all the unprocessed touched files
+# DESCRIPTION
+#   At the end of every test, read in the pipe buffer and save all the filenames
+#   to an array
+# AUTHOR
+#   Andy Neff
+#***
+process_touched_files()
+{
+  while IFS='' read -t 0.1 -u 5 -r line || [ -n "$line" ]; do
+    touched_files+=("$line")
+  done
+}
+
+#****if* testlib.sh/cleanup_touched_files
+# NAME
+#   cleanup_touched_files - Delete all the touched files
+# DESCRIPTION
+#   At the end of the last test, delete all the files in the array
+# AUTHOR
+#   Andy Neff
+#***
+cleanup_touched_files()
+{
+  local touched_file
+  exec 5>&-
+
+  for touched_file in ${touched_files+"${touched_files[@]}"}; do
+    if [ -e "${touched_file}" ] && [ ! -d "${touched_file}" ]; then
+      \rm "${touched_file}"
+    fi
+  done
 }
