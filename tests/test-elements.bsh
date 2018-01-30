@@ -8,6 +8,10 @@ begin_test "Dynamic Set Array"
 (
   set -eu
 
+  dynamic_set_a z
+  check_a z
+  not check_a z 111
+
   #Set up non-contiguous array
   y=(12 101 15 23 49)
   unset y[1] #delete the 1
@@ -17,7 +21,9 @@ begin_test "Dynamic Set Array"
 
   # Check values
   check_a x 12 15 23 49
+  not check_a x
   contiguous_a x
+  not contiguous_a y
 )
 end_test
 
@@ -26,6 +32,11 @@ begin_test "Remove from Array"
   set -eu
 
   x=(12 101 15 23 49)
+
+  # Nothing case
+  remove_element_a x 1234567890
+  check_a x 12 101 15 23 49
+
   remove_element_a x 15
   check_a x 12 101 23 49
   contiguous_a x
@@ -38,6 +49,17 @@ begin_test "Remove from Array"
   check_a x 101 23
   contiguous_a x
 
+  # Size 1 case
+  remove_element_a x 101
+  check_a x 23
+  contiguous_a x
+
+  # Size 0 case
+  remove_element_a x 23
+  check_a x
+  contiguous_a x
+
+  # Remove from tails and middle cases
   x=(666 101 15 666 23 49)
   remove_element_a x 666
   check_a x 101 15 23 49
@@ -48,6 +70,7 @@ begin_test "Remove from Array"
   check_a x 101 15 23 49
   contiguous_a x
 
+  # Everything at once!
   x=(666 666 101 666 15 666 666 23 666 49 666 666)
   remove_element_a x 666
   check_a x 101 15 23 49
@@ -58,6 +81,12 @@ end_test
 begin_test "Append to beginning of array"
 (
   set -eu
+
+  # empty case
+  x=()
+  add_element_pre_a x 11
+  check_a x 11
+  contiguous_a x
 
   x=(11 22 33 44 11)
   add_element_pre_a x 11
@@ -87,8 +116,13 @@ begin_test "Append end of array"
 (
   set -eu
 
-  x=(44 11 22 33 44)
+  # empty case
+  x=()
+  add_element_post_a x 11
+  check_a x 11
+  contiguous_a x
 
+  x=(44 11 22 33 44)
   add_element_post_a x 44
   check_a x 11 22 33 44
   contiguous_a x
@@ -116,31 +150,46 @@ begin_test "Remove from string"
 (
   set -eu
 
+  #Unset case
+  declare x
+  remove_element x 15
+  [ "${x}" = "" ]
+
+  #Empty case
+  x=''
+  remove_element x 15
+  [ "${x}" = "" ]
+
+  # "Just the one" case
+  x='15'
+  remove_element x 15
+  [ "${x}" = "" ]
+
   x='12 101 15 23 49'
   remove_element x 15
-  test "${x}" == "12 101 23 49"
+  [ "${x}" = "12 101 23 49" ]
 
   remove_element x 12
-  test "${x}" == "101 23 49"
+  [ "${x}" = "101 23 49" ]
 
   remove_element x 49
-  test "${x}" == "101 23"
+  [ "${x}" = "101 23" ]
 
   x="666 101 15 666 23 49"
   remove_element x 666
-  test "${x}" == "101 15 23 49"
+  [ "${x}" = "101 15 23 49" ]
 
   x="101 15 666 23 49 666"
   remove_element x 666
-  test "${x}" == "101 15 23 49"
+  [ "${x}" = "101 15 23 49" ]
 
   x="666 666 101 666 15 666 666 23 666 49 666 666"
   remove_element x 666
-  test "${x}" == "101 15 23 49"
+  [ "${x}" = "101 15 23 49" ]
 
   x='12:101:15:23:49'
   IFS=':' remove_element x 15
-  test "${x}" == "12:101:23:49"
+  [ "${x}" = "12:101:23:49" ]
 )
 end_test
 
@@ -148,19 +197,29 @@ begin_test "Append to beginning of string"
 (
   set -eu
 
+  #Unset case
+  declare x
+  add_element_pre x 15
+  [ "${x}" = "15" ]
+
+  #Empty case
+  x=''
+  add_element_pre x 15
+  [ "${x}" = "15" ]
+
   x="11 22 33 44 11"
   add_element_pre x 11
-  test "${x}" == "11 22 33 44"
+  [ "${x}" = "11 22 33 44" ]
 
   add_element_pre x 55
-  test "${x}" == "55 11 22 33 44"
+  [ "${x}" = "55 11 22 33 44" ]
 
   add_element_pre x 22
-  test "${x}" == "22 55 11 33 44"
+  [ "${x}" = "22 55 11 33 44" ]
 
   x="11:22:33:44:11"
   IFS=: add_element_pre x 11
-  test "${x}" == "11:22:33:44"
+  [ "${x}" = "11:22:33:44" ]
 )
 end_test
 
@@ -168,17 +227,27 @@ begin_test "Append to end of string"
 (
   set -eu
 
+  #Unset case
+  declare x
+  add_element_post x 15
+  [ "${x}" = "15" ]
+
+  #Empty case
+  x=''
+  add_element_post x 15
+  [ "${x}" = "15" ]
+
   x="44 11 22 33 44"
   add_element_post x 44
-  test "${x}" == "11 22 33 44"
+  [ "${x}" = "11 22 33 44" ]
   add_element_post x 55
-  test "${x}" == "11 22 33 44 55"
+  [ "${x}" = "11 22 33 44 55" ]
   add_element_post x 22
-  test "${x}" == "11 33 44 55 22"
+  [ "${x}" = "11 33 44 55 22" ]
 
   x="44:11:22:33:44"
   IFS=: add_element_post x 44
-  test "${x}" == "11:22:33:44"
+  [ "${x}" = "11:22:33:44" ]
 )
 end_test
 
@@ -196,6 +265,7 @@ begin_test "Comparing arrays"
   cmp_elements_a z z
   not cmp_elements_a a c
   not cmp_elements_a a d
+  not cmp_elements_a d a
   not cmp_elements_a z a
   not cmp_elements_a a z
 )
@@ -217,7 +287,21 @@ begin_test "Comparing strings"
   cmp_elements z z
   not cmp_elements a c
   not cmp_elements a d
+  not cmp_elements d a
   not cmp_elements z a
   not cmp_elements a z
+
+  a="1:2:3"
+  b="1: 2:3"
+  IFS=": " cmp_elements a b
+  c="1: 3:3"
+  IFS=": " not cmp_elements b c
+)
+end_test
+
+begin_test "Splitting strings"
+(
+  set -eu
+  split_array data
 )
 end_test

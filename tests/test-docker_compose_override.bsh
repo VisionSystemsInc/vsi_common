@@ -1,62 +1,103 @@
 
 . "$(dirname ${BASH_SOURCE[0]})/testlib.sh"
-. "$(dirname ${BASH_SOURCE[0]})/test_utils.bsh"
 
 VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+. "${VSI_COMMON_DIR}/linux/docker_functions.bsh" #Need to be sourced for docker_compose_override
 . "${VSI_COMMON_DIR}/linux/docker_compose_override"
 
-# simple1="\
-# version: '3.2'
-# services:
-#   test:
-#     image:
-#       alpine"
+function head()
+{
+  echo -e "version: '${1-3.2}'\nservices:"
+}
 
-head="\
-version: '3.2'
-services:"
-a_test1="
-  test1:"
-a_volume1="
-    volumes:
-      - /test:/foo"
+function service()
+{
+  echo -e "\n  ${1}:"
+}
 
-ans2_3="\
-version: '2.3'
-services:
-  test1:
-  test2:"
+function volumes()
+{
+  echo -e "\n    volumes:"
+}
 
-# setup()
-# {
-#   temp_dir="$(mktemp -d -u)"
-# }
+function vol()
+{
+  echo -e "\n      - ${1}"
+}
+
+function environment()
+{
+  echo -e "\n    environment:"
+}
+
+function env()
+{
+  echo -e "\n      - ${1}"
+}
 
 begin_test "No services"
 (
   set -eu
-  [ "$(generate_docker_compose_override PROJECT)" = "${head}" ]
+  [ "$(generate_docker_compose_override PROJECT)" = "$(head)" ]
 )
 end_test
 
 begin_test "CLI"
 (
   set -eu
-  ans="${head}${a_test1}"
+  ans="$(head)$(service test1)"
+  # TEST_VOLUMES="/tmp:/temp:ro"
+  # ans+="$(vol /tmp:/temp:ro)"
   [ "$("${VSI_COMMON_DIR}/linux/docker_compose_override" PROJECT test1)" = "${ans}" ]
 )
 end_test
 
-begin_test "Version 2.3"
+begin_test "COMPOSE_VERSION 2.3"
 (
   set -eu
+  ans="$(head 2.3)$(service test1)$(service test2)"
   COMPOSE_VERSION=2.3
-  [ "$(generate_docker_compose_override PROJECT test1 test2)" = "${ans2_3}" ]
+  [ "$(generate_docker_compose_override PROJECT test1 test2)" = "${ans}" ]
 )
 end_test
 
+begin_test "Just docker compose dynamic volumes"
+(
+  set -eu
+  JUST_PROJECT_PREFIX=TEST
 
-# teardown()
-# (
-#   rmdir "${temp_dir}"
-# )
+  ans="$(head)$(service test1)$(volumes)"
+
+  # ans1="${ans}$(vol ${TRASHDIR}:/tmp:z)"
+  # TEST_VOLUMES=(".:/temp:ro")
+  # override="$(generate_docker_compose_override TEST test1)"
+  # [ "${override}" = "${ans1}" ]
+
+  TEST_VOLUMES=("/tmp:/temp:ro")
+  ans+="$(vol /tmp:/temp:ro)"
+  override="$(generate_docker_compose_override TEST test1)"
+  [ "${override}" = "${ans}" ]
+
+  TEST_TEST1_VOLUMES=("/src:/source:rw")
+  ans+="$(vol /src:/source:rw)"
+  override="$(generate_docker_compose_override TEST test1)"
+  [ "${override}" = "${ans}" ]
+)
+end_test
+
+begin_test "Just docker compose dynamic environment"
+(
+  set -eu
+  JUST_PROJECT_PREFIX=TEST
+
+  ans="$(head)$(service test1)$(environment)$(env TEST=1)"
+
+
+)
+end_test
+
+begin_test "just_docker_entrypoint_links"
+(
+  set -eu
+)
+end_test

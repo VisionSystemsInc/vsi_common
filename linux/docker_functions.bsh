@@ -587,6 +587,7 @@ function parse-docker-compose()
 
   docker_compose_files=()
   docker_compose_args=()
+  docker_compose_project_name=
 
   while (( $# )); do
     case "$1" in
@@ -655,7 +656,7 @@ function parse-docker-compose()
     local OLD_IFS="${IFS}"
     local IFS="$(compose_path_separator)"
     docker_compose_files+=(${COMPOSE_FILE+"${COMPOSE_FILE[*]}"})
-    for compose_file in "${docker_compose_files[@]}"; do
+    for compose_file in ${docker_compose_files+"${docker_compose_files[@]}"}; do
       docker_compose_args+=(-f "${compose_file}")
     done
     IFS="${OLD_IFS}"
@@ -681,18 +682,20 @@ function parse-docker-compose()
       done
     fi
 
-    for compose_file in "${docker_compose_files[@]}"; do
+    for compose_file in ${docker_compose_files+"${docker_compose_files[@]}"}; do
       docker_compose_args+=(-f "${compose_file}")
     done
   fi
 
   # project name argument wins
-  if [ "${docker_compose_project_name+set}" != "set" ]; then
+  if [ "${docker_compose_project_name:+set}" != "set" ]; then
     # Then environment variable,
     if [ "${COMPOSE_PROJECT_NAME+set}" = "set" ]; then
       docker_compose_project_name="${COMPOSE_PROJECT_NAME}"
-    else
+    elif [ ${#docker_compose_files[@]} -ne 0 ]; then
       docker_compose_project_name="$(basename "$(cd "$(dirname "${docker_compose_files[0]}")"; pwd)")"
+    else
+      docker_compose_project_name=default
     fi
   fi
 }
@@ -824,6 +827,11 @@ function _Docker-compose()
 #   will be cleaned up, as one of them is rm. So ultimately, this is by design.
 #
 #   Using this function with windows paths is not currently supported
+#
+#   You can not use process substitution for the docker-compose.yml file, since
+#   bash has to read it before docker-compose reads it. So no:
+#   Just-docker-compose -f <(echo "${compose_file}") run test
+#   You have to use files
 # SEE ALSO
 #   docker_compose_override/generate_docker_compose_override
 # AUTHOR
@@ -986,10 +994,10 @@ function filter_docker_variables()
 #          a (user) specific project name
 # EXAMPLE
 #   docker_compose_sanitize_project_name 'project/A@1.1_2'
-#     A112
+#     projectA112
 #
 #   docker_compose_sanitize_project_name 'project/A@1.1_2' 'a-user:7'
-#     auser7A112
+#     auser7projectA112
 #
 #   docker_compose_sanitize_project_name '' 'a-user:7'
 #     auser7

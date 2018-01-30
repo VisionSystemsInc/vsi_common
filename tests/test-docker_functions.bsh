@@ -1,6 +1,5 @@
 
 . "$(dirname ${BASH_SOURCE[0]})/testlib.sh"
-. "$(dirname ${BASH_SOURCE[0]})/test_utils.bsh"
 
 VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 . "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
@@ -9,8 +8,6 @@ VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 
 setup()
 {
-  temp_dir="$(mktemp -d -u)"
-
   compose_file='version: "3.2"
 services:
   nb:
@@ -25,6 +22,20 @@ services:
     image: foo
 volumes:
   test:'
+
+  compose_file_hay="version: '3.2'
+services:
+  test_hay:
+    image: alpine
+    command: sh -c 'echo horse'"
+
+  compose_file_sleep="version: '3.2'
+services:
+  test_sleepy:
+    image: alpine
+    command: sleep 100"
+
+  track_touched_files
 }
 
 begin_test "Test DOCKER var"
@@ -93,12 +104,13 @@ end_test
 begin_test "docker_premkdir"
 (
   set -eu
-
+  temp_dir="${TRASHDIR}/pmd"
   mkdir -p "${temp_dir}"
   cd "${temp_dir}"
 
   docker_premkdir "${temp_dir}"
   docker_premkdir internal_dir
+  [ ! -e internal_dir ]
 
   touch "${temp_dir}/premkfile"
   docker_premkdir "${temp_dir}/premkfile"
@@ -108,8 +120,6 @@ begin_test "docker_premkdir"
   [ ! -d "${temp_dir}/premkdir" ]
   docker_premkdir "${temp_dir}/premkdir"
   [ -d "${temp_dir}/premkdir" ]
-
-  rm "${temp_dir}/premkfile"
 )
 end_test
 
@@ -166,7 +176,7 @@ begin_test "Santize Volumes"
 (
   set -eu
 
-  temp_dir="${temp_dir}/sv"
+  temp_dir="${TRASHDIR}/sv"
 
   [ ! -e "${temp_dir}" ]
 
@@ -285,12 +295,56 @@ begin_test "Parse docker-compose args"
 )
 end_test
 
-
 begin_test "Parse docker compose file args"
 (
-  set -eu
-  parse-docker-compose -f test1.yml -ftest2 --file test3 --file=test4 run debian:9 bash
-  [ "${#docker_compose_files[@]}" = 4 ]
+  set -euE
+
+  temp_dir="${TRASHDIR}/file"
+  mkdir -p "${temp_dir}"
+  pushd "${temp_dir}"
+    touch docker-compose2.yml
+
+    parse-docker-compose run alpine
+    # No docker-compose
+    [ "${docker_compose_project_name}" = "default" ]
+    [ "${#docker_compose_files[@]}" -eq 0 ]
+
+    # Make sure COMPOSE_FILE works
+    COMPOSE_FILE=docker-compose2.yml parse-docker-compose run alpine
+    [ "${docker_compose_project_name}" = "file" ]
+    [ "${#docker_compose_files[@]}" -eq 1 ]
+    [ "${docker_compose_files[0]}" = "docker-compose2.yml" ]
+
+    # Make sure COMPOSE_FILE overrides docker-compose.yml
+    touch docker-compose.yml
+    COMPOSE_FILE=docker-compose2.yml parse-docker-compose run alpine
+    [ "${docker_compose_project_name}" = "file" ]
+    [ "${#docker_compose_files[@]}" -eq 1 ]
+    [ "${docker_compose_files[0]}" = "docker-compose2.yml" ]
+
+    # Make sure docker-compose.yml works
+    parse-docker-compose run alpine
+    [ "${docker_compose_project_name}" = "file" ]
+    [ "${#docker_compose_files[@]}" -eq 1 ]
+    [ "${docker_compose_files[0]}" = "${temp_dir}/docker-compose.yml" ]
+
+    # Make sure override works
+    touch docker-compose.override.yaml
+    parse-docker-compose run alpine
+    [ "${docker_compose_project_name}" = "file" ]
+    [ "${#docker_compose_files[@]}" -eq 2 ]
+    [ "${docker_compose_files[0]}" = "${temp_dir}/docker-compose.yml" ]
+    [ "${docker_compose_files[1]}" = "${temp_dir}/docker-compose.override.yaml" ]
+
+    # Make sure -f/--file wins
+    COMPOSE_FILE=docker-compose2.yml parse-docker-compose -f test3.yml run alpine
+    [ "${docker_compose_project_name}" = "file" ]
+    [ "${#docker_compose_files[@]}" -eq 1 ]
+    [ "${docker_compose_files[0]}" = "test3.yml" ]
+
+    parse-docker-compose -f test1.yml -ftest2 --file test3 --file=test4 run debian:9 bash
+    [ "${#docker_compose_files[@]}" -eq 4 ]
+  popd
 )
 end_test
 
@@ -408,42 +462,74 @@ end_test
 
 begin_test "Just docker compose"
 (
+  set -eu
+
   JUST_PROJECT_PREFIX=TEST
 
-  compose_file="version: '3.2'
-services:
-  test_sleepy:
-    image: alpine
-    command: sh -c 'echo horse'"
+  temp_dir="${TRASHDIR}/jdc"
+  mkdir -p "${temp_dir}"
+  touch "${temp_dir}/Dockerfile"
+  echo "${compose_file_hay}" > "${temp_dir}/Dockerfile"
 
-  [ "$(Just-docker-compose -f <(echo "${compose_file}") run test_sleepy)" = "horse" ]
+  [ "$(Just-docker-compose -f "${temp_dir}/Dockerfile" run test_hay)" = "horse" ]
+)
+end_test
+
+begin_test "Just docker compose override files"
+(
+  set -eu
+  JUST_PROJECT_PREFIX=TEST
+
+  ans="version: '3.2'
+services:
+  test_hay:"
+
+  echo "${compose_file_hay}" > "${TRASHDIR}/dc.yml"
+  DRYRUN=echo
+
+  override_file="$(Just-docker-compose -f "${TRASHDIR}/dc.yml" run test_hay|tail -n1)"
+  override_file="${override_file#rm *}"
+  ttouch "${override_file}"
+  [ "$(cat "${override_file}")" = "${ans}" ]
+
+  #Test where two docker-compose files reference the same service
+  echo "${compose_file_hay}" > "${TRASHDIR}/dc2.yml"
+  override_file="$(Just-docker-compose -f "${TRASHDIR}/dc.yml" -f "${TRASHDIR}/dc2.yml" run test_hay|tail -n1)"
+  override_file="${override_file#rm *}"
+  ttouch "${override_file}"
+  [ "$(cat "${override_file}")" = "${ans}" ]
+)
+end_test
+
+begin_must_fail_test "Just docker compose required project prefix"
+(
+  unset JUST_PROJECT_PREFIX
+  echo "${compose_file_hay}" > "${TRASHDIR}/dc.yml"
+  set -eu
+  Just-docker-compose -f "${TRASHDIR}/dc.yml" run test_hay
 )
 end_test
 
 begin_test "Docker service running"
 (
-  compose_file="version: '3.2'
-services:
-  test_sleepy:
-    image: alpine
-    command: sleep 100"
-  "${DOCKER_COMPOSE}" -f <(echo "${compose_file}") rm -s -f
-  "${DOCKER_COMPOSE}" -f <(echo "${compose_file}") up -d test_sleepy
-  [ "$(COMPOSE_FILE=<(echo "${compose_file}") docker_service_running test_sleepy)" = "running" ]
-  [ "$(COMPOSE_FILE=<(echo "${compose_file}") docker_service_running test_sleepy2)" = "" ]
-  "${DOCKER_COMPOSE}" -f <(echo "${compose_file}") kill test_sleepy
-  [ "$(COMPOSE_FILE=<(echo "${compose_file}") docker_service_running test_sleepy)" = "exited" ]
+  set -eu
+
+  "${DOCKER_COMPOSE}" -f <(echo "${compose_file_sleep}") rm -s -f
+  "${DOCKER_COMPOSE}" -f <(echo "${compose_file_sleep}") up -d test_sleepy
+  [ "$(COMPOSE_FILE=<(echo "${compose_file_sleep}") docker_service_running test_sleepy)" = "running" ]
+  [ "$(COMPOSE_FILE=<(echo "${compose_file_sleep}") docker_service_running test_sleepy2)" = "" ]
+  "${DOCKER_COMPOSE}" -f <(echo "${compose_file_sleep}") kill test_sleepy
+  [ "$(COMPOSE_FILE=<(echo "${compose_file_sleep}") docker_service_running test_sleepy)" = "exited" ]
 
   #Clean up
-  "${DOCKER_COMPOSE}" -f <(echo "${compose_file}") rm -s -f
+  "${DOCKER_COMPOSE}" -f <(echo "${compose_file_sleep}") rm -s -f
 )
 end_test
 
 teardown()
 (
+  # Docker cleanup
   ! ${DOCKER} rm test-docker-function &>/dev/null
-  ! rm "${temp_dir}/premkfile" &>/dev/null
-  #remove all dirs. Trying to be safe here. Will fail if any dir is not empty
-  ! find "${temp_dir}" -type d -depth -exec rmdir \{\} \;
+
   : #teardown should always return true on success
 )

@@ -1,0 +1,119 @@
+
+. "$(dirname ${BASH_SOURCE[0]})/testlib.sh"
+. "$(dirname ${BASH_SOURCE[0]})/test_utils.bsh"
+
+VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+. "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
+. "${VSI_COMMON_DIR}/linux/just_functions.bsh"
+. "${VSI_COMMON_DIR}/linux/elements.bsh"
+
+setup()
+{
+  :
+}
+
+begin_test "Just docker compose override files"
+(
+  set -eu
+  JUST_PROJECT_PREFIX=TEST
+
+  ans="version: '3.2'
+services:
+  test_hay:"
+
+  echo "${compose_file_hay}" > "${TRASHDIR}/dc.yml"
+  DRYRUN=echo
+
+  override_file="$(Just-docker-compose -f "${TRASHDIR}/dc.yml" run test_hay|tail -n1)"
+  override_file="${override_file#rm *}"
+  ttouch "${override_file}"
+  [ "$(cat "${override_file}")" = "${ans}" ]
+
+  #Test where two docker-compose files reference the same service
+  echo "${compose_file_hay}" > "${TRASHDIR}/dc2.yml"
+  override_file="$(Just-docker-compose -f "${TRASHDIR}/dc.yml" -f "${TRASHDIR}/dc2.yml" run test_hay|tail -n1)"
+  override_file="${override_file#rm *}"
+  ttouch "${override_file}"
+  [ "$(cat "${override_file}")" = "${ans}" ]
+)
+end_test
+
+begin_test "Just docker compose COMPOSE_VERSION"
+(
+  set -eu
+  JUST_PROJECT_PREFIX=TEST
+
+  ans="version: '2.2'
+services:
+  test_hay:"
+
+  echo "${compose_file_hay}" > "${TRASHDIR}/dc.yml"
+  DRYRUN=echo
+
+  COMPOSE_VERSION=2.2
+  override_file="$(Just-docker-compose -f "${TRASHDIR}/dc.yml" run test_hay|tail -n1)"
+  override_file="${override_file#rm *}"
+  ttouch "${override_file}"
+
+  [ "$(cat "${override_file}")" = "${ans}" ]
+
+)
+end_test
+
+begin_test "Just docker compose dynamic volumes"
+(
+  set -eu
+  JUST_PROJECT_PREFIX=TEST
+
+  ans="version: '3.2'
+services:
+  test_hay:
+    volumes:"
+
+  echo "${compose_file_hay}" > "${TRASHDIR}/dc.yml"
+  DRYRUN=echo
+
+  TEST_VOLUMES=("/tmp:/temp:ro")
+  ans1="${ans}"$'\n      - /tmp:/temp:ro'
+  override_file="$(Just-docker-compose -f "${TRASHDIR}/dc.yml" run test_hay|tail -n1)"
+  override_file="${override_file#rm *}"
+  ttouch "${override_file}"
+  [ "$(cat "${override_file}")" = "${ans1}" ]
+
+  TEST_TEST_HAY_VOLUMES=("/src:/source:rw")
+  override_file="$(Just-docker-compose -f "${TRASHDIR}/dc.yml" run test_hay|tail -n1)"
+  override_file="${override_file#rm *}"
+  ttouch "${override_file}"
+  ans2="${ans1}"$'\n      - /src:/source:rw'
+  [ "$(cat "${override_file}")" = "${ans2}" ]
+)
+end_test
+
+begin_test "Just docker compose dynamic environment"
+(
+  set -eu
+  JUST_PROJECT_PREFIX=TEST
+
+  ans="version: '3.2'
+services:
+  test_hay:
+    environment:"
+
+  echo "${compose_file_hay}" > "${TRASHDIR}/dc.yml"
+  DRYRUN=echo
+
+  TEST_VOLUMES=("/tmp:/temp:ro")
+  ans1="${ans}"$'\n      - /tmp:/temp:ro'
+  override_file="$(Just-docker-compose -f "${TRASHDIR}/dc.yml" run test_hay|tail -n1)"
+  override_file="${override_file#rm *}"
+  ttouch "${override_file}"
+  [ "$(cat "${override_file}")" = "${ans1}" ]
+
+  TEST_TEST_HAY_VOLUMES=("/src:/source:rw")
+  override_file="$(Just-docker-compose -f "${TRASHDIR}/dc.yml" run test_hay|tail -n1)"
+  override_file="${override_file#rm *}"
+  ttouch "${override_file}"
+  ans2="${ans1}"$'\n      - /src:/source:rw'
+  [ "$(cat "${override_file}")" = "${ans2}" ]
+)
+end_test

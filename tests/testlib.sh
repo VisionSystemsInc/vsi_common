@@ -504,19 +504,15 @@ track_touched_files()
 
   tracking_touched_files=1
 
-#****if* testlib.sh/touch
+#****if* testlib.sh/ttouch
 # NAME
-#   touch - Touch function that should feel like the original touch command
-# NOTES
-#   The only way to touch a file without tracking it is to run command -p touch.
-#   There are other non-touch alternatives, of course. echo > foo or
-#   printf "" > bar
+#   ttouch - Touch function that should feel like the original touch command
 # SEE ALSO
-#   testlib.sh/tarack_touched_files
+#   testlib.sh/track_touched_files
 # AUTHOR
 #   Andy Neff
 #***
-  touch()
+  ttouch()
   {
     local filename
     local end_options=0
