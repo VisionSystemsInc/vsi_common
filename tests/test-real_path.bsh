@@ -1,0 +1,83 @@
+. "$(dirname ${BASH_SOURCE[0]})/testlib.sh"
+. "$(dirname ${BASH_SOURCE[0]})/test_utils.bsh"
+
+VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+. "${VSI_COMMON_DIR}/linux/real_path"
+
+begin_test "CLI"
+(
+  set -eu
+  trashdir="$(real_path "${TRASHDIR}")"
+
+  [ "$(real_path .)" = "${trashdir}" ]
+  [ "$(real_path /)" = "/" ]
+)
+end_test
+
+begin_test "real_path_manual"
+(
+  set -eu
+
+  #Yeah, this is silly. But leave it to mac to put the tmp dir in a symlink
+  trashdir="$(real_path "${TRASHDIR}")"
+
+  [ "$(real_path_manual .)" = "${trashdir}" ]
+  [ "$(real_path_manual "${trashdir}/.")" = "${trashdir}" ]
+  [ "$(real_path_manual /)" = "/" ]
+  [ "$(real_path_manual /./)" = "/" ]
+  [ "$(real_path_manual /.)" = "/" ]
+  [ "$(real_path_manual ///.//.)" = "/" ]
+  [ "$(real_path_manual ///.//.//)" = "/" ]
+
+  touch "this is  a   file"
+  [ "$(real_path_manual "${trashdir}/this is  a   file")" = "${trashdir}/this is  a   file" ]
+
+  mkdir -p rpm
+  cd rpm
+
+  touch goal
+  ln -s "${trashdir}/rpm/goal" "a"
+  ln -s "a" "b b"
+  ln -s "b b" "c  c"
+  ln -s "c  c" "d"
+  [ "$(real_path_manual d)" = "${trashdir}/rpm/goal" ]
+
+  #break the chain
+  rm a
+  [ "$(real_path_manual d)" = "${trashdir}/rpm/a" ]
+)
+end_test
+
+command -v realpath > /dev/null 2>&1 || skip_next_test
+begin_test "compare real_path_manual with realpath"
+(
+  set -eu
+
+  check_skip
+
+  [ "$(real_path_manual .)" = "$(realpath .)" ]
+  [ "$(real_path_manual "${TRASHDIR}/.")" = "$(realpath "${TRASHDIR}/.")" ]
+  [ "$(real_path_manual /)" = "$(realpath "/")" ]
+  [ "$(real_path_manual /./)" = "$(realpath "/./")" ]
+  [ "$(real_path_manual /.)" = "$(realpath "/.")" ]
+  [ "$(real_path_manual ///.//.)" = "$(realpath "///.//.")" ]
+  [ "$(real_path_manual ///.//.//)" = "$(realpath "///.//.//")" ]
+
+  touch "this is  a   file"
+  [ "$(real_path_manual "${TRASHDIR}/this is  a   file")" = "$(realpath "this is  a   file")" ]
+
+  mkdir -p cmp
+  cd cmp
+
+  touch goal
+  ln -s "${TRASHDIR}/cmp/goal" "a"
+  ln -s "a" "b b"
+  ln -s "b b" "c  c"
+  ln -s "c  c" "d"
+  [ "$(real_path_manual d)" = "$(realpath d)" ]
+
+  #break the chain
+  rm a
+  [ "$(real_path_manual d)" = "$(realpath d)" ]
+)
+end_test

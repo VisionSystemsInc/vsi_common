@@ -44,9 +44,10 @@
 
 set -e
 
-if [ "${TESTLIB_SHOW_TIMING-0}" == "1" ]; then
+if [ "${TESTLIB_SHOW_TIMING-0}" == "1" ] || [[ ${OSTYPE} = darwin* ]]; then
   . "${VSI_COMMON_DIR}/linux/time_tools.bsh"
 fi
+. "${VSI_COMMON_DIR}/linux/file_tools.bsh"
 
 # create a temporary work space
 TRASHDIR="$(mktemp -d -t $(basename "$0")-$$.XXXXXXXX)"
@@ -164,6 +165,7 @@ fi
 # Common code for begin tests
 _begin_common_test ()
 {
+  local fd
   pushd "$TRASHDIR" &> /dev/null
   # This makes calling end_test between tests "optional", but highly recommended,
   # end_test does have to be called after the last test, especially if teardown
@@ -196,7 +198,13 @@ _begin_common_test ()
     _time_0=$(get_time_seconds)
   fi
 
-  exec 3>&1 4>&2
+  find_open_fd
+  stdout="${fd}"
+  eval "exec ${stdout}>&1"
+  find_open_fd
+  stderr="${fd}"
+  eval "exec ${stderr}>&2"
+
   out="$TRASHDIR/out"
   err="$TRASHDIR/err"
   exec 1>"$out" 2>"$err"
@@ -288,7 +296,7 @@ end_test ()
 {
   test_status="${1:-$?}" #This MUST be the first line of this function
   set +x -e
-  exec 1>&3 2>&4
+  eval "exec 1>&${stdout} 2>&${stderr}"
   popd &> /dev/null
 
   local time_e=''
@@ -497,11 +505,12 @@ not_s()
 track_touched_files()
 {
   local pipe
+  local fd
   pipe="$(mktemp -u)"
   mkfifo "${pipe}"
   touched_files=("${pipe}")
-  exec 5<>"${pipe}"
-
+  fifo_buffer="${pipe}" open_fd
+  track_touched_files_fd="${fd}"
   tracking_touched_files=1
 
 #****if* testlib.sh/ttouch
@@ -517,7 +526,7 @@ track_touched_files()
     local filename
     local end_options=0
 
-    command -p touch "${@}"
+    touch "${@}"
 
     # Skip all options
     while [ $# -gt 0 ]; do
@@ -532,26 +541,72 @@ track_touched_files()
         if [ "${filename:0:1}" != "/" ]; then
           filename="$(pwd)/$1"
         fi
-
-        timeout 0.1s echo "${filename}" >&5
+        timeout 0.1s echo "${filename}" >&"${track_touched_files_fd}"
         shift 1
       fi
     done
   }
 }
+
+#****d* testlib.sh/TEST_TOUCH_TIMEOUT
+# NAME
+#   TEST_TOUCH_TIMEOUT - Timeout to wait for input on process_touched_files
+# DESCRIPTION
+#   The pipe is buffered in bash when opened in this fashion. The buffer needs
+#   to be emptied out to get all the IPC from the children processes, and also
+#   needs to be prevented from blocking. Typically 0.1 works just fine, but
+#   macos doesn't understand this, so make it 0 for macos. A timeout of 0
+#   effectively disables process_touched_files from working. So
+#   process_touched_files must be called at least once at the begining of
+#   cleanup_touched_files for everything to work.
+# SOURCE
+if [[ ${OSTYPE-} = darwin* ]]; then
+  : ${TEST_TOUCH_TIMEOUT=0}
+else
+  : ${TEST_TOUCH_TIMEOUT=0.1}
+fi
+# SEE ALSO
+#   testlib.sh/process_touched_files
+# AUTHOR
+#   Andy Neff
+#***
+
 #****if* testlib.sh/process_touched_files
 # NAME
 #   process_touched_files - Process all the unprocessed touched files
 # DESCRIPTION
 #   At the end of every test, read in the pipe buffer and save all the filenames
 #   to an array
+# INPUTS
+#   $1 - Timeout in seconds. Default is TEST_TOUCH_TIMEOUT seconds, which
+#        defaults to 0.1 or 0 on macos
+# NOTES
+#   The timeout must be a second on macos because it is incapable of handling
+#   0.1 seconds. This will be a very noticeable slowdown. For this reason, it
+#   is set to 0 on macos and will ONLY process at the end of all the tests.
+#
+#   This is far more prone to filling up the pipe buffer. If that happens, either
+#   1. Set TEST_TOUCH_TIMEOUT to 1
+#   2. Occasionally set TEST_TOUCH_TIMEOUT to 1 in end_test
+# EXAMPLE
+#   MAC_HACK=0.1
+#   if [[ ${OSTYPE-} = darwin* ]]; then
+#     MAC_HACK=1
+#   fi
+#
+#   ...
+#
+#   # Change timeout for just that one test
+#   TEST_TOUCH_TIMEOUT=${MAC_HACK} end_test
 # AUTHOR
 #   Andy Neff
 #***
 process_touched_files()
 {
-  while IFS='' read -t 0.1 -u 5 -r line || [ -n "$line" ]; do
+  local line
+  while IFS='' read -t "${1-${TEST_TOUCH_TIMEOUT}}" -u ${track_touched_files_fd} -r line 2>/dev/null|| [ -n "$line" ]; do
     touched_files+=("$line")
+    line='' #Have to clear it, in case the timeout times out
   done
 }
 
@@ -566,7 +621,12 @@ process_touched_files()
 cleanup_touched_files()
 {
   local touched_file
-  exec 5>&-
+
+  if [[ ${OSTYPE-} = darwin* ]]; then
+    process_touched_files 1
+  fi
+
+  close_fd "${track_touched_files_fd}"
 
   for touched_file in ${touched_files+"${touched_files[@]}"}; do
     if [ -e "${touched_file}" ] && [ ! -d "${touched_file}" ]; then

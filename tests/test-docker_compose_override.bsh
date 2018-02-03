@@ -35,6 +35,27 @@ function env()
   echo -e "\n      - ${1}"
 }
 
+begin_test "Docker compose override variable substitution"
+(
+  set -eu
+  [ "$(_docker_compose_override_var_sub 'x')" = "" ]
+  [ "$(_docker_compose_override_var_sub '$foo_bar')" = "foo_bar" ]
+  [ "$(_docker_compose_override_var_sub '${FOO_BAR}')" = "FOO_BAR" ]
+)
+end_test
+
+begin_test "Environment echo"
+(
+  set -eu
+  ans="    environment:"
+  ans+=$'\n      - test=15'
+  [ "$(_env_echo "      - test=15")" = "${ans}" ]
+  ans+=$'\n      - foo=bar'
+  [ "$(_env_echo "      - test=15";
+       _env_echo "      - foo=bar")" = "${ans}" ]
+)
+end_test
+
 begin_test "No services"
 (
   set -eu
@@ -68,18 +89,18 @@ begin_test "Just docker compose dynamic volumes"
 
   ans="$(head)$(service test1)$(volumes)"
 
-  # ans1="${ans}$(vol ${TRASHDIR}:/tmp:z)"
-  # TEST_VOLUMES=(".:/temp:ro")
-  # override="$(generate_docker_compose_override TEST test1)"
-  # [ "${override}" = "${ans1}" ]
+  ans1="${ans}$(vol "$(real_path "${TRASHDIR}")":/trash:z)"
+  TEST_VOLUMES=(".:/trash:z")
+  override="$(generate_docker_compose_override TEST test1)"
+  [ "${override}" = "${ans1}" ]
 
   TEST_VOLUMES=("/tmp:/temp:ro")
-  ans+="$(vol /tmp:/temp:ro)"
+  ans+="$(vol "$(real_path "/tmp")":/temp:ro)"
   override="$(generate_docker_compose_override TEST test1)"
   [ "${override}" = "${ans}" ]
 
   TEST_TEST1_VOLUMES=("/src:/source:rw")
-  ans+="$(vol /src:/source:rw)"
+  ans+="$(vol "$(real_path "/src")":/source:rw)"
   override="$(generate_docker_compose_override TEST test1)"
   [ "${override}" = "${ans}" ]
 )
@@ -91,6 +112,7 @@ begin_test "Just docker compose dynamic environment"
   JUST_PROJECT_PREFIX=TEST
 
   ans="$(head)$(service test1)$(environment)$(env TEST=1)"
+
 
 
 )

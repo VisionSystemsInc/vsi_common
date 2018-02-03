@@ -56,7 +56,7 @@ function _docker_compose_override_var_sub()
 #***
 function _env_echo()
 {
-  if [ "${new_environment}" == "1" ]; then
+  if [ "${new_environment-1}" == "1" ]; then
     echo "    environment:"
     new_environment=0
   fi
@@ -176,18 +176,16 @@ function generate_docker_compose_override()
       # If it doesn't exist, attempt to make it as this user. Better than root
       docker_premkdir "${volume_host}"
 
-      # If the volume is a path, make it relative to $(pwd)
-      if [ $"{volume_host:0:1}" == "." ]; then
+      # If the volume is a path, get the real path
+      if [[ ${volume_host:0:1} =~ [./] ]]; then
         volume_host=$(real_path "${volume_host}")
       fi
 
       # Check to see that the volume is not a docker volume
-      if [[ ${volume_host:0:1} =~ [./] ]]; then
-        host_mount_point="$(mount_point "${volume_host}")"
-        # If the mount point isn't already the same as the mount, check to see
-        # if it's nfs
-        if [ "${host_mount_point}" != "${volume_host}" ] && \
-            is_nfs "$(mount_type "${host_mount_point}")"; then
+      if [ "${volume_host:0:1}" = "/" ]; then
+        # If the mount point is nfs AND it isn't already the same as the mount
+        if host_mount_point="$(mount_point "${volume_host}" nfs nfs3 nfs4)" && \
+           [ "${host_mount_point}" != "${volume_host}" ]; then
 
           # Add to the entrypoint list
           just_docker_entrypoint_links+=("${volume_docker}"

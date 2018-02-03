@@ -302,6 +302,72 @@ end_test
 begin_test "Splitting strings"
 (
   set -eu
-  split_array data
+
+  # unset
+  unset data
+  split_s data
+  check_a data
+
+  # empty
+  unset data
+  split_s data ''
+  check_a data ""
+
+  # Just one
+  unset data
+  split_s data 'foo'
+  check_a data foo
+
+  # Simple
+  unset data
+  split_s data 'foo//bar'
+  check_a data foo bar
+
+  # Path test
+  unset data
+  split_s data '/tmp/test.txt///opt/food///good'
+  check_a data /tmp/test.txt /opt/food /good
+
+  # Custom MIFS
+  unset data
+  MIFS='//://' split_s data '/tmp/test.txt///://opt/food//:///good'
+  check_a data /tmp/test.txt/ opt/food /good
+
+  # Single letter IFS
+  unset data
+  MIFS='/' split_s data '/tmp/test.txt///opt/food///good'
+  check_a data "" tmp test.txt "" "" opt food "" "" good
+
+  # multiple strings
+  unset data
+  split_s data '/tmp/test.txt///opt/food' "good//bad" "" "hear//see//speak" ""
+  check_a data /tmp/test.txt /opt/food good bad "" hear see speak ""
+)
+end_test
+
+begin_test "Joining arrays"
+(
+  set -eu
+
+  join_a data
+  [ -z "${data+_}" ]
+
+  join_a data ""
+  [ "${data}" = "" ]
+
+  join_a data "" ""
+  [ "${data}" = "//" ]
+
+  join_a data 11 22 33
+  [ "${data}" = "11//22//33" ]
+
+  MIFS='//://' join_a data foo bar code
+  [ "${data}" = "foo//://bar//://code" ]
+
+  MIFS=":" join_a data hear see speak
+  [ "${data}" = "hear:see:speak" ]
+
+  join_a data red "" yellow green blue ""
+  [ "${data}" = "red////yellow//green//blue//" ]
 )
 end_test

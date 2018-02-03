@@ -48,6 +48,28 @@ function find_open_fd()
 #   Because open_fd will be executed in a subshell, and thus the opened fd will
 #   be useless. This is the design decision behind storing the file descriptor
 #   in the fd variable
+# EXAMPLE
+#   # Make a pipe
+#   pipe="$(mktemp -u)"
+#   mkfifo "${pipe}"
+#
+#   #Open the pipe
+#   fifobuffer="${pipe}" open_fd
+#
+#   # Write to the pipe - does not block as long as buffer not filled
+#   echo "hi" >&${fd}
+#
+#   # Read from pipe, blocking. Use timeout command to add a timeout
+#   timeout 1 cat - <&${fd}
+#
+#   # Read from the pipe and save to a variable without a subshell
+#   IFS='' read -u "${fd}" -t 0.1 -r my_variable
+#
+#   # close and cleanup
+#   close_fd "${fd}"
+#   rm "${pipe}"
+# SEE ALSO
+#   file_tools.bsh/close_fd time_tools.bsh/timeout
 #***
 function open_fd()
 {
@@ -61,13 +83,14 @@ function open_fd()
   # Setup a fifo buffer for one use
   if ! declare -p fifo_buffer&>/dev/null; then
     FILE_TOOLS_DELETE_BUFFER=1
-    fifo_buffer="$(mktemp -u -p /tmp)"
+    fifo_buffer="$(mktemp -u)"
     mkfifo "${fifo_buffer}"
   fi
 
   # Redirect 3 to the fifo buffer
   eval "exec ${fd}<>'${fifo_buffer}'"
 }
+
 
 # INPUTS
 #   1 - fd number

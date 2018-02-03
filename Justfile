@@ -22,7 +22,7 @@ function caseify()
     test_darling) # Run unit and integration tests using darline
         (
           cd "${VSI_COMMON_DIR}"
-          darling shell ./tests/run_tests.bsh ${@+"${@}"}
+          env -i HOME="${HOME}" darling shell ./tests/run_tests.bsh ${@+"${@}"}
         )
         extra_args=$#
       ;;

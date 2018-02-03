@@ -34,22 +34,36 @@ function real_path_manual()
 
   local physical_dir="$(pwd -P)"
 
-  if [ "${physical_dir}" == "/" ]; then
-    echo "/$target"
+  if [ "${target}" = "." ]; then
+    target=""
   else
-    echo "${physical_dir}/$target"
+    target="/${target}"
+  fi
+
+  if [ "${physical_dir}" = "/" ]; then
+    # Special case because pwd and basename are both /, it became // because
+    # of the previous if where it is not ".", also /. is a special case
+    if [ "${target}" = "//" ] || [ "${target}" = "" ]; then
+      echo /
+    else
+      echo "$target"
+    fi
+  else
+    echo "${physical_dir}$target"
   fi
 }
 
-if ! cmd=$(command -v realpath); then
-  cmd="readlink -f"
-  if ! ${cmd} / > /dev/null 2>&1; then
-    #Probably Darwin. Thanks Darwin! > : (
-    for x in "${@}"; do
-      real_path_manual "${x}"
-    done
-    exit 0
+if [[ ${BASH_SOURCE[0]} == ${0} ]] || [[ $(basename ${BASH_SOURCE[0]}) == ${0} ]]; then
+  if ! cmd=$(command -v realpath); then
+    cmd="readlink -f"
+    if ! ${cmd} / > /dev/null 2>&1; then
+      #Probably Darwin. Thanks Darwin! > : (
+      for x in "${@}"; do
+        real_path_manual "${x}"
+      done
+      exit 0
+    fi
   fi
-fi
 
-exec $cmd "${@}"
+  exec $cmd "${@}"
+fi

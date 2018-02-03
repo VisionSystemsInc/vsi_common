@@ -19,6 +19,8 @@
 #   - __element_array_target_s2
 #   - __element_array_target_d
 #   as the target. It will cause name collision
+# NOTES
+#   Not intended for POSIX sh
 #***
 
 : ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
@@ -316,7 +318,7 @@ function cmp_elements()
   return $?
 }
 
-#****f* elements.bsh/split_array
+#****f* elements.bsh/split_s
 # INPUTS
 #   $1 - Target array name
 #   $2... - Strings
@@ -324,12 +326,12 @@ function cmp_elements()
 # AUTHOR
 #   https://stackoverflow.com/a/47633817/4166604
 #***
-function split_array()
+function split_s()
 {
   local target="${1}"
   shift 1
 
-  local __element_array_target_a
+  local __element_array_target_a=()
   local bit
   local MIFS="${MIFS-//}"
 
@@ -342,4 +344,29 @@ function split_array()
   done
 
   dynamic_set_a "${target}" ${__element_array_target_a+"${__element_array_target_a[@]}"}
+}
+
+function join_a()
+{
+  if [ $# -eq 1 ]; then
+    return 0
+    # This means target is never set. This mirrors the behavior of split_s
+    # Note: I do not "unset $1" for the same locality is lost bug
+  fi
+
+  local target="$1"
+  shift 1
+
+  local bit
+  local MIFS="${MIFS-//}"
+
+  local __element_array_target_s="${1-}"
+  shift 1
+
+  while [ $# -gt 0 ]; do
+    __element_array_target_s+="${MIFS}${1}"
+    shift 1
+  done
+
+  export "${target}=${__element_array_target_s-}"
 }
