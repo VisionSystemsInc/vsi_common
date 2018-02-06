@@ -85,8 +85,6 @@ end_test
 begin_test "Just docker compose dynamic volumes"
 (
   set -eu
-  JUST_PROJECT_PREFIX=TEST
-
   ans="$(head)$(service test1)$(volumes)"
 
   ans1="${ans}$(vol "$(real_path "${TRASHDIR}")":/trash:z)"
@@ -109,17 +107,69 @@ end_test
 begin_test "Just docker compose dynamic environment"
 (
   set -eu
-  JUST_PROJECT_PREFIX=TEST
 
-  ans="$(head)$(service test1)$(environment)$(env TEST=1)"
+  # Basic test
+  ans="$(head)$(service test1)$(environment)$(env TEST_ONE=2)$(env TEST_ONE_HOST=1)"
+  override="$(TEST_ONE_HOST=1 TEST_ONE_DOCKER=2 \
+              generate_docker_compose_override TEST test1)"
+  [ "${override}" = "${ans}" ]
 
+  # Test with JUST_DISABLE_ENVIRONMENT_SWAP
+  ans="$(head)$(service test1)$(environment)$(env TEST_ONE_DOCKER=2)$(env TEST_ONE_HOST=1)"
+  override="$(TEST_ONE_HOST=1 TEST_ONE_DOCKER=2 JUST_DISABLE_ENVIRONMENT_SWAP=1 \
+              generate_docker_compose_override TEST test1)"
+  [ "${override}" = "${ans}" ]
 
-
+  # Ignores non-project variables
+  ans="$(head)$(service test1)"
+  override="$(TEST_ONE_HOST=1 TEST_ONE_DOCKER=2 \
+              generate_docker_compose_override TEST2 test1)"
+  [ "${override}" = "${ans}" ]
 )
 end_test
 
 begin_test "just_docker_entrypoint_links"
 (
   set -eu
+
+  linux_nfs="\
+  Filesystem                       1K-blocks        Used   Available Use% Mounted on
+  filetodata-2:/volume1/projects 23320723712 22239875584  1080729344  96% ${TRASHDIR}"
+
+  function df()
+  {
+    local foo=${!#}
+    if [ "${#foo}" -ge "${#TRASHDIR}" ] && [ "${foo:0:${#TRASHDIR}}" = "${TRASHDIR}" ]; then
+      echo "${linux_nfs}/${foo:${#TRASHDIR}+1:1}"
+      return 0
+    fi
+    return 1
+  }
+
+  TEST_VOLUMES=("${TRASHDIR}/a/a:/this is  a   test")
+  TEST_VOLUMES+=("${TRASHDIR}/a:/this is  a   test")
+  TEST_VOLUMES+=("${TRASHDIR}/a/b:/this is  a   test")
+  TEST_VOLUMES+=("${TRASHDIR}/a/c:/this is  a   test")
+  TEST_VOLUMES+=("${TRASHDIR}/b/a:/foo/bar")
+
+  override="$(generate_docker_compose_override TEST test1)"
+
+  ans="$(head)$(service test1)$(volumes)"
+  ans+="$(vol "${TRASHDIR}/a:/host_mnt${TRASHDIR}/a")"
+  ans+="$(vol "${TRASHDIR}/b:/host_mnt${TRASHDIR}/b")"
+  ans+="$(environment)"
+  ans_el="/this is  a   test:"
+  ans_el+="/host_mnt${TRASHDIR}/a/a:"
+  ans_el+="/this is  a   test:"
+  ans_el+="/host_mnt${TRASHDIR}/a:"
+  ans_el+="/this is  a   test:"
+  ans_el+="/host_mnt${TRASHDIR}/a/b:"
+  ans_el+="/this is  a   test:"
+  ans_el+="/host_mnt${TRASHDIR}/a/c:"
+  ans_el+="/foo/bar:"
+  ans_el+="/host_mnt${TRASHDIR}/b/a"
+  ans+="$(env "JUST_DOCKER_ENTRYPOINT_LINKS=${ans_el}")"
+
+  [ "${override}" = "${ans}" ]
 )
 end_test
