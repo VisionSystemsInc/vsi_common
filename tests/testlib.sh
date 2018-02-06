@@ -117,7 +117,7 @@ skipped=0
 atexit ()
 {
   test_status=$?
-  if [ -n "${test_description+_}" ]; then
+  if [ -n "${test_description+set}" ]; then
     end_test $test_status
     echo "${TEST_BAD_COLOR}WARNING${TEST_RESET_COLOR}: end_test not added at end of last test." 1>&2
     declare -p BASH_SOURCE
@@ -170,7 +170,7 @@ _begin_common_test ()
   # This makes calling end_test between tests "optional", but highly recommended,
   # end_test does have to be called after the last test, especially if teardown
   # is defined after the last test
-  if [ -n "${test_description+_}" ]; then
+  if [ -n "${test_description+set}" ]; then
     end_test $test_status
     echo "${TEST_BAD_COLOR}WARNING${TEST_RESET_COLOR}: end_test not added at end of a test." 1>&2
     declare -p BASH_SOURCE
@@ -203,11 +203,9 @@ _begin_common_test ()
     _time_0=$(get_time_seconds)
   fi
 
-  find_open_fd
-  stdout="${fd}"
+  find_open_fd stdout
   eval "exec ${stdout}>&1"
-  find_open_fd
-  stderr="${fd}"
+  find_open_fd stderr
   eval "exec ${stderr}>&2"
 
   out="$TRASHDIR/out"
@@ -313,7 +311,7 @@ end_test ()
     printf "%-80s ${TEST_GOOD_COLOR}SKIPPED OK${TEST_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
     skipped=$((skipped+1))
   elif [ "${must_fail}" -eq 1 ] && [ "$test_status" -ne 0 ]; then
-    printf "%-80s ${TEST_GOOD_COLOR}FAILED REQUIRED${TEST_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
+    printf "%-80s ${TEST_GOOD_COLOR}FAIL REQUIRED${TEST_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
     must_failures=$((must_failures+1))
   elif [ "${must_fail}" -eq 0 ] && [ "$test_status" -eq 0 ]; then
     printf "%-80s ${TEST_GOOD_COLOR}OK${TEST_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
@@ -562,8 +560,8 @@ cleanup_touched_files()
   local touched_files
   local line
 
-  # This will normally get called an extra time at exist, so the existance of
-  # the file acts as check. 
+  # This will normally get called an extra time at exist, so the existence of
+  # the file acts as check.
   if [ -f "${track_touched_file}" ]; then
     while IFS='' read -r -d '' line 2>/dev/null || [ -n "$line" ]; do
       touched_files+=("$line")

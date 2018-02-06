@@ -5,6 +5,24 @@ VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 . "${VSI_COMMON_DIR}/linux/file_tools.bsh"
 . "${VSI_COMMON_DIR}/linux/time_tools.bsh"
 
+setup()
+{
+  track_touched_files
+}
+
+begin_test "find_open_fd"
+(
+  set -eu
+  find_open_fd
+  fd1="${fd}"
+  eval "exec ${fd}<>/dev/null"
+  find_open_fd fd2
+  START_FD=$((fd2+1)) find_open_fd fd3
+  [ "${fd2}" -gt "${fd1}" ]
+  [ "${fd3}" -gt "${fd2}" ]
+)
+end_test
+
 common_find_open_test()
 {
   if [[ ${OSTYPE} = darwin* ]]; then
@@ -31,11 +49,10 @@ common_find_open_test()
 
   # This should timeout
   not read -t "${DELAY}" -u "${fd2_r}" -r line
-
   # close and cleanup
   close_fd "${fd1_r}" "${fd1_w}"
   echo "ok">&"${fd2_w}"
-  [ "$(cat - <&${fd2_r})" = "ok" ]
+  [ "$(timeout "${DELAY}" cat - <&${fd2_r})" = "ok" ]
   close_fd "${fd2_r}" "${fd2_w}"
 
   #These should be closed now
@@ -43,10 +60,6 @@ common_find_open_test()
   not_s "echo fail >&${fd2_w}"
   not_s "cat - <&${fd1_r}"
   not_s "cat - <&${fd2_r}"
-
-  # Make sure fifo_buffer is being used, as this should fail
-  export fifo_buffer="$(mktemp -u)/foobar"
-  not open_fd
 }
 
 [ "${OS-}" = "Windows_NT" ] && skip_next_test
@@ -61,16 +74,12 @@ begin_test "Find and use available fd in bash 3.2 using pipe"
   mkfifo "${TRASHDIR}/pipe2"
 
   #Open the pipe
-  same_fd=1 fifo_buffer="${TRASHDIR}/pipe1" open_fd
-  fd1_r="${fd_r}"
-  fd1_w="${fd_w}"
-
-  same_fd=1 fifo_buffer="${TRASHDIR}/pipe2" open_fd
-  fd2_r="${fd_r}"
-  fd2_w="${fd_w}"
+  open_fd -n "${TRASHDIR}/pipe1" -p -s -R fd1_r -W fd1_w
+  [ "${filename}" = "${TRASHDIR}/pipe1" ]
+  open_fd -n "${TRASHDIR}/pipe2" -p -s -R fd2_r -W fd2_w
+  [ "${filename}" = "${TRASHDIR}/pipe2" ]
 
   [ "${fd1_r}" -eq "${fd1_w}" ]
-  [ "${fd2_r}" -gt "${fd1_r}" ]
   [ "${fd2_r}" -eq "${fd2_w}" ]
 
   common_find_open_test
@@ -86,19 +95,30 @@ begin_test "Find and use available fd in bash 3.2 using file (Window compatible)
   touch "${TRASHDIR}/pipe1"
   touch "${TRASHDIR}/pipe2"
 
-  #Open the files
-  fifo_buffer="${TRASHDIR}/pipe1" open_fd
-  fd1_r="${fd_r}"
-  fd1_w="${fd_w}"
-
-  fifo_buffer="${TRASHDIR}/pipe2" open_fd
-  fd2_r="${fd_r}"
-  fd2_w="${fd_w}"
+  # Open the files
+  open_fd -n "${TRASHDIR}/file1" -f -R fd1_r -W fd1_w
+  [ "${filename}" = "${TRASHDIR}/file1" ]
+  open_fd -n "${TRASHDIR}/file2" -f -R fd2_r -W fd2_w
+  [ "${filename}" = "${TRASHDIR}/file2" ]
 
   [ "${fd1_w}" -gt "${fd1_r}" ]
-  [ "${fd2_r}" -gt "${fd1_w}" ]
   [ "${fd2_w}" -gt "${fd2_r}" ]
 
   common_find_open_test
+)
+end_test
+
+begin_test "Test open_fd automatic naming"
+(
+  set -eu
+  # Test the automatic name creation
+  open_fd -f -R fd3_r -W fd3_w
+  [ -f "${filename}" ]
+  printf "${filename}\0" >> "${track_touched_file}"
+  # Write directly to the filename
+  echo "test 123" > "${filename}"
+  # Read from the open fd, not directly file
+  [ "$(cat - <&${fd3_r})" = "test 123" ]
+  close_fd "${fd3_r}" "${fd3_w}"
 )
 end_test
