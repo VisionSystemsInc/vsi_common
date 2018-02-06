@@ -36,11 +36,14 @@ function find_open_fd()
 # NAME
 #   open_fd - Find available file descriptor
 # INPUTS
-#   [1] - File descriptor number. Default: Find next open fd
+#   [1] - File descriptor number for reading[/writing]. Default: Find next open fd
+#   [2] - File descriptor number for writing. Default: Find next open fd
 #   [fifo_buffer] - FIFO buffer used
+#   [same_fd] - Use the same fd for reading and writing. Default: 0 (disabled)
 # OUTPUT
-#   fd - The fd number
-# BUGS
+#   fd_r - The fd number for reading
+#   fd_w - The fd number for writing
+# USAGE
 #   You can't do
 #
 #     output=$(open_fd)
@@ -73,30 +76,57 @@ function find_open_fd()
 #***
 function open_fd()
 {
-  # Get fd
-  if ! (( $# )); then
-    find_open_fd
-  else
-    fd=$1
-  fi
+  local fd
 
   # Setup a fifo buffer for one use
   if ! declare -p fifo_buffer&>/dev/null; then
     FILE_TOOLS_DELETE_BUFFER=1
     fifo_buffer="$(mktemp -u)"
-    mkfifo "${fifo_buffer}"
+    if [ "${OS-}" = "Windows_NT" ]; then
+      # Windows doesn't implement pipe right.
+      touch "${fifo_buffer}"
+    else
+      mkfifo "${fifo_buffer}"
+    fi
   fi
 
-  # Redirect 3 to the fifo buffer
-  eval "exec ${fd}<>'${fifo_buffer}'"
+  # Get reading fd
+  if [ "$#" -lt 1 ]; then
+    find_open_fd
+    fd_r="${fd}"
+  else
+    fd_r="$1"
+  fi
+
+  # If the same fd is to be used for reading and writing
+  if [ "${same_fd-0}" != "0" ] || [ "${1-null}" = "${2-}" ]; then
+    # Redirect to the buffer
+    eval "exec ${fd_r}<>'${fifo_buffer}'"
+  else
+    # Open read now, so the next find_open_fd will find a new one
+    eval "exec ${fd_r}<'${fifo_buffer}'"
+
+    if [ "$#" -lt 2 ]; then
+      find_open_fd
+      fd_w="${fd}"
+    else
+      fd_w="$2"
+    fi
+
+    eval "exec ${fd_w}>'${fifo_buffer}'"
+  fi
 }
 
 
 # INPUTS
 #   1 - fd number
+#   [2] - fd number
 function close_fd()
 {
   eval "exec ${1}>&-"
+  if [ $# -gt 1 ]; then
+    eval "exec ${2}>&-"
+  fi
 
   # Delete that fifo buffer after one use
   if [ "${FILE_TOOLS_DELETE_BUFFER-}" == "1" ]; then

@@ -5,55 +5,100 @@ VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 . "${VSI_COMMON_DIR}/linux/file_tools.bsh"
 . "${VSI_COMMON_DIR}/linux/time_tools.bsh"
 
-begin_test "Find and use available fd in bash 3.2"
-(
-  set -eu
-
+common_find_open_test()
+{
   if [[ ${OSTYPE} = darwin* ]]; then
     DELAY=1
   else
     DELAY=0.1
   fi
 
-  # Make a pipe
-  mkfifo "${TRASHDIR}/pipe1"
-  mkfifo "${TRASHDIR}/pipe2"
-
-  #Open the pipe
-  fifobuffer="${TRASHDIR}/pipe1" open_fd
-  fd1="${fd}"
-
-  fifobuffer="${TRASHDIR}/pipe2" open_fd
-  fd2="${fd}"
-
-  [ "${fd2}" -gt "${fd1}" ]
-
-  # Write to the pipe
-  printf 'a b  c\t\n\nd\n\n\n' >&${fd1}
+  # Write to the file
+  printf 'a b  c\t\n\nd\n\n\n' >&"${fd1_w}"
 
   # Bash subshell substitution drop trailing newlines "by design"
-  [ "$(timeout "${DELAY}" cat - <&${fd1})" = $'a b  c\t\n\nd' ]
+  [ "$(timeout "${DELAY}" cat - <&${fd1_r})" = $'a b  c\t\n\nd' ]
 
   # Test scenario where newlines would be preserved
-  printf 'a b  c\t\n\nd\n\n\n' >&${fd2}
+  printf 'a b  c\t\n\nd\n\n\n' >&"${fd2_w}"
   lines=()
   ans=($'a b  c\t' "" "d" "" "")
   for x in $(seq 5); do
-    IFS='' read -u "${fd2}" -t "${DELAY}" -r line
+    IFS='' read -t "${DELAY}" -u "${fd2_r}" -r line
     lines+=("${line}")
   done
   check_a lines "${ans[@]}"
 
   # This should timeout
-  not read -u "${fd2}" -t "${DELAY}" -r line
+  not read -t "${DELAY}" -u "${fd2_r}" -r line
 
   # close and cleanup
-  close_fd "${fd1}"
-  echo "ok">&"${fd2}"
-  close_fd "${fd2}"
+  close_fd "${fd1_r}" "${fd1_w}"
+  echo "ok">&"${fd2_w}"
+  [ "$(cat - <&${fd2_r})" = "ok" ]
+  close_fd "${fd2_r}" "${fd2_w}"
 
   #These should be closed now
-  not_s "echo fail >&${fd1}"
-  not_s "echo fail >&${fd2}"
+  not_s "echo fail >&${fd1_w}"
+  not_s "echo fail >&${fd2_w}"
+  not_s "cat - <&${fd1_r}"
+  not_s "cat - <&${fd2_r}"
+
+  # Make sure fifo_buffer is being used, as this should fail
+  export fifo_buffer="$(mktemp -u)/foobar"
+  not open_fd
+}
+
+[ "${OS-}" = "Windows_NT" ] && skip_next_test
+begin_test "Find and use available fd in bash 3.2 using pipe"
+(
+  set -eu
+
+  check_skip
+
+  # Make a pipe
+  mkfifo "${TRASHDIR}/pipe1"
+  mkfifo "${TRASHDIR}/pipe2"
+
+  #Open the pipe
+  same_fd=1 fifo_buffer="${TRASHDIR}/pipe1" open_fd
+  fd1_r="${fd_r}"
+  fd1_w="${fd_w}"
+
+  same_fd=1 fifo_buffer="${TRASHDIR}/pipe2" open_fd
+  fd2_r="${fd_r}"
+  fd2_w="${fd_w}"
+
+  [ "${fd1_r}" -eq "${fd1_w}" ]
+  [ "${fd2_r}" -gt "${fd1_r}" ]
+  [ "${fd2_r}" -eq "${fd2_w}" ]
+
+  common_find_open_test
+)
+end_test
+
+# Writing to a pipe in windows doesn't work... Who knows why!
+begin_test "Find and use available fd in bash 3.2 using file (Window compatible)"
+(
+  set -eu
+
+  # Make a file
+  touch "${TRASHDIR}/pipe1"
+  touch "${TRASHDIR}/pipe2"
+
+  #Open the files
+  fifo_buffer="${TRASHDIR}/pipe1" open_fd
+  fd1_r="${fd_r}"
+  fd1_w="${fd_w}"
+
+  fifo_buffer="${TRASHDIR}/pipe2" open_fd
+  fd2_r="${fd_r}"
+  fd2_w="${fd_w}"
+
+  [ "${fd1_w}" -gt "${fd1_r}" ]
+  [ "${fd2_r}" -gt "${fd1_w}" ]
+  [ "${fd2_w}" -gt "${fd2_r}" ]
+
+  common_find_open_test
 )
 end_test

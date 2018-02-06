@@ -27,7 +27,8 @@ volumes:
 services:
   test_hay:
     image: alpine
-    command: sh -c 'echo horse'"
+    command: sh -c 'echo horse'
+    network_mode: 'bridge'"
 
   compose_file_sleep="version: '3.2'
 services:
@@ -72,6 +73,7 @@ begin_test "container get label"
 
   check_skip
 
+  "${DOCKER}" rm test-docker-function || :
   "${DOCKER}" create -l t1=15 -l "TEST=THIS=t h  a   t" -l blank --name test-docker-function alpine
 
   [ "$(container_get_label test-docker-function t1)" = "15" ]
@@ -90,6 +92,7 @@ begin_test "container has label"
 
   check_skip
 
+  "${DOCKER}" rm test-docker-function || :
   "${DOCKER}" create -l t1=15 -l "TEST=THIS=t h  a   t" -l blank --name test-docker-function alpine
 
   container_has_label test-docker-function t1
@@ -290,6 +293,8 @@ begin_test "Parse docker-compose args"
 (
   set -eu
 
+  parse-docker-compose run test
+
   parse-docker-compose --no-ansi -H=blah.json --verbose run -v /foo:/bar debian bash
   a1=(--no-ansi -H=blah.json --verbose)
   a2=(-v /foo:/bar debian bash)
@@ -478,7 +483,8 @@ begin_test "Just docker compose"
   touch "${temp_dir}/Dockerfile"
   echo "${compose_file_hay}" > "${temp_dir}/Dockerfile"
 
-  [ "$(Just-docker-compose -f "${temp_dir}/Dockerfile" run test_hay)" = "horse" ]
+  # I don't know why the -T is needed for this in Windows, but something between
+  [ "$(Just-docker-compose -f "${temp_dir}/Dockerfile" run -T test_hay)" = "horse" ]
 )
 end_test
 
@@ -524,15 +530,17 @@ begin_test "Docker service running"
 
   check_skip
 
-  "${DOCKER_COMPOSE}" -f <(echo "${compose_file_sleep}") rm -s -f
-  "${DOCKER_COMPOSE}" -f <(echo "${compose_file_sleep}") up -d test_sleepy
-  [ "$(COMPOSE_FILE=<(echo "${compose_file_sleep}") docker_service_running test_sleepy)" = "running" ]
-  [ "$(COMPOSE_FILE=<(echo "${compose_file_sleep}") docker_service_running test_sleepy2)" = "" ]
-  "${DOCKER_COMPOSE}" -f <(echo "${compose_file_sleep}") kill test_sleepy
-  [ "$(COMPOSE_FILE=<(echo "${compose_file_sleep}") docker_service_running test_sleepy)" = "exited" ]
+  echo "${compose_file_sleep}" > "${TRASHDIR}/dsr.yml"
+
+  "${DOCKER_COMPOSE}" -f "${TRASHDIR}/dsr.yml" rm -s -f
+  "${DOCKER_COMPOSE}" -f "${TRASHDIR}/dsr.yml" up -d test_sleepy
+  [ "$(COMPOSE_FILE="${TRASHDIR}/dsr.yml" docker_service_running test_sleepy)" = "running" ]
+  [ "$(COMPOSE_FILE="${TRASHDIR}/dsr.yml" docker_service_running test_sleepy2)" = "" ]
+  "${DOCKER_COMPOSE}" -f "${TRASHDIR}/dsr.yml" kill test_sleepy
+  [ "$(COMPOSE_FILE="${TRASHDIR}/dsr.yml" docker_service_running test_sleepy)" = "exited" ]
 
   #Clean up
-  "${DOCKER_COMPOSE}" -f <(echo "${compose_file_sleep}") rm -s -f
+  "${DOCKER_COMPOSE}" -f "${TRASHDIR}/dsr.yml" rm -s -f
 )
 end_test
 

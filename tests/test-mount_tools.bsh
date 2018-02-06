@@ -55,7 +55,7 @@ function df()
 {
   echo "${@}" >&2
   while (( $# )); do
-    echo "${1}" >&"${fd}"
+    echo "${1}" >&"${fd_w}"
     shift 1
   done
   return 1
@@ -66,59 +66,67 @@ begin_test "Test mount point Linux args"
   set -eu
   unset OSTYPE
 
-  mkfifo "${TRASHDIR}/linuxargs"
-  fifobuffer="${TRASHDIR}/linuxargs" open_fd
+  if [ "${OS-}" = "Windows_NT" ]; then
+    touch "${TRASHDIR}/linuxargs"
+  else
+    mkfifo "${TRASHDIR}/linuxargs"
+  fi
+  fifo_buffer="${TRASHDIR}/linuxargs" open_fd
 
   args=()
   mount_point /mnt/test || :
-  IFS='' read -u "${fd}" -t 1 -r line; args+=("${line}")
+  IFS='' read -u "${fd_r}" -t 1 -r line; args+=("${line}")
   check_a args /mnt/test
 
   args=()
   mount_point /mnt/test brtfs || :
   for x in $(seq 3); do
-    IFS='' read -u "${fd}" -t 1 -r line; args+=("${line}")
+    IFS='' read -u "${fd_r}" -t 1 -r line; args+=("${line}")
   done
   check_a args -t brtfs /mnt/test
 
   args=()
   mount_point /mnt/test nfs nfs3 nfs4 || :
   for x in $(seq 7); do
-    IFS='' read -u "${fd}" -t 1 -r line; args+=("${line}")
+    IFS='' read -u "${fd_r}" -t 1 -r line; args+=("${line}")
   done
   check_a args -t nfs -t nfs3 -t nfs4 /mnt/test
 
-  close_fd "${fd}"
+  close_fd "${fd_r}"
 )
 end_test
 
 begin_test "Test mount point macos args"
 (
   set -eu
+
+  if [ "${OS-}" = "Windows_NT" ]; then
+    touch "${TRASHDIR}/macargs"
+  else
+    mkfifo "${TRASHDIR}/macargs"
+  fi
+  fifo_buffer="${TRASHDIR}/macargs" open_fd
+
   OSTYPE=darwin16
-
-  mkfifo "${TRASHDIR}/macargs"
-  fifobuffer="${TRASHDIR}/macargs" open_fd
-
   args=()
   mount_point /mnt/test || :
-  IFS='' read -u "${fd}" -t 1 -r line; args+=("${line}")
+  IFS='' read -u "${fd_r}" -t 1 -r line; args+=("${line}")
   check_a args /mnt/test
 
   args=()
   mount_point /mnt/test brtfs || :
   for x in $(seq 3); do
-    IFS='' read -u "${fd}" -t 1 -r line; args+=("${line}")
+    IFS='' read -u "${fd_r}" -t 1 -r line; args+=("${line}")
   done
   check_a args -T brtfs /mnt/test
 
   args=()
   mount_point /mnt/test nfs nfs3 nfs4 || :
   for x in $(seq 3); do
-    IFS='' read -u "${fd}" -t 1 -r line; args+=("${line}")
+    IFS='' read -u "${fd_r}" -t 1 -r line; args+=("${line}")
   done
   check_a args -T nfs,nfs3,nfs4 /mnt/test
 
-  close_fd "${fd}"
+  close_fd "${fd_r}"
 )
 end_test

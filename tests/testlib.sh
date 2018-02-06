@@ -194,6 +194,11 @@ _begin_common_test ()
   test_file_name=${test_file_name#test-}
   test_description="$test_file_name - $1"
 
+  if [ "${tracking_touched_files}" = "1" ]; then
+    track_touched_file="$(mktemp -u)"
+    ttouch "${track_touched_file}"
+  fi
+
   if [ "${TESTLIB_SHOW_TIMING-0}" == "1" ]; then
     _time_0=$(get_time_seconds)
   fi
@@ -308,7 +313,7 @@ end_test ()
     printf "%-80s ${TEST_GOOD_COLOR}SKIPPED OK${TEST_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
     skipped=$((skipped+1))
   elif [ "${must_fail}" -eq 1 ] && [ "$test_status" -ne 0 ]; then
-    printf "%-80s ${TEST_GOOD_COLOR}FAILED OK${TEST_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
+    printf "%-80s ${TEST_GOOD_COLOR}FAILED REQUIRED${TEST_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
     must_failures=$((must_failures+1))
   elif [ "${must_fail}" -eq 0 ] && [ "$test_status" -eq 0 ]; then
     printf "%-80s ${TEST_GOOD_COLOR}OK${TEST_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
@@ -336,7 +341,7 @@ end_test ()
   fi
 
   if [ "${tracking_touched_files-}" = "1" ]; then
-    process_touched_files
+    cleanup_touched_files
   fi
 
   unset test_description
@@ -491,27 +496,23 @@ not_s()
 #     touch /tmp/hiya
 #   )
 #   end_test
+# USAGE
+#   Should be called before the begin_test block, not inside. Inside a ()
+#   subshell block will not work. Setup is the logical place to put it
 # BUGS
 #   Does not work in sh, only bash. Uses array, and I didn't want to make this
 #   this use a string instead
 #
-#   If the buffer fills up, the pipe can't be written to. Instead of handing, a
-#   timeout of 100ms is used to determine failure.
+#   Not multiple write thread safe. Use a different file for each thread
 # SEE ALSO
-#   testlib.sh/process_touched_files testlib.sh/cleanup_touched_files
+#   testlib.sh/cleanup_touched_files
 # AUTHOR
 #   Andy Neff
 #***
 track_touched_files()
 {
-  local pipe
-  local fd
-  pipe="$(mktemp -u)"
-  mkfifo "${pipe}"
-  touched_files=("${pipe}")
-  fifo_buffer="${pipe}" open_fd
-  track_touched_files_fd="${fd}"
   tracking_touched_files=1
+}
 
 #****if* testlib.sh/ttouch
 # NAME
@@ -521,92 +522,29 @@ track_touched_files()
 # AUTHOR
 #   Andy Neff
 #***
-  ttouch()
-  {
-    local filename
-    local end_options=0
-
-    touch "${@}"
-
-    # Skip all options
-    while [ $# -gt 0 ]; do
-      if [ "${end_options}" = "0" ] && [ "$1" = "--" ]; then
-        end_options=1
-        shift 1
-      elif [ "${end_options}" = "0" ] && [ ${#1} -gt 0 ] && [ "${1:0:1}" = "-" ]; then
-        shift 1
-      else
-        filename="$1"
-        # force to be absolute path
-        if [ "${filename:0:1}" != "/" ]; then
-          filename="$(pwd)/$1"
-        fi
-        timeout 0.1s echo "${filename}" >&"${track_touched_files_fd}"
-        shift 1
-      fi
-    done
-  }
-}
-
-#****d* testlib.sh/TEST_TOUCH_TIMEOUT
-# NAME
-#   TEST_TOUCH_TIMEOUT - Timeout to wait for input on process_touched_files
-# DESCRIPTION
-#   The pipe is buffered in bash when opened in this fashion. The buffer needs
-#   to be emptied out to get all the IPC from the children processes, and also
-#   needs to be prevented from blocking. Typically 0.1 works just fine, but
-#   macos doesn't understand this, so make it 0 for macos. A timeout of 0
-#   effectively disables process_touched_files from working. So
-#   process_touched_files must be called at least once at the begining of
-#   cleanup_touched_files for everything to work.
-# SOURCE
-if [[ ${OSTYPE-} = darwin* ]]; then
-  : ${TEST_TOUCH_TIMEOUT=0}
-else
-  : ${TEST_TOUCH_TIMEOUT=0.1}
-fi
-# SEE ALSO
-#   testlib.sh/process_touched_files
-# AUTHOR
-#   Andy Neff
-#***
-
-#****if* testlib.sh/process_touched_files
-# NAME
-#   process_touched_files - Process all the unprocessed touched files
-# DESCRIPTION
-#   At the end of every test, read in the pipe buffer and save all the filenames
-#   to an array
-# INPUTS
-#   $1 - Timeout in seconds. Default is TEST_TOUCH_TIMEOUT seconds, which
-#        defaults to 0.1 or 0 on macos
-# NOTES
-#   The timeout must be a second on macos because it is incapable of handling
-#   0.1 seconds. This will be a very noticeable slowdown. For this reason, it
-#   is set to 0 on macos and will ONLY process at the end of all the tests.
-#
-#   This is far more prone to filling up the pipe buffer. If that happens, either
-#   1. Set TEST_TOUCH_TIMEOUT to 1
-#   2. Occasionally set TEST_TOUCH_TIMEOUT to 1 in end_test
-# EXAMPLE
-#   MAC_HACK=0.1
-#   if [[ ${OSTYPE-} = darwin* ]]; then
-#     MAC_HACK=1
-#   fi
-#
-#   ...
-#
-#   # Change timeout for just that one test
-#   TEST_TOUCH_TIMEOUT=${MAC_HACK} end_test
-# AUTHOR
-#   Andy Neff
-#***
-process_touched_files()
+ttouch()
 {
-  local line
-  while IFS='' read -t "${1-${TEST_TOUCH_TIMEOUT}}" -u ${track_touched_files_fd} -r line 2>/dev/null|| [ -n "$line" ]; do
-    touched_files+=("$line")
-    line='' #Have to clear it, in case the timeout times out
+  local filename
+  local end_options=0
+
+  touch "${@}"
+
+  # Skip all options
+  while [ $# -gt 0 ]; do
+    if [ "${end_options}" = "0" ] && [ "$1" = "--" ]; then
+      end_options=1
+      shift 1
+    elif [ "${end_options}" = "0" ] && [ ${#1} -gt 0 ] && [ "${1:0:1}" = "-" ]; then
+      shift 1
+    else
+      filename="$1"
+      # force to be absolute path
+      if [ "${filename:0:1}" != "/" ]; then
+        filename="$(pwd)/$1"
+      fi
+      printf "${filename}\0" >> "${track_touched_file}"
+      shift 1
+    fi
   done
 }
 
@@ -621,16 +559,21 @@ process_touched_files()
 cleanup_touched_files()
 {
   local touched_file
+  local touched_files
+  local line
 
-  if [[ ${OSTYPE-} = darwin* ]]; then
-    process_touched_files 1
+  # This will normally get called an extra time at exist, so the existance of
+  # the file acts as check. 
+  if [ -f "${track_touched_file}" ]; then
+    while IFS='' read -r -d '' line 2>/dev/null || [ -n "$line" ]; do
+      touched_files+=("$line")
+      line='' #Have to clear it, in case the timeout times out
+    done < "${track_touched_file}"
+
+    for touched_file in ${touched_files+"${touched_files[@]}"}; do
+      if [ -e "${touched_file}" ] && [ ! -d "${touched_file}" ]; then
+        \rm "${touched_file}"
+      fi
+    done
   fi
-
-  close_fd "${track_touched_files_fd}"
-
-  for touched_file in ${touched_files+"${touched_files[@]}"}; do
-    if [ -e "${touched_file}" ] && [ ! -d "${touched_file}" ]; then
-      \rm "${touched_file}"
-    fi
-  done
 }
