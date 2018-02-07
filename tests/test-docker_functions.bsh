@@ -107,22 +107,19 @@ end_test
 begin_test "docker_premkdir"
 (
   set -eu
-  temp_dir="${TRASHDIR}/pmd"
-  mkdir -p "${temp_dir}"
-  cd "${temp_dir}"
 
-  docker_premkdir "${temp_dir}"
+  docker_premkdir "${TESTDIR}"
   docker_premkdir internal_dir
   [ ! -e internal_dir ]
 
-  touch "${temp_dir}/premkfile"
-  docker_premkdir "${temp_dir}/premkfile"
-  [ ! -d "${temp_dir}/premkfile" ]
-  [ -e "${temp_dir}/premkfile" ]
+  touch "${TESTDIR}/premkfile"
+  docker_premkdir "${TESTDIR}/premkfile"
+  [ ! -d "${TESTDIR}/premkfile" ]
+  [ -e "${TESTDIR}/premkfile" ]
 
-  [ ! -d "${temp_dir}/premkdir" ]
-  docker_premkdir "${temp_dir}/premkdir"
-  [ -d "${temp_dir}/premkdir" ]
+  [ ! -d "${TESTDIR}/premkdir" ]
+  docker_premkdir "${TESTDIR}/premkdir"
+  [ -d "${TESTDIR}/premkdir" ]
 )
 end_test
 
@@ -183,7 +180,7 @@ begin_test "Santize Volumes"
 (
   set -eu
 
-  temp_dir="${TRASHDIR}/sv"
+  temp_dir="${TESTDIR}/sv"
 
   [ ! -e "${temp_dir}" ]
 
@@ -308,52 +305,48 @@ begin_test "Parse docker compose file args"
 (
   set -euE
 
-  temp_dir="${TRASHDIR}/file"
-  mkdir -p "${temp_dir}"
-  pushd "${temp_dir}"
-    touch docker-compose2.yml
+  touch docker-compose2.yml
 
-    parse-docker-compose run alpine
-    # No docker-compose
-    [ "${docker_compose_project_name}" = "default" ]
-    [ "${#docker_compose_files[@]}" -eq 0 ]
+  parse-docker-compose run alpine
+  # No docker-compose
+  [ "${docker_compose_project_name}" = "default" ]
+  [ "${#docker_compose_files[@]}" -eq 0 ]
 
-    # Make sure COMPOSE_FILE works
-    COMPOSE_FILE=docker-compose2.yml parse-docker-compose run alpine
-    [ "${docker_compose_project_name}" = "file" ]
-    [ "${#docker_compose_files[@]}" -eq 1 ]
-    [ "${docker_compose_files[0]}" = "docker-compose2.yml" ]
+  # Make sure COMPOSE_FILE works
+  COMPOSE_FILE=docker-compose2.yml parse-docker-compose run alpine
+  [ "${docker_compose_project_name}" = "$(basename "$(pwd)")" ]
+  [ "${#docker_compose_files[@]}" -eq 1 ]
+  [ "${docker_compose_files[0]}" = "docker-compose2.yml" ]
 
-    # Make sure COMPOSE_FILE overrides docker-compose.yml
-    touch docker-compose.yml
-    COMPOSE_FILE=docker-compose2.yml parse-docker-compose run alpine
-    [ "${docker_compose_project_name}" = "file" ]
-    [ "${#docker_compose_files[@]}" -eq 1 ]
-    [ "${docker_compose_files[0]}" = "docker-compose2.yml" ]
+  # Make sure COMPOSE_FILE overrides docker-compose.yml
+  touch docker-compose.yml
+  COMPOSE_FILE=docker-compose2.yml parse-docker-compose run alpine
+  [ "${docker_compose_project_name}" = "$(basename "$(pwd)")" ]
+  [ "${#docker_compose_files[@]}" -eq 1 ]
+  [ "${docker_compose_files[0]}" = "docker-compose2.yml" ]
 
-    # Make sure docker-compose.yml works
-    parse-docker-compose run alpine
-    [ "${docker_compose_project_name}" = "file" ]
-    [ "${#docker_compose_files[@]}" -eq 1 ]
-    [ "${docker_compose_files[0]}" = "${temp_dir}/docker-compose.yml" ]
+  # Make sure docker-compose.yml works
+  parse-docker-compose run alpine
+  [ "${docker_compose_project_name}" = "$(basename "$(pwd)")" ]
+  [ "${#docker_compose_files[@]}" -eq 1 ]
+  [ "${docker_compose_files[0]}" = "${TESTDIR}/docker-compose.yml" ]
 
-    # Make sure override works
-    touch docker-compose.override.yaml
-    parse-docker-compose run alpine
-    [ "${docker_compose_project_name}" = "file" ]
-    [ "${#docker_compose_files[@]}" -eq 2 ]
-    [ "${docker_compose_files[0]}" = "${temp_dir}/docker-compose.yml" ]
-    [ "${docker_compose_files[1]}" = "${temp_dir}/docker-compose.override.yaml" ]
+  # Make sure override works
+  touch docker-compose.override.yaml
+  parse-docker-compose run alpine
+  [ "${docker_compose_project_name}" = "$(basename "$(pwd)")" ]
+  [ "${#docker_compose_files[@]}" -eq 2 ]
+  [ "${docker_compose_files[0]}" = "${TESTDIR}/docker-compose.yml" ]
+  [ "${docker_compose_files[1]}" = "${TESTDIR}/docker-compose.override.yaml" ]
 
-    # Make sure -f/--file wins
-    COMPOSE_FILE=docker-compose2.yml parse-docker-compose -f test3.yml run alpine
-    [ "${docker_compose_project_name}" = "file" ]
-    [ "${#docker_compose_files[@]}" -eq 1 ]
-    [ "${docker_compose_files[0]}" = "test3.yml" ]
+  # Make sure -f/--file wins
+  COMPOSE_FILE=docker-compose2.yml parse-docker-compose -f test3.yml run alpine
+  [ "${docker_compose_project_name}" = "$(basename "$(pwd)")" ]
+  [ "${#docker_compose_files[@]}" -eq 1 ]
+  [ "${docker_compose_files[0]}" = "test3.yml" ]
 
-    parse-docker-compose -f test1.yml -ftest2 --file test3 --file=test4 run debian:9 bash
-    [ "${#docker_compose_files[@]}" -eq 4 ]
-  popd
+  parse-docker-compose -f test1.yml -ftest2 --file test3 --file=test4 run debian:9 bash
+  [ "${#docker_compose_files[@]}" -eq 4 ]
 )
 end_test
 
@@ -478,13 +471,13 @@ begin_test "Just docker compose"
 
   JUST_PROJECT_PREFIX=TEST
 
-  temp_dir="${TRASHDIR}/jdc"
-  mkdir -p "${temp_dir}"
-  touch "${temp_dir}/Dockerfile"
-  echo "${compose_file_hay}" > "${temp_dir}/Dockerfile"
+  # Show calling from a different dir works
+  cd "${TRASHDIR}"
+  touch "${TESTDIR}/Dockerfile"
+  echo "${compose_file_hay}" > "${TESTDIR}/Dockerfile"
 
   # I don't know why the -T is needed for this in Windows, but something between
-  [ "$(Just-docker-compose -f "${temp_dir}/Dockerfile" run -T test_hay)" = "horse" ]
+  [ "$(Just-docker-compose -f "${TESTDIR}/Dockerfile" run -T test_hay)" = "horse" ]
 )
 end_test
 
@@ -497,17 +490,17 @@ begin_test "Just docker compose override files"
 services:
   test_hay:"
 
-  echo "${compose_file_hay}" > "${TRASHDIR}/dc.yml"
+  echo "${compose_file_hay}" > "${TESTDIR}/dc.yml"
   DRYRUN=echo
 
-  override_file="$(Just-docker-compose -f "${TRASHDIR}/dc.yml" run test_hay|tail -n1)"
+  override_file="$(Just-docker-compose -f "${TESTDIR}/dc.yml" run test_hay|tail -n1)"
   override_file="${override_file#rm *}"
   ttouch "${override_file}"
   [ "$(cat "${override_file}")" = "${ans}" ]
 
   #Test where two docker-compose files reference the same service
-  echo "${compose_file_hay}" > "${TRASHDIR}/dc2.yml"
-  override_file="$(Just-docker-compose -f "${TRASHDIR}/dc.yml" -f "${TRASHDIR}/dc2.yml" run test_hay|tail -n1)"
+  echo "${compose_file_hay}" > "${TESTDIR}/dc2.yml"
+  override_file="$(Just-docker-compose -f "${TESTDIR}/dc.yml" -f "${TESTDIR}/dc2.yml" run test_hay|tail -n1)"
   override_file="${override_file#rm *}"
   ttouch "${override_file}"
   [ "$(cat "${override_file}")" = "${ans}" ]
@@ -517,9 +510,9 @@ end_test
 begin_must_fail_test "Just docker compose required project prefix"
 (
   unset JUST_PROJECT_PREFIX
-  echo "${compose_file_hay}" > "${TRASHDIR}/dc.yml"
+  echo "${compose_file_hay}" > "${TESTDIR}/dc.yml"
   set -eu
-  Just-docker-compose -f "${TRASHDIR}/dc.yml" run test_hay
+  Just-docker-compose -f "${TESTDIR}/dc.yml" run test_hay
 )
 end_test
 
@@ -530,17 +523,17 @@ begin_test "Docker service running"
 
   check_skip
 
-  echo "${compose_file_sleep}" > "${TRASHDIR}/dsr.yml"
+  echo "${compose_file_sleep}" > "${TESTDIR}/dsr.yml"
 
-  "${DOCKER_COMPOSE}" -f "${TRASHDIR}/dsr.yml" rm -s -f
-  "${DOCKER_COMPOSE}" -f "${TRASHDIR}/dsr.yml" up -d test_sleepy
-  [ "$(COMPOSE_FILE="${TRASHDIR}/dsr.yml" docker_service_running test_sleepy)" = "running" ]
-  [ "$(COMPOSE_FILE="${TRASHDIR}/dsr.yml" docker_service_running test_sleepy2)" = "" ]
-  "${DOCKER_COMPOSE}" -f "${TRASHDIR}/dsr.yml" kill test_sleepy
-  [ "$(COMPOSE_FILE="${TRASHDIR}/dsr.yml" docker_service_running test_sleepy)" = "exited" ]
+  "${DOCKER_COMPOSE}" -f "${TESTDIR}/dsr.yml" rm -s -f
+  "${DOCKER_COMPOSE}" -f "${TESTDIR}/dsr.yml" up -d test_sleepy
+  [ "$(COMPOSE_FILE="${TESTDIR}/dsr.yml" docker_service_running test_sleepy)" = "running" ]
+  [ "$(COMPOSE_FILE="${TESTDIR}/dsr.yml" docker_service_running test_sleepy2)" = "" ]
+  "${DOCKER_COMPOSE}" -f "${TESTDIR}/dsr.yml" kill test_sleepy
+  [ "$(COMPOSE_FILE="${TESTDIR}/dsr.yml" docker_service_running test_sleepy)" = "exited" ]
 
   #Clean up
-  "${DOCKER_COMPOSE}" -f "${TRASHDIR}/dsr.yml" rm -s -f
+  "${DOCKER_COMPOSE}" -f "${TESTDIR}/dsr.yml" rm -s -f
 )
 end_test
 

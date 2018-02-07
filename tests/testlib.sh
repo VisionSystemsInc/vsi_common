@@ -70,6 +70,28 @@ skipped=0
 #   Andy Neff
 #***
 
+#****d* testlib.sh/TRASHDIR
+# NAME
+#   TRASHDIR - Temporary directory where everything for the test file is stored
+# DESCRIPTION
+#   Automatically generated and removed (unless TEST_KEEP_TEMP_DIRS is changed)
+# SEE ALSO
+#   testlib.sh/TESTDIR
+# AUTHOR
+#   Ryan Tomayko
+#***
+
+#****d* testlib.sh/TESTDIR
+# NAME
+#   TESTDIR - Unique temporary directory for a single test (in TRASHDIR)
+# DESCRIPTION
+#   Automatically generated and removed (unless TEST_KEEP_TEMP_DIRS is changed)
+# SEE ALSO
+#   testlib.sh/TRASHDIR
+# AUTHOR
+#   Ryan Tomayko
+#***
+
 #****f* testlib.sh/teardown
 # NAME
 #   teardown - Function run after the last test
@@ -166,7 +188,9 @@ fi
 _begin_common_test ()
 {
   local fd
-  pushd "$TRASHDIR" &> /dev/null
+  TESTDIR="${TRASHDIR}/test${tests}"
+  mkdir -p "${TESTDIR}"
+  pushd "$TESTDIR" &> /dev/null
   # This makes calling end_test between tests "optional", but highly recommended,
   # end_test does have to be called after the last test, especially if teardown
   # is defined after the last test
@@ -208,8 +232,8 @@ _begin_common_test ()
   find_open_fd stderr
   eval "exec ${stderr}>&2"
 
-  out="$TRASHDIR/out"
-  err="$TRASHDIR/err"
+  out="${TESTDIR}/out"
+  err="${TESTDIR}/err"
   exec 1>"$out" 2>"$err"
 
   # allow the subshell to exit non-zero without exiting this process
@@ -327,10 +351,10 @@ end_test ()
     fi
     (
       echo "-- stdout --"
-      sed 's/^/    /' <"$TRASHDIR/out"
+      sed 's/^/    /' <"${TESTDIR}/out"
       echo "-- stderr --"
       grep -v -e $'^\+[^\t]*\tend_test' \
-              -e $'^\+[^\t]*\tset +x -e' <"$TRASHDIR/err" |
+              -e $'^\+[^\t]*\tset +x -e' <"${TESTDIR}/err" |
         sed $'s|^[^+]| \t&|' |
         column -c1 -s $'\t' -t |
         sed 's/^/    /'
