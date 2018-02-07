@@ -111,7 +111,97 @@ begin_test "print help"
   set -eu
 
   JUST_HELP_FILES=(file1 file2)
-  echo " a) # Test 1" > file1
+
+  head=$'List of possible test-just_functions.bsh commands:\n'
+  head+=$'-----------------------------------\n'
+  subc=$'\nSubcommands\n'
+  subc+=$'-----------\n'
+
+  # Basic test
+  echo ' a) # Test 1' > file1
+  ans="${head}"
+  ans+=$'a   Test 1\n'
+  anss="${subc}"
+  anss+="    "
+  [ "$(print_help)" = "${ans}${anss}" ]
+
+  # Test with comment continuation
+  echo ' b) # Cat \' >> file1
+  echo '    # and dog' >> file1
+  echo '    # Not included' >> file1
+  echo ' c) # Run C++' >> file1
+  ans+=$'b   Cat and dog\n'
+  ans+=$'c   Run C++\n'
+  [ "$(print_help)" = "${ans}${anss}" ]
+
+  # Test multiple files
+  echo ' d) #Test this' > file2
+  ans+=$'d   Test this\n'
+  [ "$(print_help)" = "${ans}${anss}" ]
+
+  # Test indent width
+  rm file2
+  echo ' a) # Test 1' > file1
+  echo ' superjust) # Just with super powers' > file2
+  ans="${head}"
+  ans+=$'a          Test 1\n'
+  ans+=$'superjust  Just with super powers\n'
+  [ "$(print_help)" = "${ans}${anss}" ]
+
+  # Test subcommands
+  echo "sub_this) # foo" >> file2
+  anss="${subc}"
+  anss+=$'sub      \n'
+  anss+=$'    this  foo'
+  [ "$(print_help)" = "${ans}${anss}" ]
+
+  # Should be alphabetized
+  echo "sub_that) # bat" >> file2
+  anss="${subc}"
+  anss+=$'sub      \n'
+  anss+=$'    that  bat\n'
+  anss+=$'    this  foo'
+  [ "$(print_help)" = "${ans}${anss}" ]
+
+  rm file2
+  echo "-flag) # Flag 1" > file1
+  echo "-a) # Archive" >> file1
+  echo "foo) #Bar" >> file1
+  echo "apple) # Tree" >> file1
+  ans="${head}"
+  ans+=$'apple  Tree\n'
+  ans+=$'foo    Bar\n'
+  ans+=$'-a     Archive\n'
+  ans+=$'-flag  Flag 1\n'
+  anss="${subc}"
+  anss+="    "
+  [ "$(print_help)" = "${ans}${anss}" ]
+
+  # BUG 1: Only rope shows up
+  echo $'-jump|\\\n' >> file1
+  echo $'-rope) # Two line\n' >> file1
+  ans+=$'-rope  Two line\n'
+  [ "$(print_help)" = "${ans}${anss}" ]
+
+  # BUG 2: Indent not properly adjusted, only includes one arg in the calculation
+  echo $'-sea|-ocea|-wate) # Long line\n' >> file1
+  ans+=$'-sea|-ocea|-wate Long line\n'
+  [ "$(print_help)" = "${ans}${anss}" ]
+
+  # Expansion magic
+  echo '#start_{SERVICE_NAMES}) # Start service' > file2
+  SERVICE_NAMES=(a bb c)
+  anss="${subc}"
+  anss+=$'start    \n'
+  anss+=$'    a     Start service a\n'
+  anss+=$'    bb    Start service bb\n'
+  anss+=$'    c     Start service c'
+  [ "$(print_help)" = "${ans}${anss}" ]
+
+  # Uncommented
+  echo 'stop_{SERVICE_NAMES})' >> file2
+  echo 'clear)' >> file2
+  [ "$(print_help)" = "${ans}${anss}" ]
 )
 end_test
 
