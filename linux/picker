@@ -35,6 +35,9 @@
 #   #if 2 is selected
 #   #var="Choice II"
 #   #var_index=1
+# BUGS
+#   If one of your choices has a newline in it, the value of ${!1} will only
+#   contain the first line
 # AUTHOR
 #   Andy Neff
 #***
@@ -51,18 +54,21 @@ function picker()
   local args=("${@}")
 
   local x
+
+  local pad="$(awk '{print int(log($1)/log(10)+1e-10)+1}' <<< "$#")"
+
   while true; do
     for x in "${!args[@]}"; do
       x=$((x+1))
-      printf "%2s) ${!x}\n" $x >&2
+      printf "%${pad}s) ${!x}\n" $x >&2
     done
     echo >&2
 
     read -r -p "Please pick a number between 1 and $#: " x
 
-    if [[ ${x} =~ ^[0-9]+$ ]] && (( ${x} > 0 )) && (( ${x} <= $# )); then
-      export "${key}"="${!x}"
-      export "${key}_index"="$((x-1))"
+    if [[ ${x} =~ ^[0-9]+$ ]] && [ "${x}" -gt 0 ] && [ "${x}" -le $# ]; then
+      IFS='' read -r "${key}" <<< "${!x}"
+      IFS='' read -r "${key}_index" <<< "$((x-1))"
       break
     fi
     echo

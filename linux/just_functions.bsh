@@ -286,22 +286,22 @@ function load_justfile()
 #   two lines
 #
 #   It works by checking if an array is set. If it is set, it copies all the
-#   values to the array VSI_TEMP_ARRAY. If it is not set, it will copy the rest
-#   of the arguments (the default values) to VSI_TEMP_ARRAY. When using this
-#   function with set -u turned on, it is best to reference VSI_TEMP_ARRAY by
-#   (${VSI_TEMP_ARRAY+"${VSI_TEMP_ARRAY[@]}"}) in case the array is empty, as
+#   values to the array JUST_TEMP_ARRAY. If it is not set, it will copy the rest
+#   of the arguments (the default values) to JUST_TEMP_ARRAY. When using this
+#   function with set -u turned on, it is best to reference JUST_TEMP_ARRAY by
+#   (${JUST_TEMP_ARRAY+"${JUST_TEMP_ARRAY[@]}"}) in case the array is empty, as
 #   this triggers Bash's unbound variable test.
 # EXAMPLE
-#   set_temp_array MY_ARRAY default1 deafult2 "default 3"
-#   MY_ARRAY=(${VSI_TEMP_ARRAY+"${VSI_TEMP_ARRAY[@]}"})
+#   set_temp_array MY_ARRAY default1 default\ 2 "default 3"
+#   MY_ARRAY=(${JUST_TEMP_ARRAY+"${JUST_TEMP_ARRAY[@]}"})
 #
 #   # And when done, clean up
-#   unset VSI_TEMP_ARRAY
+#   unset JUST_TEMP_ARRAY
 # INPUTS
 #   $1 - Name of array to check if it is already set
 #   $2... - Default values of the array
 # OUTPUT
-#   VSI_TEMP_ARRAY - Destination for all the values set
+#   JUST_TEMP_ARRAY - Destination for all the values set
 # AUTHOR
 #   Andy Neff
 #***
@@ -311,9 +311,9 @@ function set_temp_array()
   shift
   if declare -p $default &> /dev/null; then
     default="${default}[@]"
-    VSI_TEMP_ARRAY=(${!default+"${!default}"})
+    JUST_TEMP_ARRAY=(${!default+"${!default}"})
   else
-    VSI_TEMP_ARRAY=(${@+"${@}"})
+    JUST_TEMP_ARRAY=(${@+"${@}"})
   fi
 }
 
@@ -327,7 +327,7 @@ function set_temp_array()
 #   on tput cols.
 # INPUTS
 #   stdin - Each line is a entry in the pretty printout, separated by
-#           JUST_HELP_SEPARATOR
+#           " ${JUST_HELP_SEPARATOR} " (without the quotes, with the spaces)
 # PARAMETERS
 #   indent - How much the right side should be indented to make a uniform output
 # EXAMPLE
@@ -341,13 +341,49 @@ function set_temp_array()
 function pretty_print_help()
 {
   awk -F " ${JUST_HELP_SEPARATOR} " '
-   { printf "%-'$(($indent-1))'s ", $1
+   function min(a, b)
+   {
+     if (a<b)
+       return a
+     return b
+   }
+   {
+    indent='${indent}'
+    printf "%-'$(($indent-1))'s", $1
     n = split($2,x," ")
     len = '${indent}'
-    for(i=1;i<=n;i++){
-     if(len+length(x[i])>='$(tput cols)'){printf("\n%'$indent's", ""); len = '${indent}'}
-     printf "%s ",x[i]
-     len += 1+length(x[i])
+    width = '$(tput cols)'
+    for(i=1;i<=n;i++)
+    {
+     if(len+length(x[i])>width)
+     {
+      long=x[i]
+      for(j=1;j<length(long);j+=width-indent)
+      {
+       # If this is not the begining of the right column, newline it. This
+       # condition prevents blank lines being inserted for these long words
+       if(len != indent)
+       {
+        printf("\n%'$((indent-1))'s", "")
+        len = indent
+       }
+       # Print what is available
+       printf(" "substr(long, j, width-len))
+       # Calculate the ammount added
+       len += min(width-len+1, length(long)-j+1+1)
+       # If len exceeds width, then make a new line
+       if (len>=width)
+       {
+        printf("\n%'$((indent-1))'s", "")
+        len = indent
+       }
+      }
+     }
+     else
+     {
+      printf " %s",x[i]
+      len += 1+length(x[i])
+     }
     }
     printf "\n"
   }' #c/o http://unix.stackexchange.com/a/280205/123413

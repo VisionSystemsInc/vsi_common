@@ -1,0 +1,158 @@
+#!/usr/bin/env bash
+
+. "$(dirname ${BASH_SOURCE[0]})/testlib.sh"
+. "$(dirname ${BASH_SOURCE[0]})/test_utils.bsh"
+
+VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+. "${VSI_COMMON_DIR}/linux/just_functions.bsh"
+
+begin_test "source_environment_files"
+(
+  set -eu
+
+  mkdir -p "${TRASHDIR}/sef"
+  cd "${TRASHDIR}/sef"
+  echo "justtest=15" > test.env
+  source_environment_files test.env
+  [ "${justtest}" = "15" ]
+  unset justtest
+
+  echo 'plug=in' > plugin1
+  echo 'plugin1' > .justplugins
+  echo ': ${a=15}' > test2.env
+  echo ': ${b=${a}1}' >> test2.env
+  echo 'a=17' > local.env
+  echo 'c=${b}2' > custom.env
+  JUST_LOCAL_SETTINGS_POST=custom.env source_environment_files test2.env
+  [ "${a}" = "17" ]
+  [ "${b}" = "171" ]
+  [ "${c}" = "1712" ]
+  [ -z "${justtest+set}" ]
+  [ "${plug}" = "in" ]
+)
+end_test
+
+begin_test "load_justfile"
+(
+  set -eu
+
+  mkdir -p "${TRASHDIR}/lj"
+  cd "${TRASHDIR}/lj"
+  echo "x=20" > justfile
+  mkdir foo
+  cd foo
+
+  not declare -p x
+  load_justfile justfile
+  [ "${x}" = 20 ]
+)
+end_test
+
+begin_test "set_temp_array"
+(
+  set -eu
+  not declare -p JUST_TEMP_ARRAY
+  not declare -p MY_ARRAY
+  set_temp_array MY_ARRAY
+  [ "${#JUST_TEMP_ARRAY[@]}" = "0" ]
+  unset JUST_TEMP_ARRAY
+
+  not declare -p MY_ARRAY
+  not declare -p JUST_TEMP_ARRAY
+  set_temp_array MY_ARRAY default1 default\ 2 "default  3"
+  check_a JUST_TEMP_ARRAY default1 "default 2" "default  3"
+
+  unset JUST_TEMP_ARRAY
+  MY_ARRAY=(11 22)
+  set_temp_array MY_ARRAY default1 default\ 2 "default  3"
+  check_a JUST_TEMP_ARRAY 11 22
+)
+end_test
+
+begin_test "pretty print help"
+(
+  set -eu
+
+  tput()
+  {
+    echo 20
+  }
+
+  indent=10
+
+  input="test1 ${JUST_HELP_SEPARATOR} 123456789abcdefghijk l mnopq"
+  input+=$'\n'"test2 ${JUST_HELP_SEPARATOR} x 123456789abcdefghij l mnopq"
+  input+=$'\n'"test3 ${JUST_HELP_SEPARATOR} x 123456789abcdefghi l mnopq"
+  input+=$'\n'"test4 ${JUST_HELP_SEPARATOR} x 123456789abcdefghi lm nopq"
+  input+=$'\n'"TEST5 ${JUST_HELP_SEPARATOR} 01 3 5 7 9 0"
+  input+=$'\n'"test6 ${JUST_HELP_SEPARATOR} 1 3 3647e89"
+
+  help="$(pretty_print_help <<< "${input}")"
+  ans=$'test1     123456789a\n'
+  ans+=$'          bcdefghijk\n'
+  ans+=$'          l mnopq\n'
+  ans+=$'test2     x\n'
+  ans+=$'          123456789a\n'
+  ans+=$'          bcdefghij\n'
+  ans+=$'          l mnopq\n'
+  ans+=$'test3     x\n'
+  ans+=$'          123456789a\n'
+  ans+=$'          bcdefghi l\n'
+  ans+=$'          mnopq\n'
+  ans+=$'test4     x\n'
+  ans+=$'          123456789a\n'
+  ans+=$'          bcdefghi\n'
+  ans+=$'          lm nopq\n'
+  ans+=$'TEST5     01 3 5 7 9\n'
+  ans+=$'test6     1 3\n'
+  ans+=$'          3647e89'
+  [ "${help}" = "${ans}" ]
+)
+end_test
+
+begin_test "print help"
+(
+  set -eu
+  mkdir -p "${TRASHDIR}/ph"
+  cd "${TRASHDIR}/ph"
+  JUST_HELP_FILES=(file1 file2)
+  echo " a) # Test 1" > file1
+)
+end_test
+
+begin_test ""
+(
+  set -eu
+)
+end_test
+
+begin_test ""
+(
+  set -eu
+)
+end_test
+
+begin_test ""
+(
+  set -eu
+)
+end_test
+
+begin_test "print_command"
+(
+  set -eu
+
+  [ "$(print_command)" = "" ]
+  [ "$(print_command echo test "this'this" "f o  o")" = "'echo' 'test' 'this'\"'\"'this' 'f o  o'" ]
+)
+end_test
+
+begin_test "DRYRUN trigger"
+(
+  set -eu
+
+  [ "${DRYRUN}" = "" ]
+  defaultify --dryrun
+  [ "${DRYRUN}" = "print_command" ]
+)
+end_test
