@@ -12,6 +12,13 @@ setup()
   help_head+=$'-----------------------------------\n'
   help_subc=$'\nSubcommands\n'
   help_subc+=$'-----------\n'
+
+  # Keep the results consistent, plus on darling, TERM isn't set by default
+  # (xterm-256color). The only tput call expected is "tput cols"
+  tput()
+  {
+    echo 80
+  }
 }
 
 begin_test "source_environment_files"
@@ -77,6 +84,7 @@ begin_test "pretty print help"
 (
   set -eu
 
+  # For this test, use tput cols of 20
   tput()
   {
     echo 20
@@ -114,39 +122,65 @@ begin_test "pretty print help"
 )
 end_test
 
-begin_test "print help"
+begin_test "print help basic"
+(
+  set -eu
+
+  JUST_HELP_FILES=(file1)
+
+  echo ' a) # Test 1' > file1
+  ans="${help_head}"
+  ans+=$'a   Test 1\n'
+  anss="${help_subc}    "
+  [ "$(print_help)" = "${ans}${anss}" ]
+)
+end_test
+
+begin_test "print help comment multiple line continuation"
+(
+  set -eu
+
+  JUST_HELP_FILES=(file1)
+
+  # Test with comment continuation
+  echo ' b) # Cat \' > file1
+  echo '    # and dog' >> file1
+  echo '    # Not included' >> file1
+  echo ' c) # Run C++' >> file1
+  ans="${help_head}"
+  ans+=$'b   Cat and dog\n'
+  ans+=$'c   Run C++\n'
+  anss="${help_subc}    "
+  [ "$(print_help)" = "${ans}${anss}" ]
+)
+end_test
+
+begin_test "print help multiple files"
 (
   set -eu
 
   JUST_HELP_FILES=(file1 file2)
 
-  # Basic test
-  echo ' a) # Test 1' > file1
+  # Test 1 out of 2 files
+  echo ' c) # Run C++' > file1
   ans="${help_head}"
-  ans+=$'a   Test 1\n'
-  anss="${help_subc}"
-  anss+="    "
-  [ "$(print_help)" = "${ans}${anss}" ]
-
-  # Test with comment continuation
-  echo ' b) # Cat \' >> file1
-  echo '    # and dog' >> file1
-  echo '    # Not included' >> file1
-  echo ' c) # Run C++' >> file1
-  ans+=$'b   Cat and dog\n'
   ans+=$'c   Run C++\n'
+  anss="${help_subc}    "
   [ "$(print_help)" = "${ans}${anss}" ]
 
-  # Test multiple files
+  # Test 2 out of 2 files
   echo ' d) #Test this' > file2
   ans+=$'d   Test this\n'
   [ "$(print_help)" = "${ans}${anss}" ]
 )
 end_test
 
-begin_test "print_help 2"
+begin_test "print help automatic indent adjustment"
 (
   set -eu
+
+  JUST_HELP_FILES=(file1 file2)
+
   # Test indent width
   echo ' a) # Test 1' > file1
   echo ' superjust) # Just with super powers' > file2
@@ -156,16 +190,25 @@ begin_test "print_help 2"
   anss="${help_subc}"
   anss+="    "
   [ "$(print_help)" = "${ans}${anss}" ]
+)
+end_test
+
+begin_test "print help sub commands"
+(
+  set -eu
+
+  JUST_HELP_FILES=(file1 file2)
 
   # Test help_subcommands
-  echo "sub_this) # foo" >> file2
+  echo "sub_this) # foo" > file2
+  ans="${help_head}"
   anss="${help_subc}"
   anss+=$'sub      \n'
   anss+=$'    this  foo'
   [ "$(print_help)" = "${ans}${anss}" ]
 
   # Should be alphabetized
-  echo "sub_that) # bat" >> file2
+  echo "sub_that) # bat" > file1
   anss="${help_subc}"
   anss+=$'sub      \n'
   anss+=$'    that  bat\n'
@@ -174,11 +217,12 @@ begin_test "print_help 2"
 )
 end_test
 
-begin_test "print help 3"
+begin_test "print help flags"
 (
   set -eu
-_skipping_test=1
-exit 0
+
+  JUST_HELP_FILES=(file1 file2)
+
   echo "-flag) # Flag 1" > file1
   echo "-a) # Archive" >> file1
   echo "foo) #Bar" >> file1
@@ -191,21 +235,71 @@ exit 0
   anss="${help_subc}"
   anss+="    "
   [ "$(print_help)" = "${ans}${anss}" ]
+)
+end_test
 
-  # BUG 1: Only rope shows up
-  echo $'-jump|\\\n' >> file1
-  echo $'-rope) # Two line\n' >> file1
+begin_test "print help multiple commands"
+(
+  set -eu
+
+  JUST_HELP_FILES=(file1)
+
+  echo '-jump|\' > file1
+  echo '-rope) # Two line' >> file1
+  ans="${help_head}"
+  ans+=$'-jump  Two line\n'
   ans+=$'-rope  Two line\n'
+  anss="${help_subc}    "
   [ "$(print_help)" = "${ans}${anss}" ]
 
-  # BUG 2: Indent not properly adjusted, only includes one arg in the calculation
-  echo $'-sea|-ocea|-wate) # Long line\n' >> file1
-  ans+=$'-sea|-ocea|-wate Long line\n'
+  echo "-beach) # Normal line" > file1
+  echo "-sea|-water|-ocean) # Long line" >> file1
+  ans="${help_head}"
+  ans+=$'-beach  Normal line\n'
+  ans+=$'-ocean  Long line\n'
+  ans+=$'-sea    Long line\n'
+  ans+=$'-water  Long line\n'
+  anss="${help_subc}    "
   [ "$(print_help)" = "${ans}${anss}" ]
+)
+end_test
 
-  # Expansion magic
+begin_test "print help Mixed subcommand and commands"
+(
+  set -eu
+
+  JUST_HELP_FILES=(file1)
+
+  echo 'shortcut|short_sub|sc) # Mixed mode' > file1
+  echo 'best_sub|bsc) # Mixed mode' >> file1
+  echo 'testcut|test_sub) # Mixed mode' >> file1
+  ans="${help_head}"
+  ans+=$'bsc       Mixed mode\n'
+  ans+=$'sc        Mixed mode\n'
+  ans+=$'shortcut  Mixed mode\n'
+  ans+=$'testcut   Mixed mode\n'
+  anss="${help_subc}"
+  anss+=$'best      \n'
+  anss+=$'    sub    Mixed mode\n'
+  anss+=$'short     \n'
+  anss+=$'    sub    Mixed mode\n'
+  anss+=$'test      \n'
+  anss+=$'    sub    Mixed mode'
+  [ "$(print_help)" = "${ans}${anss}" ]
+)
+end_test
+
+begin_test "print help expansion"
+(
+  set -eu
+
+  JUST_HELP_FILES=(file1 file2)
+
+  # Target expansion feature
   echo '#start_{SERVICE_NAMES}) # Start service' > file2
+  echo " start_*)" >> file2 # The real start line
   SERVICE_NAMES=(a bb c)
+  ans="${help_head}"
   anss="${help_subc}"
   anss+=$'start    \n'
   anss+=$'    a     Start service a\n'
@@ -220,21 +314,54 @@ exit 0
 )
 end_test
 
-begin_test ""
+begin_test "print help test it all"
 (
   set -eu
-)
-end_test
 
-begin_test ""
-(
-  set -eu
-)
-end_test
+  JUST_HELP_FILES=(file1 file2 file3 file4)
 
-begin_test ""
-(
-  set -eu
+  echo ' b) # Cat \' > file1
+  echo '    # and dog' >> file1
+  echo '    # Not included' >> file1
+  echo ' c) # Run C++' >> file1
+
+
+  SERVICE_NAMES=(a qwertyuiop c)
+  echo '#start_{SERVICE_NAMES}) # Start service' > file2
+  echo " start_*)" >> file2 # The real start line
+
+  echo "-flag) # Flag 1" > file3
+  echo "-a) # Archive" >> file3
+  echo "foo) #Bar" >> file3
+  echo "apple) # Tree" >> file3
+
+  echo '-jump|\' > file4
+  echo '-rope) # Two line' >> file4
+  echo "-sea|-wate|-ocea) # Long line" >> file4
+
+  ans="${help_head}"
+
+  ans="${help_head}"
+  ans+=$'apple  Tree\n'
+  ans+=$'b      Cat and dog\n'
+  ans+=$'c      Run C++\n'
+  ans+=$'foo    Bar\n'
+  ans+=$'-a     Archive\n'
+  ans+=$'-flag  Flag 1\n'
+  ans+=$'-jump  Two line\n'
+  ans+=$'-ocea  Long line\n'
+  ans+=$'-rope  Two line\n'
+  ans+=$'-sea   Long line\n'
+  ans+=$'-wate  Long line\n'
+
+  anss="${help_subc}"
+  anss+=$'start            \n'
+  anss+=$'    a             Start service a\n'
+  anss+=$'    c             Start service c\n'
+  anss+=$'    qwertyuiop    Start service qwertyuiop'
+
+  [ "$(print_help)" = "${ans}${anss}" ]
+  # [ "$(print_help | xxd)" = "$(xxd <<< "${ans}${anss}")" ]
 )
 end_test
 
@@ -247,12 +374,277 @@ begin_test "print_command"
 )
 end_test
 
-begin_test "DRYRUN trigger"
+begin_test "defaultify DRYRUN trigger"
 (
   set -eu
 
   [ "${DRYRUN}" = "" ]
   defaultify --dryrun
   [ "${DRYRUN}" = "print_command" ]
+
+  DRYRUN=""
+  defaultify -n
+  [ "${DRYRUN}" = "print_command" ]
+)
+end_test
+
+begin_test "defaultify separator"
+(
+  set -eu
+
+  [ "${JUST_SEPARATOR}" == "--" ]
+  defaultify --separator ':)'
+  [ "${JUST_SEPARATOR}" == ":)" ]
+)
+end_test
+
+begin_test "defaultify calling unknowify"
+(
+  set -eu
+
+  x=1
+
+  function unknownify()
+  {
+    x="QQ${1}qq"
+  }
+
+  defaultify testthis
+
+  [ "${x}" = "QQtestthisqq" ]
+)
+end_test
+
+begin_test "justify calls"
+(
+  set -eu
+
+  function add()
+  {
+    echo "$1) # Blah" >> file1
+    echo '  echo ":'"$1"':" ${@+"${@}"}' >> file1
+    echo "  extra_args+=${2-0}" >> file1
+    echo '  ;;' >> file1
+  }
+
+  JUST_HELP_FILES=(file1)
+
+  echo 'function caseify()' > file1
+  echo '{' >> file1
+  echo '  local just_arg=$1' >> file1
+  echo '  shift 1' >> file1
+  echo '  case ${just_arg} in' >> file1
+
+
+  add foo
+  add apple 1
+  add bar 2
+  echo '#start_{SERVICE_NAMES}) # Start service' >> file1
+  add 'start_*'
+
+  add stop_a
+  add stop_c
+  add '-flag'
+  add '-a'
+
+  echo '-jump|\' >> file1
+  add rope '$#'
+  add '-sea|-water|-ocean'
+  echo '*)' >> file1
+  echo '  echo "!${just_arg}!" ${@+"${@}"}' >> file1
+  echo '  ;;' >> file1
+  echo 'esac' >> file1
+  echo '}' >> file1
+
+  # Set up service names
+  SERVICE_NAMES=(a qwertyuiop c)
+  . file1
+
+  # normal call
+  [ "$(justify foo)" = $':foo:' ]
+
+  # Two normal calls
+  [ "$(justify foo foo)" = $':foo: foo\n:foo:' ]
+
+  # Call with one argument
+  [ "$(justify apple)" = ":apple:" ] #Missing arg
+  [ "$(justify apple tree)" = ":apple: tree" ] # with arg
+  [ "$(justify apple tree park)" = $':apple: tree park\n!park!' ] #2nd arg should be a new call
+
+  # Two args
+  [ "$(justify bar)" = ":bar:" ] #Missing arg
+  [ "$(justify bar tree)" = ":bar: tree" ] # one arg
+  [ "$(justify bar tree park)" = $':bar: tree park' ] #2nd arg should be a new call
+  [ "$(justify bar tree park zoo)" = $':bar: tree park zoo\n!zoo!' ] #3rd arg should be a new call
+
+  # All args
+  [ "$(justify rope)" = ":rope:" ] #0 args
+  [ "$(justify rope twine)" = ":rope: twine" ] #1 args
+  [ "$(justify rope twine cord)" = ":rope: twine cord" ] #2 args
+  [ "$(justify rope twine sisal string thread yarn lace)" = \
+    ":rope: twine sisal string thread yarn lace" ] #6 args
+
+  # Multiple of same target
+  [ "$(justify -sea -ocean -water)" = \
+    $':-sea|-water|-ocean: -ocean -water\n:-sea|-water|-ocean: -water\n:-sea|-water|-ocean:' ]
+
+  # Misc - Using other target value
+  [ "$(justify -jump rope)" = $':rope: rope' ] #This one is weird because of the
+  # way I made the test, the echo only echos rope, no matter what just_arg is
+  # it has no implication on how justify works at all, so don't think too hard
+  # about it
+
+  # Valid subcommands
+  [ "$(justify start a)" = ':start_*:' ]
+  [ "$(justify stop a)" = ':stop_a:' ]
+
+  # Multiple subcommands
+  [ "$(justify start a c)" = $':start_*: c\n:start_*:' ]
+  [ "$(justify stop a c)" = $':stop_a: c\n:stop_c:' ]
+  [ "$(justify start a start c)" = $':start_*: start c\n:start_*:' ]
+  [ "$(justify stop a stop c)" = $':stop_a: stop c\n:stop_c:' ]
+  # Mix it up
+  [ "$(justify start a stop c)" = $':start_*: stop c\n:stop_c:' ]
+  [ "$(justify stop a start c)" = $':stop_a: start c\n:start_*:' ]
+
+  # Invalid subcommand
+  [ "$(justify start b)" = $'!start! b\n!b!' ]
+  [ "$(justify stop b)" = $'!stop! b\n!b!' ]
+)
+end_test
+
+begin_test "callify"
+(
+  set -eu
+
+  test1()
+  {
+    echo $# >&2
+    for x in $(seq 1 1 $#); do
+      echo $x >&2
+      printf "$x:${@:$x:1} "
+    done
+  }
+
+  # No args
+  [ "$(callify test1)" == "" ]
+  [ "$(callify test1 -- 11)" == "" ]
+  [ "$(callify test1 -- 11 --)" == "" ]
+
+  # One arg
+  [ "$(callify test1 11)" == "1:11 " ]
+  [ "$(callify test1 11 --)" == "1:11 " ]
+  [ "$(callify test1 11 -- 22)" == "1:11 " ]
+
+  # Many args
+  [ "$(callify test1 11 12 13)" == "1:11 2:12 3:13 " ]
+  [ "$(callify test1 11 12 13 14 --)" == "1:11 2:12 3:13 4:14 " ]
+  [ "$(callify test1 11 12 -- 22)" == "1:11 2:12 " ]
+
+  # Custom Separator
+  JUST_SEPARATOR='$@$'
+  [ "$(callify test1 11 -- 22 '$@$' 33)" == "1:11 2:-- 3:22 " ]
+)
+end_test
+
+begin_test "get_args"
+(
+  set -eu
+
+  # No args
+  get_args
+  check_a args
+  [ "${get_args_args_used}" -eq 0 ]
+  get_args -- 11
+  check_a args
+  [ "${get_args_args_used}" -eq 1 ]
+  get_args -- 11 --
+  check_a args
+  [ "${get_args_args_used}" -eq 1 ]
+
+  # 1 arg
+  get_args 11
+  check_a args 11
+  [ "${get_args_args_used}" -eq 1 ]
+  get_args 11 --
+  check_a args 11
+  [ "${get_args_args_used}" -eq 2 ]
+  get_args 11 -- 22
+  check_a args 11
+  [ "${get_args_args_used}" -eq 2 ]
+
+  # Multiple args
+  get_args 11 12 13
+  check_a args 11 12 13
+  [ "${get_args_args_used}" -eq 3 ]
+  get_args 11 12 13 14 --
+  check_a args 11 12 13 14
+  [ "${get_args_args_used}" -eq 5 ]
+  get_args 11 12 -- 22
+  check_a args 11 12
+  [ "${get_args_args_used}" -eq 3 ]
+
+  # Custom Separator
+  JUST_SEPARATOR='$@$'
+  get_args 11 -- 22 '$@$' 33
+  check_a args 11 -- 22
+  [ "${get_args_args_used}" -eq 4 ]
+)
+end_test
+
+begin_test "get_additional_args"
+(
+  set -eu
+
+  my_args=(11 -- 22 23 -- 33 -- -- 55)
+
+  get_args "${my_args[@]}"
+  check_a args 11
+
+  get_additional_args "${my_args[@]}"
+  check_a args 22 23
+
+  get_additional_args "${my_args[@]}"
+  check_a args 33
+
+  get_additional_args "${my_args[@]}"
+  check_a args
+
+  get_additional_args "${my_args[@]}"
+  check_a args 55
+)
+end_test
+
+# Bash 3.2 handles unset declared variables different from modern bash
+[ "${BASH_VERSINFO[0]}" -lt 4 ] && skip_next_test
+begin_must_fail_test "get_additional_args called without get_args"
+(
+  set -eu
+  check_skip
+  get_additional_args 11 -- 22 -- 33
+)
+end_test
+
+begin_test "safe_load"
+(
+  set -eu
+  echo 'a=12' > file1
+  echo 'b=sixteen' >> file1
+  echo 'c=eval $((1+15));`touch file2`' >> file1
+
+  safe_load file1
+
+  [ "${a}" = "12" ]
+  [ "${b}" = "sixteen" ]
+  [ "${c}" = 'eval $((1+15));`touch file2`' ]
+
+  [ ! -f file2 ]
+
+  # Custom delimiter
+  JUST_SAFE_LOAD_DELIMITER=:
+  echo 'd:21' > file2
+  safe_load file2
+  [ "${d}" = "21" ]
+
 )
 end_test
