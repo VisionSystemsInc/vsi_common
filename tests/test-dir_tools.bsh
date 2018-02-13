@@ -1,0 +1,55 @@
+. "$(dirname ${BASH_SOURCE[0]})/testlib.sh"
+. "$(dirname ${BASH_SOURCE[0]})/test_utils.bsh"
+
+VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+. "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
+
+begin_test "parent find files"
+(
+  set -eu
+
+  mkdir -p a/b/c/d/e/f
+  touch a/b/test1
+  touch a/b/test11
+  touch a/test12
+  touch a/b/c/d/e/f/test2
+  touch test3
+
+  pushd a/b/c/d/e/f
+    parent_find_files test1
+    check_a file_matches "${TESTDIR}/a/b/test1"
+    parent_find_files test1 test11 test12
+    check_a file_matches "${TESTDIR}/a/b/test1" "${TESTDIR}/a/b/test11"
+    parent_find_files test2
+    check_a file_matches "${TESTDIR}/a/b/c/d/e/f/test2"
+    parent_find_files test3
+    check_a file_matches "${TESTDIR}/test3"
+    parent_find_files test4
+    check_a file_matches
+  popd
+
+  pushd a/b/c/d/e
+    parent_find_files test1
+    check_a file_matches "${TESTDIR}/a/b/test1"
+    parent_find_files test1 test11 test12
+    check_a file_matches "${TESTDIR}/a/b/test1" "${TESTDIR}/a/b/test11"
+    parent_find_files test2
+    check_a file_matches
+    parent_find_files test3
+    check_a file_matches "${TESTDIR}/test3"
+    parent_find_files test4
+    check_a file_matches
+  popd
+
+  parent_find_files test1
+  check_a file_matches
+  parent_find_files test1 test11 test12
+  check_a file_matches
+  parent_find_files test2
+  check_a file_matches
+  parent_find_files test3
+  check_a file_matches "${TESTDIR}/test3"
+  parent_find_files test4
+  check_a file_matches
+)
+end_test
