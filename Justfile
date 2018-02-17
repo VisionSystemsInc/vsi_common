@@ -27,14 +27,14 @@ function caseify()
         extra_args+=$#
       ;;
     run_wine) # Start a wine bash window
-      docker run -it --rm --privileged \
+      docker run -it --rm --cap-add=SYS_PTRACE \
                  -e VSI_COMMON_IS_POWERSHELL=1 \
                  -v "${VSI_COMMON_DIR}":/root/.wine/drive_c/vsi_common \
                  -w /root/.wine/drive_c/vsi_common \
                  vsiri/wine_msys64
       ;;
     run_wine-gui) # Start a wine bash window in gui mode
-      docker run --rm --privileged -e DISPLAY -e USER_ID="$(id -u)"\
+      docker run --rm --cap-add=SYS_PTRACE -e DISPLAY -e USER_ID="$(id -u)"\
                  -e VSI_COMMON_IS_POWERSHELL=1 \
                  -v /tmp/.X11-unix:/tmp/.X11-unix \
                  -v "${VSI_COMMON_DIR}":/root/.wine/drive_c/vsi_common \
@@ -42,7 +42,7 @@ function caseify()
                  vsiri/wine_msys64 &
       ;;
     test_wine)
-      docker run -it --rm --privileged \
+      docker run -it --rm --cap-add=SYS_PTRACE \
                  -e VSI_COMMON_IS_POWERSHELL=1 \
                  -v "${VSI_COMMON_DIR}":/root/.wine/drive_c/vsi_common \
                  -w /root/.wine/drive_c/vsi_common \

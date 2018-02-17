@@ -1,0 +1,309 @@
+#!/usr/bin/env bash
+
+. "$(dirname ${BASH_SOURCE[0]})/testlib.sh"
+. "$(dirname ${BASH_SOURCE[0]})/test_utils.bsh"
+. "$(dirname ${BASH_SOURCE[0]})/../linux/elements.bsh"
+
+begin_test "_save flag"
+(
+  set -eu
+
+  # Test e flag, which is obviously on
+  _save_flag e
+  [ "${VSI_COMMON_SET_FLAG_e}" = "1" ]
+  # Should not export
+  bash -euxvc '[ -z "${VSI_COMMON_SET_FLAG_e+set}" ]'
+
+  # This flag should be off in a script
+  _save_flag m
+  [ "${VSI_COMMON_SET_FLAG_m}" = "0" ]
+  bash -euxvc '[ -z "${VSI_COMMON_SET_FLAG_m+set}" ]'
+
+  reset_flags
+  [ -z "${VSI_COMMON_SET_FLAG_m+set}" ]
+  [ -z "${VSI_COMMON_SET_FLAG_e+set}" ]
+)
+end_test
+
+begin_test "set unset and reset flag"
+(
+  set -eu
+
+  set +m # Should already be disabled
+
+  # Basic set reset use case, m is off by default in script
+  [[ ! ${-} =~ m ]]
+  set_flag m
+  [[ ${-} =~ m ]]
+  reset_flag m
+  [[ ! ${-} =~ m ]]
+
+  unset_flag m
+  [[ ! ${-} =~ m ]]
+  reset_flag m
+  [[ ! ${-} =~ m ]]
+
+
+  # Set outside of set_flag so it is the "original state"
+  set -m
+
+  # Same, but it was flag set to begin with
+  [[ ${-} =~ m ]]
+  set_flag m
+  [[ ${-} =~ m ]]
+  reset_flag m
+  [[ ${-} =~ m ]] # Original state
+
+  unset_flag m
+  [[ ! ${-} =~ m ]]
+  reset_flag m
+  [[ ${-} =~ m ]] # Original state
+
+
+  # Complicated reset use case
+  set_flag m
+  set_flag m
+  unset_flag m
+  set_flag m
+  unset_flag m
+  unset_flag m
+  reset_flag m
+  [[ ${-} =~ m ]] # Original state
+)
+end_test
+
+begin_test "set unset and reset flags"
+(
+  set -eu
+
+  set -m
+  set +H
+
+  [[ ${-} =~ m ]]
+  [[ ! ${-} =~ H ]]
+  set_flags mH
+
+  [[ ${-} =~ m ]]
+  [[ ${-} =~ H ]]
+
+  unset_flags Hm
+  [[ ! ${-} =~ m ]]
+  [[ ! ${-} =~ H ]]
+
+  [[ ! ${-} =~ b ]]
+  set_flag b
+  [[ ${-} =~ b ]]
+
+  # only reset 2 our of three
+  reset_flags mH
+  [[ ${-} =~ m ]]
+  [[ ! ${-} =~ H ]]
+  [[ ${-} =~ b ]]
+)
+end_test
+
+begin_test "_save optflag"
+(
+  set -eu
+
+  shopt -q cmdhist
+  not shopt -q shift_verbose
+
+  # Test e flag, which is obviously on
+  _save_optflag cmdhist
+  [ "${VSI_COMMON_SET_OPTFLAG_cmdhist}" = "1" ]
+  # Should not export
+  bash -euxvc '[ -z "${VSI_COMMON_SET_OPTFLAG_cmdhist+set}" ]'
+
+  # This flag should be off in a script
+  _save_optflag shift_verbose
+  [ "${VSI_COMMON_SET_OPTFLAG_shift_verbose}" = "0" ]
+  bash -euxvc '[ -z "${VSI_COMMON_SET_OPTFLAG_shift_verbose+set}" ]'
+
+  reset_optflags
+  [ -z "${VSI_COMMON_SET_OPTFLAG_cmdhist+set}" ]
+  [ -z "${VSI_COMMON_SET_OPTFLAG_shift_verbose+set}" ]
+)
+end_test
+
+begin_test "set unset and reset optflag"
+(
+  set -eu
+
+  shopt -u shift_verbose
+
+  # Basic set reset use case, m is off by default in script
+  not shopt -q shift_verbose
+  set_optflag shift_verbose
+  shopt -q shift_verbose
+  reset_optflag shift_verbose
+  not shopt -q shift_verbose
+
+  unset_optflag shift_verbose
+  not shopt -q shift_verbose
+  reset_optflag shift_verbose
+  not shopt -q shift_verbose
+
+
+  # Set outside of set_optflag so it is the "original state"
+  shopt -s shift_verbose
+
+  # Same, but it was flag set to begin with
+  shopt -q shift_verbose
+  set_optflag shift_verbose
+  shopt -q shift_verbose
+  reset_optflag shift_verbose
+  shopt -q shift_verbose
+
+  unset_optflag shift_verbose
+  not shopt -q shift_verbose
+  reset_optflag shift_verbose
+  shopt -q shift_verbose
+
+
+  # Complicated reset use case
+  set_optflag shift_verbose
+  set_optflag shift_verbose
+  unset_optflag shift_verbose
+  set_optflag shift_verbose
+  unset_optflag shift_verbose
+  unset_optflag shift_verbose
+  reset_optflag shift_verbose
+  shopt -q shift_verbose
+)
+end_test
+
+begin_test "set unset and reset optflags"
+(
+  set -eu
+
+  shopt -s cmdhist
+  shopt -u shift_verbose
+
+  shopt -q cmdhist
+  not shopt -q shift_verbose
+
+  set_optflags cmdhist shift_verbose
+  shopt -q cmdhist
+  shopt -q shift_verbose
+
+  unset_optflags shift_verbose cmdhist
+  not shopt -q cmdhist
+  not shopt -q shift_verbose
+
+  not shopt -q nullglob
+  set_optflag nullglob
+  shopt -q nullglob
+
+  # Reset 2 out of 3
+  reset_optflags cmdhist shift_verbose
+  shopt -q cmdhist
+  not shopt -q shift_verbose
+  shopt -q nullglob
+)
+end_test
+
+
+begin_test "_save oflag"
+(
+  set -eu
+
+  set +o ignoreeof
+  set -o emacs
+
+  [[ ! ${SHELLOPTS} =~ (^|:)ignoreeof(:|$) ]]
+  [[ ${SHELLOPTS} =~ (^|:)emacs(:|$) ]]
+
+  # Test e flag, which is obviously on
+  _save_oflag emacs
+  [ "${VSI_COMMON_SET_OFLAG_emacs}" = "1" ]
+  # Should not export
+  bash -euxvc '[ -z "${VSI_COMMON_SET_OFLAG_emacs+set}" ]'
+
+  # This flag should be off in a script
+  _save_oflag ignoreeof
+  [ "${VSI_COMMON_SET_OFLAG_ignoreeof}" = "0" ]
+  bash -euxvc '[ -z "${VSI_COMMON_SET_OFLAG_ignoreeof+set}" ]'
+
+  reset_oflags
+  [ -z "${VSI_COMMON_SET_OFLAG_emacs+set}" ]
+  [ -z "${VSI_COMMON_SET_OFLAG_ignoreeof+set}" ]
+)
+end_test
+
+begin_test "set unset and reset oflag"
+(
+  set -eu
+
+  set +o ignoreeof
+
+  # Basic set reset use case, m is off by default in script
+  [[ ! ${SHELLOPTS} =~ (^|:)ignoreeof(:|$) ]]
+  set_oflag ignoreeof
+  [[ ${SHELLOPTS} =~ (^|:)ignoreeof(:|$) ]]
+  reset_oflag ignoreeof
+  [[ ! ${SHELLOPTS} =~ (^|:)ignoreeof(:|$) ]]
+
+  unset_oflag ignoreeof
+  [[ ! ${SHELLOPTS} =~ (^|:)ignoreeof(:|$) ]]
+  reset_oflag ignoreeof
+  [[ ! ${SHELLOPTS} =~ (^|:)ignoreeof(:|$) ]]
+
+
+  # Set outside of set_optflag so it is the "original state"
+  set -o ignoreeof
+
+  # Same, but it was flag set to begin with
+  [[ ${SHELLOPTS} =~ (^|:)ignoreeof(:|$) ]]
+  set_oflag ignoreeof
+  [[ ${SHELLOPTS} =~ (^|:)ignoreeof(:|$) ]]
+  reset_oflag ignoreeof
+  [[ ${SHELLOPTS} =~ (^|:)ignoreeof(:|$) ]]
+
+  unset_oflag ignoreeof
+  [[ ! ${SHELLOPTS} =~ (^|:)ignoreeof(:|$) ]]
+  reset_oflag ignoreeof
+  [[ ${SHELLOPTS} =~ (^|:)ignoreeof(:|$) ]]
+
+
+  # Complicated reset use case
+  set_oflag ignoreeof
+  set_oflag ignoreeof
+  unset_oflag ignoreeof
+  set_oflag ignoreeof
+  unset_oflag ignoreeof
+  unset_oflag ignoreeof
+  reset_oflag ignoreeof
+  [[ ${SHELLOPTS} =~ (^|:)ignoreeof(:|$) ]]
+)
+end_test
+
+begin_test "set unset and reset oflags"
+(
+  set -eu
+
+  set -o emacs
+  set +o ignoreeof
+
+  [[ ${SHELLOPTS} =~ (^|:)emacs(:|$) ]]
+  [[ ! ${SHELLOPTS} =~ (^|:)ignoreeof(:|$) ]]
+
+  set_oflags emacs ignoreeof
+  [[ ${SHELLOPTS} =~ (^|:)emacs(:|$) ]]
+  [[ ${SHELLOPTS} =~ (^|:)ignoreeof(:|$) ]]
+
+  unset_oflags ignoreeof emacs
+  [[ ! ${SHELLOPTS} =~ (^|:)emacs(:|$) ]]
+  [[ ! ${SHELLOPTS} =~ (^|:)ignoreeof(:|$) ]]
+
+  [[ ! ${SHELLOPTS} =~ (^|:)nolog(:|$) ]]
+  set_oflag nolog
+  [[ ${SHELLOPTS} =~ (^|:)nolog(:|$) ]]
+
+  reset_oflags emacs ignoreeof
+  [[ ${SHELLOPTS} =~ (^|:)emacs(:|$) ]]
+  [[ ! ${SHELLOPTS} =~ (^|:)ignoreeof(:|$) ]]
+  [[ ${SHELLOPTS} =~ (^|:)nolog(:|$) ]]
+)
+end_test
+
