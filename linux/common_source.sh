@@ -111,7 +111,7 @@ esac
 #     6.1    Windows 7       and Windows Server 2008R2
 #     6.0    Windows Vista   and Windows Server 2008
 #     5.2    Windows XP x64  and Windows Server 2003 and 2003R2
-#     5.1    Windows XP and Wine
+#     5.1    Windows XP
 #     5.0    Windows 2000    and Windows 2000 Server
 #     4.0    Windows NT 4.0  and Windows NT 4.0 Server
 #     3.51   Windows NT 3.51 and Windows NT 3.51 Server

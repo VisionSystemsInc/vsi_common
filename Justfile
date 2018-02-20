@@ -65,38 +65,51 @@ function caseify()
     tag-just)
       (
         # Get a list of all the files that make up just
-        shopt -s dotglob
         shopt -s nocaseglob
 
-        just_files=(linux/*just*)
-        support_files=(linux/elements.bsh linux/linux_accounts.bsh linux/mount_tools.bsh linux/docker_compose_override)
-        for f in $(ls -I '*just*' -I '*Just*' linux); do
-          if grep -q "${f}" "${just_files[@]}"; then
-            support_files+=("linux/${f}")
-          fi
+        just_files=()
+        more_files=(env.bsh
+                    linux/example_just
+                    linux/just linux/new_just
+                    linux/just_*functions.bsh
+                    linux/.just)
+        # more_files+=(linux/real_path)
+        while [ -n "${more_files+set}" ]; do
+          just_files+=("${more_files[@]}")
+          more_files=()
+          while IFS= read -r -d '' f; do
+            if grep -q "^[^#].*$(basename ${f})" "${just_files[@]}"; then
+              if ! isin "${f}" "${just_files[@]}" ${more_files+"${more_files[@]}"}; then
+                more_files+=("${f}")
+              fi
+            fi
+          done < <(find linux -type f -not -name '.git*' -print0)
         done
-        # And copy them over
-        cp env.bsh "${just_files[@]}" "${support_files[@]}" internal/just/
-        cp docker/vsi_common/docker-compose.yml internal/just/robodoc.yml
+
+        # And copy all of the just files
+        cp "${just_files[@]}" internal/just/
 
         # Refactor the code to stand alone
         # Remove unused feature in just
         sed -i -e '/PYTHONPATH/d' -e '/MATLABPATH/d' internal/just/env.bsh
         # Rebrand VSI_COMMON_DIR
-        sed -i 's|VSI_COMMON_DIR|JUST_DIR|g' internal/just/*
+        sed -i 's|VSI_COMMON_DIR|JUST_DIR|g' internal/just/* internal/just/.just
         # Flatten dir structure
-        sed -i 's|${JUST_DIR}/linux|${JUST_DIR}|g' internal/just/*
-        # Fix robodoc compose 
-        sed -i 's|${JUST_DIR}/docker/vsi_common/docker-compose.yml|${JUST_DIR}/robodoc.yml|' internal/just/just_robodoc_functions.bsh
+        sed -i 's|${JUST_DIR}/linux|${JUST_DIR}|g' internal/just/* internal/just/.just
         # Refactor new_just
         sed -i 's|vsi_common|just|' internal/just/new_just
         sed -i 's|VSI_DIR|JUST_COMMON_DIR|' internal/just/new_just
         sed -i 's|VSI |Just |' internal/just/new_just
         sed -i 's|/vsi|/just|' internal/just/new_just
         sed -i 's|/just/linux|/just|' internal/just/new_just
-        
-        sed -i 's|/linux/|/|g' internal/just/*
-        sed -i 's|/\.\.|/|g' internal/just/*
+        sed -i 's|/linux/|/|g' internal/just/*  internal/just/.just
+        sed -i 's|/\.\.|/|g' internal/just/*  internal/just/.just
+        grep -Zl '^#!/usr/bin/env' internal/just/* | xargs -0 chmod 755
+        grep -ZL '^#!/usr/bin/env' internal/just/* | xargs -0 chmod 644
+
+        # Special patch for just_robodoc_functions.bsh
+        cp docker/vsi_common/docker-compose.yml internal/just/robodoc.yml
+        sed -i 's|${JUST_DIR}/docker/vsi_common/docker-compose.yml|${JUST_DIR}/robodoc.yml|' internal/just/just_robodoc_functions.bsh
       )
       ;;
     *)
