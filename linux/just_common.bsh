@@ -106,21 +106,31 @@ function _just_commands_from_file()
               s|\\\n *||''
               t combine
             }
-            s|^ *#? *([ _0-9|a-zA-Z{}-]*)\) *# *(.*)|\1 '"${JUST_HELP_SEPARATOR}"' \2|
+            s|^ *#? *([ _0-9|a-zA-Z{}-]*[_0-9|a-zA-Z{}-]) *\) *# *(.*)|\1 '"${JUST_HELP_SEPARATOR}"' \2|
             # If there is a match, process it
             t process
             # Else do not even print it. This replaces a grep
             b noprint
             :process
+            # Remove trailing spaces
+            s| +$||
+            :processloop
             # Converts aaa|bbb|ccc @#@ blah to aaa @#@ blah\nbbb @#@ blah\n...
             s/\|(.* '"${JUST_HELP_SEPARATOR}"' (.*))/ '"${JUST_HELP_SEPARATOR}"' \2'$'\\\n''\1/
             # Continue processing until no matches
-            t process
+            t processloop
             p
-            :noprint' $1
+            :noprint' "${1}"
 }
 
-#****f* just/_just_subcommands_from_array
+#****if* just/_just_subcommands_from_array
+# SYNOPSIS
+#   Returns a non-unique list of commands that have subcommands from an array.
+#   This is not intended to line up with the input array
+# INPUT
+#   stdin - see USAGE
+# OUTPUT
+#   stdout - prints newline separated list of commands
 # USAGE
 #   IFS=$'\n'
 #   parsed_help_a=($(_just_commands_from_file "${JUSTFILE}"))
@@ -225,7 +235,7 @@ function _just_get_plugins()
 
   # Prepend the directory if it doesn't exist
   if [ ! -f "${JUST_PLUGIN_FILE}" ]; then
-    JUST_PLUGIN_FILE="${1}/${JUST_PLUGIN_FILE}"
+    JUST_PLUGIN_FILE="${base_dir}/${JUST_PLUGIN_FILE}"
   fi
 
   # Make base_dir absolute
