@@ -4,6 +4,7 @@
 : ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
 . "${VSI_COMMON_DIR}/linux/just_common.bsh"
 . "${VSI_COMMON_DIR}/linux/isin"
+. "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
 
 #****F* just/.just
 # NAME
@@ -37,15 +38,15 @@ _just()
   COMPREPLY=()   # Array variable storing the possible completions.
 
   # $1 - command aka $0
-  # $2 - current word on, can be "" if you just_file typed a space
+  # $2 - current word on, can be "" if you just typed a space
   # $3 - last work completed
   # COMP_WORDS - All args
 
   # Find Justfile
-  local just_file=$(_just_find_justfile "${JUSTFILE-Justfile}")
-  JUST_HELP_FILES+=("${just_file}")
+  local file_matches
+  parent_find_files "${JUSTFILE-Justfile}"
 
-  if [ "${just_file}" == "" ]; then
+  if [ "${#file_matches[@]}" -eq 0 ]; then
     echo
     echo "Can't find a suitable configuration file in this directory or any"
     echo "parent. Are you in the right directory?"
@@ -53,6 +54,7 @@ _just()
     echo "Supported filenames: \"Justfile\" or value of \${JUSTFILE}"
     return 0
   fi
+  JUST_HELP_FILES+=("${file_matches[0]}")
 
   local just_dir="$(\dirname ${just_file})"
 
