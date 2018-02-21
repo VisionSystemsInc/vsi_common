@@ -28,25 +28,32 @@ function caseify()
       ;;
     run_wine) # Start a wine bash window
       docker run -it --rm --cap-add=SYS_PTRACE \
+                 -e USER_ID="$(id -u)"
                  -e VSI_COMMON_IS_POWERSHELL=1 \
-                 -v "${VSI_COMMON_DIR}":/root/.wine/drive_c/vsi_common \
-                 -w /root/.wine/drive_c/vsi_common \
-                 vsiri/wine_msys64
+                 -e WINEDEBUG=fixme-all,err-winediag,err-menubuilder \
+                 -v vsi_common_wine_home:/home/.user_wine \
+                 -v "${VSI_COMMON_DIR}":/vsi_common:ro \
+                 -w /vsi_common \
+                 andyneff/wine_msys64:ubuntu_14.04 bash -c "cd /z/vsi_common; bash -l"
       ;;
     run_wine-gui) # Start a wine bash window in gui mode
-      docker run --rm --cap-add=SYS_PTRACE -e DISPLAY -e USER_ID="$(id -u)"\
+      docker run --rm --cap-add=SYS_PTRACE -e DISPLAY \
+                 -e USER_ID="$(id -u)" \
                  -e VSI_COMMON_IS_POWERSHELL=1 \
+                 -e WINEDEBUG=fixme-all,err-winediag,err-menubuilder \
+                 -v vsi_common_wine_home:/home/.user_wine \
                  -v /tmp/.X11-unix:/tmp/.X11-unix \
-                 -v "${VSI_COMMON_DIR}":/root/.wine/drive_c/vsi_common \
-                 -w /root/.wine/drive_c/vsi_common \
-                 vsiri/wine_msys64 &
+                 -v "${VSI_COMMON_DIR}":/vsi_common:ro \
+                 -w /vsi_common \
+                 andyneff/wine_msys64:ubuntu_14.04 &
       ;;
     test_wine)
       docker run -it --rm --cap-add=SYS_PTRACE \
                  -e VSI_COMMON_IS_POWERSHELL=1 \
+                 -e WINEDEBUG=fixme-all,err-winediag,err-menubuilder \
                  -v "${VSI_COMMON_DIR}":/root/.wine/drive_c/vsi_common \
                  -w /root/.wine/drive_c/vsi_common \
-                 vsiri/wine_msys64 -c \
+                 andyneff/wine_msys64:ubuntu_14.04 -c \
                  "cd /root/.wine/drive_c/vsi_common
                   . setup.env
                   just test ${*}
