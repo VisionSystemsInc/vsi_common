@@ -319,6 +319,8 @@ function cmp_elements()
 }
 
 #****f* elements.bsh/split_s
+# NAME
+#   split_s - Splits an string into an array, using an MIFS
 # INPUTS
 #   $1 - Target array name
 #   $2... - Strings
@@ -346,6 +348,15 @@ function split_s()
   dynamic_set_a "${target}" ${__element_array_target_a+"${__element_array_target_a[@]}"}
 }
 
+#****f* elements.bsh/join_a
+# NAME
+#   join_a - Joins an array into a string, using an MIFS
+# INPUTS
+#   $1 - Target array name
+#   $2... - Strings
+# PARAMETERS
+#   MIFS - A Multichararater Internal Field Separator. Default: //
+#***
 function join_a()
 {
   if [ $# -eq 1 ]; then
@@ -368,5 +379,51 @@ function join_a()
     shift 1
   done
 
-  export "${target}=${__element_array_target_s-}"
+  read -r "${target}" <<< "${__element_array_target_s-}"
+}
+
+#****f* elements.bsh/join_a_out
+# NAME
+#   join_a_out - Standard out version of join_a
+# DESCRIPTION
+#   Instead of storing the value to a variable, this outputs to stdout. Unlike
+#   join_a, join_a_out can handle special characters, like null. Because mac awk
+#   is so difficult, instead of '\x00' for null, use '\\x00'. No other form of
+#   null will work on mac. All other sed escape character should work.
+# INPUTS
+#   $1 - Hex code for IFS
+#   $1... - Strings
+# PARAMETERS
+#   MIFS - A Multichararater Internal Field Separator, using in awk escape
+#          format. (Except for null, which is a double backslash \\x00).
+#          Default: //
+#          NOTE: If you are using "" or $'' notation, you will need "\\\\x00"
+# AUTHOR
+#   https://superuser.com/a/720157/352118
+#***
+function join_a_out()
+{
+  awk -v MIFS="${MIFS-//}" \
+      'function sep(){
+        for(x=1;x<=length(MIFS);x++){
+          if(substr(MIFS, x, 2)=="\\x"){
+            c2=tolower(substr(MIFS, x+2, 1))
+            c1=tolower(substr(MIFS, x+3, 1))
+            k=index("123456789abcdef", c2)*16+index("123456789abcdef", c1)
+            printf "%c", k
+            x+=3
+          }else{
+            printf "%c", substr(MIFS, x, 1)
+          }
+        }
+      }
+      BEGIN{
+        ORS=OFS="";
+        for(i=1;i<ARGC;i++){
+          print ARGV[i]
+          if(ARGC-i-1){
+            sep()
+          }
+        }
+      }' ${@+"${@}"}
 }
