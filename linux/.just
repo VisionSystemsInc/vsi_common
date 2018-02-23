@@ -5,6 +5,7 @@
 . "${VSI_COMMON_DIR}/linux/just_common.bsh"
 . "${VSI_COMMON_DIR}/linux/isin"
 . "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
+. "${VSI_COMMON_DIR}/linux/elements.bsh"
 
 #****F* just/.just
 # NAME
@@ -29,9 +30,9 @@
 #***
 _just()
 {
-  local JUST_HELP_FILES=("${VSI_COMMON_DIR}/linux/just_functions.bsh")
   local JUST_PLUGINS=()
   local just_plugin
+  local i
 
   shopt -s extglob # Why is this needed?
 
@@ -42,23 +43,18 @@ _just()
   # $3 - last work completed
   # COMP_WORDS - All args
 
-  # Find Justfile
-  local file_matches
-  parent_find_files "${JUSTFILE-Justfile}"
+  # Emulate how the just systems finds all of its help files
 
-  if [ "${#file_matches[@]}" -eq 0 ]; then
-    echo
-    echo "Can't find a suitable configuration file in this directory or any"
-    echo "parent. Are you in the right directory?"
-    echo
-    echo "Supported filenames: \"Justfile\" or value of \${JUSTFILE}"
-    return 0
+  # 1. Initial files: just_functions.bsh
+  local JUST_HELP_FILES=(${JUST_HELP_FILES+"${JUST_HELP_FILES[@]}"})
+  if [ "${JUST_HELP_FILES+set}" != "set" ]; then
+    JUST_HELP_FILES=("${VSI_COMMON_DIR}/linux/just_functions.bsh")
   fi
-  JUST_HELP_FILES+=("${file_matches[0]}")
-
-  local just_dir="$(\dirname ${just_file})"
-
-  #Load plugins
+  # 2. Find Justfile: just_functions.bsh/load_justfile
+  JUST_DRYRUN_SOURCE=: _just_load_justfile "${JUSTFILE-Justfile}"
+  # 3. Emulate finding and adding plugins
+  # The last JUST_HELP_FILES is the just file now
+  local just_dir="$(\dirname ${JUST_HELP_FILES[${#JUST_HELP_FILES[@]}-1]})"
   _just_get_plugins "${just_dir}"
   for just_plugin in ${JUST_PLUGINS+"${JUST_PLUGINS[@]}"}; do
     JUST_HELP_FILES+=("${just_plugin}")
@@ -67,22 +63,24 @@ _just()
   # Get all command info once
   local parsed_help_a
   _just_parse_helps ${JUST_HELP_FILES+"${JUST_HELP_FILES[@]}"}
-  #Get just command names
-  parsed_help_a=("${parsed_help_a[@]%% *}") #Remove everything after the space in every entry
+  #Get just command names and remove the comments
+  parsed_help_a=("${parsed_help_a[@]%% ${JUST_HELP_SEPARATOR} *}")
 
   #Get main commands only
   local just_commands=()
-  local OLD_IFS="${IFS}"
-  IFS=$'\n'
-  # Remove all entries containing an _, and sort them and remove duplicates
-  just_commands=($(sort -u <<< "${parsed_help_a[*]//*_*}"))
-  IFS="${OLD_IFS}"
+  while IFS= read -r -d '' i || [ -n "${i}" ]; do
+    # Remove all entries containing an _, and sort them and remove duplicates
+    if [[ "${i}" != *_* ]]; then
+      just_commands+=("${i}")
+    fi
+  done < <(MIFS='\\x00' join_a_out "${parsed_help_a[@]}" | sort -u -z)
 
   #Get sub_commands
   local just_subcommands
-  IFS=$'\n'
-  just_subcommands=($((_just_subcommands_from_array | sort -u ) <<< "${parsed_help_a[*]}"))
-  IFS="${OLD_IFS}"
+  just_subcommands=($(IFS=$'\n'; (_just_subcommands_from_array | sort -u ) <<< "${parsed_help_a[*]}"))
+
+  # Declare here so I can use it in .just plugin
+  local just_subtargets=()
 
   #Call local .just if it exist
   if [ -f "${just_dir}/.just" ]; then
@@ -91,7 +89,6 @@ _just()
 
   # If the last word completed is a subcommand, only match subtargets
   if isin "$3" ${just_subcommands+"${just_subcommands[@]}"} ]; then
-    local just_subtargets=()
     _just_subtargets_from_array "${3}" ${parsed_help_a+"${parsed_help_a[@]}"}
     COMPREPLY+=($(\compgen -W "${just_subtargets[*]}" -- $2))
     return 0
@@ -99,9 +96,8 @@ _just()
 
   # search for the last subcommand used. If a match is found, add it to the total
   # list of just_commands
-  for (( i=${#COMP_WORDS[@]}; i>=0; i--)); do
+  for (( i=${#COMP_WORDS[@]}-1; i>0; i--)); do
     if isin "${COMP_WORDS[$i]}" "${just_subcommands[@]}"; then
-      local just_subtargets=()
       _just_subtargets_from_array "${COMP_WORDS[$i]}" ${parsed_help_a+"${parsed_help_a[@]}"}
       just_commands+=("${just_subtargets[@]}")
       break
@@ -112,7 +108,6 @@ _just()
   COMPREPLY+=($(\compgen -o bashdefault -W "${just_commands[*]} ${just_subcommands[*]}" -- $2))
 
   return 0
-
 }
 
 complete -F _just just

@@ -57,6 +57,10 @@ begin_test "_just_commands_from_file"
   input+=$'\nfresh_*)'
   ans+=$'\nfresh_{cucurbitaceae} :-: Fresh'
 
+  # I guess this should be parsed as a command
+  input+=$'\nraw_*) # The raw version'
+  ans+=$'\nraw_* :-: The raw version'
+
   # Test multiple target
   input+=$'\nraspberry|strawberry) # Common aggregate fruit  '
   ans+=$'\nraspberry :-: Common aggregate fruit'
@@ -67,6 +71,7 @@ begin_test "_just_commands_from_file"
   input+=$'\n # Unnatural cultivars'
   ans+=$'\nboysenberry :-: Unnatural cultivars'
   ans+=$'\nmarionberry :-: Unnatural cultivars'
+
   # [ "$(_just_commands_from_file <(echo -n "${input}") | od -a -t x1)" = "$(od -a -t x1 <<< "${ans}")" ]
   [ "$(_just_commands_from_file <(echo -n "${input}"))" = "${ans}" ]
 
@@ -214,6 +219,8 @@ begin_test "just parse helps"
 
   s+=$'#test_{COLORS}) # The color is\n'
   s+=$'test_*)\n'
+  s+=$'rest_*) # Rest something\n'
+  ans+=('rest_* #@# Rest something')
   s+=$'normal) # One more'
   ans+=('normal #@# One more')
   # Ordering gets changed by expansion, no big deal. It's all normal
@@ -223,6 +230,22 @@ begin_test "just parse helps"
   declare -p ans
   declare -p parsed_help_a
   check_a parsed_help_a "${ans[@]}"
+)
+end_test
+
+begin_test "_just_load_justfile"
+(
+  set -eu
+
+  echo "x=20" > justfile
+  mkdir foo
+  cd foo
+
+  not declare -p x
+  JUST_DRYRUN_SOURCE=: _just_load_justfile justfile
+  [ -z "${x+set}" ]
+  _just_load_justfile justfile
+  [ "${x}" = 20 ]
 )
 end_test
 
