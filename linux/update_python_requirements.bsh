@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 
+set -eu
+
 : ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
 source "${VSI_COMMON_DIR}/linux/ask_question"
+source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
 
 #Requires ca-certificates wget
 
@@ -56,9 +59,6 @@ fi
 #     Contains the list of every package, custom package, and their derived
 #     requirements too, including exact version numbers. This is the one and
 #     only file you will need to use with pip install.
-# NOTES
-#   Currently downloads wheels to a /tmp directory. This is intended to be run
-#   in a container, so cleanup is an afterthought.
 # AUTHOR
 #   Andy Neff
 #***
@@ -74,6 +74,11 @@ fi
 #           could be anything that results in downloading packages
 # PARAMETERS
 #   PIP_BINARY_ONLY - See vsi/update_python_requirements.bsh
+#   temp_dir - Allow you to setup a permanent temp_dir for downloading artifacts
+#              to. If you do not specify one, a new directory is created and
+#              cleaned up with every call to get_packages. Set outside of
+#              get_packages to prevent this slowdown with multiple calls to
+#              get_packages
 # BUGS
 #   A package path cannot contain spaces. URLs typically do not, they contain %20
 #   but if a local path does, it will bug out. It is possible to change the regex
@@ -89,14 +94,19 @@ fi
 #***
 function get_packages()
 {
+  local temp_dir="${temp_dir-}"
+  if [ -z "${temp_dir:+set}" ]; then
+    # setup a self cleaning temp dir. This will happen EVERY call to get_packages
+    make_temp_dir
+  fi
   : ${PIP=${PIP2}}
-  ${PIP} download -v -d /tmp "${@}" --no-binary :all: --only-binary "${PIP_BINARY_ONLY}" |
+  ${PIP} download -v -d "${temp_dir}" "${@}" --no-binary :all: --only-binary "${PIP_BINARY_ONLY}" |
 #    tee /dev/stderr |
     tee >(cat 1>&2) |
     #this is a nasty tee hack due to https://github.com/docker/docker/issues/31243
     sed -En '# Add collecting and using lines to the buffer
              /^Collecting/H
-             /^  Using /H
+             /^  Using version/H
              # When you hit Successfully downloaded <name>, you are at the end
              /^Successfully downloaded /{
              # Start processing the entire hold buffer
@@ -263,6 +273,10 @@ function update_python_requirements()
   local use_pip3=0
 
   local tmp=(${PIP2})
+
+  local temp_dir
+  make_temp_dir
+
   if command -v "${tmp[0]}" &> /dev/null; then
     use_pip2=1
   fi
