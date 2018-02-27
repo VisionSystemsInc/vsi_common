@@ -240,8 +240,6 @@ function write_user_data()
 #   [users] - List of users to add to the group
 #   [suffix] - Suffix to add to group_name if there is a name clash. For internal use
 #   [LINUX_ACCOUNTS_AUTOSAVE] - Auto writes out group/gshadow file. Default: 1
-#   [fifo_buffer] - A FIFO buffer used for capturing stdout. This is an advanced
-#                   feature used only to speed up adding multiple groups
 # NOTES
 #   Will write a new group to /etc/group. If it is determined that the OS uses
 #   /etc/gshadow too, then that will be written to also.
@@ -266,25 +264,11 @@ function add_group()
       read_file /etc/gshadow gshadow
     fi
 
-    local fd_r
-    local fd_w
-    : ${fifo_buffer="$(mktemp -u)"}
-    open_fd -s -p -n "${fifo_buffer}"
-
-    # Create a new group, and redirect stdout to
-    add_to_group "$1" "$2" 'x' >&${fd_w}
-    # Read from fd ${fd} into group_name
-    read -u${fd_r} group_name
-
-    close_fd ${fd_w}
+    # Create a new group, and saves group name into group_name
+    add_to_group "$1" "$2" 'x'
 
     # Add gshadow entry
     add_to_gshadow ${group_name} '!'
-
-    # Delete that fifo buffer after one use
-    if [ "${delete_buffer-}" == "1" ]; then
-      rm "${fifo_buffer}"
-    fi
   else
     # Just add a group, discard echoed name
     add_to_group "$1" "$2" 'x' > /dev/null
@@ -338,7 +322,7 @@ function write_group_data()
 #   [users] - List of users to add to the group
 #   [suffix] - Suffix to add to group_name if there is a name clash. For internal use
 # OUTPUT
-#   stdout - group name used
+#   group_name - saves group name used
 # NOTES
 #   Works on Debian, Centos, Alpine, etc... Only odd Linuxes with more than 4
 #   columns in /etc/group will fail.
@@ -348,7 +332,7 @@ function write_group_data()
 function add_to_group()
 {
   local IFS=:
-  local group_name=${1}${suffix-}
+  group_name=${1}${suffix-}
 
   local group_info
   local i
@@ -380,7 +364,6 @@ function add_to_group()
       return
     fi
   done
-  echo "${group_name}"
   #Add as first. Many OSes have a special group in the last spot, +:::
   #It's common to add as the second last sometimes, but first is easier
   group=("${group_name}:${3-x}:${2}:${users-}"
