@@ -376,32 +376,24 @@ begin_test "Joining arrays to stdout"
 (
   set -eu
 
-  if command -v xxd 2>&1 > /dev/null; then
-    cmp=(xxd -ps)
-  elif command -v hexdump 2>&1 > /dev/null; then
-    cmp=(hexdump -ve '1/1 "%.2x"')
-  else
-    false
-  fi
+  [ "$(join_a_out | xxd -ps)" = "$(printf '' | xxd -ps)" ]
+  [ "$(join_a_out "" | xxd -ps)" = "$(printf '' | xxd -ps)" ]
 
-  [ "$(join_a_out | "${cmp[@]}")" = "$(printf '' | "${cmp[@]}")" ]
-  [ "$(join_a_out "" | "${cmp[@]}")" = "$(printf '' | "${cmp[@]}")" ]
+  [ "$(join_a_out "" "" | xxd -ps)" = "$(printf '//' | xxd -ps)" ]
 
-  [ "$(join_a_out "" "" | "${cmp[@]}")" = "$(printf '//' | "${cmp[@]}")" ]
+  [ "$(join_a_out 11 22 33 | xxd -ps)" = "$(printf '11//22//33' | xxd -ps)" ]
 
-  [ "$(join_a_out 11 22 33 | "${cmp[@]}")" = "$(printf '11//22//33' | "${cmp[@]}")" ]
+  [ "$(MIFS='//://' join_a_out foo bar code | xxd -ps)" = \
+    "$(printf 'foo//://bar//://code' | xxd -ps)" ]
 
-  [ "$(MIFS='//://' join_a_out foo bar code | "${cmp[@]}")" = \
-    "$(printf 'foo//://bar//://code' | "${cmp[@]}")" ]
+  [ "$(MIFS=":" join_a_out hear see speak | xxd -ps)" = \
+    "$(printf 'hear:see:speak' | xxd -ps)" ]
 
-  [ "$(MIFS=":" join_a_out hear see speak | "${cmp[@]}")" = \
-    "$(printf 'hear:see:speak' | "${cmp[@]}")" ]
+  [ "$(join_a_out red "" yellow green blue "" | xxd -ps)" = \
+    "$(printf 'red////yellow//green//blue//' | xxd -ps)" ]
 
-  [ "$(join_a_out red "" yellow green blue "" | "${cmp[@]}")" = \
-    "$(printf 'red////yellow//green//blue//' | "${cmp[@]}")" ]
-
-  [ "$(MIFS='\\x00' join_a_out hear see speak | "${cmp[@]}")" = \
-    "$(printf 'hear\0see\0speak' | "${cmp[@]}")" ]
+  [ "$(MIFS='\\x00' join_a_out hear see speak | xxd -ps)" = \
+    "$(printf 'hear\0see\0speak' | xxd -ps)" ]
 
 )
 end_test

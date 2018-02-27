@@ -5,6 +5,9 @@ if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then #If being sourced
 fi
 
 JUST_PROJECT_PREFIX=VSI_COMMON
+VSI_COMMON_WINE_TEST_IMAGE=vsi_wine_test
+VSI_COMMON_WINE_TEST_VOLUME=vsi_common_wine_home
+
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)/wrap"
 cd "$(\dirname "${BASH_SOURCE[0]}")"
 
@@ -19,45 +22,55 @@ function caseify()
       "${VSI_COMMON_DIR}/tests/run_tests.bsh" ${@+"${@}"}
       extra_args+=$#
       ;;
-    test_darling) # Run unit and integration tests using darline
-        (
-          cd "${VSI_COMMON_DIR}"
-          env -i HOME="${HOME}" darling shell ./tests/run_tests.bsh ${@+"${@}"}
-        )
-        extra_args+=$#
+    test_darling) # Run unit and integration tests using darling
+      (
+        cd "${VSI_COMMON_DIR}"
+        env -i HOME="${HOME}" darling shell ./tests/run_tests.bsh ${@+"${@}"}
+      )
+      extra_args+=$#
+      ;;
+    build_wine) # Build wine image
+      (
+        cd "${VSI_COMMON_DIR}/docker/tests"
+        docker build -t "${VSI_COMMON_WINE_TEST_IMAGE}" -f wine.Dockerfile .
+      )
       ;;
     run_wine) # Start a wine bash window
       docker run -it --rm --cap-add=SYS_PTRACE \
-                 -e USER_ID="$(id -u)"
+                 -e USER_ID="$(id -u)" \
                  -e VSI_COMMON_IS_POWERSHELL=1 \
                  -e WINEDEBUG=fixme-all,err-winediag,err-menubuilder \
-                 -v vsi_common_wine_home:/home/.user_wine \
+                 -v "${VSI_COMMON_WINE_TEST_VOLUME}:/home/.user_wine" \
                  -v "${VSI_COMMON_DIR}":/vsi_common:ro \
                  -w /vsi_common \
-                 andyneff/wine_msys64:ubuntu_14.04 bash -c "cd /z/vsi_common; bash -l"
+                 "${VSI_COMMON_WINE_TEST_IMAGE}" -c "cd /z/vsi_common; bash -l"
       ;;
     run_wine-gui) # Start a wine bash window in gui mode
       docker run --rm --cap-add=SYS_PTRACE -e DISPLAY \
                  -e USER_ID="$(id -u)" \
                  -e VSI_COMMON_IS_POWERSHELL=1 \
                  -e WINEDEBUG=fixme-all,err-winediag,err-menubuilder \
-                 -v vsi_common_wine_home:/home/.user_wine \
+                 -v "${VSI_COMMON_WINE_TEST_VOLUME}:/home/.user_wine" \
                  -v /tmp/.X11-unix:/tmp/.X11-unix \
                  -v "${VSI_COMMON_DIR}":/vsi_common:ro \
                  -w /vsi_common \
-                 andyneff/wine_msys64:ubuntu_14.04 &
+                 "${VSI_COMMON_WINE_TEST_IMAGE}" &
       ;;
-    test_wine)
+    test_wine) # Run unit and integration tests using wine
       docker run -it --rm --cap-add=SYS_PTRACE \
+                 -e USER_ID="$(id -u)" \
                  -e VSI_COMMON_IS_POWERSHELL=1 \
                  -e WINEDEBUG=fixme-all,err-winediag,err-menubuilder \
-                 -v "${VSI_COMMON_DIR}":/root/.wine/drive_c/vsi_common \
-                 -w /root/.wine/drive_c/vsi_common \
-                 andyneff/wine_msys64:ubuntu_14.04 -c \
-                 "cd /root/.wine/drive_c/vsi_common
+                 -v "${VSI_COMMON_WINE_TEST_VOLUME}:/home/.user_wine" \
+                 -v "${VSI_COMMON_DIR}":/vsi_common:ro \
+                 -w /vsi_common \
+                 "${VSI_COMMON_WINE_TEST_IMAGE}" -c \
+                 "cd /z/vsi_common
                   . setup.env
                   just test ${*}
-                  read -p 'Press any key to close' -r -e -n1"
+                "'rv=$?
+                  read -p "Press any key to close" -r -e -n1
+                  exit ${rv}'
       extra_args+=$#
       ;;
     checkout-just)
