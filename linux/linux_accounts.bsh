@@ -182,10 +182,10 @@ function add_to_shadow()
   local user_info
   local i
 
-  local new_shadow="${1}:${2}:$(($(date +%s)/3600/24)):99999:7:::"
+  local new_shadow="${1}:${2}:$(($(date +%s)/3600/24)):0:99999:7:::"
 
   for i in "${!shadow[@]}"; do
-    #User Name[0], x[1], UID[2], GID[3], FullName,RoomNumber,WorkPhone,HomePhone,Other[4], Home Dir[5], Shell[6]
+    #User Name[0], x[1], last password change[2], min days to change password[3], max days to change password[4], password warning period[5], password inactivity period[6], account expiration date[7], reserved[8]
     user_info=(${shadow[$i]})
 
     #If name already exists, replace it
@@ -338,7 +338,7 @@ function write_group_data()
 #   [users] - List of users to add to the group
 #   [suffix] - Suffix to add to group_name if there is a name clash. For internal use
 # OUTPUT
-#   stdin - group name used
+#   stdout - group name used
 # NOTES
 #   Works on Debian, Centos, Alpine, etc... Only odd Linuxes with more than 4
 #   columns in /etc/group will fail.
@@ -361,6 +361,10 @@ function add_to_group()
     if [ "${group_info[0]}" == "${group_name}" ]; then
       #and if the id is the same
       if [ "${group_info[2]}" == "${2}" ]; then
+        # If password hash was set, make sure you use it!
+        if [ -n "${3+set}" ]; then
+          group_info[1]="${3}"
+        fi
         #Just modify the line
         if [ "${#group_info}" == "3" ]; then
           group_info[4]=${users-}
@@ -389,6 +393,7 @@ function add_to_group()
 # INPUTS
 #   $1 - Group name
 #   [$2] - Encrypted password (! or * for none). Default: !
+#   [admins] - List of admins to add to the entry
 #   [users] - List of users to add to the entry
 # AUTHOR
 #   Andy Neff
@@ -399,7 +404,7 @@ function add_to_gshadow()
   local group_info
   local i
 
-  local new_gshadow="${1}:${2-!}::${users-}"
+  local new_gshadow="${1}:${2-!}:${admins-}:${users-}"
 
   for i in "${!gshadow[@]}"; do
     #Group Name[0], password[1], admins[2], members[3]
