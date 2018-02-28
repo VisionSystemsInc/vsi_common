@@ -23,6 +23,22 @@ source "${VSI_COMMON_DIR}/linux/file_tools.bsh"
 #   Andy Neff
 #***
 
+#****id* linux_accounts.bsh/LINUX_ACCOUNTS_*_FILE
+# NAME
+#   LINUX_ACCOUNTS_PASSWD_FILE - Location of passwd file
+#   LINUX_ACCOUNTS_SHADOW_FILE - Location of shadow file
+#   LINUX_ACCOUNTS_GROUP_FILE - Location of group file
+#   LINUX_ACCOUNTS_GSHADOW_FILE - Location of gshadow file
+# DESCRIPTION
+#   Allows you to change the location to something other than the /etc location
+# AUTHOR
+#   Andy Neff
+#***
+: ${LINUX_ACCOUNTS_PASSWD_FILE=/etc/passwd}
+: ${LINUX_ACCOUNTS_SHADOW_FILE=/etc/shadow}
+: ${LINUX_ACCOUNTS_GROUP_FILE=/etc/group}
+: ${LINUX_ACCOUNTS_GSHADOW_FILE=/etc/gshadow}
+
 #****f* linux_accounts.bsh/read_file
 # NAME
 #   read_file - Read contents of /etc/passwd or similar files into an array
@@ -101,16 +117,16 @@ function add_user()
   #Read in the passwd array if it doesn't exist already
   if ! declare -p passwd&>/dev/null; then
     local passwd
-    read_file /etc/passwd passwd
+    read_file "${LINUX_ACCOUNTS_PASSWD_FILE}" passwd
   fi
 
   # The second test is for OS's like clearlinux which contain no user/group files
   # until after an additional user/group is created.
-  if [ -e /etc/shadow ] || ( [ ! -e /etc/passwd ] && getent shadow &>/dev/null ); then
+  if [ -e "${LINUX_ACCOUNTS_SHADOW_FILE}" ] || ( [ ! -e "${LINUX_ACCOUNTS_PASSWD_FILE}" ] && getent shadow &>/dev/null ); then
     #Read in the shadow array if it doesn't exist already
     if ! declare -p shadow &>/dev/null; then
       local shadow
-      read_file /etc/shadow shadow
+      read_file "${LINUX_ACCOUNTS_SHADOW_FILE}" shadow
     fi
 
     #Add the user
@@ -118,7 +134,7 @@ function add_user()
     add_to_shadow "$1" '*'
   else
     #Add the user
-    add_to_passwd "$1" '*' "${2-1000}" "${3-1000}" "${4-/home/$1}"
+    add_to_passwd "$1" x "${2-1000}" "${3-1000}" "${4-/home/$1}"
   fi
 
   if [ "${LINUX_ACCOUNTS_AUTOSAVE-1}" == "1" ]; then
@@ -209,8 +225,8 @@ function add_to_shadow()
 #***
 function read_user_data()
 {
-  read_file /etc/passwd passwd
-  read_file /etc/shadow shadow
+  read_file "${LINUX_ACCOUNTS_PASSWD_FILE}" passwd
+  read_file "${LINUX_ACCOUNTS_SHADOW_FILE}" shadow
 }
 
 #****f* linux_accounts.bsh/write_user_data
@@ -224,9 +240,9 @@ function read_user_data()
 #***
 function write_user_data()
 {
-  write_file /etc/passwd ${passwd+"${passwd[@]}"}
+  write_file "${LINUX_ACCOUNTS_PASSWD_FILE}" ${passwd+"${passwd[@]}"}
   if [ "${shadow+set}" == "set" ]; then
-    write_file /etc/shadow ${shadow+"${shadow[@]}"}
+    write_file "${LINUX_ACCOUNTS_SHADOW_FILE}" ${shadow+"${shadow[@]}"}
   fi
 }
 
@@ -252,16 +268,16 @@ function add_group()
   #Read in the group array if it doesn't exist already
   if ! declare -p group&>/dev/null; then
     local group
-    read_file /etc/group group
+    read_file "${LINUX_ACCOUNTS_GROUP_FILE}" group
   fi
 
   # The second test is for OS's like clearlinux which contain no user/group files
   # until after an additional user/group is created.
-  if [ -e /etc/gshadow ] || ( [ ! -e /etc/group ] && getent gshadow &>/dev/null ); then
+  if [ -e "${LINUX_ACCOUNTS_GSHADOW_FILE}" ] || ( [ ! -e "${LINUX_ACCOUNTS_GROUP_FILE}" ] && getent gshadow &>/dev/null ); then
     #Read in the gshadow array if it doesn't exist already
     if ! declare -p gshadow&>/dev/null; then
       local gshadow
-      read_file /etc/gshadow gshadow
+      read_file "${LINUX_ACCOUNTS_GSHADOW_FILE}" gshadow
     fi
 
     # Create a new group, and saves group name into group_name
@@ -270,8 +286,8 @@ function add_group()
     # Add gshadow entry
     add_to_gshadow ${group_name} '!'
   else
-    # Just add a group, discard echoed name
-    add_to_group "$1" "$2" 'x' > /dev/null
+    # Just add a group
+    add_to_group "$1" "$2" 'x'
   fi
 
   if [ "${LINUX_ACCOUNTS_AUTOSAVE-1}" == "1" ]; then
@@ -290,8 +306,8 @@ function add_group()
 #***
 function read_group_data()
 {
-  read_file /etc/group group
-  read_file /etc/gshadow gshadow
+  read_file "${LINUX_ACCOUNTS_GROUP_FILE}" group
+  read_file "${LINUX_ACCOUNTS_GSHADOW_FILE}" gshadow
 }
 
 #****f* linux_accounts.bsh/write_group_data
@@ -305,9 +321,9 @@ function read_group_data()
 #***
 function write_group_data()
 {
-  write_file /etc/group ${group+"${group[@]}"}
+  write_file "${LINUX_ACCOUNTS_GROUP_FILE}" ${group+"${group[@]}"}
   if declare -p gshadow &>/dev/null; then
-    write_file /etc/gshadow ${gshadow+"${gshadow[@]}"}
+    write_file "${LINUX_ACCOUNTS_GSHADOW_FILE}" ${gshadow+"${gshadow[@]}"}
   fi
 }
 

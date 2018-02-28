@@ -133,25 +133,23 @@ begin_test "add to gshadow"
 )
 end_test
 
+setup_mock()
+{
+  # Make them point at local files
+  LINUX_ACCOUNTS_PASSWD_FILE=passwd
+  LINUX_ACCOUNTS_SHADOW_FILE=shadow
+  LINUX_ACCOUNTS_GROUP_FILE=group
+  LINUX_ACCOUNTS_GSHADOW_FILE=gshadow
+}
 
-command -v "${DOCKER}" &>/dev/null || skip_next_test
 begin_test "read and write user data"
 (
   set -eu
-  check_skip
 
-  docker run --rm \
-        -v "${VSI_COMMON_DIR}:/vsi_common:ro" \
-        -w /vsi_common \
-        ubuntu:14.04 bash -c $'
-  set -eu
-  . setup.env
-  . /vsi_common/linux/linux_accounts.bsh
-  . /vsi_common/tests/test_utils.bsh
-  set -xv
+  setup_mock
+
   passwd1=(root:x:0:0:root:/root:/bin/bash daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin)
   shadow1=(root:*:17543:0:99999:7::: daemon:*:17543:0:99999:7:::)
-  rm /etc/shadow
 
   passwd=("${passwd1[@]}")
   write_user_data
@@ -169,28 +167,17 @@ begin_test "read and write user data"
 
   check_a passwd "${passwd1[@]}"
   check_a shadow "${shadow1[@]}"
-  '
 )
 end_test
 
-command -v "${DOCKER}" &>/dev/null || skip_next_test
 begin_test "read and write group data"
 (
   set -eu
-  check_skip
 
-  docker run --rm \
-        -v "${VSI_COMMON_DIR}:/vsi_common:ro" \
-        -w /vsi_common \
-        ubuntu:14.04 bash -c $'
-  set -eu
-  . setup.env
-  . /vsi_common/linux/linux_accounts.bsh
-  . /vsi_common/tests/test_utils.bsh
-  set -xv
+  setup_mock
+
   group1=(root:x:0: adm:x:4:root)
   gshadow1=(root:*:: adm:*::root)
-  rm /etc/gshadow
 
   group=("${group1[@]}")
   write_group_data
@@ -208,80 +195,57 @@ begin_test "read and write group data"
 
   check_a group "${group1[@]}"
   check_a gshadow "${gshadow1[@]}"
-  '
 )
 end_test
 
-command -v "${DOCKER}" &>/dev/null || skip_next_test
 begin_test "add user"
 (
   set -eu
-  check_skip
+  setup_mock
 
-  docker run --rm \
-        -v "${VSI_COMMON_DIR}:/vsi_common:ro" \
-        -w /vsi_common \
-        ubuntu:14.04 bash -c $'
-  set -eu
-  . setup.env
-  . /vsi_common/linux/linux_accounts.bsh
-  . /vsi_common/tests/test_utils.bsh
-  set -xv
-  ans=("foo:*:1000:1000::/home/foo:/bin/bash"
+  ans=("foo:x:1000:1000::/home/foo:$(which bash)"
        "root:x:0:0:root:/root:/bin/bash"
        "daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin")
-  anss=("^foo:\*:[0-9]*:0:99999:7:::\n$"
-        "^root:\*:17543:0:99999:7:::\n$"
-        "^daemon:\*:17543:0:99999:7:::\n$")
+  anss=("^foo:\*:[0-9]*:0:99999:7:::$"
+        "^root:\*:17543:0:99999:7:::$"
+        "^daemon:\*:17543:0:99999:7:::$")
 
   # Setup
-  echo "${ans[1]}" > /etc/passwd
-  echo -n "${ans[2]}" >> /etc/passwd
-  rm /etc/shadow
+  echo "${ans[1]}" > passwd
+  echo -n "${ans[2]}" >> passwd
 
   ( # Shadowless test
     add_user foo
-    cmp /etc/passwd <(IFS="\n"; echo "${ans[*]}")
+    cmp passwd <(IFS=$'\n'; echo "${ans[*]}")
 
     LINUX_ACCOUNTS_AUTOSAVE=0 add_user bar
-    cmp /etc/passwd <(IFS="\n"; echo "${ans[*]}")
+    cmp passwd <(IFS=$'\n'; echo "${ans[*]}")
     write_user_data
-    ans=("bar:*:1000:1000::/home/bar:/bin/bash" "${ans[@]}")
-    cmp /etc/passwd <(IFS="\n"; echo "${ans[*]}")
+    ans=("bar:x:1000:1000::/home/bar:$(which bash)" "${ans[@]}")
+    cmp passwd <(IFS=$'\n'; echo "${ans[*]}")
 
-    [ ! -f /etc/shadow ]
+    [ ! -f shadow ]
   )
 
   # Shadow test
-  ans[0]="foo:x:1000:0::/home/foo:/bin/bash"
-  echo "${ans[1]}" > /etc/passwd
-  echo -n "${ans[2]}" >> /etc/passwd
-  echo "root:*:17543:0:99999:7:::" > /etc/shadow
-  echo -n "daemon:*:17543:0:99999:7:::" >> /etc/shadow
+  ans[0]="foo:x:1000:0::/home/foo:$(which bash)"
+  echo "${ans[1]}" > passwd
+  echo "${ans[2]}" >> passwd
+  echo "root:*:17543:0:99999:7:::" > shadow
+  echo -n "daemon:*:17543:0:99999:7:::" >> shadow
 
   add_user foo 1000 0
-  cmp /etc/passwd <(IFS="\n"; echo "${ans[*]}")
-  readarray shad <<<"$(cat /etc/shadow)"
+  cmp passwd <(IFS=$'\n'; echo "${ans[*]}")
+  read_file shadow shad
   check_ra shad "${anss[@]}"
-  '
 )
 end_test
 
-command -v "${DOCKER}" &>/dev/null || skip_next_test
 begin_test "add group"
 (
   set -eu
-  check_skip
+  setup_mock
 
-  docker run --rm \
-        -v "${VSI_COMMON_DIR}:/vsi_common:ro" \
-        -w /vsi_common \
-        ubuntu:14.04 bash -c $'
-  set -eu
-  . setup.env
-  . /vsi_common/linux/linux_accounts.bsh
-  . /vsi_common/tests/test_utils.bsh
-  set -xv
   ans=("foo:x:1000:"
        "root:x:0:"
        "daemon:x:1:")
@@ -291,33 +255,31 @@ begin_test "add group"
         "daemon:*::")
 
   # Setup
-  echo "${ans[1]}" > /etc/group
-  echo -n "${ans[2]}" >> /etc/group
-  rm /etc/gshadow
+  echo "${ans[1]}" > group
+  echo -n "${ans[2]}" >> group
 
   ( # Shadowless test
     add_group foo 1000
-    cmp /etc/group <(IFS="\n"; echo "${ans[*]}")
+    cmp group <(IFS=$'\n'; echo "${ans[*]}")
 
     LINUX_ACCOUNTS_AUTOSAVE=0 add_group bar 1001
-    cmp /etc/group <(IFS="\n"; echo "${ans[*]}")
+    cmp group <(IFS=$'\n'; echo "${ans[*]}")
     write_group_data
     ans=("bar:x:1001:" "${ans[@]}")
 
-    cmp /etc/group <(IFS="\n"; echo "${ans[*]}")
+    cmp group <(IFS=$'\n'; echo "${ans[*]}")
 
-    [ ! -f /etc/gshadow ]
+    [ ! -f gshadow ]
   )
 
   # # Shadow test
-  echo "${ans[1]}" > /etc/group
-  echo -n "${ans[2]}" >> /etc/group
-  echo "${anss[1]}" > /etc/gshadow
-  echo -n "${anss[2]}" >> /etc/gshadow
+  echo "${ans[1]}" > group
+  echo -n "${ans[2]}" >> group
+  echo "${anss[1]}" > gshadow
+  echo -n "${anss[2]}" >> gshadow
 
   add_group foo 1000
-  cmp /etc/group <(IFS="\n"; echo "${ans[*]}")
-  cmp /etc/gshadow <(IFS="\n"; echo "${anss[*]}")
-  '
+  cmp group <(IFS=$'\n'; echo "${ans[*]}")
+  cmp gshadow <(IFS=$'\n'; echo "${anss[*]}")
 )
 end_test
