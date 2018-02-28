@@ -128,21 +128,22 @@ begin_test "Just docker compose dynamic environment"
 )
 end_test
 
+linux_nfs="\
+Filesystem                       1K-blocks        Used   Available Use% Mounted on
+filetodata-2:/volume1/projects 23320723712 22239875584  1080729344  96%"
+
 begin_test "just_docker_entrypoint_links"
 (
   set -eu
 
   TESTDIR="$(real_path "${TESTDIR}")"
 
-  linux_nfs="\
-  Filesystem                       1K-blocks        Used   Available Use% Mounted on
-  filetodata-2:/volume1/projects 23320723712 22239875584  1080729344  96% ${TESTDIR}"
-
   function df()
   {
-    local foo=${!#}
-    if [ "${#foo}" -ge "${#TESTDIR}" ] && [ "${foo:0:${#TESTDIR}}" = "${TESTDIR}" ]; then
-      echo "${linux_nfs}/${foo:${#TESTDIR}+1:1}"
+    local last_arg=${!#}
+
+    if [[ ${last_arg} = ${TESTDIR}* ]]; then
+      echo "${linux_nfs} ${TESTDIR}/${last_arg:${#TESTDIR}+1:1}"
       return 0
     fi
     return 1
@@ -173,5 +174,35 @@ begin_test "just_docker_entrypoint_links"
   ans+="$(env "JUST_DOCKER_ENTRYPOINT_LINKS=${ans_el}")"
 
   [ "${override}" = "${ans}" ]
+)
+end_test
+
+begin_test "Issue #7 Scenario 2"
+(
+  set -eu
+
+  TESTDIR="$(real_path "${TESTDIR}")"
+
+  function df()
+  {
+    local last_arg=${!#}
+
+    if [[ ${last_arg}/ = ${TESTDIR}/* ]]; then
+      echo "${linux_nfs} ${TESTDIR}"
+      return 0
+    fi
+    return 1
+  }
+
+  # TEST_VOLUMES=("home_mount:/home/andy"
+  #               "${TESTDIR}/a/a:/home/andy")
+
+  # override="$(generate_docker_compose_override TEST test1)"
+
+  # declare -p override >&2
+  declare -p TESTDIR
+  mount_point "${TESTDIR}/a/a" nfs nfs3 nfs4 >&2
+  # false
+
 )
 end_test
