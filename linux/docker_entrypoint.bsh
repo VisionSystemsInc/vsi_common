@@ -19,6 +19,7 @@
 
 : ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
 source "${VSI_COMMON_DIR}/linux/linux_accounts.bsh"
+source "${VSI_COMMON_DIR}/linux/elements.bsh"
 
 #****f* docker_entrypoint.bsh/docker_setup_user
 # NAME
@@ -122,28 +123,36 @@ function docker_setup_user()
 #   with squash root. Instead the base mount point is mounted into the
 #   container and a symlink is created to link the desired locations. This
 #   function creates these symlinks based on the colon separated string
-#   JUST_DOCKER_ENTRYPOINT_LINKS. Links within other links are not created.
-# INPUTS
-#   [DOCKER_LINK_MOUNTS_FORCE] - Default: 0
+#   JUST_DOCKER_ENTRYPOINT_LINKS. e.g., "destination//source//destination//source".
+# NOTES
+#   Links within other links are not created. This would just corrupt the
+#   directories on the host side.
+# PARAMETERS
+#   DOCKER_LINK_MOUNTS_FORCE - Adds a -f to ln commands, disabled by default.
+#                              Set this flag to enable.
+#   DOCKER_LINK_MOUNTS_NOT_IN_MOUNTS - Prevents from making symlinks in mounted
+#                                      subdirectories. This is not the default
+#                                      docker behavior, so this feature is
+#                                      disabled by default. Set this flag to
+#                                      enable.
 # AUTHOR
 #   Andy Neff
 #***
 function docker_link_mounts()
 {
-  local OLD_IFS="${IFS}"
-  local IFS
   local options
   local x
   local y
 
-  if [ "${DOCKER_LINK_MOUNTS_FORCE-0}" == "1" ]; then
+  local MIFS
+  : ${MIFS=:} # change to // when done
+  # Convert to array, using // as separator. This means you can't have unclean
+  # paths with // in them, but is an acceptable condition
+  split_s JUST_DOCKER_ENTRYPOINT_LINKS ${JUST_DOCKER_ENTRYPOINT_LINKS+"${JUST_DOCKER_ENTRYPOINT_LINKS}"}
+
+  if [ -n "${DOCKER_LINK_MOUNTS_FORCE+set}" ]; then
     options='-f'
   fi
-
-  #Convert to array, using colon as separator
-  IFS=:
-  JUST_DOCKER_ENTRYPOINT_LINKS=(${JUST_DOCKER_ENTRYPOINT_LINKS+${JUST_DOCKER_ENTRYPOINT_LINKS}})
-  IFS="${OLD_IFS}"
 
   local link_destinations=()
   for ((x=0; x+1<${#JUST_DOCKER_ENTRYPOINT_LINKS[@]}; x+=2)); do
@@ -151,36 +160,46 @@ function docker_link_mounts()
     link_destinations+=("${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}")
   done
 
-  IFS=$'\n'
   # Sort the array
   # per sort's man page:
   # The locale specified by the environment affects sort order. Set LC_ALL=C
   # to get the traditional sort order that uses native byte values.
   # We need it in this order so that base directories come before subdirectories.
-  link_destinations=($(LC_ALL=C sort -u <<< ${link_destinations+"${link_destinations[*]}"}))
-  IFS="${OLD_IFS}"
+  while IFS= read -r -d '' x || [ -n "${x}" ]; do
+    y+=("${x}")
+  done < <(MIFS='\\x00' join_a_out ${link_destinations+"${link_destinations[@]}"} | LC_ALL=C sort -u -z)
+  link_destinations=(${y+"${y[@]}"})
 
-  # Filter out destinations that are sub-directories of another directory;
-  # these links may fail anyway if the directory already exists. We also
-  # don't want to make symlinks in host directories if we can help it. symlinks
-  # are strictly worse than bind mounts; don't try to make them as capable.
-  for x in ${!link_destinations[@]}; do
-    for ((y=0; y<x; y++)); do
-      if [[ "${link_destinations[$y]+set}" == "set" && "${link_destinations[$x]}" == "${link_destinations[$y]}/"* ]]; then
-        unset link_destinations[$x]
-        break
-      fi
+
+  if [ -n "${DOCKER_LINK_MOUNTS_NOT_IN_MOUNTS+set}" ]; then
+    # Filter out destinations that are sub-directories of another directory;
+    # these links may fail anyway if the directory already exists. We also
+    # don't want to make symlinks in host directories if we can help it. symlinks
+    # are strictly worse than bind mounts; don't try to make them as capable.
+    for x in ${!link_destinations[@]}; do
+      for ((y=0; y<x; y++)); do
+        if [ -n "${link_destinations[$y]+set}" ] && \
+          [[ "${link_destinations[$x]}" == "${link_destinations[$y]}/"* ]]; then
+          unset link_destinations[$x]
+          break
+        fi
+      done
     done
-  done
+  fi
 
   for y in ${!link_destinations[@]}; do
     # Last link wins; this matches docker-compose behavior
     for ((x=${#JUST_DOCKER_ENTRYPOINT_LINKS[@]}-2; x>=0; x-=2)); do
-      if [ "${link_destinations[$y]+set}" == "set" ] && [ "${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}" == "${link_destinations[$y]}" ]; then
-        mkdir -p "$(dirname "${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}")" && \
-        ln -T -s ${options-} "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}" "${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}" || : # \
+      if [ -n "${link_destinations[$y]+set}" ] && \
+         [ "${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}" == "${link_destinations[$y]}" ]; then
+        mkdir -p "$(dirname "${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}")"
+
+        if [ ! -e "${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}" ] || \
+           [ -n "${DOCKER_LINK_MOUNTS_FORCE+set}" ]; then
+          ln -T -s ${options-} "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}" "${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}"
+        fi
         # This gosu version only covers a small corner case. It was deemed not worth
-        # including in the final cut. Will revisit if it is deemed desired
+        # including in the final cut. Will revisit if it is deemed necessary
         # gosu ${DOCKER_USERNAME} ln -T -s ${options-} "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}" "${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}" || :
         break
       fi

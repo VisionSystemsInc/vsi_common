@@ -157,9 +157,75 @@ begin_test "nonposix groups"
 )
 end_test
 
-begin_test "link mounts"
+setup_mock()
+{
+  ln()
+  {
+    echo "ln ${@-}" >> mockout
+  }
+
+  mkdir()
+  {
+    echo "mkdir ${@-}" >> mockout
+  }
+}
+
+begin_test "simple link mounts"
+(
+  set -eu
+  setup_mock
+  n=$'\n'
+
+  JUST_DOCKER_ENTRYPOINT_LINKS="${TESTDIR}/mnt:${TESTDIR}/test" \
+  docker_link_mounts
+
+  ans="mkdir -p ${TESTDIR}"
+  ans+="${n}ln -T -s ${TESTDIR}/test ${TESTDIR}/mnt"
+
+  [ "$(cat mockout)" = "${ans}" ]
+)
+end_test
+
+begin_test "competing link mounts"
 (
   set -eu
 
+  mkdir mnt1
+  mkdir mnt2
+
+  JUST_DOCKER_ENTRYPOINT_LINKS="${TESTDIR}/test/foo:${TESTDIR}/mnt1:${TESTDIR}/test:${TESTDIR}/mnt2" \
+  docker_link_mounts
+
+  [ "$(readlink test)" = "${TESTDIR}/mnt2" ]
+  [ "$(readlink test/foo)" = "${TESTDIR}/mnt1" ]
+
+  JUST_DOCKER_ENTRYPOINT_LINKS="${TESTDIR}/test2:${TESTDIR}/mnt2:${TESTDIR}/test2/bar:${TESTDIR}/mnt1" \
+  docker_link_mounts
+
+  [ "$(readlink test2)" = "${TESTDIR}/mnt2" ]
+  [ "$(readlink test2/bar)" = "${TESTDIR}/mnt1" ]
+)
+end_test
+
+begin_test "competing link mounts with DOCKER_LINK_MOUNTS_NOT_IN_MOUNTS"
+(
+  set -eu
+
+  mkdir mnt1
+  mkdir mnt2
+
+  JUST_DOCKER_ENTRYPOINT_LINKS="${TESTDIR}/test/foo:${TESTDIR}/mnt1:${TESTDIR}/test:${TESTDIR}/mnt2" \
+  DOCKER_LINK_MOUNTS_NOT_IN_MOUNTS=1 \
+  docker_link_mounts
+
+  [ "$(readlink test)" = "${TESTDIR}/mnt2" ]
+  [ ! -e "${TESTDIR}/test/foo" ]
+
+  JUST_DOCKER_ENTRYPOINT_LINKS="${TESTDIR}/test2:${TESTDIR}/mnt2:${TESTDIR}/test2/bar:${TESTDIR}/mnt1" \
+  DOCKER_LINK_MOUNTS_NOT_IN_MOUNTS=1 \
+  docker_link_mounts
+
+  [ "$(readlink test2)" = "${TESTDIR}/mnt2" ]
+  [ ! -e "${TESTDIR}/test/bar" ]
 )
 end_test
