@@ -58,6 +58,7 @@ source "${VSI_COMMON_DIR}/linux/linux_accounts.bsh"
 #***
 function docker_setup_user()
 {
+  local i
 
   : ${DOCKER_ACCOUNTS_CREATE_USER=1}
   : ${DOCKER_ACCOUNTS_CREATE_GROUPS=1}
@@ -69,19 +70,20 @@ function docker_setup_user()
   : ${DOCKER_GIDS=1000}
   : ${DOCKER_HOME=/home/${DOCKER_USERNAME}}
 
-  if [ "${DOCKER_ACCOUNTS_POSIX_GROUPS}" == "1" ]; then
-    #Remove non-posix characters
-    DOCKER_GROUP_NAMES=$(sed 's|[^0-9a-zA-Z._ -]||g
-                              :t
-                              /  /{
-                                s|  | group |g
-                                b t
-                              }' <<< "${DOCKER_GROUP_NAMES}")
-  fi
-
   #Convert to arrays
   DOCKER_GIDS=(${DOCKER_GIDS})
   DOCKER_GROUP_NAMES=(${DOCKER_GROUP_NAMES})
+
+  if [ "${DOCKER_ACCOUNTS_POSIX_GROUPS}" == "1" ]; then
+    #Remove non-posix characters
+    for i in "${!DOCKER_GROUP_NAMES[@]}"; do
+      DOCKER_GROUP_NAMES[$i]="$(sed 's|[^0-9a-zA-Z._ -]||g
+                                     # in cases where 100% of characters were non-posix
+                                     # simply name the group "group"
+                                     s|^ *$|group|' <<< "${DOCKER_GROUP_NAMES[$i]}")"
+    done
+  fi
+
 
   if [ "${DOCKER_ACCOUNTS_CREATE_USER}" == "1" ]; then
     add_user ${DOCKER_USERNAME} ${DOCKER_UID} ${DOCKER_GIDS[0]} "${DOCKER_HOME}"
@@ -93,13 +95,10 @@ function docker_setup_user()
   if [ "${DOCKER_ACCOUNTS_CREATE_GROUPS}" == "1" ]; then
     local group
     local gshadow
-    local fifo_buffer="$(mktemp -u -p /dev/shm)"
-    mkfifo "${fifo_buffer}"
     read_group_data
 
     LINUX_ACCOUNTS_AUTOSAVE=0 add_group ${DOCKER_GROUP_NAMES[0]} ${DOCKER_GIDS[0]}
 
-    local i
     local users
     users=(${DOCKER_USERNAME})
     for ((i=1; i<${#DOCKER_GIDS[@]}; i++)); do
@@ -107,7 +106,6 @@ function docker_setup_user()
     done
 
     write_group_data
-    rm "${fifo_buffer}"
   fi
 }
 
