@@ -30,7 +30,7 @@ function environment()
   echo -e "\n    environment:"
 }
 
-function env()
+function envi()
 {
   echo -e "\n      - ${1}"
 }
@@ -109,13 +109,13 @@ begin_test "Just docker compose dynamic environment"
   set -eu
 
   # Basic test
-  ans="$(head)$(service test1)$(environment)$(env TEST_ONE=2)$(env TEST_ONE_HOST=1)"
+  ans="$(head)$(service test1)$(environment)$(envi TEST_ONE=2)$(envi TEST_ONE_HOST=1)"
   override="$(TEST_ONE_HOST=1 TEST_ONE_DOCKER=2 \
               generate_docker_compose_override TEST test1)"
   [ "${override}" = "${ans}" ]
 
   # Test with JUST_DISABLE_ENVIRONMENT_SWAP
-  ans="$(head)$(service test1)$(environment)$(env TEST_ONE_DOCKER=2)$(env TEST_ONE_HOST=1)"
+  ans="$(head)$(service test1)$(environment)$(envi TEST_ONE_DOCKER=2)$(envi TEST_ONE_HOST=1)"
   override="$(TEST_ONE_HOST=1 TEST_ONE_DOCKER=2 JUST_DISABLE_ENVIRONMENT_SWAP=1 \
               generate_docker_compose_override TEST test1)"
   [ "${override}" = "${ans}" ]
@@ -132,12 +132,9 @@ linux_nfs="\
 Filesystem                       1K-blocks        Used   Available Use% Mounted on
 filetodata-2:/volume1/projects 23320723712 22239875584  1080729344  96%"
 
-begin_test "just_docker_entrypoint_links"
-(
-  set -eu
-
+setup_mock()
+{
   TESTDIR="$(real_path "${TESTDIR}")"
-
   function df()
   {
     local last_arg=${!#}
@@ -148,6 +145,12 @@ begin_test "just_docker_entrypoint_links"
     fi
     return 1
   }
+}
+
+begin_test "just_docker_entrypoint_links"
+(
+  set -eu
+  setup_mock
 
   TEST_VOLUMES=("${TESTDIR}/a/a:/this is  a   test")
   TEST_VOLUMES+=("${TESTDIR}/a:/this is  a   test")
@@ -159,30 +162,26 @@ begin_test "just_docker_entrypoint_links"
 
   ans="$(head)$(service test1)$(volumes)"
   ans+="$(vol "${TESTDIR}/a:/host_mnt${TESTDIR}/a")"
+  ans+="$(vol "${TESTDIR}/a:/this is  a   test")"
   ans+="$(vol "${TESTDIR}/b:/host_mnt${TESTDIR}/b")"
   ans+="$(environment)"
   ans_el="/this is  a   test:"
   ans_el+="/host_mnt${TESTDIR}/a/a:"
-  ans_el+="/this is  a   test:"
-  ans_el+="/host_mnt${TESTDIR}/a:"
   ans_el+="/this is  a   test:"
   ans_el+="/host_mnt${TESTDIR}/a/b:"
   ans_el+="/this is  a   test:"
   ans_el+="/host_mnt${TESTDIR}/a/c:"
   ans_el+="/foo/bar:"
   ans_el+="/host_mnt${TESTDIR}/b/a"
-  ans+="$(env "JUST_DOCKER_ENTRYPOINT_LINKS=${ans_el}")"
+  ans+="$(envi "JUST_DOCKER_ENTRYPOINT_LINKS=${ans_el}")"
 
   [ "${override}" = "${ans}" ]
 )
 end_test
 
-begin_test "Issue #7 Scenario 2"
-(
-  set -eu
-
+setup_mock()
+{
   TESTDIR="$(real_path "${TESTDIR}")"
-
   function df()
   {
     local last_arg=${!#}
@@ -193,16 +192,49 @@ begin_test "Issue #7 Scenario 2"
     fi
     return 1
   }
+}
 
-  # TEST_VOLUMES=("home_mount:/home/andy"
-  #               "${TESTDIR}/a/a:/home/andy")
+begin_fail_test "Issue #7 Scenario 1"
+(
+  set -eu
+  setup_mock
 
-  # override="$(generate_docker_compose_override TEST test1)"
+  TEST_VOLUMES=("home_mount:/home/andy" # This one should be in the docker-compose.yml file
+                "${TESTDIR}/a/a:/home/andy")
 
-  # declare -p override >&2
-  declare -p TESTDIR
-  mount_point "${TESTDIR}/a/a" nfs nfs3 nfs4 >&2
-  # false
+  override="$(generate_docker_compose_override TEST test1)"
 
+  ans="$(head)$(service test1)$(volumes)"
+  # This should not be here, that's the point of Scenario #1
+  # ans+="$(vol "home_mount:/home/andy")"
+  ans+="$(vol "${TESTDIR}:/host_mnt${TESTDIR}")"
+  ans+="$(environment)"
+  ans_el="/home/andy:"
+  ans_el+="/host_mnt${TESTDIR}/a/a"
+  ans+="$(envi "JUST_DOCKER_ENTRYPOINT_LINKS=${ans_el}")"
+
+  [ "${override}" = "${ans}" ]
+)
+end_test
+
+begin_test "Issue #7 Scenario 2"
+(
+  set -eu
+  setup_mock
+
+  TEST_VOLUMES=("${TESTDIR}/a/a:/this"
+                "${TESTDIR}:/this")
+
+  override="$(generate_docker_compose_override TEST test1)"
+
+  ans="$(head)$(service test1)$(volumes)"
+  ans+="$(vol "${TESTDIR}:/host_mnt${TESTDIR}")"
+  ans+="$(vol "${TESTDIR}:/this")"
+  ans+="$(environment)"
+  ans_el="/this:"
+  ans_el+="/host_mnt${TESTDIR}/a/a"
+  ans+="$(envi "JUST_DOCKER_ENTRYPOINT_LINKS=${ans_el}")"
+
+  [ "${override}" = "${ans}" ]
 )
 end_test

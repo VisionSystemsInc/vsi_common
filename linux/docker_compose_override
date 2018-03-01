@@ -181,27 +181,22 @@ function generate_docker_compose_override()
         volume_host=$(real_path "${volume_host}")
       fi
 
-      # Check to see that the volume is not a docker volume
-      if [ "${volume_host:0:1}" = "/" ]; then
-        # If the mount point is nfs AND it isn't already the same as the mount
-        if host_mount_point="$(mount_point "${volume_host}" nfs nfs3 nfs4)"; then
-          # When I tackle #19, I may add something like
-          # if [ "${host_mount_point}" != "${volume_host}" ]; then
-          #   just_docker_entrypoint_links+=("E")
-          # fi
-          # or something, like that, to send a special message to the entrypoint
-          # that these two are equal, and needed just for proper decision making
-          # like scenario 3
+         # If the volume is not a docker volume
+      if [ "${volume_host:0:1}" = "/" ] &&
+         # If the mount point is nfs AND it isn't already the same as the mount
+         host_mount_point="$(mount_point "${volume_host}" nfs nfs3 nfs4)" && \
+         # The edge case is the volume_host is exactly the mount point, don't
+         # do anything special for that case
+         [ "${host_mount_point}" != "${volume_host}" ]; then
 
-          # Add to the entrypoint list
-          just_docker_entrypoint_links+=("${volume_docker}"
-                                         "${MOUNT_PREFIX-/host_mnt}${volume_host}")
-          # Rewrite this volume
-          volume_host="${host_mount_point}"
+        # Add to the entrypoint list
+        just_docker_entrypoint_links+=("${volume_docker}"
+                                       "${MOUNT_PREFIX-/host_mnt}${volume_host}")
+        # Rewrite this volume
+        volume_host="${host_mount_point}"
 
 
-          volume_docker="${MOUNT_PREFIX-/host_mnt}${host_mount_point}"
-        fi
+        volume_docker="${MOUNT_PREFIX-/host_mnt}${host_mount_point}"
       fi
 
       IFS=:
@@ -219,7 +214,7 @@ function generate_docker_compose_override()
     IFS="${OLD_IFS}"
 
     new_environment=1
-    if [ "${just_docker_entrypoint_links+set}" == "set" ]; then
+    if [ -n "${just_docker_entrypoint_links+set}" ]; then
       IFS=:
       _env_echo "      - JUST_DOCKER_ENTRYPOINT_LINKS=${just_docker_entrypoint_links[*]}"
       IFS="${OLD_IFS}"
