@@ -123,7 +123,7 @@ function docker_setup_user()
 #   with squash root. Instead the base mount point is mounted into the
 #   container and a symlink is created to link the desired locations. This
 #   function creates these symlinks based on the colon separated string
-#   JUST_DOCKER_ENTRYPOINT_LINKS. e.g., "destination//source//destination//source".
+#   JUST_DOCKER_ENTRYPOINT_LINKS. e.g., "source//destination//source//destination".
 # NOTES
 #   Links within other links are not created. This would just corrupt the
 #   directories on the host side.
@@ -157,7 +157,7 @@ function docker_link_mounts()
   fi
 
   local link_destinations=()
-  for ((x=0; x+1<${#JUST_DOCKER_ENTRYPOINT_LINKS[@]}; x+=2)); do
+  for ((x=1; x<${#JUST_DOCKER_ENTRYPOINT_LINKS[@]}; x+=2)); do
     # copy to an array of just destinations
     link_destinations+=("${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}")
   done
@@ -194,16 +194,16 @@ function docker_link_mounts()
     # Last link wins; this matches docker-compose behavior
     for ((x=${#JUST_DOCKER_ENTRYPOINT_LINKS[@]}-2; x>=0; x-=2)); do
       if [ -n "${link_destinations[$y]+set}" ] && \
-         [ "${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}" == "${link_destinations[$y]}" ]; then
-        mkdir -p "$(dirname "${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}")"
+         [ "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}" == "${link_destinations[$y]}" ]; then
+        mkdir -p "$(dirname "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}")"
 
-        if [ ! -e "${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}" ] || \
+        if [ ! -e "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}" ] || \
            [ -n "${DOCKER_LINK_MOUNTS_FORCE+set}" ]; then
-          ln -s ${options-} "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}" "${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}"
+          ln -s ${options-} "${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}" "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}"
         fi
         # This gosu version only covers a small corner case. It was deemed not worth
         # including in the final cut. Will revisit if it is deemed necessary
-        # gosu ${DOCKER_USERNAME} ln -T -s ${options-} "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}" "${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}" || :
+        # gosu ${DOCKER_USERNAME} ln -T -s ${options-} "${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}" "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}" || :
         break
       fi
     done
