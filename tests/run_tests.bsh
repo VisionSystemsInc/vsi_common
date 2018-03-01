@@ -23,6 +23,7 @@ set -eu
 : ${VSI_COMMON_DIR="$(\dirname "${BASH_SOURCE[0]}")/.."}
 source "${VSI_COMMON_DIR}/env.bsh"
 source "${VSI_COMMON_DIR}/linux/common_source.sh"
+source "${VSI_COMMON_DIR}/tests/test_colors.sh"
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
@@ -54,9 +55,9 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 #***
 : ${TESTS_PARALLEL=${VSI_NUMBER_CORES}}
 
-#****d* run_tests.sh/TESTS_ARGS
+#****d* run_tests.sh/TEST_ARGS
 # NAME
-#   TESTS_ARGS - Test arguments passed to every test call
+#   TEST_ARGS - Test arguments passed to every test call
 # DESCRIPTION
 #   An array of arguments that can be passed to every test
 # NOTES
@@ -64,6 +65,8 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 # AUTHOR
 #   Andy Neff
 #***
+
+export summary_log_dir="$(mktemp -d)"
 
 function atexit()
 {
@@ -81,10 +84,58 @@ function atexit()
     env
   fi
 
+  sum=($(awk '
+    {
+      for (i=1;i<=NF;i++) a[i]+=$i
+    }
+    END{
+     for (i=1;i<=NF;i++) printf a[i] " "
+     printf "\n"
+    }' "${summary_log_dir}"/*))
+
+  # echo "       ____"
+  # echo "      / ___| _   _ _ __ ___  _ __ ___   __ _ _ __ _   _"
+  # echo "      \___ \| | | | '_ \` _ \| '_ \` _ \ / _\` | '__| | | |"
+  # echo "       ___) | |_| | | | | | | | | | | | (_| | |  | |_| |"
+  # echo "      |____/ \__,_|_| |_| |_|_| |_| |_|\__,_|_|   \__, |"
+  # echo "                                                  |___/"
+  echo
+
+  printf "${TEST_GOOD_COLOR}Overall Summary${TEST_RESET_COLOR}: %d tests, " ${sum[0]}
+
+  if [ "${sum[1]}" -eq 0 ]; then
+    echo -n "${TEST_BOLD_COLOR}"
+  else
+    echo -n "${TEST_BAD_COLOR}"
+  fi
+  printf "%d failures${TEST_RESET_COLOR}, " ${sum[1]}
+  if [ "${sum[2]}" -ne 0 ]; then
+    echo -n "${TEST_WARN_COLOR}"
+  else
+    echo -n "${TEST_BOLD_COLOR}"
+  fi
+  printf "%d expected failures${TEST_RESET_COLOR}, %d required failures, and " ${sum[2]}
+
+  printf "%d required failures, and " ${sum[3]}
+  if [ "${sum[4]}" -eq 0 ]; then
+    echo -n "${TEST_BOLD_COLOR}"
+  fi
+  printf "%d skipped${TEST_RESET_COLOR}\n\n" ${sum[4]}
+
+  cleanup
+
   exit $rv
 }
 
 trap "atexit" EXIT
+
+function cleanup()
+{
+  rm -r "${summary_log_dir}"
+}
+trap cleanup INT
+trap cleanup TERM
+# Everything but kill -9 should cause a proper cleanup
 
 # Optional global setup here
 

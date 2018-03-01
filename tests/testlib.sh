@@ -29,7 +29,7 @@
 # AUTHOR
 #   Ryan Tomayko
 # MODIFICATION HISTORY
-#   Andy Neff - Added begin_fail_test
+#   Andy Neff - Added begin_expected_fail_test
 #               Added optional setup/teardown functions
 #               Removed PATH
 #               Added robodoc documentation
@@ -48,6 +48,7 @@ if [ "${TESTLIB_SHOW_TIMING-0}" == "1" ] || [[ ${OSTYPE} = darwin* ]]; then
   . "${VSI_COMMON_DIR}/linux/time_tools.bsh"
 fi
 . "${VSI_COMMON_DIR}/linux/file_tools.bsh"
+. "${VSI_COMMON_DIR}/tests/test_colors.sh"
 
 # create a temporary work space
 TRASHDIR="$(mktemp -d -t $(basename "$0")-$$.XXXXXXXX)"
@@ -55,8 +56,8 @@ TRASHDIR="$(mktemp -d -t $(basename "$0")-$$.XXXXXXXX)"
 # keep track of num tests and failures
 tests=0
 failures=0
-allowed_failures=0
-must_failures=0
+expected_failures=0
+required_failures=0
 skipped=0
 
 #****f* testlib.sh/setup
@@ -165,8 +166,12 @@ atexit ()
     BOLD_COLOR="${TEST_BAD_COLOR}"
   fi
 
-  printf "%s summary: %d test ran, ${BOLD_COLOR}%d failures${TEST_RESET_COLOR}, %d allowed failures, %d must fails, %d skipped\n" \
-         "$0" "${tests}" "${failures}" "${allowed_failures}" "${must_failures}" "${skipped}"
+  printf "%s summary: %d test ran, ${BOLD_COLOR}%d failures${TEST_RESET_COLOR}, %d expected failures, %d required failures, %d skipped\n" \
+         "$0" "${tests}" "${failures}" "${expected_failures}" "${required_failures}" "${skipped}"
+
+  if [ -d "${summary_log_dir-}" ]; then
+    echo "${tests} ${failures} ${expected_failures} ${required_failures} ${skipped}" > "${summary_log_dir}/$0"
+  fi
 
   if [ "${failures}" -gt 0 ]; then
     exit 1
@@ -174,9 +179,8 @@ atexit ()
     exit 0
   fi
 }
-
-# create the trash dir
 trap "atexit" EXIT
+
 if declare -p BASH_SOURCE &>/dev/null; then
   PS4=$'+${BASH_SOURCE-null}:${LINENO})\t'
 else
@@ -204,8 +208,8 @@ _begin_common_test ()
   # Set flag defaults that could be overrideable in certain test types
   # This needs to be after end_test call above in order to keep end_test
   # optional
-  allowed_failure=0
-  must_fail=0
+  expected_failure=0
+  required_fail=0
 
   # Run setup if this is the first test
   if [ "${tests}" -eq "0" ] && type -t setup &>/dev/null && [ "$(command -v setup)" == "setup" ]; then
@@ -255,60 +259,37 @@ begin_test ()
   _begin_common_test ${@+"${@}"}
 }
 
-#****f* testlib.sh/begin_fail_test
+#****f* testlib.sh/begin_expected_fail_test
 # NAME
-#   begin_fail_test - Beginning of failable test demarcation
+#   begin_expected_fail_test - Beginning of expected fail test demarcation
 # USAGE
-#   Define the beginning of a test that is allowed to fail
+#   Define the beginning of a test that is expected to fail
 # AUTHOR
 #   Andy Neff
 #***
-begin_fail_test()
+begin_expected_fail_test()
 {
   test_status=$? # Must be first command
   _begin_common_test ${@+"${@}"}
   # Override _begin_common_test default
-  allowed_failure=1
+  expected_failure=1
 }
 
-#****f* testlib.sh/begin_must_fail_test
+#****f* testlib.sh/begin_required_fail_test
 # NAME
-#   begin_must_fail_test - Beginning of fail required test demarcation
+#   begin_required_fail_test - Beginning of required fail test demarcation
 # USAGE
 #   Define the beginning of a test that is required to fail
 # AUTHOR
 #   Andy Neff
 #***
-begin_must_fail_test()
+begin_required_fail_test()
 {
   test_status=$? # Must be first command
   _begin_common_test ${@+"${@}"}
   # Override _begin_common_test default
-  must_fail=1
+  required_fail=1
 }
-
-#****d* testlib.sh/TEST_NO_COLOR
-# NAME
-#   TEST_NO_COLOR - Disable the use of ANSI colors
-# DESCRIPTION
-#   In order to disable color test testlib's failing cases, set TEST_NO_COLOR=1
-# SOURCE
-: ${TEST_GOOD_COLOR=$'\e[1;32m'}
-: ${TEST_BAD_COLOR=$'\e[1;31m'}
-: ${TEST_BOLD_COLOR=$'\e[1m'}
-: ${TEST_RESET_COLOR=$'\e[m'}
-
-if [ "${TEST_NO_COLOR-0}" == 1 ]; then
-  TEST_GOOD_COLOR=''
-  TEST_BAD_COLOR=''
-  TEST_BOLD_COLOR=''
-  TEST_RESET_COLOR=''
-fi
-# AUTHOR
-#   Andy Neff
-#***
-# If it gets more complicated, *consider* using linux/colors.bsh
-
 
 #****f* testlib.sh/end_test
 # NAME
@@ -332,19 +313,19 @@ end_test ()
   fi
 
   if [ "${_skipping_test-}" = "1" ] && [ "${test_status}" -eq 0 ]; then
-    printf "%-80s ${TEST_GOOD_COLOR}SKIPPED OK${TEST_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
+    printf "%-80s ${TEST_GOOD_COLOR}SKIPPED${TEST_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
     skipped=$((skipped+1))
-  elif [ "${must_fail}" -eq 1 ] && [ "$test_status" -ne 0 ]; then
+  elif [ "${required_fail}" -eq 1 ] && [ "$test_status" -ne 0 ]; then
     printf "%-80s ${TEST_GOOD_COLOR}FAIL REQUIRED${TEST_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
-    must_failures=$((must_failures+1))
-  elif [ "${must_fail}" -eq 0 ] && [ "$test_status" -eq 0 ]; then
+    required_failures=$((required_failures+1))
+  elif [ "${required_fail}" -eq 0 ] && [ "$test_status" -eq 0 ]; then
     printf "%-80s ${TEST_GOOD_COLOR}OK${TEST_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
-  elif [ "${allowed_failure}" -eq 1 ]; then
-    printf "%-80s ${TEST_GOOD_COLOR}FAIL OK${TEST_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
-    allowed_failures=$(( allowed_failures + 1 ))
+  elif [ "${expected_failure}" -eq 1 ]; then
+    printf "%-80s ${TEST_GOOD_COLOR}FAIL EXPECTED${TEST_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
+    expected_failures=$(( expected_failures + 1 ))
   else
     failures=$(( failures + 1 ))
-    if [ "${must_fail}" -eq 1 ]; then
+    if [ "${required_fail}" -eq 1 ]; then
       printf "%-80s ${TEST_BAD_COLOR}SHOULD HAVE FAILED${TEST_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
     else
       printf "%-80s ${TEST_BAD_COLOR}FAILED${TEST_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
