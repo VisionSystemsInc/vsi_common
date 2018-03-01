@@ -170,7 +170,7 @@ atexit ()
          "$0" "${tests}" "${failures}" "${expected_failures}" "${required_failures}" "${skipped}"
 
   if [ -d "${summary_log_dir-}" ]; then
-    echo "${tests} ${failures} ${expected_failures} ${required_failures} ${skipped}" > "${summary_log_dir}/$0"
+    echo "${tests} ${failures} ${expected_failures} ${required_failures} ${skipped}" > "${summary_log_dir}/$(basename "$0")"
   fi
 
   if [ "${failures}" -gt 0 ]; then
@@ -291,6 +291,43 @@ begin_required_fail_test()
   required_fail=1
 }
 
+#****f* testlib.sh/setup_test
+# NAME
+#   setup_test - Sets up the test
+# DESCRIPTION
+#   Once inside the () subshell, typically set -eu needs to be run, then other
+#   things such as checking to see if a test should be skipped, etc... need to
+#   be done. This is all encapulated into setup_test. This is required, without
+#   it, end_test will know you forgot to call this and fail.
+#
+#   This is also the second part of creating a skippable test.
+#
+#   You are free to change "set -eu" after setup_test, should you wish.
+# USAGE
+#   Place at the beginning of a test
+# EXAMPLE
+#   skip_next_test
+#   begin_test "Skipping test"
+#   (
+#     setup_test
+#     #test code here
+#   )
+# AUTHOR
+#   Andy Neff
+#***
+setup_test()
+{
+  # Identify that setup_test was caleld
+  touch "${TRASHDIR}/.setup_test"
+
+  # Check to see if this test should be skipped
+  if [ "${__testlib_skip_test-}" = "1" ]; then
+    exit 0
+  fi
+
+  set -eu
+}
+
 #****f* testlib.sh/end_test
 # NAME
 #   end_test - End of a test demarcation
@@ -312,7 +349,12 @@ end_test ()
     time_e=$(awk "BEGIN {print \"\t\" $(get_time_seconds)-${_time_0}}")
   fi
 
-  if [ "${_skipping_test-}" = "1" ] && [ "${test_status}" -eq 0 ]; then
+  if [ ! -e "${TRASHDIR}/.setup_test" ]; then
+    # This is a "no matter what, failure". No expected/required failure work
+    # around for this
+    printf "%-80s ${TEST_BAD_COLOR}SETUP FAILURE${TEST_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
+    failures=$(( failures + 1 ))
+  elif [ "${__testlib_skip_test-}" = "1" ] && [ "${test_status}" -eq 0 ]; then
     printf "%-80s ${TEST_GOOD_COLOR}SKIPPED${TEST_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
     skipped=$((skipped+1))
   elif [ "${required_fail}" -eq 1 ] && [ "$test_status" -ne 0 ]; then
@@ -348,7 +390,9 @@ end_test ()
   fi
 
   unset test_description
-  unset _skipping_test
+  unset __testlib_skip_test
+
+  rm "${TRASHDIR}/.setup_test" || :
 }
 
 #****f* testlib.sh/skip_next_test
@@ -356,15 +400,18 @@ end_test ()
 #   skip_next_test - Function to indicate the next test should be skipped
 # DESCRIPTION
 #   This is the first part of creating a skippable test, used in conjunction
-#   with check_skip
+#   with setup_test
 # EXAMPLE
 #   For example, skip if docker command not found
 #
-#     if command -v docker > /dev/null 2>&1 ; then
-#       skip_next_test
-#     fi
+#     command -v docker &>/dev/null && skip_next_test
+#     begin_test "My test"
+#     (
+#       setup_test
+#       [ "$(docker run -it --rm ubuntu:14.04 echo hi)" = "hi" ]
+#     )
 # SEE ALSO
-#   testlib.sh/check_skip
+#   testlib.sh/setup_skip
 # NOTES
 #   This must be done outside of the test, or else the skip variable will not
 #   be set and detected by end_test
@@ -373,33 +420,7 @@ end_test ()
 #***
 skip_next_test()
 {
-  _skipping_test=1
-}
-
-#****f* testlib.sh/check_skip
-# NAME
-#   check_skip - Check to see if this test should be skipped
-# DESCRIPTION
-#   This is the second part of creating a skippable test. Place at the beginning
-#   of a test
-# EXAMPLE
-#   skip_next_test
-#   begin_test "Skipping test"
-#   (
-#     check_skip
-#     #test code here
-#   )
-# NOTES
-#   This must be done inside of the test subshell, as begin_test can't simply
-#   say "skip the next group" in standard sh.
-# AUTHOR
-#   Andy Neff
-#***
-check_skip()
-{
-  if [ "${_skipping_test-}" = "1" ]; then
-    exit 0
-  fi
+  __testlib_skip_test=1
 }
 
 #****f* testlib.sh/not

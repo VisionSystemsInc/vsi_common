@@ -4,7 +4,7 @@
 
 begin_test "Test Success"
 (
-  set -eu
+  setup_test
 
   echo "Working test ${@+${@}}"
 )
@@ -12,7 +12,7 @@ end_test
 
 begin_expected_fail_test "Test Expected Fail"
 (
-  set -eu
+  setup_test
 
   echo "Failing test ${@+${@}}"
 
@@ -22,7 +22,7 @@ end_test
 
 begin_required_fail_test "Test Required Fail"
 (
-  set -eu
+  setup_test
 
   echo "Required fail test ${@+${@}}"
 
@@ -33,9 +33,7 @@ end_test
 skip_next_test
 begin_test "Test Skipped Test"
 (
-  set -eu
-
-  check_skip
+  setup_test
 
   false
 )
@@ -43,7 +41,7 @@ end_test
 
 begin_test "Test not"
 (
-  set -eu
+  setup_test
 
   not false
 
@@ -59,7 +57,7 @@ end_test
 
 begin_test "Test not_s"
 (
-  set -eu
+  setup_test
 
   not_s "[[ 1 == 2 ]]"
   not not_s "[[ 1 == 1 ]]"
@@ -77,32 +75,18 @@ begin_test "Test not_s"
 )
 end_test
 
-#****d* testlib.sh/TEST_CAUSE_FAIL
-# NAME
-#   TEST_CAUSE_FAIL - Run failing tests
-# DESCRIPTION
-#   In order to test testlib's failing cases, set TEST_CAUSE_FAIL=1 to cause
-#   some actual failures. This isn't part of the normal tests because the only
-#   real way to test a failure is to cause a real failure, which won't pass.
-# AUTHOR
-#   Andy Neff
-#***
-if [ "${TEST_CAUSE_FAIL}" == "1" ]; then
-  begin_test "Test actual fail"
-  (
-    set -eu
+# I loose the cwd when I run begin_test
+THIS_TEST_DIR="$(cd "$(dirname ${BASH_SOURCE[0]})"; pwd)"
+begin_test "Run actual failing tests"
+(
+  setup_test
 
-    echo "Fail test ${@+${@}}"
+  # Output this whole test to stdout. It make reading logs a LOT easier
+  summary_log_dir=${TESTDIR} TEST_CAUSE_FAIL=1 "${THIS_TEST_DIR}/quiz-testlib.bsh" 2>&1 || :
 
-    false
-  )
-  end_test
+  sumary_file="${TESTDIR}/quiz-testlib.bsh"
 
-  begin_required_fail_test "Test failed required fail"
-  (
-    set -eu
-
-    echo "Not failing when I should pass ${@+${@}}"
-  )
-  end_test
-fi
+  # There should be three failures!
+  [ "$(awk '{print $2}' "${sumary_file}")" -eq 3 ]
+)
+end_test
