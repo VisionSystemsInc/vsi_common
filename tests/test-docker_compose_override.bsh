@@ -238,3 +238,47 @@ begin_test "Issue #7 Scenario 2"
   [ "${override}" = "${ans}" ]
 )
 end_test
+
+begin_fail_test "Issue #7 Scenario 3"
+(
+  set -eu
+  setup_mock
+
+  TEST_VOLUMES=("${TESTDIR}:/this"
+                "${TESTDIR}/a/a:/this")
+
+  override="$(generate_docker_compose_override TEST test1)"
+
+  ans="$(head)$(service test1)$(volumes)"
+  # This should not be here, that's the point of Scenario #3
+  # ans+="$(vol "${TESTDIR}:/this")"
+  ans+="$(vol "${TESTDIR}:/host_mnt${TESTDIR}")"
+  ans+="$(environment)"
+  ans_el="/host_mnt${TESTDIR}/a/a:"
+  ans_el+="/this"
+  ans+="$(envi "JUST_DOCKER_ENTRYPOINT_LINKS=${ans_el}")"
+
+  [ "${override}" = "${ans}" ]
+)
+end_test
+
+begin_fail_test "Issue #7 Scenario 4"
+(
+  set -eu
+  setup_mock
+
+  TEST_VOLUMES=("home_mount:/home" # This one should be in the docker-compose.yml file
+                "${TESTDIR}/a/a:/home/andy")
+
+  override="$(generate_docker_compose_override TEST test1)"
+
+  ans="$(head)$(service test1)$(volumes)"
+  # This should not be here, that's the point of Scenario #4
+  ans+="$(vol "home_mount:/home")"
+  ans+="$(vol "${TESTDIR}:/host_mnt${TESTDIR}")"
+  ans+="$(environment)"
+  ans_el="/host_mnt${TESTDIR}/a/a:"
+  ans_el+="/home/andy"
+  ans+="$(envi "JUST_DOCKER_ENTRYPOINT_LINKS=${ans_el}")"
+)
+end_test
