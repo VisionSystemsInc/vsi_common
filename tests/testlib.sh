@@ -1,14 +1,14 @@
 #!/usr/bin/env false
 
-#****J* vsi/testlib.sh
+#****J* vsi/testlib.bsh
 # NAME
-#   testlib.sh - Simple shell command language test library
+#   testlib.bsh - Simple shell command language test library
 # USAGE
-#   . testlib.sh
+#   . testlib.bsh
 # EXAMPLE
 #   Tests must follow the basic form:
 #
-#   source testlib.sh
+#   source testlib.bsh
 #
 #   begin_test "the thing"
 #   (
@@ -38,11 +38,9 @@
 #               Added custom PS4
 #***
 
-# The above must be the first command executed, or else it won't work. Use this
-# instead of BASH_SOURCE to maintain sh compatibility
-: ${VSI_COMMON_DIR="$(cd "$(dirname "$_")/.."; pwd)"}
-
 set -e
+
+: ${VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE}")/.."; pwd)"}
 
 if [ "${TESTLIB_SHOW_TIMING-0}" == "1" ] || [[ ${OSTYPE} = darwin* ]]; then
   . "${VSI_COMMON_DIR}/linux/time_tools.bsh"
@@ -60,7 +58,7 @@ expected_failures=0
 required_failures=0
 skipped=0
 
-#****f* testlib.sh/setup
+#****f* testlib.bsh/setup
 # NAME
 #   setup - Function run before the first test
 # NOTES
@@ -71,29 +69,29 @@ skipped=0
 #   Andy Neff
 #***
 
-#****d* testlib.sh/TRASHDIR
+#****d* testlib.bsh/TRASHDIR
 # NAME
 #   TRASHDIR - Temporary directory where everything for the test file is stored
 # DESCRIPTION
 #   Automatically generated and removed (unless TEST_KEEP_TEMP_DIRS is changed)
 # SEE ALSO
-#   testlib.sh/TESTDIR
+#   testlib.bsh/TESTDIR
 # AUTHOR
 #   Ryan Tomayko
 #***
 
-#****d* testlib.sh/TESTDIR
+#****d* testlib.bsh/TESTDIR
 # NAME
 #   TESTDIR - Unique temporary directory for a single test (in TRASHDIR)
 # DESCRIPTION
 #   Automatically generated and removed (unless TEST_KEEP_TEMP_DIRS is changed)
 # SEE ALSO
-#   testlib.sh/TRASHDIR
+#   testlib.bsh/TRASHDIR
 # AUTHOR
 #   Ryan Tomayko
 #***
 
-#****f* testlib.sh/teardown
+#****f* testlib.bsh/teardown
 # NAME
 #   teardown - Function run after the last test
 # NOTES
@@ -102,7 +100,7 @@ skipped=0
 #   Andy Neff
 #***
 
-#****d* testlib.sh/TEST_KEEP_TEMP_DIRS
+#****d* testlib.bsh/TEST_KEEP_TEMP_DIRS
 # NAME
 #   TEST_KEEP_TEMP_DIRS - Keep the trashdir/setup dir
 # DESCRIPTION
@@ -112,7 +110,7 @@ skipped=0
 #   Andy Neff
 #***
 
-#****d* testlib.sh/TESTLIB_SHOW_TIMING
+#****d* testlib.bsh/TESTLIB_SHOW_TIMING
 # NAME
 #   TESTLIB_SHOW_TIMING - Display test time after each test
 # DESCRIPTION
@@ -122,7 +120,7 @@ skipped=0
 #   Andy Neff
 #***
 
-#****f* testlib.sh/atexit
+#****f* testlib.bsh/atexit
 # NAME
 #   atexit - Function that runs at process exit
 # USAGE
@@ -181,12 +179,7 @@ atexit ()
 }
 trap "atexit" EXIT
 
-if declare -p BASH_SOURCE &>/dev/null; then
-  PS4=$'+${BASH_SOURCE-null}:${LINENO})\t'
-else
-  #Not as accurate, but better than nothing
-  PS4=$'+${0}:${LINENO})\t'
-fi
+PS4=$'+${BASH_SOURCE}:${LINENO})\t'
 
 # Common code for begin tests
 _begin_common_test ()
@@ -208,8 +201,8 @@ _begin_common_test ()
   # Set flag defaults that could be overrideable in certain test types
   # This needs to be after end_test call above in order to keep end_test
   # optional
-  expected_failure=0
-  required_fail=0
+  expected_failure="${_expected_failure-0}"
+  required_fail="${_required_fail-0}"
 
   # Run setup if this is the first test
   if [ "${tests}" -eq "0" ] && type -t setup &>/dev/null && [ "$(command -v setup)" == "setup" ]; then
@@ -240,11 +233,46 @@ _begin_common_test ()
   err="${TESTDIR}/err"
   exec 1>"$out" 2>"$err"
 
+  __test_pid=$$
   # allow the subshell to exit non-zero without exiting this process
   set -x +e
+
+  # No longer running debug trap in test subshell
+  set -T
+
+  # If bash, not sh, enable this nice safety feature
+  if [ -n "${BASH_VERSION+set}" ]; then
+    # # No longer determining subshell or not
+     _main_test_pid="${BASHPID-"$(bash -c 'echo $PPID')"}"
+    # This must be the LAST command in begin_test
+    trap _setup_test DEBUG
+  fi
 }
 
-#****f* testlib.sh/begin_test
+_setup_test()
+{
+  local _test_status="$?"
+  trap - DEBUG
+  set +T
+
+  if [ "${_main_test_pid}" = "${BASHPID-"$(bash -c 'echo $PPID')"}" ]; then
+
+    if [ "${BASH_COMMAND}" != "end_test" ]; then
+      end_test "${_test_status}"
+      echo "WARNING: end_test not explicitly run after end of test">&${stderr}
+      echo "This *may* work, but you really should add end_test">&${stderr}
+    fi
+  else
+    if [ "${BASH_COMMAND}" != "setup_test" ]; then
+      setup_test
+      # echo "WARNING: setup_test not explicitly run at beginning of test">&${stderr}
+      # echo "This *may* work, but you really should add setup_test">&${stderr}
+    fi
+  fi
+
+}
+
+#****f* testlib.bsh/begin_test
 # NAME
 #   begin_test - Beginning of test demarcation
 # USAGE
@@ -259,7 +287,7 @@ begin_test ()
   _begin_common_test ${@+"${@}"}
 }
 
-#****f* testlib.sh/begin_expected_fail_test
+#****f* testlib.bsh/begin_expected_fail_test
 # NAME
 #   begin_expected_fail_test - Beginning of expected fail test demarcation
 # USAGE
@@ -270,12 +298,11 @@ begin_test ()
 begin_expected_fail_test()
 {
   test_status=$? # Must be first command
-  _begin_common_test ${@+"${@}"}
   # Override _begin_common_test default
-  expected_failure=1
+  _expected_failure=1 _begin_common_test ${@+"${@}"}
 }
 
-#****f* testlib.sh/begin_required_fail_test
+#****f* testlib.bsh/begin_required_fail_test
 # NAME
 #   begin_required_fail_test - Beginning of required fail test demarcation
 # USAGE
@@ -286,12 +313,11 @@ begin_expected_fail_test()
 begin_required_fail_test()
 {
   test_status=$? # Must be first command
-  _begin_common_test ${@+"${@}"}
   # Override _begin_common_test default
-  required_fail=1
+  _required_fail=1 _begin_common_test ${@+"${@}"}
 }
 
-#****f* testlib.sh/setup_test
+#****f* testlib.bsh/setup_test
 # NAME
 #   setup_test - Sets up the test
 # DESCRIPTION
@@ -328,7 +354,7 @@ setup_test()
   set -eu
 }
 
-#****f* testlib.sh/end_test
+#****f* testlib.bsh/end_test
 # NAME
 #   end_test - End of a test demarcation
 # USAGE
@@ -395,7 +421,7 @@ end_test ()
   rm "${TRASHDIR}/.setup_test" || :
 }
 
-#****f* testlib.sh/skip_next_test
+#****f* testlib.bsh/skip_next_test
 # NAME
 #   skip_next_test - Function to indicate the next test should be skipped
 # DESCRIPTION
@@ -411,7 +437,7 @@ end_test ()
 #       [ "$(docker run -it --rm ubuntu:14.04 echo hi)" = "hi" ]
 #     )
 # SEE ALSO
-#   testlib.sh/setup_skip
+#   testlib.bsh/setup_skip
 # NOTES
 #   This must be done outside of the test, or else the skip variable will not
 #   be set and detected by end_test
@@ -423,7 +449,7 @@ skip_next_test()
   __testlib_skip_test=1
 }
 
-#****f* testlib.sh/not
+#****f* testlib.bsh/not
 # NAME
 #   not - Returns true only when command fails
 # DESCRIPTION
@@ -456,7 +482,7 @@ skip_next_test()
 #   In cases where this is not easily worked around, you can use
 #     not_s '[ -e /test ]'
 # SEE ALSO
-#   testlib.sh/not_s
+#   testlib.bsh/not_s
 # AUTHOR
 #   Andy Neff
 #***
@@ -472,7 +498,7 @@ not()
 }
 
 # Testing this idea...
-#****f* testlib.sh/not_s
+#****f* testlib.bsh/not_s
 # NAME
 #   not_s - Returns true only when string version of command fails
 # DESCRIPTION
@@ -494,7 +520,7 @@ not()
 # NOTES
 #   Uses eval
 # SEE ALSO
-#   testlib.sh/not
+#   testlib.bsh/not
 # AUTHOR
 #   Andy Neff
 #***
@@ -503,7 +529,7 @@ not_s()
   eval "if ${1}; then return 1; else return 0; fi"
 }
 
-#****f* testlib.sh/track_touched_files
+#****f* testlib.bsh/track_touched_files
 # NAME
 #   track_touched_files - Start tracking touched files
 # DESCRIPTION
@@ -529,7 +555,7 @@ not_s()
 #
 #   Not multiple write thread safe. Use a different file for each thread
 # SEE ALSO
-#   testlib.sh/cleanup_touched_files
+#   testlib.bsh/cleanup_touched_files
 # AUTHOR
 #   Andy Neff
 #***
@@ -538,11 +564,11 @@ track_touched_files()
   tracking_touched_files=1
 }
 
-#****if* testlib.sh/ttouch
+#****if* testlib.bsh/ttouch
 # NAME
 #   ttouch - Touch function that should feel like the original touch command
 # SEE ALSO
-#   testlib.sh/track_touched_files
+#   testlib.bsh/track_touched_files
 # AUTHOR
 #   Andy Neff
 #***
@@ -572,7 +598,7 @@ ttouch()
   done
 }
 
-#****if* testlib.sh/cleanup_touched_files
+#****if* testlib.bsh/cleanup_touched_files
 # NAME
 #   cleanup_touched_files - Delete all the touched files
 # DESCRIPTION
