@@ -5,6 +5,8 @@
 #   mount_point - Get the mount point of a path
 # INPUTS
 #   $1 - path of file/directory
+#   [$2...] - Comma separated list limiting the file system types listed. All
+#             other filesystems will be excluded
 # OUTPUT
 #   stdout - Mount point containing file/directory
 # RETURN VALUE
@@ -18,14 +20,40 @@
 #***
 function mount_point()
 {
+  local lines
   local line
   local x
+  local options=()
+  local IFS="${IFS}"
+  local OLD_IFS="${IFS}"
+
+  local target="${1}"
+  shift 1
+
+  if [ $# -gt 0 ]; then
+    if [[ ${OSTYPE-} = darwin* ]]; then
+      local OLD_IFS="${IFS}"
+      local IFS
+      options+=(-T)
+      IFS=","
+      options+=( "${*}" )
+      IFS="${OLD_IFS}"
+    else
+      for x in "${@}"; do
+        options+=(-t "${x}")
+      done
+    fi
+
+  fi
+
+  lines="$(df ${options+"${options[@]}"} "${target}" 2>/dev/null)" || return $?
+
   {
     read -r line
     x=${line%%Mounted on}
     read -r line
     echo ${line:${#x}}
-  } <<< "$(df "$1" 2>/dev/null)"
+  } <<< "${lines}"
 }
 
 #****f* mount_tools.bsh/mount_type
@@ -38,9 +66,12 @@ function mount_point()
 # NOTES
 #   Mac/Linux compatible. Works on Windows if you actually have a normal POSIX
 #   mount (MING/cygwin).
+#
+#   Deprecated
 # BUGS
 #   $1 is actually a regex. So make sure to escape it if it has special characters
 #   Windows 10 comes with a mount command that this will not currently work with
+#   Darling does not include a mount command
 #***
 function mount_type()
 {
@@ -55,6 +86,8 @@ function mount_type()
 # RETURN VALUE
 #   0 - Yes
 #   1 - No
+# NOTES
+#   Deprecated
 # AUTHOR
 #   Andy Neff
 #***

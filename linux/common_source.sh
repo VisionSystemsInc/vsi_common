@@ -47,7 +47,7 @@ case "$OSTYPE" in
   win32*|cygwin*|msys*|ming*)
     VSI_OS=windows
     VSI_DISTRO=windows
-    VSI_DISTRO_VERSION="$(wmic os get version /format:list | (source /dev/stdin 2>/dev/null; echo $Version))"
+    VSI_DISTRO_VERSION="$(wmic os get version /format:table | sed -n 2p)"
     ;;
   solaris*)
     VSI_OS=solaris
@@ -448,7 +448,7 @@ case "${VSI_OS}" in
     if command -v sysctl >/dev/null 2>&1; then # normal darwin
       VSI_NUMBER_CORES="$(\sysctl -n hw.ncpu)"
     elif [ -f /Volumes/SystemRoot/proc/cpuinfo ]; then #darling
-      VSI_NUMBER_CORES="$(grep processor /Volumes/SystemRoot/proc/cpuinfo | wc -l)"
+      VSI_NUMBER_CORES="$(\grep processor /Volumes/SystemRoot/proc/cpuinfo | wc -l)"
       # Left trim white spaces
       VSI_NUMBER_CORES="${VSI_NUMBER_CORES#"${VSI_NUMBER_CORES%%[![:space:]]*}"}"
     else
@@ -463,7 +463,7 @@ case "${VSI_OS}" in
     if command -v nproc >/dev/null 2>&1; then
       VSI_NUMBER_CORES="$(\nproc)"
     elif [ -f /proc/cpuinfo ]; then
-      VSI_NUMBER_CORES="$(grep processor /proc/cpuinfo | wc -l)"
+      VSI_NUMBER_CORES="$(\grep processor /proc/cpuinfo | wc -l)"
     else
       echo "Warning: unable to determine number of cores" >&2
       VSI_NUMBER_CORES=4

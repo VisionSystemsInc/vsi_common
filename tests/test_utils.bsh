@@ -1,0 +1,110 @@
+#!/usr/bin/env false
+
+#****F* testlib.sh/test_utils.bsh
+# NAME
+#   test_utils.bsh - Utilities to help in test verifications
+# AUTHOR
+#   Andy Neff
+#***
+
+#****f* test_utils.bsh/check_a
+# NAME
+#   check_a - Check array values for unit tests
+# INPUTS
+#   $1 - Array name
+#   [$2...] - Array values
+# OUTPUT
+#   Return Value:
+#     0 - Equal
+#     1 - A value is not the same
+#     2 - The array had less values than specified
+# SEE ALSO
+#   elements.bsh/cmd_elements_a
+# AUTHOR
+#   Andy Neff
+#***
+function check_a()
+{
+  local check_a_name="${1}[@]"
+  local check_name="${1}"
+  shift 1
+
+  for check_a_var in ${!check_name+"${!check_a_name}"}; do
+    if [ $# -eq 0 ]; then
+      echo ${!check_name+"${!check_a_name}"} >&2
+      echo "Array had too many values" >&2
+      return 3
+    fi
+    if [ "${check_a_var}" != "$1" ]; then
+      echo "${!check_a_name}" >&2
+      echo "${check_a_var} != $1" >&2
+      return 1
+    fi
+    shift 1
+  done
+  if [ $# -eq 0 ]; then
+    return 0
+  else
+    echo ${!check_name+"${!check_a_name}"} >&2
+    echo "Array had $# too few values" >&2
+    return 2
+  fi
+}
+
+#****f* test_utils.bsh/check_ra
+# NAME
+#   check_ra - Regex version of check_a
+# AUTHOR
+#   Andy Neff
+#***
+function check_ra()
+{
+  local check_a_name="${1}[@]"
+  local check_name="${1}"
+  shift 1
+
+  for check_a_var in ${!check_name+"${!check_a_name}"}; do
+    if [ $# -eq 0 ]; then
+      echo ${!check_name+"${!check_a_name}"} >&2
+      echo "Array had too many values" >&2
+      return 3
+    fi
+    if [[ ! "${check_a_var}" =~ $1 ]]; then
+      echo "${!check_a_name}" >&2
+      echo "${check_a_var} != $1" >&2
+      return 1
+    fi
+    shift 1
+  done
+  if [ $# -eq 0 ]; then
+    return 0
+  else
+    echo ${!check_name+"${!check_a_name}"} >&2
+    echo "Array had $# too few values" >&2
+    return 2
+  fi
+}
+
+#****f* test_utils.bsh/contiguous_a
+# NAME
+#   contiguous_a - Check array values are contiguous for unit tests
+# INPUTS
+#   $1 - Array name to test
+# OUTPUT
+#   Return Value:
+#     0 - Array is contiguous
+#     1 - Array is not contiguous
+# NOTES
+#   Uses eval
+# AUTHOR
+#   Andy Neff
+#***
+function contiguous_a()
+{
+  # Verify array is contiguous
+  local contiguous_a_indicies=()
+  local contiguous_a_i
+  eval 'contiguous_a_indicies=("${!'$1'[@]}")'
+  # Returns the result of check_a
+  check_a contiguous_a_indicies $(seq 0 1 $((${#contiguous_a_indicies[@]}-1)))
+}

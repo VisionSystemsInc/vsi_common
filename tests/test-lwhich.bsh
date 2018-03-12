@@ -1,0 +1,98 @@
+. "$(dirname ${BASH_SOURCE[0]})/testlib.sh"
+. "$(dirname ${BASH_SOURCE[0]})/test_utils.bsh"
+
+VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+#. "${VSI_COMMON_DIR}/linux/bin_utils.bsh"
+
+test_lwhich()
+{
+  if [ "$1" == "64" ]; then
+    file_name="$(ldconfig -p | grep 'x86-64' | head -n 1)"
+  else
+    file_name="$(ldconfig -p | grep $'^\t' | grep -v 'x86-64' | head -n 1)"
+  fi
+
+  OLD_IFS="${IFS}"
+
+  if [ "${file_name:+set}" = "set" ]; then
+    answer="$(awk -F ' => ' '{print $2}' <<< "$(echo "${file_name}")")"
+    file_name="$(awk '{print $1}' <<< "$(echo "${file_name}")")"
+
+    # Try full filename, with one extension remove, with all extensions
+    # removed, using only the first 4 chars, and a regex representing the first
+    # four chars
+    for test in "${file_name}" "${file_name%.*}" "${file_name%%.*}" \
+                "${file_name:0:4}" "${file_name:0:3}[${file_name:3:1}]"; do
+      IFS=$'\n'
+      possibilities=($("${VSI_COMMON_DIR}"/linux/lwhich $1 "${test}"))
+      IFS="${OLD_IFS}"
+      "${VSI_COMMON_DIR}"/linux/isin "${answer}" "${possibilities[@]}"
+    done
+
+    # cases guaranteed to fail to find a match, add a z in the front, or a
+    # regex where the 4th char must be different
+    for test in "z${file_name}" "z${file_name%.*}" "z${file_name%%.*}" \
+                "z${file_name:0:4}" "${file_name:0:3}[^${file_name:3:1}]${file_name:4}"; do
+      IFS=$'\n'
+      possibilities=($("${VSI_COMMON_DIR}"/linux/lwhich $1 "${test}"))
+      IFS="${OLD_IFS}"
+      not "${VSI_COMMON_DIR}"/linux/isin "${answer}" ${possibilities+"${possibilities[@]}"}
+    done
+  fi
+}
+
+if ! command -v "ldconfig" >/dev/null 2>&1 || \
+   [ "$(ldconfig -p | grep 'x86-64')" = "" ]; then
+  skip_next_test
+fi
+begin_test "lwhich 64"
+(
+  setup_test
+
+  test_lwhich 64
+)
+end_test
+
+if ! command -v "ldconfig" >/dev/null 2>&1 || \
+   [ "$(ldconfig -p | grep -v 'x86-64' | wc -l)" -lt "2" ]; then
+  skip_next_test
+fi
+begin_test "lwhich 32"
+(
+  setup_test
+
+  test_lwhich 32
+)
+end_test
+
+if ! command -v "ldconfig" >/dev/null 2>&1; then
+  skip_next_test
+fi
+begin_test "lwhich LD_LIBRARY_PATH"
+(
+  setup_test
+
+  source "${VSI_COMMON_DIR}/linux/bin_utils.bsh"
+
+  filename="$(ldconfig -p | tail -n 1 | awk -F ' => ' '{print $2}')"
+  answer="${TESTDIR}/libqwertyuiop.so"
+  bits=$(object_bits "${filename}")
+
+  cp "${filename}" "${answer}"
+  filename="${answer##*/}"
+
+  # Fail case
+  OLD_IFS="${IFS}"
+  IFS=$'\n'
+  possibilities=($("${VSI_COMMON_DIR}"/linux/lwhich --${bits} "${filename%%.*}"))
+  IFS="${OLD_IFS}"
+  not "${VSI_COMMON_DIR}"/linux/isin "${answer}" ${possibilities+"${possibilities[@]}"}
+
+  # Success case
+  export LD_LIBRARY_PATH="${TESTDIR}"
+  IFS=$'\n'
+  possibilities=($("${VSI_COMMON_DIR}"/linux/lwhich --${bits} "${filename%%.*}"))
+  IFS="${OLD_IFS}"
+  "${VSI_COMMON_DIR}"/linux/isin "${answer}" ${possibilities+"${possibilities[@]}"}
+)
+end_test

@@ -3,9 +3,9 @@
 : ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
 source "${VSI_COMMON_DIR}/linux/mount_tools.bsh"
 
-#****F* just/docker_compose_override.bsh
+#****F* just/docker_compose_override
 # NAME
-#   docker_compose_override.bsh - Generate docker compose override file
+#   docker_compose_override - Generate docker compose override file
 # USAGE
 #   Can be called or sourced for finer control
 # SEE ALSO
@@ -25,6 +25,8 @@ source "${VSI_COMMON_DIR}/linux/mount_tools.bsh"
 # EXAMPLE
 #   indirect=$(_docker_compose_override_var_sub '${var}')
 #   indirect=$(_docker_compose_override_var_sub '$var')
+# NOTES
+#   Obsolete
 # AUTHOR
 #   Andy Neff
 #***
@@ -54,7 +56,7 @@ function _docker_compose_override_var_sub()
 #***
 function _env_echo()
 {
-  if [ "${new_environment}" == "1" ]; then
+  if [ "${new_environment-1}" == "1" ]; then
     echo "    environment:"
     new_environment=0
   fi
@@ -119,6 +121,9 @@ function _env_echo()
 #       - For every environment variable ${1}_.*_DOCKER
 #         - ${1}_.*_DOCKER is copied exactly as is
 #         - ${1}_.* is copied exactly as is if it exists
+# NOTES
+#   There is no way to use the _VOLUMES features from the CLI, as arrays cannot
+#   be exported
 # SEE ALSO
 #   docker_entrypoints.bsh/docker_link_mounts
 #***
@@ -132,19 +137,21 @@ function generate_docker_compose_override()
   local indirect_all
   local host_mount_point
   local i
-  local volume_info
+  local volume_host
+  local volume_docker
+  local volume_flags
   local just_docker_entrypoint_links
   local new_environment
 
   local project_prefix=$1
   shift 1
 
-  local services_name=("${@}")
-  local services_upper=($(tr '[a-z]' '[A-Z]' <<< ${services_name[@]}))
+  local services_name=(${@+"${@}"})
+  local services_upper=($(tr '[a-z][:punct:]' '[A-Z]_' <<< ${services_name[@]}))
 
   # Save old IFS
   local OLD_IFS="${IFS}"
-  local IFS
+  local IFS="${IFS}"
 
   echo "version: '${COMPOSE_VERSION-3.2}'"
   echo "services:"
@@ -161,60 +168,40 @@ function generate_docker_compose_override()
     volumes_name_all="${project_prefix}_VOLUMES"
     indirect_all="${volumes_name_all}[@]"
 
+    # Dynamically add volumes
     for volume in ${!volumes_name_all+"${!indirect_all}"} ${!volumes_name+"${!indirect}"}; do
-      IFS=:
-      volume_info=(${volume})
-      IFS="${OLD_IFS}"
+      docker_parse_volume_string "$volume"
 
-      # Variable substitution of host volume
-      if [ "${volume_info[0]:0:1}" == "$" ]; then
-        indirect=$(_docker_compose_override_var_sub ${volume_info[0]})
-        volume_info[0]="${!indirect}"
-        declare "${indirect}_DOCKER=${volume_info[0]}"
-      fi
 
       # If it doesn't exist, attempt to make it as this user. Better than root
-      if [ ! -e "${volume_info[0]}" ]; then
-        mkdir -p "${volume_info[0]}"
+      docker_premkdir "${volume_host}"
+
+      # If the volume is a path, get the real path
+      if [[ ${volume_host:0:1} =~ [./] ]]; then
+        volume_host=$(real_path "${volume_host}")
       fi
 
-      # If the volume is a path, make it relative to $(pwd)
-      if [[ ${volume_info[0]:0:1} =~ \. ]]; then
-        volume_info[0]=$(real_path "${volume_info[0]}")
-      fi
+         # If the volume is not a docker volume
+      if [ "${volume_host:0:1}" = "/" ] &&
+         # If the mount point is nfs AND it isn't already the same as the mount
+         host_mount_point="$(mount_point "${volume_host}" nfs nfs3 nfs4)" && \
+         # The edge case is the volume_host is exactly the mount point, don't
+         # do anything special for that case
+         [ "${host_mount_point}" != "${volume_host}" ]; then
 
-      # If there is not a docker volume path, copy host path
-      if [ "${#volume_info[@]}" == 1 ]; then
-        volume_info+=("${volume_info[0]}")
-      fi
-
-      # Variable substitution of docker side volume path
-      if [ "${volume_info[1]:0:1}" == "$" ]; then
-        indirect=$(_docker_compose_override_var_sub ${volume_info[1]})
-        volume_info[1]="${!indirect}"
-        declare "${indirect}_DOCKER=${volume_info[1]}"
-      fi
+        # Add to the entrypoint list
+        just_docker_entrypoint_links+=("${MOUNT_PREFIX-/host_mnt}${volume_host}"
+                                       "${volume_docker}")
+        # Rewrite this volume
+        volume_host="${host_mount_point}"
 
 
-      # Check to see that the volume is not a docker volume
-      if [[ ${volume_info[0]:0:1} =~ [./] ]]; then
-        host_mount_point="$(mount_point "${volume_info[0]}")"
-        # If the mount point isn't already the same as the mount, check to see
-        # if it's nfs
-        if [ "${host_mount_point}" != "${volume_info[0]}" ] && \
-            is_nfs "$(mount_type "${host_mount_point}")"; then
-
-          # Add to the entrypoint list
-          just_docker_entrypoint_links+=("${volume_info[1]}"
-                                         "${MOUNT_PREFIX-/host_mnt}${volume_info[0]}")
-          # Rewrite this volume
-          volume_info[0]="${host_mount_point}"
-          volume_info[1]="${MOUNT_PREFIX-/host_mnt}${host_mount_point}"
-        fi
+        volume_docker="${MOUNT_PREFIX-/host_mnt}${host_mount_point}"
       fi
 
       IFS=:
-      volumes+=("      - ${volume_info[*]}")
+      volumes+=("      - ${volume_host}:${volume_docker}${volume_flags}")
+      IFS="${OLD_IFS}"
     done
     # remove duplicates https://unix.stackexchange.com/q/159695,
     # docker-compose doesn't like them
@@ -227,7 +214,7 @@ function generate_docker_compose_override()
     IFS="${OLD_IFS}"
 
     new_environment=1
-    if [ "${just_docker_entrypoint_links+set}" == "set" ]; then
+    if [ -n "${just_docker_entrypoint_links+set}" ]; then
       IFS=:
       _env_echo "      - JUST_DOCKER_ENTRYPOINT_LINKS=${just_docker_entrypoint_links[*]}"
       IFS="${OLD_IFS}"

@@ -1,6 +1,9 @@
 #!/usr/bin/env false
 #This file should be sourced, NOT run
 
+: ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
+source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
+
 #****d* just/JUST_VERSION
 # NAME
 #   JUST_VERSION - Version number of just
@@ -13,10 +16,10 @@
 #   Andy Neff
 #***
 _last_just_version=${JUST_VERSION-}
-export JUST_VERSION=0.0.3
+export JUST_VERSION=0.0.4
    # If last just version was set and different
-if [ "${_last_just_version}" != "" ] && \
-   [ "${_last_just_version}" != ${JUST_VERSION} ]; then
+if [ -n "${_last_just_version:+set}" ] && \
+   [ "${_last_just_version}" != "${JUST_VERSION}" ]; then
   echo "WARNING: The version of just (${JUST_VERSION}) appears to have changed" >&2
   echo "since last time (${_last_just_version})" >&2
   echo "You may want to source ${JUST_SETUP_SCRIPT-your setup script} again" >&2
@@ -74,83 +77,6 @@ unset _last_just_version
 #   Andy Neff
 #***
 
-#****if* just/_just_find_justfile
-# NAME
-#   _just_find_justfile - Find the Justfile
-# DESCRIPTION
-#   Searches for the Justfile to load. It starts by checking the current
-#   directory, and goes up. Just like git searches for a .git directory
-# INPUTS
-#   $1 - The name of the files being searched for, typically: Justfile
-# RETURN VALUE
-#   echoes out the filename if found, else nothing
-# AUTHOR
-#   Andy Neff
-#***
-_just_find_justfile()
-{
-  # local just_tmp_last_node=
-  # local just_tmp_stat_command
-  # local i
-  #speed improvement: if it's right there, echo it out right away
-  if [ -f "${1}" ]; then
-    echo "${PWD}/${1}"
-    return
-  fi
-  #else search for the file
-
-  \pushd . > /dev/null
-  while : ; do
-    if [ -f "${1}" ]; then
-      \echo "$(\cd "$(\dirname "${1}")"; \pwd)/$(\basename "${1}")"
-      break
-    fi
-
-    if [ "${PWD}" == "/" ]; then
-      break
-    fi
-
-    cd ..
-  done
-  \popd > /dev/null
-
-  #This may be all be unnecessary. Use the simple way until bug reports rain in
-
-  # # First try the obvious. cd .. until you hit /. This is fast yet susceptible
-  # # to a lot of corner conditions. So only try like 10 times
-
-  # for ((i=0; i<10; i++)); do
-  #   if [ -f "${1}" ]; then
-  #     \echo "$(\cd "$(\dirname "${1}")"; \pwd)/$(\basename "${1}")"
-  #     \popd > /dev/null
-  #     return
-  #   fi
-  #   if [ "${PWD}" == "/" ]; then
-  #     break
-  #   fi
-  # done
-
-  # # Second try a much more robust method, that should not get an an infinite
-  # # loop
-
-  # # Get OS independent device_id:inode string
-  # if [ "$(\uname)" == "Darwin" ]; then
-  #   just_tmp_stat_command="stat -f %d:%i ."
-  # else
-  #   just_tmp_stat_command="stat -c %d:%i ."
-  # fi
-
-  # while [ "${just_tmp_last_node}" != "$(\eval ${just_tmp_stat_command})" ]; do
-  #   if [ -f "${1}" ]; then
-  #     \echo "$(\cd "$(\dirname "${1}")"; \pwd)/$(\basename "${1}")"
-  #     break
-  #   fi
-  #   just_tmp_last_node=$(\eval ${just_tmp_stat_command})
-  #   \cd ..
-  # done
-  # \popd > /dev/null
-}
-
 #****f* just/_just_commands_from_file
 # NAME
 #   _just_commands_from_file - Parses Justfile for help comments on targets
@@ -174,7 +100,7 @@ function _just_commands_from_file()
               N
               # If the pattern buffer matches the case pattern, ends in a
               # \ and the comment continues on the next line, then combine
-              /^ *#? *[ _0-9|a-zA-Z{}-]*\) *#.*\\\n *#/{
+              /^ *#? *[ ?*_0-9|a-zA-Z{}-]*\) *#.*\\\n *#/{
                 # Combine the two lines, removing the extra #, replacing it
                 # with a single space
                 s| *\\\n *# *| |
@@ -183,21 +109,31 @@ function _just_commands_from_file()
               s|\\\n *||''
               t combine
             }
-            s|^ *#? *([ _0-9|a-zA-Z{}-]*)\) *# *(.*)|\1 '"${JUST_HELP_SEPARATOR}"' \2|
+            s|^ *#? *([ ?*_0-9|a-zA-Z{}-]*[?*_0-9|a-zA-Z{}-]) *\) *# *(.*)|\1 '"${JUST_HELP_SEPARATOR}"' \2|
             # If there is a match, process it
             t process
             # Else do not even print it. This replaces a grep
             b noprint
             :process
+            # Remove trailing spaces
+            s| +$||
+            :processloop
             # Converts aaa|bbb|ccc @#@ blah to aaa @#@ blah\nbbb @#@ blah\n...
-            s/\|(.*_.* '"${JUST_HELP_SEPARATOR}"' (.*))/ '"${JUST_HELP_SEPARATOR}"' \2'$'\\\n''\1/
+            s/\|(.* '"${JUST_HELP_SEPARATOR}"' (.*))/ '"${JUST_HELP_SEPARATOR}"' \2'$'\\\n''\1/
             # Continue processing until no matches
-            t process
+            t processloop
             p
-            :noprint' $1
+            :noprint' "${1}"
 }
 
-#****f* just/_just_subcommands_from_array
+#****if* just/_just_subcommands_from_array
+# SYNOPSIS
+#   Returns a non-unique list of commands that have subcommands from an array.
+#   This is not intended to line up with the input array
+# INPUT
+#   stdin - see USAGE
+# OUTPUT
+#   stdout - prints newline separated list of commands
 # USAGE
 #   IFS=$'\n'
 #   parsed_help_a=($(_just_commands_from_file "${JUSTFILE}"))
@@ -231,7 +167,7 @@ function _just_subtargets_from_array()
   for help_line in ${@+"${@}"}; do
     if [[ ${help_line} =~ ^${subcommand}_.* ]]; then
       help_line=${help_line%% *}
-      just_subtargets+=(${help_line#*_})
+      just_subtargets+=("${help_line#*_}")
     fi
   done
 }
@@ -272,6 +208,36 @@ function _just_parse_helps()
   done
 }
 
+#****f* just/_just_load_justfile
+# NAME
+#   _just_load_justfile - Convenience function for finding and loading Justfile
+# SYNOPSIS
+#   Loads the Justfile if it exists
+# INPUTS
+#   $1 - The Justfile filename
+# SWITCHES
+#   JUST_DRYRUN_SOURCE - For internal use, can replace the source command (with
+#   say :) to disable sourcing the Justfile
+# AUTHOR
+#   Andy Neff
+#***
+function _just_load_justfile()
+{
+  local file_matches=()
+  parent_find_files "${1}"
+
+  if [ "${#file_matches[@]}" -gt 0 ] && [ -f "${file_matches[0]}" ]; then
+    JUST_HELP_FILES+=("${file_matches[0]}")
+    ${JUST_DRYRUN_SOURCE-source} "${file_matches[0]}"
+  else
+    echo "Can't find a suitable configuration file in this directory or any" >&2
+    echo "parent. Are you in the right directory?" >&2
+    echo >&2
+    echo "Supported filenames: \"Justfile\" or value of \${JUSTFILE}" >&2
+    echo >&2
+  fi
+}
+
 #****f* just_plugins/_just_get_plugins()
 # NAME
 #   _just_get_plugins()
@@ -302,7 +268,7 @@ function _just_get_plugins()
 
   # Prepend the directory if it doesn't exist
   if [ ! -f "${JUST_PLUGIN_FILE}" ]; then
-    JUST_PLUGIN_FILE="${1}/${JUST_PLUGIN_FILE}"
+    JUST_PLUGIN_FILE="${base_dir}/${JUST_PLUGIN_FILE}"
   fi
 
   # Make base_dir absolute

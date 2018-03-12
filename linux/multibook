@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+
+set -eu
+
+#****F* vsi/multibook
+# NAME
+#   multibook - Create a useful notebook environment for use on multiple projects
+# INPUTS
+#   PYTHON - Environment variable to specify which python to use. Defaults to
+#            python3
+#   $1... - virtualenv arguments. Last argument must be the directory, no help
+#           available.
+# AUTHOR
+#   Andy Neff
+#***
+
+[ ${#} -gt 0 ]
+
+: ${PYTHON=python3}
+
+venv_dir="${@:$#:1}"
+
+# Temporarily download and run virtualenv
+mkdir -p "${venv_dir}/vetmp"
+python3 <(curl -L https://bootstrap.pypa.io/get-pip.py) --no-cache-dir --root "${venv_dir}/vetmp" virtualenv
+PYTHONPATH="$(cd "${venv_dir}"/vetmp/usr/local/lib/python*/*-packages/; pwd)" "${PYTHON}" "${venv_dir}/vetmp/usr/local/bin/virtualenv" "${venv_dir}"
+rm -r "${venv_dir}/vetmp"
+
+# patch activate
+for patch in JUPYTER_PATH JUPYTER_DATA_DIR JUPYTER_CONFIG_DIR; do
+  echo 'if [ "${'${patch}'+set}"  == "set" ]; then
+  _OLD_VIRTUAL_'${patch}'="${'${patch}'}"
+fi
+export '${patch}'="${VIRTUAL_ENV}/share/jupyter"' >> "${venv_dir}/bin/activate"
+  sed -i 's|unset VIRTUAL_ENV|if [ "${_OLD_VIRTUAL_'${patch}'+set}" == "set" ]; then export '${patch}'="${_OLD_VIRTUAL_'${patch}'}"; else unset '${patch}'; fi\n    &|' "${venv_dir}/bin/activate"
+done
+
+# Activate virtualenv
+set +u
+. "${venv_dir}/bin/activate"
+set -u
+
+# Install key components
+pip install jupyter bash_kernel jupyter_contrib_nbextensions widgetsnbextension
+
+# Setup extensions
+python -m bash_kernel.install
+jupyter contrib nbextension install --user
+jupyter nbextension enable --py --user widgetsnbextension
+
+jupyter notebook password
+
+# User specific
+# c.NotebookApp.ip = '*'
+# c.MultiKernelManager.default_kernel_name = 'python2'

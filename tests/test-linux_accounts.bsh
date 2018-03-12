@@ -1,0 +1,307 @@
+. "$(dirname ${BASH_SOURCE[0]})/testlib.sh"
+. "$(dirname ${BASH_SOURCE[0]})/test_utils.bsh"
+
+VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+. "${VSI_COMMON_DIR}/linux/linux_accounts.bsh"
+
+: ${DOCKER=docker}
+
+begin_test "read file"
+(
+  setup_test
+  ans=('test:x:100:100::/home/test:/usr/bin/bash'
+        ''
+       '#err:x:101:101::/home/bad_entry:/usr/bin/false')
+  echo "${ans[0]}" > file1
+  echo "${ans[1]}" >> file1
+  # Skip the last new line, to make sure the reader can handle this
+  echo -n "${ans[2]}" >> file1
+
+  read_file file1 readin
+  check_a readin "${ans[@]}"
+)
+end_test
+
+begin_test "write file"
+(
+  setup_test
+
+  ans=('test:x:100:100::/home/test:/usr/bin/bash'
+       ''
+       '#err:x:101:101::/home/bad_entry:/usr/bin/false')
+
+  write_file file2 "${ans[@]}"
+
+  cmp file2 <(echo "${ans[0]}"; echo "${ans[1]}"; echo "${ans[2]}")
+)
+end_test
+
+begin_test "add to passwd"
+(
+  setup_test
+
+  ans=("foo:x:1000:1000::/home/foo:$(which bash)")
+  add_to_passwd foo
+  check_a passwd "${ans[@]}"
+
+  ans=('bar:$6$qwe$rty$asd.fgh/zxc/vbn/:123:456::/not/ghome/bar:/usr/bin/ksh' "${ans[@]}")
+  add_to_passwd bar '$6$qwe$rty$asd.fgh/zxc/vbn/' 123 456 /not/ghome/bar /usr/bin/ksh
+  check_a passwd "${ans[@]}"
+
+  add_to_passwd foo x 100 100 /foo /usr/bin/false
+  ans[1]="foo:x:100:100::/foo:/usr/bin/false"
+  check_a passwd "${ans[@]}"
+)
+end_test
+
+begin_test "add to shadow"
+(
+  setup_test
+
+  date1=$(($(date +%s)/3600/24))
+  #In case you run over midnight while running the tests
+  date2=$((date1+1))
+
+  ans1="foo:\*:(${date1}|${date2}):0:99999:7:::"
+  add_to_shadow foo '*'
+  [ "${#shadow[@]}" -eq 1 ]
+  [[ ${shadow[0]} =~ ${ans1} ]]
+
+  ans2="bar:\\\$6\\\$qwe\\\$rty\\\$asd\\.fgh/zxc/vbn/:(${date1}|${date2}):0:99999:7:::"
+  add_to_shadow bar '$6$qwe$rty$asd.fgh/zxc/vbn/'
+  [ "${#shadow[@]}" -eq 2 ]
+  [[ ${shadow[0]} =~ ${ans2} ]]
+  [[ ${shadow[1]} =~ ${ans1} ]]
+
+  ans2="bar:\*:(${date1}|${date2}):0:99999:7:::"
+  add_to_shadow bar '*'
+  [ "${#shadow[@]}" -eq 2 ]
+  [[ ${shadow[0]} =~ ${ans2} ]]
+  [[ ${shadow[1]} =~ ${ans1} ]]
+)
+end_test
+
+begin_test "add to group"
+(
+  setup_test
+
+  ans=("adm:x:4:syslog,root")
+  users=syslog,root add_to_group adm 4
+  [ "${group_name}" = "adm" ]
+  check_a group "${ans[@]}"
+
+  ans=('foo:$6$qwe$rty$asd.fgh/zxc/vbn/:123:' "${ans[@]}")
+  add_to_group foo 123 '$6$qwe$rty$asd.fgh/zxc/vbn/'
+  [ "${group_name}" = "foo" ]
+  check_a group "${ans[@]}"
+
+  # Modify an existing group
+  ans[0]="foo:x:123:bar"
+  users=bar add_to_group foo 123 x
+  [ "${group_name}" = "foo" ]
+  check_a group "${ans[@]}"
+
+  # Add a new group, since the GID is different, a 1 will be appended
+  ans=("foo1:x:100:bar" "${ans[@]}")
+  users=bar add_to_group foo 100 x
+  [ "${group_name}" = "foo1" ]
+  check_a group "${ans[@]}"
+
+  # Should work multiple times
+  ans=("foo2:x:101:bar" "${ans[@]}")
+  users=bar add_to_group foo 101 x
+  [ "${group_name}" = "foo2" ]
+  check_a group "${ans[@]}"
+)
+end_test
+
+begin_test "add to gshadow"
+(
+  setup_test
+
+  ans=('root:!::')
+  add_to_gshadow root
+  check_a gshadow "${ans[@]}"
+
+  ans=('foo:*::' "${ans[@]}")
+  add_to_gshadow foo '*'
+  check_a gshadow "${ans[@]}"
+
+  ans[1]='root:$6$qwe$rty$asd.fgh/zxc/vbn/:me:me,notme'
+  admins=me users=me,notme add_to_gshadow root '$6$qwe$rty$asd.fgh/zxc/vbn/'
+  check_a gshadow "${ans[@]}"
+)
+end_test
+
+setup_mock()
+{
+  # Make them point at local files
+  LINUX_ACCOUNTS_PASSWD_FILE=passwd
+  LINUX_ACCOUNTS_SHADOW_FILE=shadow
+  LINUX_ACCOUNTS_GROUP_FILE=group
+  LINUX_ACCOUNTS_GSHADOW_FILE=gshadow
+}
+
+begin_test "read and write user data"
+(
+  setup_test
+
+  setup_mock
+
+  passwd1=(root:x:0:0:root:/root:/bin/bash daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin)
+  shadow1=(root:*:17543:0:99999:7::: daemon:*:17543:0:99999:7:::)
+
+  passwd=("${passwd1[@]}")
+  write_user_data
+  unset passwd
+  read_user_data
+
+  check_a passwd "${passwd1[@]}"
+  check_a shadow
+
+  shadow=("${shadow1[@]}")
+  write_user_data
+  unset passwd
+  unset shadow
+  read_user_data
+
+  check_a passwd "${passwd1[@]}"
+  check_a shadow "${shadow1[@]}"
+)
+end_test
+
+begin_test "read and write group data"
+(
+  setup_test
+
+  setup_mock
+
+  group1=(root:x:0: adm:x:4:root)
+  gshadow1=(root:*:: adm:*::root)
+
+  group=("${group1[@]}")
+  write_group_data
+  unset group
+  read_group_data
+
+  check_a group "${group1[@]}"
+  check_a gshadow
+
+  gshadow=("${gshadow1[@]}")
+  write_group_data
+  unset group
+  unset gshadow
+  read_group_data
+
+  check_a group "${group1[@]}"
+  check_a gshadow "${gshadow1[@]}"
+)
+end_test
+
+begin_test "add user"
+(
+  setup_test
+  setup_mock
+
+  ans=("foo:x:1000:1000::/home/foo:$(which bash)"
+       "root:x:0:0:root:/root:/bin/bash"
+       "daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin")
+  anss=("^foo:\*:[0-9]*:0:99999:7:::$"
+        "^root:\*:17543:0:99999:7:::$"
+        "^daemon:\*:17543:0:99999:7:::$")
+
+  # Setup
+  echo "${ans[1]}" > passwd
+  echo -n "${ans[2]}" >> passwd
+
+  ( # Shadowless test
+    add_user foo
+    cmp passwd <(IFS=$'\n'; echo "${ans[*]}")
+
+    LINUX_ACCOUNTS_AUTOSAVE=0 add_user bar
+    cmp passwd <(IFS=$'\n'; echo "${ans[*]}")
+    write_user_data
+    ans=("bar:x:1000:1000::/home/bar:$(which bash)" "${ans[@]}")
+    cmp passwd <(IFS=$'\n'; echo "${ans[*]}")
+
+    [ ! -f shadow ]
+  )
+
+  # Shadow test
+  ans[0]="foo:x:1000:0::/home/foo:$(which bash)"
+  echo "${ans[1]}" > passwd
+  echo "${ans[2]}" >> passwd
+  echo "root:*:17543:0:99999:7:::" > shadow
+  echo -n "daemon:*:17543:0:99999:7:::" >> shadow
+
+  add_user foo 1000 0
+  cmp passwd <(IFS=$'\n'; echo "${ans[*]}")
+  read_file shadow shad
+  check_ra shad "${anss[@]}"
+)
+end_test
+
+begin_test "add group"
+(
+  setup_test
+  setup_mock
+
+  ans=("foo:x:1000:"
+       "root:x:0:"
+       "daemon:x:1:")
+
+  anss=("foo:!::"
+        "root:*::"
+        "daemon:*::")
+
+  # Setup
+  echo "${ans[1]}" > group
+  echo -n "${ans[2]}" >> group
+
+  ( # Shadowless test
+    add_group foo 1000
+    cmp group <(IFS=$'\n'; echo "${ans[*]}")
+
+    LINUX_ACCOUNTS_AUTOSAVE=0 add_group bar 1001
+    cmp group <(IFS=$'\n'; echo "${ans[*]}")
+    write_group_data
+    ans=("bar:x:1001:" "${ans[@]}")
+
+    cmp group <(IFS=$'\n'; echo "${ans[*]}")
+
+    [ ! -f gshadow ]
+  )
+
+  # # Shadow test
+  echo "${ans[1]}" > group
+  echo -n "${ans[2]}" >> group
+  echo "${anss[1]}" > gshadow
+  echo -n "${anss[2]}" >> gshadow
+
+  add_group foo 1000
+  cmp group <(IFS=$'\n'; echo "${ans[*]}")
+  cmp gshadow <(IFS=$'\n'; echo "${anss[*]}")
+)
+end_test
+
+begin_test "add group pre-existing"
+(
+  setup_test
+  setup_mock
+
+  group0=("root:x:0:"
+          "daemon:x:1:root")
+  ans=("daemon1:x:3:foo4"
+       "bar:x:2:foo3"
+       "root:x:0:foo1"
+       "daemon:x:1:root,foo2")
+  write_file group "${group0[@]}"
+
+  users=foo1 add_group root 0
+  users=foo2 add_group daemon 1
+  users=foo3 add_group bar 2
+  users=foo4 add_group daemon 3
+
+  check_a group "${ans[@]}"
+)
+end_test

@@ -1,0 +1,134 @@
+
+. "$(dirname ${BASH_SOURCE[0]})/testlib.sh"
+. "$(dirname ${BASH_SOURCE[0]})/test_utils.bsh"
+
+VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+. "${VSI_COMMON_DIR}/linux/mount_tools.bsh"
+. "${VSI_COMMON_DIR}/linux/file_tools.bsh"
+
+linux_nfs="\
+Filesystem                       1K-blocks        Used   Available Use% Mounted on
+filetodata-2:/volume1/projects 23320723712 22239875584  1080729344  96% /mnt"
+
+windows_nfs="\
+Filesystem             1K-blocks        Used   Available Use% Mounted on
+P:                   23320723680 22239875584  1080848096  96% /p
+"
+
+macos_nfs="\
+Filesystem                      512-blocks        Used   Available Capacity  iused     ifree %iused  Mounted on
+filetodata-2:/volume1/projects 46641447424 44479751168  2161458688    96%  4528846 361311538    1%   /Volumes/SystemRoot/mnt"
+
+function df()
+{
+  echo "${data}"
+  if [ -z "${data}" ]; then
+    return 1
+  fi
+  return 0
+}
+
+begin_test "Test mount point"
+(
+  setup_test
+
+  data="${windows_nfs}"
+  result="$(mount_point /p/test/file.txt nfs nfs3 nfs4)"
+  [ "${result}" = "/p" ]
+
+  data="${linux_nfs}"
+  result="$(mount_point /mnt/test/file.txt nfs nfs3 nfs4)"
+  [ "${result}" = "/mnt" ]
+
+  data="${macos_nfs}"
+  OSTYPE=darwin16
+  result="$(mount_point /Volumes/SystemRoot/mnt/test/file.txt nfs nfs3 nfs4)"
+  [ "${result}" = "/Volumes/SystemRoot/mnt" ]
+
+  data=""
+  not mount_point /mnt/test/file.txt nfs nfs3 nfs4
+)
+end_test
+
+# Smuggle args to test
+function df()
+{
+  echo "${@}" >&2
+  while (( $# )); do
+    echo "${1}" >&"${fd_w}"
+    shift 1
+  done
+  return 1
+}
+
+begin_test "Test mount point Linux args"
+(
+  setup_test
+  unset OSTYPE
+
+  if [ "${OS-}" = "Windows_NT" ]; then
+    touch "${TESTDIR}/linuxargs"
+    open_fd -n "${TESTDIR}/linuxargs"
+  else
+    mkfifo "${TESTDIR}/linuxargs"
+    open_fd -s -n "${TESTDIR}/linuxargs"
+  fi
+
+  args=()
+  mount_point /mnt/test || :
+  IFS='' read -u "${fd_r}" -t 1 -r line; args+=("${line}")
+  check_a args /mnt/test
+
+  args=()
+  mount_point /mnt/test brtfs || :
+  for x in $(seq 3); do
+    IFS='' read -u "${fd_r}" -t 1 -r line; args+=("${line}")
+  done
+  check_a args -t brtfs /mnt/test
+
+  args=()
+  mount_point /mnt/test nfs nfs3 nfs4 || :
+  for x in $(seq 7); do
+    IFS='' read -u "${fd_r}" -t 1 -r line; args+=("${line}")
+  done
+  check_a args -t nfs -t nfs3 -t nfs4 /mnt/test
+
+  close_fd "${fd_r}"
+)
+end_test
+
+begin_test "Test mount point macos args"
+(
+  setup_test
+
+  if [ "${OS-}" = "Windows_NT" ]; then
+    touch "${TESTDIR}/macargs"
+    open_fd -n "${TESTDIR}/macargs"
+  else
+    mkfifo "${TESTDIR}/macargs"
+    open_fd -s -n "${TESTDIR}/macargs"
+  fi
+
+  OSTYPE=darwin16
+  args=()
+  mount_point /mnt/test || :
+  IFS='' read -u "${fd_r}" -t 1 -r line; args+=("${line}")
+  check_a args /mnt/test
+
+  args=()
+  mount_point /mnt/test brtfs || :
+  for x in $(seq 3); do
+    IFS='' read -u "${fd_r}" -t 1 -r line; args+=("${line}")
+  done
+  check_a args -T brtfs /mnt/test
+
+  args=()
+  mount_point /mnt/test nfs nfs3 nfs4 || :
+  for x in $(seq 3); do
+    IFS='' read -u "${fd_r}" -t 1 -r line; args+=("${line}")
+  done
+  check_a args -T nfs,nfs3,nfs4 /mnt/test
+
+  close_fd "${fd_r}"
+)
+end_test

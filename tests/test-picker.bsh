@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+
+. "$(dirname ${BASH_SOURCE[0]})/testlib.sh"
+
+VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+
+begin_test "picker function"
+(
+  setup_test
+  . "${VSI_COMMON_DIR}/linux/picker"
+
+  [ "$(type -t picker)" = "function" ]
+
+  # Make sure it's not exported
+  unset var1
+
+  # Simple case
+  choices=(Foo "B a  r" Fruit)
+  picker var1 "${choices[@]}" <<< 2
+  [ "${var1}" = "B a  r" ]
+  [ "${choices[${var1_index}]}" = "B a  r" ]
+  [ "${var1_index}" -eq 1 ]
+
+  # Third time's the charm
+  picker var1 "${choices[@]}" <<< $'5\noops\n1'
+  [ "${var1}" = "Foo" ]
+  [ "${var1_index}" -eq 0 ]
+
+  # Known bug
+  picker var1 One $'Two\n    To\n    Too' Three <<< 2
+  [ "${var1}" = "Two" ]
+  [ "${var1_index}" -eq 1 ]
+
+  not bash -c "declare -p var1"
+  export var1
+  bash -c "declare -p var1"
+)
+end_test
+
+begin_test "picker CLI"
+(
+  setup_test
+
+  [ "$(type -t picker)" = "file" ]
+
+  # Simple test
+  rv=0
+  picker Foo Bar Fruit <<< "2" || rv=$?
+  [ "${rv}" -eq 2 ]
+
+  # Third time is the charm
+  rv=0
+  picker Foo Bar Fruit <<< $'5\noops\n1' || rv=$?
+  [ "${rv}" -eq 1 ]
+
+  # Test stdout looks right
+  [ "$(picker Foo Bar Fruit <<< "2")" = "Bar" ]
+  # Test stderr looks right
+# [ "$(picker Foo Bar Fruit <<< "2" 2>&1 >/dev/null)"                        = $'1) Foo\n2) Bar\n3) Fruit' ]
+  [ "$(picker Foo Bar Fruit <<< "2" 2>&1 >/dev/null | xxd -p)" = "$(xxd -p <<< $'1) Foo\n2) Bar\n3) Fruit\n')" ]
+
+  # Test padding
+  p=1
+  ans=''; for x in $(seq 1 9); do ans+="$(printf "%${p}d) %s" "${x}" "${x}")"; ans+=$'\n'; done
+  [ "$(picker $(seq 1 9) <<< "5" 2>&1 >/dev/null | xxd -p)" = "$(xxd -p <<< "${ans}")" ]
+
+  p=2
+  ans=''; for x in $(seq 1 10); do ans+="$(printf "%${p}d) %s" "${x}" "${x}")"; ans+=$'\n'; done
+  [ "$(picker $(seq 1 10) <<< "5" 2>&1 >/dev/null | xxd -p)" = "$(xxd -p <<< "${ans}")" ]
+)
+end_test

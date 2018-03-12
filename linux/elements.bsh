@@ -13,10 +13,14 @@
 #   them friendlier
 # BUGS
 #   Don't use arrays element_array variable
-#   - element_array_target_u3l
-#   - element_array_target_qzx
-#   - element_array_target_dsa
+#   - __element_array_target_a
+#   - __element_array_target_a2
+#   - __element_array_target_s
+#   - __element_array_target_s2
+#   - __element_array_target_d
 #   as the target. It will cause name collision
+# NOTES
+#   Not intended for POSIX sh
 #***
 
 : ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
@@ -33,22 +37,43 @@ source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
 #   # Is like executing
 #   # my_array_name=(11 "2 2" 33)
 # NOTES
-#   Does not clear the array names by $1. So if the array had 4 elements in it
+#   Does not clear the array named by $1. So if the array had 4 elements in it
 #   and dynamic_set_a is called with 3 elements, the 4th  element is still set
 #
 #   This is not a bug, but by design. "unset" the array prior to calling
-#   dynamic_set_a.
+#   dynamic_set_a if you wish to avoid this.
 # AUTHOR
 #   Andy Neff
 #***
 function dynamic_set_a()
 {
-  local element_array_target_dsa=$1
+  local __element_array_target_d="${1}"
   shift 1
   for (( i=0; $#; i++ )); do
-    read -r "${element_array_target_dsa}[$i]" <<< "$1"
+    read -r "${__element_array_target_d}[$i]" <<< "${1}"
     shift 1
   done
+}
+
+#****f* elements.bsh/clear_a
+# NAME
+#   clear_a - Slightly safer indirect clear array
+# INPUTS
+#   $1 - Name of array to be cleared
+# OUTPUT
+#   Returns 1 on invalid variable name
+# NOTES
+#   Still uses eval, but makes sure the variable name appears valid
+# AUTHOR
+#   Andy Neff
+#***
+function clear_a()
+{
+  # https://stackoverflow.com/a/2821201/4166604
+  if [[ ! ${1} =~ [a-zA-Z_]+[a-zA-Z0-9_]* ]]; then
+    return 1
+  fi
+  eval "${1}=()"
 }
 
 #****f* elements.bsh/remove_element_a
@@ -63,26 +88,27 @@ function dynamic_set_a()
 #   # declare -a x='([0]="11" [1]="33" [2]="44")'
 # NOTES
 #   The resulting array is sequentially indexed, which is not typical in
-#   bash when removing elements from an array
+#   ba"s{h}" when removing elements from an array
 # AUTHOR
 #   Andy Neff
 #***
 function remove_element_a()
 {
-  local element_array_target_u3l=()
+  local __element_array_target_a=()
 
   if [ "${!1+set}" == "set" ]; then
     local target=${1}[@]
-    element_array_target_u3l=( ${!target} )
+    __element_array_target_a=( ${!target} )
     unset target
   else #If it's empty/does not exist, there is nothing to remove
     return 0
   fi
   local i
 
-  for i in "${!element_array_target_u3l[@]}"; do
-    if [ "${element_array_target_u3l[$i]}" == "$2" ]; then
-      unset element_array_target_u3l[$i]
+  for i in "${!__element_array_target_a[@]}"; do
+    if [ "${__element_array_target_a[$i]}" == "${2}" ]; then
+      #http://wiki.bash-hackers.org/syntax/arrays#destruction
+      unset "__element_array_target_a[$i]"
     fi
   done
 
@@ -97,9 +123,9 @@ function remove_element_a()
   # existing because ${t} REALLY means ${t[0]} which doesn't exist, but the rest
   # of ${t[@]} DOES! Solution is to disable set -u if it's set, and then
   # re-enable it if and only if it was set before all this. set_flags contains
-  # this logic
+  # this logic. t is __element_array_target_a
   unset_flag u
-  dynamic_set_a $1 "${element_array_target_u3l[@]}"
+  dynamic_set_a "${1}" "${__element_array_target_a[@]}"
   reset_flag u
 }
 
@@ -115,13 +141,13 @@ function remove_element_a()
 #***
 function remove_element()
 {
-  local target=$1
-  local element_array_target_qzx=()
+  local target="${1}"
+  local __element_array_target_s=()
   if [ "${!target+set}" == "set" ]; then
-    element_array_target_qzx=( ${!target} )
+    __element_array_target_s=( ${!target} )
   fi
-  remove_element_a element_array_target_qzx "$2"
-  export $target="${element_array_target_qzx[*]}"
+  remove_element_a __element_array_target_s "${2}"
+  export $target=${__element_array_target_s+"${__element_array_target_s[*]}"}
 }
 
 #****f* elements.bsh/add_element_post_a
@@ -145,13 +171,13 @@ function remove_element()
 #***
 function add_element_post_a()
 {
-  remove_element_a $1 "$2"
-  local target=$1[@]
-  local element_array_target_u3l=()
+  remove_element_a "${1}" "${2}"
+  local target="${1}[@]"
+  local __element_array_target_a=()
   if [ "${!1+set}" == "set" ]; then
-    element_array_target_u3l=( ${!target} )
+    __element_array_target_a=( ${!target} )
   fi
-  dynamic_set_a $1 ${element_array_target_u3l+"${element_array_target_u3l[@]}"} "$2"
+  dynamic_set_a "${1}" ${__element_array_target_a+"${__element_array_target_a[@]}"} "${2}"
 }
 
 #****f* elements.bsh/add_element_post
@@ -166,13 +192,13 @@ function add_element_post_a()
 #***
 function add_element_post ()
 {
-  local target=$1
-  local element_array_target_qzx=()
+  local target="${1}"
+  local __element_array_target_s=()
   if [ "${!target+set}" == "set" ]; then
-    element_array_target_qzx=( ${!target} )
+    __element_array_target_s=( ${!target} )
   fi
-  add_element_post_a element_array_target_qzx "$2"
-  export $target="${element_array_target_qzx[*]}"
+  add_element_post_a __element_array_target_s "${2}"
+  export $target=${__element_array_target_s+"${__element_array_target_s[*]}"}
 }
 
 #****f* elements.bsh/add_element_pre_a
@@ -196,13 +222,13 @@ function add_element_post ()
 #***
 function add_element_pre_a()
 {
-  remove_element_a $1 "$2"
-  local target=$1[@]
-  local element_array_target_u3l=()
+  remove_element_a "${1}" "${2}"
+  local target="${1}[@]"
+  local __element_array_target_a=()
   if [ "${!1+set}" == "set" ]; then
-    element_array_target_u3l=( ${!target} )
+    __element_array_target_a=( ${!target} )
   fi
-  dynamic_set_a $1 "$2" ${element_array_target_u3l+"${element_array_target_u3l[@]}"}
+  dynamic_set_a "${1}" "${2}" ${__element_array_target_a+"${__element_array_target_a[@]}"}
 }
 
 #****f* elements.bsh/add_element_pre
@@ -217,11 +243,192 @@ function add_element_pre_a()
 #***
 function add_element_pre ()
 {
-  local target=$1
-  local element_array_target_qzx=()
+  local target="${1}"
+  local __element_array_target_s=()
   if [ "${!target+set}" == "set" ]; then
-    element_array_target_qzx=( ${!target} )
+    __element_array_target_s=( ${!target} )
   fi
-  add_element_pre_a element_array_target_qzx "$2"
-  export $target="${element_array_target_qzx[*]}"
+  add_element_pre_a __element_array_target_s "${2}"
+  export $target=${__element_array_target_s+"${__element_array_target_s[*]}"}
+}
+
+#****f* elements.bsh/cmp_elements_a
+# NAME
+#   cmp_elements_a - Checks if two arrays are the same
+# INPUTS
+#   $1 - First array name
+#   $2 - Second array name
+# OUTPUT
+#   Return value
+#     0 - Identical
+#     1 - Not identical
+# AUTHOR
+#   Andy Neff
+#***
+function cmp_elements_a()
+{
+  local x
+  local __element_array_target_a
+  local __element_array_target_a2
+
+  # Have to copy https://unix.stackexchange.com/a/374094/123413 Thanks darwin!
+  x="${1}[@]"
+  __element_array_target_a=(${!1+"${!x}"})
+  x="${2}[@]"
+  __element_array_target_a2=(${!2+"${!x}"})
+
+  if [ ${#__element_array_target_a[@]} -ne ${#__element_array_target_a2[@]} ]; then
+    return 1
+  fi
+
+  for ((x=0; x<${#__element_array_target_a[@]}; x++)); do
+    if [ "${__element_array_target_a[$x]}" != "${__element_array_target_a2[$x]}" ]; then
+      return 1
+    fi
+  done
+
+  return 0
+}
+
+#****f* elements.bsh/cmp_elements
+# NAME
+#   cmp_elements - String version of cmp_elements_a
+# INPUTS
+#   $1 - First string name
+#   $2 - Second string name
+# OUTPUT
+#   Return value
+#     0 - Identical
+#     1 - Not identical
+# AUTHOR
+#   Andy Neff
+#***
+function cmp_elements()
+{
+  local __element_array_target_s=()
+  local __element_array_target_s2=()
+  local target
+
+  target="${1}"
+  __element_array_target_s=( ${!target} )
+  target="${2}"
+  __element_array_target_s2=( ${!target} )
+
+  cmp_elements_a __element_array_target_s __element_array_target_s2
+  return $?
+}
+
+#****f* elements.bsh/split_s
+# NAME
+#   split_s - Splits an string into an array, using an MIFS
+# INPUTS
+#   $1 - Target array name
+#   $2... - Strings
+#   MIFS - A Multichararater Internal Field Separator. Default: //
+# AUTHOR
+#   https://stackoverflow.com/a/47633817/4166604
+#***
+function split_s()
+{
+  local target="${1}"
+  shift 1
+
+  local __element_array_target_a=()
+  local bit
+  local MIFS="${MIFS-//}"
+
+  if [ "${MIFS}" == "" ]; then
+    echo "MIFS is not set" >&2
+    return 1
+  fi
+
+  for bit in ${@+"${@}"}; do
+    bit+=${MIFS}
+    while [ -n "${bit}" ]; do
+      __element_array_target_a+=( "${bit%%${MIFS}*}" )
+      bit="${bit#*${MIFS}}"
+    done
+  done
+
+  dynamic_set_a "${target}" ${__element_array_target_a+"${__element_array_target_a[@]}"}
+}
+
+#****f* elements.bsh/join_a
+# NAME
+#   join_a - Joins an array into a string, using an MIFS
+# INPUTS
+#   $1 - Target array name
+#   $2... - Strings
+# PARAMETERS
+#   MIFS - A Multichararater Internal Field Separator. Default: //
+#***
+function join_a()
+{
+  if [ $# -eq 1 ]; then
+    return 0
+    # This means target is never set. This mirrors the behavior of split_s
+    # Note: I do not "unset $1" for the same locality is lost bug
+  fi
+
+  local target="$1"
+  shift 1
+
+  local bit
+  local MIFS="${MIFS-//}"
+
+  local __element_array_target_s="${1-}"
+  shift 1
+
+  while [ $# -gt 0 ]; do
+    __element_array_target_s+="${MIFS}${1}"
+    shift 1
+  done
+
+  read -r "${target}" <<< "${__element_array_target_s-}"
+}
+
+#****f* elements.bsh/join_a_out
+# NAME
+#   join_a_out - Standard out version of join_a
+# DESCRIPTION
+#   Instead of storing the value to a variable, this outputs to stdout. Unlike
+#   join_a, join_a_out can handle special characters, like null. Because mac awk
+#   is so difficult, instead of '\x00' for null, use '\\x00'. No other form of
+#   null will work on mac. All other sed escape character should work.
+# INPUTS
+#   $1 - Hex code for IFS
+#   $1... - Strings
+# PARAMETERS
+#   MIFS - A Multichararater Internal Field Separator, using in awk escape
+#          format. (Except for null, which is a double backslash \\x00).
+#          Default: //
+#          NOTE: If you are using "" or $'' notation, you will need "\\\\x00"
+# AUTHOR
+#   https://superuser.com/a/720157/352118
+#***
+function join_a_out()
+{
+  awk -v MIFS="${MIFS-//}" \
+      'function sep(){
+        for(x=1;x<=length(MIFS);x++){
+          if(substr(MIFS, x, 2)=="\\x"){
+            c2=tolower(substr(MIFS, x+2, 1))
+            c1=tolower(substr(MIFS, x+3, 1))
+            k=index("123456789abcdef", c2)*16+index("123456789abcdef", c1)
+            printf "%c", k
+            x+=3
+          }else{
+            printf "%c", substr(MIFS, x, 1)
+          }
+        }
+      }
+      BEGIN{
+        ORS=OFS="";
+        for(i=1;i<ARGC;i++){
+          print ARGV[i]
+          if(ARGC-i-1){
+            sep()
+          }
+        }
+      }' ${@+"${@}"}
 }

@@ -1,0 +1,239 @@
+#!/usr/bin/env bash
+
+. "$(dirname ${BASH_SOURCE[0]})/testlib.sh"
+. "$(dirname ${BASH_SOURCE[0]})/test_utils.bsh"
+
+VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+. "${VSI_COMMON_DIR}/linux/docker_entrypoint.bsh"
+
+# Mock out linux_account and other functions
+setup_mock()
+{
+  mocked_passwd=()
+  mocked_group=()
+
+  init_group=("root:x:0:"
+              "daemon:x:1:root")
+  init_passwd=("root:x:0:0:root:/root:/bin/bash"
+               "daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin")
+
+  LINUX_ACCOUNTS_PASSWD_FILE=passwd
+  LINUX_ACCOUNTS_SHADOW_FILE=shadow
+  LINUX_ACCOUNTS_GROUP_FILE=group
+  LINUX_ACCOUNTS_GSHADOW_FILE=gshadow
+
+  write_file passwd "${init_passwd[@]}"
+  write_file group "${init_group[@]}"
+
+  mkdir()
+  {
+    echo "mkdir ${@}" >> mockout
+  }
+
+  chown()
+  {
+    echo "chown ${@}" >> mockout
+  }
+}
+
+begin_test "default setup user"
+(
+  setup_test
+
+  setup_mock
+
+  docker_setup_user
+
+  read_file passwd mocked_passwd
+  read_file group mocked_group
+  check_a mocked_passwd "user:x:1000:1000::/home/user:`which bash`" "${init_passwd[@]}"
+  check_a mocked_group "user:x:1000:" "${init_group[@]}"
+  [ "$(cat mockout)" = $'mkdir -p /home/user\nchown 1000:1000 /home/user' ]
+)
+end_test
+
+begin_test "custom setup user"
+(
+  setup_test
+
+  setup_mock
+
+  DOCKER_USERNAME=foo \
+  DOCKER_UID=100 \
+  DOCKER_GROUP_NAMES="root daemon open bar" \
+  DOCKER_GIDS="0 1 101 102" \
+  DOCKER_HOME=/nothome/foobar \
+  docker_setup_user
+
+  read_file passwd mocked_passwd
+  read_file group mocked_group
+  check_a mocked_passwd "foo:x:100:0::/nothome/foobar:`which bash`" "${init_passwd[@]}"
+  check_a mocked_group "bar:x:102:foo" "open:x:101:foo" "${init_group[0]}" "daemon:x:1:root,foo"
+  [ "$(cat mockout)" = $'mkdir -p /nothome/foobar\nchown 100:0 /nothome/foobar' ]
+)
+end_test
+
+begin_test "setup user only"
+(
+  setup_test
+
+  setup_mock
+
+  DOCKER_ACCOUNTS_CREATE_GROUPS=0 \
+  docker_setup_user
+
+  read_file passwd mocked_passwd
+  read_file group mocked_group
+  check_a mocked_passwd "user:x:1000:1000::/home/user:`which bash`" "${init_passwd[@]}"
+  check_a mocked_group "${init_group[@]}"
+  [ "$(cat mockout)" = $'mkdir -p /home/user\nchown 1000:1000 /home/user' ]
+)
+end_test
+
+begin_test "setup group only"
+(
+  setup_test
+
+  setup_mock
+
+  DOCKER_ACCOUNTS_CREATE_USER=0 \
+  docker_setup_user
+
+  read_file passwd mocked_passwd
+  read_file group mocked_group
+  check_a mocked_passwd "${init_passwd[@]}"
+  check_a mocked_group "user:x:1000:" "${init_group[@]}"
+  [ ! -f mockout ]
+)
+end_test
+
+begin_test "posix groups"
+(
+  setup_test
+
+  setup_mock
+
+  # These all work in Ubuntu, but not fedora, even Ubuntu doesn't allow spaces
+  DOCKER_GROUP_NAMES='group1 ad\group2 okdoe ok@#$%^&*doe @#$%^&* @#$%^&' \
+  DOCKER_GIDS='1000 1001 1002 1003 1004 1005' \
+  DOCKER_ACCOUNTS_POSIX_GROUPS=1 \
+  docker_setup_user
+
+  read_file group mocked_group
+  check_a mocked_group \
+          "group2:x:1005:user" \
+          "group:x:1004:user" \
+          "okdoe1:x:1003:user" \
+          "okdoe:x:1002:user" \
+          "adgroup2:x:1001:user" \
+          "group1:x:1000:" \
+          "${init_group[@]}"
+  [ "$(cat mockout)" = $'mkdir -p /home/user\nchown 1000:1000 /home/user' ]
+)
+end_test
+
+begin_test "nonposix groups"
+(
+  setup_test
+
+  setup_mock
+
+  # These all work in Ubuntu, but not fedora, even Ubuntu doesn't allow spaces
+  DOCKER_GROUP_NAMES='group1 ad\group2 okdoe ok@#$%^&*doe @#$%^&* @#$%^&' \
+  DOCKER_GIDS='1000 1001 1002 1003 1004 1005' \
+  DOCKER_ACCOUNTS_POSIX_GROUPS=0 \
+  docker_setup_user
+
+  read_file group mocked_group
+  check_a mocked_group \
+          "@#$%^&:x:1005:user" \
+          "@#$%^&*:x:1004:user" \
+          "ok@#$%^&*doe:x:1003:user" \
+          "okdoe:x:1002:user" \
+          "ad\group2:x:1001:user" \
+          "group1:x:1000:" \
+          "${init_group[@]}"
+  [ "$(cat mockout)" = $'mkdir -p /home/user\nchown 1000:1000 /home/user' ]
+)
+end_test
+
+setup_mock()
+{
+  ln()
+  {
+    echo "ln ${@-}" >> mockout
+  }
+
+  mkdir()
+  {
+    echo "mkdir ${@-}" >> mockout
+  }
+}
+
+begin_test "simple link mounts"
+(
+  setup_test
+  setup_mock
+
+  TESTDIR="$(real_path "${TESTDIR}")"
+
+  JUST_DOCKER_ENTRYPOINT_LINKS="${TESTDIR}/test:${TESTDIR}/mnt" \
+  OSTYPE= \
+  docker_link_mounts
+
+  ans="mkdir -p ${TESTDIR}"$'\n'
+  ans+="ln -s -T ${TESTDIR}/test ${TESTDIR}/mnt"
+
+  [ "$(cat mockout)" = "${ans}" ]
+)
+end_test
+
+[ "${OS-}" = "Windows_NT" ] && skip_next_test
+begin_test "competing link mounts"
+(
+  setup_test
+
+  TESTDIR="$(real_path "${TESTDIR}")"
+
+  mkdir mnt1
+  mkdir mnt2
+
+  JUST_DOCKER_ENTRYPOINT_LINKS="${TESTDIR}/mnt1:${TESTDIR}/test/foo:${TESTDIR}/mnt2:${TESTDIR}/test" \
+  docker_link_mounts
+
+  [ "$(readlink test)" = "${TESTDIR}/mnt2" ]
+  [ "$(readlink test/foo)" = "${TESTDIR}/mnt1" ]
+
+  JUST_DOCKER_ENTRYPOINT_LINKS="${TESTDIR}/mnt2:${TESTDIR}/test2:${TESTDIR}/mnt1:${TESTDIR}/test2/bar" \
+  docker_link_mounts
+
+  [ "$(readlink test2)" = "${TESTDIR}/mnt2" ]
+  [ "$(readlink test2/bar)" = "${TESTDIR}/mnt1" ]
+)
+end_test
+
+[ "${OS-}" = "Windows_NT" ] && skip_next_test
+begin_test "competing link mounts with DOCKER_LINK_MOUNTS_NOT_IN_MOUNTS"
+(
+  setup_test
+
+  TESTDIR="$(real_path "${TESTDIR}")"
+
+  mkdir mnt1
+  mkdir mnt2
+
+  JUST_DOCKER_ENTRYPOINT_LINKS="${TESTDIR}/mnt1:${TESTDIR}/test/foo:${TESTDIR}/mnt2:${TESTDIR}/test" \
+  DOCKER_LINK_MOUNTS_NOT_IN_MOUNTS=1 \
+  docker_link_mounts
+
+  [ "$(readlink test)" = "${TESTDIR}/mnt2" ]
+  [ ! -e "${TESTDIR}/test/foo" ]
+
+  JUST_DOCKER_ENTRYPOINT_LINKS="${TESTDIR}/mnt2:${TESTDIR}/test2:${TESTDIR}/mnt1:${TESTDIR}/test2/bar" \
+  DOCKER_LINK_MOUNTS_NOT_IN_MOUNTS=1 \
+  docker_link_mounts
+
+  [ "$(readlink test2)" = "${TESTDIR}/mnt2" ]
+  [ ! -e "${TESTDIR}/test/bar" ]
+)
+end_test

@@ -262,7 +262,8 @@ fi
 
 # Setup done, start making the new environment
 
-RELATIVE_PATH="$(python -c "import os; import os; print(os.path.relpath('${VSI_DIR}', '${PROJECT_DIR}'))")"
+# RELATIVE_PATH="$(python -c "import os; print(os.path.relpath('${VSI_DIR}', '${PROJECT_DIR}'))")"
+RELATIVE_PATH="$(perl -e "use File::Spec; print File::Spec->abs2rel('${VSI_DIR}','${PROJECT_DIR}');")"
 
 # Make project dir
 mkdir -p "${PROJECT_DIR}"
@@ -297,9 +298,9 @@ fi
 
 if [ ! -e "${PROJECT_NAME}.env" ]; then
   echo 'JUST_PROJECT_PREFIX='"${PROJECT_PREFIX}"'
-'"${PROJECT_PREFIX}"'_CWD="$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)"
+'"${PROJECT_PREFIX}"'_CWD="${CWD-"$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)"}"
 
-: ${'"${PROJECT_PREFIX}"'_DOCKERHUB_REPO='"${REPO_NAME}"'}
+: ${'"${PROJECT_PREFIX}"'_DOCKER_REPO='"${REPO_NAME}"'}
 
 : ${'"${PROJECT_PREFIX}"'_HOME=/home/user}
 : ${'"${PROJECT_PREFIX}"'_USERNAME=$(id -u -n)}
@@ -452,13 +453,13 @@ services:
     build:
       context: .
       dockerfile: docker/base_someappname.Dockerfile
-    image: ${'"${PROJECT_PREFIX}"'_DOCKERHUB_REPO}:base_someappname
+    image: ${'"${PROJECT_PREFIX}"'_DOCKER_REPO}:base_someappname
   someappname: &someappname_anchor
     build:
       context: .
       dockerfile: docker/someappname.Dockerfile
     # prevent different users from clobbering each others images
-    image: ${'"${PROJECT_PREFIX}"'_DOCKERHUB_REPO}:someappname_${'"${PROJECT_PREFIX}"'_USERNAME}
+    image: ${'"${PROJECT_PREFIX}"'_DOCKER_REPO}:someappname_${'"${PROJECT_PREFIX}"'_USERNAME}
     environment:
       # Variables for docker_entrypoint.bsh
       - DOCKER_UID=${'"${PROJECT_PREFIX}"'_UID}
@@ -500,6 +501,19 @@ if ! grep -q local_post.env .gitignore 2>/dev/null; then
   echo local_post.env >> .gitignore
 fi
 
+if [ ! -e ".gitattributes" ]; then
+  echo '#These file types are being explicitly set to linux line endings for windows.
+#This is to allow windows user to edit and run these files inside a linux docker
+#this list may need additions as time goes on
+*.sh eol=lf
+*.bsh eol=lf
+*.py eol=lf
+*.env eol=lf
+wrap eol=lf
+.justplugins eol=lf
+' > .gitattributes
+fi
+
 # Remove dummy vsi_common dir to make way for submodule setup
 rmdir -p "${VSI_DIR}" 2>/dev/null || :
 
@@ -517,7 +531,7 @@ if [ ! -e .git ]; then
 fi
 echo "git submodule add git@github.com:visionsystemsinc/vsi_common.git" \
                        "'${RELATIVE_PATH}'"  >&3
-echo "git add .gitignore .dockerignore .gitmodules README.md '${JUSTFILE}'" \
+echo "git add .gitattributes .gitignore .dockerignore .gitmodules README.md '${JUSTFILE}'" \
      "'${SETUPFILE}' '${WRAPFILE}' '${PROJECT_NAME}.env'" \
      "docker-compose.yml docker/someappname.Dockerfile docker/someappname_entrypoint.bsh" \
      "docker/base_someappname.Dockerfile" >&3

@@ -1,0 +1,284 @@
+
+. "$(dirname ${BASH_SOURCE[0]})/testlib.sh"
+
+VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+. "${VSI_COMMON_DIR}/linux/docker_functions.bsh" #Need to be sourced for docker_compose_override
+. "${VSI_COMMON_DIR}/linux/docker_compose_override"
+
+function head()
+{
+  echo -e "version: '${1-3.2}'\nservices:"
+}
+
+function service()
+{
+  echo -e "\n  ${1}:"
+}
+
+function volumes()
+{
+  echo -e "\n    volumes:"
+}
+
+function vol()
+{
+  echo -e "\n      - ${1}"
+}
+
+function environment()
+{
+  echo -e "\n    environment:"
+}
+
+function envi()
+{
+  echo -e "\n      - ${1}"
+}
+
+begin_test "Docker compose override variable substitution"
+(
+  setup_test
+  [ "$(_docker_compose_override_var_sub 'x')" = "" ]
+  [ "$(_docker_compose_override_var_sub '$foo_bar')" = "foo_bar" ]
+  [ "$(_docker_compose_override_var_sub '${FOO_BAR}')" = "FOO_BAR" ]
+)
+end_test
+
+begin_test "Environment echo"
+(
+  setup_test
+  ans="    environment:"
+  ans+=$'\n      - test=15'
+  [ "$(_env_echo "      - test=15")" = "${ans}" ]
+  ans+=$'\n      - foo=bar'
+  [ "$(_env_echo "      - test=15";
+       _env_echo "      - foo=bar")" = "${ans}" ]
+)
+end_test
+
+begin_test "No services"
+(
+  setup_test
+  [ "$(generate_docker_compose_override PROJECT)" = "$(head)" ]
+)
+end_test
+
+begin_test "CLI"
+(
+  setup_test
+  ans="$(head)$(service test1)"
+  # TEST_VOLUMES="/tmp:/temp:ro"
+  # ans+="$(vol /tmp:/temp:ro)"
+  [ "$("${VSI_COMMON_DIR}/linux/docker_compose_override" PROJECT test1)" = "${ans}" ]
+)
+end_test
+
+begin_test "COMPOSE_VERSION 2.3"
+(
+  setup_test
+  ans="$(head 2.3)$(service test1)$(service test2)"
+  COMPOSE_VERSION=2.3
+  [ "$(generate_docker_compose_override PROJECT test1 test2)" = "${ans}" ]
+)
+end_test
+
+begin_test "Just docker compose dynamic volumes"
+(
+  setup_test
+  ans="$(head)$(service test1)$(volumes)"
+
+  ans1="${ans}$(vol "$(real_path "${TESTDIR}")":/trash:z)"
+  TEST_VOLUMES=(".:/trash:z")
+  override="$(generate_docker_compose_override TEST test1)"
+  [ "${override}" = "${ans1}" ]
+
+  TEST_VOLUMES=("/tmp:/temp:ro")
+  ans+="$(vol "$(real_path "/tmp")":/temp:ro)"
+  override="$(generate_docker_compose_override TEST test1)"
+  [ "${override}" = "${ans}" ]
+
+  TEST_TEST1_VOLUMES=("/src:/source:rw")
+  ans+="$(vol "$(real_path "/src")":/source:rw)"
+  override="$(generate_docker_compose_override TEST test1)"
+  [ "${override}" = "${ans}" ]
+)
+end_test
+
+begin_test "Just docker compose dynamic environment"
+(
+  setup_test
+
+  # Basic test
+  ans="$(head)$(service test1)$(environment)$(envi TEST_ONE=2)$(envi TEST_ONE_HOST=1)"
+  override="$(TEST_ONE_HOST=1 TEST_ONE_DOCKER=2 \
+              generate_docker_compose_override TEST test1)"
+  [ "${override}" = "${ans}" ]
+
+  # Test with JUST_DISABLE_ENVIRONMENT_SWAP
+  ans="$(head)$(service test1)$(environment)$(envi TEST_ONE_DOCKER=2)$(envi TEST_ONE_HOST=1)"
+  override="$(TEST_ONE_HOST=1 TEST_ONE_DOCKER=2 JUST_DISABLE_ENVIRONMENT_SWAP=1 \
+              generate_docker_compose_override TEST test1)"
+  [ "${override}" = "${ans}" ]
+
+  # Ignores non-project variables
+  ans="$(head)$(service test1)"
+  override="$(TEST_ONE_HOST=1 TEST_ONE_DOCKER=2 \
+              generate_docker_compose_override TEST2 test1)"
+  [ "${override}" = "${ans}" ]
+)
+end_test
+
+linux_nfs="\
+Filesystem                       1K-blocks        Used   Available Use% Mounted on
+filetodata-2:/volume1/projects 23320723712 22239875584  1080729344  96%"
+
+setup_mock()
+{
+  TESTDIR="$(real_path "${TESTDIR}")"
+  function df()
+  {
+    local last_arg=${!#}
+
+    if [[ ${last_arg} = ${TESTDIR}* ]]; then
+      echo "${linux_nfs} ${TESTDIR}/${last_arg:${#TESTDIR}+1:1}"
+      return 0
+    fi
+    return 1
+  }
+}
+
+begin_test "just_docker_entrypoint_links"
+(
+  setup_test
+  setup_mock
+
+  TEST_VOLUMES=("${TESTDIR}/a/a:/this is  a   test")
+  TEST_VOLUMES+=("${TESTDIR}/a:/this is  a   test")
+  TEST_VOLUMES+=("${TESTDIR}/a/b:/this is  a   test")
+  TEST_VOLUMES+=("${TESTDIR}/a/c:/this is  a   test")
+  TEST_VOLUMES+=("${TESTDIR}/b/a:/foo/bar")
+
+  override="$(generate_docker_compose_override TEST test1)"
+
+  ans="$(head)$(service test1)$(volumes)"
+  ans+="$(vol "${TESTDIR}/a:/host_mnt${TESTDIR}/a")"
+  ans+="$(vol "${TESTDIR}/a:/this is  a   test")"
+  ans+="$(vol "${TESTDIR}/b:/host_mnt${TESTDIR}/b")"
+  ans+="$(environment)"
+  ans_el="/host_mnt${TESTDIR}/a/a:"
+  ans_el+="/this is  a   test:"
+  ans_el+="/host_mnt${TESTDIR}/a/b:"
+  ans_el+="/this is  a   test:"
+  ans_el+="/host_mnt${TESTDIR}/a/c:"
+  ans_el+="/this is  a   test:"
+  ans_el+="/host_mnt${TESTDIR}/b/a:"
+  ans_el+="/foo/bar"
+  ans+="$(envi "JUST_DOCKER_ENTRYPOINT_LINKS=${ans_el}")"
+
+  [ "${override}" = "${ans}" ]
+)
+end_test
+
+setup_mock()
+{
+  TESTDIR="$(real_path "${TESTDIR}")"
+  function df()
+  {
+    local last_arg=${!#}
+
+    if [[ ${last_arg}/ = ${TESTDIR}/* ]]; then
+      echo "${linux_nfs} ${TESTDIR}"
+      return 0
+    fi
+    return 1
+  }
+}
+
+begin_expected_fail_test "Issue #7 Scenario 1"
+(
+  setup_test
+  setup_mock
+
+  TEST_VOLUMES=("home_mount:/home/andy" # This one should be in the docker-compose.yml file
+                "${TESTDIR}/a/a:/home/andy")
+
+  override="$(generate_docker_compose_override TEST test1)"
+
+  ans="$(head)$(service test1)$(volumes)"
+  # This should not be here, that's the point of Scenario #1
+  # ans+="$(vol "home_mount:/home/andy")"
+  ans+="$(vol "${TESTDIR}:/host_mnt${TESTDIR}")"
+  ans+="$(environment)"
+  ans_el="/host_mnt${TESTDIR}/a/a:"
+  ans_el+="/home/andy"
+  ans+="$(envi "JUST_DOCKER_ENTRYPOINT_LINKS=${ans_el}")"
+
+  [ "${override}" = "${ans}" ]
+)
+end_test
+
+begin_test "Issue #7 Scenario 2"
+(
+  setup_test
+  setup_mock
+
+  TEST_VOLUMES=("${TESTDIR}/a/a:/this"
+                "${TESTDIR}:/this")
+
+  override="$(generate_docker_compose_override TEST test1)"
+
+  ans="$(head)$(service test1)$(volumes)"
+  ans+="$(vol "${TESTDIR}:/host_mnt${TESTDIR}")"
+  ans+="$(vol "${TESTDIR}:/this")"
+  ans+="$(environment)"
+  ans_el="/host_mnt${TESTDIR}/a/a:"
+  ans_el+="/this"
+  ans+="$(envi "JUST_DOCKER_ENTRYPOINT_LINKS=${ans_el}")"
+
+  [ "${override}" = "${ans}" ]
+)
+end_test
+
+begin_expected_fail_test "Issue #7 Scenario 3"
+(
+  setup_test
+  setup_mock
+
+  TEST_VOLUMES=("${TESTDIR}:/this"
+                "${TESTDIR}/a/a:/this")
+
+  override="$(generate_docker_compose_override TEST test1)"
+
+  ans="$(head)$(service test1)$(volumes)"
+  # This should not be here, that's the point of Scenario #3
+  # ans+="$(vol "${TESTDIR}:/this")"
+  ans+="$(vol "${TESTDIR}:/host_mnt${TESTDIR}")"
+  ans+="$(environment)"
+  ans_el="/host_mnt${TESTDIR}/a/a:"
+  ans_el+="/this"
+  ans+="$(envi "JUST_DOCKER_ENTRYPOINT_LINKS=${ans_el}")"
+
+  [ "${override}" = "${ans}" ]
+)
+end_test
+
+begin_test "Issue #7 Scenario 4"
+(
+  setup_test
+  setup_mock
+
+  TEST_VOLUMES=("home_mount:/home" # This one should be in the docker-compose.yml file
+                "${TESTDIR}/a/a:/home/andy")
+
+  override="$(generate_docker_compose_override TEST test1)"
+
+  ans="$(head)$(service test1)$(volumes)"
+  # This should not be here, that's the point of Scenario #4
+  ans+="$(vol "home_mount:/home")"
+  ans+="$(vol "${TESTDIR}:/host_mnt${TESTDIR}")"
+  ans+="$(environment)"
+  ans_el="/host_mnt${TESTDIR}/a/a:"
+  ans_el+="/home/andy"
+  ans+="$(envi "JUST_DOCKER_ENTRYPOINT_LINKS=${ans_el}")"
+)
+end_test

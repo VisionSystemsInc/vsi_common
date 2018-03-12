@@ -1,0 +1,134 @@
+. "$(dirname ${BASH_SOURCE[0]})/testlib.sh"
+. "$(dirname ${BASH_SOURCE[0]})/test_utils.bsh"
+
+VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+
+. "${VSI_COMMON_DIR}/linux/common_source.sh"
+
+OSES=(
+  clearlinux@sha256:2cf6333893ae5e28ab1645d9f448430f06167c791a9f9aee5976f81c573e3791
+  amazonlinux@sha256:b852ce504670f604074bb0a0285849c95541453c39da4a6abe19c096695ccfca
+  debian:7
+  debian:9
+  ubuntu:14.04
+  ubuntu:17.04
+  fedora:26
+  fedora:27
+  fedora:rawhide
+  centos:7
+  centos:6.9
+  centos:5.11
+  gidikern/rhel-oracle-jre:1.8.0_60
+  mstormo/suse:11.4
+  opensuse:13.2
+  opensuse:42.3
+  opensuse@sha256:bcb8c2c6ff9b81ad8e0ac428b5338e0dc7832b93381a004621408154ca081142
+  vcatechnology/linux-mint:17
+  vcatechnology/linux-mint:18.2
+  ringo/scientific:6.3
+  ringo/scientific:7.2
+  busybox:1.28.0
+  alpine:3.7
+  vbatts/slackware:14.2
+  gentoo/stage3-amd64:20170726
+  binhex/arch-base:20170510-01
+)
+
+ANSWERS=(
+  "clearlinux - 19150, clearlinux - 19150, clearlinux - 19150"
+  "amzn - 2017.09, rhel - 2017.09, fedora - 2017.09"
+  "debian - 7, debian - 7, debian - 7"
+  "debian - 9, debian - 9, debian - 9"
+  "ubuntu - 14.04, debian - 8, debian - 8"
+  "ubuntu - 17.04, debian - 9, debian - 9"
+  "fedora - 26, fedora - 26, fedora - 26"
+  "fedora - 27, fedora - 27, fedora - 27"
+  "fedora - 28, fedora - 28, fedora - 28"
+  "centos - 7, rhel - 7, fedora - 19"
+  "centos - 6.9, rhel - 6.9, fedora - 13 14"
+  "centos - 5.11, rhel - 5.11, fedora - 6"
+  "rhel - 7.1, fedora - 19, fedora - 19"
+  "sles - 11.4, sles - 11.4, sles - 11.4"
+  "opensuse - 13.2, suse - 13.2, suse - 13.2"
+  "opensuse - 42.3, suse - 42.3, suse - 42.3"
+  "opensuse - 20180106, suse - 20180106, suse - 20180106" # Rolling release
+  "linuxmint - 17.3, ubuntu - 14.04, debian - 8"
+  "linuxmint - 18.2, ubuntu - 16.04, debian - 9"
+  "scientific - 6.3, rhel - 6.3, fedora - 13 14"
+  "scientific - 7.2, rhel - 7.2, fedora - 19"
+  "busybox - 1.28.0, busybox - 1.28.0, busybox - 1.28.0"
+  "alpine - 3.7.0, alpine - 3.7.0, alpine - 3.7.0"
+  "slackware - 14.2, slackware - 14.2, slackware - 14.2"
+  "gentoo - 2.3, gentoo - 2.3, gentoo - 2.3" #Not sure this even makes sense
+  "arch - ?, arch - ?, arch - ?" # Arch, like gentoo is a rolling release
+)
+
+: ${DOCKER=docker}
+
+if ! command -v "${DOCKER}" &>/dev/null; then
+  skip_next_test
+  begin_test "Distribution names for Linuces"
+  (
+    setup_test
+  )
+  end_test
+else
+  for i in "${!OSES[@]}"; do
+    os="${OSES[$i]}"
+    ans="${ANSWERS[$i]}"
+
+    begin_test "Distribution name for $os Linux"
+    (
+      setup_test
+
+      if [ "${OS-}" = "Windows_NT" ]; then
+        VSI_COMMON_DIR="$(cygpath -w "${VSI_COMMON_DIR}")"
+      fi
+      [ "$("${DOCKER}" run -v "${VSI_COMMON_DIR}:/vsi" --rm $os sh -euc \
+                 ". /vsi/linux/common_source.sh;
+                  echo \$VSI_DISTRO      - \$VSI_DISTRO_VERSION, \
+                       \$VSI_DISTRO_LIKE - \$VSI_DISTRO_VERSION_LIKE, \
+                       \$VSI_DISTRO_CORE - \$VSI_DISTRO_VERSION_CORE")" = "${ans}" ]
+    )
+    end_test
+    if [ "${test_status}" -ne 0 ]; then
+      break
+    fi
+  done
+fi
+
+if [[ ${OSTYPE} != darwin* ]]; then
+  skip_next_test
+fi
+begin_test "Distribution name for Darwin"
+(
+  setup_test
+
+  . "${VSI_COMMON_DIR}/linux/common_source.sh"
+
+  [ "${VSI_DISTRO}" = "darwin" ]
+  [ "${VSI_DISTRO_CORE}" = "darwin" ]
+  [ "${VSI_DISTRO_LIKE}" = "darwin" ]
+  [ "${VSI_DISTRO_VERSION:0:3}" = "10." ]
+  [ "${VSI_DISTRO_VERSION_CORE:0:3}" = "10." ]
+  [ "${VSI_DISTRO_VERSION_LIKE:0:3}" = "10." ]
+)
+end_test
+
+if [ "${OS-}" != "Windows_NT" ]; then
+  skip_next_test
+fi
+begin_test "Distribution name for Windows"
+(
+  setup_test
+
+  . "${VSI_COMMON_DIR}/linux/common_source.sh"
+
+  [ "${VSI_DISTRO}" = "windows" ]
+  [ "${VSI_DISTRO_CORE}" = "windows" ]
+  [ "${VSI_DISTRO_LIKE}" = "windows" ]
+  [ "${VSI_DISTRO_VERSION%%.*}" -ge 5 ]
+  [ "${VSI_DISTRO_VERSION_CORE%%.*}" -ge 5 ]
+  [ "${VSI_DISTRO_VERSION_LIKE%%.*}" -ge 5 ]
+)
+end_test

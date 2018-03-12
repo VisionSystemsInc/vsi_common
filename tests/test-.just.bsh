@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+
+. "$(dirname ${BASH_SOURCE[0]})/testlib.sh"
+. "$(dirname ${BASH_SOURCE[0]})/test_utils.bsh"
+
+VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+. "${VSI_COMMON_DIR}/linux/.just"
+
+begin_test "just tab complete"
+(
+  setup_test
+
+  JUST_HELP_SEPARATOR='#@#'
+
+  echo ' a) # A' > Justfile
+  echo ' b) # b' >> Justfile
+  echo ' c) ' >> Justfile # Hidden
+
+  echo 'cat|dog|snake) # Pets' >> Justfile
+  echo 'rat|mouse|spider)' >> Justfile # Hidden
+
+  echo 'run_car) # Run car' >> Justfile
+  echo 'run_house) # Star house' >> Justfile
+  echo 'run_garage) # Open garage' >> Justfile
+
+  # wildcard feature
+  echo 'stop_*) # Stop something' >> Justfile
+
+  STUFF=(qwe qwert qwerty qwebar qbyurso aoeui)
+
+  echo '#read_{STUFF}) # Read' >> Justfile
+  echo 'read_*)' >> Justfile
+
+  echo "-flag) # Flag 1" >> Justfile
+  echo "-a) # Archive" >> Justfile
+  echo "foo) #Bar" >> Justfile
+  echo "apple) # Tree" >> Justfile
+
+  echo '-jump|\' >> Justfile
+  echo '-rope) # Two line' >> Justfile
+  echo "-sea|-water|-ocean) # Long line" >> Justfile
+
+  # Null case
+  COMP_WORDS=(just)
+  _just just '' just
+  # Resort it because mac sorts weird. I mean REALLY weird
+  ans=(a -a apple b cat dog --dryrun -flag foo -h help --help -jump \
+       -n -ocean -rope -sea --separator snake -water)
+  ans=($(IFS=$'\n'; sort <<< "${ans[*]}"))
+  check_a COMPREPLY "${ans[@]}" read run stop
+
+  # Simple case
+  COMP_WORDS=(just f)
+  _just just f just
+  check_a COMPREPLY foo
+
+  COMP_WORDS=(just a)
+  _just just a just
+  check_a COMPREPLY a apple
+
+  COMP_WORDS=(just c)
+  _just just c just
+  check_a COMPREPLY cat
+
+  COMP_WORDS=(just ap)
+  _just just ap just
+  check_a COMPREPLY apple
+
+  # subcommand case
+  COMP_WORDS=(just run)
+  _just just "" run
+  check_a COMPREPLY car house garage
+
+  COMP_WORDS=(just read qw)
+  _just just qw read
+  check_a COMPREPLY qwe qwert qwerty qwebar
+
+  # This is known problem
+  # COMP_WORDS=(just stop)
+  # _just just "" stop
+  # check_a COMPREPLY
+  # The * will evaluate to err Justfile out, and any other files in the CWD
+
+  # flag case
+  COMP_WORDS=(just run car -s)
+  _just just -s car
+  check_a COMPREPLY -sea
+
+  # subsequenct subcommand case
+  COMP_WORDS=(just run car)
+  _just just "" car
+  check_a COMPREPLY "${ans[@]}" car house garage read run stop
+
+  echo 'if [ "${3}" = "-jump" ]; then
+          just_commands+=("rope")
+        elif [ "${3}" = "run" ]; then
+          just_subtargets+=(bus)
+        fi' > .just
+  # Run with custom .just
+  COMP_WORDS=(just run)
+  _just just "" run
+  check_a COMPREPLY bus car house garage
+
+  COMP_WORDS=(just -jump)
+  _just just "" -jump
+  check_a COMPREPLY "${ans[@]}" rope read run stop
+
+)
+end_test

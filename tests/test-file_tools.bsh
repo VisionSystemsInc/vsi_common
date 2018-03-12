@@ -1,0 +1,119 @@
+. "$(dirname ${BASH_SOURCE[0]})/testlib.sh"
+. "$(dirname ${BASH_SOURCE[0]})/test_utils.bsh"
+
+VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+. "${VSI_COMMON_DIR}/linux/file_tools.bsh"
+. "${VSI_COMMON_DIR}/linux/time_tools.bsh"
+
+setup()
+{
+  track_touched_files
+}
+
+begin_test "find_open_fd"
+(
+  setup_test
+  find_open_fd
+  fd1="${fd}"
+  eval "exec ${fd}<>/dev/null"
+  find_open_fd fd2
+  START_FD=$((fd2+1)) find_open_fd fd3
+  [ "${fd2}" -gt "${fd1}" ]
+  [ "${fd3}" -gt "${fd2}" ]
+)
+end_test
+
+common_find_open_test()
+{
+  # on slow emulators, this timeout isn't enough, and may need to be increased
+  : ${DELAY=1}
+
+  # Write to the file
+  printf 'a b  c\t\n\nd\n\n\n' >&"${fd1_w}"
+
+  # Bash subshell substitution drop trailing newlines "by design"
+  [ "$(timeout "${DELAY}" cat - <&${fd1_r})" = $'a b  c\t\n\nd' ]
+
+  # Test scenario where newlines would be preserved
+  printf 'a b  c\t\n\nd\n\n\n' >&"${fd2_w}"
+  lines=()
+  ans=($'a b  c\t' "" "d" "" "")
+  for x in $(seq 5); do
+    IFS='' read -t "${DELAY}" -u "${fd2_r}" -r line
+    lines+=("${line}")
+  done
+  check_a lines "${ans[@]}"
+
+  # This should timeout
+  not read -t "${DELAY}" -u "${fd2_r}" -r line
+  # close and cleanup
+  close_fd "${fd1_r}" "${fd1_w}"
+  echo "ok">&"${fd2_w}"
+  [ "$(timeout "${DELAY}" cat - <&${fd2_r})" = "ok" ]
+  close_fd "${fd2_r}" "${fd2_w}"
+
+  #These should be closed now
+  not_s "echo fail >&${fd1_w}"
+  not_s "echo fail >&${fd2_w}"
+  not_s "cat - <&${fd1_r}"
+  not_s "cat - <&${fd2_r}"
+}
+
+[ "${OS-}" = "Windows_NT" ] && skip_next_test
+begin_test "Find and use available fd in bash 3.2 using pipe"
+(
+  setup_test
+
+  # Make a pipe
+  mkfifo "${TESTDIR}/pipe1"
+  mkfifo "${TESTDIR}/pipe2"
+
+  #Open the pipe
+  open_fd -n "${TESTDIR}/pipe1" -p -s -R fd1_r -W fd1_w
+  [ "${filename}" = "${TESTDIR}/pipe1" ]
+  open_fd -n "${TESTDIR}/pipe2" -p -s -R fd2_r -W fd2_w
+  [ "${filename}" = "${TESTDIR}/pipe2" ]
+
+  [ "${fd1_r}" -eq "${fd1_w}" ]
+  [ "${fd2_r}" -eq "${fd2_w}" ]
+
+  common_find_open_test
+)
+end_test
+
+# Writing to a pipe in windows doesn't work... Who knows why!
+begin_test "Find and use available fd in bash 3.2 using file (Window compatible)"
+(
+  setup_test
+
+  # Make a file
+  touch "${TESTDIR}/pipe1"
+  touch "${TESTDIR}/pipe2"
+
+  # Open the files
+  open_fd -n "${TESTDIR}/file1" -f -R fd1_r -W fd1_w
+  [ "${filename}" = "${TESTDIR}/file1" ]
+  open_fd -n "${TESTDIR}/file2" -f -R fd2_r -W fd2_w
+  [ "${filename}" = "${TESTDIR}/file2" ]
+
+  [ "${fd1_w}" -gt "${fd1_r}" ]
+  [ "${fd2_w}" -gt "${fd2_r}" ]
+
+  common_find_open_test
+)
+end_test
+
+begin_test "Test open_fd automatic naming"
+(
+  setup_test
+  # Test the automatic name creation
+  open_fd -f -R fd3_r -W fd3_w
+  [ -f "${filename}" ]
+  printf "${filename}\0" >> "${track_touched_file}"
+  # Write directly to the filename
+  echo "test 123" > "${filename}"
+  # Read from the open fd, not directly file
+  [ "$(cat - <&${fd3_r})" = "test 123" ]
+  close_fd "${fd3_r}" "${fd3_w}"
+)
+end_test
