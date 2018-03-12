@@ -208,8 +208,8 @@ _begin_common_test ()
   # Set flag defaults that could be overrideable in certain test types
   # This needs to be after end_test call above in order to keep end_test
   # optional
-  expected_failure=0
-  required_fail=0
+  expected_failure=${_expected_failure-0}
+  required_fail=${_required_fail-0}
 
   # Run setup if this is the first test
   if [ "${tests}" -eq "0" ] && type -t setup &>/dev/null && [ "$(command -v setup)" == "setup" ]; then
@@ -270,9 +270,8 @@ begin_test ()
 begin_expected_fail_test()
 {
   test_status=$? # Must be first command
-  _begin_common_test ${@+"${@}"}
   # Override _begin_common_test default
-  expected_failure=1
+  _expected_failure=1 _begin_common_test ${@+"${@}"}
 }
 
 #****f* testlib.sh/begin_required_fail_test
@@ -286,9 +285,8 @@ begin_expected_fail_test()
 begin_required_fail_test()
 {
   test_status=$? # Must be first command
-  _begin_common_test ${@+"${@}"}
   # Override _begin_common_test default
-  required_fail=1
+  _required_fail=1 _begin_common_test ${@+"${@}"}
 }
 
 #****f* testlib.sh/setup_test
