@@ -1,4 +1,4 @@
-#****F* testlib.sh/test_colors.sh
+#****F* testlib.bsh/test_colors.sh
 # NAME
 #   test_colors.sh - Color definitions for testlib
 # AUTHOR

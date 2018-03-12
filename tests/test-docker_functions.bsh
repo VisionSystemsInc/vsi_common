@@ -1,5 +1,5 @@
 
-. "$(dirname ${BASH_SOURCE[0]})/testlib.sh"
+. "$(dirname ${BASH_SOURCE[0]})/testlib.bsh"
 
 VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 . "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
@@ -41,36 +41,28 @@ services:
 
 begin_test "Test DOCKER var"
 (
-  setup_test
   DRYRUN=echo
   DOCKER="DoCkEr"
   [ "$(Docker run test)" = "DoCkEr run --rm test" ]
 )
-end_test
 
 begin_test "Test NVIDIA_DOCKER var"
 (
-  setup_test
   DRYRUN=echo
   NVIDIA_DOCKER="NvIdIa-DoCkEr"
   [ "$(Nvidia-docker run test)" = "NvIdIa-DoCkEr run --rm test" ]
 )
-end_test
 
 begin_test "is_dir_and_not_exist"
 (
-  setup_test
   not is_dir_and_not_exist qwertyuiop
   not is_dir_and_not_exist /
   is_dir_and_not_exist "$(mktemp -d -u)"
 )
-end_test
 
 command -v "${DOCKER}" >&/dev/null || skip_next_test
 begin_test "container get label"
 (
-  setup_test
-
   "${DOCKER}" rm test-docker-function || :
   "${DOCKER}" create -l t1=15 -l "TEST=THIS=t h  a   t" -l blank --name test-docker-function alpine
 
@@ -81,13 +73,10 @@ begin_test "container get label"
 
   "${DOCKER}" rm test-docker-function
 )
-end_test
 
 (command -v "${DOCKER}" >&/dev/null && command -v jq >&/dev/null) || skip_next_test
 begin_test "container has label"
 (
-  setup_test
-
   "${DOCKER}" rm test-docker-function || :
   "${DOCKER}" create -l t1=15 -l "TEST=THIS=t h  a   t" -l blank --name test-docker-function alpine
 
@@ -98,12 +87,9 @@ begin_test "container has label"
 
   "${DOCKER}" rm test-docker-function
 )
-end_test
 
 begin_test "docker_premkdir"
 (
-  setup_test
-
   docker_premkdir "${TESTDIR}"
   docker_premkdir internal_dir
   [ ! -e internal_dir ]
@@ -117,24 +103,18 @@ begin_test "docker_premkdir"
   docker_premkdir "${TESTDIR}/premkdir"
   [ -d "${TESTDIR}/premkdir" ]
 )
-end_test
 
 begin_test "docker host dir"
 (
-  setup_test
-
   if [ "${OS-}" = "Windows_NT" ]; then
     [ "$(docker_host_dir /tmp)" = "$(cygpath -w /tmp)" ]
   else
     [ "$(docker_host_dir /tmp)" = "/tmp" ]
   fi
 )
-end_test
 
 begin_test "Docker volume string parsing"
 (
-  setup_test
-
   host_paths=("."
               "/"
               "C:\\"
@@ -170,12 +150,9 @@ begin_test "Docker volume string parsing"
     done
   done
 )
-end_test
 
 begin_test "Santize Volumes"
 (
-  setup_test
-
   temp_dir="${TESTDIR}/sv"
 
   [ ! -e "${temp_dir}" ]
@@ -190,11 +167,9 @@ begin_test "Santize Volumes"
 
   [ -e "${temp_dir}" ]
 )
-end_test
 
 begin_test "Parse docker args"
 (
-  setup_test
   parse-docker --config=blah.json -D -v run -v /foo:/bar debian:9 bash
   a1=(--config=blah.json -D -v)
   a2=(-v /foo:/bar debian:9 bash)
@@ -202,11 +177,9 @@ begin_test "Parse docker args"
   [ "${docker_command}" = "run" ]
   cmp_elements_a docker_command_args a2
 )
-end_test
 
 begin_test "Docker command"
 (
-  setup_test
   export DRYRUN=print_command
 
   DOCKER_AUTOREMOVE=0
@@ -215,11 +188,9 @@ begin_test "Docker command"
   eval "r=($r)"
   cmp_elements_a a r
 )
-end_test
 
 begin_test "DOCKER_AUTOREMOVE and DOCKER_EXTRA_*_ARGS"
 (
-  setup_test
   export DRYRUN=print_command
 
   a=("${DOCKER}" run --rm -v '/test  this/:blah' 'debian:9')
@@ -233,11 +204,9 @@ begin_test "DOCKER_AUTOREMOVE and DOCKER_EXTRA_*_ARGS"
   eval "r=($r)"
   cmp_elements_a a r
 )
-end_test
 
 begin_test "DOCKER_EXTRA_ARGS"
 (
-  setup_test
   export DRYRUN=print_command
 
   DOCKER_EXTRA_BUILD_ARGS=('aaa' 'bbb')
@@ -247,25 +216,16 @@ begin_test "DOCKER_EXTRA_ARGS"
   eval "r=($r)"
   cmp_elements_a a r
 )
-end_test
-
-
-
-
 
 begin_test "Test DOCKER_COMPOSE var"
 (
-  setup_test
   DRYRUN=echo
   DOCKER_COMPOSE="DoCkEr-CoMpOsE"
   [ "$(Docker-compose run test)" = "DoCkEr-CoMpOsE run --rm test" ]
 )
-end_test
 
 begin_test "docker compose parse volumes"
 (
-  setup_test
-
   ans=(-v "/tmp:/mnt" -v "test:/opt")
   docker-compose-volumes nb <<< "${compose_file}"
   cmp_elements_a DOCKER_VOLUME_FLAGS ans
@@ -280,12 +240,9 @@ begin_test "docker compose parse volumes"
   docker-compose-volumes none <<< "${compose_file}"
   cmp_elements_a DOCKER_VOLUME_FLAGS ans
 )
-end_test
 
 begin_test "Parse docker-compose args"
 (
-  setup_test
-
   parse-docker-compose run test
 
   parse-docker-compose --no-ansi -H=blah.json --verbose run -v /foo:/bar debian bash
@@ -295,11 +252,9 @@ begin_test "Parse docker-compose args"
   [ "${docker_compose_command}" = "run" ]
   cmp_elements_a docker_compose_command_args a2
 )
-end_test
 
 begin_test "Parse docker compose file args"
 (
-  setup_test
   set -E
 
   touch docker-compose2.yml
@@ -345,38 +300,30 @@ begin_test "Parse docker compose file args"
   parse-docker-compose -f test1.yml -ftest2 --file test3 --file=test4 run debian:9 bash
   [ "${#docker_compose_files[@]}" -eq 4 ]
 )
-end_test
 
 begin_test "Compose IFS non-Windows"
 (
-  setup_test
   unset OS
   [ "$(compose_path_separator)" = ":" ]
 )
-end_test
 
 begin_test "Compose IFS Windows"
 (
-  setup_test
   OS="Windows_NT"
   [ "$(compose_path_separator)" = ";" ]
 )
-end_test
 
 begin_test "Custom IFS"
 (
-  setup_test
   COMPOSE_PATH_SEPARATOR='|'
   OS="Windows_NT"
   [ "$(compose_path_separator)" = "|" ]
   unset OS
   [ "$(compose_path_separator)" = "|" ]
 )
-end_test
 
 begin_test "Docker-compose command"
 (
-  setup_test
   export DRYRUN=print_command
 
   DOCKER_COMPOSE_AUTOREMOVE=0
@@ -385,11 +332,9 @@ begin_test "Docker-compose command"
   eval "r=($r)"
   cmp_elements_a a r
 )
-end_test
 
 begin_test "DOCKER_COMPOSE_AUTOREMOVE and DOCKER_COMPOSE_EXTRA_*_ARGS"
 (
-  setup_test
   export DRYRUN=print_command
 
   a=("${DOCKER_COMPOSE}" run --rm -v '/test  this/:blah' 'debian')
@@ -403,11 +348,9 @@ begin_test "DOCKER_COMPOSE_AUTOREMOVE and DOCKER_COMPOSE_EXTRA_*_ARGS"
   eval "r=($r)"
   cmp_elements_a a r
 )
-end_test
 
 begin_test "DOCKER_COMPOSE_EXTRA_ARGS"
 (
-  setup_test
   export DRYRUN=print_command
 
   DOCKER_COMPOSE_EXTRA_BUILD_ARGS=('aaa' 'bbb')
@@ -417,22 +360,17 @@ begin_test "DOCKER_COMPOSE_EXTRA_ARGS"
   eval "r=($r)"
   cmp_elements_a a r
 )
-end_test
 
 begin_test "docker-compose service names"
 (
-  setup_test
   service_names="$(docker_compose_service_names <(echo "${compose_file}"))"
 
   ans="nb foo bar"
   cmp_elements service_names ans
 )
-end_test
 
 begin_test "filter docker variables"
 (
-  setup_test
-
   PROJECT_VAR1=15
   VAR2_DOCKER=16
   PROJECT_VAR1_DOCKER=17
@@ -447,23 +385,17 @@ begin_test "filter docker variables"
   [ "${VAR2_DOCKER-}" = "16" ]
   [ -z "${PROJECT_VAR1_DOCKER+set}" ]
 )
-end_test
 
 begin_test "Docker compose sanitize project names"
 (
-  setup_test
-
   [ "$(docker_compose_sanitize_project_name 'project/A@1.1_2')" = "a112" ]
   [ "$(docker_compose_sanitize_project_name 'project/A@1.1_2' 'auser:7')" = "auser7a112" ]
   [ "$(docker_compose_sanitize_project_name '' 'a-user:7')" = "auser7" ]
 )
-end_test
 
 command -v "${DOCKER}" >&/dev/null || skip_next_test
 begin_test "Just docker compose"
 (
-  setup_test
-
   JUST_PROJECT_PREFIX=TEST
 
   # Show calling from a different dir works
@@ -474,11 +406,9 @@ begin_test "Just docker compose"
   # I don't know why the -T is needed for this in Windows, but something between
   [ "$(Just-docker-compose -f "${TESTDIR}/Dockerfile" run -T test_hay)" = "horse" ]
 )
-end_test
 
 begin_test "Just docker compose override files"
 (
-  setup_test
   JUST_PROJECT_PREFIX=TEST
 
   ans="version: '3.2'
@@ -500,24 +430,19 @@ services:
   ttouch "${override_file}"
   [ "$(cat "${override_file}")" = "${ans}" ]
 )
-end_test
 
 begin_required_fail_test "Just docker compose required project prefix"
 (
-  setup_test
   set +eu
   unset JUST_PROJECT_PREFIX
   echo "${compose_file_hay}" > "${TESTDIR}/dc.yml"
   set -eu
   Just-docker-compose -f "${TESTDIR}/dc.yml" run test_hay
 )
-end_test
 
 (command -v "${DOCKER}" >&/dev/null && command -v "${DOCKER_COMPOSE}" >&/dev/null) || skip_next_test
 begin_test "Docker service running"
 (
-  setup_test
-
   echo "${compose_file_sleep}" > "${TESTDIR}/dsr.yml"
 
   "${DOCKER_COMPOSE}" -f "${TESTDIR}/dsr.yml" rm -s -f
@@ -530,7 +455,6 @@ begin_test "Docker service running"
   #Clean up
   "${DOCKER_COMPOSE}" -f "${TESTDIR}/dsr.yml" rm -s -f
 )
-end_test
 
 teardown()
 (

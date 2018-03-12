@@ -215,7 +215,7 @@ _begin_common_test ()
   test_file_name=${test_file_name#test-}
   test_description="$test_file_name - $1"
 
-  if [ "${tracking_touched_files}" = "1" ]; then
+  if [ "${tracking_touched_files-}" = "1" ]; then
     track_touched_file="$(mktemp -u)"
     ttouch "${track_touched_file}"
   fi
@@ -240,14 +240,23 @@ _begin_common_test ()
   # No longer running debug trap in test subshell
   set -T
 
-  # If bash, not sh, enable this nice safety feature
-  if [ -n "${BASH_VERSION+set}" ]; then
-    # # No longer determining subshell or not
-     _main_test_pid="${BASHPID-"$(bash -c 'echo $PPID')"}"
-    # This must be the LAST command in begin_test
-    trap _setup_test DEBUG
+  # determining subshell or not
+  get_pid #for macos
+  _main_test_pid="${BASHPID}"
+  # This must be the LAST command in begin_test
+  trap _setup_test DEBUG
+}
+
+get_pid()
+{
+  # If BASHPID is not set, you must be on a stupid mac
+  if [ -z "${BASHPID+set}" ]; then
+    bash -c 'echo $PPID' > .BASHPID
+    read BASHPID < .BASHPID
   fi
 }
+
+declare -i q=0
 
 _setup_test()
 {
@@ -255,21 +264,22 @@ _setup_test()
   trap - DEBUG
   set +T
 
-  if [ "${_main_test_pid}" = "${BASHPID-"$(bash -c 'echo $PPID')"}" ]; then
+  q+=1
+  declare -p q >&${stderr}
+  declare -p SHLVL>&${stderr}
 
+  get_pid #for macos
+
+  echo ${_main_test_pid} ${BASHPID} >&${stderr}
+  if [ "${_main_test_pid}" = "${BASHPID}" ]; then
     if [ "${BASH_COMMAND}" != "end_test" ]; then
       end_test "${_test_status}"
-      echo "WARNING: end_test not explicitly run after end of test">&${stderr}
-      echo "This *may* work, but you really should add end_test">&${stderr}
     fi
   else
     if [ "${BASH_COMMAND}" != "setup_test" ]; then
       setup_test
-      # echo "WARNING: setup_test not explicitly run at beginning of test">&${stderr}
-      # echo "This *may* work, but you really should add setup_test">&${stderr}
     fi
   fi
-
 }
 
 #****f* testlib.bsh/begin_test
