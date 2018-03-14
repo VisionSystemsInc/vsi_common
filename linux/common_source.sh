@@ -445,9 +445,9 @@ VSI_ARCH="$(uname -m)"
 #***
 case "${VSI_OS}" in
   darwin)
-    if command -v sysctl >/dev/null 2>&1; then # normal darwin
+    if command -v sysctl >/dev/null 2>&1; then # Normal darwin
       VSI_NUMBER_CORES="$(\sysctl -n hw.ncpu)"
-    elif [ -f /Volumes/SystemRoot/proc/cpuinfo ]; then #darling
+    elif [ -f /Volumes/SystemRoot/proc/cpuinfo ]; then # darling
       VSI_NUMBER_CORES="$(\grep processor /Volumes/SystemRoot/proc/cpuinfo | wc -l)"
       # Left trim white spaces
       VSI_NUMBER_CORES="${VSI_NUMBER_CORES#"${VSI_NUMBER_CORES%%[![:space:]]*}"}"

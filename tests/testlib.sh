@@ -184,7 +184,7 @@ trap "atexit" EXIT
 if declare -p BASH_SOURCE &>/dev/null; then
   PS4=$'+${BASH_SOURCE-null}:${LINENO})\t'
 else
-  #Not as accurate, but better than nothing
+  # Not as accurate, but better than nothing
   PS4=$'+${0}:${LINENO})\t'
 fi
 
@@ -195,7 +195,7 @@ _begin_common_test ()
   TESTDIR="${TRASHDIR}/test${tests}"
   mkdir -p "${TESTDIR}"
   pushd "$TESTDIR" &> /dev/null
-  # This makes calling end_test between tests "optional", but highly recommended,
+  # This makes calling end_test between tests "optional", but highly recommended.
   # end_test does have to be called after the last test, especially if teardown
   # is defined after the last test
   if [ -n "${test_description+set}" ]; then
@@ -205,7 +205,7 @@ _begin_common_test ()
   fi
   unset test_status
 
-  # Set flag defaults that could be overrideable in certain test types
+  # Set flag defaults that could be overrideable in certain test types.
   # This needs to be after end_test call above in order to keep end_test
   # optional
   expected_failure=${_expected_failure-0}
@@ -240,7 +240,7 @@ _begin_common_test ()
   err="${TESTDIR}/err"
   exec 1>"$out" 2>"$err"
 
-  # allow the subshell to exit non-zero without exiting this process
+  # Allow the subshell to exit non-zero without exiting this process
   set -x +e
 }
 
@@ -250,6 +250,8 @@ _begin_common_test ()
 # USAGE
 #   Mark the beginning of a test. A subshell should immediately follow this
 #   statement.
+# SEE ALSO
+#   testlib.sh/end_test
 # AUTHOR
 #   Ryan Tomayko
 #***
@@ -294,8 +296,8 @@ begin_required_fail_test()
 #   setup_test - Sets up the test
 # DESCRIPTION
 #   Once inside the () subshell, typically set -eu needs to be run, then other
-#   things such as checking to see if a test should be skipped, etc... need to
-#   be done. This is all encapulated into setup_test. This is required, without
+#   things such as checking to see if a test should be skipped, etc. need to
+#   be done. This is all encapsulated into setup_test. This is required; without
 #   it, end_test will know you forgot to call this and fail.
 #
 #   This is also the second part of creating a skippable test.
@@ -310,12 +312,14 @@ begin_required_fail_test()
 #     setup_test
 #     #test code here
 #   )
+# SEE ALSO
+#   testlib.sh/skip_next_test
 # AUTHOR
 #   Andy Neff
 #***
 setup_test()
 {
-  # Identify that setup_test was caleld
+  # Identify that setup_test was called
   touch "${TRASHDIR}/.setup_test"
 
   # Check to see if this test should be skipped
@@ -332,12 +336,14 @@ setup_test()
 # USAGE
 #   Mark the end of a test. Must be the first command after the test group, or
 #   else the return value will not be captured successfully.
+# SEE ALSO
+#   testlib.sh/begin_test
 # AUTHOR
 #   Ryan Tomayko
 #***
 end_test ()
 {
-  test_status="${1:-$?}" #This MUST be the first line of this function
+  test_status="${1:-$?}" # This MUST be the first line of this function
   set +x -e
   eval "exec 1>&${stdout} 2>&${stderr}"
   popd &> /dev/null
@@ -409,7 +415,7 @@ end_test ()
 #       [ "$(docker run -it --rm ubuntu:14.04 echo hi)" = "hi" ]
 #     )
 # SEE ALSO
-#   testlib.sh/setup_skip
+#   testlib.sh/setup_test
 # NOTES
 #   This must be done outside of the test, or else the skip variable will not
 #   be set and detected by end_test
@@ -423,7 +429,7 @@ skip_next_test()
 
 #****f* testlib.sh/not
 # NAME
-#   not - Returns true only when command fails
+#   not - Returns true only when the command fails
 # DESCRIPTION
 #   Since ! is ignored by "set -e", use not instead. This is just a helper to
 #   make unittests look nice and not need extra ifs everywhere
@@ -472,7 +478,7 @@ not()
 # Testing this idea...
 #****f* testlib.sh/not_s
 # NAME
-#   not_s - Returns true only when string version of command fails
+#   not_s - Returns true only when the string version of command fails
 # DESCRIPTION
 #   Since ! is ignored by "set -e", use not instead. This is just a helper to
 #   make unittests look nice and not need extra ifs everywhere
@@ -487,8 +493,8 @@ not()
 #   y=t.st
 #   not2 '[[ $x =~ $y ]]' # <-- notice single quotes.
 #
-#   While the single quotes aren't necessary, they still work, and will handle
-#   the more complicated situations easier
+#   While the single quotes aren't necessary, they handle the more complicated
+#   situations more easily
 # NOTES
 #   Uses eval
 # SEE ALSO
@@ -523,9 +529,9 @@ not_s()
 #   subshell block will not work. Setup is the logical place to put it
 # BUGS
 #   Does not work in sh, only bash. Uses array, and I didn't want to make this
-#   this use a string instead
+#   use a string instead
 #
-#   Not multiple write thread safe. Use a different file for each thread
+#   Not thread safe. Use a different file for each thread
 # SEE ALSO
 #   testlib.sh/cleanup_touched_files
 # AUTHOR
@@ -538,7 +544,7 @@ track_touched_files()
 
 #****if* testlib.sh/ttouch
 # NAME
-#   ttouch - Touch function that should feel like the original touch command
+#   ttouch - Touch function that should behave like the original touch command
 # SEE ALSO
 #   testlib.sh/track_touched_files
 # AUTHOR
@@ -584,8 +590,8 @@ cleanup_touched_files()
   local touched_files
   local line
 
-  # This will normally get called an extra time at exist, so the existence of
-  # the file acts as check.
+  # This will normally get called an extra time at exit, so the existence of
+  # the file acts as a check.
   if [ -f "${track_touched_file}" ]; then
     while IFS='' read -r -d '' line 2>/dev/null || [ -n "$line" ]; do
       touched_files+=("$line")
