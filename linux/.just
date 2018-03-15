@@ -36,11 +36,11 @@ _just()
 
   shopt -s extglob # Why is this needed?
 
-  COMPREPLY=()   # Array variable storing the possible completions.
+  COMPREPLY=() # Array variable storing the possible completions.
 
   # $1 - command aka $0
-  # $2 - current word on, can be "" if you just typed a space
-  # $3 - last work completed
+  # $2 - current word; can be "" if you just typed a space
+  # $3 - last word completed
   # COMP_WORDS - All args
 
   # Emulate how the just systems finds all of its help files
@@ -63,10 +63,10 @@ _just()
   # Get all command info once
   local parsed_help_a
   _just_parse_helps ${JUST_HELP_FILES+"${JUST_HELP_FILES[@]}"}
-  #Get just command names and remove the comments
+  # Get just command names and remove the comments
   parsed_help_a=("${parsed_help_a[@]%% ${JUST_HELP_SEPARATOR} *}")
 
-  #Get main commands only
+  # Get main commands only
   local just_commands=()
   while IFS= read -r -d '' i || [ -n "${i}" ]; do
     # Remove all entries containing an _, and sort them and remove duplicates
@@ -75,14 +75,14 @@ _just()
     fi
   done < <(MIFS='\\x00' join_a_out "${parsed_help_a[@]}" | sort -u -z)
 
-  #Get sub_commands
+  # Get sub_commands
   local just_subcommands
   just_subcommands=($(IFS=$'\n'; (_just_subcommands_from_array | sort -u ) <<< "${parsed_help_a[*]}"))
 
   # Declare here so I can use it in .just plugin
   local just_subtargets=()
 
-  #Call local .just if it exist
+  # Call local .just if it exists
   if [ -f "${just_dir}/.just" ]; then
     . "${just_dir}/.just"
   fi
@@ -94,7 +94,7 @@ _just()
     return 0
   fi
 
-  # search for the last subcommand used. If a match is found, add it to the total
+  # Search for the last subcommand used. If a match is found, add it to the total
   # list of just_commands
   for (( i=${#COMP_WORDS[@]}-1; i>0; i--)); do
     if isin "${COMP_WORDS[$i]}" "${just_subcommands[@]}"; then

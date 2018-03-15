@@ -1,5 +1,5 @@
 #!/usr/bin/env false
-#Source this script for docker specific helper functions for just or other
+# Source this script for docker specific helper functions for just or other
 
 : ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
 source "${VSI_COMMON_DIR}/linux/mount_tools.bsh"
@@ -91,7 +91,7 @@ function is_dir_and_not_exist()
 # NOTES
 #   Requires perl be installed
 # BUGS
-#   Cannot determine the differece between blank and unset lables. See
+#   Cannot determine the difference between blank and unset labels. See
 #   container_has_label to handle that ambiguity.
 # AUTHOR
 #   Andy Neff
@@ -142,7 +142,7 @@ function container_has_label()
 #   docker_premkdir - Convenient wrapper to deal with the MINGW screw ups
 # DESCRIPTION
 #   Preempt one of docker's annoying behaviors of creating directories that
-#   don't exist as root:root, and make the directory yourself.
+#   don't exist with root:root ownership, and just make the directory yourself.
 #
 #   When the argument is a docker volume, nothing should happen. Docker auto
 #   creates those just fine.
@@ -150,8 +150,8 @@ function container_has_label()
 #   $1 - host directory name or docker volume
 # NOTES
 #   Always creates the directory with 777 permission. This is to maximize the
-#   chances that it works. If you don't want this, the easy solution is to
-#   create the directory yourself. This is more of an emergency catch. For this
+#   chances that it works. If you don't want this, the easiest solution is to
+#   create the directory yourself. This is more of a last resort. For this
 #   reason, when the directory is created, a message is printed.
 #
 #   When a directory doesn't exist, it is assumed it is a directory, and not a
@@ -168,10 +168,10 @@ function docker_premkdir()
     host_dir="${host_dir//\\//}"
   fi
 
-  if is_dir_and_not_exist "${host_dir}"; then #if not a file or dir
+  if is_dir_and_not_exist "${host_dir}"; then # if not a file or dir
     echo "Missing directory ${host_dir} created with 777" >&2
-    mkdir -p "${host_dir}" #make the dir
-    chmod 777 "${host_dir}" #Blow open permissions
+    mkdir -p "${host_dir}" # make the dir
+    chmod 777 "${host_dir}" # blow open permissions
   fi
 }
 
@@ -208,21 +208,21 @@ function docker_host_dir()
 
 #****f* docker_functions.bsh/docker_parse_volume_string
 # NAME
-#   docker_parse_volume_string - Split the docker volume string up
+#   docker_parse_volume_string - Split up the docker volume string
 # DESCRIPTION
 #   Docker volume strings can contain optional flags, and depending on windows
 #   or POSIX operating systems, have different rules, etc... This function will
-#   universially split the string up.
+#   universally split the string up.
 # INPUTS
-#   $1 - The volume string
+#   $1 - The volume string (source:destination:flags)
 # OUTPUT
 #   volume_host - Host path part of the string
 #   volume_docker - Docker path part of the string
-#   volume_flags - Extra optional flags part of the string. May be empty
+#   volume_flags - Extra optional flags part of the string; may be empty
 #   Returns 1 if regex is not matched, else return 0
 # NOTES
 #   Based off of docker 17.12 syntax. If new flags are added, the regex must be
-#   updated
+#   updated.
 #
 #   Not actually a bug, but a string like "d:/test:ro" would be parsed as host
 #   path "D:\test" and docker path "ro", NOT internal volume "d", docker path
@@ -268,7 +268,7 @@ function docker_parse_volume_string()
 # OUTPUT
 #   stdout - The argument that should go with the -v to docker for mounting
 # USAGE
-#   Mainly fo the docker and docker-compose CLI -v flags
+#   Mainly for the docker and docker-compose CLI -v flags
 # BUGS
 #   The docker directory is not optional if the host mount is a volume
 # AUTHOR
@@ -374,8 +374,8 @@ function Exec-Docker(){ DOCKER_EXEC=1 Docker "${@}";}
 # NAME
 #   Docker - Helper function to execute the right docker command, or just dryrun
 # DESCRIPTION
-#   Instead of calling the docker command directly, the Docker command should be
-#   called instead (for all dryrun-able activities. Simple commands like
+#   Instead of calling the docker command directly, this Docker function should
+#   be called instead (for all dryrun-able activities. Simple commands like
 #   inspect, ps, etc. don't make as much sense to dryrun, as the reset of the
 #   script will never be executed, thus rendering dryrun useless.)
 # INPUTS
@@ -413,7 +413,7 @@ function _Docker()
     docker_extra_command_args+=(--rm)
   fi
 
-  #Indirect add DOCKER_COMPOSE_EXTRA_{COMMAND}_ARGS
+  # Indirectly append DOCKER_EXTRA_{COMMAND}_ARGS
   extra_args_var=$(tr '[a-z]' '[A-Z]' <<< "${docker_command}")
   extra_args_var="DOCKER_EXTRA_${extra_args_var}_ARGS[@]"
   docker_extra_command_args+=(${!extra_args_var+"${!extra_args_var}"})
@@ -537,17 +537,15 @@ function docker-compose-volumes()
 #   Parse docker-compose's arguments and pull out a few important pieces of
 #   information (See OUTPUT)
 # INPUTS
-#   [JUST_DOCKER_COMPOSE_DIR] - By default, the docker-compose files will start
-#                               being searched for in the JUSTFILE directory,
-#                               and search up the parent dirs until / is hit.
-#                               This should give a more predictable behavior when
-#                               running just from any subdirectory from the
-#                               project. However, if you wish to the disable this
-#                               behavior and start searching for a docker compose
+#   [JUST_DOCKER_COMPOSE_DIR] - By default, the docker-compose files will
+#                               initially be searched for in the JUSTFILE
+#                               directory, and then up the parent dirs until /
+#                               is hit. However, if you wish to the disable this
+#                               behavior and start searching for a docker-compose
 #                               file from the current directory where "just" is
-#                               called, then set to an empty string. You can also
-#                               set to a specific directory to start searching
-#                               from within that directory.
+#                               called, then set this var to an empty string. You
+#                               can also set to a specific directory to start
+#                               searching from within that directory.
 #   $1.. - Arguments to be sent to docker-compose command
 # OUTPUT
 #   docker_compose_args - Arguments to docker-compose, before the docker-compose
@@ -564,8 +562,8 @@ function docker-compose-volumes()
 #     docker-compose "${docker_compose_args[@]}" "${docker_compose_command}" \
 #                    "${docker_compose_command_args[@]}"
 # EXAMPLE
-#   To start searching for docker-compose.yml in directory where "just" is called
-#   Justfile
+#   To start searching for docker-compose.yml in the directory where "just" is called:
+#   (Justfile snippet)
 #
 #     target) # Test target
 #       JUST_DOCKER_COMPOSE_DIR="" Just-docker-compose run target
@@ -577,11 +575,11 @@ function docker-compose-volumes()
 #   : ${JUST_DOCKER_COMPOSE_DIR="${PROJECT_CWD}/docker_dir"}
 #
 # NOTES
-#   Since the -f argument overrides all other forms of choosing the compose file
-#   the docker_compose_args are modified to include the -f notation, if the
-#   other methods were used. This will not change the behavior of the
+#   Because the -f argument overrides all other forms of choosing the compose
+#   file, the docker_compose_args are updated to use this notation instead of
+#   other methods that may be used. This will not change the behavior of the
 #   docker-compose command run, but will make adding additional compose files
-#   a lot easier
+#   a lot easier.
 # AUTHOR
 #   Andy Neff
 #***
@@ -646,7 +644,7 @@ function parse-docker-compose()
         esac
         shift 2
         ;;
-      # Anything else must be a docker compose command.
+      # Anything else must be a docker compose command
       *)
         docker_compose_command="$1"
         shift 1
@@ -691,9 +689,9 @@ function parse-docker-compose()
     done
   fi
 
-  # project name argument wins
+  # project-name flag wins
   if [ "${docker_compose_project_name:+set}" != "set" ]; then
-    # Then environment variable,
+    # Then environment variable
     if [ "${COMPOSE_PROJECT_NAME:+set}" = "set" ]; then
       docker_compose_project_name="${COMPOSE_PROJECT_NAME}"
     elif [ ${#docker_compose_files[@]} -ne 0 ]; then
@@ -746,9 +744,8 @@ function compose_path_separator()
 #   DOCKER_COMPOSE_EXTRA_{subcommand}_ARGS - Array of extra arguments inserted
 #                                            right after the docker subcommand
 #   DOCKER_COMPOSE_AUTOREMOVE - Automatically add the --rm flag to
-#                               docker-compose run commands
-#   when using the Docker-compose helper function
-
+#                               docker-compose run commands when using the
+#                               Docker-compose helper function
 #   DRYRUN - Optional variable inserted at the beginning of all docker commands.
 #            Useful for setting to "echo" or similar for dryrun mode
 #   $1.. - Arguments to be sent to docker-compose command
@@ -784,7 +781,7 @@ function _Docker-compose()
     docker_compose_extra_command_args+=(--rm)
   fi
 
-  #Indirect add DOCKER_COMPOSE_EXTRA_{COMMAND}_ARGS
+  # Indirect: add DOCKER_COMPOSE_EXTRA_{COMMAND}_ARGS
   extra_args_var=$(tr '[a-z]' '[A-Z]' <<< "${docker_compose_command}")
   extra_args_var="DOCKER_COMPOSE_EXTRA_${extra_args_var}_ARGS[@]"
   docker_compose_extra_command_args+=(${!extra_args_var+"${!extra_args_var}"})
@@ -803,8 +800,8 @@ function _Docker-compose()
 #   Just-docker-compose - Docker-compose with advance just features
 # INPUTS
 #   $1... - Arguments to docker-compose
-#   JUST_PROJECT_PREFIX - Typically, the project name that all the variables are
-#                         prepended with. EXAMPLE would cover EXAMPLE_VARIABLE
+#   JUST_PROJECT_PREFIX - Typically, the project name that is prepended to all
+#                         the variables. EXAMPLE would cover EXAMPLE_VARIABLE
 #   [COMPOSE_VERSION] - The docker compose yaml version number is auto
 #                       determined by parsing the existing files, and is used in
 #                       the auto generated files. In order to bypass this, you
@@ -820,22 +817,22 @@ function _Docker-compose()
 #   configuration.
 #
 #   See docker_compose_override/generate_docker_compose_override for more
-#   information
+#   information.
 #
 #   Determines which docker compose yaml files to use by mimicking the
 #   behavior of docker-compose, which includes querying the COMPOSE_FILE
-#   environment variable or trying the default files
+#   environment variable or trying the default files.
 # BUGS
 #   A temp file is left behind in dryrun mode so that dryrun mode will actually
 #   work. As long as the commands echo'd by dryrun are executed, the temp file
 #   will be cleaned up, as one of them is rm. So ultimately, this is by design.
 #
-#   Using this function with windows paths is not currently supported
+#   Using this function with windows paths is not currently supported.
 #
-#   You can not use process substitution for the docker-compose.yml file, since
-#   bash has to read it before docker-compose reads it. So no:
+#   You can not use process substitution for the docker-compose.yml file because
+#   bash has to read it before docker-compose reads it. So this will not work:
 #   Just-docker-compose -f <(echo "${compose_file}") run test
-#   You have to use files
+#   You have to use files.
 # SEE ALSO
 #   docker_compose_override/generate_docker_compose_override
 # AUTHOR
