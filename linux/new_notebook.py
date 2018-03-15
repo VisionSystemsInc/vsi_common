@@ -23,7 +23,7 @@ class Popen(Popen_orig):
     assert rv == 0
     return rv
 
-#https://stackoverflow.com/a/5227009/4166604
+# https://stackoverflow.com/a/5227009/4166604
 def which(file, windows_extension='exe'):
   if sys.platform=='win32':
     file=file+os.path.extsep+windows_extension
@@ -82,7 +82,7 @@ if sys.version_info.major == 3:
 else:
   python2 = sys.executable
 
-# If I am supposer to look for the other python, do so.
+# If I am supposed to look for the other python, do so.
 if not args.one_python:
   if sys.version_info.major == 3:
     python2 = which('python2', 'exe')

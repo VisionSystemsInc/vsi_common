@@ -24,36 +24,36 @@ source "${VSI_COMMON_DIR}/linux/elements.bsh"
 #****f* docker_entrypoint.bsh/docker_setup_user
 # NAME
 #   docker_setup_user - Create user/group
-# INPUTS
-#   DOCKER_ACCOUNTS_CREATE_USER - Enables the adding of a new user. If the
-#                                 particular username already exist, it is
-#                                 replaced. Default: 1
-#   DOCKER_ACCOUNTS_CREATE_GROUPS - Enables the adding of new groups. The first
-#                                   group is set as the user's primary group.
-#                                   Each subsequent group is set as an
-#                                   additional group, and the user is added as
-#                                   a member of each of these groups. If a group
-#                                   name already exists, an increasing number
-#                                   is appended until the name does not exist.
-#                                   if the GID already exists, it is just used
-#                                   again. Default: 1
-#   DOCKER_ACCOUNTS_POSIX_GROUPS - Enables filtering group names removing
-#                                  non-posix characters. This is important for
-#                                  operating systems like CentOS, etc... that
-#                                  actually follow the posix rules, unlike
-#                                  Debian. If 100% of the characters are
-#                                  non-posix, the name becomes simply "group".
-#                                  Default: 1
-#   DOCKER_USERNAME - The username used to create the new user. Default: user
-#   DOCKER_UID - The UID used when creating the new user. Default: 1000
-#   DOCKER_GROUP_NAMES - The group name(s) used when creating the groups for
-#                        the new user. IFS delimited string (default: space,
-#                        tab, newline). Default: user (only the primary group)
-#   DOCKER_GIDS - The GIDs used when creating the new groups. IFS delimited
-#                 string. Default: 1000
-#   DOCKER_HOME - The home directory used when creating a new user. When the new
-#                 directory is created, it is owned (non-recursively) by the
-#                 UID/GID. Default: /home/${DOCKER_USERNAME}
+# PARAMETERS
+#   [DOCKER_ACCOUNTS_CREATE_USER] - Enables the adding of a new user. If the
+#                                   particular username already exist, it is
+#                                   replaced. Default: 1
+#   [DOCKER_ACCOUNTS_CREATE_GROUPS] - Enables the adding of new groups. The
+#                                     first group is set as the user's primary
+#                                     group. Each subsequent group is set as an
+#                                     additional group, and the user is added as
+#                                     a member of each of these groups. If a group
+#                                     name already exists, an increasing number
+#                                     is appended until the name does not exist.
+#                                     if the GID already exists, it is just used
+#                                     again. Default: 1
+#   [DOCKER_ACCOUNTS_POSIX_GROUPS] - Enables filtering group names removing
+#                                    non-posix characters. This is important for
+#                                    operating systems like CentOS, etc... that
+#                                    actually follow the posix rules, unlike
+#                                    Debian. If 100% of the characters are
+#                                    non-posix, the name becomes simply "group".
+#                                    Default: 1
+#   [DOCKER_USERNAME] - The username used to create the new user. Default: user
+#   [DOCKER_UID] - The UID used when creating the new user. Default: 1000
+#   [DOCKER_GROUP_NAMES] - The group name(s) used when creating the groups for
+#                          the new user. IFS delimited string (default: space,
+#                          tab, newline). Default: user (only the primary group)
+#   [DOCKER_GIDS] - The GIDs used when creating the new groups. IFS delimited
+#                   string. Default: 1000
+#   [DOCKER_HOME] - The home directory used when creating a new user. When the new
+#                   directory is created, it is owned (non-recursively) by the
+#                   UID/GID. Default: /home/${DOCKER_USERNAME}
 # AUTHOR
 #   Andy Neff
 #***
@@ -71,12 +71,12 @@ function docker_setup_user()
   : ${DOCKER_GIDS=1000}
   : ${DOCKER_HOME=/home/${DOCKER_USERNAME}}
 
-  #Convert to arrays
+  # Convert to arrays
   DOCKER_GIDS=(${DOCKER_GIDS})
   DOCKER_GROUP_NAMES=(${DOCKER_GROUP_NAMES})
 
   if [ "${DOCKER_ACCOUNTS_POSIX_GROUPS}" == "1" ]; then
-    #Remove non-posix characters
+    # Remove non-posix characters
     for i in "${!DOCKER_GROUP_NAMES[@]}"; do
       DOCKER_GROUP_NAMES[$i]="$(sed 's|[^0-9a-zA-Z._ -]||g
                                      # in cases where 100% of characters were non-posix
@@ -124,19 +124,16 @@ function docker_setup_user()
 #   container and a symlink is created to link the desired locations. This
 #   function creates these symlinks based on the // separated string
 #   JUST_DOCKER_ENTRYPOINT_LINKS. e.g., "source//destination//source//destination".
-# NOTES
-#   Links within other links are not created. This would just corrupt the
-#   directories on the host side.
 # PARAMETERS
-#   JUST_DOCKER_ENTRYPOINT_LINKS - // delimited string of symlinks to create, e.g.,
-#                                  "source//destination//source//destination//..."
-#   DOCKER_LINK_MOUNTS_FORCE - Adds a -f to ln commands, disabled by default.
-#                              Set this flag to enable.
-#   DOCKER_LINK_MOUNTS_NOT_IN_MOUNTS - Prevents from making symlinks in mounted
-#                                      subdirectories. This is not the default
-#                                      docker behavior, so this feature is
-#                                      disabled by default. Set this flag to
-#                                      enable.
+#   JUST_DOCKER_ENTRYPOINT_LINKS - // delimited string of symlinks to create,
+#                                  e.g., "source//destination//source//destination"
+#   [DOCKER_LINK_MOUNTS_FORCE] - Adds a -f to ln commands. Disabled by default.
+#                                Set this flag to enable.
+#   [DOCKER_LINK_MOUNTS_NOT_IN_MOUNTS] - Prevents making symlinks in mounted
+#                                        subdirectories. This is not the default
+#                                        docker behavior, so this feature is
+#                                        disabled by default. Set this flag to
+#                                        enable.
 # AUTHOR
 #   Andy Neff
 #***
@@ -153,7 +150,7 @@ function docker_link_mounts()
 
   local MIFS=${MIFS-:} # change to // when done
   # Convert to array, using // as separator. This means you can't have unclean
-  # paths with // in them, but is an acceptable condition
+  # paths with // in them, but this is an acceptable limitation
   MIFS="${MIFS}" split_s JUST_DOCKER_ENTRYPOINT_LINKS ${JUST_DOCKER_ENTRYPOINT_LINKS+"${JUST_DOCKER_ENTRYPOINT_LINKS}"}
 
   if [ -n "${DOCKER_LINK_MOUNTS_FORCE+set}" ]; then
