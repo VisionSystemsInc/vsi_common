@@ -2,6 +2,7 @@
 
 : ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
 source "${VSI_COMMON_DIR}/linux/mount_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
 
 #****F* just/docker_compose_override
 # NAME
@@ -170,7 +171,7 @@ function generate_docker_compose_override()
 
     # Dynamically add volumes
     for volume in ${!volumes_name_all+"${!indirect_all}"} ${!volumes_name+"${!indirect}"}; do
-      docker_parse_volume_string "$volume"
+      docker_parse_volume_string "$volume" # sets volume_host, volume_docker, and volume_flags
 
 
       # If it doesn't exist, attempt to make it as this user. Better than root
@@ -181,10 +182,19 @@ function generate_docker_compose_override()
         volume_host=$(real_path "${volume_host}")
       fi
 
+      # A trap is set on ERR in ./just that is printing to stderr in the event
+      # of a non-zero return value. There is no catching the return value to
+      # prevent this, nor redirecting to stderr. Instead, disable the trap
+      # inheritance.
+      unset_flag E
+      local mp_rv=0
+      host_mount_point="$(mount_point "${volume_host}" nfs nfs3 nfs4)" || mp_rv=$?
+      reset_flag E
+
          # If the volume is not a docker volume
       if [ "${volume_host:0:1}" = "/" ] &&
          # If the mount point is nfs AND it isn't already the same as the mount
-         host_mount_point="$(mount_point "${volume_host}" nfs nfs3 nfs4)" && \
+         [ "${mp_rv}" -eq 0 ] && \
          # The edge case is the volume_host is exactly the mount point, don't
          # do anything special for that case
          [ "${host_mount_point}" != "${volume_host}" ]; then
