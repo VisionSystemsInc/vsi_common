@@ -212,7 +212,7 @@ _begin_common_test ()
   required_fail=${_required_fail-0}
 
   # Run setup if this is the first test
-  if [ "${tests}" -eq "0" ] && type -t setup &>/dev/null && [ "$(command -v setup)" == "setup" ]; then
+  if [ "${tests}" -eq 0 ] && type -t setup &>/dev/null && [ "$(command -v setup)" == "setup" ]; then
     setup
   fi
 
