@@ -122,12 +122,14 @@ function docker_setup_user()
 #   mounts, the desired mount will not be possible in some cases such as nfs
 #   with squash root. Instead the base mount point is mounted into the
 #   container and a symlink is created to link the desired locations. This
-#   function creates these symlinks based on the colon separated string
+#   function creates these symlinks based on the // separated string
 #   JUST_DOCKER_ENTRYPOINT_LINKS. e.g., "source//destination//source//destination".
 # NOTES
 #   Links within other links are not created. This would just corrupt the
 #   directories on the host side.
 # PARAMETERS
+#   JUST_DOCKER_ENTRYPOINT_LINKS - // delimited string of symlinks to create, e.g.,
+#                                  "source//destination//source//destination//..."
 #   DOCKER_LINK_MOUNTS_FORCE - Adds a -f to ln commands, disabled by default.
 #                              Set this flag to enable.
 #   DOCKER_LINK_MOUNTS_NOT_IN_MOUNTS - Prevents from making symlinks in mounted
@@ -143,6 +145,11 @@ function docker_link_mounts()
   local options
   local x
   local y
+
+  # Short circuit in the case that JUST_DOCKER_ENTRYPOINT_LINKS is unset
+  if ! declare -p JUST_DOCKER_ENTRYPOINT_LINKS &>/dev/null; then
+    return 0
+  fi
 
   local MIFS=${MIFS-:} # change to // when done
   # Convert to array, using // as separator. This means you can't have unclean
