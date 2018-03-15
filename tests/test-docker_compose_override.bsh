@@ -137,6 +137,39 @@ setup_mock()
   TESTDIR="$(real_path "${TESTDIR}")"
   function df()
   {
+    return 1
+  }
+}
+
+begin_test "Generate docker-compose override"
+(
+  setup_test
+  setup_mock
+
+  TEST_VOLUMES=("${TESTDIR}/a/a:/this is  a   test")
+  TEST_VOLUMES+=("${TESTDIR}/a:/this is  a   test")
+  TEST_VOLUMES+=("${TESTDIR}/a/b:/this is  a   test")
+  TEST_VOLUMES+=("${TESTDIR}/a/c:/this is  a   test")
+  TEST_VOLUMES+=("${TESTDIR}/b/a:/foo/bar")
+
+  override="$(generate_docker_compose_override TEST test1)"
+
+  ans="$(head)$(service test1)$(volumes)"
+  ans+="$(vol "${TESTDIR}/a/a:/this is  a   test")"
+  ans+="$(vol "${TESTDIR}/a:/this is  a   test")"
+  ans+="$(vol "${TESTDIR}/a/b:/this is  a   test")"
+  ans+="$(vol "${TESTDIR}/a/c:/this is  a   test")"
+  ans+="$(vol "${TESTDIR}/b/a:/foo/bar")"
+
+  [ "${override}" = "${ans}" ]
+)
+end_test
+
+setup_mock()
+{
+  TESTDIR="$(real_path "${TESTDIR}")"
+  function df()
+  {
     local last_arg=${!#}
 
     if [[ ${last_arg} = ${TESTDIR}* ]]; then
@@ -147,7 +180,7 @@ setup_mock()
   }
 }
 
-begin_test "just_docker_entrypoint_links"
+begin_test "Generate docker-compose override on nfs"
 (
   setup_test
   setup_mock
