@@ -3,7 +3,7 @@
 #   common_source.sh - Cross OS compatible common values files
 # DESCRIPTION
 #   There are many differences between bash scripts between Windows (using
-#   mingw/cygwin), MacOS (which uses a MODIFIED version of bash 3.2), and the
+#   mingw/cygwin), macOS (which uses a MODIFIED version of bash 3.2), and the
 #   many versions of Linux out there, that primarily use bash 4+. In addition to
 #   the shell behaving different, many piece of basic information are retrieved
 #   in different ways, such as the kind of OS, number of processor cores, etc...
