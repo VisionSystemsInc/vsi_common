@@ -110,6 +110,24 @@ function docker_setup_user()
   fi
 }
 
+#****f* docker_entrypoint.bsh/retry_as_user
+# NAME
+#   retry_as_user - If the command fails, retry it as DOCKER_USERNAME
+# USAGE
+#   Try to run a command as the current user (root); if that fails, run the
+#   command as DOCKER_USERNAME.
+# INPUTS
+#   $1 - The command to execute
+# PARAMETERS
+#   [DOCKER_USERNAME] - The username used to create the new user. Default: user
+# AUTHOR
+#   Andy Neff
+#***
+function retry_as_user()
+{
+  "${@}" 2>/dev/null || gosu "${DOCKER_USERNAME}" "${@}"
+}
+
 #****f* docker_entrypoint.bsh/docker_link_mounts
 # NAME
 #   docker_link_mounts - Create symlinks based on JUST_DOCKER_ENTRYPOINT_LINKS
@@ -134,6 +152,7 @@ function docker_setup_user()
 #                                        docker behavior, so this feature is
 #                                        disabled by default. Set this flag to
 #                                        enable.
+#   [DOCKER_USERNAME] - The username used to create the new user. Default: user
 # AUTHOR
 #   Andy Neff
 #***
@@ -142,6 +161,8 @@ function docker_link_mounts()
   local options
   local x
   local y
+
+  : ${DOCKER_USERNAME=user}
 
   # Short circuit in the case that JUST_DOCKER_ENTRYPOINT_LINKS is unset
   if ! declare -p JUST_DOCKER_ENTRYPOINT_LINKS &>/dev/null; then
@@ -179,10 +200,10 @@ function docker_link_mounts()
 
 
   if [ -n "${DOCKER_LINK_MOUNTS_NOT_IN_MOUNTS+set}" ]; then
-    # Filter out destinations that are sub-directories of another directory;
-    # these links may fail anyway if the directory already exists. We also
-    # don't want to make symlinks in host directories if we can help it. symlinks
-    # are strictly worse than bind mounts; don't try to make them as capable.
+    # Filter out destinations that are subdirectories of another volume; these
+    # links may fail anyway if the directory already exists. We also don't want
+    # to make symlinks in host directories if we can help it. symlinks are
+    # strictly worse than bind mounts; don't try to make them as capable.
     for x in ${!link_destinations[@]}; do
       for ((y=0; y<x; y++)); do
         if [ -n "${link_destinations[$y]+set}" ] && \
@@ -199,15 +220,17 @@ function docker_link_mounts()
     for ((x=${#JUST_DOCKER_ENTRYPOINT_LINKS[@]}-2; x>=0; x-=2)); do
       if [ -n "${link_destinations[$y]+set}" ] && \
          [ "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}" == "${link_destinations[$y]}" ]; then
-        mkdir -p "$(dirname "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}")"
+        retry_as_user mkdir -p "$(dirname "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}")"
 
-        if [ ! -e "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}" ] || \
+        # Don't overwrite an existing file unless explicitly requested
+        if ! retry_as_user test -e "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}" || \
            [ -n "${DOCKER_LINK_MOUNTS_FORCE+set}" ]; then
-          ln -s ${options-} "${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}" "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}"
+          # The gosu version covers the case when the link's destination is
+          # in a subdirectory of another volume that is on an nfs mount with
+          # squash root. NOTE the containing volume was previously symlink'd
+          # into place via this symlink indirection.
+          retry_as_user ln -s ${options-} "${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}" "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}"
         fi
-        # This gosu version only covers a small corner case. It was deemed not worth
-        # including in the final cut. Will revisit if it is deemed necessary
-        # gosu ${DOCKER_USERNAME} ln -T -s ${options-} "${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}" "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}" || :
         break
       fi
     done
