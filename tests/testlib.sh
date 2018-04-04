@@ -122,6 +122,18 @@ skipped=0
 #   Andy Neff
 #***
 
+#****d* testlib.sh/TESTLIB_RUN_SINGLE_TEST
+# NAME
+#   TESTLIB_RUN_SINGLE_TEST - Run a single test
+# DESCRIPTION
+#   Instead of running all the tests in a test file, all tests not matching the
+#   description exactly to the value of TESTLIB_RUN_SINGLE_TEST will be skipped.
+#   Useful for debugging a specific test/piece of code
+#   Default: unset
+# AUTHOR
+#   Andy Neff
+#***
+
 #****f* testlib.sh/atexit
 # NAME
 #   atexit - Function that runs at process exit
@@ -229,6 +241,11 @@ _begin_common_test ()
 
   if [ "${TESTLIB_SHOW_TIMING-0}" == "1" ]; then
     _time_0=$(get_time_seconds)
+  fi
+
+  if [ "${TESTLIB_RUN_SINGLE_TEST+set}" = "set" ] && \
+     [ "$1" != "${TESTLIB_RUN_SINGLE_TEST}" ]; then
+    skip_next_test
   fi
 
   find_open_fd stdout
