@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+
+. "$(dirname ${BASH_SOURCE[0]})/testlib.sh"
+
+VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+
+begin_test "group names"
+(
+  setup_test
+
+  function id()
+  {
+    printf 'foo\0users\0domain users\0domain admins\0'
+  }
+
+  export -f id
+
+  [ "$("${VSI_COMMON_DIR}/linux/group_names")" = "foo users domain_users domain_admins" ]
+)
+end_test
+
+begin_test "group names darwin"
+(
+  setup_test
+
+  function id()
+  {
+    echo 'uid=1234(user) gid=1000(DOMAIN1\foo) groups=1000(DOMAIN1\foo),1001(DOMAIN1\domain users),12(everyone),62(netaccounts),399(com.apple.access_ssh),701(com.apple.sharepoint.group.1),702(1),206(com.apple.loginwindow.netaccounts),223(com.apple.access_loginwindow)'
+  }
+
+  export -f id
+
+  [ "$(OSTYPE=darwin16 "${VSI_COMMON_DIR}/linux/group_names")" = "DOMAIN1\foo DOMAIN1\domain_users everyone netaccounts com.apple.access_ssh com.apple.sharepoint.group.1 1 com.apple.loginwindow.netaccounts com.apple.access_loginwindow" ]
+)
+end_test
