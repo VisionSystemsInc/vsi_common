@@ -175,24 +175,27 @@ function discover_cuda_info()
     local card_info cuda_card_arches cuda_card_families
     local x y
 
-    card_info="$(${DEVICE_QUERY-deviceQuery} | \grep -E "CUDA Capability Major/Minor version number|^Device")"
-    CUDA_CARD_ARCHES=($(echo "${card_info}" | \grep "CUDA Capability Major/Minor version number" | \awk '{print $NF}'))
-    IFS=$'\n'
-    CUDA_CARDS=($(echo "${card_info}" | \grep ^Device | \awk '{$1=$2=""; $0=$0; $1=$1}1' | \sed 's|"||g'))
-    IFS="${OLD_IFS}"
-    CUDA_CARD_FAMILIES=()
-    cuda_card_arches=(1 2 3 5 6 7) # Major version
-    cuda_card_families=(Tesla Fermi Kepler Maxwell Pascal Volta) # Family name
-    for x in ${CUDA_CARD_ARCHES+"${CUDA_CARD_ARCHES[@]}"}; do
-      for y in "${!cuda_card_arches[@]}"; do
-        if [ "${x:0:1}" == "${cuda_card_arches[$y]}" ]; then
-          CUDA_CARD_FAMILIES+=("${cuda_card_families[$y]}")
-          continue 2
-        fi
+    # deviceQuery may fail, for example, if running without nvidia-docker or if
+    # the CUDA driver version is insufficient for CUDA runtime version
+    if card_info="$(${DEVICE_QUERY-deviceQuery} | \grep -E "CUDA Capability Major/Minor version number|^Device")"; then
+      CUDA_CARD_ARCHES=($(echo "${card_info}" | \grep "CUDA Capability Major/Minor version number" | \awk '{print $NF}'))
+      IFS=$'\n'
+      CUDA_CARDS=($(echo "${card_info}" | \grep ^Device | \awk '{$1=$2=""; $0=$0; $1=$1}1' | \sed 's|"||g'))
+      IFS="${OLD_IFS}"
+      CUDA_CARD_FAMILIES=()
+      cuda_card_arches=(1 2 3 5 6 7) # Major version
+      cuda_card_families=(Tesla Fermi Kepler Maxwell Pascal Volta) # Family name
+      for x in ${CUDA_CARD_ARCHES+"${CUDA_CARD_ARCHES[@]}"}; do
+        for y in "${!cuda_card_arches[@]}"; do
+          if [ "${x:0:1}" == "${cuda_card_arches[$y]}" ]; then
+            CUDA_CARD_FAMILIES+=("${cuda_card_families[$y]}")
+            continue 2
+          fi
+        done
+        CUDA_CARD_FAMILIES+=("Family Unknown")
       done
-      CUDA_CARD_FAMILIES+=("Family Unknown")
-    done
-  # Else attempt to use nvidia-docker
+    fi
+  # Else attempt to use the nvidia-docker daemon
   elif nvidia_docker_is_running nvidia-docker-plugin || declare -p NV_HOST &>/dev/null; then
     local download_cmd
     local card_info
@@ -232,7 +235,7 @@ function discover_cuda_info()
 # EXAMPLE
 #     $ echo "${CUDA_ARCHES[@]}"
 #     20 30 32 35 37 50 52 53 60 61 62
-# 
+#
 #   Adding the periods to the architecture version number:
 #
 #   y=()
