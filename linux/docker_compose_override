@@ -3,6 +3,7 @@
 : ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
 source "${VSI_COMMON_DIR}/linux/mount_tools.bsh"
 source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
+source "${VSI_COMMON_DIR}/linux/elements.bsh"
 
 #****F* just/docker_compose_override
 # NAME
@@ -88,6 +89,8 @@ function _env_echo()
 #                    the location where these mount points are mounted. These
 #                    mount points are not intended to be used by the apps
 #                    running in the container. Default: /host_mnt
+#   [DOCKER_COMPOSE_FILES] - Array of docker-compose yaml files to parse for
+#                            volumes
 # OUTPUT
 #   stdout - docker-compose yaml files
 # DESCIRPTION
@@ -106,6 +109,8 @@ function _env_echo()
 #       due to nfs limitations), the variable JUST_DOCKER_ENTRYPOINT_LINKS is
 #       set to a colon delimited string (used by
 #       docker_entrypoints.bsh/docker_link_mounts).
+#     - Keep a // separated list of docker data volumes in
+#       JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES.
 #     - Environment variables ${1}_.*_HOST are added to the docker environment
 #       exactly as is.
 #     - Transparently swap environment variables as they are added to the
@@ -142,7 +147,15 @@ function generate_docker_compose_override()
   local volume_host
   local volume_docker
   local volume_flags
+  local volume_sources_file
+  local volume_targets_file
+  local docker_compose_file
+  local DOCKER_VOLUME_LINES
+  local DOCKER_VOLUME_SOURCES
+  local DOCKER_VOLUME_TARGETS
+  local DOCKER_VOLUME_FLAGS
   local just_docker_entrypoint_links
+  local just_docker_entrypoint_internal_volumes
   local new_environment
 
   local project_prefix=$1
@@ -155,6 +168,9 @@ function generate_docker_compose_override()
   local OLD_IFS="${IFS}"
   local IFS="${IFS}"
 
+###  See white board
+###  local docker_compose_config="$(docker-compose -f "${docker_compose_file}" config)"
+
   echo "version: '${COMPOSE_VERSION-3.2}'"
   echo "services:"
   for i in "${!services_name[@]}"; do
@@ -162,6 +178,7 @@ function generate_docker_compose_override()
 
     # Clear list for this service
     just_docker_entrypoint_links=()
+    just_docker_entrypoint_internal_volumes=()
     volumes=()
 
     # Indirect fun
@@ -169,11 +186,25 @@ function generate_docker_compose_override()
     indirect="${volumes_name}[@]"
     volumes_name_all="${project_prefix}_VOLUMES"
     indirect_all="${volumes_name_all}[@]"
+    volume_sources_file=()
+
+    for docker_compose_file in ${DOCKER_COMPOSE_FILES+"${DOCKER_COMPOSE_FILES[@]}"}; do
+      parse-docker-compose-volumes ${services_name[$i]} < <(docker-compose -f "${docker_compose_file}" config)
+      docker-compose-volumes
+      volume_sources_file+=(${DOCKER_VOLUME_SOURCES+"${DOCKER_VOLUME_SOURCES[@]}"})
+      volume_targets_file+=(${DOCKER_VOLUME_TARGETS+"${DOCKER_VOLUME_TARGETS[@]}"})
+    done
+
+    # Get internal volumes of
+    for volume in "${!volume_sources_file[@]}"; do
+      if is_internal_docker_volume "${volume_sources_file[$volume]}"; then
+        just_docker_entrypoint_internal_volumes+=("${volume_targets_file[${volume}]}")
+      fi
+    done
 
     # Dynamically add volumes
     for volume in ${!volumes_name_all+"${!indirect_all}"} ${!volumes_name+"${!indirect}"}; do
       docker_parse_volume_string "$volume" # sets volume_host, volume_docker, and volume_flags
-
 
       # If it doesn't exist, attempt to make it as this user. Better than root
       docker_premkdir "${volume_host}"
@@ -181,6 +212,8 @@ function generate_docker_compose_override()
       # If the volume is a path, get the real path
       if [[ ${volume_host:0:1} =~ [./] ]]; then
         volume_host=$(real_path "${volume_host}")
+      else # Else its a docker volume, track that too!
+        just_docker_entrypoint_internal_volumes+=("${volume_docker}")
       fi
 
       # A trap is set on ERR in ./just that is printing to stderr in the event
@@ -229,6 +262,10 @@ function generate_docker_compose_override()
       IFS=:
       _env_echo "      - JUST_DOCKER_ENTRYPOINT_LINKS=${just_docker_entrypoint_links[*]}"
       IFS="${OLD_IFS}"
+    fi
+    if [ "${#just_docker_entrypoint_internal_volumes[@]}" -gt 0 ]; then
+      MIFS='//' join_a just_docker_entrypoint_internal_volumes "${just_docker_entrypoint_internal_volumes[@]}"
+      _env_echo "      - JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES=${just_docker_entrypoint_internal_volumes}"
     fi
     for var in $(compgen -A export); do
       # For project variables ending in _DOCKER, handle these specially

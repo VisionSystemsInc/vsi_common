@@ -39,6 +39,19 @@ if ! hash ${NVIDIA_DOCKER} 2> /dev/null; then
   NVIDIA_DOCKER=${DOCKER}
 fi
 
+#****id* docker_functions.bsh/DOCKER_VOLUME_PATTERN
+# NAME
+#   DOCKER_VOLUME_PATTERN - Regex pattern for matching docker volume short form
+# NOTES
+#   Works on:
+#     C:\*, c:/* .* /* - '^(([a-zA-Z]:[/\])?[^:]*)'
+#
+#   Break the volume string up into BASH_REMATCH
+#   1 - Host path
+#   3 - Docker path
+#   5 - flags
+#***
+DOCKER_VOLUME_PATTERN='^(([a-zA-Z]:[/\])?[^:]*):(([a-zA-Z]:[/\])?[^:]*)((:ro|:rw|:z|:Z|:r?shared|:r?slave|:r?private|:delegated|:cached|:consistent|:nocopy)*)$'
 
 #****d* docker_functions.bsh/is_dir_and_not_exist
 # NAME
@@ -78,6 +91,30 @@ function is_dir_and_not_exist()
  return 1 #False :(
 }
 
+#****d* docker_functions.bsh/is_internal_docker_volume
+# NAME
+#   is_internal_docker_volume - See if the string looks like a docker volume
+# DESCRIPTION
+#   Checks to see if the string is a valid internal docker volumes (as opposed
+#   to a Linux or Windows style directory)
+# INPUTS
+#   $1 - String to check
+# OUTPUT
+#   Returns 0 for is a volumes, and 1 for not a volumes (is a directory or
+#   invalid)
+# SEE ALSO
+#   docker_functions.bsh/is_dir_and_not_exist
+# AUTHOR
+#   Andy Neff
+#***
+function is_internal_docker_volume()
+{
+  if [[ ${1} =~ ^[a-zA-Z0-9][a-zA-Z0-9_\.\-]+$ ]]; then
+    return 0
+  else
+    return 1
+  fi
+}
 
 #****f* docker_functions.bsh/container_get_label
 # NAME
@@ -233,17 +270,7 @@ function docker_host_dir()
 #***
 function docker_parse_volume_string()
 {
-  local volume_pattern='^(([a-zA-Z]:[/\])?[^:]*):(([a-zA-Z]:[/\])?[^:]*)((:ro|:rw|:z|:Z|:r?shared|:r?slave|:r?private|:delegated|:cached|:consistent|:nocopy)*)$'
-  # C:\*, c:/* .* /* - '^(([a-zA-Z]:[/\])?[^:]*)'
-  # :
-  # First part again
-  # Flags
-  # Break the volume string up into BASH_REMATCH
-  # 1 - Host path
-  # 3 - Docker path
-  # 5 - flags
-
-  if [[ ${1} =~ ${volume_pattern} ]]; then
+  if [[ ${1} =~ ${DOCKER_VOLUME_PATTERN} ]]; then
     volume_host="${BASH_REMATCH[1]}"
     volume_docker="${BASH_REMATCH[3]}"
     volume_flags="${BASH_REMATCH[5]}"
@@ -451,9 +478,9 @@ function _Docker()
 #***
 : ${DOCKER_COMPOSE=docker-compose}
 
-#****f* docker/docker-compose-volumes
+#****f* docker_functions.bsh/docker-compose-volumes-old
 # NAME
-#   docker-compose-volumes - Get volume flags from docker-compose config
+#   docker-compose-volumes-old - Get volume flags from docker-compose config
 # PURPOSE
 #   Reformats the output from docker-compose config to an array with -v flags
 #   for use in passing to another docker or docker-compose run command.
@@ -469,14 +496,14 @@ function _Docker()
 #      nb:
 #        image : blah
 #        volumes:
-#          - /tmp:/mnt
-#          - test:/opt
+#        - /tmp:/mnt
+#        - test:/opt
 #    volumes:
 #      test:
 #
-#  docker-compose-volumes nb test_prefix_ < <(docker-compose config)
+#  docker-compose-volumes-old nb test_prefix_ < <(docker-compose config)
 #  # Or
-#  # docker-compose-volumes nb <<< "$(docker-compose config)"
+#  # docker-compose-volumes-old nb <<< "$(docker-compose config)"
 #
 #  declare -p DOCKER_VOLUME_FLAGS
 #  > declare -a DOCKER_VOLUME_FLAGS='([0]="-v" [1]="/tmp:/mnt:rw" [2]="-v"
@@ -488,7 +515,7 @@ function _Docker()
 # AUTHOR
 #   Andy Neff
 #***
-function docker-compose-volumes()
+function docker-compose-volumes-old()
 {
   local OLD_IFS="${IFS}"
   local PREFIX="${2-}"
@@ -515,8 +542,8 @@ function docker-compose-volumes()
                # Read in a new line
                n
                # Match this new line for an indented(4) list
-               /^      -/{
-                 s|^      - ([^./])|      - '"${PREFIX}"'\1|
+               /^    -/{
+                 s|^    - ([^./])|    - '"${PREFIX}"'\1|
                  # Add these lines to the hold buffer
                  H
                  # Repeat
@@ -525,11 +552,184 @@ function docker-compose-volumes()
                # Switch the hold and pattern buffer
                x
                # Format indented list to look like docker flags
-            '$'s|\\n      - |\\\n-v\\\n|g''
+            '$'s|\\n    - |\\\n-v\\\n|g''
                #s|^\n|| # Remove the first blank line - Not needed with array magic
                # Print out that pretty pattern!
                p'))
   IFS="${OLD_IFS}"
+}
+
+#****f* docker_functions.bsh/parse-docker-compose-volumes
+# NAME
+#   parse-docker-compose-volumes - Get volume lines from docker-compose config
+# PURPOSE
+#   Parses the output from docker-compose config so that information about the
+#   available mounts are ready to be used by docker-compose-volumes
+# INPUTS
+#   $1 - name of service of interest
+#   [$2] - prefix to volume names
+# OUTPUT
+#   DOCKER_VOLUME_LINES - Array of the docker lines. Lines starting with an S
+#                         represent the short format. Lines starting with an L
+#                         represent the beginning of a long format entry.
+#                         Subsequent lines starting with an l are the additional
+#                         lines of the long format entry. Order matters when in
+#                         this format.
+# EXAMPLE
+#  docker-compose.yml
+#    version: "3.2"
+#    services:
+#      nb:
+#        image : blah
+#        volumes:
+#        - /tmp:/mnt
+#        - type: bind
+#          source: /home/user/src
+#          target: /src
+#        - test:/opt
+#    volumes:
+#      test:
+#
+#  parse-docker-compose-volumes nb test_prefix_ < <(docker-compose config)
+#  # Or
+#  # parse-docker-compose-volumes nb <<< "$(docker-compose config)"
+#
+#  declare -p DOCKER_VOLUME_LINES
+#  > declare -a DOCKER_VOLUME_LINES='([0]="S/tmp:/mnt" [1]="Ltype: bind"
+#                                     [2]="lsource: /home/user/src"
+#                                     [3]="ltarget: /src" [4]="Stest:/opt")'
+# NOTES
+#   Useful for working around docker/compose#4728.
+#
+#   Supports bother short and long format
+# SEE ALSO
+#   docker_functions.bsh/docker-compose-volumes
+# AUTHOR
+#   Andy Neff
+#***
+function parse-docker-compose-volumes()
+{
+  local OLD_IFS="${IFS}"
+  local PREFIX="${2-}"
+  local IFS=$'\n'
+  DOCKER_VOLUME_LINES=(\
+    $(sed -nE '/^services:$/b services
+               d
+               :services
+               n
+               # Search for the service entry
+               /^  '"${1}"':$/b found
+               /^ /b services
+               d
+               :found
+               # Clear pattern buffer and read next line
+               n
+               # Read volumes: found
+               /^    volumes:/b volumes
+               # Search all of the service entry
+               /^    /b found
+               # Volumes were not found, give up
+               d
+               :volumes
+               # Read in a new line
+               n
+               :volumes_long
+               # Long format
+               /^    - .*:( .*)?$/{
+                 :long
+                 # Remove spaces, and id as the beginning of a long form
+                 s|^    - |L|
+                 # Or remove the spaces and id as the next line in a long form
+                 s|^      |l|
+                 # Add PREFIX if it is a volume mount
+                 s|^([lL]source: )([^./])|\1'"${PREFIX}"'\2|
+                 H
+                 n
+                 /^      /b long
+                 b volumes_long
+               }
+               # Match this new line for an indented(4) list
+               /^    -/{
+                 # Remove spaces, and id as short form
+                 s|^    - |S|
+                 s|^S([^./])|'S"${PREFIX}"'\1|
+                 # Add these lines to the hold buffer
+                 H
+                 # Repeat
+                 b volumes
+               }
+               # Switch the hold and pattern buffer
+               x
+               # Print out that pretty pattern!
+               p'))
+}
+
+#****f* docker_functions.bsh/docker-compose-volumes
+# NAME
+#   docker-compose-volumes - Get volume lists from DOCKER_VOLUME_LINES
+# USAGE
+#   parse-docker-compose-volumes nb test_prefix_ < <(docker-compose config)
+#   docker-compose-volumes
+# OUTPUT
+#   DOCKER_VOLUME_SOURCES - List of sources
+#   DOCKER_VOLUME_TARGETS - Corresponding list of targets
+#   DOCKER_VOLUME_FLAGS   - Corresponding list of flags. Can be a mix of short
+#                           and long format flags. Needs more parsing before
+#                           this mix is useful.
+# SEE ALSO
+#   docker_functions.bsh/parse-docker-compose-volumes
+# AUTHOR
+#   Andy Neff
+#***
+function docker-compose-volumes()
+{
+  local volume_line
+  local flag
+  DOCKER_VOLUME_SOURCES=()
+  DOCKER_VOLUME_TARGETS=()
+  DOCKER_VOLUME_FLAGS=()
+  for volume_line in ${DOCKER_VOLUME_LINES+"${DOCKER_VOLUME_LINES[@]}"}; do
+    if [[ ${volume_line:0:1} = [SL] ]]; then
+      # If the flag hasn't been added, then add it. This only won't happen on
+      # the first loop through
+      if [ "${#DOCKER_VOLUME_FLAGS[@]}" -lt "${#DOCKER_VOLUME_TARGETS[@]}" ]; then
+        DOCKER_VOLUME_FLAGS+=("${flag}")
+      fi
+      # Clear the flag, because it's a new volume (S/L)
+      flag=
+    fi
+
+    if [ "${volume_line:0:1}" = "S" ]; then # Short format
+      volume_line="${volume_line:1}"
+      if [[ $volume_line =~ ${DOCKER_VOLUME_PATTERN} ]]; then
+        DOCKER_VOLUME_SOURCES+=("${BASH_REMATCH[1]}")
+        DOCKER_VOLUME_TARGETS+=("${BASH_REMATCH[3]}")
+        flag=("${BASH_REMATCH[5]}")
+      else
+        echo "Invalid short form volume string: ${volume_line}" >&2
+        return 1
+      fi
+    elif [[ ${volume_line:0:1} = [Ll] ]]; then
+      volume_line="${volume_line:1}"
+      if [[ ${volume_line} = source:* ]]; then
+        DOCKER_VOLUME_SOURCES+=("${volume_line#source: *}")
+      elif [[ ${volume_line} = target:* ]]; then
+        DOCKER_VOLUME_TARGETS+=("${volume_line#target: *}")
+      elif [[ ${volume_line} = type:* ]]; then
+        if [ "${volume_line}" = "type: tmpfs" ]; then
+          DOCKER_VOLUME_SOURCES+=("")
+        fi
+      else
+        flag+="${volume_line}"
+        declare -p flag
+      fi
+    fi
+  done
+
+  # Do the same logic again, for the last passthrough
+  if [ "${#DOCKER_VOLUME_FLAGS[@]}" -lt "${#DOCKER_VOLUME_TARGETS[@]}" ]; then
+    DOCKER_VOLUME_FLAGS+=("${flag}")
+  fi
 }
 
 #****f* docker_functions.bsh/parse-docker-compose
@@ -856,6 +1056,7 @@ function Just-docker-compose()
   local docker_compose_command
   local docker_compose_command_args
   local docker_compose_files
+  local DOCKER_COMPOSE_FILES
   local docker_compose_project_name
 
   local override_file="$(mktemp)"
@@ -888,6 +1089,7 @@ function Just-docker-compose()
   IFS="${OLD_IFS}"
 
   # 4. Create override file
+  DOCKER_COMPOSE_FILES=(${docker_compose_files+"${docker_compose_files[@]}"})
   generate_docker_compose_override ${JUST_PROJECT_PREFIX} \
       ${service_names+"${service_names[@]}"} > "${override_file}"
 

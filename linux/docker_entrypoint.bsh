@@ -237,8 +237,39 @@ function docker_link_mounts()
   done
 }
 
+#****f* docker_entrypoint.bsh/docker_setup_data_volumes
+# NAME
+#   docker_setup_data_volumes - Change permissions of data volumes to 777
+# USAGE
+#   Automatically called when docker_entrypoint.bsh is called. If
+#   docker_entrypoint.bsh is sourced, then docker_setup_data_volumes would need
+#   to be called separately.
+# DESCRIPTION
+#   When docker_compose_override/generate_docker_compose_override processes
+#   mounts, it determines the list of internal data volumes, and passes them
+#   to the container in JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES. This function
+#   uses that variable to set all the directories' permissions to 777. This is
+#   useful for when a data volume is just created and it only had root
+#   permissions
+# PARAMETERS
+#   [JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES] - // delimited string of folders
+#                                               corresponding to data volumes
+#                                               e.g., "/tmp/test1///dev/shm/2"
+# AUTHOR
+#   Andy Neff
+#***
+function docker_setup_data_volumes()
+{
+  if [ -n "${JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES:+set}" ]; then
+    local just_docker_entrypoint_internal_volumes
+    MIFS='//' split_s just_docker_entrypoint_internal_volumes "${JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES}"
+    chmod 777 "${just_docker_entrypoint_internal_volumes[@]}"
+  fi
+}
+
 if [[ ${BASH_SOURCE[0]} == ${0} ]] || [[ $(basename ${BASH_SOURCE[0]}) == ${0} ]]; then
   set -eu
   docker_setup_user ${@+"${@}"} && \
-  docker_link_mounts ${@+"${@}"}
+  docker_link_mounts ${@+"${@}"} && \
+  docker_setup_data_volumes
 fi

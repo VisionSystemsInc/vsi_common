@@ -13,8 +13,31 @@ services:
   nb:
     image: blah
     volumes:
-      - /tmp:/mnt
-      - test:/opt
+    - /tmp:/mnt
+    - test:/opt
+  foo:
+    image: bar
+    volumes:
+  bar:
+    image: foo
+volumes:
+  test:'
+
+  compose_file_long='version: "3.2"
+services:
+  nb:
+    image: blah
+    volumes:
+    - /tmp:/mnt
+    - source: /home/user/src
+      target: /src
+      type: bind
+    - test:/opt
+    - source: internal
+      target: /src
+      type: volume
+    - target: /tmp2
+      type: tmpfs
   foo:
     image: bar
     volumes:
@@ -63,6 +86,25 @@ begin_test "is_dir_and_not_exist"
   not is_dir_and_not_exist qwertyuiop
   not is_dir_and_not_exist /
   is_dir_and_not_exist "$(mktemp -d -u)"
+)
+end_test
+
+begin_test "is_internal_docker_volume"
+(
+  setup_test
+
+  is_internal_docker_volume test
+  is_internal_docker_volume TEST
+  is_internal_docker_volume 1test
+  is_internal_docker_volume te-st
+  is_internal_docker_volume is_internal_docker_volume
+  not is_internal_docker_volume 'C:\test'
+  not is_internal_docker_volume 'c:\test'
+  not is_internal_docker_volume 'c:/test'
+  not is_internal_docker_volume c
+  not is_internal_docker_volume './test'
+  not is_internal_docker_volume .test
+  not is_internal_docker_volume '/test'
 )
 end_test
 
@@ -261,23 +303,98 @@ begin_test "Test DOCKER_COMPOSE var"
 )
 end_test
 
-begin_test "docker compose parse volumes"
+begin_test "docker compose parse volumes old"
 (
   setup_test
 
   ans=(-v "/tmp:/mnt" -v "test:/opt")
-  docker-compose-volumes nb <<< "${compose_file}"
+  docker-compose-volumes-old nb <<< "${compose_file}"
   cmp_elements_a DOCKER_VOLUME_FLAGS ans
 
   ans=()
-  docker-compose-volumes foo <<< "${compose_file}"
+  docker-compose-volumes-old foo <<< "${compose_file}"
   cmp_elements_a DOCKER_VOLUME_FLAGS ans
 
-  docker-compose-volumes bar <<< "${compose_file}"
+  docker-compose-volumes-old bar <<< "${compose_file}"
   cmp_elements_a DOCKER_VOLUME_FLAGS ans
 
-  docker-compose-volumes none <<< "${compose_file}"
+  docker-compose-volumes-old none <<< "${compose_file}"
   cmp_elements_a DOCKER_VOLUME_FLAGS ans
+)
+end_test
+
+begin_test "parse docker compose volumes"
+(
+  setup_test
+
+  ans=("S/tmp:/mnt"
+       "Lsource: /home/user/src" "ltarget: /src" "ltype: bind"
+       "Stest:/opt"
+       "Lsource: internal" "ltarget: /src" "ltype: volume"
+       "Ltarget: /tmp2" "ltype: tmpfs")
+  parse-docker-compose-volumes nb <<< "${compose_file_long}"
+  cmp_elements_a DOCKER_VOLUME_LINES ans
+
+  ans=("S/tmp:/mnt"
+       "Lsource: /home/user/src" "ltarget: /src" "ltype: bind"
+       "Stest_prefix_test:/opt"
+       "Lsource: test_prefix_internal" "ltarget: /src" "ltype: volume"
+       "Ltarget: /tmp2" "ltype: tmpfs")
+  parse-docker-compose-volumes nb test_prefix_ <<< "${compose_file_long}"
+  cmp_elements_a DOCKER_VOLUME_LINES ans
+
+  ans=()
+  parse-docker-compose-volumes foo <<< "${compose_file_long}"
+  cmp_elements_a DOCKER_VOLUME_LINES ans
+
+  parse-docker-compose-volumes bar <<< "${compose_file_long}"
+  cmp_elements_a DOCKER_VOLUME_LINES ans
+
+  parse-docker-compose-volumes none <<< "${compose_file_long}"
+  cmp_elements_a DOCKER_VOLUME_LINES ans
+)
+end_test
+
+begin_test "docker compose volumes"
+(
+  setup_test
+
+  DOCKER_VOLUME_LINES=("S/tmp:/mnt"
+       "Lsource: /home/user/src" "ltarget: /src" "ltype: bind"
+       "Stest:/opt"
+       "Lsource: internal" "ltarget: /src" "ltype: volume"
+       "Ltarget: /tmp2" "ltype: tmpfs")
+  docker-compose-volumes
+  sources=("/tmp" "/home/user/src" "test" "internal" "")
+  targets=("/mnt" "/src" "/opt" "/src" "/tmp2")
+  flags=("" "" "" "" "")
+  cmp_elements_a DOCKER_VOLUME_SOURCES sources
+  cmp_elements_a DOCKER_VOLUME_TARGETS targets
+  cmp_elements_a DOCKER_VOLUME_FLAGS flags
+
+  DOCKER_VOLUME_LINES=("S/test1:/test2:ro"
+                       "Stest3:/test4:Z"
+                       "Lsource: internal"
+                         "ltarget: /src"
+                         "ltype: volume"
+                         "lvolume:"
+                         "l  nocopy: true")
+  docker-compose-volumes
+  sources=("/test1" "test3" "internal")
+  targets=("/test2" "/test4" "/src")
+  flags=(":ro" ":Z" "volume:  nocopy: true")
+  cmp_elements_a DOCKER_VOLUME_SOURCES sources
+  cmp_elements_a DOCKER_VOLUME_TARGETS targets
+  cmp_elements_a DOCKER_VOLUME_FLAGS flags
+
+  DOCKER_VOLUME_LINES+=("S/test5:/test6:rw")
+  docker-compose-volumes
+  sources+=("/test5")
+  targets+=("/test6")
+  flags+=(":rw")
+  cmp_elements_a DOCKER_VOLUME_SOURCES sources
+  cmp_elements_a DOCKER_VOLUME_TARGETS targets
+  cmp_elements_a DOCKER_VOLUME_FLAGS flags
 )
 end_test
 
@@ -495,6 +612,35 @@ services:
   # Test when two docker-compose files reference the same service
   echo "${compose_file_hay}" > "${TESTDIR}/dc2.yml"
   override_file="$(Just-docker-compose -f "${TESTDIR}/dc.yml" -f "${TESTDIR}/dc2.yml" run test_hay|tail -n1)"
+  override_file="${override_file#rm *}"
+  ttouch "${override_file}"
+  [ "$(cat "${override_file}")" = "${ans}" ]
+)
+end_test
+
+begin_test "Just docker compose with internal volumes"
+(
+  setup_test
+
+  JUST_PROJECT_PREFIX=TEST
+
+  ans="version: '3.2'
+services:
+  test_hay:
+    environment:
+      - JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES=/int///lint"
+
+  echo "${compose_file_hay}" > "${TESTDIR}/dc.yml"
+  echo "    volumes:" >> "${TESTDIR}/dc.yml"
+  echo "    - int:/int" >> "${TESTDIR}/dc.yml"
+  echo "    - .:/src" >> "${TESTDIR}/dc.yml"
+  echo "    - lint:/lint" >> "${TESTDIR}/dc.yml"
+  echo "volumes:" >> "${TESTDIR}/dc.yml"
+  echo "  lint:" >> "${TESTDIR}/dc.yml"
+  echo "  int:" >> "${TESTDIR}/dc.yml"
+  DRYRUN=echo
+
+  override_file="$(Just-docker-compose -f "${TESTDIR}/dc.yml" run test_hay|tail -n1)"
   override_file="${override_file#rm *}"
   ttouch "${override_file}"
   [ "$(cat "${override_file}")" = "${ans}" ]
