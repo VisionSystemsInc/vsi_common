@@ -23,6 +23,12 @@
 #   Tests must 'set -e' within the subshell block or failed assertions will not
 #   cause the test to fail and the result may be misreported. While this is not
 #   required, most tests will have this on.
+# BUGS
+#   On darling: when debugging a unit test error, sometimes the printout is cut
+#   off, making it difficult to do "printf debugging." While the cause and scope
+#   of this is unknown, it appears that running "reset" just prior to the test
+#   fixes this. So if this is happening to you, simply run reset before every
+#   call to run the tests.
 # COPYRIGHT
 #   Original version: (c) 2011-13 by Ryan Tomayko <http://tomayko.com>
 #   License: MIT
