@@ -26,9 +26,10 @@
 # BUGS
 #   On darling: when debugging a unit test error, sometimes the printout is cut
 #   off, making it difficult to do "printf debugging." While the cause and scope
-#   of this is unknown, it appears that running "reset" just prior to the test
-#   fixes this. So if this is happening to you, simply run reset before every
-#   call to run the tests.
+#   of this is unknown. A work around that sometimes works is
+#
+#     runtests 2>&1 | less -R
+#
 # COPYRIGHT
 #   Original version: (c) 2011-13 by Ryan Tomayko <http://tomayko.com>
 #   License: MIT
@@ -200,10 +201,10 @@ atexit ()
 trap "atexit" EXIT
 
 if declare -p BASH_SOURCE &>/dev/null; then
-  PS4=$'+${BASH_SOURCE-null}:${LINENO})\t'
-else
+  PS4=$'+${BASH_SOURCE[0]##*/}:${LINENO})\t'
+else # else sh probably
   # Not as accurate, but better than nothing
-  PS4=$'+${0}:${LINENO})\t'
+  PS4=$'+${0##*/}:${LINENO})\t'
 fi
 
 # Common code for begin tests
