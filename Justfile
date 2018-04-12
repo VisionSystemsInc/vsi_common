@@ -18,11 +18,15 @@ function caseify()
   local just_arg=$1
   shift 1
   case ${just_arg} in
-    test) # Run unit and integration tests
+    test) # Run unit tests
       "${VSI_COMMON_DIR}/tests/run_tests.bsh" ${@+"${@}"}
       extra_args+=$#
       ;;
-    test_darling) # Run unit and integration tests using darling
+    testint) # Run integration tests
+      TESTS_DIR=int "${VSI_COMMON_DIR}/tests/run_tests.bsh" ${@+"${@}"}
+      extra_args+=$#
+      ;;
+    test_darling) # Run unit tests using darling
       (
         cd "${VSI_COMMON_DIR}"
         env -i HOME="${HOME}" darling shell ./tests/run_tests.bsh ${@+"${@}"}
@@ -56,7 +60,7 @@ function caseify()
                  -w /vsi_common \
                  "${VSI_COMMON_WINE_TEST_IMAGE}" &
       ;;
-    test_wine) # Run unit and integration tests using wine
+    test_wine) # Run unit tests using wine
       docker run -it --rm --cap-add=SYS_PTRACE \
                  -e USER_ID="$(id -u)" \
                  -e VSI_COMMON_IS_POWERSHELL=1 \

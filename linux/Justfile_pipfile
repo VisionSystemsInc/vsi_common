@@ -1,0 +1,196 @@
+#!/usr/bin/env bash
+
+set -euE
+
+export CWD="$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)"
+
+#****just/Justfile_pipfile
+# NAME
+#   just_pipenv.bsh - Bootstrap creating a pipfile
+# DESCRIPTION
+#   When starting a new project, Creating a new Pipfile and Pipfile.lock is not
+#   a trivial task. You can't just touch an empty file, as that will result in
+#   an empty (not populated) Pipfile and error on Pipfile.lock. The purpose of
+#   this Justfile is to generate a Pipfile in a directory where none exits.
+# INPUTS
+#   PRE_CMD - environment variable added at the begining of the bash -c
+#             execution to run commands (like installing python) before running
+#             pipenv
+# USAGE
+#   Justfile_pipfile init_pipfile3 {docker Image name} {Pipfile destination dir}
+#   - Creates the Pipfiles in the destination directory, using the docker image.
+#     This will explicitly use python3 and not the python executable/symlink.
+#     Python3 and ca-certificates must be installed for this to work. A PRE_CMD
+#     Can be set to execute some commands before running. Example:
+#
+#   Justfile_pipfile init_pipfile3 python:3 /tmp/
+#
+#   Justfile_pipfile init_pipfile2 {docker Image name} {Pipfile destination dir}
+#   - Python 2 version of init pipfile
+#
+#   In case ca-certificates is not installed, PRE_CMD can be used to install
+#   the package. These targets already exist in the form of:
+#   - [debian/centos/fedora]_[no_python_]init_pipfile[2/3]
+# AUTHOR
+#   Andy Neff
+#***
+
+function caseify()
+{
+  arg=$1
+  shift 1
+  case $arg in
+    init_pipfile3) # Must have ca-certificates installed, or else will probably \
+                   # not work. Set environment PRE_CMD to install ca-certificates \
+                   # if it is not installed.
+      Docker run --rm --entrypoint env --mount "type=bind,source=${2},destination=/target" ${1} bash -c "
+        set -eu
+        ${PRE_CMD-}
+     "$'TEMP_DIR=$(mktemp -d)
+        python3 -c "import urllib.request as u; print(u.urlopen(\'https://bootstrap.pypa.io/get-pip.py\').read().decode())" > "${TEMP_DIR}/p.py"
+        PYTHONUSERBASE="${TEMP_DIR}" python3 "${TEMP_DIR}/p.py" --user setuptools -U
+        PYTHONUSERBASE="${TEMP_DIR}" python3 "${TEMP_DIR}/p.py" --user pipenv -U
+        cd /target
+        unset PIPENV_PIPFILE
+        : ${LC_ALL=C.UTF-8}
+        : ${LANG=C.UTF-8}
+        export LC_ALL
+        export LANG
+        PATH="${PATH}:${TEMP_DIR}/bin" \
+          PYTHONPATH=$(echo "${TEMP_DIR}"/lib/python*/site-packages/) \
+          pipenv install'
+      extra_args+=2
+      ;;
+
+    debian_init_pipfile3) # Debian version with PRE_CMD that should work
+      (PRE_CMD="${PRE_CMD-}
+                apt-get update
+                apt-get install -y --no-install-recommends ca-certificates"; \
+        justify init_pipfile3 "${1}" "${2}")
+      extra_args+=2
+      ;;
+
+    debian_no_python_init_pipfile3) # Version for debian where python3 isn't installed yet
+      (PRE_CMD="${PRE_CMD-}
+                apt-get update
+                apt-get install -y --no-install-recommends python3 ca-certificates"; \
+        justify init_pipfile3 "${1}" "${2}")
+      extra_args+=2
+      ;;
+
+    fedora_init_pipfile3) # Version for fedora (dnf)
+      (PRE_CMD="${PRE_CMD-}
+                dnf install -y ca-certificates"; \
+        justify init_pipfile3 "${1}" "${2}")
+      extra_args+=2
+      ;;
+
+    fedora_no_python_init_pipfile3) # Version for fedora (dnf) without python preinstalled
+      (PRE_CMD="${PRE_CMD-}
+                dnf install -y python3 ca-certificates"; \
+        justify init_pipfile3 "${1}" "${2}")
+      extra_args+=2
+      ;;
+
+    centos_init_pipfile3) # Version for centos (yum)
+      (PRE_CMD="${PRE_CMD-}
+                yum install -y ca-certificates"; \
+        justify init_pipfile3 "${1}" "${2}")
+      extra_args+=2
+      ;;
+
+    centos_no_python_init_pipfile3) # Version for centos7 (yum) without python preinstalled
+      (PRE_CMD="${PRE_CMD-}
+                export LC_ALL=en_US.utf8
+                export LANG=en_US.utf8
+                yum install -y epel-release
+                yum install -y python34 ca-certificates"; \
+        justify init_pipfile3 "${1}" "${2}")
+      extra_args+=2
+      ;;
+
+    init_pipfile2)
+      Docker run --rm --entrypoint env --mount "type=bind,source=${2},destination=/target" ${1} sh -c "
+        set -eu
+        ${PRE_CMD-}
+     "$'TEMP_DIR=$(mktemp -d)
+        python2 -c "import urllib2 as u; print u.urlopen(\'https://bootstrap.pypa.io/get-pip.py\').read()" > "${TEMP_DIR}/p.py"
+        PYTHONUSERBASE="${TEMP_DIR}" python2 "${TEMP_DIR}/p.py" --user setuptools
+        PYTHONUSERBASE="${TEMP_DIR}" python2 "${TEMP_DIR}/p.py" --user pipenv -U
+        cd /target
+        unset PIPENV_PIPFILE
+        : ${LC_ALL=C.UTF-8}
+        : ${LANG=C.UTF-8}
+        export LC_ALL
+        export LANG
+        PATH="${PATH}:${TEMP_DIR}/bin" \
+          PYTHONPATH=$(echo "${TEMP_DIR}"/lib/python*/site-packages/) \
+          pipenv install'
+      extra_args+=2
+      ;;
+
+    debian_init_pipfile2) # Debian version with PRE_CMD that should work
+      (PRE_CMD="${PRE_CMD-}
+                apt-get update
+                apt-get install -y --no-install-recommends ca-certificates"; \
+        justify init_pipfile2 "${1}" "${2}")
+      extra_args+=2
+      ;;
+
+    debian_no_python_init_pipfile2) # Version for debian where python3 isn't installed yet
+      (PRE_CMD="${PRE_CMD-}
+                apt-get update
+                apt-get install -y --no-install-recommends python ca-certificates"; \
+        justify init_pipfile2 "${1}" "${2}")
+      extra_args+=2
+      ;;
+
+    fedora_init_pipfile2) # Version for fedora (dnf)
+      (PRE_CMD="${PRE_CMD-}
+                dnf install -y ca-certificates"; \
+        justify init_pipfile2 "${1}" "${2}")
+      extra_args+=2
+      ;;
+
+    fedora_no_python_init_pipfile2) # Version for fedora (dnf) without python preinstalled
+      (PRE_CMD="${PRE_CMD-}
+                dnf install -y python2 ca-certificates"; \
+        justify init_pipfile2 "${1}" "${2}")
+      extra_args+=2
+      ;;
+
+    centos_init_pipfile2) # Version for centos (yum)
+      (PRE_CMD="${PRE_CMD-}
+                export LC_ALL=en_US.utf8
+                export LANG=en_US.utf8"; \
+        justify init_pipfile2 "${1}" "${2}")
+      extra_args+=2
+      ;;
+
+    centos_no_python_init_pipfile2) # Version for centos7 (yum) without python preinstalled
+      (PRE_CMD="${PRE_CMD-}
+                export LC_ALL=en_US.utf8
+                export LANG=en_US.utf8
+                yum install -y python2 ca-certificates"; \
+        justify init_pipfile2 "${1}" "${2}")
+      extra_args+=2
+      ;;
+
+    *)
+      defaultify "$arg" ${@+"${@}"}
+      ;;
+  esac
+  return 0
+}
+
+if ! command -v justify &> /dev/null; then
+  justify()
+  {
+    caseify ${@+"${@}"}
+  }
+  Docker()
+  {
+    ${DOCKER-docker} ${@+"${@}"}
+  }
+  justify ${@+"${@}"}
+fi
