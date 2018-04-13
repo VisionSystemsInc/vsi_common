@@ -135,6 +135,12 @@ begin_test "Generate docker-compose override internal volumes"
 
   echo "version: '3.2'
 services:
+  dummy:
+    image: alpine
+    volumes:
+    - int:/notint
+    - .:/notsrc
+    - lint:/notlint
   test_hay:
     image: alpine
     volumes:
@@ -146,9 +152,11 @@ volumes:
   int:" > dc.yml
 
   DOCKER_COMPOSE_FILES=(dc.yml)
-  override="$(generate_docker_compose_override TEST test_hay)"
+  override="$(generate_docker_compose_override TEST dummy test_hay)"
 
-  ans="$(head)$(service test_hay)$(environment)"
+  ans="$(head)$(service dummy)$(environment)"
+  ans+="$(envi JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES=/notint///notlint)"
+  ans+="$(service test_hay)$(environment)"
   ans+="$(envi JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES=/int///lint)"
   [ "${override}" = "${ans}" ]
 )
