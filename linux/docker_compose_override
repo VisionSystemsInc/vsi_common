@@ -136,28 +136,38 @@ function _env_echo()
 #***
 function generate_docker_compose_override()
 {
-  local volumes_name
+  # loop vars
   local volume
-  local volumes
+  local service_index
+  local docker_compose_file
+
+  # override variables
+  local over_volumes
+  local just_docker_entrypoint_links
+  local just_docker_entrypoint_internal_volumes
+
+  # indirect fun
+  local volumes_name
   local indirect
   local volumes_name_all
   local indirect_all
+
+  # misc
   local host_mount_point
-  local i
   local volume_host
   local volume_docker
   local volume_flags
-  local volume_sources_file
-  local volume_targets_file
-  local docker_compose_file
+  local compose_config
+
+  # parse-docker-compose-volumes/docker-compose-volumes vars
   local DOCKER_VOLUME_LINES
   local DOCKER_VOLUME_SOURCES
   local DOCKER_VOLUME_TARGETS
   local DOCKER_VOLUME_FLAGS
-  local just_docker_entrypoint_links
-  local just_docker_entrypoint_internal_volumes
+  # _env_echo
   local new_environment
 
+  # Argument parsing
   local project_prefix=$1
   shift 1
 
@@ -168,38 +178,44 @@ function generate_docker_compose_override()
   local OLD_IFS="${IFS}"
   local IFS="${IFS}"
 
-###  See white board
-###  local docker_compose_config="$(docker-compose -f "${docker_compose_file}" config)"
+  # Run docker-compose config once for all files/services
+  compose_config=()
+  for docker_compose_file in ${DOCKER_COMPOSE_FILES+"${DOCKER_COMPOSE_FILES[@]}"}; do
+    compose_config+=("-f" "${docker_compose_file}")
+  done
+
+  # If there is at least one config, then run docker-compose config
+  if [ ${#compose_config[@]} -gt 0 ]; then
+    compose_config="$(docker-compose "${compose_config[@]}" config)"
+  else
+    # Else do not. This is a non-realistic scenario, but makes this more robust
+    compose_config=""
+  fi
 
   echo "version: '${COMPOSE_VERSION-3.2}'"
   echo "services:"
-  for i in "${!services_name[@]}"; do
-    echo "  ${services_name[$i]}:"
+  for service_index in "${!services_name[@]}"; do
+    echo "  ${services_name[$service_index]}:"
 
     # Clear list for this service
     just_docker_entrypoint_links=()
     just_docker_entrypoint_internal_volumes=()
-    volumes=()
+    over_volumes=()
 
     # Indirect fun
-    volumes_name="${project_prefix}_${services_upper[$i]}_VOLUMES"
+    volumes_name="${project_prefix}_${services_upper[$service_index]}_VOLUMES"
     indirect="${volumes_name}[@]"
     volumes_name_all="${project_prefix}_VOLUMES"
     indirect_all="${volumes_name_all}[@]"
-    volume_sources_file=()
-    volume_targets_file=()
 
-    for docker_compose_file in ${DOCKER_COMPOSE_FILES+"${DOCKER_COMPOSE_FILES[@]}"}; do
-      parse-docker-compose-volumes ${services_name[$i]} < <(docker-compose -f "${docker_compose_file}" config)
-      docker-compose-volumes
-      volume_sources_file+=(${DOCKER_VOLUME_SOURCES+"${DOCKER_VOLUME_SOURCES[@]}"})
-      volume_targets_file+=(${DOCKER_VOLUME_TARGETS+"${DOCKER_VOLUME_TARGETS[@]}"})
-    done
+
+    parse-docker-compose-volumes ${services_name[$service_index]} <<< "${compose_config}"
+    docker-compose-volumes
 
     # Get internal volumes of
-    for volume in "${!volume_sources_file[@]}"; do
-      if is_internal_docker_volume "${volume_sources_file[$volume]}"; then
-        just_docker_entrypoint_internal_volumes+=("${volume_targets_file[${volume}]}")
+    for volume in "${!DOCKER_VOLUME_SOURCES[@]}"; do
+      if is_internal_docker_volume "${DOCKER_VOLUME_SOURCES[$volume]}"; then
+        just_docker_entrypoint_internal_volumes+=("${DOCKER_VOLUME_TARGETS[${volume}]}")
       fi
     done
 
@@ -245,16 +261,16 @@ function generate_docker_compose_override()
       fi
 
       IFS=:
-      volumes+=("      - ${volume_host}:${volume_docker}${volume_flags}")
+      over_volumes+=("      - ${volume_host}:${volume_docker}${volume_flags}")
       IFS="${OLD_IFS}"
     done
     # remove duplicates https://unix.stackexchange.com/q/159695,
     # docker-compose doesn't like them
     IFS=$'\n'
-    volumes=($(awk '!count[$0]++' <<< ${volumes+"${volumes[*]}"}))
-    if [ "${volumes+set}" == "set" ]; then
+    over_volumes=($(awk '!count[$0]++' <<< ${over_volumes+"${over_volumes[*]}"}))
+    if [ "${over_volumes+set}" == "set" ]; then
       echo "    volumes:"
-      echo ${volumes+"${volumes[*]}"}
+      echo ${over_volumes+"${over_volumes[*]}"}
     fi
     IFS="${OLD_IFS}"
 
