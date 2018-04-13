@@ -23,6 +23,13 @@
 #   Tests must 'set -e' within the subshell block or failed assertions will not
 #   cause the test to fail and the result may be misreported. While this is not
 #   required, most tests will have this on.
+# BUGS
+#   On darling: when debugging a unit test error, sometimes the printout is cut
+#   off, making it difficult to do "printf debugging." While the cause and scope
+#   of this is unknown. A work around that sometimes works is
+#
+#     runtests 2>&1 | less -R
+#
 # COPYRIGHT
 #   Original version: (c) 2011-13 by Ryan Tomayko <http://tomayko.com>
 #   License: MIT
@@ -122,6 +129,18 @@ skipped=0
 #   Andy Neff
 #***
 
+#****d* testlib.sh/TESTLIB_RUN_SINGLE_TEST
+# NAME
+#   TESTLIB_RUN_SINGLE_TEST - Run a single test
+# DESCRIPTION
+#   Instead of running all the tests in a test file, all tests not matching the
+#   description exactly to the value of TESTLIB_RUN_SINGLE_TEST will be skipped.
+#   Useful for debugging a specific test/piece of code
+#   Default: unset
+# AUTHOR
+#   Andy Neff
+#***
+
 #****f* testlib.sh/atexit
 # NAME
 #   atexit - Function that runs at process exit
@@ -182,10 +201,10 @@ atexit ()
 trap "atexit" EXIT
 
 if declare -p BASH_SOURCE &>/dev/null; then
-  PS4=$'+${BASH_SOURCE-null}:${LINENO})\t'
-else
+  PS4=$'+${BASH_SOURCE[0]##*/}:${LINENO})\t'
+else # else sh probably
   # Not as accurate, but better than nothing
-  PS4=$'+${0}:${LINENO})\t'
+  PS4=$'+${0##*/}:${LINENO})\t'
 fi
 
 # Common code for begin tests
@@ -229,6 +248,11 @@ _begin_common_test ()
 
   if [ "${TESTLIB_SHOW_TIMING-0}" == "1" ]; then
     _time_0=$(get_time_seconds)
+  fi
+
+  if [ "${TESTLIB_RUN_SINGLE_TEST+set}" = "set" ] && \
+     [ "$1" != "${TESTLIB_RUN_SINGLE_TEST}" ]; then
+    skip_next_test
   fi
 
   find_open_fd stdout
