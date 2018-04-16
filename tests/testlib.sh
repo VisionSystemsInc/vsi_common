@@ -26,7 +26,7 @@
 # BUGS
 #   On darling: when debugging a unit test error, sometimes the printout is cut
 #   off, making it difficult to do "printf debugging." While the cause and scope
-#   of this is unknown. A work around that sometimes works is
+#   of this is unknown, a work around that sometimes works is
 #
 #     runtests 2>&1 | less -R
 #
@@ -133,8 +133,9 @@ skipped=0
 # NAME
 #   TESTLIB_RUN_SINGLE_TEST - Run a single test
 # DESCRIPTION
-#   Instead of running all the tests in a test file, all tests not matching the
-#   description exactly to the value of TESTLIB_RUN_SINGLE_TEST will be skipped.
+#   Instead of running all the tests in a test file, only the tests with a
+#   description exactly matching the value of TESTLIB_RUN_SINGLE_TEST will
+#   be run.
 #   Useful for debugging a specific test/piece of code
 #   Default: unset
 # AUTHOR
@@ -202,7 +203,7 @@ trap "atexit" EXIT
 
 if declare -p BASH_SOURCE &>/dev/null; then
   PS4=$'+${BASH_SOURCE[0]##*/}:${LINENO})\t'
-else # else sh probably
+else # Else sh probably
   # Not as accurate, but better than nothing
   PS4=$'+${0##*/}:${LINENO})\t'
 fi
