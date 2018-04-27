@@ -207,11 +207,11 @@ fi
 #   JUST_LOCAL_SETTINGS and JUST_LOCAL_SETTINGS_POST must not be set in the
 #   project environment file or in the local.env file, as it will not have the
 #   desired effect. Instead, they should either be manually set in the
-#   environment or set in the setup or wrap script (see just/Just_wrap)
+#   environment or set in the setup AND wrap script (see just/Just_wrap)
 # NOTES
 #   Certain exceptions make sense for not storing values in the project file,
 #   such as credentials, encryption keys, etc... information that should not be
-#   hardcoded.
+#   hard-coded ever.
 #
 #   Only require settings in local.env when it cannot be avoided. For example,
 #   sometimes its better to add default behavior of create keys if possible.
@@ -226,11 +226,40 @@ function source_environment_files()
 {
   local project_dir="$(dirname $1)"
   local x
+  local JUST_LOCAL_SETTINGS="${JUST_LOCAL_SETTINGS:-${project_dir}/local.env}"
+  local JUST_LOCAL_SETTINGS_POST="${JUST_LOCAL_SETTINGS_POST:-${project_dir}/local_post.env}"
+
+  if [ ! -e "${JUST_LOCAL_SETTINGS}" ]; then
+    echo "# Put local setting in this file" > "${JUST_LOCAL_SETTINGS}"
+    echo "# You should edit this file and not \"${1}\"" >> "${JUST_LOCAL_SETTINGS}"
+    echo "# to customize setting just for your setup/computer" >> "${JUST_LOCAL_SETTINGS}"
+    echo >> "${JUST_LOCAL_SETTINGS}"
+    echo "# If you need a value from \"${1}\"" >> "${JUST_LOCAL_SETTINGS}"
+    echo "# to set a custom value, consider using" >> "${JUST_LOCAL_SETTINGS}"
+    echo "# \"${JUST_LOCAL_SETTINGS_POST}\"" >> "${JUST_LOCAL_SETTINGS}"
+    echo >> "${JUST_LOCAL_SETTINGS}"
+    echo "# NEVER commit this file. Tracked environment changes go in" >> "${JUST_LOCAL_SETTINGS}"
+    echo "# \"${1}\" only" >> "${JUST_LOCAL_SETTINGS}"
+  fi
+
+  if [ ! -e "${JUST_LOCAL_SETTINGS_POST}" ]; then
+    echo "# Put local setting in this file" > "${JUST_LOCAL_SETTINGS_POST}"
+    echo "# Use this file ONLY when you need the values from" >> "${JUST_LOCAL_SETTINGS_POST}"
+    echo "# \"${1}\"" >> "${JUST_LOCAL_SETTINGS_POST}"
+    echo >> "${JUST_LOCAL_SETTINGS_POST}" >> "${JUST_LOCAL_SETTINGS_POST}"
+    echo "# Values set in this file will not be reflected in" >> "${JUST_LOCAL_SETTINGS_POST}"
+    echo "# \"${JUST_LOCAL_SETTINGS}\" or" >> "${JUST_LOCAL_SETTINGS_POST}"
+    echo "# \"${1}\". To get variable substitution" >> "${JUST_LOCAL_SETTINGS_POST}"
+    echo "# in these files, consider using \"${JUST_LOCAL_SETTINGS}\"" >> "${JUST_LOCAL_SETTINGS_POST}"
+    echo >> "${JUST_LOCAL_SETTINGS_POST}"
+    echo "# NEVER commit this file. Tracked environment changes go in" >> "${JUST_LOCAL_SETTINGS_POST}"
+    echo "# \"${1}\" only" >> "${JUST_LOCAL_SETTINGS_POST}"
+  fi
 
   set_flag a
-  for x in "${JUST_LOCAL_SETTINGS:-${project_dir}/local.env}" \
+  for x in "${JUST_LOCAL_SETTINGS}" \
            "$1" \
-           "${JUST_LOCAL_SETTINGS_POST:-${project_dir}/local_post.env}"; do
+           "${JUST_LOCAL_SETTINGS_POST}"; do
     if [ -f "${x}" ]; then
       . "${x}"
     fi
