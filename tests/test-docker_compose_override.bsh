@@ -162,6 +162,53 @@ volumes:
 )
 end_test
 
+begin_test "Generate docker-compose override long syntax volume"
+(
+  setup_test
+
+  echo "version: '3.2'
+services:
+  dummy:
+    image: alpine
+    volumes:
+    - type: volume
+      source: int
+      target: /notint
+    - type: bind
+      source: .
+      target: /notsrc
+      read_only: true
+    - type: volume
+      source: lint
+      target: /notlint
+  test_hay:
+    image: alpine
+    volumes:
+    - type: volume
+      source: int
+      target: /int
+    - type: bind
+      source: .
+      target: /src
+      read_only: true
+    - type: volume
+      source: lint
+      target: /lint
+volumes:
+  lint:
+  int:" > dc.yml
+
+  DOCKER_COMPOSE_FILES=(dc.yml)
+  override="$(generate_docker_compose_override TEST dummy test_hay)"
+
+  ans="$(head)$(service dummy)$(environment)"
+  ans+="$(envi JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES=/notint///notlint)"
+  ans+="$(service test_hay)$(environment)"
+  ans+="$(envi JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES=/int///lint)"
+  [ "${override}" = "${ans}" ]
+)
+end_test
+
 linux_nfs="\
 Filesystem                       1K-blocks        Used   Available Use% Mounted on
 filetodata-2:/volume1/projects 23320723712 22239875584  1080729344  96%"
