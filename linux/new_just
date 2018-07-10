@@ -102,6 +102,8 @@ fi
 #   environment variable PROJECT_PREFIX to the desired value.
 # SEE ALSO
 #   just/JUST_PROJECT_PREFIX
+# AUTHOR
+#   Andy Neff
 #***
 default=$(echo "${PROJECT_NAME-}" | tr '[a-z]' '[A-Z]' | sed 's|[^A-Z0-9_]+||g')
 : ${PROJECT_PREFIX="$(read -r -p "Project variable prefix [${default}] " x; echo $x)"}
@@ -110,6 +112,26 @@ if [ "${PROJECT_PREFIX}" == "" ]; then
 else
   PROJECT_PREFIX=$(echo "${PROJECT_PREFIX-}" | tr '[a-z]' '[A-Z]' | sed 's|[^A-Z0-9_]+||g')
 fi
+
+
+
+#****d* new_just/APP_NAME
+# NAME
+#   APP_NAME - The name of the test app generated
+# DESCRIPTION
+#   Used for the name of the first service populated for you
+# AUTHOR
+#   Andy Neff
+#***
+default=$(echo "${APP_NAME-someapp}" | tr '[A-Z]' '[a-z]' | sed 's|[^a-z0-9_.-]+||g')
+: ${APP_NAME="$(read -r -p "Name of the example docker-compose app [${default}] " x; echo $x)"}
+if [ "${APP_NAME}" == "" ]; then
+  APP_NAME=${default}
+else
+  APP_NAME=$(echo "${APP_NAME-someapp}" | tr '[A-Z]' '[a-z]' | sed 's|[^a-z0-9_.-]+||g')
+fi
+
+APP_NAME_UPPER=$(echo "${APP_NAME}" | tr '[a-z]' '[A-Z]')
 
 #****d* new_just/REPO_NAME
 # NAME
@@ -240,6 +262,7 @@ echo "======="
 printf "%-40s | %-40s\n" "Project Name" "${PROJECT_NAME}"
 printf "%-40s | %-40s\n" "Project Directory" "${PROJECT_DIR}"
 printf "%-40s | %-40s\n" "Project prefix" "${PROJECT_PREFIX}"
+printf "%-40s | %-40s\n" "App Name" "${APP_NAME}"
 printf "%-40s | %-40s\n" "Just file" "${JUSTFILE}"
 printf "%-40s | %-40s\n" "Environment setup script" "${SETUPFILE}"
 printf "%-40s | %-40s\n" "Wrap script" "${WRAPFILE}"
@@ -306,6 +329,7 @@ if [ ! -e "${PROJECT_NAME}.env" ]; then
 : ${'"${PROJECT_PREFIX}"'_USERNAME=$(id -u -n)}
 : ${'"${PROJECT_PREFIX}"'_UID=$(id -u)}
 : ${'"${PROJECT_PREFIX}"'_GIDS=$(id -G)}
+: ${'"${PROJECT_PREFIX}"'_GROUP_NAMES=$(group_names)}
 
 : ${'"${PROJECT_PREFIX}"'_SOURCE_DIR="${'"${PROJECT_PREFIX}"'_CWD}"}
 : ${'"${PROJECT_PREFIX}"'_SOURCE_DIR_DOCKER="/src"}
@@ -315,9 +339,9 @@ if [ "${VSI_OS}" = "linux" ]; then
       ${'"${PROJECT_PREFIX}"'_VOLUMES+"${'"${PROJECT_PREFIX}"'_VOLUMES[@]}"})
 fi
 
-'"${PROJECT_PREFIX}"'_SOMEAPPNAME_VOLUMES=(
+'"${PROJECT_PREFIX}"'_'"${APP_NAME_UPPER}"'_VOLUMES=(
     "${'"${PROJECT_PREFIX}"'_SOURCE_DIR}:${'"${PROJECT_PREFIX}"'_SOURCE_DIR_DOCKER}"
-    ${'"${PROJECT_PREFIX}"'_SOMEAPPNAME_VOLUMES+"${'"${PROJECT_PREFIX}"'_SOMEAPPNAME_VOLUMES[@]}"})
+    ${'"${PROJECT_PREFIX}"'_'"${APP_NAME_UPPER}"'_VOLUMES+"${'"${PROJECT_PREFIX}"'_'"${APP_NAME_UPPER}"'_VOLUMES[@]}"})
 
 ' > "${PROJECT_NAME}.env"
 
@@ -327,7 +351,15 @@ fi
 
 # Make default README
 if [ ! -e "README.md" ]; then
-  echo 'Just usage:
+  echo '## Getting started
+
+```
+. setup.env
+just build
+just run 
+```
+
+## Just usage:
 
 ```
 source "'"${SETUPFILE}"'"
@@ -350,6 +382,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)/'"${WRAPFILE}"'"
 cd "${'"${PROJECT_PREFIX}"'_CWD}"
 
 source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
+source "${VSI_COMMON_DIR}/linux/just_docker_functions.bsh"
 
 function caseify()
 {
@@ -357,15 +390,16 @@ function caseify()
   shift 1
   case ${just_arg} in
     build) # Build Docker image
-      Docker-compose build base_someappname
-      Docker-compose build
+      if [ "$#" -gt "0" ]; then
+        Docker-compose "${just_arg}" ${@+"${@}"}
+        extra_args+=$#
+      else
+        (justify build_recipes)
+        Docker-compose build
+      fi
       ;;
-    run_someappname) # Run someappname 1
-      Just-docker-compose run someappname ${@+"${@}"}
-      extra_args+=$#
-      ;;
-    run_someappname2) # Run someappname 2
-      Just-docker-compose run someappname2 ${@+"${@}"}
+    run_'"${APP_NAME}"') # Run '"${APP_NAME}"' 1
+      Just-docker-compose run '"${APP_NAME}"' ${@+"${@}"}
       extra_args+=$#
       ;;
     *)
@@ -383,41 +417,46 @@ fi
 mkdir -p docker
 
 # Make default dockerfiles
-if [ ! -e "docker/base_someappname.Dockerfile" ]; then
-  echo 'FROM alpine:3.6
+if [ ! -e "docker/base_${APP_NAME}.Dockerfile" ]; then
+  echo 'FROM vsiri/recipe:gosu as gosu
+# Allow non-privileged to run gosu (remove this to take root away from user)
+RUN chmod u+s /usr/local/bin/gosu
+
+FROM vsiri/recipe:tini as tini
+FROM vsiri/recipe:pipenv as pipenv
+
+FROM debian:stretch
 
 SHELL ["sh", "-euxvc"]
 
-RUN apk --no-cache add curl
+RUN build_deps="wget ca-certificates"; \
+    apt-get update; \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ${build_deps} nano; \
+    wget -q https://www.vsi-ri.com/bin/deviceQuery; \
+    DEBIAN_FRONTEND=noninteractive apt-get purge -y --autoremove ${build_deps}; \
+    rm -rf /var/lib/apt/lists/*
 
-RUN curl -L https://github.com/krallin/tini/releases/download/v0.10.0/tini -o /usr/local/bin/tini; \
-    chmod +x /usr/local/bin/tini; \
-    echo "1361527f39190a7338a0b434bd8c88ff7233ce7b9a4876f3315c22fce7eca1b0  /usr/local/bin/tini" | sha256sum -c -
-
-RUN curl -L https://github.com/tianon/gosu/releases/download/1.10/gosu-amd64 -o /usr/local/bin/gosu; \
-    chmod +x /usr/local/bin/gosu; \
-    echo "5b3b03713a888cee84ecbf4582b21ac9fd46c3d935ff2d7ea25dd5055d302d3c  /usr/local/bin/gosu" | sha256sum -c -
-
-RUN apk --no-cache add bash
+COPY --from=tini /usr/local/bin/tini /usr/local/bin/tini
+COPY --from=gosu /usr/local/bin/gosu /usr/local/bin/gosu
 
 ADD '"${RELATIVE_PATH}"' /vsi
-ADD docker/someappname_entrypoint.bsh /
-RUN chmod 755 /someappname_entrypoint.bsh
+ADD docker/'"${APP_NAME}"'_entrypoint.bsh /
+RUN chmod 755 /'"${APP_NAME}"'_entrypoint.bsh
 
-ENTRYPOINT ["/someappname_entrypoint.bsh"]
+ENTRYPOINT ["/usr/local/bin/tini", "/'"${APP_NAME}"'_entrypoint.bsh"]
 
-CMD ["someappname"]' > docker/base_someappname.Dockerfile
+CMD ["'"${APP_NAME}"'"]' > docker/base_${APP_NAME}.Dockerfile
 else
-  echo "docker/base_someappname.Dockerfile exists, skipping..."
+  echo "docker/base_${APP_NAME}.Dockerfile exists, skipping..."
 fi
 
-if [ ! -e "docker/someappname.Dockerfile" ]; then
-  echo "FROM ${REPO_NAME}:base_someappname" > docker/someappname.Dockerfile
+if [ ! -e "docker/${APP_NAME}.Dockerfile" ]; then
+  echo "FROM ${REPO_NAME}:base_${APP_NAME}" > "docker/${APP_NAME}.Dockerfile"
 else
-  echo "docker/someappname.Dockerfile exists, skipping..."
+  echo "docker/${APP_NAME}.Dockerfile exists, skipping..."
 fi
 
-if [ ! -e "docker/someappname_entrypoint.bsh" ]; then
+if [ ! -e "docker/${APP_NAME}_entrypoint.bsh" ]; then
   echo '#!/usr/bin/env bash
 
 set -eu
@@ -434,13 +473,13 @@ source "${'"${PROJECT_PREFIX}"'_SOURCE_DIR}/wrap"
 source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
 filter_docker_variables
 
-if [ "$1" == "someappname" ]; then
-  echo "Run someappname here: ${@+${@}}"
+if [ "$1" == "'"${APP_NAME}"'" ]; then
+  echo "Run '"${APP_NAME}"' here: ${@+${@}}"
 else
   exec "${@}"
-fi' > docker/someappname_entrypoint.bsh
+fi' > "docker/${APP_NAME}_entrypoint.bsh"
 else
-  echo "docker/someappname_entrypoint.bsh exists, skipping..."
+  echo "docker/${APP_NAME}_entrypoint.bsh exists, skipping..."
 fi
 
 
@@ -449,21 +488,22 @@ if [ ! -e "docker-compose.yml" ]; then
   echo 'version: "3.2"
 
 services:
-  base_someappname:
+  base_'"${APP_NAME}"':
     build:
       context: .
-      dockerfile: docker/base_someappname.Dockerfile
-    image: ${'"${PROJECT_PREFIX}"'_DOCKER_REPO}:base_someappname
-  someappname: &someappname_anchor
+      dockerfile: docker/base_'"${APP_NAME}"'.Dockerfile
+    image: ${'"${PROJECT_PREFIX}"'_DOCKER_REPO}:base_'"${APP_NAME}"'
+  '"${APP_NAME}"': &'"${APP_NAME}"'_anchor
     build:
       context: .
-      dockerfile: docker/someappname.Dockerfile
+      dockerfile: docker/'"${APP_NAME}"'.Dockerfile
     # prevent different users from clobbering each others images
-    image: ${'"${PROJECT_PREFIX}"'_DOCKER_REPO}:someappname_${'"${PROJECT_PREFIX}"'_USERNAME}
+    image: ${'"${PROJECT_PREFIX}"'_DOCKER_REPO}:'"${APP_NAME}"'_${'"${PROJECT_PREFIX}"'_USERNAME}
     environment:
       # Variables for docker_entrypoint.bsh
       - DOCKER_UID=${'"${PROJECT_PREFIX}"'_UID}
       - DOCKER_GIDS=${'"${PROJECT_PREFIX}"'_GIDS}
+      - DOCKER_GROUP_NAMES=${'"${PROJECT_PREFIX}"'_GROUP_NAMES}
       - DOCKER_USERNAME=user
 
       #- DOCKER_HOME=${'"${PROJECT_PREFIX}"'_HOME}
@@ -473,8 +513,8 @@ services:
       - SYS_PTRACE # Useful for gdb
 #    volumes:
 #      - home-volume:${'"${PROJECT_PREFIX}"'_HOME} # home-volume should be overridable
-  someappname2:
-    <<: *someappname_anchor
+  '"${APP_NAME}"'2:
+    <<: *'"${APP_NAME}"'_anchor
 #volumes:
 #  home-volume:
 ' > "docker-compose.yml"
@@ -490,7 +530,9 @@ fi
 chmod 755 "${JUSTFILE}" "${WRAPFILE}"
 
 if [ ! -e .dockerignore ]; then
-  touch .dockerignore
+  echo '*' > .dockerignore
+  echo '!docker' >> .dockerignore
+  echo '!external/vsi_common' >> .dockerignore
 fi
 
 # Add .gitignore exceptions
@@ -531,10 +573,11 @@ if [ ! -e .git ]; then
 fi
 echo "git submodule add git@github.com:visionsystemsinc/vsi_common.git" \
                        "'${RELATIVE_PATH}'"  >&3
+echo "git submodule update --init --recursive" >&3
 echo "git add .gitattributes .gitignore .dockerignore .gitmodules README.md '${JUSTFILE}'" \
      "'${SETUPFILE}' '${WRAPFILE}' '${PROJECT_NAME}.env'" \
-     "docker-compose.yml docker/someappname.Dockerfile docker/someappname_entrypoint.bsh" \
-     "docker/base_someappname.Dockerfile" >&3
+     "docker-compose.yml docker/${APP_NAME}.Dockerfile docker/${APP_NAME}_entrypoint.bsh" \
+     "docker/base_${APP_NAME}.Dockerfile" >&3
 echo "git commit -m 'Initial commit'"  >&3
 echo
 echo
@@ -548,4 +591,4 @@ echo
 echo "Get started with:"
 echo
 echo "just build"
-echo "just run someappname bash"
+echo "just run ${APP_NAME} bash"
