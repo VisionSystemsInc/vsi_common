@@ -54,7 +54,7 @@ In order to use these directories, all you have to do is
     a submodule to your project.
   * To run the `just` wizard, you can:
 
-      bash <(curl -sL https://raw.githubusercontent.com/VisionSystemsInc/vsi_common/master/linux/new_just)
+        bash <(curl -sL https://raw.githubusercontent.com/VisionSystemsInc/vsi_common/master/linux/new_just)
 
 ### What is this repository for? ###
 
