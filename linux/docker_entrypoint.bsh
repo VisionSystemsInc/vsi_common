@@ -72,8 +72,8 @@ function docker_setup_user()
   : ${DOCKER_HOME=/home/${DOCKER_USERNAME}}
 
   # Convert to arrays
-  DOCKER_GIDS=(${DOCKER_GIDS})
-  DOCKER_GROUP_NAMES=(${DOCKER_GROUP_NAMES})
+  DOCKER_GIDS=(${DOCKER_GIDS[@]})
+  DOCKER_GROUP_NAMES=(${DOCKER_GROUP_NAMES[@]})
 
   if [ "${DOCKER_ACCOUNTS_POSIX_GROUPS}" == "1" ]; then
     # Remove non-posix characters
@@ -255,6 +255,14 @@ function docker_link_mounts()
 #   [JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES] - // delimited string of folders
 #                                               corresponding to data volumes
 #                                               e.g., "/tmp/test1///dev/shm/2"
+#   [JUST_DOCKER_ENTRYPOINT_INTERNAL_DIRS] - // delimited string of folders
+#                                            corresponding to folders in volumes
+#                                            that should be owned by DOCKER_UID
+#                                            and DOCKER_GIDS[0]
+#   [DOCKER_UID] - The UID used to reown JUST_DOCKER_ENTRYPOINT_INTERNAL_DIRS.
+#                  Default: 1000
+#   [DOCKER_GIDS] - The GIDs used to reown JUST_DOCKER_ENTRYPOINT_INTERNAL_DIRS.
+#                   IFS delimited string. Default: 1000
 # AUTHOR
 #   Andy Neff
 #***
@@ -265,6 +273,19 @@ function docker_setup_data_volumes()
     MIFS='//' split_s just_docker_entrypoint_internal_volumes "${JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES}"
     chmod 777 "${just_docker_entrypoint_internal_volumes[@]}"
   fi
+
+  if [ -n "${JUST_DOCKER_ENTRYPOINT_INTERNAL_DIRS:+set}" ]; then
+    : ${DOCKER_UID=1000}
+    : ${DOCKER_GIDS=1000}
+    # Convert to arrays, no quotes in case it was an array already, it has no spaces
+    DOCKER_GIDS=(${DOCKER_GIDS[@]})
+
+    local just_docker_entrypoint_internal_dirs
+    MIFS='//' split_s just_docker_entrypoint_internal_dirs "${JUST_DOCKER_ENTRYPOINT_INTERNAL_DIRS}"
+    echo "Reowning: ${just_docker_entrypoint_internal_dirs[@]}"
+    chown -R "${DOCKER_UID}:${DOCKER_GIDS[0]}" "${just_docker_entrypoint_internal_dirs[@]}"
+  fi
+
 }
 
 if [[ ${BASH_SOURCE[0]} == ${0} ]] || [[ $(basename ${BASH_SOURCE[0]}) == ${0} ]]; then

@@ -507,8 +507,6 @@ if [ "${USE_DOCKER}" = "1" ]; then
   # Make default dockerfiles
   if [ ! -e "docker/base_${APP_NAME}.Dockerfile" ]; then
     echo 'FROM vsiri/recipe:gosu as gosu
-# Allow non-privileged to run gosu (remove this to take root away from user)
-RUN chmod u+s /usr/local/bin/gosu
 
 FROM vsiri/recipe:tini as tini' > docker/base_${APP_NAME}.Dockerfile
 
@@ -529,7 +527,9 @@ RUN build_deps="wget ca-certificates"; \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=tini /usr/local/bin/tini /usr/local/bin/tini
-COPY --from=gosu /usr/local/bin/gosu /usr/local/bin/gosu' >> docker/base_${APP_NAME}.Dockerfile
+COPY --from=gosu /usr/local/bin/gosu /usr/local/bin/gosu
+# Allow non-privileged to run gosu (remove this to take root away from user)
+RUN chmod u+s /usr/local/bin/gosu' >> docker/base_${APP_NAME}.Dockerfile
 
     if [ "${USE_PIPENV}" = "1" ]; then
       echo 'COPY --from=pipenv /tmp/pipenv /tmp/pipenv
@@ -545,7 +545,7 @@ ENV WORKON_HOME=/venv \
 ADD Pipfile Pipfile.lock /src/
 
 RUN cd /src; \
-    if [ ! -s Pipfile ]; then \
+    if [ ! -s Pipfile.lock ]; then \
       pipenv lock; \
     fi; \
     pipenv install
@@ -574,7 +574,7 @@ RUN cd /src; \
 #     apt-get purge -y --auto-remove ${build_deps}; \
 #     rm -r /var/lib/apt/lists/*
 
-#     # Some libraries need numpy setup tools installed before installing the to compile with.
+#     # Some libraries like scikit-garden==0.1.3 need numpy setup tools installed before installing the to compile with.
 #     pipenv install --skip-lock "numpy$(python3 -c "import json; print(json.load(open('Pipfile.lock', 'r'))['default']['numpy']['version'])" 2>/dev/null)"; \
 
 
@@ -604,34 +604,52 @@ CMD ["'"${APP_NAME}"'"]' >> docker/base_${APP_NAME}.Dockerfile
 
 set -eu
 
+source "${'"${PROJECT_PREFIX}"'_SOURCE_DIR}/wrap"
+
 if [ "${ALREADY_RUN_ONCE+set}" != "set" ]; then
-  # create the user and associated groups and handle nfs symlinks
-  bash -eu /vsi/linux/docker_entrypoint.bsh
-' > "docker/${APP_NAME}_entrypoint.bsh"
+  # create the user and associated groups and handle nfs symlinks' > "docker/${APP_NAME}_entrypoint.bsh"
 
-  if [ "${USE_PIPENV}" = "1" ]; then
-    echo '  if [ "$(stat -c %u /venv/src-*)" != "${DOCKER_UID-1000}" ]; then
-    echo "Reowning virtualenv..."
-    DOCKER_GID="${DOCKER_GIDS-1000}"
-    DOCKER_GID="${DOCKER_GID%% *}"
-    chown -R "${DOCKER_UID-1000}:${DOCKER_GID}" /venv/src-*
-  fi
-' >> "docker/${APP_NAME}_entrypoint.bsh"
-  fi
+    if [ "${USE_PIPENV}" = "1" ]; then
+      echo '  source "${VSI_COMMON_DIR}/linux/elements.bsh"
+  join_a venvs /venv/*
+  JUST_DOCKER_ENTRYPOINT_INTERNAL_DIRS="${venvs}" \' >> "docker/${APP_NAME}_entrypoint.bsh"
+    fi
 
-  echo '# Rerun entrypoint as user now, (skipping the root part via ALREADY_RUN_ONCE)
+    echo '  bash -eu /vsi/linux/docker_entrypoint.bsh
+
+  # Rerun entrypoint as user now, (skipping the root part via ALREADY_RUN_ONCE)
   ALREADY_RUN_ONCE=1 exec gosu ${DOCKER_USERNAME} $0 ${@+"${@}"}
 fi
 
-source "${'"${PROJECT_PREFIX}"'_SOURCE_DIR}/wrap"
 source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
 filter_docker_variables
 
-if [ "$1" == "'"${APP_NAME}"'" ]; then
+' >> "docker/${APP_NAME}_entrypoint.bsh"
+
+    if [ "${USE_PIPENV}" = "1" ]; then
+      echo 'if [ "$1" == "'"${APP_NAME}"'" ]; then
+  cd "${'"${PROJECT_PREFIX}"'_SOURCE_DIR}"
+  if [ ! -s "${'"${PROJECT_PREFIX}"'_SOURCE_DIR}/Pipfile.lock" ]; then
+    pipenv lock
+  fi
+  pipenv shell
+elif [ "$1" == "nopipenv" ]; then
+  shift 1
+  exec "${@}"
+else
+  cd "${'"${PROJECT_PREFIX}"'_SOURCE_DIR}"
+  if [ ! -s "${'"${PROJECT_PREFIX}"'_SOURCE_DIR}/Pipfile.lock" ]; then
+    pipenv lock
+  fi
+  exec pipenv run "${@}"
+fi' >> "docker/${APP_NAME}_entrypoint.bsh"
+    else
+      echo 'if [ "$1" == "'"${APP_NAME}"'" ]; then
   echo "Run '"${APP_NAME}"' here: ${@+${@}}"
 else
   exec "${@}"
 fi' >> "docker/${APP_NAME}_entrypoint.bsh"
+    fi
   else
     echo "docker/${APP_NAME}_entrypoint.bsh exists, skipping..."
   fi
