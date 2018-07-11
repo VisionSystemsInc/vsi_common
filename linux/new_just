@@ -396,12 +396,13 @@ if [ ! -e "README.md" ]; then
   echo '## Getting started
 
 ```
-. setup.env
-just build' > README.md
+. setup.env' > README.md
 if [ "${USE_DOCKER}" = "1" ]; then
-  echo "just run ${APP_NAME}" >> README.md
+  echo "just build
+just run ${APP_NAME}" >> README.md
 else
-  echo "just run" >> README.md
+  echo "just compile
+just run" >> README.md
 fi
   echo '```
 
@@ -472,7 +473,7 @@ function caseify()
   local just_arg=$1
   shift 1
   case ${just_arg} in
-    build) # Build program
+    compile) # Build program
       g++ hi.cpp -o hi
       ;;
     run) # Run program
@@ -505,20 +506,20 @@ if [ "${USE_DOCKER}" = "1" ]; then
   mkdir -p docker
 
   # Make default dockerfiles
-  if [ ! -e "docker/base_${APP_NAME}.Dockerfile" ]; then
+  if [ ! -e "docker/${APP_NAME}.Dockerfile" ]; then
     echo 'FROM vsiri/recipe:gosu as gosu
-
-FROM vsiri/recipe:tini as tini' > docker/base_${APP_NAME}.Dockerfile
+FROM vsiri/recipe:tini as tini' > docker/${APP_NAME}.Dockerfile
 
     if [ "${USE_PIPENV}" = "1" ]; then
-      echo 'FROM vsiri/recipe:pipenv as pipenv' >> docker/base_${APP_NAME}.Dockerfile
+      echo 'FROM vsiri/recipe:pipenv as pipenv' >> docker/${APP_NAME}.Dockerfile
     fi
 
     echo '
 FROM debian:stretch
 
-SHELL ["sh", "-euxvc"]
+SHELL ["/usr/bin/env", "bash", "-euxvc"]
 
+# Example of installing packages
 RUN build_deps="wget ca-certificates"; \
     apt-get update; \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ${build_deps} python3; \
@@ -529,11 +530,11 @@ RUN build_deps="wget ca-certificates"; \
 COPY --from=tini /usr/local/bin/tini /usr/local/bin/tini
 COPY --from=gosu /usr/local/bin/gosu /usr/local/bin/gosu
 # Allow non-privileged to run gosu (remove this to take root away from user)
-RUN chmod u+s /usr/local/bin/gosu' >> docker/base_${APP_NAME}.Dockerfile
+RUN chmod u+s /usr/local/bin/gosu' >> docker/${APP_NAME}.Dockerfile
 
     if [ "${USE_PIPENV}" = "1" ]; then
       echo 'COPY --from=pipenv /tmp/pipenv /tmp/pipenv
-RUN python3 /tmp/pipenv/getpipenv; rm -r /tmp/pipenv
+RUN python3 /tmp/pipenv/get-pipenv; rm -r /tmp/pipenv
 
 ENV WORKON_HOME=/venv \
     #PIPENV_PIPFILE=/src/Pipfile \
@@ -578,7 +579,7 @@ RUN cd /src; \
 #     pipenv install --skip-lock "numpy$(python3 -c "import json; print(json.load(open('Pipfile.lock', 'r'))['default']['numpy']['version'])" 2>/dev/null)"; \
 
 
-' >> docker/base_${APP_NAME}.Dockerfile
+' >> docker/${APP_NAME}.Dockerfile
     fi
 
     echo '
@@ -588,13 +589,7 @@ RUN chmod 755 /'"${APP_NAME}"'_entrypoint.bsh
 
 ENTRYPOINT ["/usr/local/bin/tini", "/'"${APP_NAME}"'_entrypoint.bsh"]
 
-CMD ["'"${APP_NAME}"'"]' >> docker/base_${APP_NAME}.Dockerfile
-  else
-    echo "docker/base_${APP_NAME}.Dockerfile exists, skipping..."
-  fi
-
-  if [ ! -e "docker/${APP_NAME}.Dockerfile" ]; then
-    echo "FROM ${REPO_NAME}:base_${APP_NAME}" > "docker/${APP_NAME}.Dockerfile"
+CMD ["'"${APP_NAME}"'"]' >> docker/${APP_NAME}.Dockerfile
   else
     echo "docker/${APP_NAME}.Dockerfile exists, skipping..."
   fi
@@ -607,7 +602,8 @@ set -eu
 source "${'"${PROJECT_PREFIX}"'_SOURCE_DIR}/wrap"
 
 if [ "${ALREADY_RUN_ONCE+set}" != "set" ]; then
-  # create the user and associated groups and handle nfs symlinks' > "docker/${APP_NAME}_entrypoint.bsh"
+  # create the user and associated groups and handle nfs symlinks
+  chmod u+x /vsi/linux/docker_entrypoint.bsh' > "docker/${APP_NAME}_entrypoint.bsh"
 
     if [ "${USE_PIPENV}" = "1" ]; then
       echo '  source "${VSI_COMMON_DIR}/linux/elements.bsh"
@@ -615,11 +611,17 @@ if [ "${ALREADY_RUN_ONCE+set}" != "set" ]; then
   JUST_DOCKER_ENTRYPOINT_INTERNAL_DIRS="${venvs}" \' >> "docker/${APP_NAME}_entrypoint.bsh"
     fi
 
-    echo '  bash -eu /vsi/linux/docker_entrypoint.bsh
+    echo '  /vsi/linux/docker_entrypoint.bsh
 
   # Rerun entrypoint as user now, (skipping the root part via ALREADY_RUN_ONCE)
   ALREADY_RUN_ONCE=1 exec gosu ${DOCKER_USERNAME} $0 ${@+"${@}"}
 fi
+
+function sudo()
+{
+  gosu root ${@+"${@}"}
+}
+export -f sudo
 
 source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
 filter_docker_variables
@@ -660,11 +662,6 @@ fi' >> "docker/${APP_NAME}_entrypoint.bsh"
     echo 'version: "3.2"
 
 services:
-  base_'"${APP_NAME}"':
-    build:
-      context: .
-      dockerfile: docker/base_'"${APP_NAME}"'.Dockerfile
-    image: ${'"${PROJECT_PREFIX}"'_DOCKER_REPO}:base_'"${APP_NAME}"'
   '"${APP_NAME}"': &'"${APP_NAME}"'_anchor
     build:
       context: .
@@ -734,7 +731,7 @@ else
   echo '#include <iostream>
 int main()
 {
-  std::cout << "hi" << std::endl;
+  std::cout << "hello world!" << std::endl;
   return 0;
 }' > hi.cpp
 fi
@@ -776,8 +773,7 @@ echo "git add .gitignore .gitmodules README.md '${JUSTFILE}'" \
      "'${SETUPFILE}' '${WRAPFILE}' '${PROJECT_NAME}.env'" >&3
 if [ "${USE_DOCKER}" = "1" ]; then
   echo "git add .gitattributes .dockerignore" \
-       "docker-compose.yml docker/${APP_NAME}.Dockerfile docker/${APP_NAME}_entrypoint.bsh" \
-       "docker/base_${APP_NAME}.Dockerfile" >&3
+       "docker-compose.yml docker/${APP_NAME}.Dockerfile docker/${APP_NAME}_entrypoint.bsh" >&3
 else
   echo "git add hi.cpp" >&3
 fi
