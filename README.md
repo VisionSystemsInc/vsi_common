@@ -46,10 +46,10 @@ In order to use these directories, all you have to do is
 * J.U.S.T. - J.U.S.T. Useful Simple Tasking
 
   * `just` utilizes a number of vsi_common scripts create a bash script to
-    easily any number of "targets", similar to a Makefile, but in the language
-    of bash instead. With extra emphasis on fixing all the small docker-compose
-    issues that can't be solved blindly in the sandbox, e.g. matching host user
-    and group ids or using nfs mounts with squash root.
+    easily any number of "targets", similar to a Makefile (minus dependencies),
+    but in the language of bash instead. With extra emphasis on fixing all the
+    small docker-compose issues that can't be solved blindly in the sandbox,
+    e.g. matching host user and group ids or using nfs mounts with squash root.
   * Currently, the easiest way to interface with `just` is to add vsi_common as
     a submodule to your project.
   * To run the `just` wizard, you can:

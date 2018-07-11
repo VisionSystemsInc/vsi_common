@@ -282,8 +282,17 @@ function docker_setup_data_volumes()
 
     local just_docker_entrypoint_internal_dirs
     MIFS='//' split_s just_docker_entrypoint_internal_dirs "${JUST_DOCKER_ENTRYPOINT_INTERNAL_DIRS}"
-    echo "Reowning: ${just_docker_entrypoint_internal_dirs[@]}"
-    chown -R "${DOCKER_UID}:${DOCKER_GIDS[0]}" "${just_docker_entrypoint_internal_dirs[@]}"
+    local reown_dirs=()
+    local d
+    for d in "${just_docker_entrypoint_internal_dirs[@]}"; do
+      if [ "$(stat -c %u /venv/src-*)" != "${DOCKER_UID}" ]; then
+        reown_dirs=(${reown_dirs+"${reown_dirs[@]}"} "${d}")
+      fi
+    done
+    if [[ ${#reown_dirs[@]} != 0 ]]; then
+      echo "Reowning: ${reown_dirs[@]}"
+      chown -R "${DOCKER_UID}:${DOCKER_GIDS[0]}" "${reown_dirs[@]}"
+    fi
   fi
 
 }

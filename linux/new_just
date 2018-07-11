@@ -254,12 +254,12 @@ if [ "${USE_DOCKER}" = "1" ]; then
   # AUTHOR
   #   Andy Neff
   #***
-  default=$(echo "${APP_NAME-someapp}" | tr '[A-Z]' '[a-z]' | sed 's|[^a-z0-9_.-]+||g')
+  default=$(echo "${APP_NAME-example}" | tr '[A-Z]' '[a-z]' | sed 's|[^a-z0-9_.-]+||g')
   : ${APP_NAME="$(read -r -p "Name of the example docker-compose app (${default}) " x; echo $x)"}
   if [ "${APP_NAME}" == "" ]; then
     APP_NAME=${default}
   else
-    APP_NAME=$(echo "${APP_NAME-someapp}" | tr '[A-Z]' '[a-z]' | sed 's|[^a-z0-9_.-]+||g')
+    APP_NAME=$(echo "${APP_NAME-example}" | tr '[A-Z]' '[a-z]' | sed 's|[^a-z0-9_.-]+||g')
   fi
 
   APP_NAME_UPPER=$(echo "${APP_NAME}" | tr '[a-z]' '[A-Z]')
@@ -384,6 +384,19 @@ fi
     "${'"${PROJECT_PREFIX}"'_DATA_DIR}:${'"${PROJECT_PREFIX}"'_DATA_DIR_DOCKER}"
     ${'"${PROJECT_PREFIX}"'_'"${APP_NAME_UPPER}"'_VOLUMES+"${'"${PROJECT_PREFIX}"'_'"${APP_NAME_UPPER}"'_VOLUMES[@]}"})
 
+###############################################################################
+### Non-'"${PROJECT_PREFIX}"' Setting ###
+###############################################################################
+
+# Put variables that do not begin with '"${PROJECT_PREFIX}"' here.
+
+# Use this to add the username to the docker-compose project name. This is
+# important when multiple users are using this docker-compose project on a
+# single host. This way all of the docker resources are prefixed with a unique
+# name and do not collide
+source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
+: ${COMPOSE_PROJECT_NAME=$(docker_compose_sanitize_project_name "${'"${PROJECT_PREFIX}"'_CWD}" "${'"${PROJECT_PREFIX}"'_USERNAME}")}
+
 ' >> "${PROJECT_NAME}.env"
   fi
 
@@ -398,7 +411,7 @@ if [ ! -e "README.md" ]; then
 ```
 . setup.env' > README.md
 if [ "${USE_DOCKER}" = "1" ]; then
-  echo "just build
+  echo "just setup
 just run ${APP_NAME}" >> README.md
 else
   echo "just compile
@@ -429,9 +442,12 @@ fi
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)/'"${WRAPFILE}"'"
 cd "${'"${PROJECT_PREFIX}"'_CWD}"
 
+# Plugins
 source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
 source "${VSI_COMMON_DIR}/linux/just_docker_functions.bsh"
+source "${VSI_COMMON_DIR}/linux/just_git_functions.bsh"
 
+# Main function
 function caseify()
 {
   local just_arg=$1
@@ -450,6 +466,37 @@ function caseify()
       Just-docker-compose run '"${APP_NAME}"' ${@+"${@}"}
       extra_args+=$#
       ;;
+
+    setup) # Run any special command to set up the environment for the first \
+      # time after checking out the repo. Usually population of volumes/databases \
+      # go here.
+      (justify _sync)
+      ;;
+    sync) # Synchronize the many aspects of the project when new code changes \
+          # are applied e.g. after "git checkout"
+      (justify _sync)
+      # Add any extra steps run when syncing when not installing
+      ;;
+    _sync)
+      (justify git_submodule-update) # For those users who don'"'"'t remember!
+      (justify build)' > "${JUSTFILE}"
+      if [ "${USE_PIPENV}" = "1" ]; then
+        echo '      (justify clean venv)' >> "${JUSTFILE}"
+      fi
+      echo '      ;;
+    clean_all) # Delete all local volumes
+      ask_question "Are you sure? This will clear your database too!" n
+      (justify clean venv)
+      ;;
+    clean_venv) # Delete the virtual environment volume. The next container \
+                # to use this volume will automatically copy the contents from \
+                # the image.
+      if docker volume inspect "${COMPOSE_PROJECT_NAME}_venv" &> /dev/null; then
+        Docker volume rm "${COMPOSE_PROJECT_NAME}_venv"
+      else
+        echo "${COMPOSE_PROJECT_NAME}_venv already removed"
+      fi
+      ;;
     *)
       defaultify "${just_arg}" ${@+"${@}"}
       ;;
@@ -457,7 +504,7 @@ function caseify()
 }
 
 if ! command -v justify &> /dev/null; then caseify ${@+"${@}"};fi
-' > "${JUSTFILE}"
+' >> "${JUSTFILE}"
   else
     echo '#!/usr/bin/env bash
 
@@ -528,34 +575,41 @@ RUN build_deps="wget ca-certificates"; \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=tini /usr/local/bin/tini /usr/local/bin/tini
+
 COPY --from=gosu /usr/local/bin/gosu /usr/local/bin/gosu
 # Allow non-privileged to run gosu (remove this to take root away from user)
-RUN chmod u+s /usr/local/bin/gosu' >> docker/${APP_NAME}.Dockerfile
+RUN chmod u+s /usr/local/bin/gosu
+' >> docker/${APP_NAME}.Dockerfile
 
     if [ "${USE_PIPENV}" = "1" ]; then
       echo 'COPY --from=pipenv /tmp/pipenv /tmp/pipenv
 RUN python3 /tmp/pipenv/get-pipenv; rm -r /tmp/pipenv
-
 ENV WORKON_HOME=/venv \
-    #PIPENV_PIPFILE=/src/Pipfile \
+    PIPENV_PIPFILE=/src/Pipfile \
     # Needed for pipenv shell \
     PYENV_SHELL=/bin/bash \
     LC_ALL=C.UTF-8 \
     LANG=C.UTF-8
-
 ADD Pipfile Pipfile.lock /src/
-
-RUN cd /src; \
-    if [ ! -s Pipfile.lock ]; then \
+# Break apart into multiple steps if it gets too big. Manually pick big packages
+# And install them separate RUN commands
+RUN if [ ! -s Pipfile.lock ]; then \
       pipenv lock; \
     fi; \
-    pipenv install
+    pipenv install; \
+    # Cleanup and make way for the real /src that will be mounted at runtime
+    rm -r /src
 
+# Packages can be added to your project using either:
+# - "just run '"${APP_NAME}"'" and running "pipenv install {package}" e.g. "pipenv install scipy"
+# - Editing the Pipfile and adding lines to the [packages] section, e.g. "scipy = '"'"'*'"'"'"
 
 # Here'"'"'s a more complicated example, say GDAL is in your Pipfile
-# Hint: To get GDAL in the Pipfile, "just run '"${APP_NAME}"'" and run these commands
-#       To run "pipenv install gdal==2.1.0" (you want the version to match the gdal version)
-# RUN build_deps="libgdal-dev python3-dev g++"
+# Hint: To get GDAL in the Pipfile, add '"'"'gdal = "==2.1.0"'"'"'
+#       to the [packages] section of the Pipfile.
+#       The version of the pypi package should match (as close as possible)
+#       the GDAL binary version installed; then uncomment these lines:
+# RUN build_deps="libgdal-dev python3-dev g++"; \
 #     apt-get update; \
 #     # Install build dependencies and runtime dependencies
 #     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -566,18 +620,25 @@ RUN cd /src; \
 #     export C_INCLUDE_PATH=/usr/include/gdal; \
 #     # Build up venv
 #     # First you must install the version of numpy specified by the Pipfile.lock
-#     # GDAL needs numpy setup tools to compile with.
-#     pipenv install --skip-lock "numpy$(python3 -c "import json; print(json.load(open('"'"'Pipfile.lock'"'"', '"'"'r'"'"'))['"'"'default'"'"']['"'"'numpy'"'"']['"'"'version'"'"'])" 2>/dev/null)"; \
-#     pipenv sync; \
+#     if [ ! -s Pipfile.lock ]; then \
+#       pipenv lock; \
+#     fi; \
+#     pipenv install; \
 #     # Cleanup
-#     rm -rv /src/*
+#     rm -rv /src/*; \
 #     # Remove build dependencies, you are done with them
 #     apt-get purge -y --auto-remove ${build_deps}; \
 #     rm -r /var/lib/apt/lists/*
 
-#     # Some libraries like scikit-garden==0.1.3 need numpy setup tools installed before installing the to compile with.
-#     pipenv install --skip-lock "numpy$(python3 -c "import json; print(json.load(open('Pipfile.lock', 'r'))['default']['numpy']['version'])" 2>/dev/null)"; \
-
+# Another Example
+# RUN if [ ! -s Pipfile.lock ]; then \
+#       pipenv lock; \
+#     fi; \
+#     # Some libraries like scikit-garden==0.1.3 need numpy setup tools installed
+#     # before installing the to compile with.
+#     pipenv install --skip-lock "numpy$(python3 -c "import json; print(json.load(open('"'"'Pipfile.lock'"'"', '"'"'r'"'"'))['"'"'default'"'"']['"'"'numpy'"'"']['"'"'version'"'"'])" 2>/dev/null)"; \
+#     # Install everything else now that numpy is available.
+#     pipenv sync
 
 ' >> docker/${APP_NAME}.Dockerfile
     fi
@@ -585,9 +646,11 @@ RUN cd /src; \
     echo '
 ADD '"${RELATIVE_PATH}"' /vsi
 ADD docker/'"${APP_NAME}"'_entrypoint.bsh /
-RUN chmod 755 /'"${APP_NAME}"'_entrypoint.bsh
+RUN chmod 644 /'"${APP_NAME}"'_entrypoint.bsh
 
-ENTRYPOINT ["/usr/local/bin/tini", "/'"${APP_NAME}"'_entrypoint.bsh"]
+ENTRYPOINT ["/usr/local/bin/tini", "/usr/bin/env", "bash", "/'"${APP_NAME}"'_entrypoint.bsh"]
+# Does not require execute permissions, unlike
+# ENTRYPOINT ["/usr/local/bin/tini", "/'"${APP_NAME}"'_entrypoint.bsh"]
 
 CMD ["'"${APP_NAME}"'"]' >> docker/${APP_NAME}.Dockerfile
   else
@@ -602,8 +665,7 @@ set -eu
 source "${'"${PROJECT_PREFIX}"'_SOURCE_DIR}/wrap"
 
 if [ "${ALREADY_RUN_ONCE+set}" != "set" ]; then
-  # create the user and associated groups and handle nfs symlinks
-  chmod u+x /vsi/linux/docker_entrypoint.bsh' > "docker/${APP_NAME}_entrypoint.bsh"
+  # create the user and associated groups and handle nfs symlinks' > "docker/${APP_NAME}_entrypoint.bsh"
 
     if [ "${USE_PIPENV}" = "1" ]; then
       echo '  source "${VSI_COMMON_DIR}/linux/elements.bsh"
@@ -611,10 +673,10 @@ if [ "${ALREADY_RUN_ONCE+set}" != "set" ]; then
   JUST_DOCKER_ENTRYPOINT_INTERNAL_DIRS="${venvs}" \' >> "docker/${APP_NAME}_entrypoint.bsh"
     fi
 
-    echo '  /vsi/linux/docker_entrypoint.bsh
+    echo '  /usr/bin/env bash /vsi/linux/docker_entrypoint.bsh
 
   # Rerun entrypoint as user now, (skipping the root part via ALREADY_RUN_ONCE)
-  ALREADY_RUN_ONCE=1 exec gosu ${DOCKER_USERNAME} $0 ${@+"${@}"}
+  ALREADY_RUN_ONCE=1 exec gosu ${DOCKER_USERNAME} /usr/bin/env bash $0 ${@+"${@}"}
 fi
 
 function sudo()
@@ -624,13 +686,13 @@ function sudo()
 export -f sudo
 
 source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
+# Remove duplicate '"${PROJECT_PREFIX}"'_*_DOCKER variables
 filter_docker_variables
 
 ' >> "docker/${APP_NAME}_entrypoint.bsh"
 
     if [ "${USE_PIPENV}" = "1" ]; then
       echo 'if [ "$1" == "'"${APP_NAME}"'" ]; then
-  cd "${'"${PROJECT_PREFIX}"'_SOURCE_DIR}"
   if [ ! -s "${'"${PROJECT_PREFIX}"'_SOURCE_DIR}/Pipfile.lock" ]; then
     pipenv lock
   fi
@@ -639,7 +701,6 @@ elif [ "$1" == "nopipenv" ]; then
   shift 1
   exec "${@}"
 else
-  cd "${'"${PROJECT_PREFIX}"'_SOURCE_DIR}"
   if [ ! -s "${'"${PROJECT_PREFIX}"'_SOURCE_DIR}/Pipfile.lock" ]; then
     pipenv lock
   fi
@@ -686,19 +747,21 @@ services:
         target: ${'"${PROJECT_PREFIX}"'_SOURCE_DIR_DOCKER}' > "docker-compose.yml"
     if [ "${USE_PIPENV}" = "1" ]; then
       echo '      - type: volume
-        source: venv-volume
+        source: venv
         target: /venv' >> "docker-compose.yml"
     fi
     echo '      # - type: volume
       #   source: home-volume
       #   target: ${'"${PROJECT_PREFIX}"'_HOME} # home-volume should be overridable
   '"${APP_NAME}"'2:
-    <<: *'"${APP_NAME}"'_anchor
-volumes:
-#  home-volume:' >> "docker-compose.yml"
+    <<: *'"${APP_NAME}"'_anchor' >> "docker-compose.yml"
     if [ "${USE_PIPENV}" = "1" ]; then
-      echo '  venv-volume:' >> "docker-compose.yml"
+      echo 'volumes:
+  venv:' >> "docker-compose.yml"
+    else
+      echo '#   volumes:' >> "docker-compose.yml"
     fi
+    echo '#   home-volume:' >> "docker-compose.yml"
   else
     echo "docker-compose.yml exists, skipping..."
   fi
@@ -793,9 +856,10 @@ echo "just help"
 echo
 echo "Get started with:"
 echo
-echo "just build"
 if [ "${USE_DOCKER}" = "1" ]; then
+  echo "just setup"
   echo "just run ${APP_NAME} bash"
 else
+  echo "just compile"
   echo "just run"
 fi
