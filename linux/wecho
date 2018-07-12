@@ -1,0 +1,39 @@
+# - This only works in script where you are doing a multiline echo.
+# - Will not work correctly if you are using "\n"
+# - Will not work correctly "\t" in your indents. Use here doc if you want to
+#   use tabs
+
+function wecho()
+{
+  # Get caller info
+  local line_number="$(caller)"
+  # Extract filename
+  local file_name="${line_number#* }"
+  # Get the line number
+  line_number="${line_number%% *}"
+
+  # In the case of a multiline command Determine number of lines to backtrack
+  local lines="$(echo -n ${@+"${@}"} | wc -l)"
+  line_number=$((line_number-lines))
+
+
+  local source_line="$(sed -n "${line_number}p" "${file_name}")"
+
+  # Count number of leading spaces
+  local spaces="$(echo -n "${source_line}" | sed -E 's|^( *wecho ['"'"'"]?).*|\1|' | wc -c)"
+
+  local args=()
+
+  local testthis=${LINE}
+
+  while (( $# )); do
+    args+=("$(sed '2,$s|^ \{'"${spaces}"'\}||' <<< "$1")")
+    shift 1
+  done
+  echo ${args+"${args[@]}"}
+}
+
+if [[ ${BASH_SOURCE[0]} == ${0} ]] || [[ $(basename ${BASH_SOURCE[0]}) == ${0} ]]; then
+  wecho ${@+"${@}"}
+  exit $?
+fi
