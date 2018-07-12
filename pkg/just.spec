@@ -5,10 +5,17 @@ block_cipher = None
 added_files=[('../linux', 'linux'),
              ('../env.bsh', '.')]
 
-# Package up bash too, why not
+# Add for recipes
+added_files.append(('../docker', 'docker'))
+
+# Add tests to test just executable
+added_files.append(('../tests', 'test'))
+
 if os.name=='nt':
-  import distutils.spawn
-#  added_files.append((distutils.spawn.find_executable('bash'), 'vsi'))
+  console=False
+  # console=True
+else:
+  console=True
 
 a = Analysis(['just.py'],
              pathex=['.'],
@@ -33,4 +40,4 @@ exe = EXE(pyz,
           strip=False,
           upx=True,
           runtime_tmpdir=None,
-          console=True )
+          console=console )
