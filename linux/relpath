@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+
+# Based on https://stackoverflow.com/a/14914070/4166604
+
+#****F* vsi/relpath
+# NAME
+#   relpath - Bash CLI version of relpath
+# INPUTS
+#   $1 - Target dir
+#   $2 - Start dir
+# OUTPUT
+#   stdout - relpath
+# SEE ALSO
+#   relpath/relpath
+#***
+
+#****f* relpath/relpath
+# NAME
+#   relpath - Returns the relative path of the two directories
+# INPUTS
+#   $1 - Target dir
+#   $2 - Start dir
+# OUTPUT
+#   stdout - relpath
+# EXAMPLE
+#   relpath 33 11 22 33 44
+# AUTHOR
+#   Andy Neff
+#***
+function relpath()
+{
+  current="${1:+"$2"}"
+  target="${1:-"$2"}"
+
+  # If dir is ., make it /
+  if [[ ${target} =~ ^\./*$ ]]; then
+    target="/"
+  fi
+  if [[ ${current} =~ ^\./*$ ]]; then
+    current="/"
+  fi
+  : "${current:="/"}"
+
+  # Remove trailing and leading slahes, and always start with /
+  target="/$(sed -E 's|^/*||;s|/*$||' <<< "${target}")" >&2
+  current="/$(sed -E 's|^/*||;s|/*$||' <<< "${current}")" >&2
+
+  # Remove beginning slash, if there is one
+  appendix="${target##/}"
+  relative=''
+  while appendix="${target#"$current"/}"
+    [ "$current" != '/' ] && [ "$appendix" = "$target" ]; do
+    if [ "$current" = "$appendix" ]; then
+      relative="${relative:-.}"
+      # Return value
+      echo "${relative#/}"
+      return 0
+    fi
+    current="${current%/*}"
+    relative="$relative${relative:+/}.."
+  done
+  relative="$relative${relative:+${appendix:+/}}${appendix#/}"
+
+  # Return value
+  echo "$relative"
+}
+
+if [[ ${BASH_SOURCE[0]} == ${0} ]] || [[ $(basename ${BASH_SOURCE[0]}) == ${0} ]]; then
+  relpath ${@+"${@}"}
+  exit $?
+fi

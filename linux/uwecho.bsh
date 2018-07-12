@@ -1,0 +1,74 @@
+
+#****F* vsi/uwecho.bsh
+# NAME
+#   uwecho - Unwrapping echo
+#***
+
+#****f* uwecho.bsh/uwecho
+# NAME
+#   uwecho - Unwrapping echo
+# DESCRIPTION
+#   When doing many multiline echo's, mixed indentation becomes hard to read:
+#
+#     echo "This
+#   is
+#     a
+#     test"
+#
+#   uwecho will determine how many spaces up to the quote on the first line,
+#   and remove that many spaces if they are leading in all the subsequent lines
+#
+#     uwecho "This
+#             is
+#               a
+#               test"
+#
+#   Much easier to read. Even handles:
+#
+#     uwecho "  This
+#             is
+#               a test"
+#
+# INPUTS
+#   [$1...] - Args to echo
+# OUTPUT
+#   stdout - Echo's strings with lines unindented
+# NOTES
+#   - This only works in script where you are doing a multiline echo.
+#   - Will not work correctly if you are using "\n"
+#   - Will not work correctly "\t" in your indents. Use here doc if you want to
+#     use tabs
+#   - Not smart enough to work execpt when line starts with spaces and wecho
+#   - Does not work if you cd after the script is started, unless you use full
+#     path name to call the script
+#   - Does not work in $() or `` or any as any subprocess
+# AUTHOR
+#   Andy Neff
+#***
+function uwecho()
+{
+  # Get caller info
+  local line_number="$(caller)"
+  # Extract filename
+  local file_name="${line_number#* }"
+  # Get the line number
+  line_number="${line_number%% *}"
+
+  # In the case of a multiline command Determine number of lines to backtrack
+  local lines="$(echo -n ${@+"${@}"} | wc -l)"
+  line_number=$((line_number-lines))
+
+
+  local source_line="$(sed -n "${line_number}p" "${file_name}")"
+
+  # Count number of leading spaces
+  local spaces="$(echo -n "${source_line}" | sed -E 's|^( *uwecho ['"'"'"]?).*|\1|' | wc -c)"
+
+  local args=()
+
+  while (( $# )); do
+    args+=("$(sed '2,$s|^ \{'"${spaces}"'\}||' <<< "$1")")
+    shift 1
+  done
+  echo ${args+"${args[@]}"}
+}
