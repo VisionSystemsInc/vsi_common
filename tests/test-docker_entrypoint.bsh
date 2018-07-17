@@ -267,3 +267,46 @@ begin_test "docker setup data volumes"
   [ "$(cat mockout)" = $'chmod 777 /tmp/test1 /tmp/tes1 /dev/shm/test 1:  2 ' ]
 )
 end_test
+
+begin_test "docker_convert_paths"
+(
+  setup_test
+  QUESTS=('//dir/dir2//dir3://foo//bar'
+          'test://this'
+          '/foo//bar')
+  ANS=('/dir/dir2//dir3:/foo//bar'
+       'test:/this'
+       '/foo//bar')
+
+  for q in "${!QUESTS[@]}"; do
+    export ATEST="${QUESTS[$q]}"
+    export bbqTEST="${QUESTS[$q]}"
+    export CFOO="${QUESTS[$q]}"
+    export DBAR="${QUESTS[$q]}"
+
+    (
+      JUST_NO_PATHCONV='.*TEST' docker_convert_paths
+      [ "${ATEST}" = "${QUESTS[$q]}" ]
+      [ "${bbqTEST}" = "${QUESTS[$q]}" ]
+      [ "${CFOO}" = "${ANS[$q]}" ]
+      [ "${DBAR}" = "${ANS[$q]}" ]
+    )
+
+    (
+      JUST_NO_PATHCONV='CFOO|.*AR' docker_convert_paths
+      [ "${ATEST}" = "${ANS[$q]}" ]
+      [ "${bbqTEST}" = "${ANS[$q]}" ]
+      [ "${CFOO}" = "${QUESTS[$q]}" ]
+      [ "${DBAR}" = "${QUESTS[$q]}" ]
+    )
+
+    (
+      docker_convert_paths
+      [ "${ATEST}" = "${ANS[$q]}" ]
+      [ "${bbqTEST}" = "${ANS[$q]}" ]
+      [ "${CFOO}" = "${ANS[$q]}" ]
+      [ "${DBAR}" = "${ANS[$q]}" ]
+    )
+  done
+)
+end_test

@@ -294,7 +294,71 @@ function docker_setup_data_volumes()
       chown -R "${DOCKER_UID}:${DOCKER_GIDS[0]}" "${reown_dirs[@]}"
     fi
   fi
+}
 
+#****f* docker_entrypoint.bsh/docker_convert_paths
+# NAME
+#   docker_convert_paths - Remove double slash from environment variables
+# USAGE
+#   Automatically called when docker_entrypoint.bsh is called. If
+#   docker_entrypoint.bsh is sourced, then docker_convert_paths would need
+#   to be called separately.
+# DESCRIPTION
+#   Using docker on Windows has many complexities. This function fixes the case
+#   MSYS2/MINGW/CYGWIN converts paths for you too aggressively. The official
+#   solution from http://www.mingw.org/wiki/Posix_path_conversion is to use //
+#   on Windows.
+#
+#   While this is annoying and ugly, it is usually harmless... However not
+#   always harmless and can and does create errors sometimes with no good
+#   solution.
+#
+#   Using MSYS_NO_PATHCONV only works on Git for Windows, and will end up
+#   breaking a lot more than it fixes. This function will remove the //'s on
+#   the docker side
+# PARAMETERS
+#   [JUST_NO_PATHCONV] - Regex expression for variable names that should not
+#                        be converted. It is anticipated this will never be
+#                        needed but in case there is an environment variable
+#                        that validly contains //, putting its name in here
+#                        will exclude it from the conversion. Remember, the
+#                        pattern '' matches everything.
+#   [LC_COLLATE] - Has significant affect on regex ranges. [a-z] and [A-Z] has
+#                  most of both upper and lower cases in their range on
+#                  en_US.utf-8, which is probably not the intended result.
+#                  Use LC_COLLATE=C or POSIX to get a more basic result.
+# EXAMPLE
+#   JUST_1="this is a :// test" # Excluded from converted
+#   JUST_2="dir1://dir2"        # Converted
+#   JUST_3="this is // test"    # Excluded from converted
+#   JUST_4="test // this"       # Not converted, doesn't match pattern
+#   JUST_5=//dir1://dir2"       # Converted
+#
+#   JUST_NO_PATHCONV="JUST_1|JUST_3" docker_convert_paths # Run conversion
+#   JUST_NO_PATHCONV="JUST_{1,3}" docker_convert_paths    # Same thing
+# NOTES
+#   Only checks exported variables, and does not work on arrays, which shouldn't
+#   be exported in the first place
+#
+#   Pure Bash implementation should decrease any unnecessary forking.
+# AUTHOR
+#   Andy Neff
+#***
+function docker_convert_paths()
+{
+  local var
+  local value
+  for var in $(compgen -A export); do
+    if ! [[ ${var} =~ ${JUST_NO_PATHCONV-nomatch^} ]]; then
+      value="${!var}"
+      #Check leading //
+      if [ ${#value} -ge 2 ] && [ "${value:0:2}" == "//" ]; then
+        value="${value:1}"
+      fi
+      # Replace for internal ://
+      export "${var}=${value//:\/\//:\/}"
+    fi
+  done
 }
 
 if [[ ${BASH_SOURCE[0]} == ${0} ]] || [[ $(basename ${BASH_SOURCE[0]}) == ${0} ]]; then
