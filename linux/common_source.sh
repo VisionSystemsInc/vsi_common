@@ -32,10 +32,47 @@
 #   Andy Neff
 #***
 
+#****d* common_source.sh/VSI_PATH_ESC
+# NAME
+#   VSI_PATH_ESC - Path escape string for windows path translation
+# DESCRIPTION
+#   MSYS2, Git for Windows, etc.. translate unix style paths to windows style
+#   for you when even you call a non-bash command. This helps bridge the gap
+#   between the unix style systems and windows. However, sometimes it
+#   translates too much, which can cause a lot of issue.
+#
+#   This environment variable exists to add a / on Windows, and null on all
+#   other OSes
+# EXAMPLE
+#     foo -v /tmp:/tmp
+#   Becomes
+#     foo -v C:/Users/user/AppData/Temp:C:/Users/user/AppData/Temp
+#
+#   But what you really might want is
+#     foo -v C:/Users/user/AppData/Temp:/tmp
+#
+#   Using VSI_PATH_ESC
+#     foo -v /tmp:${VSI_PATH_ESC}/tmp
+#   Becomes
+#     foo -v C:/Users/user/AppData/Temp://tmp
+# NOTES
+#   Cygwin does not automatically translate paths, you have to explicitly call
+#   cygpath, so VSI_PATH_ESC is set to null. Using cygwin will take a lot more
+#   work, and is usually less preferred for this reason
+# BUGS
+#   There is a // artifact left over when there should be a /. This usually
+#   does not cause problems, but on rare occasions it does. It is ugly on all
+#   occasions
+# AUTHOR
+#   Andy Neff
+#***
+
 # In general, sh doesn't set OSTYPE; bash always does
 : ${OSTYPE=$(uname | tr '[A-Z]' '[a-z]')}
 
-case "$OSTYPE" in
+VSI_PATH_ESC=''
+
+case "${OSTYPE}" in
   linux*)
     VSI_OS=linux
     ;;
@@ -48,6 +85,9 @@ case "$OSTYPE" in
     VSI_OS=windows
     VSI_DISTRO=windows
     VSI_DISTRO_VERSION="$(wmic os get version /format:table | sed -n 2p)"
+    if ! [[ ${OSTYPE} =~ cygwin.* ]]; then
+      VSI_PATH_ESC='/'
+    fi
     ;;
   solaris*)
     VSI_OS=solaris
