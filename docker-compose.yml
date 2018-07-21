@@ -1,0 +1,43 @@
+version: "2.3"
+
+services:
+  wine: &wine
+    build:
+      context: docker/tests
+      dockerfile: wine.Dockerfile
+    image:
+      vsi_wine_test
+    cap_add:
+      - SYS_PTRACE
+    working_dir: /vsi_common
+    environment: &wine_environment
+      USER_ID: "${USER_ID-1000}"
+      VSI_COMMON_IS_POWERSHELL: "1"
+      WINEDEBUG: "fixme-all,err-winediag,err-menubuilder"
+    volumes:
+      - &wine_volume1
+        type: volume
+        source: wine_home
+        target: /home/.user_wine
+      - &wine_volume2
+        type: bind
+        source: .
+        target: /vsi_common
+        read_only: true
+    command: -c "cd /z/vsi_common; bash -l"
+  wine_gui:
+    <<: *wine
+    environment:
+      <<: *wine_environment
+      DISPLAY:
+    volumes:
+      - *wine_volume1
+      - *wine_volume2
+      - type: bind
+        read_only: true
+        target: /tmp/.X11-unix
+        source: /tmp/.X11-unix
+    command: []
+
+volumes:
+  wine_home:

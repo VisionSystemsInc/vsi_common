@@ -29,52 +29,29 @@ function caseify()
     test_darling) # Run unit tests using darling
       (
         cd "${VSI_COMMON_DIR}"
-        env -i HOME="${HOME}" darling shell ./tests/run_tests.bsh ${@+"${@}"}
+        env -i HOME="${HOME}" darling shell env TESTS_PARALLEL=8 ./tests/run_tests.bsh ${@+"${@}"}
       )
       extra_args+=$#
       ;;
     build_wine) # Build wine image
-      (
-        cd "${VSI_COMMON_DIR}/docker/tests"
-        docker build -t "${VSI_COMMON_WINE_TEST_IMAGE}" -f wine.Dockerfile .
-      )
+      Docker-compose build
       ;;
     run_wine) # Start a wine bash window
-      docker run -it --rm --cap-add=SYS_PTRACE \
-                 -e USER_ID="$(id -u)" \
-                 -e VSI_COMMON_IS_POWERSHELL=1 \
-                 -e WINEDEBUG=fixme-all,err-winediag,err-menubuilder \
-                 -v "${VSI_COMMON_WINE_TEST_VOLUME}:/home/.user_wine" \
-                 -v "${VSI_COMMON_DIR}":/vsi_common:ro \
-                 -w /vsi_common \
-                 "${VSI_COMMON_WINE_TEST_IMAGE}" -c "cd /z/vsi_common; bash -l"
+      Docker-compose run -e USER_ID="$(id -u)" wine ${@+"${@}"} || :
+      extra_args+=$#
       ;;
     run_wine-gui) # Start a wine bash window in gui mode
-      docker run --rm --cap-add=SYS_PTRACE -e DISPLAY \
-                 -e USER_ID="$(id -u)" \
-                 -e VSI_COMMON_IS_POWERSHELL=1 \
-                 -e WINEDEBUG=fixme-all,err-winediag,err-menubuilder \
-                 -v "${VSI_COMMON_WINE_TEST_VOLUME}:/home/.user_wine" \
-                 -v /tmp/.X11-unix:/tmp/.X11-unix \
-                 -v "${VSI_COMMON_DIR}":/vsi_common:ro \
-                 -w /vsi_common \
-                 "${VSI_COMMON_WINE_TEST_IMAGE}" &
+      Docker-compose run -e USER_ID="$(id -u)" wine_gui ${@+"${@}"}&
+      extra_args+=$#
       ;;
     test_wine) # Run unit tests using wine
-      docker run -it --rm --cap-add=SYS_PTRACE \
-                 -e USER_ID="$(id -u)" \
-                 -e VSI_COMMON_IS_POWERSHELL=1 \
-                 -e WINEDEBUG=fixme-all,err-winediag,err-menubuilder \
-                 -v "${VSI_COMMON_WINE_TEST_VOLUME}:/home/.user_wine" \
-                 -v "${VSI_COMMON_DIR}":/vsi_common:ro \
-                 -w /vsi_common \
-                 "${VSI_COMMON_WINE_TEST_IMAGE}" -c \
-                 "cd /z/vsi_common
-                  . setup.env
-                  just test ${*}
-                "'rv=$?
-                  read -p "Press any key to close" -r -e -n1
-                  exit ${rv}'
+      (justify run wine -c "
+        cd /z/vsi_common
+        . setup.env
+        just test ${*}"'
+        rv=$?
+        read -p "Press any key to close" -r -e -n1
+        exit ${rv}')
       extra_args+=$#
       ;;
     *)
