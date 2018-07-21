@@ -209,6 +209,21 @@ else
   JUSTFILE="$(basename ${JUSTFILE})"
 fi
 
+#****d* new_just/USE_VSI_COMMON
+# NAME
+#   USE_VSI_COMMON - Flag to include vsi_common
+# DESCRIPTION
+#   vsi_common can either be included as a submodule, in which case setup.env
+#   is needed, or the just executable needs to be installed and vsi_common is
+#   not needed.
+# AUTHOR
+#   Andy Neff
+#***
+echo "If you do not include vsi_common, then all users till have to have"
+echo "the just executable installed and on their path to use this project."
+echo "(It also makes updating vsi_common features/bugs harder)"
+ask_question "Do you want to include the vsi_common submodule?" USE_VSI_COMMON y
+
 #****d* new_just/SETUPFILE
 # NAME
 #   SETUPFILE - Name of the setup file sourced to setup just environment
@@ -228,12 +243,14 @@ fi
 # AUTHOR
 #   Andy Neff
 #***
-: ${SETUPFILE="$(read -r -p "Environment setup script file name (setup.env) " x; echo "$x")"}
-if [ "${SETUPFILE}" == "" ]; then
-  SETUPFILE="setup.env"
-else
-  SETUPFILE="$(basename ${SETUPFILE})"
-fi
+if [ "${USE_VSI_COMMON}" = "1" ]; then
+
+  : ${SETUPFILE="$(read -r -p "Environment setup script file name (setup.env) " x; echo "$x")"}
+  if [ "${SETUPFILE}" == "" ]; then
+    SETUPFILE="setup.env"
+  else
+    SETUPFILE="$(basename ${SETUPFILE})"
+  fi
 
 #****d* new_just/WRAPFILE
 # NAME
@@ -246,15 +263,16 @@ fi
 #   wrap. The question can be skipped by setting the environment variable
 #   WRAPFILE to the desired value.
 # SEE ALSO
-#   just/Just_wrap
+#   just/just_env
 # AUTHOR
 #   Andy Neff
 #***
-: ${WRAPFILE="$(read -r -p "Wrap script file name (wrap) " x; echo "$x")"}
-if [ "${WRAPFILE}" == "" ]; then
-  WRAPFILE="wrap"
-else
-  WRAPFILE="$(basename ${WRAPFILE})"
+  : ${WRAPFILE="$(read -r -p "Wrap script file name (wrap) " x; echo "$x")"}
+  if [ "${WRAPFILE}" == "" ]; then
+    WRAPFILE="wrap"
+  else
+    WRAPFILE="$(basename ${WRAPFILE})"
+  fi
 fi
 
 #****d* new_just/VSI_DIR
@@ -272,16 +290,19 @@ fi
 # AUTHOR
 #   Andy Neff
 #***
-: ${VSI_DIR="$(read -r -p "VSI common module path (./external/vsi_common) " x; echo "$x")"}
-if [ "${VSI_DIR}" == "" ]; then
-  VSI_DIR="${PROJECT_DIR}/external/vsi_common"
-else
-  VSI_DIR="$(cd "${PROJECT_DIR}";
-             mkdir -p "${VSI_DIR}";
-             cd "${VSI_DIR}";
-             pwd)"
+if [ "${USE_VSI_COMMON}" = "1" ]; then
+  : ${VSI_DIR="$(read -r -p "VSI common module path (./external/vsi_common) " x; echo "$x")"}
+  if [ "${VSI_DIR}" == "" ]; then
+    VSI_DIR="${PROJECT_DIR}/external/vsi_common"
+  else
+    VSI_DIR="$(cd "${PROJECT_DIR}";
+               mkdir -p "${VSI_DIR}";
+               cd "${VSI_DIR}";
+               pwd;
+               cd -;
+               rmdir "${VSI_DIR}")"
+  fi
 fi
-
 
 ## Docker Stuff
 
@@ -352,16 +373,21 @@ printf "%-40s | %-40s\n" "Project Name" "${PROJECT_NAME}"
 printf "%-40s | %-40s\n" "Project Directory" "${PROJECT_DIR}"
 printf "%-40s | %-40s\n" "Project prefix" "${PROJECT_PREFIX}"
 printf "%-40s | %-40s\n" "Just file" "${JUSTFILE}"
-printf "%-40s | %-40s\n" "Environment setup script" "${SETUPFILE}"
-printf "%-40s | %-40s\n" "Wrap script" "${WRAPFILE}"
+if [ "${USE_VSI_COMMON}" = "1" ]; then
+  printf "%-40s | %-40s\n" "Environment setup script" "${SETUPFILE}"
+  printf "%-40s | %-40s\n" "Wrap script" "${WRAPFILE}"
+fi
 
 printf "%-40s | %-40s\n" "Use docker" "${USE_DOCKER}"
 printf "%-40s | %-40s\n" "Use pipenv" "${USE_PIPENV}"
+printf "%-40s | %-40s\n" "Include vsi_common" "${USE_VSI_COMMON}"
 if [ "${USE_DOCKER}" = "1" ]; then
 
   printf "%-40s | %-40s\n" "App Name" "${APP_NAME}"
   printf "%-40s | %-40s\n" "Docker Repo" "${REPO_NAME}"
-  printf "%-40s | %-40s\n" "VSI Common Directory" "${VSI_DIR}"
+  if [ "${USE_VSI_COMMON}" = "1" ]; then
+    printf "%-40s | %-40s\n" "VSI Common Directory" "${VSI_DIR}"
+  fi
 fi
 echo
 # Ask y/n question
@@ -373,9 +399,11 @@ fi
 
 # Setup done, start making the new environment
 
-# RELATIVE_PATH="$(python -c "import os; print(os.path.relpath('${VSI_DIR}', '${PROJECT_DIR}'))")"
-# RELATIVE_PATH="$(perl -e "use File::Spec; print File::Spec->abs2rel('${VSI_DIR}','${PROJECT_DIR}');")"
-RELATIVE_PATH="$(relpath "${VSI_DIR}" "${PROJECT_DIR}")"
+if [ "${USE_VSI_COMMON}" = "1" ]; then
+  # RELATIVE_PATH="$(python -c "import os; print(os.path.relpath('${VSI_DIR}', '${PROJECT_DIR}'))")"
+  # RELATIVE_PATH="$(perl -e "use File::Spec; print File::Spec->abs2rel('${VSI_DIR}','${PROJECT_DIR}');")"
+  RELATIVE_PATH="$(relpath "${VSI_DIR}" "${PROJECT_DIR}")"
+fi
 
 # Make project dir
 mkdir -p "${PROJECT_DIR}"
@@ -385,41 +413,43 @@ cd "${PROJECT_DIR}"
 ### wrap ###
 ############
 
-if [ ! -e "${WRAPFILE}" ]; then
-  echo   '#!/usr/bin/env bash' > "${WRAPFILE}"
-  if [ "${JUSTFILE}" != "Justfile" ]; then
-    echo "export JUSTFILE=${JUSTFILE}" >> "${WRAPFILE}"
-  fi
-  uwecho ': "$(\dirname "${BASH_SOURCE[0]}")"
-          . "${VSI_COMMON_DIR:-"${_}"/'"${RELATIVE_PATH}"'}/linux/Just_wrap" "${_}"/'"${PROJECT_NAME}"'.env ${@+"${@}"}' >> "${WRAPFILE}"
+if [ "${USE_VSI_COMMON}" = "1" ]; then
+  if [ ! -e "${WRAPFILE}" ]; then
+    echo   '#!/usr/bin/env bash' > "${WRAPFILE}"
+    if [ "${JUSTFILE}" != "Justfile" ]; then
+      echo "export JUSTFILE=${JUSTFILE}" >> "${WRAPFILE}"
+    fi
+    uwecho ': "$(\dirname "${BASH_SOURCE[0]}")"
+            source "${VSI_COMMON_DIR:-"${_}"/'"${RELATIVE_PATH}"'}/linux/just_env" "${_}"/'"${PROJECT_NAME}"'.env ${@+"${@}"}' >> "${WRAPFILE}"
 
-else
-  echo "${WRAPFILE} exists, skipping..."
-fi
-
-#################
-### setup.env ###
-#################
-
-if [ ! -e "${SETUPFILE}" ]; then
-  uwecho 'export JUST_SETUP_SCRIPT="$(\basename "${BASH_SOURCE[0]}")"
-          unset JUST_VERSION
-          source "$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)/'"${RELATIVE_PATH}"'/env.bsh"' > "${SETUPFILE}"
-  if [ "${JUSTFILE}" != "Justfile" ]; then
-    echo "export JUSTFILE=${JUSTFILE}" >> "${SETUPFILE}"
   else
-    echo "unset JUSTFILE" >> "${SETUPFILE}"
+    echo "${WRAPFILE} exists, skipping..."
   fi
-else
-  echo "${SETUPFILE} exists, skipping..."
-fi
 
+  #################
+  ### setup.env ###
+  #################
+
+  if [ ! -e "${SETUPFILE}" ]; then
+    uwecho 'export JUST_SETUP_SCRIPT="$(\basename "${BASH_SOURCE[0]}")"
+            unset JUST_VERSION
+            source "$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)/'"${RELATIVE_PATH}"'/env.bsh"' > "${SETUPFILE}"
+    if [ "${JUSTFILE}" != "Justfile" ]; then
+      echo "export JUSTFILE=${JUSTFILE}" >> "${SETUPFILE}"
+    else
+      echo "unset JUSTFILE" >> "${SETUPFILE}"
+    fi
+  else
+    echo "${SETUPFILE} exists, skipping..."
+  fi
+fi
 
 ###################
 ### project.env ###
 ###################
 
 if [ ! -e "${PROJECT_NAME}.env" ]; then
+
   uwecho   'JUST_PROJECT_PREFIX='"${PROJECT_PREFIX}"'
             '"${PROJECT_PREFIX}"'_CWD="${CWD-"$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)"}"
             '  > "${PROJECT_NAME}.env"
@@ -458,7 +488,7 @@ if [ ! -e "${PROJECT_NAME}.env" ]; then
 
             # Put variables that do not begin with '"${PROJECT_PREFIX}"' here.
 
-            # Use this to add the username to the docker-compose project name. This is
+            # Use this to add the user name to the docker-compose project name. This is
             # important when multiple users are using this docker-compose project on a
             # single host. This way all of the docker resources are prefixed with a unique
             # name and do not collide
@@ -480,7 +510,7 @@ if [ ! -e "README.md" ]; then
   uwecho '## Getting started
 
           ```
-          . setup.env' > README.md
+          source setup.env' > README.md
 if [ "${USE_DOCKER}" = "1" ]; then
   uwecho "just setup
           just run ${APP_NAME}" >> README.md
@@ -492,9 +522,13 @@ fi
 
           ## Just usage:
 
-          ```
-          source "'"${SETUPFILE}"'"
-          just help
+          ```' >> README.md
+
+  if [ "${USE_VSI_COMMON}" = "1" ]; then
+    echo 'source "'"${SETUPFILE}"'"' >> README.md
+  fi
+
+  uwecho 'just help
           ```
           ' >> README.md
 else
@@ -509,9 +543,13 @@ if [ ! -e "${JUSTFILE}" ]; then
             if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then # If being sourced
               set -euE
             fi
-
-            source "$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)/'"${WRAPFILE}"'"
-            cd "${'"${PROJECT_PREFIX}"'_CWD}"
+            ' > "${JUSTFILE}"
+    if [ "${USE_VSI_COMMON}" = "1" ]; then
+      echo 'source "$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)/'"${WRAPFILE}"'"' >> "${JUSTFILE}"
+    else
+      echo 'source "${VSI_COMMON_DIR}/linux/just_env" "$(dirname "${BASH_SOURCE[0]}")"/'"${PROJECT_NAME}"'.env' >> "${JUSTFILE}"
+    fi
+    uwecho 'cd "${'"${PROJECT_PREFIX}"'_CWD}"
 
             # Plugins
             source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
@@ -529,7 +567,7 @@ if [ ! -e "${JUSTFILE}" ]; then
                     Docker-compose "${just_arg}" ${@+"${@}"}
                     extra_args+=$#
                   else
-                    (justify build_recipes)
+                    (justify build_recipes gosu tini vsi)
                     Docker-compose build
                   fi
                   ;;
@@ -551,27 +589,25 @@ if [ ! -e "${JUSTFILE}" ]; then
                 _sync)
                   Docker-compose down
                   (justify git_submodule-update) # For those users who don'"'"'t remember!
-                  (justify build)' > "${JUSTFILE}"
+                  (justify build)' >> "${JUSTFILE}"
     if [ "${USE_PIPENV}" = "1" ]; then
-      echo '      (justify clean venv)' >> "${JUSTFILE}"
-    fi
-    uwecho '      ;;
+    uwecho '      (justify clean venv)
+                  ;;
                 clean_all) # Delete all local volumes
                   ask_question "Are you sure? This will packages not in Pipfile!" n
                   (justify clean venv)
-                  ;;' >> "${JUSTFILE}"
-    if [ "${USE_PIPENV}" = "1" ]; then
-      uwecho '    clean_venv) # Delete the virtual environment volume. The next container \
-                              # to use this volume will automatically copy the contents from \
-                              # the image.
-                    if docker volume inspect "${COMPOSE_PROJECT_NAME}_venv" &> /dev/null; then
-                      Docker volume rm "${COMPOSE_PROJECT_NAME}_venv"
-                    else
-                      echo "${COMPOSE_PROJECT_NAME}_venv already removed"
-                    fi
-                    ;;' >> "${JUSTFILE}"
+                  ;;
+                clean_venv) # Delete the virtual environment volume. The next container \
+                            # to use this volume will automatically copy the contents from \
+                            # the image.
+                  if docker volume inspect "${COMPOSE_PROJECT_NAME}_venv" &> /dev/null; then
+                    Docker volume rm "${COMPOSE_PROJECT_NAME}_venv"
+                  else
+                    echo "${COMPOSE_PROJECT_NAME}_venv already removed"
+                  fi' >> "${JUSTFILE}"
     fi
-    uwecho '    *)
+    uwecho '      ;;
+                *)
                   defaultify "${just_arg}" ${@+"${@}"}
                   ;;
               esac
@@ -585,8 +621,13 @@ if [ ! -e "${JUSTFILE}" ]; then
               set -euE
             fi
 
-            source "$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)/'"${WRAPFILE}"'"
-            cd "${'"${PROJECT_PREFIX}"'_CWD}"
+            ' > "${JUSTFILE}"
+    if [ "${USE_VSI_COMMON}" = "1" ]; then
+      echo 'source "$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)/'"${WRAPFILE}"'"' >> "${JUSTFILE}"
+    else
+      echo 'source "${VSI_COMMON_DIR}/linux/just_env" "$(dirname "${BASH_SOURCE[0]}")"/'"${PROJECT_NAME}"'.env' >> "${JUSTFILE}"
+    fi
+    uwecho 'cd "${'"${PROJECT_PREFIX}"'_CWD}"
 
             function caseify()
             {
@@ -627,7 +668,8 @@ if [ "${USE_DOCKER}" = "1" ]; then
   # Make default dockerfiles
   if [ ! -e "docker/${APP_NAME}.Dockerfile" ]; then
     uwecho 'FROM vsiri/recipe:gosu as gosu
-            FROM vsiri/recipe:tini as tini' > docker/${APP_NAME}.Dockerfile
+            FROM vsiri/recipe:tini as tini
+            FROM vsiri/recipe:vsi as vsi' > docker/${APP_NAME}.Dockerfile
 
     if [ "${USE_PIPENV}" = "1" ]; then
       echo 'FROM vsiri/recipe:pipenv as pipenv' >> docker/${APP_NAME}.Dockerfile
@@ -716,7 +758,7 @@ if [ "${USE_DOCKER}" = "1" ]; then
     fi
 
     uwecho '
-            ADD '"${RELATIVE_PATH}"' /vsi
+            COPY --from=vsi /vsi /vsi
             ADD docker/'"${APP_NAME}"'_entrypoint.bsh /
 
             ENTRYPOINT ["/usr/local/bin/tini", "/usr/bin/env", "bash", "/'"${APP_NAME}"'_entrypoint.bsh"]
@@ -733,18 +775,17 @@ if [ "${USE_DOCKER}" = "1" ]; then
 
             set -eu
 
-            source "${'"${PROJECT_PREFIX}"'_SOURCE_DIR}/wrap"
+            source "${VSI_COMMON_DIR:-/vsi}/linux/just_env" "${'"${PROJECT_PREFIX}"'_SOURCE_DIR}/'"${PROJECT_NAME}"'.env"
 
             if [ "${ALREADY_RUN_ONCE+set}" != "set" ]; then
-              # create the user and associated groups and handle nfs symlinks' > "docker/${APP_NAME}_entrypoint.bsh"
+              # create the user and associated groups and handle nfs symlinks
 
-    if [ "${USE_PIPENV}" = "1" ]; then
-      uwecho '  source "${VSI_COMMON_DIR}/linux/elements.bsh"
-                join_a venvs /venv/*
-                JUST_DOCKER_ENTRYPOINT_INTERNAL_DIRS="${venvs}" \' >> "docker/${APP_NAME}_entrypoint.bsh"
-    fi
-
-    uwecho '  /usr/bin/env bash /vsi/linux/docker_entrypoint.bsh
+              # JUST_DOCKER_ENTRYPOINT_INTERNAL_DIRS will automatically chown
+              # all files in volumes to match the user. If this takes too long
+              # and you don'"'"'t need this feature, remove the ONE line, but leave
+              # the docker_entrypoint.bsh call
+              JUST_DOCKER_ENTRYPOINT_INTERNAL_DIRS="${JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES}" \
+              /usr/bin/env bash /vsi/linux/docker_entrypoint.bsh
 
               # Rerun entrypoint as user now, (skipping the root part via ALREADY_RUN_ONCE)
               ALREADY_RUN_ONCE=1 exec gosu ${DOCKER_USERNAME} /usr/bin/env bash $0 ${@+"${@}"}
@@ -840,7 +881,9 @@ if [ "${USE_DOCKER}" = "1" ]; then
   if [ ! -e .dockerignore ]; then
     echo '*' > .dockerignore
     echo '!docker' >> .dockerignore
-    echo '!'"${RELATIVE_PATH}" >> .dockerignore
+    if [ "${USE_VSI_COMMON}" = "1" ]; then
+      echo '!'"${RELATIVE_PATH}" >> .dockerignore
+    fi
 
     if [ "${USE_PIPENV}" = "1" ]; then
       echo '!Pipfile' >> .dockerignore
@@ -874,7 +917,11 @@ fi
 ###
 
 # Add executable permissions
-chmod 755 "${JUSTFILE}" "${WRAPFILE}"
+chmod 755 "${JUSTFILE}"
+
+if [ "${USE_VSI_COMMON}" = "1" ]; then
+  chmod 755 "${WRAPFILE}"
+fi
 
 # Add .gitignore exceptions
 if ! grep -q local.env .gitignore 2>/dev/null; then
@@ -883,9 +930,6 @@ fi
 if ! grep -q local_post.env .gitignore 2>/dev/null; then
   echo local_post.env >> .gitignore
 fi
-
-# Remove dummy vsi_common dir to make way for submodule setup
-rmdir -p "${VSI_DIR}" 2>/dev/null || :
 
 # ****************************************************************************
 # ****DONE****DONE****DONE****DONE****DONE****DONE****DONE****DONE****DONE****
@@ -899,12 +943,18 @@ uwecho "Done!
 if [ ! -e .git ]; then
   echo "git init ." >&3
 fi
-uwecho "git submodule add https://github.com/visionsystemsinc/vsi_common.git '${RELATIVE_PATH}'
-        git submodule update --init --recursive
-        pushd '${RELATIVE_PATH}'
-        git remote set-url origin --push git@github.com:visionsystemsinc/vsi_common.git
-        popd
-        git add .gitignore .gitmodules README.md '${JUSTFILE}' '${SETUPFILE}' '${WRAPFILE}' '${PROJECT_NAME}.env'" >&3
+
+if [ "${USE_VSI_COMMON}" = "1" ]; then
+  uwecho "git submodule add https://github.com/visionsystemsinc/vsi_common.git '${RELATIVE_PATH}'
+          git submodule update --init --recursive
+          pushd '${RELATIVE_PATH}'
+          git remote set-url origin --push git@github.com:visionsystemsinc/vsi_common.git
+          popd" >&3
+  echo   "git add '${SETUPFILE}' '${WRAPFILE}' .gitmodules" >&3
+fi
+
+echo   "git add .gitignore README.md '${JUSTFILE}' '${PROJECT_NAME}.env'" >&3
+
 if [ "${USE_DOCKER}" = "1" ]; then
   echo "git add .gitattributes .dockerignore docker-compose.yml docker/${APP_NAME}.Dockerfile docker/${APP_NAME}_entrypoint.bsh" >&3
 else
@@ -920,9 +970,13 @@ uwecho "
 
         To use your new just:
 
-        cd '${PROJECT_DIR}'
-        . '${SETUPFILE}'
-        just help
+        cd '${PROJECT_DIR}'"
+
+if [ "${USE_VSI_COMMON}" = "1" ]; then
+  echo "source '${SETUPFILE}'"
+fi
+
+uwecho "just help
 
         Get started with:"
 

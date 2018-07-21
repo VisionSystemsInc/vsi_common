@@ -134,6 +134,12 @@ source "${VSI_COMMON_DIR}/linux/elements.bsh"
 # DESCRIPTION
 #   Defaults to .justplugin in the same directory as the Justfile, but can be
 #   overridden to another filename/path by exporting to this variable
+# NOTES
+#   Since plugins are loaded right before the project environment, you can not
+#   set the JUST_PLUGIN_FILE in the project env file. If you are using a custom
+#   JUST_PLUGIN_FILE, it will need to be set in the SETUPFILE (setup.env)
+# SEE ALSO
+#   just/just_env
 # AUTHOR
 #   Andy Neff
 #***
@@ -178,6 +184,13 @@ fi
 #   Some just functions will need to know what all the project variables are
 #   called (using compgen). This should be defined in your environment script,
 #   and does not need to be overridable
+# AUTHOR
+#   Andy Neff
+#***
+
+#****id* just/JUST_PROJECT_FILE
+# NAME
+#   JUST_PROJECT_FILE - Absolute path to the project env file used
 # AUTHOR
 #   Andy Neff
 #***
@@ -229,6 +242,8 @@ function source_environment_files()
   local JUST_LOCAL_SETTINGS="${JUST_LOCAL_SETTINGS:-${project_dir}/local.env}"
   local JUST_LOCAL_SETTINGS_POST="${JUST_LOCAL_SETTINGS_POST:-${project_dir}/local_post.env}"
 
+  JUST_PROJECT_FILE="$(cd "${project_dir}"; pwd)/${1##*/}"
+
   if [ ! -e "${JUST_LOCAL_SETTINGS}" ]; then
     echo "# Put local setting in this file" > "${JUST_LOCAL_SETTINGS}"
     echo "# You should edit this file and not \"${1}\"" >> "${JUST_LOCAL_SETTINGS}"
@@ -256,6 +271,12 @@ function source_environment_files()
     echo "# \"${1}\" only" >> "${JUST_LOCAL_SETTINGS_POST}"
   fi
 
+  # Load plugins
+  _just_get_plugins "${project_dir}"
+  for just_plugin in ${JUST_PLUGINS+"${JUST_PLUGINS[@]}"}; do
+    source "${just_plugin}"
+  done
+
   set_flag a
   for x in "${JUST_LOCAL_SETTINGS}" \
            "$1" \
@@ -273,12 +294,6 @@ function source_environment_files()
   # harmless but annoying
   for x in $(declare -Fx | awk '{print $3}'); do
     export -fn "${x}"
-  done
-
-  # Load plugins
-  _just_get_plugins "${project_dir}"
-  for just_plugin in ${JUST_PLUGINS+"${JUST_PLUGINS[@]}"}; do
-    source "${just_plugin}"
   done
 }
 
@@ -580,7 +595,11 @@ function setup_powershell()
 function print_command()
 {
   while [ "$#" -gt 0 ]; do
-    printf "'${1//\'/\'\"\'\"\'}'"
+    if [[ ${1} =~ ^[a-zA-Z0-9_.:/-]*$ ]]; then
+      printf -- "${1}"
+    else
+      printf "'${1//\'/\'\"\'\"\'}'"
+    fi
     shift 1
     [ "$#" -gt 0 ] && printf " "
   done
@@ -645,6 +664,9 @@ function defaultify()
       ;;
     --new) # Run the new just wizard
       # This is just a help placeholder. The REAL --new is in just
+      ;;
+    --wrap) # Same as calling ./wrap ... Useful for just executable
+      exec "${VSI_COMMON_DIR}/linux/Just_wrap" "${JUST_PROJECT_FILE}" ${@+"${@}"}
       ;;
     -h|--help|help) #Print help
       print_help

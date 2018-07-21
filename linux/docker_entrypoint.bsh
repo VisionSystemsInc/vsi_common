@@ -261,8 +261,6 @@ function docker_link_mounts()
 #                                            and DOCKER_GIDS[0]
 #   [DOCKER_UID] - The UID used to reown JUST_DOCKER_ENTRYPOINT_INTERNAL_DIRS.
 #                  Default: 1000
-#   [DOCKER_GIDS] - The GIDs used to reown JUST_DOCKER_ENTRYPOINT_INTERNAL_DIRS.
-#                   IFS delimited string. Default: 1000
 # AUTHOR
 #   Andy Neff
 #***
@@ -276,22 +274,19 @@ function docker_setup_data_volumes()
 
   if [ -n "${JUST_DOCKER_ENTRYPOINT_INTERNAL_DIRS:+set}" ]; then
     : ${DOCKER_UID=1000}
-    : ${DOCKER_GIDS=1000}
-    # Convert to arrays, no quotes in case it was an array already, it has no spaces
-    DOCKER_GIDS=(${DOCKER_GIDS[@]})
 
     local just_docker_entrypoint_internal_dirs
     MIFS='//' split_s just_docker_entrypoint_internal_dirs "${JUST_DOCKER_ENTRYPOINT_INTERNAL_DIRS}"
     local reown_dirs=()
     local d
     for d in "${just_docker_entrypoint_internal_dirs[@]}"; do
-      if [ "$(stat -c %u /venv/src-*)" != "${DOCKER_UID}" ]; then
+      if [ "$(stat -c %u "${d}")" != "${DOCKER_UID}" ]; then
         reown_dirs=(${reown_dirs+"${reown_dirs[@]}"} "${d}")
       fi
     done
     if [[ ${#reown_dirs[@]} != 0 ]]; then
       echo "Reowning: ${reown_dirs[@]}"
-      chown -R "${DOCKER_UID}:${DOCKER_GIDS[0]}" "${reown_dirs[@]}"
+      chown -R "${DOCKER_UID}:" "${reown_dirs[@]}"
     fi
   fi
 }
