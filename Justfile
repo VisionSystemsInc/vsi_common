@@ -77,12 +77,20 @@ function caseify()
           files+=("${file}")
         done < <(find "${VSI_COMMON_DIR}" -type f -not -name '*.md' -name just -print0)
 
-        for file in "${files[@]}"; do
-          doc_file="$(sed -nE '/ *#\*# */{s/ *#\*# *//; p;q}' "${file}")"
-          if [[ ${doc_file::1} =~ ^[./j] ]]; then
-            echo "${file} skipped. Invalid dockname ${doc_file}"
+        for src_file in "${files[@]}"; do
+          doc_file="$(sed -nE '/ *#\*# */{s/ *#\*# *//; p;q}' "${src_file}")"
+          if [ ${#doc_file} -eq 0 ] || [[ ${doc_file::1} =~ ^[./] ]] || [[ ${doc_file} =~ \.\. ]]; then
+            echo "${src_file} skipped. Invalid document name ${doc_file}"
             continue
           fi
+
+          doc_file="${VSI_COMMON_DIR}/docs/${doc_file}"
+          doc_ext="${doc_file##*.}"
+          if [ "${doc_ext}" == "${doc_file}" ]; then
+            doc_ext='rst'
+          fi
+          doc_file="${doc_file%.*}.auto.${doc_ext}"
+
           sed -nE  ':block_start
                     # If the beginning pattern matched, start reading the block
                     /^#\*\*/b read_block
@@ -98,13 +106,13 @@ function caseify()
                       # Remove those extra spaced, #, and an optional space
                       s/# ?//
                       # print it
-                      # p
+                      p
                     }
                     # continue reading the block
                     b read_block
                     # Move on
                     :noprint
-                   ' "${file}"
+                   ' "${src_file}" > "${doc_file}"
         done
       )
       ;;

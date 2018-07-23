@@ -7,7 +7,7 @@
 . "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
 . "${VSI_COMMON_DIR}/linux/elements.bsh"
 
-#****F* just/.just
+##****F* just/.just
 # NAME
 #   .just - Auto complete for bash
 # USAGE
@@ -27,7 +27,7 @@
 #   Does not work in zsh
 # AUTHOR
 #   Andy Neff
-#***
+##***
 _just()
 {
   local JUST_PLUGINS=()

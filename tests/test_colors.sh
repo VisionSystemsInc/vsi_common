@@ -1,11 +1,11 @@
-#****F* testlib.sh/test_colors.sh
+##****F* testlib.sh/test_colors.sh
 # NAME
 #   test_colors.sh - Color definitions for testlib
 # AUTHOR
 #   Andy Neff
-#***
+##***
 
-#****d* test_colors.sh/TEST_NO_COLOR
+##****d* test_colors.sh/TEST_NO_COLOR
 # NAME
 #   TEST_NO_COLOR - Disable the use of ANSI colors
 # DESCRIPTION
@@ -25,5 +25,5 @@ if [ "${TEST_NO_COLOR-0}" == 1 ]; then
 fi
 # AUTHOR
 #   Andy Neff
-#***
+##***
 # If it gets more complicated, *consider* using linux/colors.bsh
