@@ -1,7 +1,7 @@
 FROM vsiri/recipe:gosu as gosu
 FROM vsiri/recipe:tini as tini
 
-FROM python:2.7
+FROM python:3.7.0
 
 SHELL ["/usr/bin/env", "bash", "-euxvc"]
 
@@ -20,7 +20,7 @@ RUN if [ ! -s "${PIPENV_PIPFILE}.lock" ]; then \
     rm -r /vsi
 
 # Hack for vsi_domain
-RUN ln -s /vsi/docs/vsi_domains.py /venv/docs-*/lib/python2.7/site-packages/
+RUN ln -s /vsi/docs/vsi_domains.py /venv/docs-*/lib/python3.7/site-packages/
 
 COPY --from=tini /usr/local/bin/tini /usr/local/bin/tini
 COPY --from=gosu /usr/local/bin/gosu /usr/local/bin/gosu
