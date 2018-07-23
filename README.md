@@ -149,11 +149,33 @@ In order to use these directories, all you have to do is
 
 ### Documentation ###
 
-Documentation uses [robodoc](https://rfsber.home.xs4all.nl/Robo/). To compile
-documentation, run
+Documentation uses sphinx. To compile documentation, run
 
 ```
-./Justfile robodoc
+just build docs
+just compile docs
+```
+
+Sphinx documentation can be embedded in any source file. There must be a `#*#` comment stating the filename and any `#` comments surrounded with `#**` will be added to sphinx documentation
+
+```
+
+# This documentation path will become:
+#   {VSI_COMMON_DIR}/docs/example/readme.auto.rst
+# Other files will refer to is the document with .auto. in the name
+#*# example/readme.rst
+
+
+# The following three lines are included
+
+#**
+# .. note::
+#
+#     You can not run the script and download in one call, you must call new_just as a file, not a pipe stream. ``
+#**
+
+# These lines are not
+# No #** at the beginnig of this line
 ```
 
 ### Who do I talk to? ###

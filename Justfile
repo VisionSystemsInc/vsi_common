@@ -78,6 +78,11 @@ function caseify()
         done < <(find "${VSI_COMMON_DIR}" -type f -not -name '*.md' -name just -print0)
 
         for file in "${files[@]}"; do
+          doc_file="$(sed -nE '/ *#\*# */{s/ *#\*# *//; p;q}' "${file}")"
+          if [[ ${doc_file::1} =~ ^[./j] ]]; then
+            echo "${file} skipped. Invalid dockname ${doc_file}"
+            continue
+          fi
           sed -nE  ':block_start
                     # If the beginning pattern matched, start reading the block
                     /^#\*\*/b read_block
