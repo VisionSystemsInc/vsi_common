@@ -10,6 +10,8 @@ export VSI_COMMON_GIDS=$(id -g)
 
 source "$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)/linux/just_env" "$(dirname "${BASH_SOURCE[0]}")"/vsi_common.env
 
+source "${VSI_COMMON_DIR}/linux/just_docker_functions.bsh"
+
 cd "$(\dirname "${BASH_SOURCE[0]}")"
 
 function caseify()
@@ -115,11 +117,7 @@ function caseify()
                    ' "${src_file}" > "${doc_file}"
         done
 
-        if (( $# )); then
-          pipenv run make "${@}"
-        else
-          pipenv run make html
-        fi
+        Docker-compose run docs ${@+"${@}"}
       )
       ;;
     *)
