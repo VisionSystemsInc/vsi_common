@@ -11,8 +11,6 @@ VSI_COMMON_WINE_TEST_VOLUME=vsi_common_wine_home
 source "$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)/wrap"
 cd "$(\dirname "${BASH_SOURCE[0]}")"
 
-source "${VSI_COMMON_DIR}/linux/just_robodoc_functions.bsh"
-
 function caseify()
 {
   local just_arg=$1
@@ -53,6 +51,57 @@ function caseify()
         read -p "Press any key to close" -r -e -n1
         exit ${rv}')
       extra_args+=$#
+      ;;
+
+    build_docs) # Build docker image
+      ( #TODO move to docker
+        cd "${VSI_COMMON_DIR}/docs"
+        pipenv run make
+      )
+      ;;
+
+    compile_docs) # Compile documentation
+      (
+        cd "${VSI_COMMON_DIR}/docs"
+        # if (( $# )); then
+        #   pipenv run make "${@}"
+        # else
+        #   pipenv run make html
+        # fi
+        files=()
+
+        # For now, all languages we are using can use ## as comments. When this
+        # is no longer true, the find will need to be extension specific, or
+        # some mechanism will be needed to determine type, say `file`
+        while IFS= read -r -d '' file; do
+          files+=("${file}")
+        done < <(find "${VSI_COMMON_DIR}" -type f -not -name '*.md' -name just -print0)
+
+        for file in "${files[@]}"; do
+          sed -nE  ':block_start
+                    # If the beginning pattern matched, start reading the block
+                    /^#\*\*/b read_block
+                    # Else do not print, goes to next line
+                    b noprint
+                    :read_block
+                    # read the next line
+                    n
+                    # If the end of doc comment, move on
+                    /^ *#\*\*/b noprint
+                    # If a line starting with #
+                    /^ *#/{
+                      # Remove those extra spaced, #, and an optional space
+                      s/# ?//
+                      # print it
+                      # p
+                    }
+                    # continue reading the block
+                    b read_block
+                    # Move on
+                    :noprint
+                   ' "${file}"
+        done
+      )
       ;;
     *)
       defaultify "${just_arg}" ${@+"${@}"}
