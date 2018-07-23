@@ -5,10 +5,11 @@ if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then #If being sourced
 fi
 
 JUST_PROJECT_PREFIX=VSI_COMMON
-VSI_COMMON_WINE_TEST_IMAGE=vsi_wine_test
-VSI_COMMON_WINE_TEST_VOLUME=vsi_common_wine_home
+export VSI_COMMON_UID=$(id -u)
+export VSI_COMMON_GIDS=$(id -g)
 
-source "$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)/wrap"
+source "$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)/linux/just_env" "$(dirname "${BASH_SOURCE[0]}")"/vsi_common.env
+
 cd "$(\dirname "${BASH_SOURCE[0]}")"
 
 function caseify()
@@ -54,10 +55,11 @@ function caseify()
       ;;
 
     build_docs) # Build docker image
-      ( #TODO move to docker
-        cd "${VSI_COMMON_DIR}/docs"
-        pipenv run make
-      )
+      # ( #TODO move to docker
+      #   cd "${VSI_COMMON_DIR}/docs"
+      #   pipenv run make
+      # )
+      Docker-compose build docs
       ;;
 
     compile_docs) # Compile documentation
@@ -86,6 +88,8 @@ function caseify()
             doc_ext='rst'
           fi
           doc_file="${doc_file%.*}.auto.${doc_ext}"
+
+          mkdir -p "$(dirname "${doc_file}")"
 
           sed -nE  ':block_start
                     # If the beginning pattern matched, start reading the block
