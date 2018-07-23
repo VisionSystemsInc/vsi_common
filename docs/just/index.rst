@@ -9,4 +9,4 @@ J.U.S.T. Useful Simple Tasking
 
    installation
    quickstart
-   just
+   just.auto

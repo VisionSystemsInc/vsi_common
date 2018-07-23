@@ -63,11 +63,7 @@ function caseify()
     compile_docs) # Compile documentation
       (
         cd "${VSI_COMMON_DIR}/docs"
-        # if (( $# )); then
-        #   pipenv run make "${@}"
-        # else
-        #   pipenv run make html
-        # fi
+
         files=()
 
         # For now, all languages we are using can use ## as comments. When this
@@ -114,6 +110,12 @@ function caseify()
                     :noprint
                    ' "${src_file}" > "${doc_file}"
         done
+
+        if (( $# )); then
+          pipenv run make "${@}"
+        else
+          pipenv run make html
+        fi
       )
       ;;
     *)
