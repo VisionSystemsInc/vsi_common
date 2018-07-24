@@ -2,23 +2,23 @@ import re
 
 # -*- coding: utf-8 -*-
 """
-  sphinxcontrib.domaintools
-  =========================
+    sphinxcontrib.domaintools
+    =========================
 
-  Code is taken from `sphinx.domains.std`_ and is 
-  parameterized for easy domain creation.
+    Code is taken from `sphinx.domains.std`_ and is
+    parameterized for easy domain creation.
 
-  :copyright: Kay-Uwe (Kiwi) Lorenz, ModuleWorks GmbH
-  :license: BSD, see LICENSE.txt for details
+    :copyright: Kay-Uwe (Kiwi) Lorenz, ModuleWorks GmbH
+    :license: BSD, see LICENSE.txt for details
 
 
-  sphinx.domains.std
-  ~~~~~~~~~~~~~~~~~~
+    sphinx.domains.std
+    ~~~~~~~~~~~~~~~~~~
 
-  The standard domain.
+    The standard domain.
 
-  :copyright: Copyright 2007-2011 by the Sphinx team, see AUTHORS.
-  :license: BSD, see LICENSE for details.
+    :copyright: Copyright 2007-2011 by the Sphinx team, see AUTHORS.
+    :license: BSD, see LICENSE for details.
 """
 
 import re
@@ -38,96 +38,102 @@ __version__ = '0.1'
 
 
 class GenericObject(ObjectDescription):
-  """
-  #  A generic x-ref directive registered with Sphinx.add_object_type().
+    """
+    #  A generic x-ref directive registered with Sphinx.add_object_type().
 
-  Usage:
-    DomainObject = type('DomainObject', (GenericObject, object), dict(
-      domain = 'my-domain-name'))
+    Usage:
+        DomainObject = type('DomainObject', (GenericObject, object), dict(
+            domain = 'my-domain-name'))
 
-    DomainObject = type('DomainObject', (GenericObject, object), dict(
-      domain = 'my-domain-name', indextemplate=(
+        DomainObject = type('DomainObject', (GenericObject, object), dict(
+            domain = 'my-domain-name', indextemplate=(
 
-    class MyDescriptionObject(GenericObject):
-  """
-  indextemplate = ''
-  parse_node = None
-  domain = 'std'
+        class MyDescriptionObject(GenericObject):
+    """
+    indextemplate = ''
+    parse_node = None
+    domain = 'std'
 
-  def handle_signature(self, sig, signode):
-    if self.parse_node:
-      name = self.parse_node(self.env, sig, signode)
-    else:
-      signode.clear()
-      signode += addnodes.desc_name(sig, sig)
-      # normalize whitespace like XRefRole does
-      name = ws_re.sub('', sig)
-    return name+'siggy'
-
-  def add_target_and_index(self, name, sig, signode):
-    targetname = '%s-%s' % (self.objtype, name)
-    signode['ids'].append(targetname)
-    self.state.document.note_explicit_target(signode)
-    if self.indextemplate:
-      colon = self.indextemplate.find(':')
-      if colon != -1:
-        indextype = self.indextemplate[:colon].strip()
-        indexentry = self.indextemplate[colon+1:].strip() % (name,)
+    # The signature of the urls that get auto generated AND the link names
+    # In other words, remove the arguments
+    def handle_signature(self, sig, signode):
+      if self.parse_node:
+        name = self.parse_node(self.options, self.env, sig, signode)
       else:
-        indextype = 'single'
-        indexentry = self.indextemplate % (name,)
-      self.indexnode['entries'].append((indextype, indexentry,
-                        targetname, '', None))
-    self.env.domaindata[self.domain]['objects'][self.objtype, name] = \
-      self.env.docname, targetname
+        signode.clear()
+        signode += addnodes.desc_name(sig, sig)
+        # normalize whitespace like XRefRole does
+        name = ws_re.sub('', sig)
+      return name
+
+    def add_target_and_index(self, name, sig, signode):
+      targetname = '%s-%s' % (self.objtype, name)
+      signode['ids'].append(targetname)
+      self.state.document.note_explicit_target(signode)
+      if self.indextemplate:
+        colon = self.indextemplate.find(':')
+        if colon != -1:
+          indextype = self.indextemplate[:colon].strip()
+          indexentry = self.indextemplate[colon+1:].strip() % (name,)
+        else:
+          indextype = 'single'
+          indexentry = self.indextemplate % (name,)
+        self.indexnode['entries'].append((indextype, indexentry,
+                                            targetname, '', None))
+      self.env.domaindata[self.domain]['objects'][self.objtype, name] = \
+          self.env.docname, targetname
+
+    def before_content(self):
+      # TOTALLY undocumented feature
+      if self.objtype == "file":
+        self.env.ref_context['bash:file'] = self.names[-1]
+      elif self.objtype == "function":
+        self.env.ref_context['bash:function'] = self.names[-1]
+      print('b4'+self.name)
 
 class CustomDomain(Domain):
-  """
-  Domain for all objects that don't fit into another domain or are added
-  via the application interface.
-  """
+    """
+    Domain for all objects that don't fit into another domain or are added
+    via the application interface.
+    """
 
-  name = 'std'
-  label = 'Default'
+    name = 'std'
+    label = 'Default'
 
-  object_types = {}
-  directives = {}
-  roles = {}
+    object_types = {}
+    directives = {}
+    roles = {}
+    initial_data = {
+        'objects': {},      # (type, name) -> docname, labelid
+    }
+    dangling_warnings = {}
 
-  initial_data = {
-    'objects': {},      # (type, name) -> docname, labelid
-  }
+    def clear_doc(self, docname):
+      if 'objects' in self.data:
+        self.data['objects'] = {key:val for key, val in self.data['objects'].items() if val[0] != docname}
 
-  dangling_warnings = {}
+    def resolve_xref(self, env, fromdocname, builder,
+                     typ, target, node, contnode):
+      objtypes = self.objtypes_for_role(typ) or []
+      for objtype in objtypes:
+        if (objtype, target) in self.data['objects']:
+          docname, labelid = self.data['objects'][objtype, target]
+          break
+      else:
+        docname, labelid = '', ''
+      if not docname:
+        return None
+      return make_refnode(builder, fromdocname, docname,
+                          labelid, contnode)
 
-  def clear_doc(self, docname):
-    if 'objects' in self.data:
-      for key, (fn, _) in self.data['objects'].items():
-        if fn == docname:
-          del self.data['objects'][key]
+    def get_objects(self):
+      for (type, name), info in self.data['objects'].items():
+        yield (name, name, type, info[0], info[1],
+               self.object_types[type].attrs['searchprio'])
 
-  def resolve_xref(self, env, fromdocname, builder,
-           typ, target, node, contnode):
-    objtypes = self.objtypes_for_role(typ) or []
-    for objtype in objtypes:
-      if (objtype, target) in self.data['objects']:
-        docname, labelid = self.data['objects'][objtype, target]
-        break
-    else:
-      docname, labelid = '', ''
-    if not docname:
-      return None
-    return make_refnode(builder, fromdocname, docname,
-              labelid, contnode)
-
-  def get_objects(self):
-    for (type, name), info in self.data['objects'].items():
-      yield (name, name, type, info[0], info[1],
-          self.object_types[type].attrs['searchprio'])
-
-  def get_type_name(self, type, primary=False):
-    # never prepend "Default"
-    return type.lname
+    def get_type_name(self, type, primary=False):
+      # never prepend "Default"
+      return type.lname
 
 
 def custom_domain(class_name, name='', label='', elements = {}):
@@ -140,35 +146,35 @@ def custom_domain(class_name, name='', label='', elements = {}):
   :param name      : short name of your domain (part of directives, e.g. `make`)
   :param label     : Long name of your domain (e.g. `GNU Make`)
   :param elements  :
-    dictionary of your domain directives/roles
+      dictionary of your domain directives/roles
 
-    An element value is a dictionary with following possible entries:
+      An element value is a dictionary with following possible entries:
 
-    - `objname` - Long name of the entry, defaults to entry's key
+      - `objname` - Long name of the entry, defaults to entry's key
 
-    - `role` - role name, defaults to entry's key
+      - `role` - role name, defaults to entry's key
 
-    - `indextemplate` - e.g. ``pair: %s; Make Target``, where %s will be
-      the matched part of your role.  You may leave this empty, defaults
-      to ``pair: %s; <objname>``
+      - `indextemplate` - e.g. ``pair: %s; Make Target``, where %s will be
+        the matched part of your role.  You may leave this empty, defaults
+        to ``pair: %s; <objname>``
 
-    - `parse_node` - a function with signature ``(env, sig, signode)``,
-      defaults to `None`.
+      - `parser` - a function with signature ``(env, sig, signode)``,
+        defaults to `None`.
 
-    - `fields` - A list of fields where parsed fields are mapped to. this
-      is passed to Domain as `doc_field_types` parameter.
+      - `fields` - A list of fields where parsed fields are mapped to. this
+        is passed to Domain as `doc_field_types` parameter.
 
-    - `ref_nodeclass` - class passed as XRefRole's innernodeclass,
-      defaults to `None`.
+      - `ref_nodeclass` - class passed as XRefRole's innernodeclass,
+        defaults to `None`.
 
   '''
   domain_class = type(class_name, (CustomDomain, object), dict(
-    name  = name,
-    label = label,
+      name  = name,
+      label = label,
   ))
 
   domain_object_class = \
-    type("%s_Object"%name, (GenericObject, object), dict(domain=name))
+      type("%s_Object"%name, (GenericObject, object), dict(domain=name))
 
   for n,e in elements.items():
     obj_name = e.get('objname', n)
@@ -177,7 +183,7 @@ def custom_domain(class_name, name='', label='', elements = {}):
 
     domain_class.directives[n] = type(n, (domain_object_class, object), dict(
         indextemplate   = e.get('indextemplate', 'pair: %%s; %s' % obj_name),
-        parse_node      = staticmethod(e.get('parse', None)),
+        parse_node      = staticmethod(e.get('parse_node', None)),
         doc_field_types = e.get('fields', []),
         ))
 
@@ -191,8 +197,36 @@ __version__ = "0.1"
 release = __version__
 version = release.rsplit('.', 1)[0]
 
-def my_domain():
-  custom_domain('BashDomain',
+function_sig_re = re.compile(r'^(\w+) ?(.*)')
+
+def parse_function(options, env, sig, signode):
+  m = function_sig_re.match(sig)
+  if not m:
+    # signode.clear()
+    signode += addnodes.desc_name(sig, sig)
+    # normalize whitespace like XRefRole does
+    return ws_re.sub('', sig)
+
+  name, args = m.groups()
+
+  filename = env.ref_context.get('bash:file')
+  functionname = env.ref_context.get('bash:function')
+
+  if functionname:
+    signode += addnodes.desc_addname(functionname + " " + name, functionname + " " + name)
+  elif filename:
+    signode += addnodes.desc_addname(filename + " " + name, filename + " " + name)
+  else:
+    signode += addnodes.desc_name(name, name)
+
+  if args:
+    # white spaces are striped, use unicode! :D
+    signode += addnodes.desc_annotation('\u00A0'+args, '\u00A0'+args)
+  return name
+
+def setup(app):
+  app.add_domain(custom_domain(
+      'BashDomain',
       name  = 'bash',
       label = "Bourne Again Shell",
 
@@ -217,10 +251,13 @@ def my_domain():
           function = dict(
               objname = "Bash Function",
               role = "func",
+              parse_node = parse_function,
               indextemplate = "pair: %s; Bash Function"
-        ),
-      )
-  )
-
-def setup(app):
-  app.add_domain(my_domain())
+          ),
+          command = dict(
+              objname = "Just command",
+              role = "cmd",
+              parse_node = parse_function,
+              indextemplate = "pair: %s; Just command"
+          ),
+      )))
