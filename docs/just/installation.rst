@@ -31,7 +31,13 @@ The ``just`` `wizard <https://raw.githubusercontent.com/VisionSystemsInc/vsi_com
 
 .. note::
 
-    You can not run the script and download in one call, you must call new_just as a file, not a pipe stream. ``bash <(curl -Ls https://raw.githubusercontent.com/VisionSystemsInc/vsi_common/master/linux/new_just)`` will not work
+    You can **not** run the script and download in one call, you must call new_just as a file, not a pipe stream.
+
+    .. code-block:: bash
+
+        bash <(curl -Ls https://raw.githubusercontent.com/VisionSystemsInc/vsi_common/master/linux/new_just)
+
+    This will *not* work
 
 .. _just-install-exe:
 

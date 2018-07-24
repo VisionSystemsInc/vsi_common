@@ -9,4 +9,5 @@ J.U.S.T. Useful Simple Tasking
 
    installation
    quickstart
+   files
    just.auto

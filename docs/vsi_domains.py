@@ -89,7 +89,6 @@ class GenericObject(ObjectDescription):
         self.env.ref_context['bash:file'] = self.names[-1]
       elif self.objtype == "function":
         self.env.ref_context['bash:function'] = self.names[-1]
-      print('b4'+self.name)
 
 class CustomDomain(Domain):
     """
@@ -199,7 +198,7 @@ version = release.rsplit('.', 1)[0]
 
 function_sig_re = re.compile(r'^(\w+) ?(.*)')
 
-def parse_function(options, env, sig, signode):
+def parse_bash(options, env, sig, signode, sigtype='unknown'):
   m = function_sig_re.match(sig)
   if not m:
     # signode.clear()
@@ -212,17 +211,32 @@ def parse_function(options, env, sig, signode):
   filename = env.ref_context.get('bash:file')
   functionname = env.ref_context.get('bash:function')
 
-  if functionname:
-    signode += addnodes.desc_addname(functionname + " " + name, functionname + " " + name)
-  elif filename:
-    signode += addnodes.desc_addname(filename + " " + name, filename + " " + name)
+  ref_name = name
+
+  if sigtype in ['command', 'function', 'env', 'var'] and (functionname or filename):
+    fullname = name
+
+    if sigtype in ['command']:
+      if functionname:
+        fullname = functionname + " " + name
+      if filename:
+        fullname = filename + " " + name
+
+    if functionname and sigtype not in ['function', 'file']:
+      ref_name = functionname + " " + name
+    if filename and sigtype not in ['file']:
+      ref_name = filename + " " + name
+    signode += addnodes.desc_addname(fullname , fullname)
   else:
     signode += addnodes.desc_name(name, name)
 
+
   if args:
-    # white spaces are striped, use unicode! :D
-    signode += addnodes.desc_annotation('\u00A0'+args, '\u00A0'+args)
-  return name
+    args = args.split(' ')
+    for arg in args:
+      # white spaces are striped, use unicode! :D
+      signode += addnodes.desc_annotation('\u00A0'+arg, '\u00A0'+arg)
+  return ref_name
 
 def setup(app):
   app.add_domain(custom_domain(
@@ -231,33 +245,31 @@ def setup(app):
       label = "Bourne Again Shell",
 
       elements = dict(
-          project = dict(
-              objname = "Bash Project",
-              role = "proj",
-              indextemplate = "pair: %s; Bash Project",
-          ),
           file = dict(
               objname = "Bash File",
+              parse_node = lambda a,b,c,d: parse_bash(a,b,c,d,'file'),
               indextemplate = "pair: %s; Bash File",
           ),
           env = dict(
               objname = "Bash Environment Variable",
+              parse_node = lambda a,b,c,d: parse_bash(a,b,c,d,'env'),
               indextemplate = "pair: %s; Bash Environment Variable"
           ),
           var = dict(
               objname = "Bash Variable",
+              parse_node = lambda a,b,c,d: parse_bash(a,b,c,d,'var'),
               indextemplate = "pair: %s; Bash Variable"
           ),
           function = dict(
               objname = "Bash Function",
               role = "func",
-              parse_node = parse_function,
+              parse_node = lambda a,b,c,d: parse_bash(a,b,c,d,'function'),
               indextemplate = "pair: %s; Bash Function"
           ),
           command = dict(
               objname = "Just command",
               role = "cmd",
-              parse_node = parse_function,
+              parse_node = lambda a,b,c,d: parse_bash(a,b,c,d,'command'),
               indextemplate = "pair: %s; Just command"
           ),
       )))

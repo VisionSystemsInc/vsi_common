@@ -56,11 +56,7 @@ function caseify()
       extra_args+=$#
       ;;
 
-    build_docs) # Build docker image
-      # ( #TODO move to docker
-      #   cd "${VSI_COMMON_DIR}/docs"
-      #   pipenv run make
-      # )
+    build_docs) # Build docs image
       Docker-compose build docs
       ;;
 
@@ -101,8 +97,17 @@ function caseify()
                     :read_block
                     # read the next line
                     n
-                    # If the end of doc comment, move on
-                    /^ *#\*\*/b noprint
+                    # If the end of doc comment, move on to noprint
+                    /^ *#\*\*/{
+                      # Print a blank line. This removes the requirement that
+                      # the doc writer has to add blank # lines at the end of
+                      # a comment block. Other wise you get a lot of "Explicit
+                      # markup ends without a blank line; unexpected unindent."
+                      # warnings
+                      s/.*//
+                      p
+                      b noprint
+                    }
                     # If a line starting with #
                     /^ *#/{
                       # Remove those extra spaced, #, and an optional space
