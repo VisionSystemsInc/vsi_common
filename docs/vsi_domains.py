@@ -1,5 +1,3 @@
-import re
-
 # -*- coding: utf-8 -*-
 """
     sphinxcontrib.domaintools
@@ -38,101 +36,101 @@ __version__ = '0.1'
 
 
 class GenericObject(ObjectDescription):
-    """
-    #  A generic x-ref directive registered with Sphinx.add_object_type().
+  """
+  #  A generic x-ref directive registered with Sphinx.add_object_type().
 
-    Usage:
-        DomainObject = type('DomainObject', (GenericObject, object), dict(
-            domain = 'my-domain-name'))
+  Usage:
+      DomainObject = type('DomainObject', (GenericObject, object), dict(
+          domain = 'my-domain-name'))
 
-        DomainObject = type('DomainObject', (GenericObject, object), dict(
-            domain = 'my-domain-name', indextemplate=(
+      DomainObject = type('DomainObject', (GenericObject, object), dict(
+          domain = 'my-domain-name', indextemplate=(
 
-        class MyDescriptionObject(GenericObject):
-    """
-    indextemplate = ''
-    parse_node = None
-    domain = 'std'
+      class MyDescriptionObject(GenericObject):
+  """
+  indextemplate = ''
+  parse_node = None
+  domain = 'std'
 
-    # The signature of the urls that get auto generated AND the link names
-    # In other words, remove the arguments
-    def handle_signature(self, sig, signode):
-      if self.parse_node:
-        name = self.parse_node(self.options, self.env, sig, signode)
+  # The signature of the urls that get auto generated AND the link names
+  # In other words, remove the arguments
+  def handle_signature(self, sig, signode):
+    if self.parse_node:
+      name = self.parse_node(self.options, self.env, sig, signode)
+    else:
+      signode.clear()
+      signode += addnodes.desc_name(sig, sig)
+      # normalize whitespace like XRefRole does
+      name = ws_re.sub('', sig)
+    return name
+
+  def add_target_and_index(self, name, sig, signode):
+    targetname = '%s-%s' % (self.objtype, name)
+    signode['ids'].append(targetname)
+    self.state.document.note_explicit_target(signode)
+    if self.indextemplate:
+      colon = self.indextemplate.find(':')
+      if colon != -1:
+        indextype = self.indextemplate[:colon].strip()
+        indexentry = self.indextemplate[colon+1:].strip() % (name,)
       else:
-        signode.clear()
-        signode += addnodes.desc_name(sig, sig)
-        # normalize whitespace like XRefRole does
-        name = ws_re.sub('', sig)
-      return name
+        indextype = 'single'
+        indexentry = self.indextemplate % (name,)
+      self.indexnode['entries'].append((indextype, indexentry,
+                                          targetname, '', None))
+    self.env.domaindata[self.domain]['objects'][self.objtype, name] = \
+        self.env.docname, targetname
 
-    def add_target_and_index(self, name, sig, signode):
-      targetname = '%s-%s' % (self.objtype, name)
-      signode['ids'].append(targetname)
-      self.state.document.note_explicit_target(signode)
-      if self.indextemplate:
-        colon = self.indextemplate.find(':')
-        if colon != -1:
-          indextype = self.indextemplate[:colon].strip()
-          indexentry = self.indextemplate[colon+1:].strip() % (name,)
-        else:
-          indextype = 'single'
-          indexentry = self.indextemplate % (name,)
-        self.indexnode['entries'].append((indextype, indexentry,
-                                            targetname, '', None))
-      self.env.domaindata[self.domain]['objects'][self.objtype, name] = \
-          self.env.docname, targetname
-
-    def before_content(self):
-      # TOTALLY undocumented feature
-      if self.objtype == "file":
-        self.env.ref_context['bash:file'] = self.names[-1]
-      elif self.objtype == "function":
-        self.env.ref_context['bash:function'] = self.names[-1]
+  def before_content(self):
+    # TOTALLY undocumented feature
+    if self.objtype == "file":
+      self.env.ref_context['bash:file'] = self.names[-1]
+    elif self.objtype == "function":
+      self.env.ref_context['bash:function'] = self.names[-1]
 
 class CustomDomain(Domain):
-    """
-    Domain for all objects that don't fit into another domain or are added
-    via the application interface.
-    """
+  """
+  Domain for all objects that don't fit into another domain or are added
+  via the application interface.
+  """
 
-    name = 'std'
-    label = 'Default'
+  name = 'std'
+  label = 'Default'
 
-    object_types = {}
-    directives = {}
-    roles = {}
-    initial_data = {
-        'objects': {},      # (type, name) -> docname, labelid
-    }
-    dangling_warnings = {}
+  object_types = {}
+  directives = {}
+  roles = {}
+  initial_data = {
+      'objects': {},      # (type, name) -> docname, labelid
+  }
+  dangling_warnings = {}
 
-    def clear_doc(self, docname):
-      if 'objects' in self.data:
-        self.data['objects'] = {key:val for key, val in self.data['objects'].items() if val[0] != docname}
+  def clear_doc(self, docname):
+    if 'objects' in self.data:
+      self.data['objects'] = {key:val for key, val in self.data['objects'].items() if val[0] != docname}
 
-    def resolve_xref(self, env, fromdocname, builder,
-                     typ, target, node, contnode):
-      objtypes = self.objtypes_for_role(typ) or []
-      for objtype in objtypes:
-        if (objtype, target) in self.data['objects']:
-          docname, labelid = self.data['objects'][objtype, target]
-          break
-      else:
-        docname, labelid = '', ''
-      if not docname:
-        return None
-      return make_refnode(builder, fromdocname, docname,
-                          labelid, contnode)
+  def resolve_xref(self, env, fromdocname, builder,
+                   typ, target, node, contnode):
+    objtypes = self.objtypes_for_role(typ) or []
+    for objtype in objtypes:
+      if (objtype, target) in self.data['objects']:
+        docname, labelid = self.data['objects'][objtype, target]
+        break
+    else:
+      docname, labelid = '', ''
+    if not docname:
+      return None
+    return make_refnode(builder, fromdocname, docname,
+                        labelid, contnode)
 
-    def get_objects(self):
-      for (type, name), info in self.data['objects'].items():
-        yield (name, name, type, info[0], info[1],
-               self.object_types[type].attrs['searchprio'])
+  def get_objects(self):
+    for (type, name), info in self.data['objects'].items():
+      yield (name, name, type, info[0], info[1],
+             self.object_types[type].attrs['searchprio'])
 
-    def get_type_name(self, type, primary=False):
-      # never prepend "Default"
-      return type.lname
+  def get_type_name(self, type, primary=False):
+    # never prepend "Default"
+    return type.lname
 
 
 def custom_domain(class_name, name='', label='', elements = {}):

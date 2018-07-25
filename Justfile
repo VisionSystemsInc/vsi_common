@@ -71,14 +71,18 @@ function caseify()
         # some mechanism will be needed to determine type, say `file`
         while IFS= read -r -d '' file; do
           files+=("${file}")
-        done < <(find "${VSI_COMMON_DIR}" -type f -not -name '*.md' -name just -print0)
+        done < <(find "${VSI_COMMON_DIR}" -name docs -prune -o -type f -not -name '*.md' -print0)
 
         for src_file in "${files[@]}"; do
           doc_file="$(sed -nE '/ *#\*# */{s/ *#\*# *//; p;q}' "${src_file}")"
-          if [ ${#doc_file} -eq 0 ] || [[ ${doc_file::1} =~ ^[./] ]] || [[ ${doc_file} =~ \.\. ]]; then
+          if [ ${#doc_file} -eq 0 ]; then
+            continue
+          fi
+          if [[ ${doc_file::1} =~ ^[./] ]] || [[ ${doc_file} =~ \.\. ]]; then
             echo "${src_file} skipped. Invalid document name ${doc_file}"
             continue
           fi
+          # echo "Processing ${doc_file}"
 
           doc_file="${VSI_COMMON_DIR}/docs/${doc_file}"
           doc_ext="${doc_file##*.}"
