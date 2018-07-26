@@ -1,3 +1,12 @@
+#*# linux/common_source
+
+#**
+# =============
+# Common Source
+# =============
+#
+#**
+
 ##****F* vsi/common_source.sh
 # NAME
 #   common_source.sh - Cross OS compatible common values files

@@ -12,5 +12,6 @@ J.U.S.T. Useful Simple Tasking
    files
    just.auto
    just-tab.auto
+   just_common.auto
 
    plugins/index
