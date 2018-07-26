@@ -32,6 +32,10 @@ from sphinx.directives import ObjectDescription
 from sphinx.util import ws_re
 from sphinx.util.nodes import clean_astext, make_refnode
 
+from sphinx.locale import __
+from sphinx.util import logging
+logger = logging.getLogger(__name__)
+
 __version__ = '0.1'
 
 
@@ -58,6 +62,7 @@ class GenericObject(ObjectDescription):
     if self.parse_node:
       name = self.parse_node(self.options, self.env, sig, signode)
     else:
+      logger.warning(__('Default Signature handler used for: "%s"'), sig, location=__file__)
       signode.clear()
       signode += addnodes.desc_name(sig, sig)
       # normalize whitespace like XRefRole does
@@ -184,8 +189,9 @@ def custom_domain(class_name, name='', label='', elements = {}):
         doc_field_types = e.get('fields', []),
         ))
 
-    domain_class.roles[e.get('role', n)] = XRefRole(innernodeclass=
-        e.get('ref_nodeclass', None))
+    # domain_class.roles[e.get('role', n)] = XRefRole(innernodeclass=
+        # e.get('ref_nodeclass', None))
+    domain_class.roles[e.get('role', n)] = e.get('xref_role', XRefRole(innernodeclass=e.get('ref_nodeclass', None)))
 
   return domain_class
 
@@ -194,12 +200,20 @@ __version__ = "0.1"
 release = __version__
 version = release.rsplit('.', 1)[0]
 
-function_sig_re = re.compile(r'^(\w+) ?(.*)')
+function_sig_re = re.compile(r'^([\w.]+) ?(.*)')
 
 def parse_bash(options, env, sig, signode, sigtype='unknown'):
+
+  # ref_name - name used for href. Also needed for domain references. Python
+  #            has a way of not needing the module/class scope part. I don't
+  #            see how, so in the end, I don't care.
+  # full_name - The name that that reader sees when reading the document
+  #
+
   m = function_sig_re.match(sig)
   if not m:
-    # signode.clear()
+    logger.warning(__('Signature does not match pattern: "%s"'), sig, location=__file__)
+    signode.clear()
     signode += addnodes.desc_name(sig, sig)
     # normalize whitespace like XRefRole does
     return ws_re.sub('', sig)
@@ -209,22 +223,29 @@ def parse_bash(options, env, sig, signode, sigtype='unknown'):
   filename = env.ref_context.get('bash:file')
   functionname = env.ref_context.get('bash:function')
 
+  if filename:
+    signode['file'] = filename
+
   ref_name = name
+  fullname = name
 
   if sigtype in ['command', 'function', 'env', 'var'] and (functionname or filename):
-    fullname = name
 
     if sigtype in ['command']:
       if functionname:
-        fullname = functionname + " " + name
-      if filename:
-        fullname = filename + " " + name
+        fullname = functionname + " " + fullname
+      # Filename is already prepended to funcitonname
+      elif filename:
+        fullname = filename + " " + fullname
+      signode += addnodes.desc_addname(fullname , fullname)
+    else:
+      signode += addnodes.desc_name(fullname , fullname)
 
     if functionname and sigtype not in ['function', 'file']:
-      ref_name = functionname + " " + name
-    if filename and sigtype not in ['file']:
-      ref_name = filename + " " + name
-    signode += addnodes.desc_addname(fullname , fullname)
+      ref_name = functionname + " " + ref_name
+    # Filename is already prepended to funcitonname
+    elif filename and sigtype not in ['file']:
+      ref_name = filename + " " + ref_name
   else:
     signode += addnodes.desc_name(name, name)
 
@@ -235,6 +256,25 @@ def parse_bash(options, env, sig, signode, sigtype='unknown'):
       # white spaces are striped, use unicode! :D
       signode += addnodes.desc_annotation('\u00A0'+arg, '\u00A0'+arg)
   return ref_name
+
+# This class is responsible for auto appending filename/function name to
+# reference if one is not already appended. It only works if there is no spaced
+# in the target name, in bash this works well
+class BashXRefRole(XRefRole):
+  def process_link(self, env, refnode, has_explicit_title, title, target):
+    role = refnode['reftype']
+
+    if ' ' not in target:
+      filename = env.ref_context.get('bash:file')
+      functionname = env.ref_context.get('bash:function')
+
+      # functionname contains filename already
+      if functionname and role != 'func':
+        target = functionname + " " + target
+      elif filename:
+        target = filename + " " + target
+
+    return title, ws_re.sub(' ', target)
 
 def setup(app):
   app.add_domain(custom_domain(
@@ -247,27 +287,32 @@ def setup(app):
               objname = "Bash File",
               parse_node = lambda a,b,c,d: parse_bash(a,b,c,d,'file'),
               indextemplate = "pair: %s; Bash File",
+              # Don't need the xref_role for files
           ),
           env = dict(
               objname = "Bash Environment Variable",
               parse_node = lambda a,b,c,d: parse_bash(a,b,c,d,'env'),
-              indextemplate = "pair: %s; Bash Environment Variable"
+              indextemplate = "pair: %s; Bash Environment Variable",
+              xref_role = BashXRefRole()
           ),
           var = dict(
               objname = "Bash Variable",
               parse_node = lambda a,b,c,d: parse_bash(a,b,c,d,'var'),
-              indextemplate = "pair: %s; Bash Variable"
+              indextemplate = "pair: %s; Bash Variable",
+              xref_role = BashXRefRole()
           ),
           function = dict(
               objname = "Bash Function",
               role = "func",
               parse_node = lambda a,b,c,d: parse_bash(a,b,c,d,'function'),
-              indextemplate = "pair: %s; Bash Function"
+              indextemplate = "pair: %s; Bash Function",
+              xref_role = BashXRefRole()
           ),
           command = dict(
               objname = "Just command",
               role = "cmd",
               parse_node = lambda a,b,c,d: parse_bash(a,b,c,d,'command'),
-              indextemplate = "pair: %s; Just command"
+              indextemplate = "pair: %s; Just command",
+              xref_role = BashXRefRole()
           ),
       )))

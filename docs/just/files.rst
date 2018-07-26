@@ -54,13 +54,15 @@ The file sourced by just. The primary purpose of the Justfile is to define the f
 
 .. seealso::
 
-  :func:`source_environment_files`
+  :func:`source_environment_files <just_functions.bsh source_environment_files>`
     Sources environment
-  :func:`get_extra_args`
-    Parses
+  :func:`get_args <just_functions.bsh get_args>`
+    Parses a block of arguments
+  :func:`get_additional_args <just_functions.bsh get_additional_args>`
+    Parses another block of arguments
   :cmd:`just help`
     Help test
-  :env:`JUSTFILE`
+  :env:`JUSTFILE <just JUSTFILE>`
     Sets :file:`Justfile` filename to load
 
 .. _just-project-env-files:

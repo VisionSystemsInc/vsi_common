@@ -60,6 +60,10 @@ function caseify()
       Docker-compose build docs
       ;;
 
+    --nit) # Set nit picky when compiling docs
+      export SPHINXOPTS="${SPHINXOPTS-} -n"
+      ;;
+
     compile_docs) # Compile documentation
       (
         cd "${VSI_COMMON_DIR}/docs"
@@ -126,7 +130,7 @@ function caseify()
                    ' "${src_file}" > "${doc_file}"
         done
 
-        Docker-compose run docs ${@+"${@}"}
+        Docker-compose run -e SPHINXOPTS docs ${@+"${@}"}
       )
       ;;
     *)
