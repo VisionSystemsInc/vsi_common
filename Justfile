@@ -86,16 +86,20 @@ function caseify()
             echo "${src_file} skipped. Invalid document name ${doc_file}"
             continue
           fi
+
           # echo "Processing ${doc_file}"
 
           doc_file="${VSI_COMMON_DIR}/docs/${doc_file}"
+          doc_dir="$(dirname "${doc_file}")"
+          doc_file="$(basename "${doc_file}")"
+
           doc_ext="${doc_file##*.}"
           if [ "${doc_ext}" == "${doc_file}" ]; then
             doc_ext='rst'
           fi
           doc_file="${doc_file%.*}.auto.${doc_ext}"
 
-          mkdir -p "$(dirname "${doc_file}")"
+          mkdir -p "${doc_dir}"
 
           sed -nE  ':block_start
                     # If the beginning pattern matched, start reading the block
@@ -127,7 +131,7 @@ function caseify()
                     b read_block
                     # Move on
                     :noprint
-                   ' "${src_file}" > "${doc_file}"
+                   ' "${src_file}" > "${doc_dir}/${doc_file}"
         done
 
         Docker-compose run -e SPHINXOPTS docs ${@+"${@}"}
