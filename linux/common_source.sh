@@ -1,4 +1,4 @@
-#****F* vsi/common_source.sh
+##****F* vsi/common_source.sh
 # NAME
 #   common_source.sh - Cross OS compatible common values files
 # DESCRIPTION
@@ -13,9 +13,9 @@
 #   Should be Bourne Shell compatible, not just Bourne again shell compatible.
 # AUTHOR
 #   Andy Neff
-#***
+##***
 
-#****d* common_source.sh/VSI_OS
+##****d* common_source.sh/VSI_OS
 # NAME
 #   VSI_OS - Operating system name
 # DESCRIPTION
@@ -30,9 +30,9 @@
 #   common_source.sh/VSI_DISTRO, common_source.sh/VSI_DISTRO_VERSION
 # AUTHOR
 #   Andy Neff
-#***
+##***
 
-#****d* common_source.sh/VSI_PATH_ESC
+##****d* common_source.sh/VSI_PATH_ESC
 # NAME
 #   VSI_PATH_ESC - Path escape string for windows path translation
 # DESCRIPTION
@@ -65,7 +65,7 @@
 #   occasions
 # AUTHOR
 #   Andy Neff
-#***
+##***
 
 # In general, sh doesn't set OSTYPE; bash always does
 : ${OSTYPE=$(uname | tr '[A-Z]' '[a-z]')}
@@ -110,7 +110,7 @@ esac
 
 
 
-#****d* common_source.sh/VSI_DISTRO
+##****d* common_source.sh/VSI_DISTRO
 # NAME
 #   VSI_DISTRO - Name of the distribution.
 # DESCRIPTION
@@ -135,9 +135,9 @@ esac
 #   common_source.sh/VSI_DISTRO_LIKE common_source.sh/VSI_DISTRO_CORE
 # AUTHOR
 #   Andy Neff
-#***
+##***
 
-#****d* common_source.sh/VSI_DISTRO_VERSION
+##****d* common_source.sh/VSI_DISTRO_VERSION
 # NAME
 #   VSI_DISTRO_VERSION - The version of the distribution
 # NOTES
@@ -176,9 +176,9 @@ esac
 #   common_source.sh/VSI_VERSION_LIKE common_source.sh/VSI_VERSION_CORE
 # AUTHOR
 #   Andy Neff
-#***
+##***
 
-#****d* common_source.sh/VSI_DISTRO_LIKE
+##****d* common_source.sh/VSI_DISTRO_LIKE
 # NAME
 #   VSI_DISTRO_LIKE - Name of the distribution this distribution is based off of
 # DESCRIPTION
@@ -193,9 +193,9 @@ esac
 #   common_source.sh/VSI_DISTRO common_source.sh/VSI_DISTRO_CORE
 # AUTHOR
 #   Andy Neff
-#***
+##***
 
-#****d* common_source.sh/VSI_DISTRO_VERSION_LIKE
+##****d* common_source.sh/VSI_DISTRO_VERSION_LIKE
 # NAME
 #   VSI_DISTRO_VERSION_LIKE - Version of VSI_DISTRO_LIKE
 # DESCRIPTION
@@ -208,9 +208,9 @@ esac
 #   common_source.sh/VSI_DISTRO common_source.sh/VSI_DISTRO_CORE
 # AUTHOR
 #   Andy Neff
-#***
+##***
 
-#****d* common_source.sh/VSI_DISTRO_CORE
+##****d* common_source.sh/VSI_DISTRO_CORE
 # NAME
 #   VSI_DISTRO_CORE - Name of the distribution this distribution is based off of
 # DESCRIPTION
@@ -226,9 +226,9 @@ esac
 #   common_source.sh/VSI_DISTRO_VERSION_CORE common_source.sh/VSI_DISTRO
 # AUTHOR
 #   Andy Neff
-#***
+##***
 
-#****d* common_source.sh/VSI_DISTRO_VERSION_CORE
+##****d* common_source.sh/VSI_DISTRO_VERSION_CORE
 # NAME
 #   VSI_DISTRO_VERSION_CORE - Version of VSI_DISTRO_CORE
 # DESCRIPTION
@@ -237,7 +237,7 @@ esac
 #   common_source.sh/VSI_DISTRO_CORE
 # AUTHOR
 #   Andy Neff
-#***
+##***
 
 if [ -f /etc/os-release ]; then
   # Run in a sub-shell so I can source os-release
@@ -437,7 +437,7 @@ if [ "${VSI_DISTRO_CORE}" = "${VSI_DISTRO_LIKE}" ]; then
   VSI_DISTRO_VERSION_LIKE="${VSI_DISTRO_VERSION_CORE}"
 fi
 
-#****d* common_source.sh/VSI_OS_VERSION
+##****d* common_source.sh/VSI_OS_VERSION
 # NAME
 #   VSI_OS_VERSION - Version of the operating system
 # DESCRIPTION
@@ -448,7 +448,7 @@ fi
 #   common_source.sh/VSI_DISTRO_VERSION
 # AUTHOR
 #   Andy Neff
-#***
+##***
 case VSI_OS in
   windows)
      VSI_OS_VERSION="${VSI_DISTRO_VERSION}"
@@ -458,7 +458,7 @@ case VSI_OS in
      ;;
 esac
 
-#****d* common_source.sh/VSI_ARCH
+##****d* common_source.sh/VSI_ARCH
 # NAME
 #   VSI_ARCH - System architecture
 # DESCRIPTION
@@ -471,18 +471,18 @@ esac
 #   Typically found: x86_64
 # AUTHOR
 #   Andy Neff
-#***
+##***
 
 VSI_ARCH="$(uname -m)"
 
-#****d* common_source.sh/VSI_NUMBER_CORES
+##****d* common_source.sh/VSI_NUMBER_CORES
 # NAME
 #   VSI_NUMBER_CORES - Number of CPU cores
 # DESCRIPTION
 #   Determines the number of CPU cores available on the machine.
 # AUTHOR
 #   Andy Neff
-#***
+##***
 case "${VSI_OS}" in
   darwin)
     if command -v sysctl >/dev/null 2>&1; then # Normal darwin

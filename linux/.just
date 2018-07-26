@@ -1,5 +1,5 @@
 #!/usr/bin/env false
-#!This file should be sourced, NOT run
+#This file should be sourced, NOT run!
 
 : ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
 . "${VSI_COMMON_DIR}/linux/just_common.bsh"
@@ -7,27 +7,30 @@
 . "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
 . "${VSI_COMMON_DIR}/linux/elements.bsh"
 
-#****F* just/.just
-# NAME
-#   .just - Auto complete for bash
-# USAGE
-#   source .just
-# DESCRIPTION
-#   Creates auto complete suggestions based on parsing the Justfile case
-#   statements.
+#*# just/just-tab.rst
+
+#**
+# .. default-domain:: bash
 #
-#   To add customized tab completions, add a .just script next to project
-#   Justfile. Write what would normally go inside the complete function to the
-#   .just file (without the function header). This file will be sourced every
-#   complete after the just_commands, _just_subcommands, _just_subcommands
-#   arrays are populated.
-# NOTES
-#   Source automatically in Bash when sourcing env.bsh
-# BUGS
-#   Does not work in zsh
-# AUTHOR
-#   Andy Neff
-#***
+# ==============
+# Tab completion
+# ==============
+#
+# .. file:: .just
+#
+# *Tab* completion suggestions based on parsing the :file:`Justfile` case statements can easily be added to your bash session by sourcing the :file:`.just` file. This file is sourced for you when you source the :ref:`setup file <just-setup-file>`
+#
+# The *tab* completion script can be extended by adding a ``.just`` file to your project next to the :file:`Justfile`. Write what would normally go inside the ``complete`` function to the ``.just`` file (without the bash ``function()`` header). This file will be sourced by :file:`.just` after the ``just_commands`` and ``_just_subcommands`` arrays are populated. See `here <https://github.com/visionsystemsinc/vsi_common/blob/master/.just>`_ for an example;
+#
+# .. seealso::
+#
+#   :cmd:`just help`
+#     Explanation of what is parsed from the :file:`Justfile`
+#
+# .. warning::
+#
+#   Does not work in ``zsh``, or any shell other than ``bash``
+#**
 _just()
 {
   local JUST_PLUGINS=()

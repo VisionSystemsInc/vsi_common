@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+
+set -eu
+
+JUST_PROJECT_PREFIX=VSI_COMMON
+source "${VSI_COMMON_DIR:-/vsi}/linux/just_env" "${DOCS_SOURCE_DIR-/vsi/docs}/docs.env"
+
+if [ "${ALREADY_RUN_ONCE+set}" != "set" ]; then
+  # create the user and associated groups and handle nfs symlinks
+  /usr/bin/env bash /vsi/linux/docker_entrypoint.bsh
+
+  # Rerun entrypoint as user now, (skipping the root part via ALREADY_RUN_ONCE)
+  ALREADY_RUN_ONCE=1 exec gosu ${DOCKER_USERNAME} /usr/bin/env bash $0 ${@+"${@}"}
+fi
+
+function sudo()
+{
+  gosu root ${@+"${@}"}
+}
+export -f sudo
+
+source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
+# Remove duplicate DOCS_*_DOCKER variables
+filter_docker_variables
+if [ "$1" == "docs" ]; then
+  if [ ! -s "${DOCS_SOURCE_DIR-/vsi/docs}/Pipfile.lock" ]; then
+    pipenv lock
+  fi
+  cd /vsi/docs
+  pipenv run make SPHINXOPTS="${SPHINXOPTS-}" html
+elif [ "$1" == "nopipenv" ]; then
+  shift 1
+  exec "${@}"
+else
+  if [ ! -s "${DOCS_SOURCE_DIR-/vsi/docs}/Pipfile.lock" ]; then
+    pipenv lock
+  fi
+  exec pipenv run "${@}"
+fi

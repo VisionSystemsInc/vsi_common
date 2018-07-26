@@ -1,6 +1,6 @@
 #!/usr/bin/env false
 
-#****J* vsi/testlib.sh
+##****J* vsi/testlib.sh
 # NAME
 #   testlib.sh - Simple shell command language test library
 # USAGE
@@ -43,7 +43,7 @@
 #               Use pushd/popd for each test instead of cd
 #               Auto prepend filename to description
 #               Added custom PS4
-#***
+##***
 
 # The above must be the first command executed, or else it won't work. Use this
 # instead of BASH_SOURCE to maintain sh compatibility
@@ -67,7 +67,7 @@ expected_failures=0
 required_failures=0
 skipped=0
 
-#****f* testlib.sh/setup
+##****f* testlib.sh/setup
 # NAME
 #   setup - Function run before the first test
 # NOTES
@@ -76,9 +76,9 @@ skipped=0
 #   Setup is not run if no tests are ever run
 # AUTHOR
 #   Andy Neff
-#***
+##***
 
-#****d* testlib.sh/TRASHDIR
+##****d* testlib.sh/TRASHDIR
 # NAME
 #   TRASHDIR - Temporary directory where everything for the test file is stored
 # DESCRIPTION
@@ -87,9 +87,9 @@ skipped=0
 #   testlib.sh/TESTDIR
 # AUTHOR
 #   Ryan Tomayko
-#***
+##***
 
-#****d* testlib.sh/TESTDIR
+##****d* testlib.sh/TESTDIR
 # NAME
 #   TESTDIR - Unique temporary directory for a single test (in TRASHDIR)
 # DESCRIPTION
@@ -98,18 +98,18 @@ skipped=0
 #   testlib.sh/TRASHDIR
 # AUTHOR
 #   Ryan Tomayko
-#***
+##***
 
-#****f* testlib.sh/teardown
+##****f* testlib.sh/teardown
 # NAME
 #   teardown - Function run after the last test
 # NOTES
 #   Teardown is not run if no tests are ever run
 # AUTHOR
 #   Andy Neff
-#***
+##***
 
-#****d* testlib.sh/TEST_KEEP_TEMP_DIRS
+##****d* testlib.sh/TEST_KEEP_TEMP_DIRS
 # NAME
 #   TEST_KEEP_TEMP_DIRS - Keep the trashdir/setup dir
 # DESCRIPTION
@@ -117,9 +117,9 @@ skipped=0
 #   1 to keep directories. Default: 0
 # AUTHOR
 #   Andy Neff
-#***
+##***
 
-#****d* testlib.sh/TESTLIB_SHOW_TIMING
+##****d* testlib.sh/TESTLIB_SHOW_TIMING
 # NAME
 #   TESTLIB_SHOW_TIMING - Display test time after each test
 # DESCRIPTION
@@ -127,9 +127,9 @@ skipped=0
 #   Default: 0
 # AUTHOR
 #   Andy Neff
-#***
+##***
 
-#****d* testlib.sh/TESTLIB_RUN_SINGLE_TEST
+##****d* testlib.sh/TESTLIB_RUN_SINGLE_TEST
 # NAME
 #   TESTLIB_RUN_SINGLE_TEST - Run a single test
 # DESCRIPTION
@@ -140,9 +140,9 @@ skipped=0
 #   Default: unset
 # AUTHOR
 #   Andy Neff
-#***
+##***
 
-#****f* testlib.sh/atexit
+##****f* testlib.sh/atexit
 # NAME
 #   atexit - Function that runs at process exit
 # USAGE
@@ -156,7 +156,7 @@ skipped=0
 #   Andy Neff - Added setup cleanup
 #               Added teardown
 #               Added TEST_KEEP_TEMP_DIRS flags
-#***
+##***
 atexit ()
 {
   test_status=$?
@@ -269,7 +269,7 @@ _begin_common_test ()
   set -x +e
 }
 
-#****f* testlib.sh/begin_test
+##****f* testlib.sh/begin_test
 # NAME
 #   begin_test - Beginning of test demarcation
 # USAGE
@@ -279,21 +279,21 @@ _begin_common_test ()
 #   testlib.sh/end_test
 # AUTHOR
 #   Ryan Tomayko
-#***
+##***
 begin_test ()
 {
   test_status=$? # Must be first command
   _begin_common_test ${@+"${@}"}
 }
 
-#****f* testlib.sh/begin_expected_fail_test
+##****f* testlib.sh/begin_expected_fail_test
 # NAME
 #   begin_expected_fail_test - Beginning of expected fail test demarcation
 # USAGE
 #   Define the beginning of a test that is expected to fail
 # AUTHOR
 #   Andy Neff
-#***
+##***
 begin_expected_fail_test()
 {
   test_status=$? # Must be first command
@@ -301,14 +301,14 @@ begin_expected_fail_test()
   _expected_failure=1 _begin_common_test ${@+"${@}"}
 }
 
-#****f* testlib.sh/begin_required_fail_test
+##****f* testlib.sh/begin_required_fail_test
 # NAME
 #   begin_required_fail_test - Beginning of required fail test demarcation
 # USAGE
 #   Define the beginning of a test that is required to fail
 # AUTHOR
 #   Andy Neff
-#***
+##***
 begin_required_fail_test()
 {
   test_status=$? # Must be first command
@@ -316,7 +316,7 @@ begin_required_fail_test()
   _required_fail=1 _begin_common_test ${@+"${@}"}
 }
 
-#****f* testlib.sh/setup_test
+##****f* testlib.sh/setup_test
 # NAME
 #   setup_test - Sets up the test
 # DESCRIPTION
@@ -341,7 +341,7 @@ begin_required_fail_test()
 #   testlib.sh/skip_next_test
 # AUTHOR
 #   Andy Neff
-#***
+##***
 setup_test()
 {
   # Identify that setup_test was called
@@ -355,7 +355,7 @@ setup_test()
   set -eu
 }
 
-#****f* testlib.sh/end_test
+##****f* testlib.sh/end_test
 # NAME
 #   end_test - End of a test demarcation
 # USAGE
@@ -365,7 +365,7 @@ setup_test()
 #   testlib.sh/begin_test
 # AUTHOR
 #   Ryan Tomayko
-#***
+##***
 end_test ()
 {
   test_status="${1:-$?}" # This MUST be the first line of this function
@@ -424,7 +424,7 @@ end_test ()
   rm "${TRASHDIR}/.setup_test" || :
 }
 
-#****f* testlib.sh/skip_next_test
+##****f* testlib.sh/skip_next_test
 # NAME
 #   skip_next_test - Function to indicate the next test should be skipped
 # DESCRIPTION
@@ -446,13 +446,13 @@ end_test ()
 #   be set and detected by end_test
 # AUTHOR
 #   Andy Neff
-#***
+##***
 skip_next_test()
 {
   __testlib_skip_test=1
 }
 
-#****f* testlib.sh/not
+##****f* testlib.sh/not
 # NAME
 #   not - Returns true only when the command fails
 # DESCRIPTION
@@ -488,7 +488,7 @@ skip_next_test()
 #   testlib.sh/not_s
 # AUTHOR
 #   Andy Neff
-#***
+##***
 not()
 {
   local cmd="$1"
@@ -501,7 +501,7 @@ not()
 }
 
 # Testing this idea...
-#****f* testlib.sh/not_s
+##****f* testlib.sh/not_s
 # NAME
 #   not_s - Returns true only when the string version of command fails
 # DESCRIPTION
@@ -526,13 +526,13 @@ not()
 #   testlib.sh/not
 # AUTHOR
 #   Andy Neff
-#***
+##***
 not_s()
 {
   eval "if ${1}; then return 1; else return 0; fi"
 }
 
-#****f* testlib.sh/track_touched_files
+##****f* testlib.sh/track_touched_files
 # NAME
 #   track_touched_files - Start tracking touched files
 # DESCRIPTION
@@ -561,20 +561,20 @@ not_s()
 #   testlib.sh/cleanup_touched_files
 # AUTHOR
 #   Andy Neff
-#***
+##***
 track_touched_files()
 {
   tracking_touched_files=1
 }
 
-#****if* testlib.sh/ttouch
+##****if* testlib.sh/ttouch
 # NAME
 #   ttouch - Touch function that should behave like the original touch command
 # SEE ALSO
 #   testlib.sh/track_touched_files
 # AUTHOR
 #   Andy Neff
-#***
+##***
 ttouch()
 {
   local filename
@@ -601,14 +601,14 @@ ttouch()
   done
 }
 
-#****if* testlib.sh/cleanup_touched_files
+##****if* testlib.sh/cleanup_touched_files
 # NAME
 #   cleanup_touched_files - Delete all the touched files
 # DESCRIPTION
 #   At the end of the last test, delete all the files in the array
 # AUTHOR
 #   Andy Neff
-#***
+##***
 cleanup_touched_files()
 {
   local touched_file
