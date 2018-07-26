@@ -10,8 +10,8 @@ J.U.S.T. Useful Simple Tasking
    installation
    quickstart
    files
-   just.auto
    just-tab.auto
+   just.auto
    just_common.auto
 
    plugins/index
