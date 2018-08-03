@@ -86,6 +86,94 @@ else
   }
 fi
 
+while (($#)); do
+  arg="$1"
+  shift 1
+  case $arg in
+    --help)
+      echo "New Just Wizard usage"
+      echo "====================="
+      echo "  --help - prints this help"
+      echo "  --defaults - use all defaults without prompting"
+      echo "  --project-dir dir - Use dir as the project directory"
+      echo "  --prefix prefix - Set variable prefix to use"
+      echo "  --justfile justfile - Set Justfile name"
+      echo "  --setupfile setupfile - Set setup.env filename"
+      echo "  --wrapfile wrapfile - Set wrap filename"
+      echo "  --[no-]use-vsi - Enable/disable using the vsi submodule"
+      echo "  --[no-]use-docker docker - Enable/disable setting up docker"
+      echo "  --[no-]use-pipenv pipenv - Enable/disable using pipenv in docker"
+      echo "  --app app - Application name for docker-compose service"
+      echo "  --repo repo - Docker repo name for compiled images"
+      echo "  --continue continue - Set to auto continue summary without prompting"
+      echo
+      exit 0
+      ;;
+    --defaults)
+      USE_DEFAULTS=1
+      : ${USE_VSI_COMMON=n}
+      : ${USE_DOCKER=y}
+      : ${USE_PIPENV=y}
+      ;;
+    --project-dir)
+      PROJECT_DIR="$1"
+      shift 1
+      ;;
+    --project-name)
+      PROJECT_NAME="$1"
+      shift 1
+      ;;
+    --prefix)
+      PROJECT_PREFIX="$1"
+      shift 1
+      ;;
+    --justfile)
+      JUSTFILE="$1"
+      shift 1
+      ;;
+    --setupfile)
+      SETUPFILE="$1"
+      shift 1
+      ;;
+    --wrapfile)
+      WRAPFILE="$1"
+      shift 1
+      ;;
+    --use-vsi)
+      USE_VSI_COMMON=y
+      ;;
+    --no-use-vsi)
+      USE_VSI_COMMON=n
+      ;;
+    --use-docker)
+      USE_DOCKER=y
+      ;;
+    --no-use-docker)
+      USE_DOCKER=n
+      ;;
+    --use-pipenv)
+      USE_PIPENV=y
+      ;;
+    --no-use-pipenv)
+      USE_PIPENV=n
+      ;;
+    --app)
+      APP_NAME="$1"
+      shift 1
+      ;;
+    --repo)
+      REPO_NAME="$1"
+      ;;
+    --continue)
+      continue=y
+      ;;
+    *)
+      echo "Unknown argument: $arg"
+      exit 1
+      ;;
+  esac
+done
+
 ##****F* just/new_just
 # NAME
 #   new_just - Create a new just project
@@ -131,9 +219,14 @@ echo
 # AUTHOR
 #   Andy Neff
 ##***
-: ${PROJECT_DIR="$(read -r -p "Project directory (${PWD}) " x; echo "$x")"}
+default="${PWD}"
+if [ "${USE_DEFAULTS-}" == "1" ]; then
+  : ${PROJECT_DIR="${default}"}
+fi
+
+: ${PROJECT_DIR="$(read -r -p "Project directory (${default}) " x; echo "$x")"}
 if [ "${PROJECT_DIR}" == "" ]; then
-  PROJECT_DIR="${PWD}"
+  PROJECT_DIR="${default}"
 else
   mkdir -p "${PROJECT_DIR}"
   PROJECT_DIR="$(cd "${PROJECT_DIR}"; pwd)"
@@ -155,9 +248,14 @@ fi
 # AUTHOR
 #   Andy Neff
 ##***
+default="$(basename "${PROJECT_DIR}")"
+if [ "${USE_DEFAULTS-}" == "1" ]; then
+  : ${PROJECT_NAME="${default}"}
+fi
+
 : ${PROJECT_NAME="$(read -r -p "Project name ($(basename "${PROJECT_DIR}")) " x; echo "$x")"}
 if [ "${PROJECT_NAME}" == "" ]; then
-  PROJECT_NAME="$(basename "${PROJECT_DIR}")"
+  PROJECT_NAME="${default}"
 fi
 
 ##****d* new_just/PROJECT_PREFIX
@@ -179,6 +277,10 @@ fi
 #   Andy Neff
 ##***
 default=$(echo "${PROJECT_NAME-}" | tr '[a-z]' '[A-Z]' | sed -E 's|[^A-Z0-9_]+||g')
+if [ "${USE_DEFAULTS-}" == "1" ]; then
+  : ${PROJECT_PREFIX="${default}"}
+fi
+
 : ${PROJECT_PREFIX="$(read -r -p "Project variable prefix (${default}) " x; echo $x)"}
 if [ "${PROJECT_PREFIX}" == "" ]; then
   PROJECT_PREFIX=${default}
@@ -203,9 +305,14 @@ fi
 # AUTHOR
 #   Andy Neff
 ##***
+default=Justfile
+if [ "${USE_DEFAULTS-}" == "1" ]; then
+  : ${JUSTFILE="${default}"}
+fi
+
 : ${JUSTFILE="$(read -r -p "Just file name (Justfile) " x; echo "$x")"}
 if [ "${JUSTFILE}" == "" ]; then
-  JUSTFILE="Justfile"
+  JUSTFILE="${default}"
 else
   JUSTFILE="$(basename ${JUSTFILE})"
 fi
@@ -223,7 +330,7 @@ fi
 echo "If you do not include vsi_common, then all users will have to have"
 echo "the just executable installed and on their path to use this project."
 echo "(It also makes updating vsi_common features/bugs harder.)"
-ask_question "Do you want to include the vsi_common submodule?" USE_VSI_COMMON y
+ask_question "Do you want to include the vsi_common submodule?" USE_VSI_COMMON n
 
 ##****d* new_just/SETUPFILE
 # NAME
@@ -245,10 +352,14 @@ ask_question "Do you want to include the vsi_common submodule?" USE_VSI_COMMON y
 #   Andy Neff
 ##***
 if [ "${USE_VSI_COMMON}" = "1" ]; then
+  default=setup.env
+  if [ "${USE_DEFAULTS-}" == "1" ]; then
+    : ${SETUPFILE="${default}"}
+  fi
 
   : ${SETUPFILE="$(read -r -p "Environment setup script file name (setup.env) " x; echo "$x")"}
   if [ "${SETUPFILE}" == "" ]; then
-    SETUPFILE="setup.env"
+    SETUPFILE="${default}"
   else
     SETUPFILE="$(basename ${SETUPFILE})"
   fi
@@ -268,9 +379,14 @@ if [ "${USE_VSI_COMMON}" = "1" ]; then
 # AUTHOR
 #   Andy Neff
 ##***
+  default=wrap
+  if [ "${USE_DEFAULTS-}" == "1" ]; then
+    : ${WRAPFILE="${default}"}
+  fi
+
   : ${WRAPFILE="$(read -r -p "Wrap script file name (wrap) " x; echo "$x")"}
   if [ "${WRAPFILE}" == "" ]; then
-    WRAPFILE="wrap"
+    WRAPFILE="${default}"
   else
     WRAPFILE="$(basename ${WRAPFILE})"
   fi
@@ -292,9 +408,14 @@ fi
 #   Andy Neff
 ##***
 if [ "${USE_VSI_COMMON}" = "1" ]; then
+  default="${PROJECT_DIR}/external/vsi_common"
+  if [ "${USE_DEFAULTS-}" == "1" ]; then
+    : ${VSI_DIR="${default}"}
+  fi
+
   : ${VSI_DIR="$(read -r -p "VSI common module path (./external/vsi_common) " x; echo "$x")"}
   if [ "${VSI_DIR}" == "" ]; then
-    VSI_DIR="${PROJECT_DIR}/external/vsi_common"
+    VSI_DIR="${default}"
   else
     VSI_DIR="$(cd "${PROJECT_DIR}";
                mkdir -p "${VSI_DIR}";
@@ -333,6 +454,9 @@ if [ "${USE_DOCKER}" = "1" ]; then
   #   Andy Neff
   #***
   default=$(echo "${APP_NAME-example}" | tr '[A-Z]' '[a-z]' | sed -E 's|[^a-z0-9_.-]+||g')
+  if [ "${USE_DEFAULTS-}" == "1" ]; then
+    : ${APP_NAME="${default}"}
+  fi
   : ${APP_NAME="$(read -r -p "Name of the example docker-compose app (${default}) " x; echo $x)"}
   if [ "${APP_NAME}" == "" ]; then
     APP_NAME=${default}
@@ -360,6 +484,9 @@ if [ "${USE_DOCKER}" = "1" ]; then
   #   Andy Neff
   #***
   default=$(echo "${PROJECT_NAME-}" | tr '[A-Z]' '[a-z]' | sed -E 's|[^a-z0-9_./-]+||g')
+  if [ "${USE_DEFAULTS-}" == "1" ]; then
+    : ${REPO_NAME="${default}"}
+  fi
   : ${REPO_NAME="$(read -r -p "Docker Repo for images (${default}) " x; echo $x)"}
   if [ "${REPO_NAME}" == "" ]; then
     REPO_NAME=${default}
@@ -810,6 +937,7 @@ if [ "${USE_DOCKER}" = "1" ]; then
     uwecho '
             COPY --from=vsi /vsi /vsi
             ADD docker/'"${APP_NAME}"'_entrypoint.bsh /
+            ADD '"${PROJECT_NAME}.env"' /src/
 
             ENTRYPOINT ["/usr/local/bin/tini", "/usr/bin/env", "bash", "/'"${APP_NAME}"'_entrypoint.bsh"]
             # Does not require execute permissions, unlike:
@@ -936,6 +1064,9 @@ if [ "${USE_DOCKER}" = "1" ]; then
     echo '!docker' >> .dockerignore
     if [ "${USE_VSI_COMMON}" = "1" ]; then
       echo '!'"${RELATIVE_PATH}" >> .dockerignore
+    fi
+    if [ "${USE_DOCKER}" = "1" ]; then
+      echo '!'"${PROJECT_NAME}.env" >> .dockerignore
     fi
 
     if [ "${USE_PIPENV}" = "1" ]; then
