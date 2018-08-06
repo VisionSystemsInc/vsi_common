@@ -845,28 +845,31 @@ if [ "${USE_DOCKER}" = "1" ]; then
               RUN /tmp/pipenv/get-pipenv; rm -r /tmp/pipenv
               ENV WORKON_HOME=/venv \
                   PIPENV_PIPFILE=/src/Pipfile \
-                  # Needed so pipenv lock works when package cannot be recompiled
+                  # Needed so "pipenv lock" works when a package cannot be recompiled (e.g., at
+                  # runtime when the build dependencies are no longer available)
                   PIPENV_CACHE_DIR=/venv/cache \
                   # Needed for pipenv shell
                   PYENV_SHELL=/bin/bash \
-                  # pipenv recommends that these env variables be set to en_US.UTF-8. Unfortunately,
-                  # that locale does not exist by default on Debian. C.UTF-8 seems to work. If you
-                  # want, you can generate the en_US.UTF-8 locale by following this answer:
-                  # https://stackoverflow.com/a/38553499/1771778
-                  # Note, they do exist by default if you changed your base image to Centos/Fedora.
+                  # pipenv recommends that these env variables be set to en_US.UTF-8.
+                  # Unfortunately, that locale does not exist by default on Debian. C.UTF-8
+                  # seems to work. If you want, you can generate the en_US.UTF-8 locale by
+                  # following this answer: https://stackoverflow.com/a/38553499/1771778
+                  # Note, they do exist by default if you changed the base image to Centos/Fedora
                   LC_ALL=C.UTF-8 \
                   LANG=C.UTF-8
               ADD Pipfile Pipfile.lock /src/
               # Packages can be added as dependencies to your project by either:
-              # - "just run '"${APP_NAME}"'" and running "pipenv install {package}" e.g. "pipenv install scipy"
-              # - Editing the Pipfile and adding lines to the [packages] section, e.g. "scipy = '"'"'*'"'"'"
-              # However, do not run "pipenv install {package}" here (within the Dockerfile) because the
-              # Pipfiles on the host will not be updated.
+              # - "just run '"${APP_NAME}"'" and running "pipenv install {package}"
+              #   e.g., "pipenv install scipy"
+              # - Editing the Pipfile and adding lines to the [packages] section
+              #   e.g., "scipy = '"'"'*'"'"'"
+              # However, do not run "pipenv install {package}" here (within the Dockerfile)
+              # because the Pipfiles on the host will not be updated.
 
-              # If all your packages are pure python or wheels, then you can use
+              # If all of your packages are pure python or wheels, then you can use
               # this simple pattern to install the packages into the image
               RUN if [ ! -s "${PIPENV_PIPFILE}.lock" ]; then \
-                    # Initialize the Pipfiles if necessary
+                    # Remove empty Pipfile.lock; pipenv works best this way
                     rm "${PIPENV_PIPFILE}.lock"; \
                   fi; \
                   # Install packages into the image
@@ -875,31 +878,30 @@ if [ "${USE_DOCKER}" = "1" ]; then
                   rm -r /src
 
               # Alternatively, here'"'"'s a more complicated example with dependencies:
-              # Say GDAL is one of the packages in your Pipfile
-              # 1) Create a new just project
-              # 2) Edit your Pipfile and add the following lines (or similar)
+              # Say GDAL is one of the packages you want to install. GDAL has three
+              # issues when building from source:
+              # 1) GDAL has extra build dependencies. The apt-get pattern below will install
+              #    (and then remove) these dependencies. These build dependencies are also
+              #    needed to run "pipenv lock". Fortunately, the PIPENV_CACHE_DIR can be set
+              #    to side-step this check
+              # 2) GDAL'"'"'s build script needs some customization. The exports
+              #    below accomplish this
+              # 3) GDAL needs numpy installed before it is built, otherwise, numpy
+              #    integration will not be compiled
+              #
+              # First, edit your Pipfile and add the following lines (or similar)
               #    gdal = "==2.1.0"
               #    numpy = "*"
-              # 3) just build
-              # This will add the latest version of numpy, and the version of
-              # gdal compatible with debian:stretch. The version of the pypi
-              # package should match (as closely as possible) to the version of
-              # the GDAL binary (gdal-bin) dependency
+              # This will add the latest version of numpy and the version of
+              # gdal compatible with debian:stretch to your pipenv environment.
+              # Note: the version of the pypi package should match (as closely as
+              # possible) to the version of the GDAL-binary dependency (gdal-bin)
               #
-              # GDAL has three complications involved in building from source
-              # 1) GDAL has extra build dependencies. The apt-get pattern below
-              #    will install dependencies for building only. These build
-              #    depenedencies are needed to generate the lock cache too.
-              #    The `pipenv lock` below caches this for you.
-              # 2) GDAL'"'"'s setup needs extra setup. The exports below accomplish
-              #    this
-              # 3) GDAL needs numpy installed before gdal is built. If this does
-              #    not happen, the numpy integration will not be compiled
-              # Uncomment these lines for gdal:
+              # Then, uncomment these lines:
               # RUN build_deps="libgdal-dev python3-dev g++"; \
               #     apt-get update; \
               #     # Install build dependencies and runtime dependencies
-              #     # Note: the build/run dependencies for other packages must also be included
+              #     # Note: build/run dependencies for other packages must also be included
               #     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
               #       gdal-bin ${build_deps}; \
               #     #
@@ -907,27 +909,25 @@ if [ "${USE_DOCKER}" = "1" ]; then
               #     export CPLUS_INCLUDE_PATH=/usr/include/gdal; \
               #     export C_INCLUDE_PATH=/usr/include/gdal; \
               #     #
-              #     # This will install the numpy specified in the pipfiles first.
-              #     # After numpy is installed, all other packages are installed
-              #     # automaticall into the image, including gdal.
+              #     # Install the version of numpy specified in the Pipfiles first; after
+              #     # numpy is installed, the other packages are installed into the image
               #     if [ -s "${PIPENV_PIPFILE}.lock" ]; then \
-              #       pipenv install --selective-upgrade --keep-outdated numpy; \
+              #       pipenv install --selective-upgrade numpy; \
               #     else \
-              #       # Remove empty Pipfile.lock, pipenv works best this way
-              #       rm "${PIPENV_PIPFILE}.lock"; \
-              #       # --selective-upgrade appears to be calling --keep-outdated.
-              #       # Keep both for future proofing. These flags will install
-              #       # the version of package in the pipfiles instead of the latest
-              #       pipenv install --selective-upgrade --keep-outdated --skip-lock numpy; \
-              #       # Generate pipenv cache for runtime, else you will need all
-              #       # the OS dependencies to compile gdal installed at runtime.
+              #       # Remove empty Pipfile.lock; pipenv works best this way
+              #       rm "${PIPENV_PIPFILE}.lock"; \' >> docker/${APP_NAME}.Dockerfile
+              # --selective-upgrade implies --keep-outdated; https://github.com/pypa/pipenv/blob/master/pipenv/core.py#L1635
+              # Keep both for future proofing
+      uwecho '#       pipenv install --selective-upgrade --skip-lock numpy; \
+              #       # Generate the pipenv cache. Without this, all the OS dependencies
+              #       # would be needed at runtime to lock the pipenv
               #       pipenv lock; \
               #     fi; \
               #     #
               #     # Cleanup
               #     rm -rv /src/* /tmp/pip*; \
               #     #
-              #     # Remove build dependencies, you are done with them
+              #     # Remove build dependencies; you are done with them
               #     apt-get purge -y --auto-remove ${build_deps}; \
               #     rm -r /var/lib/apt/lists/*
 
