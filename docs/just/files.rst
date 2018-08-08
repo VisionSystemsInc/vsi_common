@@ -1,8 +1,8 @@
 .. default-domain:: bash
 
-==========
-just files
-==========
+==============
+J.U.S.T. Files
+==============
 
 .. _just-Justfile-file:
 

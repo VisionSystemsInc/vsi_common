@@ -14,9 +14,23 @@ Linux Utilities
    cuda_info.auto
    dir_tools.auto
    elements.auto
+   example.auto
    file_tools.auto
    findin.auto
    findinpaths.auto
    group_names.auto
    inisin.auto
    isin.auto
+   linux_accounts.auto
+   lwhich.auto
+   mount_tools.auto
+   multibook.auto
+   picker.auto
+   postisin.auto
+   preisin.auto
+   real_path.auto
+   relpath.auto
+   set_flags.auto
+   string_tools.auto
+   time_tools.auto
+   uwecho.auto

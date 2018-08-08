@@ -1,5 +1,5 @@
 ======================
-J.U.S.T. docker plugin
+J.U.S.T. Docker Plugin
 ======================
 
 .. default-domain:: bash
