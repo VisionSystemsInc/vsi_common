@@ -1,0 +1,170 @@
+#!/usr/bin/env bash
+
+. "$(dirname "${BASH_SOURCE[0]}")/../testlib.sh"
+
+VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.."; pwd)"
+. uwecho.bsh
+
+begin_test "New Just with defaults"
+(
+  setup_test
+  echo y | "${VSI_COMMON_DIR}/linux/new_just" --defaults --use-vsi
+
+  # This SHOULD work on mingw64, I think it creates a copy
+  ln -s ${VSI_COMMON_DIR} "${TESTDIR}/external/vsi_common"
+
+  project_name=$(basename "${TESTDIR}" | tr '[a-z]' '[A-Z]' | sed -E 's|[^A-Z0-9_]+||g')
+
+  [ "$(./wrap bash -c 'echo $'"${project_name}"'_CWD')" = "${TESTDIR}" ]
+)
+end_test
+
+begin_test "New Just"
+(
+  setup_test
+  "${VSI_COMMON_DIR}/linux/new_just" --continue --use-vsi \
+                                     --use-docker --use-pipenv \
+                                     --prefix JTEST \
+                                     --project-dir "${TESTDIR}" \
+                                     --justfile "j.u.s.t  f i'l\"e" \
+                                     --setupfile "set u.p  f i'l\"e" \
+                                     --wrapfile "wra.p  f i'l\"e" \
+                                     --project-name "je.  t e's\"t" \
+                                     --vsi-dir "v.s.i  d i'r\"" \
+                                     --app yaan \
+                                     --repo atest/btest
+
+  ln -s ${VSI_COMMON_DIR} "${TESTDIR}/v.s.i  d i'r\""
+
+  [ "$("./wra.p  f i'l\"e" bash -c 'echo $JTEST_CWD')" = "${TESTDIR}" ]
+
+  export PATH="${TESTDIR}/ss:${PATH}"
+  export COMPOSE_PROJECT_NAME=testpro
+  mkdir "${TESTDIR}/ss"
+  . "set u.p  f i'l\"e"
+
+  uwecho '#!/usr/bin/env bash
+          echo mockdc "${@}"' > ss/docker-compose
+  chmod 755 ss/docker-compose
+
+  uwecho '#!/usr/bin/env bash
+          echo mockd "${@}"
+          exit 0' > ss/docker
+  chmod 755 ss/docker
+
+  [ "$(just build)" = "mockd volume rm testpro_venv
+mockdc -f ${TESTDIR}/v.s.i  d i'r\"/docker/recipes/docker-compose.yml build gosu tini vsi pipenv
+mockdc -f ${TESTDIR}/docker-compose.yml build" ]
+  [ "$(just build example)" = "mockdc -f ${TESTDIR}/docker-compose.yml build example" ]
+
+  [[ $(just -n run yaan) =~ docker-compose\ -f\ ${TESTDIR}/docker-compose\.yml\ -f\ (.*)\ run\ --rm\ yaan ]]
+
+  tmp_file="${BASH_REMATCH[1]}"
+
+  ans="version: '2.3'
+services:
+  yaan:
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+      - ${TESTDIR}/new-data:/data
+    environment:
+      - JTEST_DATA_DIR_HOST=${TESTDIR}/new-data
+      - JTEST_DATA_DIR=/data
+      - JTEST_SOURCE_DIR_HOST=${TESTDIR}
+      - JTEST_SOURCE_DIR=/src"
+
+  [ "$(cat "${tmp_file}")" = "${ans}" ]
+
+  rm "${tmp_file}"
+
+  # Test clean venv when volume exists
+  [ "$(just clean venv)" = "mockd volume rm testpro_venv" ]
+
+
+  # Test clean venv when volume doesn't exist
+  uwecho '#!/usr/bin/env bash
+          echo mockd "${@}"
+          exit 1' > ss/docker
+  chmod 755 ss/docker
+  [ "$(just clean venv 2>&1)" = "testpro_venv already removed" ]
+)
+end_test
+
+begin_test "New Just no pipenv"
+(
+  setup_test
+  "${VSI_COMMON_DIR}/linux/new_just" --defaults --continue --prefix JTEST --use-vsi --no-use-pipenv
+
+  ln -s ${VSI_COMMON_DIR} "${TESTDIR}/external/vsi_common"
+
+  [ "$(./wrap bash -c 'echo $JTEST_CWD')" = "${TESTDIR}" ]
+
+  export PATH="${TESTDIR}:${PATH}"
+  . setup.env
+
+  uwecho '#!/usr/bin/env bash
+          echo mockdc "${@}"' > docker-compose
+  chmod 755 docker-compose
+
+  [ "$(just build)" = "mockdc -f ${TESTDIR}/external/vsi_common/docker/recipes/docker-compose.yml build gosu tini vsi
+mockdc -f ${TESTDIR}/docker-compose.yml build" ]
+  [ "$(just build example)" = "mockdc -f ${TESTDIR}/docker-compose.yml build example" ]
+
+  [[ $(just -n run example) =~ docker-compose\ -f\ ${TESTDIR}/docker-compose\.yml\ -f\ (.*)\ run\ --rm\ example ]]
+
+  tmp_file="${BASH_REMATCH[1]}"
+
+  ans="version: '2.3'
+services:
+  example:
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+      - ${TESTDIR}/new-data:/data
+    environment:
+      - JTEST_DATA_DIR_HOST=${TESTDIR}/new-data
+      - JTEST_DATA_DIR=/data
+      - JTEST_SOURCE_DIR_HOST=${TESTDIR}
+      - JTEST_SOURCE_DIR=/src"
+
+  [ "$(cat "${tmp_file}")" = "${ans}" ]
+
+  rm "${tmp_file}"
+)
+end_test
+
+begin_test "New Just no docker"
+(
+  setup_test
+
+  "${VSI_COMMON_DIR}/linux/new_just" --defaults --continue --prefix JTEST --use-vsi --no-use-docker
+
+  ln -s ${VSI_COMMON_DIR} "${TESTDIR}/external/vsi_common"
+
+  [ "$(./wrap bash -c 'echo $JTEST_CWD')" = "${TESTDIR}" ]
+
+  export PATH="${TESTDIR}:${PATH}"
+  . setup.env
+
+  uwecho '#!/usr/bin/env bash
+          echo mockg++ "${@}"' > g++
+  chmod 755 g++
+
+  [ "$(just compile)" = "mockg++ hi.cpp -o hi" ]
+
+  uwecho '#!/usr/bin/env bash
+          echo mockhi "${@}"' > hi
+  chmod 755 hi
+
+  [ "$(just run test123)" = "mockhi test123" ]
+)
+end_test
+
+: ${DOCKER=docker}
+command -v "${DOCKER}" &>/dev/null || skip_next_test
+begin_test "New just docker test"
+(
+  setup_test
+
+  "${VSI_COMMON_DIR}/linux/new_just" --defaults --continue --prefix JTEST --use-vsi --no-use-docker
+)
+end_test

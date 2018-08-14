@@ -59,7 +59,8 @@ else
     local lines="$(echo -n ${@+"${@}"} | wc -l)"
     line_number=$((line_number-lines))
     local source_line="$(sed -n "${line_number}p" "${file_name}")"
-    local spaces="$(echo -n "${source_line}" | sed -E 's|^( *uwecho ['"'"'"]?).*|\1|' | wc -c)"
+
+    local spaces="$(echo -n "${source_line}" | sed -E 's|^( *uwecho +['"'"'"]?).*|\1|' | tr -d '\n' | wc -c)"
     local args=()
     while (( $# )); do
       args+=("$(sed '2,$s|^ \{'"${spaces}"'\}||' <<< "$1")")
@@ -112,10 +113,12 @@ while (($#)); do
       echo "====================="
       echo "  --help - prints this help"
       echo "  --project-dir DIR - Use dir as the project directory"
+      echo "  --project-name NAME - Affects project env filename and defaults"
       echo "  --prefix PREFIX - Set variable prefix to use"
       echo "  --justfile FILE - Set Justfile name"
       echo "  --setupfile FILE - Set setup.env filename"
       echo "  --wrapfile FILE - Set wrap filename"
+      echo "  --vsi-dir DIR - VSI common submodule dir"
       echo "  --[no-]use-vsi - Enable/[disable] using the vsi submodule"
       echo "  --[no-]use-docker - Enable/[disable] setting up docker"
       echo "  --[no-]use-pipenv - Enable/[disable] using pipenv in docker"
@@ -156,6 +159,10 @@ while (($#)); do
       WRAPFILE="$1"
       shift 1
       ;;
+    --vsi-dir)
+      VSI_DIR="$1"
+      shift 1
+      ;;
     --use-vsi)
       USE_VSI_COMMON=y
       ;;
@@ -180,9 +187,10 @@ while (($#)); do
       ;;
     --repo)
       REPO_NAME="$1"
+      shift 1
       ;;
     --continue)
-      continue=y
+      CONTINUE=y
       ;;
     *)
       echo "Unknown argument: $arg"
@@ -331,7 +339,7 @@ fi
 if [ "${JUSTFILE}" == "" ]; then
   JUSTFILE="${default}"
 else
-  JUSTFILE="$(basename ${JUSTFILE})"
+  JUSTFILE="$(basename "${JUSTFILE}")"
 fi
 
 ##****d* new_just/USE_VSI_COMMON
@@ -378,7 +386,7 @@ if [ "${USE_VSI_COMMON}" = "1" ]; then
   if [ "${SETUPFILE}" == "" ]; then
     SETUPFILE="${default}"
   else
-    SETUPFILE="$(basename ${SETUPFILE})"
+    SETUPFILE="$(basename "${SETUPFILE}")"
   fi
 
 ##****d* new_just/WRAPFILE
@@ -405,7 +413,7 @@ if [ "${USE_VSI_COMMON}" = "1" ]; then
   if [ "${WRAPFILE}" == "" ]; then
     WRAPFILE="${default}"
   else
-    WRAPFILE="$(basename ${WRAPFILE})"
+    WRAPFILE="$(basename "${WRAPFILE}")"
   fi
 fi
 
@@ -434,12 +442,18 @@ if [ "${USE_VSI_COMMON}" = "1" ]; then
   if [ "${VSI_DIR}" == "" ]; then
     VSI_DIR="${default}"
   else
+    # Guarentee the path is clean, no .. or . or // in the name
     VSI_DIR="$(cd "${PROJECT_DIR}";
-               mkdir -p "${VSI_DIR}";
-               cd "${VSI_DIR}";
-               pwd;
-               cd -;
-               rmdir "${VSI_DIR}")"
+               if [ -e "${VSI_DIR}" ]; then
+                 cd "${VSI_DIR}";
+                 pwd;
+               else
+                 mkdir -p "${VSI_DIR}";
+                 cd "${VSI_DIR}";
+                 pwd;
+                 cd "${PROJECT_DIR}";
+                 rmdir "${VSI_DIR}";
+               fi)"  # VSCode highlighter bug -->"
   fi
 fi
 
@@ -558,14 +572,28 @@ cd "${PROJECT_DIR}"
 ### wrap ###
 ############
 
+# Helper to quote complicated names, adds '' for you, does not need extra
+# quotes added to file
+function q()
+{
+  echo "'${1//\'/\'\"\'\"\'}'"
+}
+
+# Helper to quote complicated names that go in the blah part of "${x-blah}"
+function q2()
+{
+  local x="${1//\"/\\\"}"
+  echo "${x//\'/\"\'\"}"
+}
+
 if [ "${USE_VSI_COMMON}" = "1" ]; then
   if [ ! -e "${WRAPFILE}" ]; then
     echo   '#!/usr/bin/env bash' > "${WRAPFILE}"
     if [ "${JUSTFILE}" != "Justfile" ]; then
-      echo "export JUSTFILE=${JUSTFILE}" >> "${WRAPFILE}"
+      echo "export JUSTFILE=$(q "${JUSTFILE}")" >> "${WRAPFILE}"
     fi
     uwecho ': "$(\dirname "${BASH_SOURCE[0]}")"
-            source "${VSI_COMMON_DIR:-"${_}"/'"${RELATIVE_PATH}"'}/linux/just_env" "${_}"/'"${PROJECT_NAME}"'.env ${@+"${@}"}' >> "${WRAPFILE}"
+            source "${VSI_COMMON_DIR:-"${_}"/'"$(q2 "${RELATIVE_PATH}")"'}/linux/Just_wrap" "${_}"/'"$(q "${PROJECT_NAME}")"'.env ${@+"${@}"}' >> "${WRAPFILE}"
 
   else
     echo "${WRAPFILE} exists, skipping..."
@@ -578,9 +606,9 @@ if [ "${USE_VSI_COMMON}" = "1" ]; then
   if [ ! -e "${SETUPFILE}" ]; then
     uwecho 'export JUST_SETUP_SCRIPT="$(\basename "${BASH_SOURCE[0]}")"
             unset JUST_VERSION
-            source "$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)/'"${RELATIVE_PATH}"'/env.bsh"' > "${SETUPFILE}"
+            source "$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)/"'"$(q "${RELATIVE_PATH}")"'/env.bsh' > "${SETUPFILE}"
     if [ "${JUSTFILE}" != "Justfile" ]; then
-      echo "export JUSTFILE=${JUSTFILE}" >> "${SETUPFILE}"
+      echo "export JUSTFILE=$(q "${JUSTFILE}")" >> "${SETUPFILE}"
     else
       echo "unset JUSTFILE" >> "${SETUPFILE}"
     fi
@@ -653,32 +681,36 @@ fi
 #################
 
 if [ ! -e "README.md" ]; then
-  uwecho '## Getting started
+  uwecho   '## Getting started
 
-          ```
-          source setup.env' > README.md
-if [ "${USE_DOCKER}" = "1" ]; then
-  uwecho "just setup
-          just run ${APP_NAME}" >> README.md
-else
-  uwecho "just compile
-          just run" >> README.md
-fi
-  uwecho '```
-
-          ## Just usage:
-
-          ```' >> README.md
+            ``` ' > README.md
 
   if [ "${USE_VSI_COMMON}" = "1" ]; then
-    echo 'source "'"${SETUPFILE}"'"' >> README.md
+    echo   "source $(q "${SETUPFILE}")" >> README.md
   fi
 
-  uwecho 'just help
-          ```
-          ' >> README.md
+  if [ "${USE_DOCKER}" = "1" ]; then
+    uwecho "just setup
+            just run ${APP_NAME}" >> README.md
+  else
+    uwecho "just compile
+            just run" >> README.md
+  fi
+  uwecho   '```
+
+            ## Just usage:
+
+            ```' >> README.md
+
+  if [ "${USE_VSI_COMMON}" = "1" ]; then
+    echo   "source $(q "${SETUPFILE}")" >> README.md
+  fi
+
+  uwecho   'just help
+            ```
+            ' >> README.md
 else
-  echo "README.md exists, skipping..."
+  echo     "README.md exists, skipping..."
 fi
 
 # Make Just file
@@ -691,7 +723,7 @@ if [ ! -e "${JUSTFILE}" ]; then
             fi
             ' > "${JUSTFILE}"
     if [ "${USE_VSI_COMMON}" = "1" ]; then
-      echo 'source "$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)/'"${WRAPFILE}"'"' >> "${JUSTFILE}"
+      echo 'source "$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)/"'"$(q "${WRAPFILE}")" >> "${JUSTFILE}"
     else
       echo 'source "${VSI_COMMON_DIR}/linux/just_env" "$(dirname "${BASH_SOURCE[0]}")"/'"${PROJECT_NAME}"'.env' >> "${JUSTFILE}"
     fi
@@ -753,7 +785,7 @@ if [ ! -e "${JUSTFILE}" ]; then
                   if docker volume inspect "${COMPOSE_PROJECT_NAME}_venv" &> /dev/null; then
                     Docker volume rm "${COMPOSE_PROJECT_NAME}_venv"
                   else
-                    echo "${COMPOSE_PROJECT_NAME}_venv already removed"
+                    echo "${COMPOSE_PROJECT_NAME}_venv already removed" >&2
                   fi
                   ;;' >> "${JUSTFILE}"
     fi
@@ -1141,21 +1173,21 @@ uwecho "Done!
 
         To complete your git initialization:
 
-        cd '${PROJECT_DIR}'"
+        cd '${PROJECT_DIR//\'/\'\"\'\"\'}'"
 if [ ! -e .git ]; then
   echo "git init ." >&3
 fi
 
 if [ "${USE_VSI_COMMON}" = "1" ]; then
-  uwecho "git submodule add https://github.com/visionsystemsinc/vsi_common.git '${RELATIVE_PATH}'
+  uwecho "git submodule add https://github.com/visionsystemsinc/vsi_common.git '${RELATIVE_PATH//\'/\'\"\'\"\'}'
           git submodule update --init --recursive
-          pushd '${RELATIVE_PATH}'
+          pushd '${RELATIVE_PATH//\'/\'\"\'\"\'}'
           git remote set-url origin --push git@github.com:visionsystemsinc/vsi_common.git
           popd" >&3
-  echo   "git add '${SETUPFILE}' '${WRAPFILE}' .gitmodules" >&3
+  echo   "git add '${SETUPFILE//\'/\'\"\'\"\'}' '${WRAPFILE//\'/\'\"\'\"\'}' .gitmodules" >&3
 fi
 
-echo   "git add .gitignore README.md '${JUSTFILE}' '${PROJECT_NAME}.env'" >&3
+echo   "git add .gitignore README.md '${JUSTFILE//\'/\'\"\'\"\'}' '${PROJECT_NAME//\'/\'\"\'\"\'}.env'" >&3
 
 if [ "${USE_DOCKER}" = "1" ]; then
   echo "git add .gitattributes .dockerignore docker-compose.yml docker/${APP_NAME}.Dockerfile docker/${APP_NAME}_entrypoint.bsh" >&3
@@ -1172,10 +1204,10 @@ uwecho "
 
         To use your new just:
 
-        cd '${PROJECT_DIR}'"
+        cd '${PROJECT_DIR//\'/\'\"\'\"\'}'"
 
 if [ "${USE_VSI_COMMON}" = "1" ]; then
-  echo "source '${SETUPFILE}'"
+  echo "source '${SETUPFILE//\'/\'\"\'\"\'}'"
 fi
 
 uwecho "just help

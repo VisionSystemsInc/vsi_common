@@ -57,7 +57,7 @@ _just()
   JUST_DRYRUN_SOURCE=: _just_load_justfile "${JUSTFILE-Justfile}"
   # 3. Emulate finding and adding plugins
   # The last JUST_HELP_FILES is the just file now
-  local just_dir="$(\dirname ${JUST_HELP_FILES[${#JUST_HELP_FILES[@]}-1]})"
+  local just_dir="$(\dirname "${JUST_HELP_FILES[${#JUST_HELP_FILES[@]}-1]}")"
   _just_get_plugins "${just_dir}"
   for just_plugin in ${JUST_PLUGINS+"${JUST_PLUGINS[@]}"}; do
     JUST_HELP_FILES+=("${just_plugin}")
