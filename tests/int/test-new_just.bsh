@@ -159,12 +159,45 @@ begin_test "New Just no docker"
 )
 end_test
 
+command -v git &>/dev/null || skip_next_test
+begin_test "New just instructions test (git)"
+(
+  setup_test
+
+  # Evaluate git commands in stdout
+  eval "$("${VSI_COMMON_DIR}/linux/new_just" --continue --use-vsi \
+                                             --use-docker --use-pipenv \
+                                             --prefix JTEST \
+                                             --project-dir "${TESTDIR}" \
+                                             --justfile "j.u.s.t  f i'l\"e" \
+                                             --setupfile "set u.p  f i'l\"e" \
+                                             --wrapfile "wra.p  f i'l\"e" \
+                                             --project-name "je.  t e's\"t" \
+                                             --vsi-dir "v.s.i  d i'r\"" \
+                                             --app yaan \
+                                             --repo tmp)"
+
+  # The only untracked changes should be the test files err and out
+  [ "$(git status --porcelain 2>&1)" == $'?? err\n?? out' ]
+
+
+)
+end_test
+
 : ${DOCKER=docker}
 command -v "${DOCKER}" &>/dev/null || skip_next_test
 begin_test "New just docker test"
 (
   setup_test
 
-  "${VSI_COMMON_DIR}/linux/new_just" --defaults --continue --prefix JTEST --use-vsi --no-use-docker
+  "${VSI_COMMON_DIR}/linux/new_just" --continue --use-vsi --defaults \
+                                     --app yaan --repo tmp
+
+  ln -s ${VSI_COMMON_DIR} "${TESTDIR}/external/vsi_common"
+
+  . setup.env
+
+  just build
+  [[ $(just run yaan pip freeze --all) =~ pip==.*setuptools==.*wheel==.* ]]
 )
 end_test
