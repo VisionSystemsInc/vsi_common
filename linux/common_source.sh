@@ -5,6 +5,10 @@
 # Common Source
 # =============
 #
+# .. default-domain:: bash
+#
+# .. file:: common_source.sh
+#
 #**
 
 ##****F* vsi/common_source.sh
