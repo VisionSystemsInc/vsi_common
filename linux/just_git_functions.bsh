@@ -1,6 +1,8 @@
 JUST_DEFAULTIFY_FUNCTIONS+=(git_defaultify)
 JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 
+source "${VSI_COMMON_DIR}/linux/ask_question"
+
 ##****just/just_git_functions*
 # DESCRIPTION
 #   git plugin for just
@@ -74,7 +76,7 @@ function submodule-helper-list()
 #   $2 - Submodule path (relative)
 #   $3 - Message to print out if submodule update failed
 # OUTPUT
-#   key - set variable key on failure
+#   presskey - set variable presskey on failure
 ##***
 function _checkout_git_submodule()
 {
@@ -87,7 +89,7 @@ function _checkout_git_submodule()
       popd &>/dev/null
     fi
   else
-    read -n1 -r -p "${3} Any key to continue." key
+    read -n1 -r -p "${3} Any key to continue." presskey
     echo
   fi
 }
@@ -120,6 +122,8 @@ function safe_git_submodule_update()
 {
   local i
   local show_summary_message=${show_summary_message-1}
+  local presskey
+  local askcontinue
 
   pushd "$(pwd)" > /dev/null
     local submodule_names
@@ -165,7 +169,7 @@ function safe_git_submodule_update()
         fi
         if ! git diff --no-ext-diff --cached --quiet; then
           echo "Staged tracked files in ${sm_path}"
-          read -n1 -r -p "You need to commit/reset files and resolve any conflicts in the submodule: ${name}" key
+          read -n1 -r -p "You need to commit/reset files and resolve any conflicts in the submodule: ${name}" presskey
           popd > /dev/null
           continue
         fi
@@ -195,7 +199,7 @@ function safe_git_submodule_update()
       echo "However, ensure that any commits you may have made are tracked."
     done
 
-    if [ "${key+set}" == "set" ]; then
+    if [ "${presskey+set}" == "set" ]; then
       echo
       echo "*************************** WARNING ******************************"
       echo "Tried to safely update submodules, however something went wrong."
@@ -203,6 +207,13 @@ function safe_git_submodule_update()
       echo "again. If this is not working for you, you can fall back to"
       echo "  'git submodule update --init --recursive'"
       echo "However, ensure that any commits you may have made to submodules are tracked."
+    fi
+
+    echo
+    ask_question "Continue?" askcontinue n
+
+    if [ "${askcontinue}" = "0" ]; then
+      return 1
     fi
   fi
 }
@@ -253,7 +264,7 @@ function git_defaultify()
       fi'
       ;;
     *)
-      return 1
+      plugin_not_found=1
       ;;
   esac
   return 0
