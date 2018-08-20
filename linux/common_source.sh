@@ -411,6 +411,7 @@ if [ "${VSI_DISTRO_CORE-}" = "debian" ]; then
 fi
 
 # Fix the case when OSes like mint are like ubuntu but use the codename
+# https://wiki.ubuntu.com/Releases
 if [ "${VSI_DISTRO_LIKE-}" = "ubuntu" ]; then
   case "${VSI_DISTRO_VERSION_LIKE-}" in
     precise) VSI_DISTRO_VERSION_LIKE=12.04 ;; # EOL April 28, 2017
@@ -422,7 +423,8 @@ if [ "${VSI_DISTRO_LIKE-}" = "ubuntu" ]; then
     yakkety) VSI_DISTRO_VERSION_LIKE=16.10 ;; # EOL July 20, 2017
     zesty)   VSI_DISTRO_VERSION_LIKE=17.04 ;; # EOL Jan 2018
     artful)  VSI_DISTRO_VERSION_LIKE=17.10 ;; # Release Oct 2017
-    busy)    VSI_DISTRO_VERSION_LIKE=18.04 ;; # May change; Release April 2018
+    bionic)  VSI_DISTRO_VERSION_LIKE=18.04 ;; # Released April 2018
+    cosmic)  VSI_DISTRO_VERSION_LIKE=18.10 ;; # To be released October 18, 2018
   esac
 fi
 
