@@ -53,12 +53,6 @@ services:
     command: sh -c 'echo horse'
     network_mode: 'bridge'"
 
-  compose_file_sleep="version: '3.2'
-services:
-  test_sleepy:
-    image: alpine
-    command: sleep 100"
-
   track_touched_files
 }
 
@@ -105,40 +99,6 @@ begin_test "is_internal_docker_volume"
   not is_internal_docker_volume './test'
   not is_internal_docker_volume .test
   not is_internal_docker_volume '/test'
-)
-end_test
-
-command -v "${DOCKER}" >&/dev/null || skip_next_test
-begin_test "container get label"
-(
-  setup_test
-
-  "${DOCKER}" rm test-docker-function || :
-  "${DOCKER}" create -l t1=15 -l "TEST=THIS=t h  a   t" -l blank --name test-docker-function alpine
-
-  [ "$(container_get_label test-docker-function t1)" = "15" ]
-  [ "$(container_get_label test-docker-function TEST)" = "THIS=t h  a   t" ]
-  [ "$(container_get_label test-docker-function blank)" = "" ]
-  [ "$(container_get_label test-docker-function none)" = "" ]
-
-  "${DOCKER}" rm test-docker-function
-)
-end_test
-
-(command -v "${DOCKER}" >&/dev/null && command -v jq >&/dev/null) || skip_next_test
-begin_test "container has label"
-(
-  setup_test
-
-  "${DOCKER}" rm test-docker-function || :
-  "${DOCKER}" create -l t1=15 -l "TEST=THIS=t h  a   t" -l blank --name test-docker-function alpine
-
-  container_has_label test-docker-function t1
-  container_has_label test-docker-function TEST
-  container_has_label test-docker-function blank
-  not container_has_label test-docker-function none
-
-  "${DOCKER}" rm test-docker-function
 )
 end_test
 
@@ -575,23 +535,6 @@ begin_test "Docker compose sanitize project names"
 )
 end_test
 
-command -v "${DOCKER}" >&/dev/null || skip_next_test
-begin_test "Just docker compose"
-(
-  setup_test
-
-  JUST_PROJECT_PREFIX=TEST
-
-  # Show calling from a different dir works
-  cd "${TRASHDIR}"
-  touch "${TESTDIR}/Dockerfile"
-  echo "${compose_file_hay}" > "${TESTDIR}/Dockerfile"
-
-  # I don't know why the -T is needed for this in Windows, but something between
-  [ "$(Just-docker-compose -f "${TESTDIR}/Dockerfile" run -T test_hay)" = "horse" ]
-)
-end_test
-
 begin_test "Just docker compose override files"
 (
   setup_test
@@ -618,36 +561,6 @@ services:
 )
 end_test
 
-command -v "${DOCKER_COMPOSE}" >&/dev/null || skip_next_test
-begin_test "Just docker compose with internal volumes"
-(
-  setup_test
-
-  JUST_PROJECT_PREFIX=TEST
-
-  ans="version: '3.2'
-services:
-  test_hay:
-    environment:
-      - JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES=/int///lint"
-
-  echo "${compose_file_hay}" > "${TESTDIR}/dc.yml"
-  echo "    volumes:" >> "${TESTDIR}/dc.yml"
-  echo "    - int:/int" >> "${TESTDIR}/dc.yml"
-  echo "    - .:/src" >> "${TESTDIR}/dc.yml"
-  echo "    - lint:/lint" >> "${TESTDIR}/dc.yml"
-  echo "volumes:" >> "${TESTDIR}/dc.yml"
-  echo "  lint:" >> "${TESTDIR}/dc.yml"
-  echo "  int:" >> "${TESTDIR}/dc.yml"
-  DRYRUN=echo
-
-  override_file="$(Just-docker-compose -f "${TESTDIR}/dc.yml" run test_hay|tail -n1)"
-  override_file="${override_file#rm *}"
-  ttouch "${override_file}"
-  [ "$(cat "${override_file}")" = "${ans}" ]
-)
-end_test
-
 begin_required_fail_test "Just docker compose required project prefix"
 (
   setup_test
@@ -658,30 +571,3 @@ begin_required_fail_test "Just docker compose required project prefix"
   Just-docker-compose -f "${TESTDIR}/dc.yml" run test_hay
 )
 end_test
-
-(command -v "${DOCKER}" >&/dev/null && command -v "${DOCKER_COMPOSE}" >&/dev/null) || skip_next_test
-begin_test "Docker service running"
-(
-  setup_test
-
-  echo "${compose_file_sleep}" > "${TESTDIR}/dsr.yml"
-
-  "${DOCKER_COMPOSE}" -f "${TESTDIR}/dsr.yml" rm -s -f
-  "${DOCKER_COMPOSE}" -f "${TESTDIR}/dsr.yml" up -d test_sleepy
-  [ "$(COMPOSE_FILE="${TESTDIR}/dsr.yml" docker_service_running test_sleepy)" = "running" ]
-  [ "$(COMPOSE_FILE="${TESTDIR}/dsr.yml" docker_service_running test_sleepy2)" = "" ]
-  "${DOCKER_COMPOSE}" -f "${TESTDIR}/dsr.yml" kill test_sleepy
-  [ "$(COMPOSE_FILE="${TESTDIR}/dsr.yml" docker_service_running test_sleepy)" = "exited" ]
-
-  # Clean up
-  "${DOCKER_COMPOSE}" -f "${TESTDIR}/dsr.yml" rm -s -f
-)
-end_test
-
-teardown()
-(
-  # Docker cleanup
-  ! ${DOCKER} rm test-docker-function &>/dev/null
-
-  : # teardown should always return true on success
-)
