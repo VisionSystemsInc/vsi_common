@@ -1,0 +1,108 @@
+
+. "$(dirname "${BASH_SOURCE[0]}")/../testlib.sh"
+
+VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.."; pwd)"
+. "${VSI_COMMON_DIR}/linux/docker_functions.bsh" # Need to be sourced for docker_compose_override
+. "${VSI_COMMON_DIR}/linux/docker_compose_override"
+
+function head()
+{
+  echo -e "version: '${1-3.2}'\nservices:"
+}
+
+function service()
+{
+  echo -e "\n  ${1}:"
+}
+
+function environment()
+{
+  echo -e "\n    environment:"
+}
+
+function envi()
+{
+  echo -e "\n      - ${1}"
+}
+
+command -v "${DOCKER_COMPOSE}" >&/dev/null || skip_next_test
+begin_test "Generate docker-compose override internal volumes"
+(
+  setup_test
+
+  echo "version: '3.2'
+services:
+  dummy:
+    image: alpine
+    volumes:
+    - int:/notint
+    - .:/notsrc
+    - lint:/notlint
+  test_hay:
+    image: alpine
+    volumes:
+    - int:/int
+    - .:/src
+    - lint:/lint
+volumes:
+  lint:
+  int:" > dc.yml
+
+  DOCKER_COMPOSE_FILES=(dc.yml)
+  override="$(generate_docker_compose_override TEST dummy test_hay)"
+
+  ans="$(head)$(service dummy)$(environment)"
+  ans+="$(envi JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES=/notint///notlint)"
+  ans+="$(service test_hay)$(environment)"
+  ans+="$(envi JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES=/int///lint)"
+  [ "${override}" = "${ans}" ]
+)
+end_test
+
+command -v "${DOCKER_COMPOSE}" >&/dev/null || skip_next_test
+begin_test "Generate docker-compose override long syntax volume"
+(
+  setup_test
+
+  echo "version: '3.2'
+services:
+  dummy:
+    image: alpine
+    volumes:
+    - type: volume
+      source: int
+      target: /notint
+    - type: bind
+      source: .
+      target: /notsrc
+      read_only: true
+    - type: volume
+      source: lint
+      target: /notlint
+  test_hay:
+    image: alpine
+    volumes:
+    - type: volume
+      source: int
+      target: /int
+    - type: bind
+      source: .
+      target: /src
+      read_only: true
+    - type: volume
+      source: lint
+      target: /lint
+volumes:
+  lint:
+  int:" > dc.yml
+
+  DOCKER_COMPOSE_FILES=(dc.yml)
+  override="$(generate_docker_compose_override TEST dummy test_hay)"
+
+  ans="$(head)$(service dummy)$(environment)"
+  ans+="$(envi JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES=/notint///notlint)"
+  ans+="$(service test_hay)$(environment)"
+  ans+="$(envi JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES=/int///lint)"
+  [ "${override}" = "${ans}" ]
+)
+end_test
