@@ -1,4 +1,6 @@
-# README #
+# VSI Common
+
+[![CircleCI](https://circleci.com/gh/VisionSystemsInc/vsi_common.svg?style=svg)](https://circleci.com/gh/VisionSystemsInc/vsi_common)
 
 In order to use these directories, all you have to do is
 

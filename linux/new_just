@@ -754,7 +754,7 @@ if [ ! -e "${JUSTFILE}" ]; then
                   ;;
                 _post_build)
                   image_name=$(docker create ${'"${PROJECT_PREFIX}"'_DOCKER_REPO}:'"${APP_NAME}"'_${'"${PROJECT_PREFIX}"'_USERNAME})
-                  docker cp ${image_name}:/venv/Pipfile.lock "${FOO_CWD}/Pipfile.lock"
+                  docker cp ${image_name}:/venv/Pipfile.lock "${'"${PROJECT_PREFIX}"'_CWD}/Pipfile.lock"
                   docker rm ${image_name}
                   ;;' >> "${JUSTFILE}"
     else
@@ -863,7 +863,7 @@ if [ "${USE_PIPENV}" = "1" ]; then
     uwecho '{
                 "_meta": {
                     "hash": {
-                        "sha256": "0"
+                        "sha256": "415dfdcb118dd9bdfef17671cb7dcd78dbd69b6ae7d4f39e8b44e71d60ca72e7"
                     },
                     "pipfile-spec": 6,
                     "requires": {},
@@ -886,168 +886,187 @@ if [ "${USE_DOCKER}" = "1" ]; then
 
   # Make default dockerfiles
   if [ ! -e "docker/${APP_NAME}.Dockerfile" ]; then
-    uwecho 'FROM vsiri/recipe:gosu as gosu
-            FROM vsiri/recipe:tini as tini
-            FROM vsiri/recipe:vsi as vsi' > docker/${APP_NAME}.Dockerfile
+    uwecho   'FROM vsiri/recipe:gosu as gosu
+              FROM vsiri/recipe:tini as tini
+              FROM vsiri/recipe:vsi as vsi' > docker/${APP_NAME}.Dockerfile
 
     if [ "${USE_PIPENV}" = "1" ]; then
-      echo 'FROM vsiri/recipe:pipenv as pipenv' >> docker/${APP_NAME}.Dockerfile
-    fi
+      uwecho 'FROM vsiri/recipe:pipenv as pipenv
+              # # Uncomment for GDAL
+              # FROM vsiri/recipe:jq as jq
 
-    uwecho '
-            FROM debian:stretch
+              FROM debian:stretch as dep_stage
+              SHELL ["/usr/bin/env", "bash", "-euxvc"]
 
-            SHELL ["/usr/bin/env", "bash", "-euxvc"]
+              # Install runtime dependencies
+              RUN apt-get update; \
+                  # Install runtime dependencies
+                  # Note: run dependencies for other packages must also be included
+                  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                    # # Uncomment for GDAL
+                    # gdal-bin \
+                    python3; \
+                  rm -r /var/lib/apt/lists/*
 
-            # Example of installing packages
-            RUN build_deps="wget ca-certificates"; \
-                apt-get update; \
-                DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ${build_deps} python3; \
-                wget -q https://www.vsi-ri.com/bin/deviceQuery; \
-                DEBIAN_FRONTEND=noninteractive apt-get purge -y --autoremove ${build_deps}; \
-                rm -rf /var/lib/apt/lists/*
-
-            COPY --from=tini /usr/local/bin/tini /usr/local/bin/tini
-
-            COPY --from=gosu /usr/local/bin/gosu /usr/local/bin/gosu
-            # Allow non-privileged to run gosu (remove this to take root away from user)
-            RUN chmod u+s /usr/local/bin/gosu
-
-            ' >> docker/${APP_NAME}.Dockerfile
-
-    if [ "${USE_PIPENV}" = "1" ]; then
-      uwecho 'COPY --from=pipenv /tmp/pipenv /tmp/pipenv
-              RUN /tmp/pipenv/get-pipenv; rm -rf /tmp/pipenv || :
-              ENV WORKON_HOME=/venv \
+              ENV \
+                  # Move all virtualenvs to /venv
+                  WORKON_HOME=/venv \
                   PIPENV_PIPFILE=/src/Pipfile \
-                  # Needed so "pipenv lock" works when a package cannot be recompiled (e.g., at
-                  # runtime when the build dependencies are no longer available)
+                  # Stored the pipenv cache in /venv and packages are not recompiled
+                  # at runtime when the build dependencies are no longer available
                   PIPENV_CACHE_DIR=/venv/cache \
                   # Needed for pipenv shell
                   PYENV_SHELL=/bin/bash \
                   # pipenv recommends that these env variables be set to en_US.UTF-8.
-                  # Unfortunately, that locale does not exist by default on Debian. C.UTF-8
-                  # seems to work. If you want, you can generate the en_US.UTF-8 locale by
-                  # following this answer: https://stackoverflow.com/a/38553499/1771778
+                  # C.UTF-8 seems to work. To generate en_US.UTF-8 locale follow
+                  # https://stackoverflow.com/a/38553499/1771778
                   # Note, they do exist by default if you changed the base image to Centos/Fedora
                   LC_ALL=C.UTF-8 \
                   LANG=C.UTF-8
+
+              COPY --from=pipenv /tmp/pipenv /tmp/pipenv
+              RUN /tmp/pipenv/get-pipenv; rm -rf /tmp/pipenv || :
+
+              FROM dep_stage as pipenv_cache
+
+              # # Uncomment for GDAL
+              # # Install build dependencies
+              # RUN apt-get update; \
+              #     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+              #       libgdal-dev python3-dev g++ ; \
+              #     rm -r /var/lib/apt/lists/*
+              #
+              # COPY --from=jq /usr/local/bin/jq /usr/local/bin/jq
+
               ADD Pipfile Pipfile.lock /src/
               # Packages can be added as dependencies to your project by either:
               # - "just run '"${APP_NAME}"'" and running "pipenv install {package}"
               #   e.g., "pipenv install scipy"
               # - Editing the Pipfile and adding lines to the [packages] section
               #   e.g., "scipy = '"'"'*'"'"'"
-              # However, do not run "pipenv install {package}" here (within the Dockerfile)
-              # because the Pipfiles on the host will not be updated.
 
-              # If all of your packages are pure python or wheels, then you can use
-              # this simple pattern to install the packages into the image
-              RUN # Install packages into the image
-                  pipenv install --keep-outdated; \
-                  cp /src/Pipfile.lock /venv; \
-                  # Cleanup and make way for the real /src that will be mounted at runtime
-                  rm -r /src
+              # Here'"'"'s a more complicated example: GDAL
+              # - GDAL has extra build dependencies. The apt-get pattern above will install
+              #   these dependencies.
+              # - GDAL'"'"'s build script needs some customization. The exports
+              #   below accomplish this
+              # - GDAL needs numpy installed before it is built, otherwise, numpy
+              #   integration will not be compiled
+              #
+              # To test this out:
+              # 1) Edit your Pipfile and add the following lines (or similar)
+              #        gdal = "==2.1.0"
+              #        numpy = "*"
+              #    This will add the latest version of numpy and the version of
+              #    gdal compatible with debian:stretch to your pipenv environment.
+              #    Note: the version of the pypi package should match (as closely as
+              #    possible) to the version of the GDAL-binary dependency (gdal-bin)
+              # 2) Uncomment all the "Uncomment for GDAL" sections
 
-              # Alternatively, here'"'"'s a more complicated example with dependencies:
-              # Say GDAL is one of the packages you want to install. GDAL has three
-              # issues when building from source:
-              # 1) GDAL has extra build dependencies. The apt-get pattern below will install
-              #    (and then remove) these dependencies. These build dependencies are also
-              #    needed to run "pipenv lock". Fortunately, the PIPENV_CACHE_DIR can be set
-              #    to side-step this check
-              # 2) GDAL'"'"'s build script needs some customization. The exports
-              #    below accomplish this
-              # 3) GDAL needs numpy installed before it is built, otherwise, numpy
-              #    integration will not be compiled
-              #
-              # First, edit your Pipfile and add the following lines (or similar)
-              #    gdal = "==2.1.0"
-              #    numpy = "*"
-              # This will add the latest version of numpy and the version of
-              # gdal compatible with debian:stretch to your pipenv environment.
-              # Note: the version of the pypi package should match (as closely as
-              # possible) to the version of the GDAL-binary dependency (gdal-bin)
-              #
-              # Then, uncomment these lines:
-              # RUN apt-get update; \
-              #     # Install runtime dependencies
-              #     # Note: run dependencies for other packages must also be included
-              #     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-              #       gdal-bin; \
-              #     rm -r /var/lib/apt/lists/*
-              # ADD Pipfile Pipfile.lock /src/
-              # RUN build_deps="libgdal-dev python3-dev g++"; \
-              #     apt-get update; \
-              #     # Install build dependencies and runtime dependencies
-              #     # Note: build/run dependencies for other packages must also be included
-              #     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ${build_deps}; \
-              #     #
+              # # Uncomment for GDAL
+              # RUN \
               #     # Gdal specific hacks
               #     export CPLUS_INCLUDE_PATH=/usr/include/gdal; \
               #     export C_INCLUDE_PATH=/usr/include/gdal; \
-              #     #
+              #
               #     # Install the version of numpy specified in the Pipfiles first; after
-              #     # numpy is installed, the other packages are installed into the image
-              #     pipenv install --selective-upgrade --keep-outdated numpy; \
-              #     cp /src/Pipfile.lock /venv; \
-              #     #
-              #     # Cleanup
-              #     rm -rf /src/* /tmp/pip*; \
-              #     #
-              #     # Remove build dependencies; you are done with them
-              #     apt-get purge -y --auto-remove ${build_deps}; \
-              #     rm -r /var/lib/apt/lists/*
+              #     # numpy is installed, the other packages are installed into the cache. If
+              #     # numpy is not locked yet, the version is an empty string and this still
+              #     # works as expected
+              #     numpy_version="$(jq --raw-output ".default.numpy.version // empty" "${PIPENV_PIPFILE}".lock)"; \
+              #     pipenv install --keep-outdated numpy${numpy_version}; \
+              #
+              #     cp "${PIPENV_PIPFILE}".lock /venv; \
+              #     rm -rf /src/* /tmp/pip*
 
-              ' >> docker/${APP_NAME}.Dockerfile
+              RUN \
+                  # Install packages into the image
+                  pipenv install --keep-outdated; \
+                  # Copy the lock file, so that it gets exported to the repo after docker build
+                  cp /src/Pipfile.lock /venv; \
+                  # Cleanup and make way for the real /src that will be mounted at runtime
+                  rm -rf /src/* /tmp/pip*
+
+              FROM dep_stage' >> docker/${APP_NAME}.Dockerfile
+    else
+      uwecho '
+              FROM debian:stretch
+              SHELL ["/usr/bin/env", "bash", "-euxvc"]' >> docker/${APP_NAME}.Dockerfile
+
     fi
 
-    uwecho '
-            COPY --from=vsi /vsi /vsi
-            ADD docker/'"${APP_NAME}"'_entrypoint.bsh /
-            ADD '"${PROJECT_NAME}.env"' /src/
+    uwecho   '
+              # Example of installing packages
+              RUN apt-get update; \
+                  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3; \
+                  rm -rf /var/lib/apt/lists/*
 
-            ENTRYPOINT ["/usr/local/bin/tini", "/usr/bin/env", "--", "bash", "/'"${APP_NAME}"'_entrypoint.bsh"]
-            # Does not require execute permissions, unlike:
-            # ENTRYPOINT ["/usr/local/bin/tini", "/'"${APP_NAME}"'_entrypoint.bsh"]
+              # Another typical example of installing a package
+              # RUN build_deps="wget ca-certificates"; \
+              #     apt-get update; \
+              #     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ${build_deps}; \
+              #     wget -q https://www.vsi-ri.com/bin/deviceQuery; \
+              #     DEBIAN_FRONTEND=noninteractive apt-get purge -y --autoremove ${build_deps}; \
+              #     rm -rf /var/lib/apt/lists/*
 
-            CMD ["'"${APP_NAME}"'"]' >> docker/${APP_NAME}.Dockerfile
+              COPY --from=tini /usr/local/bin/tini /usr/local/bin/tini
+
+              COPY --from=gosu /usr/local/bin/gosu /usr/local/bin/gosu
+              # Allow non-privileged to run gosu (remove this to take root away from user)
+              RUN chmod u+s /usr/local/bin/gosu
+
+              ' >> docker/${APP_NAME}.Dockerfile
+
+    if [ "${USE_PIPENV}" = "1" ]; then
+      uwecho 'COPY --from=pipenv_cache /venv /venv' >> docker/${APP_NAME}.Dockerfile
+    fi
+
+    uwecho   '
+              COPY --from=vsi /vsi /vsi
+              ADD docker/'"${APP_NAME}"'_entrypoint.bsh /
+              ADD '"${PROJECT_NAME}.env"' /src/
+
+              ENTRYPOINT ["/usr/local/bin/tini", "/usr/bin/env", "--", "bash", "/'"${APP_NAME}"'_entrypoint.bsh"]
+              # Does not require execute permissions, unlike:
+              # ENTRYPOINT ["/usr/local/bin/tini", "/'"${APP_NAME}"'_entrypoint.bsh"]
+
+              CMD ["'"${APP_NAME}"'"]' >> docker/${APP_NAME}.Dockerfile
   else
-    echo   "docker/${APP_NAME}.Dockerfile exists, skipping..."
+    echo     "docker/${APP_NAME}.Dockerfile exists, skipping..."
   fi
 
   if [ ! -e "docker/${APP_NAME}_entrypoint.bsh" ]; then
-    uwecho '#!/usr/bin/env bash
+    uwecho   '#!/usr/bin/env bash
 
-            set -eu
+              set -eu
 
-            source "${VSI_COMMON_DIR:-/vsi}/linux/just_env" "${'"${PROJECT_PREFIX}"'_SOURCE_DIR-/src}/'"${PROJECT_NAME}"'.env"
+              source "${VSI_COMMON_DIR:-/vsi}/linux/just_env" "${'"${PROJECT_PREFIX}"'_SOURCE_DIR-/src}/'"${PROJECT_NAME}"'.env"
 
-            if [ "${ALREADY_RUN_ONCE+set}" != "set" ]; then
-              # create the user and associated groups and handle nfs symlinks
+              if [ "${ALREADY_RUN_ONCE+set}" != "set" ]; then
+                # create the user and associated groups and handle nfs symlinks
 
-              # JUST_DOCKER_ENTRYPOINT_INTERNAL_DIRS will automatically chown
-              # all files in volumes to match the user. If this takes too long
-              # and you don'"'"'t need this feature, remove the ONE line, but leave
-              # the docker_entrypoint.bsh call
-              JUST_DOCKER_ENTRYPOINT_INTERNAL_DIRS="${JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES}" \
-              /usr/bin/env bash /vsi/linux/docker_entrypoint.bsh
+                # JUST_DOCKER_ENTRYPOINT_INTERNAL_DIRS will automatically chown
+                # all files in volumes to match the user. If this takes too long
+                # and you don'"'"'t need this feature, remove the ONE line, but leave
+                # the docker_entrypoint.bsh call
+                JUST_DOCKER_ENTRYPOINT_INTERNAL_DIRS="${JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES}" \
+                /usr/bin/env bash /vsi/linux/docker_entrypoint.bsh
 
-              # Rerun entrypoint as user now, (skipping the root part via ALREADY_RUN_ONCE)
-              ALREADY_RUN_ONCE=1 exec gosu ${DOCKER_USERNAME} /usr/bin/env bash $0 ${@+"${@}"}
-            fi
+                # Rerun entrypoint as user now, (skipping the root part via ALREADY_RUN_ONCE)
+                ALREADY_RUN_ONCE=1 exec gosu ${DOCKER_USERNAME} /usr/bin/env bash $0 ${@+"${@}"}
+              fi
 
-            function sudo()
-            {
-              gosu root ${@+"${@}"}
-            }
-            export -f sudo
+              function sudo()
+              {
+                gosu root ${@+"${@}"}
+              }
+              export -f sudo
 
-            source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
-            # Remove duplicate '"${PROJECT_PREFIX}"'_*_DOCKER variables
-            filter_docker_variables
+              source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
+              # Remove duplicate '"${PROJECT_PREFIX}"'_*_DOCKER variables
+              filter_docker_variables
 
-            ' >> "docker/${APP_NAME}_entrypoint.bsh"
+              ' >> "docker/${APP_NAME}_entrypoint.bsh"
 
     if [ "${USE_PIPENV}" = "1" ]; then
       uwecho '# default CMD
