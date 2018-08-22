@@ -747,14 +747,23 @@ if [ ! -e "${JUSTFILE}" ]; then
                   else' >> "${JUSTFILE}"
     if [ "${USE_PIPENV}" = "1" ]; then
     uwecho '        (justify clean venv)
-                    (justify build_recipes gosu tini vsi pipenv)' >> "${JUSTFILE}"
-    else
-      echo '        (justify build_recipes gosu tini vsi)' >> "${JUSTFILE}"
-    fi
-    uwecho '        Docker-compose build
+                    (justify build_recipes gosu tini vsi pipenv)
+                    Docker-compose build
+                    (justify _post_build)
                   fi
                   ;;
-                run_'"${APP_NAME}"') # Run '"${APP_NAME}"' 1
+                _post_build)
+                  image_name=$(docker create ${'"${PROJECT_PREFIX}"'_DOCKER_REPO}:'"${APP_NAME}"'_${'"${PROJECT_PREFIX}"'_USERNAME})
+                  docker cp ${image_name}:/venv/Pipfile.lock "${FOO_CWD}/Pipfile.lock"
+                  docker rm ${image_name}
+                  ;;' >> "${JUSTFILE}"
+    else
+      echo '        (justify build_recipes gosu tini vsi)
+                    Docker-compose build
+                  fi
+                  ;;' >> "${JUSTFILE}"
+    fi
+    uwecho '    run_'"${APP_NAME}"') # Run '"${APP_NAME}"' 1
                   Just-docker-compose run '"${APP_NAME}"' ${@+"${@}"}
                   extra_args+=$#
                   ;;
@@ -851,7 +860,24 @@ if [ "${USE_PIPENV}" = "1" ]; then
             ' > Pipfile
   fi
   if [ ! -e "Pipfile.lock" ]; then
-    touch Pipfile.lock
+    uwecho '{
+                "_meta": {
+                    "hash": {
+                        "sha256": "0"
+                    },
+                    "pipfile-spec": 6,
+                    "requires": {},
+                    "sources": [
+                        {
+                            "name": "pypi",
+                            "url": "https://pypi.org/simple",
+                            "verify_ssl": true
+                        }
+                    ]
+                },
+                "default": {},
+                "develop": {}
+            }' > Pipfile.lock
   fi
 fi
 
@@ -917,12 +943,9 @@ if [ "${USE_DOCKER}" = "1" ]; then
 
               # If all of your packages are pure python or wheels, then you can use
               # this simple pattern to install the packages into the image
-              RUN if [ ! -s "${PIPENV_PIPFILE}.lock" ]; then \
-                    # Remove empty Pipfile.lock; pipenv works best this way
-                    rm "${PIPENV_PIPFILE}.lock"; \
-                  fi; \
-                  # Install packages into the image
-                  pipenv install; \
+              RUN # Install packages into the image
+                  pipenv install --keep-outdated; \
+                  cp /src/Pipfile.lock /venv; \
                   # Cleanup and make way for the real /src that will be mounted at runtime
                   rm -r /src
 
@@ -947,12 +970,18 @@ if [ "${USE_DOCKER}" = "1" ]; then
               # possible) to the version of the GDAL-binary dependency (gdal-bin)
               #
               # Then, uncomment these lines:
+              # RUN apt-get update; \
+              #     # Install runtime dependencies
+              #     # Note: run dependencies for other packages must also be included
+              #     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+              #       gdal-bin; \
+              #     rm -r /var/lib/apt/lists/*
+              # ADD Pipfile Pipfile.lock /src/
               # RUN build_deps="libgdal-dev python3-dev g++"; \
               #     apt-get update; \
               #     # Install build dependencies and runtime dependencies
               #     # Note: build/run dependencies for other packages must also be included
-              #     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-              #       gdal-bin ${build_deps}; \
+              #     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ${build_deps}; \
               #     #
               #     # Gdal specific hacks
               #     export CPLUS_INCLUDE_PATH=/usr/include/gdal; \
@@ -960,22 +989,11 @@ if [ "${USE_DOCKER}" = "1" ]; then
               #     #
               #     # Install the version of numpy specified in the Pipfiles first; after
               #     # numpy is installed, the other packages are installed into the image
-              #     if [ -s "${PIPENV_PIPFILE}.lock" ]; then \
-              #       pipenv install --selective-upgrade --keep-outdated numpy; \
-              #     else \
-              #       # Remove empty Pipfile.lock; pipenv works best this way
-              #       rm "${PIPENV_PIPFILE}.lock"; \' >> docker/${APP_NAME}.Dockerfile
-              # --selective-upgrade implies --keep-outdated for now
-              # https://github.com/pypa/pipenv/blob/908ad9d1bcb49eed20f6e439fd24f9c3a26db3c9/pipenv/core.py#L1640
-              # Keep both for future proofing
-      uwecho '#       pipenv install --selective-upgrade --keep-outdated --skip-lock numpy; \
-              #       # Generate the pipenv cache. Without this, all the OS dependencies
-              #       # would be needed at runtime to lock the pipenv
-              #       pipenv lock; \
-              #     fi; \
+              #     pipenv install --selective-upgrade --keep-outdated numpy; \
+              #     cp /src/Pipfile.lock /venv; \
               #     #
               #     # Cleanup
-              #     rm -rv /src/* /tmp/pip*; \
+              #     rm -rf /src/* /tmp/pip*; \
               #     #
               #     # Remove build dependencies; you are done with them
               #     apt-get purge -y --auto-remove ${build_deps}; \
@@ -1034,19 +1052,11 @@ if [ "${USE_DOCKER}" = "1" ]; then
     if [ "${USE_PIPENV}" = "1" ]; then
       uwecho '# default CMD
               if [ "$1" == "'"${APP_NAME}"'" ]; then
-                if [ ! -s "${PIPENV_PIPFILE}.lock" ]; then
-                  rm -f "${PIPENV_PIPFILE}.lock"
-                  pipenv lock
-                fi
                 pipenv shell
               elif [ "$1" == "nopipenv" ]; then
                 shift 1
                 exec "${@}"
               else
-                if [ ! -s "${PIPENV_PIPFILE}.lock" ]; then
-                  rm -f "${PIPENV_PIPFILE}.lock"
-                  pipenv lock
-                fi
                 exec pipenv run "${@}"
               fi' >> "docker/${APP_NAME}_entrypoint.bsh"
     else
