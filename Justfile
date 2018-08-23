@@ -23,8 +23,12 @@ function caseify()
       "${VSI_COMMON_DIR}/tests/run_tests.bsh" ${@+"${@}"}
       extra_args+=$#
       ;;
-    testint) # Run integration tests
+    test_int) # Run integration tests
       TESTS_DIR=int "${VSI_COMMON_DIR}/tests/run_tests.bsh" ${@+"${@}"}
+      extra_args+=$#
+      ;;
+    test_recipe) # Run docker recipe tests
+      TESTS_DIR="${VSI_COMMON_DIR}/docker/recipes/tests" "${VSI_COMMON_DIR}/tests/run_tests.bsh" ${@+"${@}"}
       extra_args+=$#
       ;;
     test_darling) # Run unit tests using darling

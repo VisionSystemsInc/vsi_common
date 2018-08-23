@@ -21,6 +21,8 @@ services:
     command: sleep 100"
 
   track_touched_files
+
+  temp_image="$(mktemp -u test_XXXXXXXXXXXXXXXX | tr '[:upper:]' '[:lower:]')"
 }
 
 command -v "${DOCKER}" >&/dev/null || skip_next_test
@@ -28,15 +30,15 @@ begin_test "container get label"
 (
   setup_test
 
-  "${DOCKER}" rm test-docker-function || :
-  "${DOCKER}" create -l t1=15 -l "TEST=THIS=t h  a   t" -l blank --name test-docker-function alpine
+  "${DOCKER}" rm ${temp_image} || :
+  "${DOCKER}" create -l t1=15 -l "TEST=THIS=t h  a   t" -l blank --name ${temp_image} alpine
 
-  [ "$(container_get_label test-docker-function t1)" = "15" ]
-  [ "$(container_get_label test-docker-function TEST)" = "THIS=t h  a   t" ]
-  [ "$(container_get_label test-docker-function blank)" = "" ]
-  [ "$(container_get_label test-docker-function none)" = "" ]
+  [ "$(container_get_label ${temp_image} t1)" = "15" ]
+  [ "$(container_get_label ${temp_image} TEST)" = "THIS=t h  a   t" ]
+  [ "$(container_get_label ${temp_image} blank)" = "" ]
+  [ "$(container_get_label ${temp_image} none)" = "" ]
 
-  "${DOCKER}" rm test-docker-function
+  "${DOCKER}" rm ${temp_image}
 )
 end_test
 
@@ -45,15 +47,15 @@ begin_test "container has label"
 (
   setup_test
 
-  "${DOCKER}" rm test-docker-function || :
-  "${DOCKER}" create -l t1=15 -l "TEST=THIS=t h  a   t" -l blank --name test-docker-function alpine
+  "${DOCKER}" rm ${temp_image} || :
+  "${DOCKER}" create -l t1=15 -l "TEST=THIS=t h  a   t" -l blank --name ${temp_image} alpine
 
-  container_has_label test-docker-function t1
-  container_has_label test-docker-function TEST
-  container_has_label test-docker-function blank
-  not container_has_label test-docker-function none
+  container_has_label ${temp_image} t1
+  container_has_label ${temp_image} TEST
+  container_has_label ${temp_image} blank
+  not container_has_label ${temp_image} none
 
-  "${DOCKER}" rm test-docker-function
+  "${DOCKER}" rm ${temp_image}
 )
 end_test
 
@@ -126,7 +128,7 @@ end_test
 teardown()
 (
   # Docker cleanup
-  ! ${DOCKER} rm test-docker-function &>/dev/null
+  ! ${DOCKER} rm ${temp_image} &>/dev/null
 
   : # teardown should always return true on success
 )
