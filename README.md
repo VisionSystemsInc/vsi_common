@@ -1,6 +1,6 @@
 # VSI Common
 
-[![CircleCI](https://circleci.com/gh/VisionSystemsInc/vsi_common.svg?style=svg)](https://circleci.com/gh/VisionSystemsInc/vsi_common)
+Linux: [![CircleCI](https://circleci.com/gh/VisionSystemsInc/vsi_common.svg?style=svg)](https://circleci.com/gh/VisionSystemsInc/vsi_common) Windows: [![Build status](https://ci.appveyor.com/api/projects/status/3a3hd3m41clxd5gw/branch/master?svg=true)](https://ci.appveyor.com/project/andyneff/vsi-common/branch/master)
 
 In order to use these directories, all you have to do is
 
