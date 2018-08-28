@@ -108,7 +108,46 @@ case "${OSTYPE}" in
     ;;
 esac
 
+#**
+# .. env:: VSI_MUSL
+#
+#   :Value: *0* - Not a musl libc OS
+#           *1* - Is a musl libc based OS
+#           *-1* - Unable to determine
+#
+# Checks to see if this is a musl based operating system. Inspect the grep executable for the string "musl". If it is found, like on alpine, then this is marked as a musl libc OS `1`, else `0`.
+#**
 
+# Default: I can't figure it out, probably glibc
+VSI_MUSL=-1
+if command -v ldd 2>&1 > /dev/null; then
+  if ! VSI_MUSL=$(ldd --version) 2> /dev/null; then
+    # Some versions of ldd fail when using the --version flag, but succeed on
+    # no flag
+    VSI_MUSL=$(ldd 2>&1 || :)
+  fi
+  # Was musl not found in first line
+  if command -v awk 2>&1 > /dev/null; then
+    if echo "${VSI_MUSL}" | awk '{if (NR < 2 && $0 ~ /musl/) {exit 1} else {exit 0}}'; then
+      VSI_MUSL=0
+    else
+      VSI_MUSL=1
+    fi
+  else
+    if echo "${VSI_MUSL}" | head -n1 | grep -q musl; then
+      VSI_MUSL=1
+    else
+      VSI_MUSL=0
+    fi
+  fi
+fi
+
+# Old highly unreliable method
+# if grep -q musl $(unalias grep &> /dev/null || :; unset grep; command -v grep); then
+#   VSI_MUSL=1
+# else
+#   VSI_MUSL=0
+# fi
 
 ##****d* common_source.sh/VSI_DISTRO
 # NAME
@@ -268,7 +307,7 @@ if [ -f /etc/os-release ]; then
                 if [ "${ID_LIKE-}" = "ubuntu" ]; then
                   ID_CORE=debian
                 # If there is a space, this is like centos that says "rhel fedora"
-                elif [ "${ID_LIKE+set}" == "set" ] && [ "${ID_LIKE}" != "${ID_LIKE%% *}" ]; then
+                elif [ "${ID_LIKE+set}" = "set" ] && [ "${ID_LIKE}" != "${ID_LIKE%% *}" ]; then
                   ID_CORE=${ID_LIKE#* }
                   ID_LIKE=${ID_LIKE%% *}
                 # Scientific Linux doesn't capture itself for some reason
@@ -352,7 +391,7 @@ elif [ -f /etc/slackware-version ]; then
   read VSI_DISTRO < /etc/slackware-version
   VSI_DISTRO_VERSION=${VSI_DISTRO##* }
   VSI_DISTRO=${VSI_DISTRO% *}
-  VSI_DISTRO=${VSI_DISTRO,,}
+  VSI_DISTRO=$(echo "${VSI_DISTRO}" | tr '[A-Z]' '[a-z]')
 
 # Special case for arch linux
 elif [ -f /etc/arch-release ]; then
