@@ -116,6 +116,67 @@ function is_internal_docker_volume()
   fi
 }
 
+#**
+# .. function:: is_readonly_docker_volume
+# :Arguments: * **1** - docker volume_flags string to check
+# :Return Value: * 0 if it is readonly
+#                * 1 it if is writeable (according to docker flags only)
+#
+# Checks to see if a volume string contains the read only attribute. Can be used both for the docker volume syntax and the docker-compose short volume syntax
+#
+# .. note::
+#
+#   It is still possible the underlying directory is not writeable, this will not check that. Used most for docker volumes, where this is not an issue.
+#
+# .. seealso::
+#
+#   :func:`docker_parse_volume_string`
+#     Parsed a docker volume string and generates volume_flags
+#**
+
+function is_readonly_docker_volume()
+{
+  if [[ $1 =~ :ro($|:) ]]; then
+    return 0
+  else
+    return 1
+  fi
+}
+
+#**
+# .. function:: is_readonly_docker_compose_long_volume
+# :Arguments: * **1** - docker DOCKER_VOLUME_FLAGS string to check
+# :Return Value: * 0 if it is readonly
+#                * 1 it if is writeable (according to docker flags only)
+#
+# Checks to see if a volume string contains the read only attribute. Can be used both for the docker-compose long volume syntax
+#
+# .. note::
+#
+#   It is still possible the underlying directory is not writeable, this will not check that. Used most for docker volumes, where this is not an issue.
+#
+# .. seealso::
+#
+#   :func:`docker-compose-volumes`
+#     Parses docker-compose volumes and generates DOCKER_VOLUME_FLAGS
+#**
+
+function is_readonly_docker_compose_long_volume()
+{
+  local IFS=$'\n'
+  local flags=($1)
+  local flag
+
+  for flag in ${flags+"${flags[@]}"}; do
+    if [ "${flag}" == "read_only: true" ]; then
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+
 ##****f* docker_functions.bsh/container_get_label
 # NAME
 #   container_get_label - Get a label value from a docker container
@@ -278,6 +339,16 @@ function docker_parse_volume_string()
   else
     return 1
   fi
+}
+
+# Work in progress
+function docker_parse_mount_string()
+{
+  local IFS=,
+  local docker_args
+
+  # There's no better way in bash
+  eval docker_args=($(cat <<< "${1}"))
 }
 
 ##****f* docker_functions.bsh/docker_sanitize_volume
@@ -676,6 +747,8 @@ function parse-docker-compose-volumes()
 #   DOCKER_VOLUME_FLAGS   - Corresponding list of flags. Can be a mix of short
 #                           and long format flags. Needs more parsing before
 #                           this mix is useful.
+#   DOCKER_VOLUME_FORMATS - Corresponding list of "long" or "short" format for
+#                           each volume
 # SEE ALSO
 #   docker_functions.bsh/parse-docker-compose-volumes
 # AUTHOR
@@ -688,6 +761,7 @@ function docker-compose-volumes()
   DOCKER_VOLUME_SOURCES=()
   DOCKER_VOLUME_TARGETS=()
   DOCKER_VOLUME_FLAGS=()
+  DOCKER_VOLUME_FORMATS=()
   for volume_line in ${DOCKER_VOLUME_LINES+"${DOCKER_VOLUME_LINES[@]}"}; do
     if [[ ${volume_line:0:1} = [SL] ]]; then
       # If the flag hasn't been added, then add it. This only won't happen on
@@ -704,12 +778,16 @@ function docker-compose-volumes()
       if [[ $volume_line =~ ${DOCKER_VOLUME_PATTERN} ]]; then
         DOCKER_VOLUME_SOURCES+=("${BASH_REMATCH[1]}")
         DOCKER_VOLUME_TARGETS+=("${BASH_REMATCH[3]}")
+        DOCKER_VOLUME_FORMATS+=("short")
         flag=("${BASH_REMATCH[5]}")
       else
         echo "Invalid short form volume string: ${volume_line}" >&2
         return 1
       fi
     elif [[ ${volume_line:0:1} = [Ll] ]]; then
+      if [ ${volume_line:0:1} = L ]; then
+        DOCKER_VOLUME_FORMATS+=("long")
+      fi
       volume_line="${volume_line:1}"
       if [[ ${volume_line} = source:* ]]; then
         DOCKER_VOLUME_SOURCES+=("${volume_line#source: *}")
@@ -720,7 +798,11 @@ function docker-compose-volumes()
           DOCKER_VOLUME_SOURCES+=("")
         fi
       else
-        flag+="${volume_line}"
+        if [ "${flag}" = "" ]; then
+          flag="${volume_line}"
+        else
+          flag+=$'\n'"${volume_line}"
+        fi
       fi
     fi
   done

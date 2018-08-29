@@ -328,9 +328,11 @@ begin_test "docker compose volumes"
   sources=("/tmp" "/home/user/src" "test" "internal" "")
   targets=("/mnt" "/src" "/opt" "/src" "/tmp2")
   flags=("" "" "" "" "")
+  formats=(short long short long long)
   cmp_elements_a DOCKER_VOLUME_SOURCES sources
   cmp_elements_a DOCKER_VOLUME_TARGETS targets
   cmp_elements_a DOCKER_VOLUME_FLAGS flags
+  cmp_elements_a DOCKER_VOLUME_FORMATS formats
 
   DOCKER_VOLUME_LINES=("S/test1:/test2:ro"
                        "Stest3:/test4:Z"
@@ -342,7 +344,7 @@ begin_test "docker compose volumes"
   docker-compose-volumes
   sources=("/test1" "test3" "internal")
   targets=("/test2" "/test4" "/src")
-  flags=(":ro" ":Z" "volume:  nocopy: true")
+  flags=(":ro" ":Z" $'volume:\n  nocopy: true')
   cmp_elements_a DOCKER_VOLUME_SOURCES sources
   cmp_elements_a DOCKER_VOLUME_TARGETS targets
   cmp_elements_a DOCKER_VOLUME_FLAGS flags
@@ -569,5 +571,16 @@ begin_required_fail_test "Just docker compose required project prefix"
   echo "${compose_file_hay}" > "${TESTDIR}/dc.yml"
   set -eu
   Just-docker-compose -f "${TESTDIR}/dc.yml" run test_hay
+)
+end_test
+
+begin_test "is_readonly_docker_volume"
+(
+  setup_test
+
+  is_readonly_docker_volume ":ro"
+  is_readonly_docker_volume ":ro:"
+  not is_readonly_docker_volume ":row"
+  not is_readonly_docker_volume ":row:"
 )
 end_test

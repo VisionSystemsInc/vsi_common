@@ -147,7 +147,7 @@ function _env_echo()
 #
 # Some mounted file systems will not allow subdirectories to be mounted by root, such as nfs with squash root turned on. In this case, generate_docker_compose_override will mount the base mount point in a side location, and symlink the subdirectory in where it was supposed to be mounted. This may be slightly less than ideal, but this is the best that can be done with these file systems. The :var:`MOUNT_PREFIX` is the location where these mount points are mounted. These mount points are not intended to be used by the apps running in the container.
 #
-# ..var:: DOCKER_COMPOSE_FILES
+# .. var:: DOCKER_COMPOSE_FILES
 #
 #   :Default: {}
 #   :Optional: True
@@ -174,6 +174,7 @@ function generate_docker_compose_override()
   local over_volumes
   local just_docker_entrypoint_links
   local just_docker_entrypoint_internal_volumes
+  local just_docker_entrypoint_internal_ro_volumes
 
   # indirect fun
   local volumes_name
@@ -229,6 +230,7 @@ function generate_docker_compose_override()
     # Clear list for this service
     just_docker_entrypoint_links=()
     just_docker_entrypoint_internal_volumes=()
+    just_docker_entrypoint_internal_ro_volumes=()
     over_volumes=()
 
     # Indirect fun
@@ -244,7 +246,19 @@ function generate_docker_compose_override()
     # Get internal volumes of
     for volume in "${!DOCKER_VOLUME_SOURCES[@]}"; do
       if is_internal_docker_volume "${DOCKER_VOLUME_SOURCES[$volume]}"; then
-        just_docker_entrypoint_internal_volumes+=("${DOCKER_VOLUME_TARGETS[${volume}]}")
+        if [ "${DOCKER_VOLUME_FORMATS[$volume]}" == "short" ]; then
+          if is_readonly_docker_volume "${DOCKER_VOLUME_FLAGS[$volume]}"; then
+            just_docker_entrypoint_internal_ro_volumes+=("${DOCKER_VOLUME_TARGETS[${volume}]}")
+          else
+            just_docker_entrypoint_internal_volumes+=("${DOCKER_VOLUME_TARGETS[${volume}]}")
+          fi
+        else
+          if is_readonly_docker_compose_long_volume "${DOCKER_VOLUME_FLAGS[$volume]}"; then
+            just_docker_entrypoint_internal_ro_volumes+=("${DOCKER_VOLUME_TARGETS[${volume}]}")
+          else
+            just_docker_entrypoint_internal_volumes+=("${DOCKER_VOLUME_TARGETS[${volume}]}")
+          fi
+        fi
       fi
     done
 
@@ -254,12 +268,15 @@ function generate_docker_compose_override()
 
       # If it doesn't exist, attempt to make it as this user. Better than root
       docker_premkdir "${volume_host}"
-
-      # If the volume is a path, get the real path
-      if [[ ${volume_host:0:1} =~ [./] ]]; then
+      # If it's a docker volume, track that too!
+      if is_internal_docker_volume "${volume_host}"; then
+        if is_readonly_docker_volume "${volume_flags}"; then
+          just_docker_entrypoint_internal_ro_volumes+=("${volume_docker}")
+        else
+          just_docker_entrypoint_internal_volumes+=("${volume_docker}")
+        fi
+      else # Else the volume is a path, get the real path
         volume_host=$(real_path "${volume_host}")
-      else # Else it's a docker volume, track that too!
-        just_docker_entrypoint_internal_volumes+=("${volume_docker}")
       fi
 
       # A trap is set on ERR in ./just that is printing to stderr in the event
@@ -312,6 +329,10 @@ function generate_docker_compose_override()
     if [ "${#just_docker_entrypoint_internal_volumes[@]}" -gt 0 ]; then
       MIFS='//' join_a just_docker_entrypoint_internal_volumes "${just_docker_entrypoint_internal_volumes[@]}"
       _env_echo "      - JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES=${just_docker_entrypoint_internal_volumes}"
+    fi
+    if [ "${#just_docker_entrypoint_internal_ro_volumes[@]}" -gt 0 ]; then
+      MIFS='//' join_a just_docker_entrypoint_internal_ro_volumes "${just_docker_entrypoint_internal_ro_volumes[@]}"
+      _env_echo "      - JUST_DOCKER_ENTRYPOINT_INTERNAL_RO_VOLUMES=${just_docker_entrypoint_internal_ro_volumes}"
     fi
     for var in $(compgen -A export); do
       # For project variables ending in _DOCKER, handle these specially
