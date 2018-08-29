@@ -670,6 +670,47 @@ function defaultify()
     --new) # Run the new just wizard
       # This is just a help placeholder. The REAL --new is in just
       ;;
+    --latest) # Print latest juste version install instrucions
+      (
+        current_version=$(juste --version | awk '{print $NF}')
+        if command -v curl &> /dev/null; then
+            url="$(curl -sL https://api.github.com/repos/visionsystemsinc/just/releases | \
+                  sed -En '/"browser_download_url": ".*juste-Linux-x86_64"/{
+                            s/ *"browser_download_url": "(.*juste-Linux-x86_64)"/\1/;
+                            p;
+                            q}')"
+            [[ ${url} =~ https://github.com/VisionSystemsInc/just/releases/download/(.*)/juste ]]
+            version="${BASH_REMATCH[1]}"
+            if [ "${version}" = "${current_version}" ]; then
+              echo "You are already up to date (${version})" >&2
+            else
+              echo "To install the latest juste:" >&2
+              echo "sudo curl -o \"$(which juste)\" -L \"${url}\""
+            fi
+        elif command -v wget &> /dev/null; then
+            url="$(wget -qO- https://api.github.com/repos/visionsystemsinc/just/releases | \
+                  sed -En '/"browser_download_url": ".*juste-Linux-x86_64"/{
+                            s/ *"browser_download_url": "(.*juste-Linux-x86_64)"/\1/;
+                            p;
+                            q}')"
+            [[ ${url} =~ https://github.com/VisionSystemsInc/just/releases/download/(.*)/juste ]]
+            version="${BASH_REMATCH[1]}"
+            if [ "${version}" = "${current_version}" ]; then
+              echo "You are already up to date (${version})" >&2
+            else
+              echo "To install the latest juste:" >&2
+              echo "sudo wget -O \"$(which juste)\" \"${url}\""
+            fi
+        # elif command -v python &> /dev/null; then
+        #   :
+        # elif command -v powershell &> /dev/null; then
+        #   :
+        else
+          echo "You don't have a supported web downloader installed" >&2
+          false
+        fi
+      )
+      ;;
     --wrap) # Same as calling ./wrap ... Useful for just executable
       exec "${VSI_COMMON_DIR}/linux/Just_wrap" "${JUST_PROJECT_FILE}" ${@+"${@}"}
       ;;
