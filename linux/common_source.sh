@@ -121,7 +121,7 @@ esac
 # Default: I can't figure it out, probably glibc
 VSI_MUSL=-1
 if command -v ldd 2>&1 > /dev/null; then
-  if ! VSI_MUSL=$(ldd --version) 2> /dev/null; then
+  if ! VSI_MUSL=$(ldd --version 2>&1); then
     # Some versions of ldd fail when using the --version flag, but succeed on
     # no flag
     VSI_MUSL=$(ldd 2>&1 || :)
