@@ -905,9 +905,7 @@ if [ "${USE_DOCKER}" = "1" ]; then
               FROM debian:stretch as dep_stage
               SHELL ["/usr/bin/env", "bash", "-euxvc"]
 
-              #
               # Install any runtime dependencies
-              #
               RUN apt-get update; \
                   DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
                     # # Uncomment for GDAL
@@ -919,16 +917,15 @@ if [ "${USE_DOCKER}" = "1" ]; then
                   # Move all virtualenvs to /venv
                   WORKON_HOME=/venv \
                   PIPENV_PIPFILE=/src/Pipfile \
-                  # The pipenv cache avoids the need to reompile packages at runtime
+                  # The pipenv cache is how we avoid recompiling packages at runtime
                   # when the build dependencies are no longer available
                   PIPENV_CACHE_DIR=/venv/cache \
                   # Needed for pipenv shell
                   PYENV_SHELL=/bin/bash \
                   # pipenv recommends that these env variables be set to en_US.UTF-8.
-                  # Unfortunately, that locale does not exist by default on Debian.
-                  # C.UTF-8 seems to work. To generate en_US.UTF-8 locale follow
-                  # https://stackoverflow.com/a/38553499/1771778
-                  # Note, they do exist by default if you changed the base image to Centos/Fedora
+                  # On debian, C.UTF-8 exists by default instead, and seems to work.
+                  # More detail: https://stackoverflow.com/a/38553499/1771778
+                  # Note: en_US.UTF-8 exists by default in Centos/Fedora base images
                   LC_ALL=C.UTF-8 \
                   LANG=C.UTF-8
 
@@ -937,10 +934,8 @@ if [ "${USE_DOCKER}" = "1" ]; then
 
               FROM dep_stage as pipenv_cache
 
-              #
-              # Install any build dependencies
-              #
               # # Uncomment for GDAL
+              # # Install any build dependencies
               # RUN apt-get update; \
               #     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
               #       libgdal-dev python3-dev g++ ; \
@@ -949,14 +944,16 @@ if [ "${USE_DOCKER}" = "1" ]; then
               # COPY --from=jq /usr/local/bin/jq /usr/local/bin/jq
 
               ADD Pipfile Pipfile.lock /src/
-              # Packages can be added as dependencies to your project, for example, by
-              # - Editing the Pipfile and adding lines to the [packages] section; e.g.,
-              #   "scipy = '"'"'*'"'"'", and then rebuilding the docker image with
-              #     $ just build
+              # Simple packages can be added as dependencies to your project by:
               # - Running the container and installing them with pipenv; e.g.,
-              #     $ just run '"${APP_NAME}"'
-              #     $ pipenv install --keep-outdated scipy # install scipy without
-              #                                            # updating other packages
+              #     just run '"${APP_NAME}"'
+              #     pipenv install --keep-outdated scipy
+              #     # install scipy without updating other packages
+              # Packages that require compiling should be added by
+              # - Editing the Pipfile and adding lines to the [packages] section
+              #     scipy = "*"
+              # - Rebuiling the image
+              #     just build
 
               # GDAL, for example, is a more complicated example
               # - GDAL has extra build dependencies. The apt-get pattern above will install
@@ -1009,12 +1006,11 @@ if [ "${USE_DOCKER}" = "1" ]; then
     fi
 
     uwecho   '
-              #
               # Install any additional packages
-              #
               RUN apt-get update; \
                   DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-                  libpng16-16; \
+                    # Example of a package
+                    qbs-examples; \
                   rm -rf /var/lib/apt/lists/*
 
               # Another typical example of installing a package
