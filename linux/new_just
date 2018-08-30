@@ -979,11 +979,9 @@ if [ "${USE_DOCKER}" = "1" ]; then
               #     export CPLUS_INCLUDE_PATH=/usr/include/gdal; \
               #     export C_INCLUDE_PATH=/usr/include/gdal; \
               #
-              #     # Install the version of numpy specified in the Pipfiles first; after
-              #     # numpy is installed, the other packages are installed. If numpy is not
-              #     # locked yet, the version is an empty string and pipenv will fall back
-              #     # to the Pipfile
+              #     # Get the version of numpy specified in the lock file, else blank
               #     numpy_version="$(jq --raw-output ".default.numpy.version // empty" "${PIPENV_PIPFILE}".lock)"; \
+              #     # Install numpy first; then the other packages are installed.
               #     pipenv install --keep-outdated numpy${numpy_version}; \
               #
               #     cp "${PIPENV_PIPFILE}".lock /venv; \
@@ -992,7 +990,7 @@ if [ "${USE_DOCKER}" = "1" ]; then
               RUN \
                   # Install all packages into the image
                   pipenv install --keep-outdated; \
-                  # Copy the lock file, so that it can be smuggled out of the image
+                  # Copy the lock file, so that it can be copied out of the image in "just _post_build"
                   cp /src/Pipfile.lock /venv; \
                   # Cleanup and make way for the real /src that will be mounted at runtime
                   rm -rf /src/* /tmp/pip*
@@ -1057,20 +1055,22 @@ if [ "${USE_DOCKER}" = "1" ]; then
               if [ "${ALREADY_RUN_ONCE+set}" != "set" ]; then
                 # create the user and associated groups and handle nfs symlinks
 
-                # docker_entrypoint.sh will automatically chown all files in the
-                # volumes listed in JUST_DOCKER_ENTRYPOINT_CHOWN_DIRS to match the user.
-                # Although this process could be slow (since it has to touch every file in
-                # the volumes), it only executes when the volumes are created. If this
-                # still takes too long and you don'"'"'t need this feature, remove the
-                # ONE line, but leave the docker_entrypoint.bsh call.
-                # docker_entrypoint.sh will non-recursively chmod the directories in the
-                # volumes listed in JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS to 777 so that any
-                # initial ownership issues are avoided.
-                # These two features give volumes a much more desirable default behavior.
-                # If you want different behavior, add that logic here instead
+                # Setup the container to be more friendly to non-root users and
+                # add other advanced J.U.S.T. features
                 JUST_DOCKER_ENTRYPOINT_CHOWN_DIRS="${JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES-}" \
                 JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS="${JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES-}" \
                 /usr/bin/env bash /vsi/linux/docker_entrypoint.bsh
+
+                # - JUST_DOCKER_ENTRYPOINT_CHOWN_DIRS - automatically chown all files in the
+                #   volumes listed to match the user. This could be slow with many files, but
+                #   it only executes when the volumes permissions are bad. If you don'"'"'t
+                #   need this feature, save time by removing the
+                #   JUST_DOCKER_ENTRYPOINT_CHOWN_DIRS line, but leave rest.
+                # - JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS - non-recursively chmod the directories
+                #   listed to 777 so that any initial ownership issues are avoided. Can also
+                #   be disabled by removing the JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS line
+                # These two features give volumes a much more desirable default behavior for
+                # non-root users. Add any other custom behavior here.
 
                 # Rerun entrypoint as user now, (skipping the root part via ALREADY_RUN_ONCE)
                 ALREADY_RUN_ONCE=1 exec gosu ${DOCKER_USERNAME} /usr/bin/env bash $0 ${@+"${@}"}
