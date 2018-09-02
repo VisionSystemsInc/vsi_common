@@ -4,6 +4,12 @@
 
 VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.."; pwd)"
 . uwecho.bsh
+. common_source.sh
+
+setup()
+{
+  temp_image="$(mktemp -u test_XXXXXXXXXXXXXXXX | tr '[:upper:]' '[:lower:]')"
+}
 
 begin_test "New Just with defaults"
 (
@@ -15,33 +21,37 @@ begin_test "New Just with defaults"
 
   project_name=$(basename "${TESTDIR}" | tr '[a-z]' '[A-Z]' | sed -E 's|[^A-Z0-9_]+||g')
 
-  [ "$(./wrap bash -c 'echo $'"${project_name}"'_CWD')" = "${TESTDIR}" ]
+  [ "$(. setup.env; just --wrap bash -c 'echo $'"${project_name}"'_CWD')" = "${TESTDIR}" ]
 )
 end_test
 
-begin_test "New Just"
+begin_test "New Just with difficult names"
 (
   setup_test
+  if [ "${VSI_OS}" != "windows" ]; then
+    # Windows can't handle " quotes in file names
+    q='"'
+  fi
+
   "${VSI_COMMON_DIR}/linux/new_just" --continue --use-vsi \
                                      --use-docker --use-pipenv \
                                      --prefix JTEST \
                                      --project-dir "${TESTDIR}" \
-                                     --justfile "j.u.s.t  f i'l\"e" \
-                                     --setupfile "set u.p  f i'l\"e" \
-                                     --wrapfile "wra.p  f i'l\"e" \
-                                     --project-name "je.  t e's\"t" \
-                                     --vsi-dir "v.s.i  d i'r\"" \
+                                     --justfile "j.u.s.t  f i'l${q-}e" \
+                                     --setupfile "set u.p  f i'l${q-}e" \
+                                     --project-name "je.  t e's${q-}t" \
+                                     --vsi-dir "v.s.i  d i'r${q-}" \
                                      --app yaan \
                                      --repo atest/btest
 
-  ln -s ${VSI_COMMON_DIR} "${TESTDIR}/v.s.i  d i'r\""
+  ln -s ${VSI_COMMON_DIR} "${TESTDIR}/v.s.i  d i'r${q-}"
 
-  [ "$("./wra.p  f i'l\"e" bash -c 'echo $JTEST_CWD')" = "${TESTDIR}" ]
+  [ "$(. "set u.p  f i'l${q-}e"; just --wrap bash -c 'echo $JTEST_CWD')" = "${TESTDIR}" ]
 
   export PATH="${TESTDIR}/ss:${PATH}"
   export COMPOSE_PROJECT_NAME=testpro
   mkdir "${TESTDIR}/ss"
-  . "set u.p  f i'l\"e"
+  . "set u.p  f i'l${q-}e"
 
   uwecho '#!/usr/bin/env bash
           echo mockdc "${@}"' > ss/docker-compose
@@ -53,7 +63,7 @@ begin_test "New Just"
   chmod 755 ss/docker
 
   [ "$(just build)" = "mockd volume rm testpro_venv
-mockdc -f ${TESTDIR}/v.s.i  d i'r\"/docker/recipes/docker-compose.yml build gosu tini vsi pipenv
+mockdc -f ${TESTDIR}/v.s.i  d i'r${q-}/docker/recipes/docker-compose.yml build gosu tini vsi pipenv
 mockdc -f ${TESTDIR}/docker-compose.yml build
 mockd cp mockd create atest/btest:yaan_$(id -u -n):/venv/Pipfile.lock ${TESTDIR}/Pipfile.lock
 mockd rm mockd create atest/btest:yaan_$(id -u -n)" ]
@@ -67,13 +77,25 @@ mockd rm mockd create atest/btest:yaan_$(id -u -n)" ]
 services:
   yaan:
     volumes:
-      - /tmp/.X11-unix:/tmp/.X11-unix:ro
-      - ${TESTDIR}/new-data:/data
+"
+  if [ "${VSI_OS}" = "linux" ]; then
+    ans+="      - /tmp/.X11-unix:/tmp/.X11-unix:ro"
+  fi
+  if [ "${VSI_OS}" = "windows" ]; then
+    ans+="      - $(cygpath -w ${TESTDIR}/new-data)://data
+    environment:
+      - JTEST_DATA_DIR_HOST=$(cygpath -w ${TESTDIR}/new-data)
+      - JTEST_DATA_DIR=//data
+      - JTEST_SOURCE_DIR_HOST=$(cygpath -w ${TESTDIR})
+      - JTEST_SOURCE_DIR=//src"
+  else
+    ans+="      - ${TESTDIR}/new-data:/data
     environment:
       - JTEST_DATA_DIR_HOST=${TESTDIR}/new-data
       - JTEST_DATA_DIR=/data
       - JTEST_SOURCE_DIR_HOST=${TESTDIR}
       - JTEST_SOURCE_DIR=/src"
+  fi
 
   [ "$(cat "${tmp_file}")" = "${ans}" ]
 
@@ -99,7 +121,7 @@ begin_test "New Just no pipenv"
 
   ln -s ${VSI_COMMON_DIR} "${TESTDIR}/external/vsi_common"
 
-  [ "$(./wrap bash -c 'echo $JTEST_CWD')" = "${TESTDIR}" ]
+  [ "$(. setup.env; just --wrap bash -c 'echo $JTEST_CWD')" = "${TESTDIR}" ]
 
   export PATH="${TESTDIR}:${PATH}"
   . setup.env
@@ -120,13 +142,25 @@ mockdc -f ${TESTDIR}/docker-compose.yml build" ]
 services:
   example:
     volumes:
-      - /tmp/.X11-unix:/tmp/.X11-unix:ro
-      - ${TESTDIR}/new-data:/data
+"
+  if [ "${VSI_OS}" = "linux" ]; then
+    ans+="      - /tmp/.X11-unix:/tmp/.X11-unix:ro"
+  fi
+  if [ "${VSI_OS}" = "windows" ]; then
+    ans+="      - $(cygpath -w ${TESTDIR}/new-data)://data
+    environment:
+      - JTEST_DATA_DIR_HOST=$(cygpath -w ${TESTDIR}/new-data)
+      - JTEST_DATA_DIR=//data
+      - JTEST_SOURCE_DIR_HOST=$(cygpath -w ${TESTDIR})
+      - JTEST_SOURCE_DIR=//src"
+  else
+    ans+="      - ${TESTDIR}/new-data:/data
     environment:
       - JTEST_DATA_DIR_HOST=${TESTDIR}/new-data
       - JTEST_DATA_DIR=/data
       - JTEST_SOURCE_DIR_HOST=${TESTDIR}
       - JTEST_SOURCE_DIR=/src"
+  fi
 
   [ "$(cat "${tmp_file}")" = "${ans}" ]
 
@@ -142,7 +176,7 @@ begin_test "New Just no docker"
 
   ln -s ${VSI_COMMON_DIR} "${TESTDIR}/external/vsi_common"
 
-  [ "$(./wrap bash -c 'echo $JTEST_CWD')" = "${TESTDIR}" ]
+  [ "$(. setup.env; just --wrap bash -c 'echo $JTEST_CWD')" = "${TESTDIR}" ]
 
   export PATH="${TESTDIR}:${PATH}"
   . setup.env
@@ -165,17 +199,19 @@ command -v git &>/dev/null || skip_next_test
 begin_test "New just instructions test (git)"
 (
   setup_test
+  if [ "${OS-}" != "Windows_NT" ]; then
+    q='"'
+  fi
 
   # Evaluate git commands in stdout
   eval "$("${VSI_COMMON_DIR}/linux/new_just" --continue --use-vsi \
                                              --use-docker --use-pipenv \
                                              --prefix JTEST \
                                              --project-dir "${TESTDIR}" \
-                                             --justfile "j.u.s.t  f i'l\"e" \
-                                             --setupfile "set u.p  f i'l\"e" \
-                                             --wrapfile "wra.p  f i'l\"e" \
-                                             --project-name "je.  t e's\"t" \
-                                             --vsi-dir "v.s.i  d i'r\"" \
+                                             --justfile "j.u.s.t  f i'l${q-}e" \
+                                             --setupfile "set u.p  f i'l${q-}e" \
+                                             --project-name "je.  t e's${q-}t" \
+                                             --vsi-dir "v.s.i  d i'r${q-}" \
                                              --app yaan \
                                              --repo tmp)"
 
@@ -202,11 +238,24 @@ begin_test "New just docker test"
   just build
 
   # If this fails, then the docker server is on another host
-  if docker create --name tmp --mount "type=bind,source=${TESTDIR},destination=/src" alpine:3.8 &>/dev/null; then
-    docker rm tmp
+  # if docker create --name ${temp_image} --mount "type=bind,source=/${TESTDIR},destination=/src" alpine:3.8 &>/dev/null; then
+  if docker create --name ${temp_image} -v "${TESTDIR}://src" alpine:3.8 &>/dev/null; then
+    docker rm ${temp_image}
   else
-    tar c . | docker run -i --rm -v ${TESTDIR}:/src -w /src alpine:3.8 tar x
+    tar c . | docker run -i --rm -v "${TESTDIR}://src" -w //src alpine:3.8 tar x
   fi
+just run yaan pwd >&2
+just run yaan ls // >&2
+just run yaan pip freeze --all >& 2
+just -n run yaan >& 2
   [[ $(just run yaan pip freeze --all) =~ pip==.*setuptools==.*wheel==.* ]]
 )
 end_test
+
+teardown()
+(
+  # Docker cleanup
+  ! ${DOCKER} rm ${temp_image} &>/dev/null
+
+  : # teardown should always return true on success
+)

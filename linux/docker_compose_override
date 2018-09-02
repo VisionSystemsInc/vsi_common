@@ -307,7 +307,11 @@ function generate_docker_compose_override()
       fi
 
       IFS=:
-      over_volumes+=("      - ${volume_host}:${volume_docker}${volume_flags}")
+      if [ "${VSI_OS}" = "windows" ]; then
+        over_volumes+=("      - $(cygpath -w ${volume_host}):${volume_docker}${volume_flags}")
+      else
+        over_volumes+=("      - ${volume_host}:${volume_docker}${volume_flags}")
+      fi
       IFS="${OLD_IFS}"
     done
     # remove duplicates https://unix.stackexchange.com/q/159695,
@@ -343,11 +347,19 @@ function generate_docker_compose_override()
           if [ "${JUST_DISABLE_ENVIRONMENT_SWAP-}" == "1" ]; then
             _env_echo "      - ${indirect}=${!indirect}"
           else
-            _env_echo "      - ${indirect}_HOST=${!indirect}"
+            if [ "${VSI_OS}" = "windows" ]; then
+              _env_echo "      - ${indirect}_HOST=$(cygpath -w ${!indirect})"
+            else
+              _env_echo "      - ${indirect}_HOST=${!indirect}"
+            fi
           fi
         fi
         if [ "${JUST_DISABLE_ENVIRONMENT_SWAP-}" == "1" ]; then
-          _env_echo "      - ${var}=${!var}"
+          if [ "${VSI_OS}" = "windows" ]; then
+            _env_echo "      - ${var}=$(cygpath -w ${!var})"
+          else
+            _env_echo "      - ${var}=${!var}"
+          fi
         else
           _env_echo "      - ${indirect}=${!var}"
           if [ "${EXPORT_DOCKER-0}" == "1" ]; then
