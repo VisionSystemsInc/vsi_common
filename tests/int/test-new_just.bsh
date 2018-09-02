@@ -144,7 +144,7 @@ services:
     volumes:
 "
   if [ "${VSI_OS}" = "linux" ]; then
-    ans+=$'      - /tmp/.X11-unix:/tmp/.X11-unix:ro'
+    ans+=$'      - /tmp/.X11-unix:/tmp/.X11-unix:ro\n'
   fi
   if [ "${VSI_OS}" = "windows" ]; then
     ans+="      - $(cygpath -w ${TESTDIR}/new-data)://data
@@ -239,10 +239,18 @@ begin_test "New just docker test"
 
   # If this fails, then the docker server is on another host
   # if docker create --name ${temp_image} --mount "type=bind,source=/${TESTDIR},destination=/src" alpine:3.8 &>/dev/null; then
-  if docker create --name ${temp_image} -v "${TESTDIR}://src" alpine:3.8 &>/dev/null; then
-    docker rm ${temp_image}
+  if [ "${VSI_OS}" = "windows" ]; then
+    if docker create --name ${temp_image}  --mount "type=bind,source=$(cygpath -w ${TESTDIR}),destination=//src" alpine:3.8 &>/dev/null; then
+      docker rm ${temp_image}
+    else
+      tar c . | docker run -i --rm -v "$(cygpath -w ${TESTDIR}):${VSI_PATH_ESC}/src" -w ${VSI_PATH_ESC}/src alpine:3.8 tar x
+    fi
   else
-    tar c . | docker run -i --rm -v "${TESTDIR}://src" -w //src alpine:3.8 tar x
+    if docker create --name ${temp_image}  --mount "type=bind,source=${TESTDIR},destination=/src" alpine:3.8 &>/dev/null; then
+      docker rm ${temp_image}
+    else
+      tar c . | docker run -i --rm -v "${TESTDIR}:${VSI_PATH_ESC}/src" -w ${VSI_PATH_ESC}/src alpine:3.8 tar x
+    fi
   fi
 
   [[ $(just run yaan pip freeze --all) =~ pip==.*setuptools==.*wheel==.* ]]
