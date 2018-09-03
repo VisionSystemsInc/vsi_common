@@ -37,3 +37,54 @@ begin_test "macOS timeout substitute"
   [ "${t_diff}" -lt 1300 ]
 )
 end_test
+
+[ "${OS-}" != "Windows_NT" ] && skip_next_test
+begin_test "Get timezone Windows"
+(
+  setup_test
+
+  # Mock powershell
+  # powershell()
+  # {
+  #   echo -5
+  # }
+
+  offset="$(powershell (Get-TimeZone).BaseUtcOffset.TotalSeconds)"
+  hexoffset="$(printf '%08x\n' ${offset})"
+  hexoffset="$(echo -n "${hexoffset}" | sed -E 's/([0-9A-F]{2})/\\x\1/gI')"
+  tz="justtz"
+
+  printf 'TFif2' > "${tz}"
+  printf '\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00' >> "${tz}" # 15 nulls for furture use
+  printf '\x00\x00\x00\x01' >> "${tz}" # gmt flags
+  printf '\x00\x00\x00\x01' >> "${tz}" # std flags
+  printf '\x00\x00\x00\x00' >> "${tz}" # leap seconds
+  printf '\x00\x00\x00\x00' >> "${tz}" # transition times
+  printf '\x00\x00\x00\x01' >> "${tz}" # Abbreviations
+  printf '\x00\x00\x00\x04' >> "${tz}" # Abbreviation size
+
+  # gmt flag
+  printf "${gmtoffset}" >> "${tz}" # signed int offset in seconds
+  printf '\x00\x00' >> "${tz}"
+  printf "ZZZ" >> "${tz}"
+  printf '\x00\x00\x00' >> "${tz}"
+
+  # std flag
+
+  # leap
+  # transision
+  # Abreviateion
+  tz+=$''
+
+)
+
+[ "${OS-}" = "Windows_NT" ] && skip_next_test
+begin_test "Get timezone not windows"
+(
+  setup_test
+
+  zone_file=/etc/localtime
+  if [ -n "${TZ+set}" ]; then
+    zone_file=$(cd /usr/share/zoneinfo; real_path "${TZ}")
+  fi
+)
