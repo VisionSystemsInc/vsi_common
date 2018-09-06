@@ -17,81 +17,78 @@ source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
 #
 # .. file:: docker_functions.bsh
 #
+# Set of functions to make using dockers easier
+#
+# .. envvar:: DOCKER
+#
+# Name/path of docker executable
+#
+# Instead of hard-coding "docker" everywhere, use the variable :envvar:`DOCKER` so that
+# when the need comes, it is easier to switch which executable gets called.
 #**
 
-##****F* just/docker_functions.bsh
-# NAME
-#   docker_functions.bsh - Set of functions to make using dockers easier
-# AUTHOR
-#   Andy Neff
-##***
-
-##****d* docker_functions.bsh/DOCKER
-# NAME
-#   DOCKER - Name/path of docker executable
-# SYNOPSIS
-#   Instead of hard-coding "docker" everywhere, use the variable DOCKER so that
-#   when the need comes, it is easier to switch which executable gets called
-# AUTHOR
-#   Andy Neff
-##***
 : ${DOCKER=docker}
-##****d* docker_functions.bsh/NVIDIA_DOCKER
-# NAME
-#   NVIDIA_DOCKER - Name/path of nvidia-docker executable
-# SYNOPSIS
-#   Instead of hard-coding "nvidia-docker" everywhere, use the variable
-#   NVIDIA_DOCKER so that when the need comes, it is easier to switch which
-#   executable gets called. Default to DOCKER if nvidia-docker executable is not
-#   in the path (hash-able)
-# AUTHOR
-#   Andy Neff
-##***
+
+#**
+# .. envvar:: NVIDIA_DOCKER
+#
+# Name/path of nvidia-docker executable
+#
+# Instead of hard-coding "nvidia-docker" everywhere, use the variable
+# :envvar:`NVIDIA_DOCKER` so that when the need comes, it is easier to switch which
+# executable gets called. Default to :envvar:`DOCKER` if nvidia-docker executable is not
+# in the path (hash-able)
+#**
+
 : ${NVIDIA_DOCKER=nvidia-docker}
 if ! hash ${NVIDIA_DOCKER} 2> /dev/null; then
   NVIDIA_DOCKER=${DOCKER}
 fi
 
-##****id* docker_functions.bsh/DOCKER_VOLUME_PATTERN
-# NAME
-#   DOCKER_VOLUME_PATTERN - Regex pattern for matching docker volume short form
-# NOTES
+#**
+# .. var:: DOCKER_VOLUME_PATTERN
+#
+# Regex pattern for matching docker volume short form
+#
+# .. Note::
 #   Works on:
 #     C:\*, c:/* .* /* - '^(([a-zA-Z]:[/\])?[^:]*)'
 #
-#   Break the volume string up into BASH_REMATCH
-#   1 - Host path
-#   3 - Docker path
-#   5 - flags
-##***
+#   Break the volume string up into ``BASH_REMATCH``
+#    1 - Host path
+#    3 - Docker path
+#    5 - flags
+#**
+
 DOCKER_VOLUME_PATTERN='^(([a-zA-Z]:[/\])?[^:]*):(([a-zA-Z]:[/\])?[^:]*)((:ro|:rw|:z|:Z|:r?shared|:r?slave|:r?private|:delegated|:cached|:consistent|:nocopy)*)$'
 
-##****d* docker_functions.bsh/is_dir_and_not_exist
-# NAME
-#   is_dir_and_not_exist - See if the string looks like a non-existing directory
-# DESCRIPTION
-#   Docker currently creates directories that do not exist when mounting. This
-#   has a few bad side effects, such as the directories end up being own by root.
-#   In order to work around this "bug", this function identifies if docker will
-#   assume a string is a directory/file or an internal mount.
-# INPUTS
-#   $1 - String to check
-# OUTPUT
-#   Returns 0 for is a directory, and 1 for not a directory (is an internal
-#   mount)
-# EXAMPLE
-#   is_dir_and_not_exist this_looks_like_an_internal_volume
-#   is_dir_and_not_exist ./this_looks/like_a/directory
-#   is_dir_and_not_exist /this_also_looks/like_a/directory
+#**
+# .. function:: is_dir_and_not_exist
 #
-#   if is_dir_and_not_exist ${my_mount}; then
-#     mkdir -p ${my_mount}
-#   fi
-# AUTHOR
-#   Andy Neff
-# SEE ALSO
-#   docker_functions.bsh/docker_sanitize_volume
-##***
+# :Arguments: ``$1`` - String to check
+# :Output: Returns ``0`` for is a directory, and ``1`` for not a directory (is an internal mount)
+#
+# See if the string looks like a non-existing directory
+#
+# Docker currently creates directories that do not exist when mounting. This
+# has a few bad side effects, such as the directories end up being own by root.
+# In order to work around this "bug", this function identifies if docker will
+# assume a string is a directory/file or an internal mount.
+#
+# .. rubric:: Example
+# .. code-block:: bash
+#
+#     is_dir_and_not_exist this_looks_like_an_internal_volume
+#     is_dir_and_not_exist ./this_looks/like_a/directory
+#     is_dir_and_not_exist /this_also_looks/like_a/directory
+#
+#     if is_dir_and_not_exist ${my_mount}; then
+#      mkdir -p ${my_mount}
+#     fi
+# .. seealso::
+#   :func:`docker_sanitize_volume`
+#**
+
 function is_dir_and_not_exist()
 {
  local dir_name="$1"
@@ -104,22 +101,19 @@ function is_dir_and_not_exist()
  return 1 #False :(
 }
 
-##****d* docker_functions.bsh/is_internal_docker_volume
-# NAME
-#   is_internal_docker_volume - Check if the string looks like a docker volume
-# DESCRIPTION
-#   Checks to see if the string is a valid internal docker volume (as opposed
-#   to a Linux or Windows style directory)
-# INPUTS
-#   $1 - String to check
-# OUTPUT
-#   Returns 0 if it is a volume and 1 if it is not (i.e., it is a directory or
-#   invalid)
-# SEE ALSO
-#   docker_functions.bsh/is_dir_and_not_exist
-# AUTHOR
-#   Andy Neff
-##***
+#**
+# .. function:: is_internal_docker_volume
+#
+# :Arguments: ``$1`` - String to check
+# :Output: Returns ``0`` if it is a volume and ``1`` if it is not (i.e., it is a directory or invalid)
+#
+# Checks to see if the string is a valid internal docker volume (as opposed
+# to a Linux or Windows style directory)
+#
+# .. seealso:: 
+#   :func:`is_dir_and_not_exist`
+#**
+
 function is_internal_docker_volume()
 {
   if [[ ${1} =~ ^[a-zA-Z0-9][a-zA-Z0-9_\.\-]+$ ]]; then
@@ -129,23 +123,23 @@ function is_internal_docker_volume()
   fi
 }
 
-##****f* docker_functions.bsh/container_get_label
-# NAME
-#   container_get_label - Get a label value from a docker container
-# INPUTS
-#   $1 - Container name
-#   $2 - Label name
-# OUTPUT
-#   stdout - Prints out the label value (and evaluates environment variables)
-#   Return 1 if label is blank (possibly not set), 0 for label found
-# NOTES
+#**
+# .. function:: container_get_label
+#
+# :Arguments: * ``$1`` - Container name
+#             * ``$2`` - Label name
+# :Output: * `stdout` - Prints out the label value (and evaluates environment variables)
+#          * Return ``1`` if label is blank (possibly not set), ``0`` for label found
+#
+# Get a label value from a docker container
+#
+# .. Note::
 #   Requires perl be installed
-# BUGS
-#   Cannot determine the difference between blank and unset labels. See
-#   container_has_label to handle that ambiguity.
-# AUTHOR
-#   Andy Neff
-##***
+# .. rubric:: Bugs
+#
+# Cannot determine the difference between blank and unset labels. See :func:`container_has_label` to handle that ambiguity.
+#**
+
 function container_get_label()
 { # All labels go through a perl filter that evaluate %name% using exported
   # environment variables. This won't work on unexported variables
@@ -159,24 +153,23 @@ function container_get_label()
   return 0
 }
 
-
-##****f* docker_functions.bsh/container_has_label
-# NAME
-#   container_has_label - Check to see if a container contains a certain label
-# SYNOPSIS
-#   docker_functions.bsh/container_get_label can not tell whether a container
-#   has a label or not when the label is blank. The go template filter does not
-#   differentiate. This will verify that a blank label is set or unset.
-# INPUTS
-#   $1 - Container name
-#   $2 - Label name
-# OUTPUT
-#   Return 1 for label is unset, 0 for label is set
-# NOTES
+#**
+# .. function:: container_has_label
+#
+# :Arguments: * ``$1`` - Container name
+#             * ``$2`` - Label name
+# :Output: Return ``1`` for label is unset, ``0`` for label is set
+#
+# Check to see if a container contains a certain label
+#
+# :func:`container_get_label` can not tell whether a container
+# has a label or not when the label is blank. The go template filter does not
+# differentiate. This will verify that a blank label is set or unset.
+#
+# .. Note::
 #   Requires jq be installed
-# AUTHOR
-#   Andy Neff
-##***
+#**
+
 function container_has_label()
 {
   if [ "$(docker inspect -f '{{json .Config.Labels }}' $1 | \
@@ -187,18 +180,20 @@ function container_has_label()
   fi
 }
 
-##****f* docker_functions.bsh/docker_premkdir
-# NAME
-#   docker_premkdir - Convenient wrapper to deal with the MINGW screw ups
-# DESCRIPTION
-#   Preempt one of docker's annoying behaviors of creating directories that
-#   don't exist with root:root ownership, and just make the directory yourself.
+#**
+# .. function:: docker_premkdir
 #
-#   When the argument is a docker volume, nothing should happen. Docker auto
-#   creates those just fine.
-# INPUTS
-#   $1 - Host directory name or docker volume
-# NOTES
+# :Arguments: ``$1`` - Host directory name or docker volume
+#
+# Convenient wrapper to deal with the ``MINGW`` screw ups
+#
+# Preempt one of docker's annoying behaviors of creating directories that
+# don't exist with root:root ownership, and just make the directory yourself.
+#
+# When the argument is a docker volume, nothing should happen. Docker auto
+# creates those just fine.
+#
+# .. Note::
 #   Always creates the directory with 777 permission. This is to maximize the
 #   chances that it works. If you don't want this, the easiest solution is to
 #   create the directory yourself. This is more of a last resort. For this
@@ -206,9 +201,8 @@ function container_has_label()
 #
 #   When a directory doesn't exist, it is assumed it is a directory, and not a
 #   file because this is the same behavior as docker.
-# AUTHOR
-#   Andy Neff
-##***
+#**
+
 function docker_premkdir()
 {
   local host_dir="${1}"
@@ -225,21 +219,20 @@ function docker_premkdir()
   fi
 }
 
-##****f* docker_functions.bsh/docker_host_dir
-# NAME
-#   docker_host_dir - Normalize POSIX path to native path
-# DESCRIPTION
+#**
+# .. function:: docker_host_dir
+#
+# :Arguments: ``$1`` - Directory name
+# :Output: `stdout` - Converted directory name
+#
+# Normalize ``POSIX`` path to native path
+#
 #   On Windows:
 #     Converts /d/foo/bar to D:\foo\bar using cygpath
 #   On everything else in the world:
-#     WYSIWYG
-# INPUTS
-#   $1 - Directory name
-# OUTPUT
-#   stdout - Converted directory name
-# AUTHOR
-#   Andy Neff
-##***
+#     ``WYSIWYG``
+#**
+
 function docker_host_dir()
 {
   if [ "${OS-notwindows}" == "Windows_NT" ] && command -v cygpath &> /dev/null ; then
@@ -254,23 +247,22 @@ function docker_host_dir()
   fi
 }
 
-
-
-##****f* docker_functions.bsh/docker_parse_volume_string
-# NAME
-#   docker_parse_volume_string - Split up the docker volume string
-# DESCRIPTION
-#   Docker volume strings can contain optional flags, and depending on windows
-#   or POSIX operating systems, have different rules, etc... This function will
-#   universally split the string up.
-# INPUTS
-#   $1 - The volume string (source:destination:flags)
-# OUTPUT
-#   volume_host - Host path part of the string
-#   volume_docker - Docker path part of the string
-#   volume_flags - Extra optional flags part of the string; may be empty
-#   Returns 1 if regex is not matched, else return 0
-# NOTES
+#**
+# .. function:: docker_parse_volume_string
+#
+# :Arguments: ``$1`` - The volume string (source:destination:flags)
+# :Output: * volume_host - Host path part of the string
+#          * volume_docker - Docker path part of the string
+#          * volume_flags - Extra optional flags part of the string; may be empty
+#          * Returns ``1`` if regex is not matched, else return ``0``
+#
+# Split up the docker volume string
+#
+# Docker volume strings can contain optional flags, and depending on windows
+# or ``POSIX`` operating systems, have different rules, etc... This function will
+# universally split the string up.
+#
+# .. Note::
 #   Based off of docker 17.12 syntax. If new flags are added, the regex must be
 #   updated.
 #
@@ -278,9 +270,8 @@ function docker_host_dir()
 #   path "D:\test" and docker path "ro", NOT internal volume "d", docker path
 #   "/test", and flag read-only. This is not a bug because you can't have a
 #   single letter docker volume, so this shouldn't work anyways.
-# AUTHOR
-#   Andy Neff
-##***
+#**
+
 function docker_parse_volume_string()
 {
   if [[ ${1} =~ ${DOCKER_VOLUME_PATTERN} ]]; then
@@ -293,27 +284,30 @@ function docker_parse_volume_string()
   fi
 }
 
-##****f* docker_functions.bsh/docker_sanitize_volume
-# NAME
-#   docker_sanitize_volume - Create a directory before docker gets a chance to
-# DESCRIPTION
-#   A number of things can go wrong with something as simple as mounting a
-#   directory. If the directory doesn't exist, root will end up owning the
-#   directory (which is often not desired). Also, on MINGW Linux/Windows path
-#   expansion ends up being an error to docker on windows. So this function will
-#   take care of both of these problems in an OS agnostic way.
-# INPUTS
-#   $1 - The host directory/volume name
-#   [$2] - The docker directory (optional. If omitted, copies host directory)
-# OUTPUT
-#   stdout - The argument that should go with the -v to docker for mounting
-# USAGE
-#   Mainly for the docker and docker-compose CLI -v flags
-# BUGS
-#   The docker directory is not optional if the host mount is a volume
-# AUTHOR
-#   Andy Neff
-##***
+#**
+# .. function:: docker_sanitize_volume
+#
+# :Arguments: * ``$1`` - The host directory/volume name
+#             * ``[$2]`` - The docker directory (optional. If omitted, copies host directory)
+# :Output: `stdout` - The argument that should go with the -v to docker for mounting
+#
+# Create a directory before docker gets a chance to
+#
+# A number of things can go wrong with something as simple as mounting a
+# directory. If the directory doesn't exist, root will end up owning the
+# directory (which is often not desired). Also, on MINGW Linux/Windows path
+# expansion ends up being an error to docker on windows. So this function will
+# take care of both of these problems in an OS agnostic way.
+#
+# .. rubric:: Usage
+#
+# Mainly for the docker and docker-compose CLI -v flags
+#
+# .. rubric:: Bugs
+#
+# The docker directory is not optional if the host mount is a volume
+#**
+
 function docker_sanitize_volume()
 {
   if (( $# < 2 )); then
@@ -338,27 +332,25 @@ function docker_sanitize_volume()
   echo "${host_dir}:${docker_dir}"
 }
 
-##****f* docker_functions.bsh/parse-docker
-# NAME
-#   parse-docker - Parse docker arguments
-# DESCRIPTION
-#   Parse docker's arguments and split up information (See OUTPUT)
-# INPUTS
-#   $1.. - Arguments to be sent to docker command
-# OUTPUT
-#   docker_args - Arguments to docker, before the docker subcommand (run, up,
-#                 down, etc...)
-#   docker_command - Docker command specified
-#   docker_command_args - Arguments for the specified command
-# USAGE
-#   Typically, in the calling function, you will define all the output variables
-#   as local, so that they are captured by the calling function only.
+#**
+# .. function:: parse-docker
 #
-#   Original command can be thought of as:
-#     docker "${docker_args[@]}" "${docker_command}" "${docker_command_args[@]}"
-# AUTHOR
-#   Andy Neff
-##***
+# :Arguments: ``$1``.. - Arguments to be sent to docker command
+# :Output: * docker_args - Arguments to docker, before the docker subcommand (run, up, down, etc...)
+#          * docker_command - Docker command specified
+#          * docker_command_args - Arguments for the specified command
+#
+# Parse docker's arguments and split up information (See OUTPUT)
+#
+# .. rubric:: Usage
+#
+# Typically, in the calling function, you will define all the output variables
+# as local, so that they are captured by the calling function only.
+#
+# Original command can be thought of as:
+#  docker "${docker_args[@]}" "${docker_command}" "${docker_command_args[@]}"
+#**
+
 function parse-docker()
 {
   docker_args=()
@@ -389,51 +381,48 @@ function parse-docker()
   done
 }
 
-##****f* docker_functions.bsh/Exec-Nvidia-Docker
-# NAME
-#   Exec-Nvidia-Docker - Version of Docker for Nvidia and exec's
-# AUTHOR
-#   Andy Neff
-##***
+#**
+# .. function:: Exec-Nvidia-Docker
+#
+# Version of Docker for Nvidia and exec's
+#**
+
 function Exec-Nvidia-docker(){ DOCKER_EXEC=1 Nvidia-Docker "${@}";}
-##****f* docker_functions.bsh/Nvidia-Docker
-# NAME
-#   Nvidia-Docker - Version of Docker for Nvidia
-# AUTHOR
-#   Andy Neff
-##***
+
+#**
+# .. function:: Nvidia-Docker
+#
+# Version of Docker for Nvidia
+#**
+
 function Nvidia-docker(){ DOCKER="${NVIDIA_DOCKER}" Docker "${@}";}
-##****f* docker_functions.bsh/Exec-Docker
-# NAME
-#   Exec-Docker - Version of Docker that exec's command rather than call
-# AUTHOR
-#   Andy Neff
-##***
+
+#**
+# .. function:: Exec-Docker
+#
+# Version of Docker that exec's command rather than call
+#**
+
 function Exec-Docker(){ DOCKER_EXEC=1 Docker "${@}";}
-##****f* docker_functions.bsh/Docker
-# NAME
-#   Docker - Helper function to execute the right docker command, or just dryrun
-# DESCRIPTION
-#   Instead of calling the docker command directly, this Docker function should
-#   be called instead (for all dryrun-able activities. Simple commands like
-#   inspect, ps, etc. don't make as much sense to dryrun, as the reset of the
-#   script will never be executed, thus rendering dryrun useless.)
-# INPUTS
-#   $1.. - Arguments to be sent to docker command
-# PARAMETERS
-#   [DRYRUN] - Optional variable inserted at the beginning of all docker
-#              commands. Useful for setting to "echo" or similar for dryrun mode
-#   DOCKER_EXTRA_ARGS - Array of extra arguments inserted after docker but
-#                       before the docker subcommand
-#   DOCKER_EXTRA_{subcommand}_ARGS - Extra arguments inserted right after the
-#                                    docker subcommand
-#   [DOCKER_AUTOREMOVE] - Automatically add the --rm flag to docker run
-#                         commands. Default: 1
-# OUTPUT
-#   Runs docker command
-# AUTHOR
-#   Andy Neff
-##***
+
+#**
+# .. function:: Docker
+#
+# :Arguments: ``$1``.. - Arguments to be sent to docker command
+# :Parameters: * [``DRYRUN``] - Optional variable inserted at the beginning of all docker commands. Useful for setting to "echo" or similar for dryrun mode
+#              * ``DOCKER_EXTRA_ARGS`` - Array of extra arguments inserted after docker but before the docker subcommand
+#              * ``DOCKER_EXTRA_{subcommand}_ARGS`` - Extra arguments inserted right after the docker subcommand
+#              * [``DOCKER_AUTOREMOVE``] - Automatically add the --rm flag to docker run commands. Default: 1
+# :Output: Runs docker command
+#
+# Helper function to execute the right docker command, or just dryrun
+#
+# Instead of calling the docker command directly, this Docker function should
+# be called instead (for all dryrun-able activities. Simple commands like
+# inspect, ps, etc. don't make as much sense to dryrun, as the reset of the
+# script will never be executed, thus rendering dryrun useless.)
+#**
+
 function Docker()
 {
   local docker_args
@@ -479,30 +468,33 @@ function _Docker()
 ### docker-compose ###
 ######################
 
-##****d* docker_functions.bsh/DOCKER_COMPOSE
-# NAME
-#   DOCKER_COMPOSE - Name/path of docker-compose executable
-# SYNOPSIS
-#   Instead of hard-coding "docker-compose" everywhere, use the variable
-#   DOCKER_COMPOSE so that when the need comes, it is easier to switch which
-#   executable gets called
-# AUTHOR
-#   Andy Neff
-##***
+#**
+# .. envvar:: DOCKER_COMPOSE
+#
+# Name/path of docker-compose executable
+#
+# Instead of hard-coding "docker-compose" everywhere, use the variable
+# :envvar:`DOCKER_COMPOSE` so that when the need comes, it is easier to switch which
+# executable gets called
+#**
+
 : ${DOCKER_COMPOSE=docker-compose}
 
-##****f* docker_functions.bsh/docker-compose-volumes-old
-# NAME
-#   docker-compose-volumes-old - Get volume flags from docker-compose config
-# PURPOSE
-#   Reformats the output from docker-compose config to an array with -v flags
-#   for use in passing to another docker or docker-compose run command.
-# INPUTS
-#   $1 - Name of service of interest
-#   [$2] - Prefix to volume names
-# OUTPUT
-#   DOCKER_VOLUME_FLAGS - Array of the docker flags, including necessary -v's
-# EXAMPLE
+#**
+# .. function:: docker-compose-volumes-old
+#
+# :Arguments: * ``$1`` - Name of service of interest
+#          * [``$2``] - Prefix to volume names
+# :Output: ``DOCKER_VOLUME_FLAGS`` - Array of the docker flags, including necessary -v's
+#
+# Get volume flags from docker-compose config
+#
+# Reformats the output from docker-compose config to an array with -v flags
+# for use in passing to another docker or docker-compose run command.
+#
+# .. rubric:: Example
+# .. code-block:: bash
+#
 #  docker-compose.yml
 #    version: "3.2"
 #    services:
@@ -521,13 +513,15 @@ function _Docker()
 #  declare -p DOCKER_VOLUME_FLAGS
 #  > declare -a DOCKER_VOLUME_FLAGS='([0]="-v" [1]="/tmp:/mnt:rw" [2]="-v"
 #                                     [3]="test_prefix_test:/opt")'
-# BUGS
-#   Currently only works on volume short format
-# NOTES
+#
+# .. rubric:: Bugs
+#
+# Currently only works on volume short format
+#
+# .. Note::
 #   Useful for working around docker/compose#4728
-# AUTHOR
-#   Andy Neff
-##***
+#**
+
 function docker-compose-volumes-old()
 {
   local OLD_IFS="${IFS}"
@@ -572,23 +566,23 @@ function docker-compose-volumes-old()
   IFS="${OLD_IFS}"
 }
 
-##****f* docker_functions.bsh/parse-docker-compose-volumes
-# NAME
-#   parse-docker-compose-volumes - Get volume lines from docker-compose config
-# PURPOSE
-#   Parses the output from docker-compose config so that information about the
-#   available mounts are ready to be used by docker-compose-volumes
-# INPUTS
-#   $1 - Name of service of interest
-#   [$2] - Prefix to volume names
-# OUTPUT
-#   DOCKER_VOLUME_LINES - Array of the docker lines. Lines starting with an S
-#                         represent the short format. Lines starting with an L
-#                         represent the beginning of a long format entry.
-#                         Subsequent lines starting with an l are the additional
-#                         lines of the long format entry. Order matters when in
-#                         this format.
-# EXAMPLE
+#**
+# .. function:: parse-docker-compose-volumes
+#
+# :Arguments: * ``$1`` - Name of service of interest
+#             * [``$2``] - Prefix to volume names
+#
+# :Output: ``DOCKER_VOLUME_LINES`` - Array of the docker lines. Lines starting with an S represent the short format. Lines starting with an L represent the beginning of a long format entry. Subsequent lines starting with an l are the additional lines of the long format entry. Order matters when in this format.
+#
+# Get volume lines from docker-compose config
+#
+# Parses the output from docker-compose config so that information about the
+# available mounts are ready to be used by docker-compose-volumes
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
 #  docker-compose.yml
 #    version: "3.2"
 #    services:
@@ -611,15 +605,16 @@ function docker-compose-volumes-old()
 #  > declare -a DOCKER_VOLUME_LINES='([0]="S/tmp:/mnt" [1]="Ltype: bind"
 #                                     [2]="lsource: /home/user/src"
 #                                     [3]="ltarget: /src" [4]="Stest:/opt")'
-# NOTES
+#
+# .. Note::
 #   Useful for working around docker/compose#4728
 #
 #   Supports both short and long format
-# SEE ALSO
-#   docker_functions.bsh/docker-compose-volumes
-# AUTHOR
-#   Andy Neff
-##***
+#
+# .. Seealso::
+#   docker-compose-volumes
+#**
+
 function parse-docker-compose-volumes()
 {
   local OLD_IFS="${IFS}"
@@ -677,23 +672,26 @@ function parse-docker-compose-volumes()
                p'))
 }
 
-##****f* docker_functions.bsh/docker-compose-volumes
-# NAME
-#   docker-compose-volumes - Get volume lists from DOCKER_VOLUME_LINES
-# USAGE
+#**
+# .. function:: docker-compose-volumes
+#
+# :Output: * ``DOCKER_VOLUME_SOURCES`` - List of sources
+#          * ``DOCKER_VOLUME_TARGETS`` - Corresponding list of targets
+#          * ``DOCKER_VOLUME_FLAGS`` - Corresponding list of flags. Can be a mix of short and long format flags. Needs more parsing before this mix is useful.
+#
+# Get volume lists from ``DOCKER_VOLUME_LINES``
+#
+# .. rubric:: Usage
+#
+# .. code-block:: bash
+#
 #   parse-docker-compose-volumes nb test_prefix_ < <(docker-compose config)
 #   docker-compose-volumes
-# OUTPUT
-#   DOCKER_VOLUME_SOURCES - List of sources
-#   DOCKER_VOLUME_TARGETS - Corresponding list of targets
-#   DOCKER_VOLUME_FLAGS   - Corresponding list of flags. Can be a mix of short
-#                           and long format flags. Needs more parsing before
-#                           this mix is useful.
-# SEE ALSO
-#   docker_functions.bsh/parse-docker-compose-volumes
-# AUTHOR
-#   Andy Neff
-##***
+#
+# .. seealso::
+#   parse-docker-compose-volumes
+#**
+
 function docker-compose-volumes()
 {
   local volume_line
@@ -744,60 +742,59 @@ function docker-compose-volumes()
   fi
 }
 
-##****f* docker_functions.bsh/parse-docker-compose
-# NAME
-#   parse-docker-compose - Parse docker-compose arguments
-# DESCRIPTION
-#   Parse docker-compose's arguments and pull out a few important pieces of
-#   information (See OUTPUT)
-# INPUTS
-#   $1.. - Arguments to be sent to docker-compose command
-# PARAMETERS
-#   [JUST_DOCKER_COMPOSE_DIR] - By default, the docker-compose files will
-#                               initially be searched for in the JUSTFILE
-#                               directory, and then up the parent dirs until /
-#                               is hit. However, if you wish to the disable this
-#                               behavior and start searching for a docker-compose
-#                               file from the current directory where "just" is
-#                               called, then set this var to an empty string. You
-#                               can also set to a specific directory to start
-#                               searching from within that directory.
-# OUTPUT
-#   docker_compose_args - Arguments to docker-compose, before the docker-compose
-#                         command (run, up, down, etc...)
-#   docker_compose_command - Docker compose command specified
-#   docker_compose_command_args - Arguments for the specified command
-#   docker_compose_files - Array of docker compose files that are used
-#   docker_compose_project_name - Docker compose project name
-# USAGE
-#   Typically, in the calling function, you will define all the output variables
-#   as local, so that they are captured by the calling function only.
+#**
+# .. function:: parse-docker-compose
 #
-#   Original command can be thought of as:
-#     docker-compose "${docker_compose_args[@]}" "${docker_compose_command}" \
-#                    "${docker_compose_command_args[@]}"
-# EXAMPLE
-#   To start searching for docker-compose.yml in the directory where "just" is called:
-#   (Justfile snippet)
+# :Arguments: ``$1``.. - Arguments to be sent to docker-compose command
+# :Parameters: [``JUST_DOCKER_COMPOSE_DIR``] - By default, the docker-compose files will initially be searched for in the ``JUSTFILE`` directory, and then up the parent dirs until / is hit. However, if you wish to the disable this behavior and start searching for a docker-compose file from the current directory where "just" is called, then set this var to an empty string. You can also set to a specific directory to start searching from within that directory.
+# :Output: * ``docker_compose_args`` - Arguments to docker-compose, before the docker-compose command (run, up, down, etc...)
+#          * ``docker_compose_command`` - Docker compose command specified
+#          * ``docker_compose_command_args`` - Arguments for the specified command
+#          * ``docker_compose_files`` - Array of docker compose files that are used
+#          * ``docker_compose_project_name`` - Docker compose project name
+#
+# Parse docker-compose's arguments and pull out a few important pieces of
+# information (See OUTPUT)
+#
+# .. rubric:: Usage
+#
+# Typically, in the calling function, you will define all the output variables
+# as local, so that they are captured by the calling function only.
+#
+# Original command can be thought of as:
+#
+# .. code-block:: bash
+#
+#   docker-compose "${docker_compose_args[@]}" "${docker_compose_command}" \
+#                  "${docker_compose_command_args[@]}"
+#
+# .. rubric:: Example
+#
+# To start searching for docker-compose.yml in the directory where "just" is called:
+# (Justfile snippet)
+#
+# .. code-block:: bash
 #
 #     target) # Test target
 #       JUST_DOCKER_COMPOSE_DIR="" Just-docker-compose run target
 #       ;;
 #
-#   To change the default search location for a project, in the project env file
-#   add
+# To change the default search location for a project, in the project env file
+# add
+#
+# .. code-block:: bash
 #
 #   : ${JUST_DOCKER_COMPOSE_DIR="${PROJECT_CWD}/docker_dir"}
 #
-# NOTES
+# .. Note::
 #   Because the -f argument overrides all other forms of choosing the compose
-#   file, the docker_compose_args are updated to use this notation instead of
+#   file, the ``docker_compose_args`` are updated to use this notation instead of
 #   other methods that may be used. This will not change the behavior of the
-#   docker-compose command run, but will make adding additional compose files
+#   ``docker-compose`` command run, but will make adding additional compose files
 #   a lot easier.
-# AUTHOR
-#   Andy Neff
-##***
+#
+#**
+
 function parse-docker-compose()
 {
   local compose_file
@@ -917,23 +914,27 @@ function parse-docker-compose()
   fi
 }
 
-##****f* docker_functions.bsh/compose_path_separator
-# NAME
-#   compose_path_separator - Reproduce docker-compose logic for pathsep
-# DESCRIPTION
-#   docker-compose uses some logic to determine the IFS separator for splitting
-#   up the COMPOSE_FILE environment variable. This should return the exact same
-#   result
-# OUTPUT
-#   stdout - IFS string
-# USAGE
-#   local OLD_IFS="${IFS}"
-#   local IFS="$(compose_path_separator)"
-#   ...
-#   IFS="${OLD_IFS}"
-# AUTHOR
-#   Andy Neff
-##***
+#**
+# .. function:: compose_path_separator
+#
+# :Output: *stdout* - IFS string
+#
+# Reproduce ``docker-compose`` logic for pathsep
+#
+# ``docker-compose`` uses some logic to determine the IFS separator for splitting
+# up the ``COMPOSE_FILE`` environment variable. This should return the exact same
+# result
+#
+# .. rubric:: Usage
+#
+# .. code-block:: bash
+#
+#  local OLD_IFS="${IFS}"
+#  local IFS="$(compose_path_separator)"
+#  ...
+#  IFS="${OLD_IFS}"
+#**
+
 function compose_path_separator()
 {
   if [ "${COMPOSE_PATH_SEPARATOR:+set}" = "set" ]; then
@@ -945,35 +946,30 @@ function compose_path_separator()
   fi
 }
 
-##****f* docker_functions.bsh/Docker-compose
-# NAME
-#   Docker-compose - Helper function to execute (dryrun) the right command
-# DESCRIPTION
-#   Instead of calling the docker-compose command directly, the Docker-compose
-#   command should be called instead (for all dryrun-able activities. Simple
-#   commands like ps, etc. don't make as much sense to dryrun, as the reset of
-#   the script will never be executed, thus rendering dryrun useless.)
-# INPUTS
-#   $1.. - Arguments to be sent to docker-compose command
-# PARAMETERS
-#   DOCKER_COMPOSE_EXTRA_ARGS - Array of extra arguments inserted after
-#                               docker-compose but before the docker subcommand
-#   DOCKER_COMPOSE_EXTRA_{subcommand}_ARGS - Array of extra arguments inserted
-#                                            right after the docker subcommand
-#   [DOCKER_COMPOSE_AUTOREMOVE] - Automatically add the --rm flag to
-#                                 docker-compose run commands when using the
-#                                 Docker-compose helper function. Default: 1
-#   [DRYRUN] - Optional variable inserted at the beginning of all docker commands.
-#              Useful for setting to "echo" or similar for dryrun mode
-# OUTPUT
-#   Runs docker-compose command
-# BUGS
-#   Docker-compose should not be exec'd like Docker was. Since fifo buffers are
-#   created in common usage of Docker-compose, `exec Docker-compose` would
-#   result in fifo buffers being left behind in /tmp
-# AUTHOR
-#   Andy Neff
-##***
+#**
+# .. function:: Docker-compose
+#
+# :Arguments: ``$1``.. - Arguments to be sent to docker-compose command
+# :Parameters: * ``DOCKER_COMPOSE_EXTRA_ARGS`` - Array of extra arguments inserted after ``docker-compose`` but before the docker subcommand
+#              * ``DOCKER_COMPOSE_EXTRA_{subcommand}_ARGS`` - Array of extra arguments inserted right after the docker subcommand
+#              * [``DOCKER_COMPOSE_AUTOREMOVE``] - Automatically add the --rm flag to ``docker-compose`` run commands when using the Docker-compose helper function. Default: 1
+#              * ``DRYRUN``] - Optional variable inserted at the beginning of all docker commands. Useful for setting to "echo" or similar for dryrun mode
+# :Output: Runs docker-compose command
+#
+# Helper function to execute (dryrun) the right command
+#
+# Instead of calling the ``docker-compose`` command directly, the ``Docker-compose``
+# command should be called instead (for all dryrun-able activities. Simple
+# commands like ps, etc. don't make as much sense to dryrun, as the reset of
+# the script will never be executed, thus rendering dryrun useless.)
+#
+# .. rubric:: Bugs
+#
+# ``Docker-compose`` should not be exec'd like Docker was. Since fifo buffers are
+# created in common usage of ``Docker-compose``, `exec Docker-compose` would
+# result in fifo buffers being left behind in /tmp
+#**
+
 function Docker-compose()
 {
   local docker_compose_args
@@ -1011,50 +1007,47 @@ function _Docker-compose()
   return $?
 }
 
-##****f* docker_functions.bsh/Just-docker-compose
-# NAME
-#   Just-docker-compose - Docker-compose with advance just features
-# INPUTS
-#   $1... - Arguments to docker-compose
-# PARAMETERS
-#   JUST_PROJECT_PREFIX - Typically, the project name that is prepended to all
-#                         the variables. EXAMPLE would cover EXAMPLE_VARIABLE
-#   [COMPOSE_VERSION] - The docker compose yaml version number is auto
-#                       determined by parsing the existing files, and is used in
-#                       the auto generated files. In order to bypass this, you
-#                       can specify the version number manually using this
-#                       variable.
-# DESCRIPTION
-#   To provide a smoother just experience, advanced features are baked into
-#   Just-docker-compose to work with Just and docker_entrypoint.bsh to cover the
-#   last mile in getting docker started and setup with a predictable environment
-#   user permissions, mounts (and more...)
+#**
+# .. function:: Just-docker-compose
 #
-#   Creates a docker override yaml file and extends the current docker-compose
-#   configuration.
+# :Arguments: ``$1``... - Arguments to docker-compose
+# :Parameters: * ``JUST_PROJECT_PREFIX`` - Typically, the project name that is prepended to all the variables. EXAMPLE would cover EXAMPLE_VARIABLE
+#              * [``COMPOSE_VERSION``] - The docker compose yaml version number is auto determined by parsing the existing files, and is used in the auto generated files. In order to bypass this, you can specify the version number manually using this variable.
 #
-#   See docker_compose_override/generate_docker_compose_override for more
-#   information.
+# ``Docker-compose`` with advance just features
 #
-#   Determines which docker compose yaml files to use by mimicking the
-#   behavior of docker-compose, which includes querying the COMPOSE_FILE
-#   environment variable or trying the default files.
-# BUGS
-#   A temp file is left behind in dryrun mode so that dryrun mode will actually
-#   work. As long as the commands echo'd by dryrun are executed, the temp file
-#   will be cleaned up, as one of them is rm. So ultimately, this is by design.
+# To provide a smoother just experience, advanced features are baked into
+# ``Just-docker-compose`` to work with Just and :file:`docker_entrypoint.bsh` to cover the
+# last mile in getting docker started and setup with a predictable environment
+# user permissions, mounts (and more...)
 #
-#   Using this function with windows paths is not currently supported.
+# Creates a docker override yaml file and extends the current docker-compose
+# configuration.
 #
-#   You can not use process substitution for the docker-compose.yml file because
-#   bash has to read it before docker-compose reads it. So this will not work:
-#   Just-docker-compose -f <(echo "${compose_file}") run test
-#   You have to use files.
-# SEE ALSO
-#   docker_compose_override/generate_docker_compose_override
-# AUTHOR
-#   Andy Neff
-##***
+# See :func:`docker_compose_override generate_docker_compose_override` for more
+# information.
+#
+# Determines which docker compose yaml files to use by mimicking the
+# behavior of docker-compose, which includes querying the ``COMPOSE_FILE``
+# environment variable or trying the default files.
+#
+# .. rubric:: Bugs
+#
+# A temp file is left behind in dryrun mode so that dryrun mode will actually
+# work. As long as the commands echo'd by dryrun are executed, the temp file
+# will be cleaned up, as one of them is rm. So ultimately, this is by design.
+#
+# Using this function with windows paths is not currently supported.
+#
+# You can not use process substitution for the docker-compose.yml file because
+# ``bash`` has to read it before docker-compose reads it. So this will not work:
+# Just-docker-compose -f <(echo "${compose_file}") run test
+# You have to use files.
+#
+# .. seealso::
+#   :func:`docker_compose_override generate_docker_compose_override`
+#**
+
 function Just-docker-compose()
 {
   if [ ! "${JUST_PROJECT_PREFIX:+set}" == "set" ]; then
@@ -1117,40 +1110,36 @@ function Just-docker-compose()
   return $rv
 }
 
-##****f* docker_functions.bsh/docker_service_running
-# NAME
-#   docker_service_running - Checks to see if a service is running
-# DESCRIPTION
-#   Returns the state-status of any containers, using the docker-compose service
-#   names.
-# INPUTS
-#   [$1...] - service names, if none are provided, all are used
-# PARAMETERS
-#   COMPOSE_FILE - Colon delimited file listing docker-compose files to use
-# OUTPUT
-#   stdout - State of service running, Up/Exited/Creating/etc...
-# RETURN VALUE
-#   0 - Service found
-#   1 - Service not found
-# AUTHOR
-#   Andy Neff
-##***
+#**
+# .. function:: docker_service_running
+#
+# :Arguments: [``$1``...] - service names, if none are provided, all are used
+# :Parameters: ``COMPOSE_FILE`` - Colon delimited file listing docker-compose files to use
+# :Output: *stdout* - State of service running, Up/Exited/Creating/etc...
+# :Return Value: * ``0`` - Service found
+#                * ``1`` - Service not found
+#
+# Checks to see if a service is running
+#
+# Returns the state-status of any containers, using the docker-compose service
+# names.
+#**
+
 function docker_service_running()
 {
   ${DOCKER} inspect -f '{{.State.Status}}' \
             $(${DOCKER_COMPOSE} ps -q ${@+"${@}"}) 2>/dev/null
 }
 
-##****f* docker_functions.bsh/docker_compose_service_names
-# NAME
-#   docker_compose_service_names - Get service names from compose yaml file
-# INPUTS
-#   $1 - docker compose yaml file
-# OUTPUT
-#   stdout - New line separated list of service names
-# AUTHOR
-#   Andy Neff
-##***
+#**
+# .. function:: docker_compose_service_names
+#
+# :Arguments: ``$1`` - docker compose yaml file
+# :Output: *stdout* - New line separated list of service names
+#
+# Get service names from compose yaml file
+#**
+
 function docker_compose_service_names()
 {
            # Skip (d) all lines until services: is matched
@@ -1172,22 +1161,20 @@ function docker_compose_service_names()
            b services' "${1}"
 }
 
-##****f* docker_functions.bsh/filter_docker_variables
-# NAME
-#   filter_docker_variables - Helper function to remove variables in a docker
-# DESCRIPTION
-#   Filters out environment variables $1_*_DOCKER if JUST_FILTER_DOCKER is
-#   enabled. Should be called from the entrypoint.
-# INPUTS
-#   [$1] - The prefix of the variables you want cleared, typically
-#          JUST_PROJECT_PREFIX. Default: ${JUST_PROJECT_PREFIX}
-# PARAMETERS
-#   [JUST_FILTER_DOCKER] - If this is set to 1, and this script is being
-#                          executed inside a docker, then ${1}_.*_DOCKER
-#                          variables are unset. Default: on
-# AUTHOR
-#   Andy Neff
-##***
+#**
+# .. function:: filter_docker_variables
+#
+# :Arguments: [``$1``] - The prefix of the variables you want cleared, typically
+#          ``JUST_PROJECT_PREFIX``. Default: ``${JUST_PROJECT_PREFIX}``
+# :Parameters: [``JUST_FILTER_DOCKER``] - If this is set to ``1``, and this script is being
+#                          executed inside a docker, then ``${1}_.*_DOCKER``
+#                          variables are unset. Default: ``on``
+#
+# Helper function to remove variables in a docker
+# Filters out environment variables ``$1_*_DOCKER`` if ``JUST_FILTER_DOCKER`` is
+# enabled. Should be called from the entrypoint.
+#**
+
 function filter_docker_variables()
 {
   local temp_var_name
@@ -1199,6 +1186,34 @@ function filter_docker_variables()
     done
   fi
 }
+
+#**
+# .. function:: docker_compose_sanitize_project_name
+#
+# :Arguments:  * ``$1`` - Directory name. Can also be any name really. But directory name is what docker-compose uses to come up with the project name
+#              * [``$2``] - Optionally specify a prefix (like a username) to assist in making a (user) specific project name
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
+#   docker_compose_sanitize_project_name 'project/A@1.1_2'
+#     projectA112
+#
+#   docker_compose_sanitize_project_name 'project/A@1.1_2' 'a-user:7'
+#     auser7projectA112
+#
+#   docker_compose_sanitize_project_name '' 'a-user:7'
+#     auser7
+#
+# Make a valid project name
+#
+# Docker compose will auto generate a project name based off of the directory
+# name. A docker compose project name can only have lowercase letters and
+# numbers. This function will reproduce that same functionality so that you
+# can have that value in ``bash``, with some added benefits (prefix) to truly take
+# control of your docker-compose experience.
+#**
 
 ##****f* docker_functions/docker_compose_sanitize_project_name
 # NAME
