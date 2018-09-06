@@ -93,7 +93,7 @@ _just()
   # If the last word completed is a subcommand, only match subtargets
   if isin "$3" ${just_subcommands+"${just_subcommands[@]}"} ]; then
     _just_subtargets_from_array "${3}" ${parsed_help_a+"${parsed_help_a[@]}"}
-    COMPREPLY+=($(\compgen -W "${just_subtargets[*]}" -- $2))
+    COMPREPLY+=($(\compgen -W "${just_subtargets+${just_subtargets[*]}}" -- $2))
     return 0
   fi
 
@@ -102,13 +102,13 @@ _just()
   for (( i=${#COMP_WORDS[@]}-1; i>0; i--)); do
     if isin "${COMP_WORDS[$i]}" "${just_subcommands[@]}"; then
       _just_subtargets_from_array "${COMP_WORDS[$i]}" ${parsed_help_a+"${parsed_help_a[@]}"}
-      just_commands+=("${just_subtargets[@]}")
+      just_commands+=(${just_subtargets+"${just_subtargets[@]}"})
       break
     fi
   done
 
   # Simply just auto complete all commands
-  COMPREPLY+=($(\compgen -o bashdefault -W "${just_commands[*]} ${just_subcommands[*]}" -- $2))
+  COMPREPLY+=($(\compgen -o bashdefault -W "${just_commands+${just_commands[*]}} ${just_subcommands+${just_subcommands[*]}}" -- $2))
 
   return 0
 }
