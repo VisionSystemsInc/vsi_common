@@ -14,7 +14,6 @@ Linux Utilities
    cuda_info.auto
    dir_tools.auto
    elements.auto
-   example.auto
    file_tools.auto
    findin.auto
    findinpaths.auto

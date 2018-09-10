@@ -63,6 +63,9 @@ function caseify()
     --nit) # Set nit picky when compiling docs
       export SPHINXOPTS="${SPHINXOPTS-} -n"
       ;;
+    --all) # Set rebuild all when compiling docs
+      export SPHINXOPTS="${SPHINXOPTS-} -a"
+      ;;
     compile_docs) # Compile documentation
       Docker-compose run -e SPHINXOPTS docs ${@+"${@}"}
       ;;

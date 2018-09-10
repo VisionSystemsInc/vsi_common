@@ -62,7 +62,7 @@ The file sourced by just. The primary purpose of the Justfile is to define the f
     Parses another block of arguments
   :cmd:`just help`
     Help test
-  :env:`just JUSTFILE`
+  ``just JUSTFILE``
     Sets :file:`Justfile` filename to load
 
 .. _just-project-env-files:
