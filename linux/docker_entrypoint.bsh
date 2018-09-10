@@ -1,62 +1,53 @@
 #!/usr/bin/env bash
 
-##****F* just/docker_entrypoint.bsh
-# NAME
-#   docker_entrypoint.bsh - Functions to help write docker entrypoints
-# INPUTS
-#   See inputs for other SEE ALSO
-# EXAMPLE
-#   docker_entrypoint.bsh
-# USAGE
-#   Can also be sourced to call individual functions. By default, calling
-#   docker_entrypoint.bsh runs
-#   - docker_setup_user
-# SEE ALSO
-#   docker_setup_user
-# AUTHOR
-#   Andy Neff
-##***
-
 : ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
 source "${VSI_COMMON_DIR}/linux/linux_accounts.bsh"
 source "${VSI_COMMON_DIR}/linux/elements.bsh"
 
-##****f* docker_entrypoint.bsh/docker_setup_user
-# NAME
-#   docker_setup_user - Create user/group
-# PARAMETERS
-#   [DOCKER_ACCOUNTS_CREATE_USER] - Enables the adding of a new user. If the
-#                                   particular username already exist, it is
-#                                   replaced. Default: 1
-#   [DOCKER_ACCOUNTS_CREATE_GROUPS] - Enables the adding of new groups. The
-#                                     first group is set as the user's primary
-#                                     group. Each subsequent group is set as an
-#                                     additional group, and the user is added as
-#                                     a member of each of these groups. If a group
-#                                     name already exists, an increasing number
-#                                     is appended until the name does not exist.
-#                                     if the GID already exists, it is just used
-#                                     again. Default: 1
-#   [DOCKER_ACCOUNTS_POSIX_GROUPS] - Enables filtering group names removing
-#                                    non-posix characters. This is important for
-#                                    operating systems like CentOS, etc... that
-#                                    actually follow the posix rules, unlike
-#                                    Debian. If 100% of the characters are
-#                                    non-posix, the name becomes simply "group".
-#                                    Default: 1
-#   [DOCKER_USERNAME] - The username used to create the new user. Default: user
-#   [DOCKER_UID] - The UID used when creating the new user. Default: 1000
-#   [DOCKER_GROUP_NAMES] - The group name(s) used when creating the groups for
-#                          the new user. IFS delimited string (default: space,
-#                          tab, newline). Default: user (only the primary group)
-#   [DOCKER_GIDS] - The GIDs used when creating the new groups. IFS delimited
-#                   string. Default: 1000
-#   [DOCKER_HOME] - The home directory used when creating a new user. When the new
-#                   directory is created, it is owned (non-recursively) by the
-#                   UID/GID. Default: /home/${DOCKER_USERNAME}
-# AUTHOR
-#   Andy Neff
-##***
+#*# just/plugins/docker/docker_entrypoint
+
+#**
+# =================
+# Docker Entrypoint
+# =================
+#
+# .. default-domain:: bash
+#
+# .. file:: docker_entrypoint.bsh
+#
+# Functions to help write docker entrypoints
+#
+# :Arguments: See inputs for other SEE ALSO
+#
+# .. rubric:: Example
+#
+# :file:`docker_entrypoint.bsh`
+#
+# .. rubric:: Usage
+#
+# Can also be sourced to call individual functions. By default, calling
+# :file:`docker_entrypoint.bsh` runs
+# - :func:`docker_setup_user`
+#
+# .. Seealso::
+#   :func:`docker_setup_user`
+#
+# .. function:: docker_setup_user
+#
+# Create user/group
+#
+# :Parameters:
+#   * [``DOCKER_ACCOUNTS_CREATE_USER``] - Enables the adding of a new user. If the particular username already exist, it is replaced. Default: 1
+#   * [``DOCKER_ACCOUNTS_CREATE_GROUPS``] - Enables the adding of new groups. The first group is set as the user's primary group. Each subsequent group is set as an additional group, and the user is added as a member of each of these groups. If a group name already exists, an increasing number is appended until the name does not exist. if the GID already exists, it is just used again. Default: 1
+#   * [``DOCKER_ACCOUNTS_POSIX_GROUPS``] - Enables filtering group names removing non-posix characters. This is important for operating systems like CentOS, etc... that actually follow the posix rules, unlike Debian. If 100% of the characters are non-posix, the name becomes simply "group". Default: 1
+#   * [``DOCKER_USERNAME``] - The username used to create the new user. Default: user
+#   * [``DOCKER_UID``] - The UID used when creating the new user. Default: 1000
+#   * [``DOCKER_GROUP_NAMES``] - The group name(s) used when creating the groups for the new user. IFS delimited string (default: space, tab, newline). Default: user (only the primary group)
+#   * [``DOCKER_GIDS``] - The GIDs used when creating the new groups. IFS delimited string. Default: 1000
+#   * [``DOCKER_HOME``] - The home directory used when creating a new user. When the new directory is created, it is owned (non-recursively) by the UID/GID. Default: /home/${``DOCKER_USERNAME``}
+#
+#**
+
 function docker_setup_user()
 {
   local i
@@ -112,52 +103,53 @@ function docker_setup_user()
   fi
 }
 
-##****f* docker_entrypoint.bsh/retry_as_user
-# NAME
-#   retry_as_user - If the command fails, retry it as DOCKER_USERNAME
-# USAGE
-#   Try to run a command as the current user (root); if that fails, run the
-#   command as DOCKER_USERNAME.
-# INPUTS
-#   $1 - The command to execute
-# PARAMETERS
-#   [DOCKER_USERNAME] - The username used to create the new user. Default: user
-# AUTHOR
-#   Andy Neff
-##***
+#**
+#
+# .. function:: retry_as_user
+#
+# If the command fails, retry it as ``DOCKER_USERNAME``
+#
+# .. rubric:: Usage
+#
+# Try to run a command as the current user (root); if that fails, run the
+# command as ``DOCKER_USERNAME``.
+#
+# :Inputs: ``$1`` - The command to execute
+#
+# :Parameters: [``DOCKER_USERNAME``] - The username used to create the new user. Default: user
+#
+#**
+
 function retry_as_user()
 {
   "${@}" 2>/dev/null || gosu "${DOCKER_USERNAME}" "${@}"
 }
 
-##****f* docker_entrypoint.bsh/docker_link_mounts
-# NAME
-#   docker_link_mounts - Create symlinks based on JUST_DOCKER_ENTRYPOINT_LINKS
-# USAGE
-#   Automatically called when docker_entrypoint.bsh is called. If
-#   docker_entrypoint.bsh is sourced, then docker_link_mounts would need to be
-#   called separately.
-# DESCRIPTION
-#   When docker_compose_override/generate_docker_compose_override processes
-#   mounts, the desired mount will not be possible in some cases such as nfs
-#   with squash root. Instead the base mount point is mounted into the
-#   container and a symlink is created to link the desired locations. This
-#   function creates these symlinks based on the // separated string
-#   JUST_DOCKER_ENTRYPOINT_LINKS. e.g., "source//destination//source//destination".
-# PARAMETERS
-#   [JUST_DOCKER_ENTRYPOINT_LINKS] - // delimited string of symlinks to create,
-#                                    e.g., "source//destination//source//destination"
-#   [DOCKER_LINK_MOUNTS_FORCE] - Adds a -f to ln commands. Disabled by default.
-#                                Set this flag to enable.
-#   [DOCKER_LINK_MOUNTS_NOT_IN_MOUNTS] - Prevents making symlinks in mounted
-#                                        subdirectories. This is not the default
-#                                        docker behavior, so this feature is
-#                                        disabled by default. Set this flag to
-#                                        enable.
-#   [DOCKER_USERNAME] - The username used to create the new user. Default: user
-# AUTHOR
-#   Andy Neff
-##***
+#**
+#
+# .. function:: docker_link_mounts
+#
+# Create symlinks based on ``JUST_DOCKER_ENTRYPOINT_LINKS``
+# When :func:`docker_compose_override generate_docker_compose_override` processes
+# mounts, the desired mount will not be possible in some cases such as nfs
+# with squash root. Instead the base mount point is mounted into the
+# container and a symlink is created to link the desired locations. This
+# function creates these symlinks based on the // separated string
+# ``JUST_DOCKER_ENTRYPOINT_LINKS``. e.g., "source//destination//source//destination".
+#
+# .. rubric:: Usage
+#
+# Automatically called when :file:`docker_entrypoint.bsh` is called. If
+# :file:`docker_entrypoint.bsh` is sourced, then :func:`docker_link_mounts` would need to be
+# called separately.
+#
+# :Parameters: * [``JUST_DOCKER_ENTRYPOINT_LINKS``] - // delimited string of symlinks to create, e.g., "source//destination//source//destination"
+#   * [``DOCKER_LINK_MOUNTS_FORCE``] - Adds a -f to ln commands. Disabled by default. Set this flag to enable.
+#   * [``DOCKER_LINK_MOUNTS_NOT_IN_MOUNTS``] - Prevents making symlinks in mounted subdirectories. This is not the default docker behavior, so this feature is disabled by default. Set this flag to enable.
+#   * [``DOCKER_USERNAME``] - The username used to create the new user. Default: user
+#
+#**
+
 function docker_link_mounts()
 {
   local options
@@ -239,33 +231,31 @@ function docker_link_mounts()
   done
 }
 
-##****f* docker_entrypoint.bsh/docker_setup_data_volumes
-# NAME
-#   docker_setup_data_volumes - Change permissions of data volumes to 777
-# USAGE
-#   Automatically called when docker_entrypoint.bsh is called. If
-#   docker_entrypoint.bsh is sourced, then docker_setup_data_volumes would need
-#   to be called separately.
-# DESCRIPTION
-#   When docker_compose_override/generate_docker_compose_override processes
-#   mounts, it determines the list of internal data volumes, and passes them
-#   to the container in JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS. This function
-#   uses that variable to set all the directories' permissions to 777. This is
-#   useful for when a data volume is just created and it only had root
-#   permissions
-# PARAMETERS
-#   [JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS] - // delimited string of folders
-#                                         corresponding to data volumes
-#                                         e.g., "/tmp/test1///dev/shm/2"
-#   [JUST_DOCKER_ENTRYPOINT_CHOWN_DIRS] - // delimited string of folders
-#                                         corresponding to folders in volumes
-#                                         that should be owned by DOCKER_UID
-#                                         and DOCKER_GIDS[0]
-#   [DOCKER_USERNAME] - The username used to reown JUST_DOCKER_ENTRYPOINT_CHOWN_DIRS.
-#                       Default: user
-# AUTHOR
-#   Andy Neff
-##***
+#**
+#
+# .. function:: docker_setup_data_volumes
+#
+# Change permissions of data volumes to 777
+#
+# When :func:`docker_compose_override generate_docker_compose_override` processes
+# mounts, it determines the list of internal data volumes, and passes them
+# to the container in ``JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS``. This function
+# uses that variable to set all the directories' permissions to 777. This is
+# useful for when a data volume is just created and it only had root
+# permissions
+#
+# .. rubric:: Usage
+#
+# Automatically called when docker_entrypoint.bsh is called. If
+# :file:`docker_entrypoint.bsh` is sourced, then :func:`docker_setup_data_volumes` would need
+# to be called separately.
+#
+# :Parameters:
+#   * [``JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS``] - // delimited string of folders corresponding to data volumes e.g., "/tmp/test1///dev/shm/2"
+#   * [``JUST_DOCKER_ENTRYPOINT_CHOWN_DIRS``] - // delimited string of folders corresponding to folders in volumes that should be owned by ```DOCKER_UID`` and ``DOCKER_GIDS[0]``
+#   * [``DOCKER_USERNAME``] - The username used to reown ``JUST_DOCKER_ENTRYPOINT_CHOWN_DIRS``. Default: user
+#**
+
 function docker_setup_data_volumes()
 {
   if [ -n "${JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS:+set}" ]; then
@@ -293,54 +283,49 @@ function docker_setup_data_volumes()
   fi
 }
 
-##****f* docker_entrypoint.bsh/docker_convert_paths
-# NAME
-#   docker_convert_paths - Remove double slash from environment variables
-# USAGE
-#   Automatically called when docker_entrypoint.bsh is called. If
-#   docker_entrypoint.bsh is sourced, then docker_convert_paths would need
-#   to be called separately.
-# DESCRIPTION
-#   Using docker on Windows has many complexities. This function fixes the case
-#   MSYS2/MINGW/CYGWIN converts paths for you too aggressively. The official
-#   solution from http://www.mingw.org/wiki/Posix_path_conversion is to use //
-#   on Windows.
+#**
 #
-#   While this is annoying and ugly, it is usually harmless... However not
-#   always harmless and can and does create errors sometimes with no good
-#   solution.
+# .. function:: docker_convert_paths
 #
-#   Using MSYS_NO_PATHCONV only works on Git for Windows, and will end up
-#   breaking a lot more than it fixes. This function will remove the //'s on
-#   the docker side
-# PARAMETERS
-#   [JUST_NO_PATHCONV] - Regex expression for variable names that should not
-#                        be converted. It is anticipated this will never be
-#                        needed but in case there is an environment variable
-#                        that validly contains //, putting its name in here
-#                        will exclude it from the conversion. Remember, the
-#                        pattern '' matches everything.
-#   [LC_COLLATE] - Has significant affect on regex ranges. [a-z] and [A-Z] has
-#                  most of both upper and lower cases in their range on
-#                  en_US.utf-8, which is probably not the intended result.
-#                  Use LC_COLLATE=C or POSIX to get a more basic result.
-# EXAMPLE
-#   JUST_1="this is a :// test" # Excluded from converted
-#   JUST_2="dir1://dir2"        # Converted
-#   JUST_3="this is // test"    # Excluded from converted
-#   JUST_4="test // this"       # Not converted, doesn't match pattern
-#   JUST_5=//dir1://dir2"       # Converted
+# Remove double slash from environment variables
 #
-#   JUST_NO_PATHCONV="JUST_1|JUST_3" docker_convert_paths # Run conversion
-#   JUST_NO_PATHCONV="JUST_{1,3}" docker_convert_paths    # Same thing
-# NOTES
+# Using docker on Windows has many complexities. This function fixes the case
+# ``MSYS2/MINGW/CYGWIN`` converts paths for you too aggressively. The official
+# solution from http://www.mingw.org/wiki/Posix_path_conversion is to use //
+# on Windows.
+#
+# While this is annoying and ugly, it is usually harmless... However not
+# always harmless and can and does create errors sometimes with no good
+# solution.
+#
+# Using ``MSYS_NO_PATHCONV`` only works on Git for Windows, and will end up
+# breaking a lot more than it fixes. This function will remove the //'s on
+# the docker side.
+#
+# :Parameters:
+#   * [``JUST_NO_PATHCONV``] - Regex expression for variable names that should not be converted. It is anticipated this will never be needed but in case there is an environment variable that validly contains //, putting its name in here will exclude it from the conversion. Remember, the pattern '' matches everything.
+#   * [``LC_COLLATE``] - Has significant affect on regex ranges. [a-z] and [A-Z] has most of both upper and lower cases in their range on en_US.utf-8, which is probably not the intended result. Use ``LC_COLLATE=C`` or ``POSIX`` to get a more basic result.
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+# 
+#     JUST_1="this is a :// test" # Excluded from converted
+#     JUST_2="dir1://dir2"        # Converted
+#     JUST_3="this is // test"    # Excluded from converted
+#     JUST_4="test // this"       # Not converted, doesn't match pattern
+#     JUST_5=//dir1://dir2"       # Converted
+#
+#     JUST_NO_PATHCONV="JUST_1|JUST_3" docker_convert_paths # Run conversion
+#     JUST_NO_PATHCONV="JUST_{1,3}" docker_convert_paths    # Same thing
+#
+# .. Note::
 #   Only checks exported variables, and does not work on arrays, which shouldn't
 #   be exported in the first place
 #
 #   Pure Bash implementation should decrease any unnecessary forking.
-# AUTHOR
-#   Andy Neff
-##***
+#**
+
 function docker_convert_paths()
 {
   local var

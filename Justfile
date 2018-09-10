@@ -67,79 +67,11 @@ function caseify()
     --nit) # Set nit picky when compiling docs
       export SPHINXOPTS="${SPHINXOPTS-} -n"
       ;;
-
+    --all) # Set rebuild all when compiling docs
+      export SPHINXOPTS="${SPHINXOPTS-} -a"
+      ;;
     compile_docs) # Compile documentation
-      (
-        cd "${VSI_COMMON_DIR}/docs"
-
-        files=()
-
-        # For now, all languages we are using can use ## as comments. When this
-        # is no longer true, the find will need to be extension specific, or
-        # some mechanism will be needed to determine type, say `file`
-        while IFS= read -r -d '' file; do
-          files+=("${file}")
-        done < <(find "${VSI_COMMON_DIR}" -name docs -prune -o -type f -not -name '*.md' -print0)
-
-        for src_file in "${files[@]}"; do
-          doc_file="$(sed -nE '/ *#\*# */{s/ *#\*# *//; p;q}' "${src_file}")"
-          if [ ${#doc_file} -eq 0 ]; then
-            continue
-          fi
-          if [[ ${doc_file::1} =~ ^[./] ]] || [[ ${doc_file} =~ \.\. ]]; then
-            echo "${src_file} skipped. Invalid document name ${doc_file}"
-            continue
-          fi
-
-          # echo "Processing ${doc_file}"
-
-          doc_file="${VSI_COMMON_DIR}/docs/${doc_file}"
-          doc_dir="$(dirname "${doc_file}")"
-          doc_file="$(basename "${doc_file}")"
-
-          doc_ext="${doc_file##*.}"
-          if [ "${doc_ext}" == "${doc_file}" ]; then
-            doc_ext='rst'
-          fi
-          doc_file="${doc_file%.*}.auto.${doc_ext}"
-
-          mkdir -p "${doc_dir}"
-
-          sed -nE  ':block_start
-                    # If the beginning pattern matched, start reading the block
-                    /^#\*\*/b read_block
-                    # Else do not print, goes to next line
-                    b noprint
-                    :read_block
-                    # read the next line
-                    n
-                    # If the end of doc comment, move on to noprint
-                    /^ *#\*\*/{
-                      # Print a blank line. This removes the requirement that
-                      # the doc writer has to add blank # lines at the end of
-                      # a comment block. Other wise you get a lot of "Explicit
-                      # markup ends without a blank line; unexpected unindent."
-                      # warnings
-                      s/.*//
-                      p
-                      b noprint
-                    }
-                    # If a line starting with #
-                    /^ *#/{
-                      # Remove those extra spaced, #, and an optional space
-                      s/# ?//
-                      # print it
-                      p
-                    }
-                    # continue reading the block
-                    b read_block
-                    # Move on
-                    :noprint
-                   ' "${src_file}" > "${doc_dir}/${doc_file}"
-        done
-
-        Docker-compose run -e SPHINXOPTS docs ${@+"${@}"}
-      )
+      Docker-compose run -e SPHINXOPTS docs ${@+"${@}"}
       ;;
     *)
       defaultify "${just_arg}" ${@+"${@}"}

@@ -1,20 +1,33 @@
 #!/usr/bin/env false
 # This file should be sourced, NOT run
 
+#*# just/just_common
+
+#**
+# .. default-domain:: bash
+#
+# =====================
+# Just Common Functions
+# =====================
+#
+# .. file:: just_common.bsh
+#
+# .. env:: JUST_VERSION
+#
+# Provides the version number of just. If the version number from the last time the just setup script was sourced
+# and just do not match, a warning message will appear.
+#
+# .. seealso::
+#   :envvar:`JUST_SETUP_SCRIPT`
+#
+#**
+
 : ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
 source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
 
 ##****d* just/JUST_VERSION
-# NAME
-#   JUST_VERSION - Version number of just
-# DESCRIPTION
-#   If the version number from the last time the just setup script was sourced
-#   and just do not match, a warning message will appear
-# SEE ALSO
-#   just/JUST_SETUP_SCRIPT
-# AUTHOR
-#   Andy Neff
 ##***
+
 _last_just_version=${JUST_VERSION-}
 export JUST_VERSION=0.0.11
    # If last just version was set and different
@@ -27,43 +40,53 @@ if [ -n "${_last_just_version:+set}" ] && \
 fi
 unset _last_just_version
 
-##****id* just/JUST_HELP_SEPARATOR
-# NAME
-#   JUST_HELP_SEPARATOR - Separator used internally for processing help comments
-# PURPOSE
-#   When processing the help comments, the JUST_HELP_SEPARATOR is used to
-#   separate the strings. As long as no help string contains this, everything
-#   will work out. Default: @#@
-# AUTHOR
-#   Andy Neff
-# BUGS
-#   * If a comment contains " ${JUST_HELP_SEPARATOR} ", then it will be truncated
-#     at the first instance
-#   * If JUST_HELP_SEPARATOR is not regex safe, it will not work either.
-# SEE ALSO
-#   just/safe_load
-##***
+#**
+# .. envvar:: JUST_HELP_SEPARATOR
+#
+# Separator used internally for processing help comments
+#
+# When processing the help comments, the :envvar:`JUST_HELP_SEPARATOR` is used to
+# separate the strings. As long as no help string contains this, everything
+# will work out. Default: @#@
+#
+# .. rubric:: Bugs
+#
+# * If a comment contains " ${:envvar:`JUST_HELP_SEPARATOR`} ", then it will be truncated
+#   at the first instance
+# * If :envvar:`JUST_HELP_SEPARATOR` is not regex safe, it will not work either.
+#
+# .. seealso::
+#
+#   :func:`safe_load`
+#**
 : ${JUST_HELP_SEPARATOR='@#@'}
 
-##****d* just/JUST_SETUP_SCRIPT
-# NAME
-#   JUST_SETUP_SCRIPT - Name of the just setup script
-# DESCRIPTION
-#   When writing a setup script (typically called setup.env), JUST_SETUP_SCRIPT
-#   can optionally be set to the name of the script that will be used in
-#   messages such as the version check.
-# EXAMPLE
-#   Usually developers will source a simple script to setup just. This primarily
-#   includes adding just to the path and setting up tab complete:
+#**
+# .. envvar:: JUST_SETUP_SCRIPT
+#
+# When writing a setup script (typically called setup.env), :envvar:`JUST_SETUP_SCRIPT`
+# can optionally be set to the name of the ust setup script that will be used in
+# messages such as the version check.
+#
+# .. rubric:: Example
+#
+# Usually developers will source a simple script to setup just. This primarily
+# includes adding just to the path and setting up tab complete:
+#
+# .. code-block:: bash
 #
 #     export JUST_SETUP_SCRIPT="$(basename "${BASH_SOURCE[0]}")"
 #     source "$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)/external/vsi_common/env.bsh"
 #
-#   This might also include adding plugins for tab-complete
+# This might also include adding plugins for tab-complete.
+#
+# .. code-block:: bash
 #
 #     JUST_HELP_FILES=("${VSI_COMMON_DIR}"/linux/just_git_functions.bsh)
 #
-#   This is also a convenient place to slip in git hooks
+# This is also a convenient place to slip in git hooks.
+#
+# .. code-block:: bash
 #
 #     #Create post-checkout hook
 #     _just_temp_filename="$(dirname "${BASH_SOURCE[0]}")/.git/hooks/post-checkout"
@@ -91,23 +114,22 @@ unset _last_just_version
 #       chmod 755 "${_just_temp_filename}"
 #     fi
 #     unset _just_temp_filename
-# AUTHOR
-#   Andy Neff
-##***
+#
+# .. function:: _just_commands_from_file
+#
+# :Arguments: ``$1`` - Filename of Justfile to be parsed
+#
+# Parses Justfile for help comments on targets. It looks for all case statements with a comment at the end. It will also parse
+# commented case statements that exist for the purpose of populating the help
+#
+# .. seealso::
+#
+#   :envvar:`JUST_HELP_SEPARATOR` Used to combine lines.
+#
+#   :cmd:`just help` Prints out basic help based on comments in the Justfile.
+#
+#**
 
-##****f* just/_just_commands_from_file
-# NAME
-#   _just_commands_from_file - Parses Justfile for help comments on targets
-# SYNOPSIS
-#   Look for all case statements with a comment at the end. It will also parse
-#   commented case statements that exist for the purpose of populating the help
-# INPUTS
-#   $1 - Filename of Justfile to be parsed
-# SEE ALSO
-#   JUST_HELP_SEPARATOR, just/help
-# AUTHOR
-#   Andy Neff
-##***
 function _just_commands_from_file()
 {
            # Segment into "command JUST_HELP_SEPARATOR comment"
@@ -144,38 +166,53 @@ function _just_commands_from_file()
             :noprint' "${1}"
 }
 
-##****if* just/_just_subcommands_from_array
-# SYNOPSIS
-#   Returns a non-unique list of commands that have subcommands from an array.
-#   This is not intended to line up with the input array
-# INPUT
-#   stdin - see USAGE
-# OUTPUT
-#   stdout - prints newline separated list of commands
-# USAGE
+#**
+#
+# .. function:: _just_subcommands_from_array
+#
+# :Arguments: *stdin* - see Usage
+#
+# :Output: *stdout* - prints newline separated list of commands
+#
+# Returns a non-unique list of commands that have subcommands from an array.
+# This is not intended to line up with the input array
+#
+# .. rubric:: Usage
+#
+# .. code-block:: bash
+#
 #   IFS=$'\n'
 #   parsed_help_a=($(_just_commands_from_file "${JUSTFILE}"))
 #   _just_subcommands_from_array <<< "${parsed_help_a[*]}"
-##***
+#
+#**
+
 function _just_subcommands_from_array()
 {
   \sed -nE 's|^(_?[a-zA-Z0-9\-]+)_.*|\1|p'
 }
 
-##****f* just/_just_subtargets_from_array
-# USAGE
+#**
+#
+# .. function:: _just_subtargets_from_array
+#
+# :Arguments: ``$1`` - subcommand name
+#
+#          ``$2..N`` - help_lines
+#
+# :Return Value: just_subtargets - Adds to array
+#
+# .. rubric:: Usage
+#
+# .. code-block:: bash
+#
 #   IFS=$'\n'
 #   parsed_help_a=($(_just_commands_from_file "${JUSTFILE}"))
 #
 #   _just_subtargets_from_array ${TARGET} "${parsed_help_a[@]}"
-# INPUTS
-#   $1 - subcommand name
-#   $2..N - help_lines
-# RETURN VALUE
-#   just_subtargets - Adds to array
-# AUTHOR
-#   Andy Neff
-##***
+#
+#**
+
 function _just_subtargets_from_array()
 {
   local help_line
@@ -190,16 +227,18 @@ function _just_subtargets_from_array()
   done
 }
 
-##****f* just/_just_parse_helps
-# NAME
-#   _just_parse_helps - Parse help information out of Just files
-# INPUT
-#   $1... - List of Just files, including plugins
-# OUTPUT
-#   parsed_help_a - Array of help lines: "target ${JUST_HELP_SEPARATOR} message"
-# AUTHOR
-#   Andy Neff
-##***
+#**
+#
+# .. function:: _just_parse_helps
+#
+# :Arguments: ``$1...`` - List of Just files, including plugins
+#
+# :Output: parsed_help_a - Array of help lines: ``target ${JUST_HELP_SEPARATOR} message``
+#
+# Parse help information out of Just files
+#
+#**
+
 function _just_parse_helps()
 {
   local filename
@@ -226,19 +265,18 @@ function _just_parse_helps()
   done
 }
 
-##****f* just/_just_load_justfile
-# NAME
-#   _just_load_justfile - Convenience function for finding and loading Justfile
-# SYNOPSIS
-#   Loads the Justfile if it exists
-# INPUTS
-#   $1 - The Justfile filename
-# SWITCHES
-#   JUST_DRYRUN_SOURCE - For internal use, can replace the source command (with
-#   say :) to disable sourcing the Justfile
-# AUTHOR
-#   Andy Neff
-##***
+#**
+#
+# .. function:: _just_load_justfile
+#
+# :Arguments: ``$1`` - The Justfile filename
+#
+# :Switches: ``JUST_DRYRUN_SOURCE`` - For internal use, can replace the source command (with say :) to disable sourcing the Justfile
+#
+# Convenience function for finding and loading the Justfile if it exists
+#
+#**
+
 function _just_load_justfile()
 {
   local file_matches=()
@@ -261,23 +299,31 @@ function _just_load_justfile()
 }
 
 ##****f* just_plugins/_just_get_plugins()
-# NAME
-#   _just_get_plugins()
-# INPUTS
-#   [$1] - Default directory to look for JUST_PLUGIN_FILE in
-# PARAMETERS
-#   [JUST_PLUGIN_FILE] - Override the name of the just plugins file.
-#                        Default: .justplugins
-# OUTPUT
-#   JUST_PLUGINS - (Possibly empty) array of plugins filenames
-# NOTES
-#   _just_get_plugins adds to JUST_PLUGINS if it already exists. If you want to
-#   replace JUST_PLUGINS, unset JUST_PLUGINS before calling _just_get_plugins.
-# SEE ALSO
-#   just/just_plugins, just_plugins/.justplugins
-# AUTHOR
-#   Andy Neff
 ##***
+
+#**
+#
+# .. function:: _just_get_plugins
+#
+# :Arguments: ``[$1]`` - Default directory to look for :envvar:`JUST_PLUGIN_FILE` in
+#
+# :Parameters: [:envvar:`JUST_PLUGIN_FILE`] - Override the name of the just plugins file.
+#
+# :Default: :file:`.justplugins`
+#
+# :Output: ``JUST_PLUGINS`` - (Possibly empty) array of plugins filenames
+#
+# .. note::
+#   :func:`_just_get_plugins` adds to ``JUST_PLUGINS`` if it already exists. If you want to
+#   replace ``JUST_PLUGINS``, unset ``JUST_PLUGINS`` before calling :func:`_just_get_plugins`.
+#
+# .. seealso::
+#   The plug in system for just
+#
+#   :file:`.justplugins` Plugin file
+#
+#**
+
 function _just_get_plugins()
 {
   local line

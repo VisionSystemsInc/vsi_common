@@ -1,3 +1,16 @@
+#*# linux/common_source
+
+#**
+# =============
+# Common Source
+# =============
+#
+# .. default-domain:: bash
+#
+# .. file:: common_source.sh
+#
+#**
+
 ##****F* vsi/common_source.sh
 # NAME
 #   common_source.sh - Cross OS compatible common values files

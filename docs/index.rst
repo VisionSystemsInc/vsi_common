@@ -11,6 +11,7 @@ VSI Common documentation
    :caption: Contents:
 
    just/index
+   linux/index
 
 Indices and tables
 ==================
