@@ -9,54 +9,45 @@
 #
 # .. file:: common_source.sh
 #
+# Cross OS compatible common values files
+#
+# There are many differences between bash scripts between Windows (using mingw/cygwin), macOS (which uses a MODIFIED version of bash 3.2), and the many versions of Linux out there, that primarily use bash 4+. In addition to the shell behaving different, many pieces of basic information are retrieved in different ways, such as the kind of OS, number of processor cores, etc... This sets a collection of variables to try and normalize these behaviors for other vsi scripts to use, no matter what OS they are running on.
+#
+# .. note::
+#   Should be Bourne Shell compatible, not just Bourne again shell compatible.
 #**
 
-##****F* vsi/common_source.sh
-# NAME
-#   common_source.sh - Cross OS compatible common values files
-# DESCRIPTION
-#   There are many differences between bash scripts between Windows (using
-#   mingw/cygwin), macOS (which uses a MODIFIED version of bash 3.2), and the
-#   many versions of Linux out there, that primarily use bash 4+. In addition to
-#   the shell behaving different, many piece of basic information are retrieved
-#   in different ways, such as the kind of OS, number of processor cores, etc...
-#   This sets a collection of variables to try and normalize these behaviors for
-#   other vsi scripts to use, no matter what OS they are running on.
-# NOTES
-#   Should be Bourne Shell compatible, not just Bourne again shell compatible.
-# AUTHOR
-#   Andy Neff
-##***
-
-##****d* common_source.sh/VSI_OS
-# NAME
-#   VSI_OS - Operating system name
-# DESCRIPTION
-#   Lowercase representation of the Operating system name. Based off of the
-#   OSTYPE environment variable, which is always defined in Bourne Shell.
-# EXAMPLE
-#   Values include linux, darwin, windows, bsd, solaris, and unknown
-# NOTES
-#   Only systems that are not EOL are considered. For example, Windows 95
-#   doesn't have the wmic used, but is pass end-of-life, so it is not a concern.
-# SEE ALSO
-#   common_source.sh/VSI_DISTRO, common_source.sh/VSI_DISTRO_VERSION
-# AUTHOR
-#   Andy Neff
-##***
-
-##****d* common_source.sh/VSI_PATH_ESC
-# NAME
-#   VSI_PATH_ESC - Path escape string for windows path translation
-# DESCRIPTION
-#   MSYS2, Git for Windows, etc.. translate unix style paths to windows style
-#   for you when even you call a non-bash command. This helps bridge the gap
-#   between the unix style systems and windows. However, sometimes it
-#   translates too much, which can cause a lot of issue.
+#**
+# .. function:: VSI_OS
 #
-#   This environment variable exists to add a / on Windows, and null on all
-#   other OSes
-# EXAMPLE
+# Operating system name
+#
+# Lowercase representation of the Operating system name. Based off of the ``OSTYPE`` environment variable, which is always defined in Bourne Shell.
+#
+# .. rubric:: Example
+#
+# Values include linux, darwin, windows, bsd, solaris, and unknown
+#
+# .. note::
+#   Only systems that are not EOL are considered. For example, Windows 95 doesn't have the wmic used, but is pass end-of-life, so it is not a concern.
+#
+# .. seealso::
+#   :envvar:`VSI_DISTRO`, :envvar:`VSI_DISTRO_VERSION`
+#**
+
+#**
+# .. envvar:: VSI_PATH_ESC
+#
+# Path escape string for windows path translation
+#
+# MSYS2, Git for Windows, etc.. translate unix style paths to windows style for you when even you call a non-bash command. This helps bridge the gap between the unix style systems and windows. However, sometimes it translates too much, which can cause a lot of issue.
+#
+#   This environment variable exists to add a / on Windows, and null on all other OSes
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
 #     foo -v /tmp:/tmp
 #   Becomes
 #     foo -v C:/Users/user/AppData/Temp:C:/Users/user/AppData/Temp
@@ -68,17 +59,14 @@
 #     foo -v /tmp:${VSI_PATH_ESC}/tmp
 #   Becomes
 #     foo -v C:/Users/user/AppData/Temp://tmp
-# NOTES
-#   Cygwin does not automatically translate paths, you have to explicitly call
-#   cygpath, so VSI_PATH_ESC is set to null. Using cygwin will take a lot more
-#   work, and is usually less preferred for this reason
-# BUGS
-#   There is a // artifact left over when there should be a /. This usually
-#   does not cause problems, but on rare occasions it does. It is ugly on all
-#   occasions
-# AUTHOR
-#   Andy Neff
-##***
+#
+# .. note::
+#   Cygwin does not automatically translate paths, you have to explicitly call cygpath, so :envvar:`VSI_PATH_ESC` is set to null. Using cygwin will take a lot more work, and is usually less preferred for this reason
+#
+# .. rubric:: Bugs
+#
+# There is a // artifact left over when there should be a /. This usually does not cause problems, but on rare occasions it does. It is ugly on all occasions.
+#**
 
 # In general, sh doesn't set OSTYPE; bash always does
 : ${OSTYPE=$(uname | tr '[A-Z]' '[a-z]')}
@@ -124,11 +112,11 @@ esac
 #**
 # .. env:: VSI_MUSL
 #
-#   :Value: *0* - Not a musl libc OS
-#           *1* - Is a musl libc based OS
-#           *-1* - Unable to determine
+#   :Value: * ``0`` - Not a musl libc OS
+#           * ``1`` - Is a musl libc based OS
+#           * ``-1`` - Unable to determine
 #
-# Checks to see if this is a musl based operating system. Inspect the grep executable for the string "musl". If it is found, like on alpine, then this is marked as a musl libc OS `1`, else `0`.
+# Checks to see if this is a musl based operating system. Inspect the grep executable for the string "musl". If it is found, like on alpine, then this is marked as a musl libc OS ``1``, else ``0``.
 #**
 
 # Default: I can't figure it out, probably glibc
@@ -162,134 +150,149 @@ fi
 #   VSI_MUSL=0
 # fi
 
-##****d* common_source.sh/VSI_DISTRO
-# NAME
-#   VSI_DISTRO - Name of the distribution.
-# DESCRIPTION
-#   For the various Linux distributions, it is often hard to know what OS you are
-#   dealing with. VSI_DISTRO will tell you the name of the distribution, which
-#   is typically all lowercase (in all test cases). Many different versions
-#   store the distribution name in different locations---only most modern Linux
-#   distributions use the standard /etc/os-release, but many LTS distributions
-#   that are not EOL (end-of-life) use less standard methods. This variable
-#   checks all of these known possibilities.
-# NOTES
-#   Other OSes like Windows, Mac, BSD, and solaris will have something set to
-#   VSI_DISTRO
+#**
+# .. envvar:: VSI_DISTRO
 #
-#   OS      | VSI_DISTRO
-#   --------|-----------
-#   Windows | windows    (same as VSI_OS)
-#   BSDs    | ${OS_TYPE} (expected bsd*, freebsd*)
-#   Solaris | ${OS_TYPE} (expected solaris*)
-#   Mac     | darwin     (same as VSI_OS)
-# SEE ALSO
-#   common_source.sh/VSI_DISTRO_LIKE common_source.sh/VSI_DISTRO_CORE
-# AUTHOR
-#   Andy Neff
-##***
+# Name of the distribution.
+#
+# For the various Linux distributions, it is often hard to know what OS you are dealing with. :envvar:`VSI_DISTRO` will tell you the name of the distribution, which is typically all lowercase (in all test cases). Many different versions store the distribution name in different locations---only most modern Linux distributions use the standard /etc/os-release, but many LTS distributions that are not EOL (end-of-life) use less standard methods. This variable checks all of these known possibilities.
+#
+# .. note::
+#   Other OSes like Windows, Mac, BSD, and solaris will have something set to :envvar:`VSI_DISTRO`
+#
+#   +----------+-----------+--------------------------+
+#   |  OS      | VSI_DISTRO|                          |
+#   +==========+===========+==========================+
+#   |  Windows | windows   | (same as VSI_OS)         |
+#   +----------+-----------+--------------------------+
+#   |  BSDs    | ${OS_TYPE}| (expected bsd*, freebsd*)|
+#   +----------+-----------+--------------------------+
+#   |  Solaris | ${OS_TYPE}| (expected solaris*)      |
+#   +----------+-----------+--------------------------+
+#   |  Mac     | darwin    | (same as VSI_OS)         |
+#   +----------+-----------+--------------------------+
+#
+# .. seealso::
+#   :envvar:`VSI_DISTRO_LIKE` :envvar:`VSI_DISTRO_CORE`
+#**
 
-##****d* common_source.sh/VSI_DISTRO_VERSION
-# NAME
-#   VSI_DISTRO_VERSION - The version of the distribution
-# NOTES
-#   For non-Linux distributions, this is the same as the VSI_OS_VERSION
+#**
+# .. envvar:: VSI_DISTRO_VERSION
+#
+# The version of the distribution
+#
+# .. note::
+#   For non-Linux distributions, this is the same as the :envvar:`VSI_OS_VERSION`
 #
 #   Understanding Windows versions
 #
-#     10.0   Windows 10      and Windows Server 2016
-#     6.3    Windows 8.1     and Windows Server 2012R2
-#     6.2    Windows 8       and Windows Server 2012
-#     6.1    Windows 7       and Windows Server 2008R2
-#     6.0    Windows Vista   and Windows Server 2008
-#     5.2    Windows XP x64  and Windows Server 2003 and 2003R2
-#     5.1    Windows XP
-#     5.0    Windows 2000    and Windows 2000 Server
-#     4.0    Windows NT 4.0  and Windows NT 4.0 Server
-#     3.51   Windows NT 3.51 and Windows NT 3.51 Server
-#     3.5    Windows NT 3.5  and Windows NT 3.5 Server
-#     3.10   Windows NT 3.1  and Windows NT 3.1 Server
-#     ------------------- NT line
-#     4.90   Windows Me
-#     4.10   Windows 98
-#     4.00   Windows 95
-#     3.2    Windwos 3.2
-#     3.11   Windwos 3.11
-#     3.10   Windows 3.1
-#     3.00   Windows 3.0
-#     2.11   Windows 2.11
-#     2.10   Windows 2.10
-#     2.03   Windows 2.03
-#     1.04   Windows 1.04
-#     1.03   Windows 1.03
-#     1.02   Windows 1.02
-#     1.01   Windows 1.01
-# SEE ALSO
-#   common_source.sh/VSI_VERSION_LIKE common_source.sh/VSI_VERSION_CORE
-# AUTHOR
-#   Andy Neff
-##***
-
-##****d* common_source.sh/VSI_DISTRO_LIKE
-# NAME
-#   VSI_DISTRO_LIKE - Name of the distribution this distribution is based off of
-# DESCRIPTION
-#   Some os-release files typically have an ID_LIKE to specify which
-#   distribution it was based off of. For example Ubuntu is based off of debian
-#   and Mint is based off of Ubuntu. This captures and stores that "like"
-#   behavior.
+#    +----+---------------+----------------------------------+
+#    |10.0|Windows 10     |and Windows Server 2016           |
+#    +----+---------------+----------------------------------+
+#    |6.3 |Windows 8.1    |and Windows Server 2012R2         |
+#    +----+---------------+----------------------------------+
+#    |6.2 |Windows 8      |and Windows Server 2012           |
+#    +----+---------------+----------------------------------+
+#    |6.1 |Windows 7      |and Windows Server 2008R2         |
+#    +----+---------------+----------------------------------+
+#    |6.0 |Windows Vista  |and Windows Server 2008           |
+#    +----+---------------+----------------------------------+
+#    |5.2 |Windows XP x64 |and Windows Server 2003 and 2003R2|
+#    +----+---------------+----------------------------------+
+#    |5.1 |Windows XP     |                                  +
+#    +----+---------------+----------------------------------+
+#    |5.0 |Windows 2000   |  and Windows 2000 Server         |
+#    +----+---------------+----------------------------------+
+#    |4.0 |Windows NT 4.0 |  and Windows NT 4.0 Server       |
+#    +----+---------------+----------------------------------+
+#    |3.51|Windows NT 3.51|and Windows NT 3.51 Server        |
+#    +----+---------------+----------------------------------+
+#    |3.5 |Windows NT 3.5 |and Windows NT 3.5 Server         |
+#    +----+---------------+----------------------------------+
+#    |3.10|Windows NT 3.1 |and Windows NT 3.1 Server         |
+#    +----+---------------+----------------------------------+
+#    |------------------- NT line                            |
+#    +----+---------------+----------------------------------+
+#    |4.90|Windows Me     |                                  |
+#    +----+---------------+----------------------------------+
+#    |4.10|Windows 98     |                                  |
+#    +----+---------------+----------------------------------+
+#    |4.00|Windows 95     |                                  |
+#    +----+---------------+----------------------------------+
+#    |3.2 |Windwos 3.2    |                                  |
+#    +----+---------------+----------------------------------+
+#    |3.11|Windwos 3.11   |                                  |
+#    +----+---------------+----------------------------------+
+#    |3.10|Windows 3.1    |                                  |
+#    +----+---------------+----------------------------------+
+#    |3.00|Windows 3.0    |                                  |
+#    +----+---------------+----------------------------------+
+#    |2.11|Windows 2.11   |                                  |
+#    +----+---------------+----------------------------------+
+#    |2.10|Windows 2.10   |                                  |
+#    +----+---------------+----------------------------------+
+#    |2.03|Windows 2.03   |                                  |
+#    +----+---------------+----------------------------------+
+#    |1.04|Windows 1.04   |                                  |
+#    +----+---------------+----------------------------------+
+#    |1.03|Windows 1.03   |                                  |
+#    +----+---------------+----------------------------------+
+#    |1.02|Windows 1.02   |                                  |
+#    +----+---------------+----------------------------------+
+#    |1.01|Windows 1.01   |                                  |
+#    +----+---------------+----------------------------------+
 #
-#   This is not as useful as the VSI_DISTRO_CORE which is more useful in
-#   determining "should I use yum or apt, etc..."
-# SEE ALSO
-#   common_source.sh/VSI_DISTRO common_source.sh/VSI_DISTRO_CORE
-# AUTHOR
-#   Andy Neff
-##***
+# .. seealso::
+#   ``VSI_VERSION_LIKE`` ``VSI_VERSION_CORE``
+#**
 
-##****d* common_source.sh/VSI_DISTRO_VERSION_LIKE
-# NAME
-#   VSI_DISTRO_VERSION_LIKE - Version of VSI_DISTRO_LIKE
-# DESCRIPTION
-#   The version release (number when possible) of the VSI_DISTRO_LIKE. This is
-#   not as useful as VSI_VERSION_CORE for determining things such as "For this
-#   fedora based distributions, should I be using dnf or yum". If it was centos,
-#   _LIKE would be rhel, and _CORE would be fedora, and then all you would need
-#   to check is if the fedora version (VSI_DISTRO_VERSION_CORE) is >= 22 or not.
-# SEE ALSO
-#   common_source.sh/VSI_DISTRO common_source.sh/VSI_DISTRO_CORE
-# AUTHOR
-#   Andy Neff
-##***
-
-##****d* common_source.sh/VSI_DISTRO_CORE
-# NAME
-#   VSI_DISTRO_CORE - Name of the distribution this distribution is based off of
-# DESCRIPTION
-#   Unlike VSI_DISTRO_LIKE, VSI_DISTRO_CORE will tell you the distribution that
-#   this distribution is REALLY based off of. For example, centos is "like" rhel
-#   but they are both really fedora at the core. Which means they use yum, etc.
-#   This is what really matters for a lot of logic that you would be using these
-#   variables in the first place.
+#**
+# .. envvar:: VSI_DISTRO_LIKE
 #
-#   While the _LIKE variable identifies the parent distribution, _CORE should identify
-#   the progenitor, typically debian, fedora, slackware, gentoo, etc...
-# SEE ALSO
-#   common_source.sh/VSI_DISTRO_VERSION_CORE common_source.sh/VSI_DISTRO
-# AUTHOR
-#   Andy Neff
-##***
+# Name of the distribution this distribution is based off of
+#
+# Some os-release files typically have an ID_LIKE to specify which distribution it was based off of. For example Ubuntu is based off of debian and Mint is based off of Ubuntu. This captures and stores that "like" behavior.
+#
+# This is not as useful as the :envvar:`VSI_DISTRO_CORE` which is more useful in determining "should I use yum or apt, etc..."
+#
+# .. seealso::
+#   :envvar:`VSI_DISTRO` :envvar:`VSI_DISTRO_CORE`
+#**
 
-##****d* common_source.sh/VSI_DISTRO_VERSION_CORE
-# NAME
-#   VSI_DISTRO_VERSION_CORE - Version of VSI_DISTRO_CORE
-# DESCRIPTION
-#   The version of the VSI_DISTRO_CORE that the distribution is based off of
-# SEE ALSO
-#   common_source.sh/VSI_DISTRO_CORE
-# AUTHOR
-#   Andy Neff
-##***
+#**
+# .. envvar:: VSI_DISTRO_VERSION_LIKE
+#
+# Version of :envvar:`VSI_DISTRO_LIKE`
+#
+# The version release (number when possible) of the :envvar:`VSI_DISTRO_LIKE`. This is not as useful as ``VSI_VERSION_CORE`` for determining things such as "For this fedora based distributions, should I be using dnf or yum". If it was centos, ``_LIKE`` would be rhel, and ``_CORE`` would be fedora, and then all you would need to check is if the fedora version (:envvar:`VSI_DISTRO_VERSION_CORE`) is >= 22 or not.
+#
+# .. seealso::
+#   :envvar:`VSI_DISTRO` :envvar:`VSI_DISTRO_CORE`
+#**
+
+#**
+# .. envvar:: VSI_DISTRO_CORE
+#
+# Name of the distribution this distribution is based off of
+#
+# Unlike :envvar:`VSI_DISTRO_LIKE`, :envvar:`VSI_DISTRO_CORE` will tell you the distribution that this distribution is REALLY based off of. For example, centos is "like" rhel but they are both really fedora at the core. Which means they use yum, etc. This is what really matters for a lot of logic that you would be using these variables in the first place.
+#
+# While the ``_LIKE`` variable identifies the parent distribution, ``_CORE`` should identify the progenitor, typically debian, fedora, slackware, gentoo, etc...
+#
+# .. seealso::
+#   :envvar:`VSI_DISTRO_VERSION_CORE` :envvar:`VSI_DISTRO`
+#**
+
+#**
+# .. envvar:: VSI_DISTRO_VERSION_CORE
+#
+# Version of :envvar:`VSI_DISTRO_CORE`
+#
+# The version of the :envvar:`VSI_DISTRO_CORE` that the distribution is based off of
+#
+# .. seealso::
+#   :envvar:`VSI_DISTRO_CORE`
+#**
 
 if [ -f /etc/os-release ]; then
   # Run in a sub-shell so I can source os-release
@@ -491,18 +494,17 @@ if [ "${VSI_DISTRO_CORE}" = "${VSI_DISTRO_LIKE}" ]; then
   VSI_DISTRO_VERSION_LIKE="${VSI_DISTRO_VERSION_CORE}"
 fi
 
-##****d* common_source.sh/VSI_OS_VERSION
-# NAME
-#   VSI_OS_VERSION - Version of the operating system
-# DESCRIPTION
-#   For the Windows operating systems, this is the same as VSI_DISTRO_VERSION.
-#   For Linux/Unix based operating systems, this will evaluate to the kernel
-#   version
-# SEE ALSO
-#   common_source.sh/VSI_DISTRO_VERSION
-# AUTHOR
-#   Andy Neff
-##***
+#**
+# .. envvar:: VSI_OS_VERSION
+#
+# Version of the operating system
+#
+# For the Windows operating systems, this is the same as :envvar:`VSI_DISTRO_VERSION`. For Linux/Unix based operating systems, this will evaluate to the kernel version
+#
+# .. seealso::
+#   :envvar:`VSI_DISTRO_VERSION`
+#**
+
 case VSI_OS in
   windows)
      VSI_OS_VERSION="${VSI_DISTRO_VERSION}"
@@ -512,31 +514,31 @@ case VSI_OS in
      ;;
 esac
 
-##****d* common_source.sh/VSI_ARCH
-# NAME
-#   VSI_ARCH - System architecture
-# DESCRIPTION
-#   The architecture of the CPU in use (same as uname -m)
-# EXAMPLE
-#   Possible values include (but may not be limited to)
-#     i386 i686 x86_64 ia64 alpha amd64 arm armeb armel hppa m32r m68k mips
-#     mipsel powerpc ppc64 s390 s390x sh3 sh3eb sh4 sh4eb sparc
+#**
+# .. envvar:: VSI_ARCH
 #
-#   Typically found: x86_64
-# AUTHOR
-#   Andy Neff
-##***
+# System architecture
+#
+# The architecture of the CPU in use (same as uname -m)
+#
+# .. rubric:: Example
+#
+# Possible values include (but may not be limited to)
+#
+#  | i386 i686 x86_64 ia64 alpha amd64 arm armeb armel hppa m32r m68k mips
+#  | mipsel powerpc ppc64 s390 s390x sh3 sh3eb sh4 sh4eb sparc
+#
+# Typically found: x86_64
+#**
 
 VSI_ARCH="$(uname -m)"
 
-##****d* common_source.sh/VSI_NUMBER_CORES
-# NAME
-#   VSI_NUMBER_CORES - Number of CPU cores
-# DESCRIPTION
-#   Determines the number of CPU cores available on the machine.
-# AUTHOR
-#   Andy Neff
-##***
+#**
+# .. envvar:: VSI_NUMBER_CORES
+#
+# Determines the number of CPU cores available on the machine.
+#**
+
 case "${VSI_OS}" in
   darwin)
     if command -v sysctl >/dev/null 2>&1; then # Normal darwin
