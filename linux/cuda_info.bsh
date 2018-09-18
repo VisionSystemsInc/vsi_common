@@ -14,55 +14,35 @@
 #
 # .. file:: cuda_info.bsh
 #
+# Determine easy to use capabilities for ``CUDA`` devices
+#
+# There are many versions of ``CUDA``, ``CUDA`` card architectures, etc... Knowing how to compile for a specific card is hard enough, but it's very difficult to know what the right architectures are for your specific card and what the limitations are based on your version of ``CUDA/NVIDIA`` driver, etc. This script should help determine what versions you have and suggest what architectures to use. This is good enough for an automated solution to get up and running, but these suggestions are not absolute. You may find a fine-tuned configuration that works better on a case-by-case basis.
 #**
 
-##****F* vsi/cuda_info.bsh
-# NAME
-#   cuda_info.bsh - Determine easy to use capabilities for CUDA devices
-# DESCRIPTION
-#   There are many versions of CUDA, CUDA card architectures, etc... Knowing
-#   how to compile for a specific card is hard enough, but it's very difficult
-#   to know what the right architectures are for your specific card and what
-#   the limitations are based on your version of CUDA/NVIDIA driver, etc.
-#   This script should help determine what versions you have and suggest what
-#   architectures to use. This is good enough for an automated solution to get
-#   up and running, but these suggestions are not absolute. You may find a
-#   fine-tuned configuration that works better on a case-by-case basis.
-# AUTHOR
-#   Andy Neff
-##***
-
-##****d* cuda_info.bsh/CUDA_VERSION
-# NAME
-#   CUDA_VERSION - The version of CUDA being used
-# DESCRIPTION
-#   cuda_info.bsh will attempt to discover the CUDA Development Kit in commonly
-#   known locations, and accumulate a list of all discovered CDKs in the sorted
-#   array CUDA_VERSIONS. Then, the highest capable version of CUDA is picked and
-#   set to CUDA_VERSION.
+#**
+# .. envvar:: CUDA_VERSION
 #
-#   CUDA_VERSION can optionally be set to a specific version (e.g. "7.5.13"),
-#   in which case other CUDA versions will not be discovered and CUDA_VERSIONS
-#   will not be populated.
-# NOTES
-#   Currently, CDKs are discovered by checking the system PATH and
-#   /usr/local/cuda*/bin/ directories for the nvcc executable. More paths should
-#   be added to this file as they become necessary.
-# AUTHOR
-#   Andy Neff
-##***
+# The version of ``CUDA`` being used
+# 
+# :file:`cuda_info.bsh` will attempt to discover the ``CUDA`` Development Kit in commonly known locations, and accumulate a list of all discovered CDKs in the sorted array CUDA_VERSIONS. Then, the highest capable version of ``CUDA`` is picked and set to :envvar:`CUDA_VERSION`.
+#
+# :envvar:`CUDA_VERSION` can optionally be set to a specific version (e.g. "7.5.13"), in which case other ``CUDA`` versions will not be discovered and ``CUDA_VERSIONS`` will not be populated.
+#
+# .. note::
+#   Currently, CDKs are discovered by checking the system PATH and /usr/local/cuda*/bin/ directories for the nvcc executable. More paths should be added to this file as they become necessary.
+#**
 
-##****fi* cuda_info.bsh/discover_cuda_versions
-# NAME
-#   discover_cuda_versions - Find CUDA development kits
-# OUTPUT
-#   CUDA_VERSIONS - List of CUDA versions found
-# NOTES
+#**
+# .. function:: discover_cuda_versions
+#
+# :Output: ``CUDA_VERSIONS`` - List of ``CUDA`` versions found
+#
+# Find ``CUDA`` development kits
+#
+# .. note::
 #   Will not work on macosx if mac have nvidia and two or more versions of cuda
 #   installed. Seems unlikely
-# AUTHOR
-#   Andy Neff
-##***
+#**
 function discover_cuda_versions()
 {
   CUDA_VERSIONS=()
@@ -80,78 +60,64 @@ function discover_cuda_versions()
   CUDA_VERSION=${CUDA_VERSIONS+"${CUDA_VERSIONS[${#CUDA_VERSIONS[@]}-1]}"}
 }
 
-##****d* cuda_info.bsh/CUDA_DISCOVER
-# NAME
-#   CUDA_DISCOVER - Flag to enable the discovery of CUDA cards and capabilities
-# PARAMETER
-#   CUDA_DISCOVER - Default is disabled, set to "1" to enable.
-# DESCRIPTION
-#   Because the CUDA card discovery can be expensive (milliseconds on some
-#   computers, hundreds on others), it is disabled by default.
+#**
+# .. envvar:: CUDA_DISCOVER
 #
-#   There are two methods for CUDA device discovery (in order):
-#   1. Using deviceQuery (available here https://goo.gl/ocBgPU)
-#     - looks for ${DEVICE_QUERY-deviceQuery} on the PATH
-#   2. Using the nvidia-docker-plugin to get and parse GPU information
-#     - discovered using either NV_HOST or checking to see if
-#       nvidia-docker-plugin is running locally using pgrep or ps
+# :Parameter: ``CUDA_DISCOVER`` - Default is disabled, set to ``1`` to enable.
 #
-#   When running in a docker, deviceQuery is the preferred method. NV_HOST
-#   could be used, but that involves telling the docker the IP of the host, or
-#   using a shared network mode in order to use localhost (which is not
-#   recommended for production). Attempting to discover nvidia-docker-plugin
-#   will not work in a docker.
-# AUTHOR
-#   Andy Neff
-##***
+# Flag to enable the discovery of CUDA cards and capabilities
+# 
+# Because the ``CUDA`` card discovery can be expensive (milliseconds on some computers, hundreds on others), it is disabled by default.
+#
+# There are two methods for CUDA device discovery (in order):
+#  1. Using deviceQuery (available here https://goo.gl/ocBgPU)
+#
+#   * looks for ${DEVICE_QUERY-deviceQuery} on the PATH
+#
+#  2. Using the nvidia-docker-plugin to get and parse GPU information
+#
+#   * discovered using either ``NV_HOST`` or checking to see if nvidia-docker-plugin is running locally using pgrep or ps
+#
+# When running in a docker, deviceQuery is the preferred method. ``NV_HOST`` could be used, but that involves telling the docker the IP of the host, or using a shared network mode in order to use localhost (which is not recommended for production). Attempting to discover nvidia-docker-plugin will not work in a docker.
+#**
 
-##****d* cuda_info.bsh/CUDA_CARDS
-# NAME
-#   CUDA_CARDS - List of CUDA devices found on the computer
-# DESCRIPTION
-#   An array of all the CUDA cards discovered. The only way to manually override
-#   this would be to disable CUDA_DISCOVER, but that was not the intended use.
-# AUTHOR
-#   Andy Neff
-##***
+#**
+# .. envvar:: CUDA_CARDS
+#
+# List of ``CUDA`` devices found on the computer
+#
+# An array of all the ``CUDA`` cards discovered. The only way to manually override this would be to disable :envvar:`CUDA_DISCOVER`, but that was not the intended use.
+#**
 
-##****d* cuda_info.bsh/CUDA_CARD_ARCHES
-# NAME
-#   CUDA_CARD_ARCHES - List of CUDA card architectures
-# DESCRIPTION
-#   An array of all the architectures the CUDA cards discovered. The only way
-#   to manually override this would be to disable CUDA_DISCOVER, but that was
-#   not the intended use.
-# AUTHOR
-#   Andy Neff
-##***
+#**
+# .. envvar:: CUDA_CARD_ARCHES
+#
+# List of ``CUDA`` card architectures
+#
+# An array of all the architectures the ``CUDA`` cards discovered. The only way to manually override this would be to disable :envvar:`CUDA_DISCOVER`, but that was not the intended use.
+#**
 
+#**
+# .. envvar:: CUDA_CARD_FAMILIES
+#
+# List of ``CUDA`` card family names
+#
+# An array of all the family names of the ``CUDA`` cards discovered. The only way to manually override this would be to disable :envvar:`CUDA_DISCOVER`, but that was not the intended use.
+#
+# .. note::
+#   If deviceQuery is not used, then an internal lookup table is used, but only supports Tesla, Fermi, Kepler, Maxwell, Pascal, and Volta. Additional family names need to be added as they are released.
+#**
 
-##****d* cuda_info.bsh/CUDA_CARD_FAMILIES
-# NAME
-#   CUDA_CARD_FAMILIES - List of CUDA card family names
-# DESCRIPTION
-#   An array of all the family names of the CUDA cards discovered. The only way
-#   to manually override this would be to disable CUDA_DISCOVER, but that was
-#   not the intended use.
-# NOTES
-#   If deviceQuery is not used, then an internal lookup table is used, but only
-#   supports Tesla, Fermi, Kepler, Maxwell, Pascal, and Volta. Additional family
-#   names need to be added as they are released.
-# AUTHOR
-#   Andy Neff
-##***
+#**
+# .. function:: discover_cuda_info
+#
+# :Output: * :envvar:`CUDA_CARDS` - List of all ``CUDA`` capable devices
+#          * :envvar:`CUDA_CARD_ARCHES` - Matching list of ``CUDA`` real architectures
+#          * :envvar:`CUDA_CARD_FAMILIES` - Matching list of ``CUDA`` families
+#
+# Get ``CUDA`` info about each card
+#**
 
-##****fi* cuda_info.bsh/discover_cuda_info
-# NAME
-#   discover_cuda_info - Get CUDA info about each card
-# OUTPUT
-#   CUDA_CARDS - List of all CUDA capable devices
-#   CUDA_CARD_ARCHES - Matching list of CUDA real architectures
-#   CUDA_CARD_FAMILIES - Matching list of CUDA families
-# AUTHOR
-#   Andy Neff
-##***
 function discover_cuda_info()
 {
   if command -v pgrep &>/dev/null; then
@@ -168,23 +134,19 @@ function discover_cuda_info()
     }
   fi
 
-  #****d* cuda_info.bsh/DEVICE_QUERY
-  # NAME
-  #   DEVICE_QUERY - Name of the device query executable
-  # USAGE
-  #   Optional override for the name of the executable for device query. Device
-  #   query is one of the sample programs in the CUDA Development Kit that prints
-  #   out useful information about the connected CUDA devices.
-  #
-  #   DEVICE_QUERY defaults to "deviceQuery" and must either be on the PATH or be
-  #   an absolute path.
-  #
-  #   The deviceQuery executable is compiled from the source code typically
-  #   found the in /usr/local/cuda/samples/1_Utilities/deviceQuery/ directory,
-  #   but can be downloaded precompiled for Linux from https://goo.gl/equvX3
-  # AUTHOR
-  #   Andy Neff
-  #***
+#**
+# .. envvar:: DEVICE_QUERY
+#
+# Name of the device query executable
+#
+# .. rubric:: Usage
+#
+# Optional override for the name of the executable for device query. Device query is one of the sample programs in the ``CUDA`` Development Kit that prints out useful information about the connected ``CUDA`` devices.
+#
+# :envvar:`DEVICE_QUERY` defaults to "deviceQuery" and must either be on the PATH or be an absolute path.
+#
+# The deviceQuery executable is compiled from the source code typically found the in /usr/local/cuda/samples/1_Utilities/deviceQuery/ directory, but can be downloaded precompiled for Linux from https://goo.gl/equvX3
+#**
 
   local IFS="${IFS}"
   local OLD_IFS="${IFS}"
@@ -240,18 +202,19 @@ function discover_cuda_info()
   CUDA_CARD_ARCHES=(${CUDA_CARD_ARCHES+"${CUDA_CARD_ARCHES[@]/./}"})
 }
 
-##****d* cuda_info.bsh/CUDA_ARCHES
-# NAME
-#   CUDA_ARCHES - List of CUDA "virtual" instruction sets supported by CUDA
-# DESCRIPTION
-#   Every version of CUDA (nvcc) has a set of "virtual" compute_xx architectures
-#   (ISAs) that it can build against when compiling code for "real" sm_xx
-#   architectures.
+#**
+# .. envvar:: CUDA_ARCHES
 #
-#   This array contains the list of the compute (virtual) architectures
-#   supported by the CUDA_VERSION version of CUDA as an array of two digit
-#   numbers.
-# EXAMPLE
+# List of ``CUDA`` "virtual" instruction sets supported by ``CUDA``
+#
+# Every version of ``CUDA`` (nvcc) has a set of "virtual" compute_xx architectures (ISAs) that it can build against when compiling code for "real" sm_xx architectures.
+#
+# This array contains the list of the compute (virtual) architectures supported by the :envvar:`CUDA_VERSION` version of ``CUDA`` as an array of two digit numbers.
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
 #     $ echo "${CUDA_ARCHES[@]}"
 #     20 30 32 35 37 50 52 53 60 61 62
 #
@@ -264,69 +227,57 @@ function discover_cuda_info()
 #
 #   $ echo "${y[@]}"
 #   2.0 3.0 3.2 3.5 3.7 5.0 5.2 5.3 6.0 6.1 6.2
-# SEE ALSO
-#   cuda_info.bsh/CUDA_DEPRECATED
-# AUTHOR
-#   Andy Neff
-##***
-
-##****d* cuda_info.bsh/CUDA_CODES
-# NAME
-#   CUDA_CODES - List of CUDA "real" instruction sets supported by CUDA
-# DESCRIPTION
-#   Every version of CUDA (nvcc) has a set of "real" sm_xx architectures that
-#   that it can assemble native (CUDA binary) code for.
 #
-#   This array contains a list of the sm architectures supported by the 
-#   CUDA_VERSION version of CUDA as an array of two digit numbers.
-# EXAMPLE
+# .. seealso::
+#   :envvar:`CUDA_DEPRECATED`
+#**
+
+#**
+# .. envvar:: CUDA_CODES
+#
+# List of ``CUDA`` "real" instruction sets supported by ``CUDA``
+#
+# Every version of ``CUDA`` (nvcc) has a set of "real" sm_xx architectures that that it can assemble native (``CUDA`` binary) code for.
+#
+# This array contains a list of the sm architectures supported by the :envvar:`CUDA_VERSION` version of ``CUDA`` as an array of two digit numbers.
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
 #     $ echo "${CUDA_CODES[@]}"
 #     20 21 30 32 35 37 50 52 53 60 61 62
-# SEE ALSO
-#   cuda_info.bsh/CUDA_DEPRECATED
-# AUTHOR
-#   Andy Neff
-##***
+#
+# .. seealso::
+#   :envvar:`CUDA_DEPRECATED`
+#**
 
-##****d* cuda_info.bsh/CUDA_MINIMAL_DRIVER_VERSION
-# NAME
-#   CUDA_MINIMAL_DRIVER_VERSION - Required version of NVIDIA driver
-# DESCRIPTION
-#   Every version of CUDA has a minimal version of the NVIDIA graphics-card
-#   driver that must be installed in order to support that version of CUDA.
-#   This is largely undocumented, despite being obviously important. This
-#   variable is set to the minimum required version of the NVIDIA driver for
-#   the CUDA_VERSION version of CUDA, as best as we've been able to determine.
-# AUTHOR
-#   Andy Neff
-##***
+#**
+# .. envvar:: CUDA_MINIMAL_DRIVER_VERSION
+#
+# Required version of NVIDIA driver
+#
+# Every version of ``CUDA`` has a minimal version of the NVIDIA graphics-card driver that must be installed in order to support that version of ``CUDA``. This is largely undocumented, despite being obviously important. This variable is set to the minimum required version of the NVIDIA driver for the :envvar:`CUDA_VERSION` version of ``CUDA``, as best as we've been able to determine.
+#**
 
-##****d* cuda_info.bsh/CUDA_DEPRECATED
-# NAME
-#   CUDA_DEPRECATED - List of deprecated instruction sets supported by CUDA
-# DESCRIPTION
-#   Some versions of CUDA support old instruction sets, but print a deprecated
-#   warning. For those versions of CUDA, a CUDA_DEPRECATED array is defined to
-#   list the two digit architectures that are supported yet deprecated in the
-#   CUDA_VERSION version of CUDA.
-# AUTHOR
-#   Andy Neff
-##***
+#**
+# .. envvar:: CUDA_DEPRECATED
+#
+# List of deprecated instruction sets supported by ``CUDA``
+#
+# Some versions of ``CUDA`` support old instruction sets, but print a deprecated warning. For those versions of ``CUDA``, a :envvar:`CUDA_DEPRECATED` array is defined to list the two digit architectures that are supported yet deprecated in the :envvar:`CUDA_VERSION` version of ``CUDA``.
+#**
 
-
-##****fi* cuda_info.bsh/cuda_capabilities
-# NAME
-#   cuda_capabilities - Determine compiler capabilities for specific CDK
-# OUTPUT
-#   CUDA_ARCHES - Supported CUDA virtual architectures (compute_xx)
-#   CUDA_CODES - Supported CUDA real architectures (sm_xx)
-#   CUDA_MINIMAL_DRIVER_VERSION - Minimal NVIDIA driver version needed for
-#                                 CUDA_VERSION version of graphics-card driver
-#   [CUDA_DEPRECATED] - List of deprecated (yet working) architectures.
-# AUTHOR
-#   Andy Neff
-##***
-
+#**
+# .. function:: cuda_capabilities
+#
+# :Output: * :envvar:`CUDA_ARCHES` - Supported ``CUDA`` virtual architectures (compute_xx)
+#          * :envvar:`CUDA_CODES` - Supported ``CUDA`` real architectures (sm_xx)
+#          * :envvar:`CUDA_MINIMAL_DRIVER_VERSION` - Minimal NVIDIA driver version needed for :envvar:`CUDA_VERSION` version of graphics-card driver
+#          * [:envvar:`CUDA_DEPRECATED`] - List of deprecated (yet working) architectures.
+#
+# Determine compiler capabilities for specific CDK
+#**
 function cuda_capabilities()
 {
   # This is the most complete list of compute and sm architectures supported by
@@ -466,71 +417,52 @@ function cuda_capabilities()
   esac
 }
 
-##****d* cuda_info.bsh/CUDA_SUGGESTED_ARCHES
-# NAME
-#   CUDA_SUGGESTED_ARCHES - Suggested "virtual" architectures to compile for
-# DESCRIPTION
-#   Instead of compiling for every architecture that the CUDA_VERSION version
-#   of CUDA supports, CUDA_SUGGESTED_ARCHES is the intersection between
-#   CUDA_CARD_ARCHES and CUDA_ARCHES so that you compile only for your cards.
-# AUTHOR
-#   Andy Neff
-##***
-
-##****d* cuda_info.bsh/CUDA_SUGGESTED_CODES
-# NAME
-#   CUDA_SUGGESTED_CODES - Suggested "real" architectures to compile for
-# DESCRIPTION
-#   Instead of compiling for every architecture that the CUDA_VERSION version
-#   of CUDA supports, CUDA_SUGGESTED_CODES is the intersection between
-#   CUDA_CARD_CODES and CUDA_CODES so that you compile only for your cards.
-# AUTHOR
-#   Andy Neff
-##***
-
-##****d* cuda_info.bsh/CUDA_SUGGESTED_PTX
-# NAME
-#   CUDA_SUGGESTED_PTX - Suggested PTX architectures to compile for
-# DESCRIPTION
-#   If your graphics card is too new for the CUDA_VERSION version of CUDA, you
-#   will need to compile to a pure virtual architecture (by embedding PTX code
-#   in the fatbinary) in order to use it. That way, the real architecture can
-#   be JIT (Just-In-Time) compiled for at runtime.
+#**
+# .. envvar:: CUDA_SUGGESTED_ARCHES
 #
-#   CUDA_SUGGESTED_PTX identifies the PTX architectures you need to run on newer
-#   (unsupported) cards. You can choose to add them to your builds.
-# AUTHOR
-#   Andy Neff
-##***
-
-##****d* cuda_info.bsh/CUDA_FORWARD_PTX
-# NAME
-#   CUDA_FORWARD_PTX - PTX arch for newer CUDA cards
-# DESCRIPTION
-#   In situations where you are making portable fatbinaries, you should compile
-#   for every architecture. However, in order to future proof your fatbin for
-#   architectures newer than your current version of CUDA supports, you will
-#   need to compile to a pure virtual architecture using the PTX feature so
-#   that the real architecture can be JIT (Just-In-Time) compiled.
+# Suggested "virtual" architectures to compile for
 #
-#   CUDA_FORWARD_PTX identifies the fullest featured PTX architecture so that
-#   you can choose to add this to your builds.
-# AUTHOR
-#   Andy Neff
-##***
+# Instead of compiling for every architecture that the :envvar:`CUDA_VERSION` version of ``CUDA`` supports, :envvar:`CUDA_SUGGESTED_ARCHES` is the intersection between :envvar:`CUDA_CARD_ARCHES` and :envvar:`CUDA_ARCHES` so that you compile only for your cards.
+#**
 
-##****fi* cuda_info.bsh/suggested_architectures
-# NAME
-#   suggested_architectures - Calculate suggested architectures
-# OUTPUT
-#  CUDA_SUGGESTED_ARCHES - Suggested virtual architectures for your cards
-#  CUDA_SUGGESTED_CODES - Suggested real architectures for your cards
-#  CUDA_SUGGESTED_PTX - Suggested PTX for your cards
-#  CUDA_FORWARD_PTX - Potential forward compatibility PTX to compile for cards
-#                     newer than your current CUDA supports
-# AUTHOR
-#   Andy Neff
-##***
+#**
+# .. envvar:: CUDA_SUGGESTED_CODES
+#
+# Suggested "real" architectures to compile for
+#
+# Instead of compiling for every architecture that the :envvar:`CUDA_VERSION` version of ``CUDA`` supports, :envvar:`CUDA_SUGGESTED_CODES` is the intersection between ``CUDA_CARD_CODES`` and :envvar:`CUDA_CODES` so that you compile only for your cards.
+#**
+
+#**
+# .. envvar:: CUDA_SUGGESTED_PTX
+#
+# Suggested PTX architectures to compile for
+#
+# If your graphics card is too new for the :envvar:`CUDA_VERSION` version of ``CUDA``, you will need to compile to a pure virtual architecture (by embedding PTX code in the fatbinary) in order to use it. That way, the real architecture can be JIT (Just-In-Time) compiled for at runtime.
+#
+# :envvar:`CUDA_SUGGESTED_PTX` identifies the PTX architectures you need to run on newer (unsupported) cards. You can choose to add them to your builds.
+#**
+
+#**
+# .. envvar:: CUDA_FORWARD_PTX
+#
+# PTX arch for newer ``CUDA`` cards
+#
+# In situations where you are making portable fatbinaries, you should compile for every architecture. However, in order to future proof your fatbin for architectures newer than your current version of ``CUDA`` supports, you will need to compile to a pure virtual architecture using the PTX feature so that the real architecture can be JIT (Just-In-Time) compiled.
+#
+# :envvar:`CUDA_FORWARD_PTX` identifies the fullest featured PTX architecture so that you can choose to add this to your builds.
+#**
+
+#**
+# .. function:: suggested_architectures
+#
+# :Output: * :envvar:`CUDA_SUGGESTED_ARCHES` - Suggested virtual architectures for your cards
+#          * :envvar:`CUDA_SUGGESTED_CODES` - Suggested real architectures for your cards
+#          * :envvar:`CUDA_SUGGESTED_PTX` - Suggested PTX for your cards
+#          * :envvar:`CUDA_FORWARD_PTX` - Potential forward compatibility PTX to compile for cards newer than your current ``CUDA`` supports
+#
+# Calculate suggested architectures
+#**
 function suggested_architectures()
 {
   local x arch y
@@ -614,40 +546,42 @@ function suggested_architectures()
   CUDA_SUGGESTED_PTX=($(sort -u <<< ${CUDA_SUGGESTED_PTX+"${CUDA_SUGGESTED_PTX[*]}"}))
 }
 
-##****f* cuda_info.bsh/cmake_cuda_flags
-# NAME
-#   cmake_cuda_flags - Generate CUDA flags for CMake
-# DESCRIPTION
-#   Modern CMake installs include a FindCUDA.cmake script which calls the
-#   select_compute_arch.cmake script (https://goo.gl/uZvAjR). It uses a limited
-#   version of the tables that cuda_info.bsh uses and is prone to being out of
-#   date.
+#**
+# .. function:: cmake_cuda_flags
 #
-#   This function will calculate the suggested value of
-#   target_CUDA_architectures for CMake's:
+# :Parameters: * :envvar:`CUDA_SUGGESTED_ARCHES` - List of virtual architectures to compile
+#              * :envvar:`CUDA_SUGGESTED_CODES` - Matching list of real architectures to compile
+#              * [:envvar:`CUDA_SUGGESTED_PTX`] - Optional list of PTX architectures to compile
+# :Output: *stdout* - echoes out the value of the target_CUDA_architectures
 #
-#     FindCUDA.cmake:select_compute_arch.cmake:CUDA_SELECT_NVCC_ARCH_FLAGS
+# Generate ``CUDA`` flags for CMake
 #
-#   You will need to find where this is used and set the variable accordingly.
-# PARAMETERS
-#   CUDA_SUGGESTED_ARCHES - List of virtual architectures to compile
-#   CUDA_SUGGESTED_CODES - Matching list of real architectures to compile
-#   [CUDA_SUGGESTED_PTX] - Optional list of PTX architectures to compile
-# OUTPUT
-#   stdout - echoes out the value of the target_CUDA_architectures
-# EXAMPLE
-#   For example, PyTorch's CMake contains:
-#     CUDA_SELECT_NVCC_ARCH_FLAGS(NVCC_FLAGS_EXTRA $ENV{TORCH_CUDA_ARCH_LIST})
-#   Setting the environment variable TORCH_CUDA_ARCH_LIST to the output of
-#   cmake_cuda_flags will result in using the desired CUDA architecture and
-#   code versions.
+# Modern CMake installs include a FindCUDA.cmake script which calls the select_compute_arch.cmake script (https://goo.gl/uZvAjR). It uses a limited version of the tables that :file:`cuda_info.bsh` uses and is prone to being out of date.
 #
-#   To add the CUDA_FORWARD_PTX, run:
-#     CUDA_SUGGESTED_PTX+=(${CUDA_FORWARD_PTX})
-#   before calling cmake_cuda_flags
-# AUTHOR
-#   Andy Neff
-##***
+# This function will calculate the suggested value of target_CUDA_architectures for CMake's:
+#
+#   FindCUDA.cmake:select_compute_arch.cmake:CUDA_SELECT_NVCC_ARCH_FLAGS
+#
+# You will need to find where this is used and set the variable accordingly.
+#
+# .. rubric:: Example
+#
+# For example, PyTorch's CMake contains:
+#
+# .. code-block:: bash
+#
+#   CUDA_SELECT_NVCC_ARCH_FLAGS(NVCC_FLAGS_EXTRA $ENV{TORCH_CUDA_ARCH_LIST})
+#
+# Setting the environment variable ``TORCH_CUDA_ARCH_LIST`` to the output of :func:`cmake_cuda_flags` will result in using the desired ``CUDA`` architecture and code versions.
+#
+# To add the :envvar:`CUDA_FORWARD_PTX`, run:
+#
+# .. code-block:: bash
+#
+#   CUDA_SUGGESTED_PTX+=(${CUDA_FORWARD_PTX})
+#
+# before calling :func:`cmake_cuda_flags`
+#**
 function cmake_cuda_flags()
 {
   local cmake=()
