@@ -42,7 +42,7 @@ set -eu
 # .. seealso::
 #
 #   :envvar:`PROJECT_DIR`, :envvar:`PROJECT_NAME`, :envvar:`PROJECT_PREFIX`
-#   :envvar:`REPO_NAME`, :envvar:`JUSTFILE`, :envvar:`WRAPFILE`, :envvar:`SETUPFILE`
+#   :envvar:`REPO_NAME`, :envvar:`JUSTFILE`, :envvar:`SETUPFILE`
 #   :envvar:`VSI_DIR`
 #**
 
@@ -157,7 +157,6 @@ while (($#)); do
       echo "  --prefix PREFIX - Set variable prefix to use"
       echo "  --justfile FILE - Set Justfile name"
       echo "  --setupfile FILE - Set setup.env filename"
-      echo "  --wrapfile FILE - Set wrap filename"
       echo "  --vsi-dir DIR - VSI common submodule dir"
       echo "  --[no-]use-vsi - Enable/[disable] using the vsi submodule"
       echo "  --[no-]use-docker - Enable/[disable] setting up docker"
@@ -193,10 +192,6 @@ while (($#)); do
       ;;
     --setupfile)
       SETUPFILE="$1"
-      shift 1
-      ;;
-    --wrapfile)
-      WRAPFILE="$1"
       shift 1
       ;;
     --vsi-dir)
@@ -379,7 +374,7 @@ ask_question "Do you want to include the vsi_common submodule?" USE_VSI_COMMON n
 # few environment variables. This is meant to be as unobtrusive as possible.
 #
 # This file needs to be sourced every time a new terminal session is opened.
-# The only time the setup script is not needed is when calling the :envvar:`WRAPFILE`.
+# The only time the setup script is not needed is when using :command:`juste`.
 #
 # The value can be customized when prompted by :file:`new_just`. The default value is
 # ``setup.env``. The question can be skipped by setting the environment variable
@@ -387,7 +382,7 @@ ask_question "Do you want to include the vsi_common submodule?" USE_VSI_COMMON n
 #
 # .. seealso::
 #
-#   :envvar:`WRAPFILE`
+#   :command:`juste`
 #**
 
 if [ "${USE_VSI_COMMON}" = "1" ]; then
@@ -401,34 +396,6 @@ if [ "${USE_VSI_COMMON}" = "1" ]; then
     SETUPFILE="${default}"
   else
     SETUPFILE="$(basename "${SETUPFILE}")"
-  fi
-
-#**
-# .. envvar:: WRAPFILE
-#
-# The wrap filename that runs any command in the just environment
-#
-# The wrap file can be used to run any command in the full just environment or
-# to enter a bash session in this environment.
-#
-# The value can be customized when prompted by :file:`new_just`. The default value is
-# wrap. The question can be skipped by setting the environment variable
-# :envvar:`WRAPFILE` to the desired value.
-#
-# .. seealso::
-#
-#   :file:`just_env`
-#**
-  default=wrap
-  if [ "${USE_DEFAULTS-}" == "1" ]; then
-    : ${WRAPFILE="${default}"}
-  fi
-
-  : ${WRAPFILE="$(read -r -p "Wrap script file name (wrap) " x; echo "$x")"}
-  if [ "${WRAPFILE}" == "" ]; then
-    WRAPFILE="${default}"
-  else
-    WRAPFILE="$(basename "${WRAPFILE}")"
   fi
 fi
 
@@ -545,7 +512,6 @@ printf "%-40s | %-40s\n" "Project prefix" "${PROJECT_PREFIX}"
 printf "%-40s | %-40s\n" "Just file" "${JUSTFILE}"
 if [ "${USE_VSI_COMMON}" = "1" ]; then
   printf "%-40s | %-40s\n" "Environment setup script" "${SETUPFILE}"
-  printf "%-40s | %-40s\n" "Wrap script" "${WRAPFILE}"
 fi
 
 printf "%-40s | %-40s\n" "Use docker" "${USE_DOCKER}"
@@ -586,10 +552,6 @@ else
 fi
 
 
-############
-### wrap ###
-############
-
 # Helper to quote complicated names, adds '' for you, does not need extra
 # quotes added to file
 function quote()
@@ -605,18 +567,6 @@ function quote_def()
 }
 
 if [ "${USE_VSI_COMMON}" = "1" ]; then
-  if [ ! -e "${WRAPFILE}" ]; then
-    echo   '#!/usr/bin/env bash' > "${WRAPFILE}"
-    if [ "${JUSTFILE}" != "Justfile" ]; then
-      echo "export JUSTFILE=$(quote "${JUSTFILE}")" >> "${WRAPFILE}"
-    fi
-    uwecho ': "$(\dirname "${BASH_SOURCE[0]}")"
-            source "${VSI_COMMON_DIR:-"${_}"/'"$(quote_def "${RELATIVE_PATH}")"'}/linux/Just_wrap" "${_}"/'"$(quote "${PROJECT_NAME}")"'.env ${@+"${@}"}' >> "${WRAPFILE}"
-
-  else
-    echo "${WRAPFILE} exists, skipping..."
-  fi
-
   #################
   ### setup.env ###
   #################
@@ -739,13 +689,8 @@ if [ ! -e "${JUSTFILE}" ]; then
             if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then # If being sourced
               set -euE
             fi
-            ' > "${JUSTFILE}"
-    if [ "${USE_VSI_COMMON}" = "1" ]; then
-      echo 'source "$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)/"'"$(quote "${WRAPFILE}")" >> "${JUSTFILE}"
-    else
-      echo 'source "${VSI_COMMON_DIR}/linux/just_env" "$(dirname "${BASH_SOURCE[0]}")"/'"${PROJECT_NAME}"'.env' >> "${JUSTFILE}"
-    fi
-    uwecho 'cd "${'"${PROJECT_PREFIX}"'_CWD}"
+            source "${VSI_COMMON_DIR}/linux/just_env" "$(dirname "${BASH_SOURCE[0]}")"/'"${PROJECT_NAME}"'.env
+            cd "${'"${PROJECT_PREFIX}"'_CWD}"
 
             # Plugins
             source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
@@ -830,13 +775,8 @@ if [ ! -e "${JUSTFILE}" ]; then
               set -euE
             fi
 
-            ' > "${JUSTFILE}"
-    if [ "${USE_VSI_COMMON}" = "1" ]; then
-      echo 'source "$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)/'"${WRAPFILE}"'"' >> "${JUSTFILE}"
-    else
-      echo 'source "${VSI_COMMON_DIR}/linux/just_env" "$(dirname "${BASH_SOURCE[0]}")"/'"${PROJECT_NAME}"'.env' >> "${JUSTFILE}"
-    fi
-    uwecho 'cd "${'"${PROJECT_PREFIX}"'_CWD}"
+            source "${VSI_COMMON_DIR}/linux/just_env" "$(dirname "${BASH_SOURCE[0]}")"/'"${PROJECT_NAME}"'.env
+            cd "${'"${PROJECT_PREFIX}"'_CWD}"
 
             function caseify()
             {
@@ -1194,7 +1134,6 @@ if [ "${USE_DOCKER}" = "1" ]; then
             *.bsh eol=lf
             *.py eol=lf
             *.env eol=lf
-            wrap eol=lf
             .justplugins eol=lf' > .gitattributes
   fi
 else
@@ -1212,10 +1151,6 @@ fi
 
 # Add executable permissions
 chmod 755 "${JUSTFILE}"
-
-if [ "${USE_VSI_COMMON}" = "1" ]; then
-  chmod 755 "${WRAPFILE}"
-fi
 
 # Add .gitignore exceptions
 if ! grep -q local.env .gitignore 2>/dev/null; then
@@ -1244,7 +1179,7 @@ if [ "${USE_VSI_COMMON}" = "1" ]; then
           pushd $(quote "${RELATIVE_PATH}")
           git remote set-url origin --push git@github.com:visionsystemsinc/vsi_common.git
           popd" >&3
-  echo   "git add $(quote "${SETUPFILE}") $(quote "${WRAPFILE}") .gitmodules" >&3
+  echo   "git add $(quote "${SETUPFILE}") .gitmodules" >&3
 fi
 
 echo   "git add .gitignore README.md $(quote "${JUSTFILE}") $(quote "${PROJECT_NAME}").env" >&3
