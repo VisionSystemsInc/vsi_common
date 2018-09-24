@@ -23,6 +23,10 @@ function caseify()
       "${VSI_COMMON_DIR}/tests/run_tests.bsh" ${@+"${@}"}
       extra_args+=$#
       ;;
+    --test) # Run only this test
+      export TESTLIB_RUN_SINGLE_TEST="${1}"
+      extra_args+=1
+      ;;
     test_int) # Run integration tests
       TESTS_DIR=int "${VSI_COMMON_DIR}/tests/run_tests.bsh" ${@+"${@}"}
       extra_args+=$#
