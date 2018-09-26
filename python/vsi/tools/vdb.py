@@ -25,7 +25,7 @@ class Tracer(IPython.core.debugger.Tracer):
       super(Tracer, self).__init__(colors)
     except ValueError:
       #This is JUST IN CASE invalid color is specified, should not be relied on
-      super(Tracer, self).__init__('Linux') 
+      super(Tracer, self).__init__('Linux')
     self.debugger = Vdb(skipInput, self.debugger.color_scheme_table.active_scheme_name, *args, **kwargs)
     #This may be dirty, but is less likely to miss features in the future
 
@@ -43,7 +43,7 @@ class Vdb(IPython.core.debugger.Pdb):
       self.onecmd('c')#continue, effectively ignoring the first input
     else:
       IPython.core.debugger.Pdb.interaction(self, frame, None)
-    
+
   #everything needed from set_trace, minus sys.settrace
   def _pre_settrace(self, frame=None):
     if frame is None:
@@ -73,10 +73,10 @@ def runpdb(lines, debugger=None):
   ''' Executes a list of vdb command
 
       Arguments:
-      lines - list/tuple/etc... of strings to be executed as if you were 
-              already in the debugger. Useful for setting breakpoints 
+      lines - list/tuple/etc... of strings to be executed as if you were
+              already in the debugger. Useful for setting breakpoints
               programatically.
-              
+
       Returns the debugger object, since this can only be executed on the
       debugger object, you can optionally pass it in as the second argument
       if you want to call rubpdb multiple times. If you do not, a new
@@ -90,14 +90,14 @@ def runpdb(lines, debugger=None):
 
   if not debugger:
     debugger = Tracer().debugger
-    
+
   debugger._pre_settrace(frame=sys._getframe().f_back)
-  
+
   for line in lines:
     debugger.onecmd(line)
-  
+
   debugger._settrace()
-  
+
   return debugger
 
 def get_colors(colors=None):
@@ -116,13 +116,13 @@ def find_frame(frame, depth=0):
   for d in range(depth):
     if frame.f_back is None:
       break
-    frame = frame.f_back  
+    frame = frame.f_back
   return frame
-  
+
 def set_trace(frame=None, colors=None, depth=None):
   ''' Helper function, like pdb.set_trace
 
-      set colors = "NoColor", "Linux", or "LightBG"  ''' 
+      set colors = "NoColor", "Linux", or "LightBG"  '''
   colors=get_colors(colors)
   frame = find_frame(frame, depth if depth is not None else 2 if frame is None else 0)
   Tracer(skipInput=False, colors=colors).debugger.set_trace(frame)
@@ -141,12 +141,12 @@ def post_mortem(tb=None, colors=None):
   tracer = Tracer(skipInput=False, colors=colors)
   tracer.debugger.reset()
   tracer.debugger.interaction(None, tb)
- 
+
 def set_attach(db_cmd=None):
-  ''' Set up this process to be "debugger attachable" 
-  
-      Just like gdb can attach to a running process, if you execute this on a 
-      process, now you can "attach" to the running python using the attach 
+  ''' Set up this process to be "debugger attachable"
+
+      Just like gdb can attach to a running process, if you execute this on a
+      process, now you can "attach" to the running python using the attach
       command
 
       This works pretty well, and allows you to resume the code UNLESS you are
@@ -159,11 +159,11 @@ def set_attach(db_cmd=None):
     thread.daemon = True
     thread.start()
   #print(os.getpid())
-  
+
 def attach(pid):
   ''' Trigger a python pid that's been already run set_attach
-  
-      This is the second part of attaching to a python process. Once 
+
+      This is the second part of attaching to a python process. Once
       set_attach is run, on another prompt running attach will trigger
       the interrupt thing attaching or triggering whatever db_cmd was'''
   if os.name == 'nt':
@@ -179,7 +179,7 @@ def pipe_server():
     pipe = Pipe('vdb_%d' % os.getpid(), server=True)
     knock = pipe.read(3)
     if knock == 'vsi':
-      os.kill(0, signal.CTRL_C_EVENT)      
+      os.kill(0, signal.CTRL_C_EVENT)
       #ctypes.windll.kernel32.GenerateConsoleCtrlEvent(0, os.getpid())
     pipe.disconnect()
     pipe.close()
@@ -195,7 +195,7 @@ def handle_db(sig, frame, db_cmd=None):
 
 class PostMortemHook(object):
   original_excepthook = None
-  
+
   @staticmethod
   def dbclear_if_error():
     if PostMortemHook.original_excepthook != None:
@@ -212,11 +212,11 @@ class PostMortemHook(object):
   def set_post_mortem(interactive=False):
     ''' Overrite this function for each debugger '''
     raise Exception('Purely virtual function')
-    
+
 class VdbPostMortemHook(PostMortemHook):
   @staticmethod
   def set_post_mortem(interactive=False, colors=None):
-    sys.excepthook = partial(dbstop_exception_hook, 
+    sys.excepthook = partial(dbstop_exception_hook,
                              post_mortem=partial(post_mortem, colors=colors),
                              interactive=interactive)
 
@@ -224,14 +224,14 @@ def dbclear_if_error():
   VdbPostMortemHook.dbclear_if_error()
 
 def dbstop_if_error(interactive=False, colors=None):
-  ''' Run this to auto start the vdb debugger on an exception. 
+  ''' Run this to auto start the vdb debugger on an exception.
 
       Optional arguments:
       interactive - Default False. dbstop if console is interactive. You are
                     still able to print and run commands in the debugger, just
                     listing code declared interactively will not work. Does
                     not appear to work in ipython. Use %debug instead. This
-                    will not help in the multithread case in ipython... 
+                    will not help in the multithread case in ipython...
                     ipython does too much, just don't try that. Unless
                     someone adds a way to override ipython's override.
       colors - Default None. Set ipython debugger color scheme'''
@@ -251,7 +251,7 @@ class DbStopIfErrorGeneric(object):
 
   def __exit__(self, exc_type, exc_value, tb):
     if tb is not None:
-      print 'Exception detected!!!'
+      print('Exception detected!!!')
       pm = self.get_post_mortem()
       pm(tb, *self.args, **self.kwargs)
       if self.ignore_exception:
@@ -276,11 +276,11 @@ class DbStopIfError(DbStopIfErrorGeneric):
   ''' With statement for local dbstop situations '''
   def __init__(self, threading_support=False, *args, **kwargs):
     ''' Optional arguments:
-        threading_support - Support the threading module and patch a bug 
+        threading_support - Support the threading module and patch a bug
                             preventing catching exceptions in other threads.
                             See add_threading_excepthook for more info. Only
                             neccesary if you want to catch exceptions not on
-                            the main thread. This is only patched after 
+                            the main thread. This is only patched after
                             __enter__ unpatched at __exit__
 
         All other args from db_stop_if_error()'''
@@ -316,7 +316,7 @@ class DbStopIfError(DbStopIfErrorGeneric):
     return post_mortem
 
 
-def dbstop_exception_hook(type, value, tb, 
+def dbstop_exception_hook(type, value, tb,
                           post_mortem=partial(post_mortem, colors=None),
                           interactive=False):
     if not interactive and (hasattr(sys, 'ps1') or not sys.stderr.isatty()):
@@ -330,10 +330,10 @@ def dbstop_exception_hook(type, value, tb,
       post_mortem(tb)
 
 def break_pool_worker():
-  ''' Setup the ThreadPool to break when an exception occurs (so that it can 
+  ''' Setup the ThreadPool to break when an exception occurs (so that it can
       be debugged)
-  
-      The ThreadPool class (and the Pool class too, but not useful here) 
+
+      The ThreadPool class (and the Pool class too, but not useful here)
       always catches any exception and raises it in the main thread. This
       is nice for normal behavior, but for debugging, it makes it impossible
       to do post mortem debugging. In order to automatically attach a post
@@ -341,11 +341,11 @@ def break_pool_worker():
       thrown WILL BREAK the pool call, and not allow your main function to
       continue, however you can now attach a debugger post_mortem. Useful
       with dbstop_if_error
-      
+
       Threading has a "bug" where exceptions are also automatically caught.
       http://bugs.python.org/issue1230540
       In order to make THIS work, call add_threading_excepthook too
-      
+
       Example:
       >>> from multiprocessing.pool import ThreadPool
       >>> import vsi.tools.vdb as vdb
@@ -360,7 +360,7 @@ def break_pool_worker():
       >>> tp.map(a, range(10))
       '''
   import multiprocessing.pool
-  
+
   def worker(inqueue, outqueue, initializer=None, initargs=(), maxtasks=None):
     assert maxtasks is None or (type(maxtasks) == int and maxtasks > 0)
     put = outqueue.put
@@ -387,7 +387,7 @@ def break_pool_worker():
       job, i, func, args, kwds = task
 #      try:
       result = (True, func(*args, **kwds))
-#      except Exception, e:
+#      except Exception as e:
 #        result = (False, e)
       try:
         put((job, i, result))
@@ -404,7 +404,7 @@ def add_threading_excepthook():
   Workaround for sys.excepthook thread bug
   From
   http://spyced.blogspot.com/2007/06/workaround-for-sysexcepthook-bug.html
- 
+
   (https://sourceforge.net/tracker/?func=detail&atid=105470&aid=1230540&group_id=5470).
   Call once from __main__ before creating any threads.
   If using psyco, call psyco.cannotcompile(threading.Thread.run)
@@ -425,7 +425,7 @@ def add_threading_excepthook():
         sys.excepthook(*sys.exc_info())
     self.run = run_with_except_hook
   threading.Thread.__init__ = init
-      
+
 def main():
   import argparse
   parser = argparse.ArgumentParser()
@@ -442,10 +442,10 @@ def main():
   parser.add_argument('--port', default=4444, type=int,
                       help='Set port for rpdb to attach on')
   parser.add_argument('--password', '--pw', default='vsi')
-  parser.add_argument('args', nargs='*', 
+  parser.add_argument('args', nargs='*',
                       help='Command to run with vdb attached. Not implemented yet')
   args = parser.parse_args()
-  
+
   if args.pid:
     #attach to a pid
     if args.rpdb2 or args.winpdb:

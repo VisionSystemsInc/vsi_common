@@ -4,10 +4,6 @@ if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then #If being sourced
   set -euE
 fi
 
-JUST_PROJECT_PREFIX=VSI_COMMON
-export VSI_COMMON_UID=$(id -u)
-export VSI_COMMON_GIDS=$(id -g)
-
 source "$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)/linux/just_env" "$(dirname "${BASH_SOURCE[0]}")"/vsi_common.env
 
 source "${VSI_COMMON_DIR}/linux/just_docker_functions.bsh"
@@ -42,8 +38,37 @@ function caseify()
       )
       extra_args+=$#
       ;;
-    build_wine) # Build wine image
+    test_python) # Run python unit tests
+      # python2 -B -m unittest discover -s "${VSI_COMMON_DIR}/python/vsi/test"
+      python3 -B -m unittest discover -s "${VSI_COMMON_DIR}/python/vsi/test"
+      ;;
+    build_docker) # Build docker image
       Docker-compose build
+      (justify clean venv)
+      (justify _post_build_docker)
+      ;;
+    clean_venv) # Delete the virtual environment volume. The next container \
+                # to use this volume will automatically copy the contents from \
+                # the image.
+      if docker volume inspect "${COMPOSE_PROJECT_NAME}_venv2" &> /dev/null; then
+        Docker volume rm "${COMPOSE_PROJECT_NAME}_venv2"
+      else
+        echo "${COMPOSE_PROJECT_NAME}_venv2 already removed" >&2
+      fi
+      if docker volume inspect "${COMPOSE_PROJECT_NAME}_venv3" &> /dev/null; then
+        Docker volume rm "${COMPOSE_PROJECT_NAME}_venv3"
+      else
+        echo "${COMPOSE_PROJECT_NAME}_venv3 already removed" >&2
+      fi
+      ;;
+
+    _post_build_docker)
+      image_name=$(docker create ${VSI_COMMON_DOCKER_REPO}:python2_test)
+      docker cp ${image_name}:/venv/Pipfile2.lock "${VSI_COMMON_DIR}/docker/tests/Pipfile2.lock"
+      docker rm ${image_name}
+      image_name=$(docker create ${VSI_COMMON_DOCKER_REPO}:python3_test)
+      docker cp ${image_name}:/venv/Pipfile3.lock "${VSI_COMMON_DIR}/docker/tests/Pipfile3.lock"
+      docker rm ${image_name}
       ;;
     run_wine) # Start a wine bash window
       Docker-compose run -e USER_ID="$(id -u)" wine ${@+"${@}"} || :

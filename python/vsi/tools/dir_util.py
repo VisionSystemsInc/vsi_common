@@ -33,15 +33,15 @@ def is_subdir(path, base_dir):
 def mkdtemp(*args, **kwargs):
   ''' Version of tempfile.mkdtemp that is r/w by uid and gid'''
   tempdir = mkdtemp_orig(*args, **kwargs)
-  os.chmod(tempdir, 0770)
+  os.chmod(tempdir, 0o770)
   return tempdir
 
 class Chdir(object):
-  ''' Simple helper function to change dir and guarantee you get back to your 
-      original directory 
-      
+  ''' Simple helper function to change dir and guarantee you get back to your
+      original directory
+
       Example:
-      
+
       >>> import os
       >>> import tempfile
       >>> from vsi.tools.dir_util import Chdir
@@ -57,10 +57,10 @@ class Chdir(object):
       '''
   def __init__(self, dir, create=False, error_on_exit=False):
     ''' Create Chdir object
-    
+
         Required arguments
         dir - the directory you want to change directory to
-        
+
         Optional arguments
         create - Create the directory if it doesn't exist (else os error 2 
                  will occur) Default: False
@@ -73,20 +73,20 @@ class Chdir(object):
     self.oldDir = None
     self.create = create
     self.error_on_exit = error_on_exit
-  
+
   def __enter__(self):
     self.oldDir = os.getcwd()
     if self.create and not os.path.exists(self.dir):
       os.makedirs(self.dir)
     os.chdir(self.dir)
-  
+
   def __exit__(self, exc_type, exc_value, traceback):
     try:
       os.chdir(self.oldDir)
     except OSError as osError:
       if osError.errno == 2 and self.error_on_exit:
-        print "Previous directory does not exist anymore.\nCannot return to " \
-              "%s" % self.oldDir
+        print("Previous directory does not exist anymore.\nCannot return to {}"
+              .format(self.oldDir))
         #Return you to / or the c:\ or d:\, etc... If THIS errors, something
         #is seriously WRONG
         os.chdir(os.path.abspath(os.sep))
@@ -94,13 +94,13 @@ class Chdir(object):
         raise(osError)
 
 class TempDir(object):
-  ''' Create and clean up a temp directory 
-  
+  ''' Create and clean up a temp directory
+
       The most common usage for this would be to create a random directory
       each time. The mkdtemp flag was added to facilitate this.
-      
+
       Example:
-      
+
       >>> from vsi.tools.dir_util import TempDir
       >>> import tempfile
       >>> from glob import glob
@@ -110,13 +110,13 @@ class TempDir(object):
       >>> print(glob(tempDir))
   '''
 
-  def __init__(self, dir=None, cd=False, delete=True, mkdtemp=False, 
+  def __init__(self, dir=None, cd=False, delete=True, mkdtemp=False,
                delete_if_not_create=False, *args, **kwargs):
     ''' Create a temp dir object
 
         Arguments
 
-        dir - Base dir must exist. Default is None. None will only work if 
+        dir - Base dir must exist. Default is None. None will only work if
               mkdtemp is true.
         cd - Change into the temp dir (and change back). Default: false
         mkdtemp - Call mkdtemp in dir to create a temp dir. Default: false
@@ -126,30 +126,30 @@ class TempDir(object):
                   where a directory may be inadvertently deleted if you
                   accidentally tell it to be.
         delete - Delete on exit. Default: true
-        delete_if_not_create - Default: false. Delete the directory "dir" 
-                               even if it was not created by TempDir. ONLY 
+        delete_if_not_create - Default: false. Delete the directory "dir"
+                               even if it was not created by TempDir. ONLY
                                TURN THIS ON when you are absolutely sure you
-                               want this directory deleted. Make sure the 
-                               input dir is something you want deleted, or 
-                               else just don't use this argument! For example, 
+                               want this directory deleted. Make sure the
+                               input dir is something you want deleted, or
+                               else just don't use this argument! For example,
                                in an unsanitized case the tempdir could be / or
                                something like /home/username. Then / or the
-                               entire home directory would be deleted! That 
-                               has to be bad, right? 
+                               entire home directory would be deleted! That
+                               has to be bad, right?
         *args/**kwargs - Passed on to Chdir (mostly for error_on_exit)'''
 
     self.base_dir= dir
-    
+
     self.mkdtemp = mkdtemp
 
     if self.mkdtemp and not self.base_dir:
       self.base_dir = gettempdir()
 
     self.cd = Chdir(self.base_dir, *args, **kwargs) if cd else None
-    
+
     self.delete = delete
     self.delete_if_not_create=delete_if_not_create
-    
+
     self.created_dir = False
 
   def __enter__(self):
@@ -165,7 +165,7 @@ class TempDir(object):
       #These two are separate variables incase with is called twice on the
       #same instance... It COULD happen
       self.dir = self.base_dir
-    
+
     if not os.path.exists(self.dir):
       os.makedirs(self.dir)
       self.created_dir = True
@@ -240,7 +240,7 @@ def copytree(src, dst, symlinks=False, ignore=None):
     if not os.path.exists(dst):
       os.makedirs(dst)
     else:
-      os.chmod(dst, 0777)
+      os.chmod(dst, 0o777)
 
     errors = []
     for name in names:
@@ -265,20 +265,20 @@ def copytree(src, dst, symlinks=False, ignore=None):
                 copy2(srcname, dstname)
         # catch the Error from the recursive copytree so that we can
         # continue with other files
-        except Error, err:
+        except Error as err:
             errors.extend(err.args[0])
-        except EnvironmentError, why:
+        except EnvironmentError as why:
             errors.append((srcname, dstname, str(why)))
     try:
         copystat(src, dst)
-    except OSError, why:
+    except OSError as why:
         if WindowsError is not None and isinstance(why, WindowsError):
             # Copying file access times may fail on Windows
             pass
         else:
             errors.append((src, dst, str(why)))
     if errors:
-        raise Error, errors
+        raise Error(errors)
 
 def root_dir(directory):
   ''' OS independent way of getting the root directory of a directory
@@ -293,7 +293,7 @@ def root_dir(directory):
   return os.path.splitdrive(directory)[0] + os.sep
 
 def samefile(path1, path2, normpath=True):
-  ''' OS independent version of os.path.samefile 
+  ''' OS independent version of os.path.samefile
 
       Optional normpath=True. In posix cases when you want symlinks to be
       followed instead of normalized out, this would be useful to set to false.
@@ -314,7 +314,7 @@ def samefile(path1, path2, normpath=True):
     return os.path.realpath(path1) == os.path.realpath(path2)
 
 def prune_dir(directory, top_dir=None):
-  ''' Remove directory and ancestor directories if they are empty 
+  ''' Remove directory and ancestor directories if they are empty
 
       Optional argument top_dir, prevents pruning below that directory'''
 
@@ -331,10 +331,10 @@ def prune_dir(directory, top_dir=None):
   assert os.path.isdir(top_dir)
   assert is_subdir(directory, top_dir)
 
-  for x in range(100): 
+  for x in range(100):
   #prevent infinite loop, not that I think that's possible
     if samefile(directory, top_dir):
-      #If reached top dir, stop! 
+      #If reached top dir, stop!
       break
     try:
       os.rmdir(directory)

@@ -1,7 +1,12 @@
 """Filename globbing utility with optional case sensitive override."""
 
-from glob import _unicode
-from fnmatch import translate, _MAXCACHE
+try:    # Python 2
+  from glob import _unicode
+except: # Python 3
+  _unicode=str
+  unicode=str
+
+from fnmatch import translate
 import os,posixpath,ntpath
 import sys
 import re
@@ -10,7 +15,7 @@ __all__ = ["glob", "iglob"]
 
 def path_split(p):
   ''' Well... it turns out that os.path.split is WRONG for both posix and nt.
-  
+
       When you execute os.path.split('.') You SHOULD get ('.','') BUT... due
       to the simplicity of os.path.split, it only looks for /, and it fails
       to make an exception for this, which breaks the recursive logic of glob.
@@ -37,8 +42,8 @@ def glob(pathname, case=None):
   The pattern may contain simple shell-style wildcards a la
   fnmatch. However, unlike fnmatch, filenames starting with a
   dot are special cases that are not matched by '*' and '?'
-  patterns.  
-  
+  patterns.
+
   Set case to true to force case sensitive, false to force
   case insensitive or None(default) to run glob natively
 
@@ -47,7 +52,7 @@ def glob(pathname, case=None):
 
 def checkcase(case=None):
   ''' Determing which case mode to use
-  
+
       If None(default) then uses which ever mode is native to the OS
       If True, forces case sensitive mode
       If False, forces case insensitive mode '''
@@ -59,23 +64,23 @@ def checkcase(case=None):
 
 def iglob(pathname, case=None):
   """Return an iterator which yields the paths matching a pathname pattern.
-  
+
   The pattern may contain simple shell-style wildcards a la
   fnmatch. However, unlike fnmatch, filenames starting with a
   dot are special cases that are not matched by '*' and '?'
   patterns.
-  
+
   Set case to true to force case sensitive, false to force
   case insensitive or None(default) to run glob natively
   """
 
   dirname, basename = path_split(pathname)
-  
+
   walker = os.walk(dirname)
 
   case = checkcase(case)
 
-  # The only REAL use I have for these lines are to make sure iglob('') 
+  # The only REAL use I have for these lines are to make sure iglob('')
   #returns EMPTY. Other than that, this is repeat of logic below
   if not dirname:
     for name in glob1(os.curdir, basename):
@@ -94,7 +99,6 @@ def iglob(pathname, case=None):
     glob_in_dir = glob0
   else:
     glob_in_dir = glob1
-    
 
   for dirname in dirs:
     for name in glob_in_dir(dirname, basename, case):
@@ -134,11 +138,11 @@ _nocasecache = {}
 def fnmatch_filter(names, pat, casesensitive):
   """Return the subset of the list NAMES that match PAT"""
   result=[]
-  
+
   if casesensitive:
     if not pat in _casecache:
       res = translate(pat)
-      if len(_casecache) >= _MAXCACHE:
+      if len(_casecache) >= 100:
         _casecache.clear()
       _casecache[pat] = re.compile(res)
     match=_casecache[pat].match
@@ -149,7 +153,7 @@ def fnmatch_filter(names, pat, casesensitive):
   else:
     if not pat in _nocasecache:
       res = translate(pat)
-      if len(_nocasecache) >= _MAXCACHE:
+      if len(_nocasecache) >= 100:
         _nocasecache.clear()
       _nocasecache[pat] = re.compile(res, re.IGNORECASE)
     match=_nocasecache[pat].match

@@ -1,8 +1,8 @@
 '''
 @created: Nov, 2014
 @author: srichardson
-Script to generate a scene file given corner coordinates (lat, lon, height), 
-GSD, and number of refinements. This will generate a scene with blocks that 
+Script to generate a scene file given corner coordinates (lat, lon, height),
+GSD, and number of refinements. This will generate a scene with blocks that
 will, in the wrost case, fit within the identified GPU's memory.
 
 terminology:
@@ -21,6 +21,7 @@ import sys,os
 import re
 from subprocess import Popen, PIPE
 import math
+from __future__ import print_function
 
 from .generate_scene_xml import generate_scene_xml
 
@@ -36,33 +37,33 @@ from vsi.tools.redirect import PopenRedirect, Redirect
 
 def main():
   parser = argparse.ArgumentParser()
-  parser.add_argument('output_file', nargs='?', type=argparse.FileType('w'), 
+  parser.add_argument('output_file', nargs='?', type=argparse.FileType('w'),
       default=sys.stdout,
       help="Filename to write scene.xml to. Default is stdout")
-  parser.add_argument('-a', '--appearance', nargs='+', 
+  parser.add_argument('-a', '--appearance', nargs='+',
       default=('boxm2_mog3_grey','boxm2_num_obs'),
       help="""List of appearance models to use. Default is boxm2_mog3_grey and
               boxm2_num_obs""")
-  parser.add_argument('-b', '--bins', default=1, type=int, 
+  parser.add_argument('-b', '--bins', default=1, type=int,
      help='Number of illumination bins')
   parser.add_argument('-m', '--modeldir', default='.', help='Model directory')
-  parser.add_argument('-d', '--device', default='gpu0', 
+  parser.add_argument('-d', '--device', default='gpu0',
       help='OpenCL Device to process on')
-  parser.add_argument('--mem', default=None, 
-      help="""Override the block size (in GB) instead of querying the GPU 
+  parser.add_argument('--mem', default=None,
+      help="""Override the block size (in GB) instead of querying the GPU
               device. Probably most useful for CPU OpenCL""")
-  parser.add_argument('-r', '--refine', default=3, choices=range(4), type=int, 
-      help="""Promise: a scene will be refined at most [0,3] times is fully 
-              refined after three subdivisions, although, because a cell must 
+  parser.add_argument('-r', '--refine', default=3, choices=range(4), type=int,
+      help="""Promise: a scene will be refined at most [0,3] times is fully
+              refined after three subdivisions, although, because a cell must
               pass a certain threshold to be eligible for subdivision,
               additional passes may continue to refine the scene """)
-  parser.add_argument('-s', '--gsd', default=1.0, type=float, 
-      help="""GSD in meters of a voxel (leaf cell in the octree) in a fully 
+  parser.add_argument('-s', '--gsd', default=1.0, type=float,
+      help="""GSD in meters of a voxel (leaf cell in the octree) in a fully
               refined world""")
   group = parser.add_mutually_exclusive_group(required=True)
   group.add_argument('--lla1', nargs=3, type=float, default=None,
-      help="""Longitude, Latitude, and Altitude in degrees and meters of the 
-              west,south,floor corner of the world. Note: NOT Latitude, 
+      help="""Longitude, Latitude, and Altitude in degrees and meters of the
+              west,south,floor corner of the world. Note: NOT Latitude,
               Longitude order""")
   group.add_argument('--lvcs1', nargs=3, type=float, default=None,
       help="""X Y Z in arbitrary units of the west,south,floor corner of the
@@ -70,23 +71,23 @@ def main():
   group = parser.add_mutually_exclusive_group(required=True)
   group.add_argument('--lla2', nargs=3, type=float, default=None,
       help="""Longitude, Latitude, and Altitude in degrees and meters of the
-              east,north,ceiling corner of the world. Note: NOT Latitude, 
+              east,north,ceiling corner of the world. Note: NOT Latitude,
               Longitude order""")
   group.add_argument('--lvcs2', nargs=3, type=float, default=None,
       help="""X Y Z in arbitrary units of the east,north,ceiling corner of the
               world""")
-  parser.add_argument('-o', '--origin', nargs=3, type=float, default=None, 
-      help="""Optional origin for scene file, default is to use lla Longitude, 
-              Latitude, and Altitude in degrees and meters  of the 
-              east,north,ceiling corner of the world. Note: NOT Latitude, 
+  parser.add_argument('-o', '--origin', nargs=3, type=float, default=None,
+      help="""Optional origin for scene file, default is to use lla Longitude,
+              Latitude, and Altitude in degrees and meters  of the
+              east,north,ceiling corner of the world. Note: NOT Latitude,
               Longitude order""")
   args = parser.parse_args()
-  
+
   #Force all output to stderr so that if the output_file is stdout, it's clean
   with Redirect(all=sys.stderr):
-    create_scene_xml(args.device, args.refine, args.gsd, lla1=args.lla1, 
+    create_scene_xml(args.device, args.refine, args.gsd, lla1=args.lla1,
                      lla2=args.lla2, lvcs1=args.lvcs1, lvcs2=args.lvcs2,
-                     origin=args.origin, output_file=args.output_file, 
+                     origin=args.origin, output_file=args.output_file,
                      model_dir=args.modeldir,
                      appearance_models=args.appearance, number_bins=args.bins,
                      block_size=args.mem)
@@ -94,9 +95,9 @@ def main():
 # INTERNAL ---------
 def gpu_memory(gpu_device):
   stdout = StringIO()
-  
+
   with PopenRedirect(stdout) as redirect:
-    pid = Popen([sys.executable, '-c', 'import boxm2_adaptor as b; b.ocl_info()'], 
+    pid = Popen([sys.executable, '-c', 'import boxm2_adaptor as b; b.ocl_info()'],
           stdout=redirect.stdout)
     pid.wait()
 
@@ -135,29 +136,29 @@ def gpu_memory(gpu_device):
             if gpu_mem_units == 'MBytes': n_bytes_gpu = float(gpu_mem)*1024**2
             break
         break
-  print >>sys.stderr, "GPU Device ID:", device_id
-  print >>sys.stderr, "GPU Name:", device_name
-  print >>sys.stderr, "GPU Memory (bytes):", n_bytes_gpu
+  print("GPU Device ID: {}".format(device_id), file=sys.stderr)
+  print("GPU Name: {}".format(device_name), file=sys.stderr)
+  print("GPU Memory (bytes): {}".format(n_bytes_gpu), file=sys.stderr)
 
   return n_bytes_gpu
 
 
-def create_scene_xml(gpu_device, refinements, gsd, 
+def create_scene_xml(gpu_device, refinements, gsd,
                      lla1=None, lla2=None, lvcs1=None, lvcs2=None,
-                     origin=None, output_file=sys.stdout, model_dir = ".", 
+                     origin=None, output_file=sys.stdout, model_dir = ".",
                      appearance_models=None, number_bins=1,
                      n_bytes_gpu=None):
   ''' Create a scene xml file based off of input parameters
 
       Required arguments:
-      gpu_device - The GPU device used for the block size calculation. The 
+      gpu_device - The GPU device used for the block size calculation. The
                    scene will be made to fit specifically on that gpu device
       refinements - Number of refinement passes. Max should be 3, even if you
                     refine more times than 3 times.
       gsd - The desired voxel size. This is in meters when using lla notation
 
       Mutually exclusive arguments:
-      lla1,lla2 - The min and max (in order) longitude, latitude, altitude 
+      lla1,lla2 - The min and max (in order) longitude, latitude, altitude
                   coordinates for bounding box of the scene. Will be expanded
                   to the next sublock
       lvcs1, lvcs2 - The min and max (in order) x, y, z coordinates for
@@ -166,17 +167,17 @@ def create_scene_xml(gpu_device, refinements, gsd,
 
       Optional arguments:
       origin - Origin of scene. Default: lla1 or (0,0,0) if lvcs1 is used
-      output_file - Output file object. Must support .write. 
+      output_file - Output file object. Must support .write.
                     Default: sys.stdout
       model_dir - The model dir used. is_model_local="true" is always used
                   Default: "."
-      appearance_models - Tuple of appearance models to be used. 
+      appearance_models - Tuple of appearance models to be used.
                           Default: ('boxm2_mog3_grey','boxm2_num_obs')
       number_bins - Sets the num_illumination_bins. Default: 1
       n_bytes_gpu - Optional override gpu_device memory size. Useful for CPU
                     OpenCL
       '''
-  
+
   #impose mutually exclusive constraint
   assert(lla1 is None or lvcs1 is None)
   assert(lla2 is None or lvcs2 is None)
@@ -195,11 +196,11 @@ def create_scene_xml(gpu_device, refinements, gsd,
   # transform the coordinate system from lat/lon/height to a lvcs (meters) with
   # the origin at one corner of the scene
   if lvcs1 is None:
-    lvcs1 = vpgl_adaptor.convert_to_local_coordinates2(lvcs, 
+    lvcs1 = vpgl_adaptor.convert_to_local_coordinates2(lvcs,
         lla1[1], lla1[0], lla1[2])
 
   if lvcs2 is None:
-    lvcs2 = vpgl_adaptor.convert_to_local_coordinates2(lvcs, 
+    lvcs2 = vpgl_adaptor.convert_to_local_coordinates2(lvcs,
         lla2[1], lla2[0], lla2[2])
 
   lvcs_size = map(lambda x,y:y-x, lvcs1, lvcs2)
@@ -211,8 +212,8 @@ def create_scene_xml(gpu_device, refinements, gsd,
       n_bytes_gpu, refinements, gsd, lvcs_size)
 
   generate_scene_xml(output_file, model_dir,
-      num_blocks=n_blocks, num_subblocks=n_subblocks, 
-      subblock_size=subblock_len, appearance_models=appearance_models, 
+      num_blocks=n_blocks, num_subblocks=n_subblocks,
+      subblock_size=subblock_len, appearance_models=appearance_models,
       num_bins=number_bins, max_level=refinements+1, lvcs_og=origin,
       local_og=lvcs1)
 
@@ -241,7 +242,7 @@ def subblocks_per_block(n_refinement_passes, n_bytes_gpu):
   return max_n_subblocks_xyz, max_bytes_block
 
 
-def calculate_block_parameters(n_bytes_gpu, n_refinement_passes, gsd, 
+def calculate_block_parameters(n_bytes_gpu, n_refinement_passes, gsd,
                                scene_length):
   (lx,ly,lz) = scene_length
 
@@ -262,7 +263,7 @@ def calculate_block_parameters(n_bytes_gpu, n_refinement_passes, gsd,
   n_blocks_z = int(math.ceil(lz / max_block_len))
 
   # clip the z height of the scene; compute the minimum number of sub-blocks
-  # (which will be distributed evenly among the z blocks) needed to cover the 
+  # (which will be distributed evenly among the z blocks) needed to cover the
   # scene
   # n_subblocks_z cannot get larger
   n_subblocks_z = int(math.ceil(lz / (n_blocks_z*subblock_len)))
@@ -292,33 +293,34 @@ def calculate_block_parameters(n_bytes_gpu, n_refinement_passes, gsd,
 
 
   # print summary of the scene.xml file
-  print >>sys.stderr, "nblocks_x:", n_blocks_x, " y:", n_blocks_y, \
-                      " z:", n_blocks_z
-  print >>sys.stderr, "block_len_x (m):", block_len_x, \
-                      " n_subblocks_x:", n_subblocks_x
-  print >>sys.stderr, "block_len_y (m):", block_len_y, \
-                      " n_subblocks_y:", n_subblocks_y
-  print >>sys.stderr, "block_len z (m):", block_len_z, \
-                      " n_subblocks_z:", n_subblocks_z
-  print >>sys.stderr, "subblock_len (m):", subblock_len, \
-                      " n_refinement_passes:", n_refinement_passes
-  print >>sys.stderr, "input scene length (m) x:", lx, " blocked x:", \
-        n_blocks_x*n_subblocks_x*subblock_len
-  print >>sys.stderr, "input scene length (m) y:", ly, " blocked y:", \
-        n_blocks_y*n_subblocks_y*subblock_len
-  print >>sys.stderr, "input scene length (m) z:", lz, " blocked z:", \
-        n_blocks_z*n_subblocks_z*subblock_len
+  print("nblocks_x:", n_blocks_x, " y:", n_blocks_y, \
+        " z:", n_blocks_z, file=sys.stderr)
+  print("block_len_x (m):", block_len_x, \
+        " n_subblocks_x:", n_subblocks_x, file=sys.stderr)
+  print("block_len_y (m):", block_len_y, \
+        " n_subblocks_y:", n_subblocks_y, file=sys.stderr)
+  print("block_len z (m):", block_len_z, \
+        " n_subblocks_z:", n_subblocks_z, file=sys.stderr)
+  print("subblock_len (m):", subblock_len, \
+        " n_refinement_passes:", n_refinement_passes, file=sys.stderr)
+  print("input scene length (m) x:", lx, " blocked x:", \
+        n_blocks_x*n_subblocks_x*subblock_len, file=sys.stderr)
+  print("input scene length (m) y:", ly, " blocked y:", \
+        n_blocks_y*n_subblocks_y*subblock_len, file=sys.stderr)
+  print("input scene length (m) z:", lz, " blocked z:", \
+        n_blocks_z*n_subblocks_z*subblock_len, file=sys.stderr)
 
   n_subb = n_subblocks_x*n_subblocks_y*n_subblocks_z
   #n_cells_subb = 1+8+64+512
   #n_bytes_subb = 36*n_cells_subb  # alpha:4, mog3/gauss:8, num_obs:8, aux:16
   n_bytes_block = n_subb*n_bytes_subb
-  print >>sys.stderr, "Memory requirements for a block at finest resolution:",\
-        n_bytes_block/1e6, "MB per block"
-  print >>sys.stderr, "  including bit tree:", \
-                      (n_bytes_block + n_subb*16)/1e6, "MB"
-  print >>sys.stderr, "  entire world (worst case):", \
-        (n_bytes_block + n_subb*16)*n_blocks_x*n_blocks_y*n_blocks_z/1e6, "MB"
+  print("Memory requirements for a block at finest resolution:",\
+        n_bytes_block/1e6, "MB per block", file=sys.stderr)
+  print("  including bit tree:",
+        (n_bytes_block + n_subb*16)/1e6, "MB", file=sys.stderr)
+  print("  entire world (worst case):",
+        (n_bytes_block + n_subb*16)*n_blocks_x*n_blocks_y*n_blocks_z/1e6, "MB",
+        file=sys.stderr)
 
   return (n_blocks_x, n_blocks_y, n_blocks_z), \
          (n_subblocks_x, n_subblocks_y, n_subblocks_z), subblock_len
