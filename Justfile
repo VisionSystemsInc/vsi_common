@@ -39,8 +39,9 @@ function caseify()
       extra_args+=$#
       ;;
     test_python) # Run python unit tests
-      # python2 -B -m unittest discover -s "${VSI_COMMON_DIR}/python/vsi/test"
-      python3 -B -m unittest discover -s "${VSI_COMMON_DIR}/python/vsi/test"
+      Docker-compose run python2
+      Docker-compose run python3
+      # python3 -B -m unittest discover -s "${VSI_COMMON_DIR}/python/vsi/test"
       ;;
     build_docker) # Build docker image
       Docker-compose build

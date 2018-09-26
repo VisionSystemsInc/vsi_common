@@ -64,7 +64,7 @@ class Vdb(IPython.core.debugger.Pdb):
 try:
   delattr(IPython.core.debugger.OldPdb, 'do_r')
   delattr(IPython.core.debugger.OldPdb, 'do_q')
-  delattr(IPython.core.debugger.Pdb, 'do_q'); #New quit in newer ipython
+  delattr(IPython.core.debugger.Pdb, 'do_q') #New quit in newer ipython
 except:
   pass
 #I HATE these! Too powerful and too easy to do by accident
@@ -79,7 +79,7 @@ def runpdb(lines, debugger=None):
 
       Returns the debugger object, since this can only be executed on the
       debugger object, you can optionally pass it in as the second argument
-      if you want to call rubpdb multiple times. If you do not, a new
+      if you want to call runpdb multiple times. If you do not, a new
       debugger object is created, and all the "memory" of the last debugger
       is lost, such as breakpoints, etc...'''
   try:

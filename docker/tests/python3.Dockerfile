@@ -38,7 +38,7 @@ ADD Pipfile3 Pipfile3.lock /vsi/docker/tests/
 
 RUN mkdir /opt/wx; \
     echo "from setuptools import setup, find_packages; setup(name='wxpython', version='4.0.3')" > /opt/wx/setup.py; \
-    pipenv install --pre --keep-outdated /opt/wx; \
+    pipenv install --keep-outdated /opt/wx; \
     cp /vsi/docker/tests/Pipfile3.lock /venv; \
     rm -rf /vsi/* /tmp/pip*
 
