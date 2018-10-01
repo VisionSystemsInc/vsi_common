@@ -1,16 +1,24 @@
-##****F* testlib.sh/test_colors.sh
-# NAME
-#   test_colors.sh - Color definitions for testlib
-# AUTHOR
-#   Andy Neff
-##***
 
-##****d* test_colors.sh/TEST_NO_COLOR
-# NAME
-#   TEST_NO_COLOR - Disable the use of ANSI colors
-# DESCRIPTION
-#   In order to disable color test testlib's failing cases, set TEST_NO_COLOR=1
-# SOURCE
+#*# tests/test_colors
+
+#**
+# ===========
+# Test Colors
+# ===========
+#
+# .. default-domain:: bash
+#
+# .. file:: test_colors.sh
+#
+# Color definitions for testlib
+#**
+
+#**
+# .. envvar:: TEST_NO_COLOR
+#
+# Disable the use of ``ANSI`` colors
+#
+# In order to disable color test testlib's failing cases, set :envvar:`TEST_NO_COLOR` =1
 : ${TEST_GOOD_COLOR=$'\e[1;32m'}
 : ${TEST_BAD_COLOR=$'\e[1;31m'}
 : ${TEST_WARN_COLOR=$'\e[1;33m'}
@@ -23,7 +31,7 @@ if [ "${TEST_NO_COLOR-0}" == 1 ]; then
   TEST_BOLD_COLOR=''
   TEST_RESET_COLOR=''
 fi
-# AUTHOR
-#   Andy Neff
-##***
+#
+# .. rubric:: Source
+#**
 # If it gets more complicated, *consider* using linux/colors.bsh
