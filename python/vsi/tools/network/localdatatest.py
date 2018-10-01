@@ -19,7 +19,7 @@ def testIp(host):
     socket.gethostbyaddr(host)
   except:
     return False
-  return True 
+  return True
 
 def testConnect(host,port, timeout=0.1):
   if not testIp(host):
@@ -39,9 +39,9 @@ class Average(object):
     self.used = 0
     self.total = 0
     self.t0 = None
-    
+
     self.set_partial()
-  
+
   def add_partial(self, value, t=time.time()):
     self.used += 1
     if self.used >= self.bufferSize:
@@ -49,7 +49,7 @@ class Average(object):
     if self.t0 is None:
       t0 = t
     self.add_full(value, t)
-  
+
   def add_full(self, value, t=time.time()):
     self.values[self.index] = value
     self.t[self.index] = t
@@ -57,17 +57,17 @@ class Average(object):
     if self.index >= self.bufferSize:
       self.index = 0
     self.total += value
-  
+
   def clear(self):
     self.index = 0
     self.used = 0
     self.set_partial()
-  
+
   def average_partial(self):
-    delta = self.t[self.used] -self.t[0] 
+    delta = self.t[self.used] -self.t[0]
     value = np.sum(self.values[0:self.used])
     return value/delta
-  
+
   def average_full(self):
     delta =  self.t[self.index-1] - self.t[self.index]
     #should support wrap around
@@ -77,7 +77,7 @@ class Average(object):
   def set_full(self):
     self.add = self.add_full
     self.average = self.average_full
-  
+
   def set_partial(self):
     self.add = self.add_partial
     self.average = self.average_partial
@@ -118,31 +118,31 @@ def streamData(sock, desired):
           logger.warning('Disconnect')
           break
         reads.add(len(d))
-      
+
       tLeft = delay + t1 - time.time()
       if tLeft > 0:
         time.sleep(tLeft)
       writes.add(sock.send(' '*size))
-        
+
       writeSpeed = writes.average()
       speedError = desired - writeSpeed
-      
+
       size += gain * speedError
       size = int(min(MAX_SIZE, max(MIN_SIZE, size)))
-      
+
       t1 += delay
-      
+
       if time.time() > timePrint:
-        print reads.average()
-        print writeSpeed
-        print writes.t[writes.index-1]-writes.t[writes.index]
-        print size, time.time()-startTime
-        print writes.values
+        print(reads.average())
+        print(writeSpeed)
+        print(writes.t[writes.index-1]-writes.t[writes.index])
+        print(size, time.time()-startTime)
+        print(writes.values)
         timePrint = time.time()+printInteval
   except:
     if RAISE:
       raise
-    print 'Disconnected... I guess'
+    print('Disconnected... I guess')
 
 def serveDataTest(port, desired):
   serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -156,11 +156,11 @@ def serveDataTest(port, desired):
       s2 = serverSocket.accept()[0]
 
       streamData(s2, desired)
-          
+
 
 def connectDataTest(ip, port, desired, timeout=1):
   clientSocket = socket.create_connection((ip, port), timeout=1)
-  
+
   streamData(clientSocket, desired)
 
 def scanSubnet(ip, port):

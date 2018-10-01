@@ -9,16 +9,16 @@ import traceback
 DEFAULT_IP = '127.0.0.1'
 DEFAULT_PORT = 4444
 
-dbclear_if_error = vdb.dbclear_if_error
-
 class RpdbPostMortemHook(vdb.PostMortemHook):
   @staticmethod
   def set_post_mortem(interactive=False, ip=DEFAULT_IP, port=DEFAULT_PORT):
-    sys.excepthook = partial(vdb.dbstop_exception_hook, 
+    sys.excepthook = partial(vdb.dbstop_exception_hook,
                              interactive=interactive,
-                             post_mortem=partial(post_mortem, 
+                             post_mortem=partial(post_mortem,
                                                  ip=ip, port=port))
 
+def dbclear_if_error():
+  RpdbPostMortemHook.dbclear_if_error()
 
 def dbstop_if_error(interactive=False, ip=DEFAULT_IP, port=DEFAULT_PORT):
   ''' Run this to auto start the debugger on an exception.
@@ -28,7 +28,7 @@ def dbstop_if_error(interactive=False, ip=DEFAULT_IP, port=DEFAULT_PORT):
       ip - Default 127.0.0.1 - Ip to bind to for remote debugger
       port - Default 4444 - Port to bind to for remote debugger'''
 
-  RpdbPostMortemHook.dbstop_if_error(interactive=interactive, 
+  RpdbPostMortemHook.dbstop_if_error(interactive=interactive,
                                      ip=ip, port=port)
 
 def post_mortem(tb=None, ip=DEFAULT_IP, port=DEFAULT_PORT):
@@ -43,7 +43,7 @@ def post_mortem(tb=None, ip=DEFAULT_IP, port=DEFAULT_PORT):
   r.reset()
   r.interaction(None, tb)
 
-class DbStopIfError(vdb.DbStopIfError):
+class DbStopIfError(vdb.DbStopIfErrorGeneric):
   def get_post_mortem(self):
     return post_mortem
   def get_post_mortem_class(self):
@@ -51,8 +51,8 @@ class DbStopIfError(vdb.DbStopIfError):
 
 
 def set_trace(frame=None, depth=None, ip=DEFAULT_IP, port=DEFAULT_PORT):
-  ''' Wrapper function to keep the same import x; x.set_trace() interface. 
-  
+  ''' Wrapper function to keep the same import x; x.set_trace() interface.
+
       We catch all the possible exceptions from pdb and cleanup. '''
   frame = vdb.find_frame(frame, depth if depth is not None else 2 if frame is None else 0)
 
