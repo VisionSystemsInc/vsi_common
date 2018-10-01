@@ -1,7 +1,10 @@
 """ A collection of utility functions related to Image data """
 import numpy as np
 import PIL.Image as Image
-from itertools import izip
+try:
+  from itertools import izip
+except ImportError:
+  izip = zip
 import scipy.ndimage.filters
 import skimage.transform
 

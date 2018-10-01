@@ -1,7 +1,7 @@
+from __future__ import print_function
 import unittest
 import sys
 import os
-from __future__ import print_function
 
 from .redirect import Redirect, Capture
 

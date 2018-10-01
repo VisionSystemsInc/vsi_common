@@ -1,6 +1,6 @@
 """ Utility classes for modeling cameras """
 import numpy as np
-import vsi.uils.geometry_utils as geometry_utils
+import vsi.utils.geometry_utils as geometry_utils
 
 
 def construct_K(image_size, focal_len=None, fov_degrees=None, fov_radians=None):

@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 '''
 @created: Nov, 2014
 @author: srichardson
@@ -21,7 +23,6 @@ import sys,os
 import re
 from subprocess import Popen, PIPE
 import math
-from __future__ import print_function
 
 from .generate_scene_xml import generate_scene_xml
 
