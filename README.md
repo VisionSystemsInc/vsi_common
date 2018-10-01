@@ -1,6 +1,8 @@
 # VSI Common
 
-Linux: [![CircleCI](https://circleci.com/gh/VisionSystemsInc/vsi_common.svg?style=shield)](https://circleci.com/gh/VisionSystemsInc/vsi_common) Windows: [![Build status](https://ci.appveyor.com/api/projects/status/3a3hd3m41clxd5gw/branch/master?svg=true)](https://ci.appveyor.com/project/andyneff/vsi-common/branch/master) macos: [![Build Status](https://travis-ci.org/VisionSystemsInc/vsi_common.svg?branch=master)](https://travis-ci.org/VisionSystemsInc/vsi_common)
+|Linux|Windows|macos|
+|--|--|--|
+|[![CircleCI](https://circleci.com/gh/VisionSystemsInc/vsi_common.svg?style=shield)](https://circleci.com/gh/VisionSystemsInc/vsi_common)|[![Build status](https://ci.appveyor.com/api/projects/status/3a3hd3m41clxd5gw/branch/master?svg=true)](https://ci.appveyor.com/project/andyneff/vsi-common/branch/master)|[![Build Status](https://travis-ci.org/VisionSystemsInc/vsi_common.svg?branch=master)](https://travis-ci.org/VisionSystemsInc/vsi_common)|
 
 In order to use these directories, all you have to do is
 

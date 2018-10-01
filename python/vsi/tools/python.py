@@ -1,3 +1,5 @@
+from __future__ import print_function # Python2 compat
+
 import sys
 
 class Try(object):
@@ -51,7 +53,7 @@ def is_string_like(obj):
 
 def get_file(fid, mode='rb'):
   ''' Helper function to take either a filename or fid
-  
+
       Keyword Arguments:
       fid - File object or filename
       mode - Optional, file mode to open file if filename supplied
@@ -59,18 +61,18 @@ def get_file(fid, mode='rb'):
 
   if is_string_like(fid):
     fid = open(fid, mode)
-  
-  return fid 
+
+  return fid
 
 def static(**kwargs):
   ''' Decorator for easily defining static variables
-  
+
       Example:
-      
+
       @static(count=0)
       def test(a, b):
         test.count += 1
-        print a+b, test.count
+        print(a+b, test.count)
   '''
   def decorate(func):
     for k in kwargs:
@@ -80,7 +82,7 @@ def static(**kwargs):
 
 class OptionalArgumentDecorator(object):
   ''' Decorator for easily defining a decorator class that may take arguments
-      
+
       Write a decorator class as normal, that would always take arguments, and
       make sure they all have default values. Then just add this decorator and
       both notations will work
@@ -91,9 +93,9 @@ class OptionalArgumentDecorator(object):
       #normal use
       self.cls = args[0]
     else:
-      #inheritance 
+      #inheritance
       #args = (class_name_str, (parent_class,), {'__module__': module_name})
-      parents = tuple(x.cls if type(x) == OptionalArgumentDecorator else x 
+      parents = tuple(x.cls if type(x) == OptionalArgumentDecorator else x
                       for x in args[1])
       self.cls = type(args[0], parents, args[2])
 
@@ -142,11 +144,11 @@ class BasicDecorator(_BasicArgumentDecorator):
       Define __inner_call__(self, *args, **kwargs) to add your wrapper magic
 
       Usage: Define a new class that inherits from OptionalArgumentDecorator.
-      There is logic to support inheritance as long as the classes are 
+      There is logic to support inheritance as long as the classes are
       decorated by OptionalArgumentDecorator ONLY. Any additional decorators
-      will probably break the inheritance logic. If this is needed, than 
-      inherit from _BasicArgumentDecorator instead and Add the 
-      @OptionalArgumentDecorator decorator yourself, and don't inherit from 
+      will probably break the inheritance logic. If this is needed, than
+      inherit from _BasicArgumentDecorator instead and Add the
+      @OptionalArgumentDecorator decorator yourself, and don't inherit from
       that.
 
       Example:
@@ -156,9 +158,9 @@ class BasicDecorator(_BasicArgumentDecorator):
           self.name = name
         def __inner_call__(self, first_arg, *args, **kwargs):
           result = self.fun(first_arg, *args, **kwargs)
-          print self.name, first_arg, result
+          print(self.name, first_arg, result)
           return result
-          
+
       @MyDecor
       def test1(x, y):
         return x+y
@@ -173,26 +175,26 @@ class BasicDecorator(_BasicArgumentDecorator):
       '''
 
 class WarningDecorator(object):
-  ''' Decorator to add to a function to print a message out when called 
-      
+  ''' Decorator to add to a function to print a message out when called
+
       Usage:
 
       @WarningDecorator
       def my_prototype(x, y):
-        print x/y
+        print(x/y)
 
       @WarningDecorator('Warning: Unstable Code')
       def my_prototype(x, y):
-        print x/y
+        print(x/y)
 
       @WarningDecorator(output_stream=sys.stdout)
       def my_prototype(x, y):
-        print x/y
+        print(x/y)
 
   '''
   def __init__(self, *args, **kwargs):
     ''' Initilize decorator
-    
+
         Arguments:
           message, output_stream
          or
@@ -207,14 +209,14 @@ class WarningDecorator(object):
     self.fun = fun
     self.message = 'Warning'
     self.output_stream=sys.stderr
-    
+
   def init2(self, message='Warning', output_stream=sys.stderr):
     self.message = message
     self.output_stream = output_stream
-  
+
   def __call__(self, *args, **kwargs):
     if hasattr(self, 'fun'):
-      print >>self.output_stream, self.message
+      print(self.message, file=self.output_stream)
       return self.fun(*args, **kwargs)
     else:
       self.fun = args[0]
@@ -239,10 +241,10 @@ def args_to_kwargs(function, args=tuple(), kwargs={}):
        exactly as python would, certain failure situations are not reproduced,
        for exampled it does not raise exception if you declare the same 
        parameter in both *args and **kwargs)
-     
+
      Only works for python2. need to use signature instead of getargspec for 
      python3.
-     
+
      Based on:
      https://github.com/merriam/dectools/blob/master/dectools/dectools.py'''
 
@@ -303,7 +305,7 @@ def args_to_kwargs(function, args=tuple(), kwargs={}):
   # check we did it correctly.  Each param and only params are set
 
   assert set(params.iterkeys()) == (set(names)|
-                                    set([KWARGS if kwargs_name else None, 
+                                    set([KWARGS if kwargs_name else None,
                                          ARGS if args_name else None]) \
                                    -set([None]))
   #Remove None, since if *args/**kwargs isn't used, it will have the value None

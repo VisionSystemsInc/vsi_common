@@ -35,6 +35,6 @@ if __name__ == '__main__':
     filterString = sys.argv[2]
     pids = findProcess(imageName, filterString)
     pids = filter(lambda x: x != myPid, pids)
-    print '\n'.join(map(str, pids))
+    print('\n'.join(map(str, pids)))
   except:
-    print 'Usage: %s [imageName] [filterString]' % sys.argv[0]
+    print('Usage: {} [imageName] [filterString]'.format(sys.argv[0]))

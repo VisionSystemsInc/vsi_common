@@ -42,7 +42,7 @@ set -eu
 # .. seealso::
 #
 #   :envvar:`PROJECT_DIR`, :envvar:`PROJECT_NAME`, :envvar:`PROJECT_PREFIX`
-#   :envvar:`REPO_NAME`, :envvar:`JUSTFILE`, :envvar:`WRAPFILE`, :envvar:`SETUPFILE`
+#   :envvar:`REPO_NAME`, :envvar:`JUSTFILE`, :envvar:`SETUPFILE`
 #   :envvar:`VSI_DIR`
 #**
 
@@ -157,7 +157,6 @@ while (($#)); do
       echo "  --prefix PREFIX - Set variable prefix to use"
       echo "  --justfile FILE - Set Justfile name"
       echo "  --setupfile FILE - Set setup.env filename"
-      echo "  --wrapfile FILE - Set wrap filename"
       echo "  --vsi-dir DIR - VSI common submodule dir"
       echo "  --[no-]use-vsi - Enable/[disable] using the vsi submodule"
       echo "  --[no-]use-docker - Enable/[disable] setting up docker"
@@ -193,10 +192,6 @@ while (($#)); do
       ;;
     --setupfile)
       SETUPFILE="$1"
-      shift 1
-      ;;
-    --wrapfile)
-      WRAPFILE="$1"
       shift 1
       ;;
     --vsi-dir)
@@ -379,7 +374,7 @@ ask_question "Do you want to include the vsi_common submodule?" USE_VSI_COMMON n
 # few environment variables. This is meant to be as unobtrusive as possible.
 #
 # This file needs to be sourced every time a new terminal session is opened.
-# The only time the setup script is not needed is when calling the :envvar:`WRAPFILE`.
+# The only time the setup script is not needed is when using :command:`juste`.
 #
 # The value can be customized when prompted by :file:`new_just`. The default value is
 # ``setup.env``. The question can be skipped by setting the environment variable
@@ -387,7 +382,7 @@ ask_question "Do you want to include the vsi_common submodule?" USE_VSI_COMMON n
 #
 # .. seealso::
 #
-#   :envvar:`WRAPFILE`
+#   :command:`juste`
 #**
 
 if [ "${USE_VSI_COMMON}" = "1" ]; then
@@ -401,34 +396,6 @@ if [ "${USE_VSI_COMMON}" = "1" ]; then
     SETUPFILE="${default}"
   else
     SETUPFILE="$(basename "${SETUPFILE}")"
-  fi
-
-#**
-# .. envvar:: WRAPFILE
-#
-# The wrap filename that runs any command in the just environment
-#
-# The wrap file can be used to run any command in the full just environment or
-# to enter a bash session in this environment.
-#
-# The value can be customized when prompted by :file:`new_just`. The default value is
-# wrap. The question can be skipped by setting the environment variable
-# :envvar:`WRAPFILE` to the desired value.
-#
-# .. seealso::
-#
-#   :file:`just_env`
-#**
-  default=wrap
-  if [ "${USE_DEFAULTS-}" == "1" ]; then
-    : ${WRAPFILE="${default}"}
-  fi
-
-  : ${WRAPFILE="$(read -r -p "Wrap script file name (wrap) " x; echo "$x")"}
-  if [ "${WRAPFILE}" == "" ]; then
-    WRAPFILE="${default}"
-  else
-    WRAPFILE="$(basename "${WRAPFILE}")"
   fi
 fi
 
@@ -545,7 +512,6 @@ printf "%-40s | %-40s\n" "Project prefix" "${PROJECT_PREFIX}"
 printf "%-40s | %-40s\n" "Just file" "${JUSTFILE}"
 if [ "${USE_VSI_COMMON}" = "1" ]; then
   printf "%-40s | %-40s\n" "Environment setup script" "${SETUPFILE}"
-  printf "%-40s | %-40s\n" "Wrap script" "${WRAPFILE}"
 fi
 
 printf "%-40s | %-40s\n" "Use docker" "${USE_DOCKER}"
@@ -586,10 +552,6 @@ else
 fi
 
 
-############
-### wrap ###
-############
-
 # Helper to quote complicated names, adds '' for you, does not need extra
 # quotes added to file
 function quote()
@@ -605,18 +567,6 @@ function quote_def()
 }
 
 if [ "${USE_VSI_COMMON}" = "1" ]; then
-  if [ ! -e "${WRAPFILE}" ]; then
-    echo   '#!/usr/bin/env bash' > "${WRAPFILE}"
-    if [ "${JUSTFILE}" != "Justfile" ]; then
-      echo "export JUSTFILE=$(quote "${JUSTFILE}")" >> "${WRAPFILE}"
-    fi
-    uwecho ': "$(\dirname "${BASH_SOURCE[0]}")"
-            source "${VSI_COMMON_DIR:-"${_}"/'"$(quote_def "${RELATIVE_PATH}")"'}/linux/Just_wrap" "${_}"/'"$(quote "${PROJECT_NAME}")"'.env ${@+"${@}"}' >> "${WRAPFILE}"
-
-  else
-    echo "${WRAPFILE} exists, skipping..."
-  fi
-
   #################
   ### setup.env ###
   #################
@@ -686,7 +636,6 @@ if [ ! -e "${PROJECT_NAME}.env" ]; then
             # name and do not collide
             source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
             : ${COMPOSE_PROJECT_NAME=$(docker_compose_sanitize_project_name "${'"${PROJECT_PREFIX}"'_CWD}" "${'"${PROJECT_PREFIX}"'_USERNAME}")}
-
             ' >> "${PROJECT_NAME}.env"
   fi
 
@@ -731,136 +680,133 @@ else
   echo     "README.md exists, skipping..."
 fi
 
-# Make Just file
+################
+### Justfile ###
+################
+
 if [ ! -e "${JUSTFILE}" ]; then
   if [ "${USE_DOCKER}" = "1" ]; then
-    uwecho '#!/usr/bin/env bash
+    uwecho   '#!/usr/bin/env bash
 
-            if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then # If being sourced
-              set -euE
-            fi
-            ' > "${JUSTFILE}"
-    if [ "${USE_VSI_COMMON}" = "1" ]; then
-      echo 'source "$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)/"'"$(quote "${WRAPFILE}")" >> "${JUSTFILE}"
+              if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then # If being sourced
+                set -euE
+              fi
+              source "${VSI_COMMON_DIR}/linux/just_env" "$(dirname "${BASH_SOURCE[0]}")"/'"$(quote "${PROJECT_NAME}")"'.env
+              cd "${'"${PROJECT_PREFIX}"'_CWD}"
+
+              # Plugins
+              source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
+              source "${VSI_COMMON_DIR}/linux/just_docker_functions.bsh"
+              source "${VSI_COMMON_DIR}/linux/just_git_functions.bsh"
+
+              # Main function
+              function caseify()
+              {
+                local just_arg=$1
+                shift 1
+                case ${just_arg} in
+                  build) # Build Docker image
+                    if [ "$#" -gt "0" ]; then
+                      Docker-compose "${just_arg}" ${@+"${@}"}
+                      extra_args+=$#
+                    else' >> "${JUSTFILE}"
+    if [ "${USE_PIPENV}" = "1" ]; then
+      uwecho '        (justify build_recipes gosu tini vsi pipenv)
+                      Docker-compose build
+                      (justify clean venv)
+                      (justify _post_build)
+                    fi
+                    ;;
+                  _post_build)
+                    image_name=$(docker create ${'"${PROJECT_PREFIX}"'_DOCKER_REPO}:'"${APP_NAME}"'_${'"${PROJECT_PREFIX}"'_USERNAME})
+                    docker cp ${image_name}:/venv/Pipfile.lock "${'"${PROJECT_PREFIX}"'_CWD}/Pipfile.lock"
+                    docker rm ${image_name}
+                    ;;' >> "${JUSTFILE}"
     else
-      echo 'source "${VSI_COMMON_DIR}/linux/just_env" "$(dirname "${BASH_SOURCE[0]}")"/'"${PROJECT_NAME}"'.env' >> "${JUSTFILE}"
+      uwecho '        (justify build_recipes gosu tini vsi)
+                      Docker-compose build
+                    fi
+                    ;;' >> "${JUSTFILE}"
     fi
-    uwecho 'cd "${'"${PROJECT_PREFIX}"'_CWD}"
-
-            # Plugins
-            source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
-            source "${VSI_COMMON_DIR}/linux/just_docker_functions.bsh"
-            source "${VSI_COMMON_DIR}/linux/just_git_functions.bsh"
-
-            # Main function
-            function caseify()
-            {
-              local just_arg=$1
-              shift 1
-              case ${just_arg} in
-                build) # Build Docker image
-                  if [ "$#" -gt "0" ]; then
-                    Docker-compose "${just_arg}" ${@+"${@}"}
+    uwecho   '    run_'"${APP_NAME}"') # Run '"${APP_NAME}"' 1
+                    Just-docker-compose run '"${APP_NAME}"' ${@+"${@}"}
                     extra_args+=$#
-                  else' >> "${JUSTFILE}"
-    if [ "${USE_PIPENV}" = "1" ]; then
-    uwecho '        (justify clean venv)
-                    (justify build_recipes gosu tini vsi pipenv)
-                    Docker-compose build
-                    (justify _post_build)
-                  fi
-                  ;;
-                _post_build)
-                  image_name=$(docker create ${'"${PROJECT_PREFIX}"'_DOCKER_REPO}:'"${APP_NAME}"'_${'"${PROJECT_PREFIX}"'_USERNAME})
-                  docker cp ${image_name}:/venv/Pipfile.lock "${'"${PROJECT_PREFIX}"'_CWD}/Pipfile.lock"
-                  docker rm ${image_name}
-                  ;;' >> "${JUSTFILE}"
-    else
-      echo '        (justify build_recipes gosu tini vsi)
-                    Docker-compose build
-                  fi
-                  ;;' >> "${JUSTFILE}"
-    fi
-    uwecho '    run_'"${APP_NAME}"') # Run '"${APP_NAME}"' 1
-                  Just-docker-compose run '"${APP_NAME}"' ${@+"${@}"}
-                  extra_args+=$#
-                  ;;
+                    ;;
 
-                setup) # Run any special command to set up the environment for the first \
-                  # time after checking out the repo. Usually population of volumes/databases \
-                  # go here.
-                  (justify _sync)
-                  ;;
-                sync) # Synchronize the many aspects of the project when new code changes \
-                      # are applied e.g. after "git checkout"
-                  (justify _sync)
-                  # Add any extra steps run when syncing when not installing
-                  ;;
-                _sync)
-                  Docker-compose down
-                  (justify git_submodule-update) # For those users who don'"'"'t remember!
-                  (justify build)
-                  ;;' >> "${JUSTFILE}"
+                  setup) # Run any special command to set up the environment for the first \
+                         # time after checking out the repo. Usually population of volumes/databases \
+                         # go here.
+                    (justify _sync)
+                    ;;
+                  sync) # Synchronize the many aspects of the project when new code changes \
+                        # are applied e.g. after "git checkout"
+                    (justify _sync)
+                    # Add any extra steps run when syncing when not installing
+                    ;;
+                  _sync)
+                    Docker-compose down
+                    (justify git_submodule-update) # For those users who don'"'"'t remember!
+                    (justify build)
+                    ;;' >> "${JUSTFILE}"
     if [ "${USE_PIPENV}" = "1" ]; then
-    uwecho '    clean_all) # Delete all local volumes
-                  ask_question "Are you sure? This will remove packages not in Pipfile!" n
-                  (justify clean venv)
-                  ;;
-                clean_venv) # Delete the virtual environment volume. The next container \
-                            # to use this volume will automatically copy the contents from \
-                            # the image.
-                  if docker volume inspect "${COMPOSE_PROJECT_NAME}_venv" &> /dev/null; then
-                    Docker volume rm "${COMPOSE_PROJECT_NAME}_venv"
-                  else
-                    echo "${COMPOSE_PROJECT_NAME}_venv already removed" >&2
-                  fi
-                  ;;' >> "${JUSTFILE}"
+      uwecho '    clean_all) # Delete all local volumes
+                    ask_question "Are you sure? This will remove packages not in Pipfile!" n
+                    (justify clean venv)
+                    ;;
+                  clean_venv) # Delete the virtual environment volume. The next container \
+                              # to use this volume will automatically copy the contents from \
+                              # the image.
+                    if docker volume inspect "${COMPOSE_PROJECT_NAME}_venv" &> /dev/null; then
+                      Docker volume rm "${COMPOSE_PROJECT_NAME}_venv"
+                    else
+                      echo "${COMPOSE_PROJECT_NAME}_venv already removed" >&2
+                    fi
+                    ;;' >> "${JUSTFILE}"
     fi
-    uwecho '    *)
-                  defaultify "${just_arg}" ${@+"${@}"}
-                  ;;
-              esac
-            }
+    uwecho   '    *)
+                    defaultify "${just_arg}" ${@+"${@}"}
+                    ;;
+                esac
+              }
 
-            if ! command -v justify &> /dev/null; then caseify ${@+"${@}"};fi' >> "${JUSTFILE}"
+              if ! command -v justify &> /dev/null; then caseify ${@+"${@}"};fi' >> "${JUSTFILE}"
   else
-    uwecho '#!/usr/bin/env bash
+    uwecho   '#!/usr/bin/env bash
 
-            if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then # If being sourced
-              set -euE
-            fi
+              if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then # If being sourced
+                set -euE
+              fi
 
-            ' > "${JUSTFILE}"
-    if [ "${USE_VSI_COMMON}" = "1" ]; then
-      echo 'source "$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)/'"${WRAPFILE}"'"' >> "${JUSTFILE}"
-    else
-      echo 'source "${VSI_COMMON_DIR}/linux/just_env" "$(dirname "${BASH_SOURCE[0]}")"/'"${PROJECT_NAME}"'.env' >> "${JUSTFILE}"
-    fi
-    uwecho 'cd "${'"${PROJECT_PREFIX}"'_CWD}"
+              source "${VSI_COMMON_DIR}/linux/just_env" "$(dirname "${BASH_SOURCE[0]}")"/'"${PROJECT_NAME}"'.env
+              cd "${'"${PROJECT_PREFIX}"'_CWD}"
 
-            function caseify()
-            {
-              local just_arg=$1
-              shift 1
-              case ${just_arg} in
-                compile) # Build program
-                  g++ hi.cpp -o hi
-                  ;;
-                run) # Run program
-                  ./hi ${@+"${@}"}
-                  extra_args+=$#
-                  ;;
-                *)
-                  defaultify "${just_arg}" ${@+"${@}"}
-                  ;;
-              esac
-            }
+              function caseify()
+              {
+                local just_arg=$1
+                shift 1
+                case ${just_arg} in
+                  compile) # Build program
+                    g++ hi.cpp -o hi
+                    ;;
+                  run) # Run program
+                    ./hi ${@+"${@}"}
+                    extra_args+=$#
+                    ;;
+                  *)
+                    defaultify "${just_arg}" ${@+"${@}"}
+                    ;;
+                esac
+              }
 
-            if ! command -v justify &> /dev/null; then caseify ${@+"${@}"};fi' >> "${JUSTFILE}"
+              if ! command -v justify &> /dev/null; then caseify ${@+"${@}"};fi' >> "${JUSTFILE}"
   fi
 else
   echo "${JUSTFILE} exists, skipping..."
 fi
+
+###############
+### Pipfile ###
+###############
 
 if [ "${USE_PIPENV}" = "1" ]; then
   if [ ! -e "Pipfile" ]; then
@@ -877,6 +823,11 @@ if [ "${USE_PIPENV}" = "1" ]; then
             [packages]
             ' > Pipfile
   fi
+
+  ####################
+  ### Pipfile.lock ###
+  ####################
+
   if [ ! -e "Pipfile.lock" ]; then
     uwecho '{
                 "_meta": {
@@ -902,7 +853,10 @@ fi
 if [ "${USE_DOCKER}" = "1" ]; then
   mkdir -p docker
 
-  # Make default dockerfiles
+  ##################
+  ### Dockerfile ###
+  ##################
+
   if [ ! -e "docker/${APP_NAME}.Dockerfile" ]; then
     uwecho   'FROM vsiri/recipe:gosu as gosu
               FROM vsiri/recipe:tini as tini
@@ -1035,7 +989,6 @@ if [ "${USE_DOCKER}" = "1" ]; then
               COPY --from=gosu /usr/local/bin/gosu /usr/local/bin/gosu
               # Allow non-privileged to run gosu (remove this to take root away from user)
               RUN chmod u+s /usr/local/bin/gosu
-
               ' >> docker/${APP_NAME}.Dockerfile
 
     if [ "${USE_PIPENV}" = "1" ]; then
@@ -1055,6 +1008,10 @@ if [ "${USE_DOCKER}" = "1" ]; then
   else
     echo     "docker/${APP_NAME}.Dockerfile exists, skipping..."
   fi
+
+  ######################
+  ### entrypoint.bsh ###
+  ######################
 
   if [ ! -e "docker/${APP_NAME}_entrypoint.bsh" ]; then
     uwecho   '#!/usr/bin/env bash
@@ -1120,8 +1077,10 @@ if [ "${USE_DOCKER}" = "1" ]; then
     echo     "docker/${APP_NAME}_entrypoint.bsh exists, skipping..."
   fi
 
+  ##########################
+  ### docker-compose.yml ###
+  ##########################
 
-  # Make default docker-compose.yml
   if [ ! -e "docker-compose.yml" ]; then
     uwecho 'version: "2.3"
 
@@ -1162,12 +1121,16 @@ if [ "${USE_DOCKER}" = "1" ]; then
       uwecho 'volumes:
                 venv:' >> "docker-compose.yml"
     else
-      echo   '#   volumes:' >> "docker-compose.yml"
+      echo   '# volumes:' >> "docker-compose.yml"
     fi
     echo     '#   home-volume:' >> "docker-compose.yml"
   else
     echo "docker-compose.yml exists, skipping..."
   fi
+
+  #####################
+  ### .dockerignore ###
+  #####################
 
   if [ ! -e .dockerignore ]; then
     echo '*' > .dockerignore
@@ -1185,6 +1148,9 @@ if [ "${USE_DOCKER}" = "1" ]; then
     fi
   fi
 
+  ######################
+  ### .gitattributes ###
+  ######################
 
   if [ ! -e ".gitattributes" ]; then
     uwecho '#These file types are being explicitly set to linux line endings for windows.
@@ -1194,10 +1160,13 @@ if [ "${USE_DOCKER}" = "1" ]; then
             *.bsh eol=lf
             *.py eol=lf
             *.env eol=lf
-            wrap eol=lf
             .justplugins eol=lf' > .gitattributes
   fi
 else
+  ##############
+  ### hi.cpp ###
+  ##############
+
   uwecho '#include <iostream>
           int main()
           {
@@ -1213,11 +1182,10 @@ fi
 # Add executable permissions
 chmod 755 "${JUSTFILE}"
 
-if [ "${USE_VSI_COMMON}" = "1" ]; then
-  chmod 755 "${WRAPFILE}"
-fi
+##################
+### .gitignore ###
+##################
 
-# Add .gitignore exceptions
 if ! grep -q local.env .gitignore 2>/dev/null; then
   echo local.env >> .gitignore
 fi
@@ -1244,7 +1212,7 @@ if [ "${USE_VSI_COMMON}" = "1" ]; then
           pushd $(quote "${RELATIVE_PATH}")
           git remote set-url origin --push git@github.com:visionsystemsinc/vsi_common.git
           popd" >&3
-  echo   "git add $(quote "${SETUPFILE}") $(quote "${WRAPFILE}") .gitmodules" >&3
+  echo   "git add $(quote "${SETUPFILE}") .gitmodules" >&3
 fi
 
 echo   "git add .gitignore README.md $(quote "${JUSTFILE}") $(quote "${PROJECT_NAME}").env" >&3

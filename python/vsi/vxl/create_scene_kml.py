@@ -25,7 +25,7 @@ def main(args=None):
   scene = boxm2_scene_adaptor(scene_xml, "cpp")
   description = adaptor.describe_scene(scene.scene)
   for key, value in description.iteritems():
-    print " key = %s, value = %s" % (key, value)
+    print(" key = {}, value = {}".format(key, value))
   if scene_kml is None:
     scene_kml = os.path.join(description["dataPath"], "scene.kml")
   adaptor.write_scene_to_kml(scene.scene, scene_kml)
