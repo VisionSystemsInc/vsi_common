@@ -1,11 +1,26 @@
 #!/usr/bin/env false
 
-##****J* vsi/testlib.sh
-# NAME
-#   testlib.sh - Simple shell command language test library
-# USAGE
-#   . testlib.sh
-# EXAMPLE
+#*# tests/testlib
+
+#**
+# ============
+# Test Library
+# ============
+#
+# .. default-domain:: bash
+#
+# .. file:: testlib.sh
+#
+# Simple shell command language test library
+#
+# .. rubric:: Usage
+#
+# . testlib.sh
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
 #   Tests must follow the basic form:
 #
 #   source testlib.sh
@@ -19,31 +34,32 @@
 #   end_test
 #
 #   When a test fails its stdout and stderr are shown.
-# NOTES
-#   Tests must 'set -e' within the subshell block or failed assertions will not
-#   cause the test to fail and the result may be misreported. While this is not
-#   required, most tests will have this on.
-# BUGS
-#   On darling: when debugging a unit test error, sometimes the printout is cut
-#   off, making it difficult to do "printf debugging." While the cause and scope
-#   of this is unknown, a work around that sometimes works is
+#
+# .. note::
+#   Tests must 'set -e' within the subshell block or failed assertions will not cause the test to fail and the result may be misreported. While this is not required, most tests will have this on.
+#
+# .. rubric:: Bugs
+#
+# On darling: when debugging a unit test error, sometimes the printout is cut off, making it difficult to do "printf debugging." While the cause and scope of this is unknown, a work around that sometimes works is
+#
+# .. code-block:: bash
 #
 #     runtests 2>&1 | less -R
 #
-# COPYRIGHT
-#   Original version: (c) 2011-13 by Ryan Tomayko <http://tomayko.com>
-#   License: MIT
-# AUTHOR
-#   Ryan Tomayko
-# MODIFICATION HISTORY
-#   Andy Neff - Added begin_expected_fail_test
-#               Added optional setup/teardown functions
-#               Removed PATH
-#               Added robodoc documentation
-#               Use pushd/popd for each test instead of cd
-#               Auto prepend filename to description
-#               Added custom PS4
-##***
+# :Copyright: Original version: (c) 2011-13 by Ryan Tomayko <http://tomayko.com>
+#
+#             License: MIT
+# :Author: Ryan Tomayko
+# :Modification History: Andy Neff
+#
+#              * Added :func:`begin_expected_fail_test`
+#              * Added optional :func:`setup`/:func:`teardown` functions
+#              * Removed PATH
+#              * Added robodoc documentation
+#              * Use pushd/popd for each test instead of cd
+#              * Auto prepend filename to description
+#              * Added custom PS4
+#**
 
 # The above must be the first command executed, or else it won't work. Use this
 # instead of BASH_SOURCE to maintain sh compatibility
@@ -67,96 +83,100 @@ expected_failures=0
 required_failures=0
 skipped=0
 
-##****f* testlib.sh/setup
-# NAME
-#   setup - Function run before the first test
-# NOTES
-#   A directory TRASHDIR is created for setup, right before running setup().
+#**
+# .. function:: setup
+#
+# Function run before the first test
+#
+# .. note::
+#   A directory :envvar:`TRASHDIR` is created for setup, right before running :func:`setup` ().
 #
 #   Setup is not run if no tests are ever run
-# AUTHOR
-#   Andy Neff
-##***
+#**
 
-##****d* testlib.sh/TRASHDIR
-# NAME
-#   TRASHDIR - Temporary directory where everything for the test file is stored
-# DESCRIPTION
-#   Automatically generated and removed (unless TEST_KEEP_TEMP_DIRS is changed)
-# SEE ALSO
-#   testlib.sh/TESTDIR
-# AUTHOR
-#   Ryan Tomayko
-##***
-
-##****d* testlib.sh/TESTDIR
-# NAME
-#   TESTDIR - Unique temporary directory for a single test (in TRASHDIR)
-# DESCRIPTION
-#   Automatically generated and removed (unless TEST_KEEP_TEMP_DIRS is changed)
-# SEE ALSO
-#   testlib.sh/TRASHDIR
-# AUTHOR
-#   Ryan Tomayko
-##***
-
-##****f* testlib.sh/teardown
-# NAME
-#   teardown - Function run after the last test
-# NOTES
-#   Teardown is not run if no tests are ever run
-# AUTHOR
-#   Andy Neff
-##***
-
-##****d* testlib.sh/TEST_KEEP_TEMP_DIRS
-# NAME
-#   TEST_KEEP_TEMP_DIRS - Keep the trashdir/setup dir
-# DESCRIPTION
-#   Debug flag to keep the temporary directories generated when testing. Set to
-#   1 to keep directories. Default: 0
-# AUTHOR
-#   Andy Neff
-##***
-
-##****d* testlib.sh/TESTLIB_SHOW_TIMING
-# NAME
-#   TESTLIB_SHOW_TIMING - Display test time after each test
-# DESCRIPTION
-#   Debug flag to display time elapsed for each test. Set to 1 to enable.
-#   Default: 0
-# AUTHOR
-#   Andy Neff
-##***
-
-##****d* testlib.sh/TESTLIB_RUN_SINGLE_TEST
-# NAME
-#   TESTLIB_RUN_SINGLE_TEST - Run a single test
-# DESCRIPTION
-#   Instead of running all the tests in a test file, only the tests with a
-#   description exactly matching the value of TESTLIB_RUN_SINGLE_TEST will
-#   be run.
-#   Useful for debugging a specific test/piece of code
-#   Default: unset
-# AUTHOR
-#   Andy Neff
-##***
-
-##****f* testlib.sh/atexit
-# NAME
-#   atexit - Function that runs at process exit
-# USAGE
-#   Automatically called on exit by trap.
+#**
+# .. envvar:: TRASHDIR
 #
-#   Checks to see if teardown is defined, and calls it. teardown is typically a
-#   function, alias, or something that makes sense to call.
-# AUTHOR
-#   Ryan Tomayko
-# MODIFICATION HISTORY
-#   Andy Neff - Added setup cleanup
-#               Added teardown
-#               Added TEST_KEEP_TEMP_DIRS flags
-##***
+# Temporary directory where everything for the test file is stored
+#
+# Automatically generated and removed (unless :envvar:`TEST_KEEP_TEMP_DIRS` is changed)
+#
+# .. seealso::
+#   :envvar:`TESTDIR`
+#
+# :Author: Ryan Tomayko
+#**
+
+#**
+# .. envvar:: TESTDIR
+#
+# Unique temporary directory for a single test (in :envvar:`TRASHDIR`)
+#
+# Automatically generated and removed (unless :envvar:`TEST_KEEP_TEMP_DIRS` is changed)
+#
+# .. seealso:: 
+#   :envvar:`TRASHDIR`
+#
+# :Author: Ryan Tomayko
+#**
+
+#**
+# .. function:: teardown
+#
+# Function run after the last test
+#
+# .. note::
+#   Teardown is not run if no tests are ever run
+#**
+
+#**
+# .. envvar:: TEST_KEEP_TEMP_DIRS
+#
+# Keep the trashdir/setup dir
+#
+# Debug flag to keep the temporary directories generated when testing. Set to ``1`` to keep directories.
+#
+# :Default: ``0``
+#**
+
+#**
+# .. envvar:: TESTLIB_SHOW_TIMING
+#
+# Display test time after each test
+#
+# Debug flag to display time elapsed for each test. Set to ``1`` to enable.
+#
+# :Default: ``0``
+#**
+
+#**
+# .. envvar:: TESTLIB_RUN_SINGLE_TEST
+#
+# Run a single test
+#
+# Instead of running all the tests in a test file, only the tests with a description exactly matching the value of :envvar:`TESTLIB_RUN_SINGLE_TEST` will be run. Useful for debugging a specific test/piece of code
+#
+# :Default: *unset*
+#**
+
+#**
+# .. function:: atexit
+#
+# Function that runs at process exit
+#
+# .. rubric:: Usage
+#
+# Automatically called on exit by trap.
+#
+# Checks to see if teardown is defined, and calls it. teardown is typically a function, alias, or something that makes sense to call.
+#
+# :Author: Ryan Tomaydo
+# :Modification History: Andy Neff
+#
+#             * Added :func:`setup` cleanup
+#             * Added :func:`teardown`
+#             * Added :envvar:`TEST_KEEP_TEMP_DIRS` flags
+#**
 atexit ()
 {
   test_status=$?
@@ -269,31 +289,35 @@ _begin_common_test ()
   set -x +e
 }
 
-##****f* testlib.sh/begin_test
-# NAME
-#   begin_test - Beginning of test demarcation
-# USAGE
-#   Mark the beginning of a test. A subshell should immediately follow this
-#   statement.
-# SEE ALSO
-#   testlib.sh/end_test
-# AUTHOR
-#   Ryan Tomayko
-##***
+#**
+# .. function:: begin_test
+#
+# Beginning of test demarcation
+#
+# .. rubric:: Usage
+#
+# Mark the beginning of a test. A subshell should immediately follow this statement.
+#
+# .. seealso::
+#   :func:`end_test`
+#
+# :Author: Ryan Tomayko
+#**
 begin_test ()
 {
   test_status=$? # Must be first command
   _begin_common_test ${@+"${@}"}
 }
 
-##****f* testlib.sh/begin_expected_fail_test
-# NAME
-#   begin_expected_fail_test - Beginning of expected fail test demarcation
-# USAGE
-#   Define the beginning of a test that is expected to fail
-# AUTHOR
-#   Andy Neff
-##***
+#**
+# .. function:: begin_expected_fail_test
+#
+# Beginning of expected fail test demarcation
+#
+# .. rubric:: Usage
+#
+# Define the beginning of a test that is expected to fail
+#**
 begin_expected_fail_test()
 {
   test_status=$? # Must be first command
@@ -301,14 +325,15 @@ begin_expected_fail_test()
   _expected_failure=1 _begin_common_test ${@+"${@}"}
 }
 
-##****f* testlib.sh/begin_required_fail_test
-# NAME
-#   begin_required_fail_test - Beginning of required fail test demarcation
-# USAGE
-#   Define the beginning of a test that is required to fail
-# AUTHOR
-#   Andy Neff
-##***
+#**
+# .. function:: begin_required_fail_test
+#
+# Beginning of required fail test demarcation
+#
+# .. rubric:: Usage
+#
+# Define the beginning of a test that is required to fail
+#**
 begin_required_fail_test()
 {
   test_status=$? # Must be first command
@@ -316,32 +341,35 @@ begin_required_fail_test()
   _required_fail=1 _begin_common_test ${@+"${@}"}
 }
 
-##****f* testlib.sh/setup_test
-# NAME
-#   setup_test - Sets up the test
-# DESCRIPTION
-#   Once inside the () subshell, typically set -eu needs to be run, then other
-#   things such as checking to see if a test should be skipped, etc. need to
-#   be done. This is all encapsulated into setup_test. This is required; without
-#   it, end_test will know you forgot to call this and fail.
+#**
+# .. function:: setup_test
 #
-#   This is also the second part of creating a skippable test.
+# Sets up the test
 #
-#   You are free to change "set -eu" after setup_test, should you wish.
-# USAGE
-#   Place at the beginning of a test
-# EXAMPLE
+# Once inside the () subshell, typically set -eu needs to be run, then other things such as checking to see if a test should be skipped, etc. need to be done. This is all encapsulated into :func:`setup_test`. This is required; without it, :func:`end_test` will know you forgot to call this and fail.
+#
+# This is also the second part of creating a skippable test.
+#
+# You are free to change "set -eu" after :func:`setup_test`, should you wish.
+#
+# .. rubric:: Usage
+#
+# Place at the beginning of a test
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
 #   skip_next_test
 #   begin_test "Skipping test"
 #   (
 #     setup_test
 #     #test code here
 #   )
-# SEE ALSO
-#   testlib.sh/skip_next_test
-# AUTHOR
-#   Andy Neff
-##***
+#
+# .. seealso::
+#   :func:`skip_next_test`
+#**
 setup_test()
 {
   # Identify that setup_test was called
@@ -355,17 +383,20 @@ setup_test()
   set -eu
 }
 
-##****f* testlib.sh/end_test
-# NAME
-#   end_test - End of a test demarcation
-# USAGE
-#   Mark the end of a test. Must be the first command after the test group, or
-#   else the return value will not be captured successfully.
-# SEE ALSO
-#   testlib.sh/begin_test
-# AUTHOR
-#   Ryan Tomayko
-##***
+#**
+# .. function:: end_test
+#
+# End of a test demarcation
+#
+# .. rubric:: Usage
+#
+# Mark the end of a test. Must be the first command after the test group, or else the return value will not be captured successfully.
+#
+# .. seealso::
+#   :func:`begin_test`
+#
+# :Author: Ryan Tomayko
+#**
 end_test ()
 {
   test_status="${1:-$?}" # This MUST be the first line of this function
@@ -424,13 +455,17 @@ end_test ()
   rm "${TRASHDIR}/.setup_test" || :
 }
 
-##****f* testlib.sh/skip_next_test
-# NAME
-#   skip_next_test - Function to indicate the next test should be skipped
-# DESCRIPTION
-#   This is the first part of creating a skippable test, used in conjunction
-#   with setup_test
-# EXAMPLE
+#**
+# .. function:: skip_next_test
+#
+# Function to indicate the next test should be skipped
+#
+# This is the first part of creating a skippable test, used in conjunction with :func:`setup_test`
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
 #   For example, skip if docker command not found
 #
 #     command -v docker &>/dev/null && skip_next_test
@@ -439,32 +474,35 @@ end_test ()
 #       setup_test
 #       [ "$(docker run -it --rm ubuntu:14.04 echo hi)" = "hi" ]
 #     )
-# SEE ALSO
-#   testlib.sh/setup_test
-# NOTES
-#   This must be done outside of the test, or else the skip variable will not
-#   be set and detected by end_test
-# AUTHOR
-#   Andy Neff
-##***
+#
+# .. seealso::
+#   :func:`setup_test`
+#
+# .. note::
+#   This must be done outside of the test, or else the skip variable will not be set and detected by :func:`end_test`
+#**
 skip_next_test()
 {
   __testlib_skip_test=1
 }
 
-##****f* testlib.sh/not
-# NAME
-#   not - Returns true only when the command fails
-# DESCRIPTION
-#   Since ! is ignored by "set -e", use not instead. This is just a helper to
-#   make unittests look nice and not need extra ifs everywhere
-# INPUTS
-#   $1... - Command and arguments
-# OUTPUT
-#   Return value
-#     0 - On non-zero return code evaluation
-#     1 - On zero return code
-# EXAMPLE
+#**
+# .. function:: not
+#
+# :Arguments: ``$1``... - Command and arguments
+# :Output: Return value
+#
+#     * ``0`` - On non-zero return code evaluation
+#     * ``1`` - On zero return code
+#
+# Returns true only when the command fails
+#
+# Since ``!`` is ignored by "set -e", use :func:`not` instead. This is just a helper to make unittests look nice and not need extra ifs everywhere
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
 #   # No good, always passes, even if ! true
 #   ! false
 #
@@ -476,19 +514,31 @@ skip_next_test()
 #   else
 #     false
 #   fi
-# BUGS
-#   Complex statements do not work, e.g. [, [[ and ((, etc...
+#
+# .. rubric:: Bugs
+#
+# Complex statements do not work, e.g. [, [[ and ((, etc...
 #   For example, you should use
+#
+# .. code-block:: bash
+#
 #     [ ! -e /test ]
-#   instead of
+#
+# |  instead of
+#
+# .. code-block:: bash
+#
 #     not [ -e /test ]
-#   In cases where this is not easily worked around, you can use
+#
+# |  In cases where this is not easily worked around, you can use
+#
+# .. code-block:: bash
+#
 #     not_s '[ -e /test ]'
-# SEE ALSO
-#   testlib.sh/not_s
-# AUTHOR
-#   Andy Neff
-##***
+#
+# .. seealso::
+#   :func:`not_s`
+#**
 not()
 {
   local cmd="$1"
@@ -501,45 +551,52 @@ not()
 }
 
 # Testing this idea...
-##****f* testlib.sh/not_s
-# NAME
-#   not_s - Returns true only when the string version of command fails
-# DESCRIPTION
-#   Since ! is ignored by "set -e", use not instead. This is just a helper to
-#   make unittests look nice and not need extra ifs everywhere
-# INPUTS
-#   $1 - Command/statement in a single string
-# OUTPUT
-#   Return value
-#     0 - On non-zero return code evaluation
-#     1 - On zero return code
-# EXAMPLES
+#**
+# .. function:: not_s
+#
+# :Arguments: ``$1`` - Command/statement in a single string
+# :Output: Return Value:
+#
+#             * ``0`` - On non-zero return code evaluation
+#             * ``1`` - On zero return code
+#
+# Returns true only when the string version of command fails
+#
+# Since ``!`` is ignored by "set -e", use :func:`not` instead. This is just a helper to make unittests look nice and not need extra ifs everywhere.
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
 #   x=test
 #   y=t.st
 #   not2 '[[ $x =~ $y ]]' # <-- notice single quotes.
 #
-#   While the single quotes aren't necessary, they handle the more complicated
-#   situations more easily
-# NOTES
+# While the single quotes aren't necessary, they handle the more complicated situations more easily.
+#
+# .. note::
 #   Uses eval
-# SEE ALSO
-#   testlib.sh/not
-# AUTHOR
-#   Andy Neff
-##***
+#
+# .. seealso::
+#   :func:`not`
+#
+#**
 not_s()
 {
   eval "if ${1}; then return 1; else return 0; fi"
 }
 
-##****f* testlib.sh/track_touched_files
-# NAME
-#   track_touched_files - Start tracking touched files
-# DESCRIPTION
-#   After running track_touched_files, any call to touch will cause that file
-#   to be added to the internal list (touched_files). Just prior to the teardown
-#   phase, all of these files will be automatically removed for your convenience.
-# EXAMPLES
+#**
+# .. function:: track_touched_files
+#
+# Start tracking touched files
+#
+# After running :func:`track_touched_files`, any call to touch will cause that file to be added to the internal list (touched_files). Just prior to the teardown phase, all of these files will be automatically removed for your convenience.
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
 #   setup()
 #   {
 #     track_touched_files
@@ -549,32 +606,33 @@ not_s()
 #     touch /tmp/hiya
 #   )
 #   end_test
-# USAGE
-#   Should be called before the begin_test block, not inside. Inside a ()
-#   subshell block will not work. Setup is the logical place to put it
-# BUGS
-#   Does not work in sh, only bash. Uses array, and I didn't want to make this
-#   use a string instead
 #
-#   Not thread safe. Use a different file for each thread
-# SEE ALSO
-#   testlib.sh/cleanup_touched_files
-# AUTHOR
-#   Andy Neff
-##***
+# .. rubric:: Usage
+#
+# Should be called before the :func:`begin_test` block, not inside. Inside a () subshell block will not work. Setup is the logical place to put it.
+#
+# .. rubric:: Bugs
+#
+# Does not work in sh, only ``bash``. Uses array, and I didn't want to make this use a string instead.
+#
+# Not thread safe. Use a different file for each thread
+#
+# .. seealso::
+#   :func:`cleanup_touched_files`
+#**
 track_touched_files()
 {
   tracking_touched_files=1
 }
 
-##****if* testlib.sh/ttouch
-# NAME
-#   ttouch - Touch function that should behave like the original touch command
-# SEE ALSO
-#   testlib.sh/track_touched_files
-# AUTHOR
-#   Andy Neff
-##***
+#**
+# .. function:: ttouch
+#
+# Touch function that should behave like the original touch command
+#
+# .. seealso::
+#   :func:`track_touched_files`
+#**
 ttouch()
 {
   local filename
@@ -601,14 +659,13 @@ ttouch()
   done
 }
 
-##****if* testlib.sh/cleanup_touched_files
-# NAME
-#   cleanup_touched_files - Delete all the touched files
-# DESCRIPTION
-#   At the end of the last test, delete all the files in the array
-# AUTHOR
-#   Andy Neff
-##***
+#**
+# .. function:: cleanup_touched_files
+#
+# Delete all the touched files
+#
+# At the end of the last test, delete all the files in the array
+#**
 cleanup_touched_files()
 {
   local touched_file

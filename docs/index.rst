@@ -12,6 +12,7 @@ VSI Common documentation
 
    just/index
    linux/index
+   tests/index
 
 Indices and tables
 ==================
