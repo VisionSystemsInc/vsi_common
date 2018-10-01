@@ -3,7 +3,7 @@ import argparse
 
 import numpy as np
 
-PORT = int(int('vsi'.encode('hex'), 16)**0.5)
+PORT = 2786 #int(int('vsi'.encode('hex'), 16)**0.5)
 
 import logging
 logger = logging.getLogger(__name__)

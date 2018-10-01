@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 """ Generate a boxm2-style scene.xml file """
 import argparse
-import vsi.utils.generate_scene_xml as generate_scene_xml
+import vsi.vxl.generate_scene_xml as generate_scene_xml
 import vsi.utils.mesh_utils as mesh_utils
 import sys
 import numpy as np

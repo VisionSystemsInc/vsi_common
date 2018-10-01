@@ -41,6 +41,7 @@ extensions = [
     'sphinx.ext.todo',
     'sphinx.ext.coverage',
     'sphinx.ext.autodoc',
+    'sphinx.ext.napoleon',
     'sphinx.ext.mathjax',
     'sphinx.ext.ifconfig',
     'sphinx.ext.viewcode',
@@ -77,6 +78,13 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = 'sphinx'
+
+# Napoleon parameters
+napoleon_google_docstring = False
+napoleon_use_param = True
+napoleon_use_ivar = True
+napoleon_include_private_with_doc = True
+napoleon_include_special_with_doc = True
 
 
 # -- Options for HTML output -------------------------------------------------

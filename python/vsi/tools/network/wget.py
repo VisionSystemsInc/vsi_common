@@ -2,9 +2,17 @@ try:
   import urllib2
 except ImportError:
   import urllib.request as urllib2
-import Cookie
 
-from StringIO import StringIO
+try:
+  from Cookie import SimpleCookie
+except ImportError:
+  from http.cookies import SimpleCookie
+
+try:
+  from StringIO import StringIO
+except ImportError:
+  from io import StringIO
+
 import zlib
 
 def authorize_basic(user=None, password=None, realm=None, uri=None):
@@ -16,7 +24,7 @@ def authorize_basic(user=None, password=None, realm=None, uri=None):
     urllib2.install_opener(opener)
 
 def _make_cookie_string(cookie):
-  simple_cookie = Cookie.SimpleCookie(cookie)
+  simple_cookie = SimpleCookie(cookie)
   cookie_string = []
   for morsel_name in simple_cookie:
     cookie_string.append('%s=%s' % (morsel_name, simple_sookie[morsel_name].coded_value))
@@ -31,7 +39,7 @@ def download(url, filename=None, chunk_size=2**20, cookie={}, disable_ssl_verify
 
   if cookie:
     request.add_header('Cookie', _make_cookie_string(cookie))
-  
+
   context=None
   if disable_ssl_verify and url.startswith('https://'):
     import ssl
@@ -56,7 +64,7 @@ def download(url, filename=None, chunk_size=2**20, cookie={}, disable_ssl_verify
   else:
     from StringIO import StringIO
     output = StringIO()
-    
+
   buf = True
   while buf:
     buf = response.read(chunk_size)
@@ -64,10 +72,9 @@ def download(url, filename=None, chunk_size=2**20, cookie={}, disable_ssl_verify
       output.write(decompressor.decompress(buf))
     else:
       output.write(buf)
-  
+
   if filename:
     output.close()
   else:
     output.seek(0)
-    return output.read() 
-  
+    return output.read()

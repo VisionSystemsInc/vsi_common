@@ -14,14 +14,16 @@ ENV WORKON_HOME=/venv \
     LANG=C.UTF-8
 ADD Pipfile Pipfile.lock /vsi/docs/
 
-RUN packages=(wxpython pyopencl boxm2_adaptor boxm2_scene_adaptor brl_init vtk); \
-    versions=(4.0.3 2018.2 1.0 1.0 1.0 1.0); \
+RUN packages=(wxpython pyopencl boxm2_adaptor boxm2_scene_adaptor brl_init vtk vpgl_adaptor_boxm2_batch); \
+    versions=(4.0.3 2018.2 1.0 1.0 1.0 1.0 1.0); \
     for x in "${!packages[@]}"; do \
-        mkdir -p "/opt/${packages[$x]}/${packages[$x]}"; \
-        touch "/opt/${packages[$x]}/${packages[$x]}/__init__.py"; \
-        echo "from setuptools import setup, find_packages; setup(name='${packages[$x]}', packages=['${packages[$x]}'], version='${versions[$x]}')" > "/opt/${packages[$x]}/setup.py"; \
+        mkdir -p "/opt/fake_package_${packages[$x]}/${packages[$x]}"; \
+        touch "/opt/fake_package_${packages[$x]}/${packages[$x]}/__init__.py"; \
+        echo "from setuptools import setup, find_packages; setup(name='${packages[$x]}', packages=['${packages[$x]}'], version='${versions[$x]}')" > "/opt/fake_package_${packages[$x]}/setup.py"; \
     done; \
-    pipenv install --keep-outdated /opt/*; \
+    echo "boxm2_scene_adaptor=1" >> /opt/fake_package_boxm2_scene_adaptor/boxm2_scene_adaptor/__init__.py; \
+    echo "create_scene_and_blocks=1; ocl_info=2" >> /opt/fake_package_boxm2_adaptor/boxm2_adaptor/__init__.py; \
+    pipenv install --keep-outdated /opt/fake_package_*; \
     cp "${PIPENV_PIPFILE}.lock" /venv; \
     rm -rf /vsi/* /tmp/pip*
 

@@ -1,7 +1,7 @@
 # approximate some of the functionality of matlab's 'format long g' command.
 # not finished
 import numpy as np
-import terminal_info as ts
+import vsi.console.terminal_info as ts
 
 def repr_g(a):
   (precision, linewidth, edgeitems) = est_options(a)
