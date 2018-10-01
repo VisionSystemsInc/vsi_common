@@ -13,6 +13,7 @@ VSI Common documentation
    just/index
    linux/index
    tests/index
+   python/modules
 
 Indices and tables
 ==================

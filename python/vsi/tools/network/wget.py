@@ -1,4 +1,7 @@
-import urllib2
+try:
+  import urllib2
+except ImportError:
+  import urllib.request as urllib2
 import Cookie
 
 from StringIO import StringIO
