@@ -413,7 +413,8 @@ begin_test "justify calls"
   {
     echo "$1) # Blah" >> file1
     echo '  echo ":'"$1"':" ${@+"${@}"}' >> file1
-    echo "  extra_args+=${2-0}" >> file1
+    echo "  extra=${2-0}" >> file1
+    echo '  extra_args+=$(( extra > $# ? $# : extra))' >> file1
     echo '  ;;' >> file1
   }
 
@@ -464,8 +465,16 @@ begin_test "justify calls"
   # Two args
   [ "$(justify bar)" = ":bar:" ] # Missing arg
   [ "$(justify bar tree)" = ":bar: tree" ] # One arg
-  [ "$(justify bar tree park)" = $':bar: tree park' ] # 2nd arg should be a new call
+  [ "$(justify bar tree park)" = $':bar: tree park' ] # Two args
   [ "$(justify bar tree park zoo)" = $':bar: tree park zoo\n!zoo!' ] # 3rd arg should be a new call
+  [ "$(justify bar tree -- apple)" = $':bar: tree\n:apple:' ] # 2 args plus new call
+  [ "$(justify bar tree park --)" = $':bar: tree park' ] # 2 args
+  [ "$(justify bar tree --)" = $':bar: tree' ] # 1 args
+
+  [ "$(justify bar tree -- bar tree -- apple)" = $':bar: tree\n:bar: tree\n:apple:' ] # 2 args * 2 plus new call
+  [ "$(justify bar tree -- bar tree -- apple --)" = $':bar: tree\n:bar: tree\n:apple:' ] # with trailing --
+  [ "$(justify bar tree -- -- bar tree -- --)" = $':bar: tree\n:bar: tree' ] # with multiple --
+  [ "$(justify bar tree -- bar tree -- --)" = $':bar: tree\n:bar: tree' ] # with two trailing --
 
   # All args
   [ "$(justify rope)" = ":rope:" ] # 0 args
@@ -473,6 +482,8 @@ begin_test "justify calls"
   [ "$(justify rope twine cord)" = ":rope: twine cord" ] # 2 args
   [ "$(justify rope twine sisal string thread yarn lace)" = \
     ":rope: twine sisal string thread yarn lace" ] # 6 args
+
+  [ "$(justify rope twine -- apple)" = $':rope: twine\n:apple:' ] # 2 args plus new call
 
   # Multiple of same target
   [ "$(justify -sea -ocean -water)" = \
