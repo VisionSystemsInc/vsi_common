@@ -661,7 +661,7 @@ if [ ! -e "README.md" ]; then
   fi
 
   if [ "${USE_DOCKER}" = "1" ]; then
-    uwecho "${just_cmd} setup
+    uwecho "${just_cmd} sync
             ${just_cmd} run ${APP_NAME}" >> README.md
   else
     uwecho "${just_cmd} compile
@@ -717,7 +717,7 @@ if [ ! -e "${JUSTFILE}" ]; then
     if [ "${USE_PIPENV}" = "1" ]; then
       uwecho '        (justify build_recipes gosu tini vsi pipenv)
                       Docker-compose build
-                      (justify clean venv)
+                      (justify docker-compose clean venv)
                       (justify _post_build)
                     fi
                     ;;
@@ -737,15 +737,15 @@ if [ ! -e "${JUSTFILE}" ]; then
                     extra_args+=$#
                     ;;
 
-                  setup) # Run any special command to set up the environment for the first \
-                         # time after checking out the repo. Usually population of volumes/databases \
-                         # go here.
-                    (justify _sync)
-                    ;;
                   sync) # Synchronize the many aspects of the project when new code changes \
                         # are applied e.g. after "git checkout"
+                    if [ ! -e "${'"${PROJECT_PREFIX}"'_CWD}/.first_sync" ]; then
+                      # Add any commands here, like initializing a database, etc... that need \
+                      # to be run the first time sync is run.
+                      touch "${'"${PROJECT_PREFIX}"'_CWD}/.first_sync"
+                    fi
                     (justify _sync)
-                    # Add any extra steps run when syncing when not installing
+                    # Add any extra steps run when syncing everytime
                     ;;
                   _sync)
                     Docker-compose down
@@ -755,16 +755,7 @@ if [ ! -e "${JUSTFILE}" ]; then
     if [ "${USE_PIPENV}" = "1" ]; then
       uwecho '    clean_all) # Delete all local volumes
                     ask_question "Are you sure? This will remove packages not in Pipfile!" n
-                    (justify clean venv)
-                    ;;
-                  clean_venv) # Delete the virtual environment volume. The next container \
-                              # to use this volume will automatically copy the contents from \
-                              # the image.
-                    if docker volume inspect "${COMPOSE_PROJECT_NAME}_venv" &> /dev/null; then
-                      Docker volume rm "${COMPOSE_PROJECT_NAME}_venv"
-                    else
-                      echo "${COMPOSE_PROJECT_NAME}_venv already removed" >&2
-                    fi
+                    (justify docker-compose clean venv)
                     ;;' >> "${JUSTFILE}"
     fi
     uwecho   '    *)
@@ -1108,7 +1099,7 @@ if [ "${USE_DOCKER}" = "1" ]; then
             #     cap_add:
             #       - SYS_PTRACE # Useful for gdb
                 volumes:
-                  - type: ${'"${PROJECT_PREFIX}"'_SOURCE_TYPE}
+                  - type: ${'"${PROJECT_PREFIX}"'_SOURCE_DIR_TYPE}
                     source: ${'"${PROJECT_PREFIX}"'_SOURCE_DIR}
                     target: ${'"${PROJECT_PREFIX}"'_SOURCE_DIR_DOCKER}' > "docker-compose.yml"
     if [ "${USE_PIPENV}" = "1" ]; then
@@ -1247,7 +1238,7 @@ uwecho "${just_cmd} help
         Get started with:"
 
 if [ "${USE_DOCKER}" = "1" ]; then
-  uwecho "${just_cmd} setup
+  uwecho "${just_cmd} sync
           ${just_cmd} run ${APP_NAME} bash"
 else
   uwecho "${just_cmd} compile
