@@ -67,7 +67,7 @@ _just()
   local parsed_help_a
   _just_parse_helps ${JUST_HELP_FILES+"${JUST_HELP_FILES[@]}"}
   # Get just command names and remove the comments
-  parsed_help_a=("${parsed_help_a[@]%% ${JUST_HELP_SEPARATOR} *}")
+  parsed_help_a=("${parsed_help_a[@]%% ${JUST_HELP_SEPARATOR}*}")
 
   # Get main commands only
   local just_commands=()
