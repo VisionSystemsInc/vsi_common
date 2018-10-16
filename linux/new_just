@@ -611,21 +611,22 @@ if [ ! -e "${PROJECT_NAME}.env" ]; then
             # should only be used when the directory is guaranteed to exist
             : ${'"${PROJECT_PREFIX}"'_SOURCE_DIR="${'"${PROJECT_PREFIX}"'_CWD}"}
             : ${'"${PROJECT_PREFIX}"'_SOURCE_DIR_DOCKER="/src"}
-
-            # This directory is added to the container using '"${PROJECT_PREFIX}"'_'"${APP_NAME_UPPER}"'_VOLUMES
-            # below. This mechanism is better when the directory doesn'"'"'t exist. The directory
-            # will be created and owned properly
-            : ${'"${PROJECT_PREFIX}"'_DATA_DIR="${'"${PROJECT_PREFIX}"'_SOURCE_DIR}/new-data"}
-            : ${'"${PROJECT_PREFIX}"'_DATA_DIR_DOCKER="/data"}
+            : ${'"${PROJECT_PREFIX}"'_SOURCE_DIR_TYPE=bind}
 
             if [ "${VSI_OS}" = "linux" ]; then
               '"${PROJECT_PREFIX}"'_VOLUMES=("/tmp/.X11-unix:/tmp/.X11-unix:ro"
                   ${'"${PROJECT_PREFIX}"'_VOLUMES+"${'"${PROJECT_PREFIX}"'_VOLUMES[@]}"})
             fi
 
-            '"${PROJECT_PREFIX}"'_'"${APP_NAME_UPPER}"'_VOLUMES=(
-                "${'"${PROJECT_PREFIX}"'_DATA_DIR}:${'"${PROJECT_PREFIX}"'_DATA_DIR_DOCKER}"
-                ${'"${PROJECT_PREFIX}"'_'"${APP_NAME_UPPER}"'_VOLUMES+"${'"${PROJECT_PREFIX}"'_'"${APP_NAME_UPPER}"'_VOLUMES[@]}"})
+            # Example of a Dynamic Volume, that is created programatically instead
+            # always there. This directory is added to the container using '"${PROJECT_PREFIX}"'_'"${APP_NAME_UPPER}"'_VOLUMES.
+            # This mechanism is better when the directory doesn'"'"'t exist, as the directory
+            # will be created and owned properly, unlike docker'"'"'s default behavior
+            # : ${'"${PROJECT_PREFIX}"'_DATA_DIR="${'"${PROJECT_PREFIX}"'_SOURCE_DIR}/new-data"}
+            # : ${'"${PROJECT_PREFIX}"'_DATA_DIR_DOCKER="/data"}
+            # '"${PROJECT_PREFIX}"'_'"${APP_NAME_UPPER}"'_VOLUMES=(
+            #     "${'"${PROJECT_PREFIX}"'_DATA_DIR}:${'"${PROJECT_PREFIX}"'_DATA_DIR_DOCKER}"
+            #     ${'"${PROJECT_PREFIX}"'_'"${APP_NAME_UPPER}"'_VOLUMES+"${'"${PROJECT_PREFIX}"'_'"${APP_NAME_UPPER}"'_VOLUMES[@]}"})
 
             ###############################################################################
             # Non-'"${PROJECT_PREFIX}"' Settings
@@ -660,7 +661,7 @@ if [ ! -e "README.md" ]; then
   fi
 
   if [ "${USE_DOCKER}" = "1" ]; then
-    uwecho "${just_cmd} setup
+    uwecho "${just_cmd} sync
             ${just_cmd} run ${APP_NAME}" >> README.md
   else
     uwecho "${just_cmd} compile
@@ -716,7 +717,7 @@ if [ ! -e "${JUSTFILE}" ]; then
     if [ "${USE_PIPENV}" = "1" ]; then
       uwecho '        (justify build_recipes gosu tini vsi pipenv)
                       Docker-compose build
-                      (justify clean venv)
+                      (justify docker-compose clean venv)
                       (justify _post_build)
                     fi
                     ;;
@@ -732,19 +733,19 @@ if [ ! -e "${JUSTFILE}" ]; then
                     ;;' >> "${JUSTFILE}"
     fi
     uwecho   '    run_'"${APP_NAME}"') # Run '"${APP_NAME}"' 1
-                    Just-docker-compose run '"${APP_NAME}"' ${@+"${@}"}
+                    Just-docker-compose run --service-ports '"${APP_NAME}"' ${@+"${@}"}
                     extra_args+=$#
                     ;;
 
-                  setup) # Run any special command to set up the environment for the first \
-                         # time after checking out the repo. Usually population of volumes/databases \
-                         # go here.
-                    (justify _sync)
-                    ;;
                   sync) # Synchronize the many aspects of the project when new code changes \
                         # are applied e.g. after "git checkout"
+                    if [ ! -e "${'"${PROJECT_PREFIX}"'_CWD}/.first_sync" ]; then
+                      # Add any commands here, like initializing a database, etc... that need
+                      # to be run the first time sync is run.
+                      touch "${'"${PROJECT_PREFIX}"'_CWD}/.first_sync"
+                    fi
                     (justify _sync)
-                    # Add any extra steps run when syncing when not installing
+                    # Add any extra steps run when syncing everytime
                     ;;
                   _sync)
                     Docker-compose down
@@ -754,16 +755,7 @@ if [ ! -e "${JUSTFILE}" ]; then
     if [ "${USE_PIPENV}" = "1" ]; then
       uwecho '    clean_all) # Delete all local volumes
                     ask_question "Are you sure? This will remove packages not in Pipfile!" n
-                    (justify clean venv)
-                    ;;
-                  clean_venv) # Delete the virtual environment volume. The next container \
-                              # to use this volume will automatically copy the contents from \
-                              # the image.
-                    if docker volume inspect "${COMPOSE_PROJECT_NAME}_venv" &> /dev/null; then
-                      Docker volume rm "${COMPOSE_PROJECT_NAME}_venv"
-                    else
-                      echo "${COMPOSE_PROJECT_NAME}_venv already removed" >&2
-                    fi
+                    (justify docker-compose clean venv)
                     ;;' >> "${JUSTFILE}"
     fi
     uwecho   '    *)
@@ -1088,7 +1080,7 @@ if [ "${USE_DOCKER}" = "1" ]; then
     uwecho 'version: "2.3"
 
             services:
-              '"${APP_NAME}"': &'"${APP_NAME}"'_anchor
+              '"${APP_NAME}"':
                 build:
                   context: .
                   dockerfile: docker/'"${APP_NAME}"'.Dockerfile
@@ -1107,7 +1099,7 @@ if [ "${USE_DOCKER}" = "1" ]; then
             #     cap_add:
             #       - SYS_PTRACE # Useful for gdb
                 volumes:
-                  - type: bind
+                  - type: ${'"${PROJECT_PREFIX}"'_SOURCE_DIR_TYPE}
                     source: ${'"${PROJECT_PREFIX}"'_SOURCE_DIR}
                     target: ${'"${PROJECT_PREFIX}"'_SOURCE_DIR_DOCKER}' > "docker-compose.yml"
     if [ "${USE_PIPENV}" = "1" ]; then
@@ -1117,9 +1109,7 @@ if [ "${USE_DOCKER}" = "1" ]; then
     fi
     uwecho '#       - type: volume
             #         source: home-volume
-            #         target: ${'"${PROJECT_PREFIX}"'_HOME} # home-volume should be overridable
-              '"${APP_NAME}"'2:
-                <<: *'"${APP_NAME}"'_anchor' >> "docker-compose.yml"
+            #         target: ${'"${PROJECT_PREFIX}"'_HOME} # home-volume should be overridable' >> "docker-compose.yml"
     if [ "${USE_PIPENV}" = "1" ]; then
       uwecho 'volumes:
                 venv:' >> "docker-compose.yml"
@@ -1246,7 +1236,7 @@ uwecho "${just_cmd} help
         Get started with:"
 
 if [ "${USE_DOCKER}" = "1" ]; then
-  uwecho "${just_cmd} setup
+  uwecho "${just_cmd} sync
           ${just_cmd} run ${APP_NAME} bash"
 else
   uwecho "${just_cmd} compile

@@ -23,7 +23,7 @@
 # .. envvar:: CUDA_VERSION
 #
 # The version of ``CUDA`` being used
-# 
+#
 # :file:`cuda_info.bsh` will attempt to discover the ``CUDA`` Development Kit in commonly known locations, and accumulate a list of all discovered CDKs in the sorted array CUDA_VERSIONS. Then, the highest capable version of ``CUDA`` is picked and set to :envvar:`CUDA_VERSION`.
 #
 # :envvar:`CUDA_VERSION` can optionally be set to a specific version (e.g. "7.5.13"), in which case other ``CUDA`` versions will not be discovered and ``CUDA_VERSIONS`` will not be populated.
@@ -151,6 +151,8 @@ function discover_cuda_info()
   local IFS="${IFS}"
   local OLD_IFS="${IFS}"
 
+  CUDA_CARD_FAMILIES=()
+
   # Attempt to use deviceQuery
   if command -v "${DEVICE_QUERY-deviceQuery}" &> /dev/null; then
     local card_info cuda_card_arches cuda_card_families
@@ -163,7 +165,6 @@ function discover_cuda_info()
       IFS=$'\n'
       CUDA_CARDS=($(echo "${card_info}" | \grep ^Device | \awk '{$1=$2=""; $0=$0; $1=$1}1' | \sed 's|"||g'))
       IFS="${OLD_IFS}"
-      CUDA_CARD_FAMILIES=()
       cuda_card_arches=(1 2 3 5 6 7) # Major version
       cuda_card_families=(Tesla Fermi Kepler Maxwell Pascal Volta) # Family name
       for x in ${CUDA_CARD_ARCHES+"${CUDA_CARD_ARCHES[@]}"}; do
@@ -195,7 +196,7 @@ function discover_cuda_info()
     CUDA_CARDS=($(echo "${card_info}" | \grep Model: | \awk '{$1=""; $0=$0; $1=$1}1'))
     IFS="${OLD_IFS}"
   else
-    echo "deviceQuery not found and nvidia-docker plugin not running"
+    echo "deviceQuery not found and nvidia-docker v1 plugin not running"
     echo "deviceQuery can be downloaded from https://www.vsi-ri.com/bin/deviceQuery60"
     echo "or https://goo.gl/equvX3"
   fi

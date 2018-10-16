@@ -254,11 +254,18 @@ def catch_request(request):
 class FileGetter(threading.Thread):
   """Thread class for retrieving a URL
 
+  Parameters
+  ----------
+  url : string
+      The url
+  param2 : float
+      The Start Time
+
   Attributes
   ----------
   url : string
       The url
-  start : float
+  attr2 : float
       The Start Time
 
   """
@@ -339,9 +346,20 @@ class FilePutter(threading.Thread):
   
   Parameters
   ----------
+  url : string
+      The url
+  param2 : float
+      The Start Time
+  size : array_like
+      
 
-  Returns
-  -------
+  Attributes
+  ----------
+  url : string
+      The url
+  attr2 : float
+      The Start Time
+  size : array_like
 
   """
 
