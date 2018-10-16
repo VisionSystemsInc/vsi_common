@@ -4,6 +4,7 @@ import sys
 
 class Try(object):
   ''' Try catch helper for cases when you want to ignore certain exceptions '''
+  
   def __init__(self, default_ignore=Exception, *other_ignore):
     ''' Arguments of Exception classes to ignore. Default is all '''
     self.ignore = (default_ignore,) + other_ignore
@@ -57,7 +58,7 @@ def get_file(fid, mode='rb'):
       Keyword Arguments:
       fid - File object or filename
       mode - Optional, file mode to open file if filename supplied
-             Default rb'''
+      Default rb'''
 
   if is_string_like(fid):
     fid = open(fid, mode)
@@ -71,8 +72,8 @@ def static(**kwargs):
 
       @static(count=0)
       def test(a, b):
-        test.count += 1
-        print(a+b, test.count)
+      |  test.count += 1
+      |  print(a+b, test.count)
   '''
   def decorate(func):
     for k in kwargs:
@@ -83,9 +84,7 @@ def static(**kwargs):
 class OptionalArgumentDecorator(object):
   ''' Decorator for easily defining a decorator class that may take arguments
 
-      Write a decorator class as normal, that would always take arguments, and
-      make sure they all have default values. Then just add this decorator and
-      both notations will work
+      Write a decorator class as normal, that would always take arguments, and make sure they all have default values. Then just add this decorator and both notations will work
 
       '''
   def __init__(self, *args):
@@ -107,12 +106,15 @@ class OptionalArgumentDecorator(object):
 
 class _BasicDecorator(object):
   ''' A basic decorator class that does not take arguments'''
+
   def __init__(self, fun):
     ''' No need to rewrite this '''
+
     self.fun = fun
 
   def __call__(self, *args, **kwargs):
     '''re-write this. No need for super'''
+
     #pre wrap code
     result = self.fun(*args, **kwargs)
     #postwrap code
@@ -125,11 +127,13 @@ class _BasicArgumentDecorator(object):
 
   def __call__(self, fun):
     ''' No need to rewrite this '''
+
     self.fun = fun
     return self.__inner_call__
 
   def __inner_call__(self, *args, **kwargs):
     '''re-write this. No need for super'''
+
     #pre wrap code
     result = self.fun(*args, **kwargs)
     #postwrap code
@@ -229,21 +233,13 @@ KWARGS=-2
 def args_to_kwargs(function, args=tuple(), kwargs={}):
   '''returns a single dict of all the args and kwargs
 
-     Should handle: functions, classes (their __init__), bound and unbound 
-       versions of methods, class methods, and static methods. Furthermore,
-       if a class instance has a __call__ method, this is used.
+     Should handle: functions, classes (their __init__), bound and unbound versions of methods, class methods, and static methods. Furthermore, if a class instance has a __call__ method, this is used.
 
      It does not call the function.
 
-     The returned dictionary has the keywords that would be received in a real
-       function call. Leftover args are put into the key ARGS(-1), and leftover
-       KWARGS are placed in the key KWARGS(-2). While everything should behave
-       exactly as python would, certain failure situations are not reproduced,
-       for exampled it does not raise exception if you declare the same 
-       parameter in both *args and **kwargs)
+     The returned dictionary has the keywords that would be received in a real function call. Leftover args are put into the key ARGS(-1), and leftover KWARGS are placed in the key KWARGS(-2). While everything should behave exactly as python would, certain failure situations are not reproduced, for exampled it does not raise exception if you declare the same  parameter in both /*/args and /**/kwargs)
 
-     Only works for python2. need to use signature instead of getargspec for 
-     python3.
+     Only works for python2. need to use signature instead of getargspec for python3.
 
      Based on:
      https://github.com/merriam/dectools/blob/master/dectools/dectools.py'''
