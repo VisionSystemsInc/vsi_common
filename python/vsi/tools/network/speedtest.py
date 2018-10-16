@@ -86,10 +86,6 @@ try:
   import builtins
 except ImportError:
   def print_(*args, **kwargs):
-    """The new-style print function taken from
-    https://pypi.python.org/pypi/six/
-
-    """
     fp = kwargs.pop("file", sys.stdout)
     if fp is None:
       return
@@ -140,29 +136,8 @@ else:
 
 
 class SpeedtestCliServerListError(Exception):
-  """Internal Exception class used to indicate to move on to the next
-  URL for retrieving speedtest.net server details
-
-  """
-
 
 def bound_socket(*args, **kwargs):
-  """Bind socket to a specified source IP address
-  
-  Parameters
-  ----------
-  *args
-      Variable length argument list.
-  **kwargs
-      Arbitrary keyword arguments.
-
-  Returns
-  -------
-  float
-      The Socket
-
-  """
-
   global source
   sock = socket_socket(*args, **kwargs)
   sock.bind((source, 0))
@@ -170,21 +145,6 @@ def bound_socket(*args, **kwargs):
 
 
 def distance(origin, destination):
-  """Determine distance between 2 sets of [lat,lon] in km
-  
-  Parameters
-  ----------
-  origin : array_like
-      The origin
-  destination : array_like
-      The Dest
-
-  Returns
-  -------
-  float
-      Distance in km
-
-  """
 
   lat1, lon1 = origin
   lat2, lon2 = destination
@@ -202,48 +162,11 @@ def distance(origin, destination):
   return d
 
 def build_request(url, data=None, headers={}):
-  """Build a urllib2 request object
-
-  This function automatically adds a User-Agent header to all requests
-
-  Parameters
-  ----------
-  url : string
-      The url
-  data : string
-
-  headers : array_like
-      The header
-
-  Returns
-  -------
-  string
-      The url
-
-  """
-
   headers['User-Agent'] = user_agent
   return Request(url, data=data, headers=headers)
 
 
 def catch_request(request):
-  """Helper function to catch common exceptions encountered when
-  establishing a connection with a HTTP/HTTPS request
-
-  Parameters
-  ----------
-  request : string
-      The url
-
-  Returns
-  -------
-  file_like
-      a "file-like" handle to the remote data
-  bool
-      False if error opening the url
-  
-  """
-
   try:
     uh = urlopen(request)
     return uh
@@ -252,23 +175,6 @@ def catch_request(request):
 
 
 class FileGetter(threading.Thread):
-  """Thread class for retrieving a URL
-
-  Parameters
-  ----------
-  url : string
-      The url
-  param2 : float
-      The Start Time
-
-  Attributes
-  ----------
-  url : string
-      The url
-  attr2 : float
-      The Start Time
-
-  """
 
   def __init__(self, url, start):
     self.url = url
@@ -292,20 +198,6 @@ class FileGetter(threading.Thread):
 
 
 def downloadSpeed(files, quiet=False):
-  """Function to launch FileGetter threads and calculate download speeds
-  
-  Parameters
-  ----------
-  files : list
-      List of urls
-  quiet : bool
-
-  Returns
-  -------
-  float
-      The download speed
-
-"""
 
   start = timeit.default_timer()
 
@@ -342,26 +234,6 @@ def downloadSpeed(files, quiet=False):
 
 
 class FilePutter(threading.Thread):
-  """Thread class for putting a URL
-  
-  Parameters
-  ----------
-  url : string
-      The url
-  param2 : float
-      The Start Time
-  size : array_like
-      
-
-  Attributes
-  ----------
-  url : string
-      The url
-  attr2 : float
-      The Start Time
-  size : array_like
-
-  """
 
   def __init__(self, url, start, size):
     self.url = url
@@ -389,21 +261,6 @@ class FilePutter(threading.Thread):
 
 
 def uploadSpeed(url, sizes, quiet=False):
-  """Function to launch FilePutter threads and calculate upload speeds
-  
-  Parameters
-  ----------
-  url : string
-      The best url
-  sizes : array_like
-  quiet : array_like
-
-  Returns
-  -------
-  float
-      The Upload Speed
-
-  """
 
   start = timeit.default_timer()
 
@@ -440,46 +297,11 @@ def uploadSpeed(url, sizes, quiet=False):
 
 
 def getAttributesByTagName(dom, tagName):
-  """Retrieve an attribute from an XML document and return it in a
-  consistent format
-
-  Only used with xml.dom.minidom, which is likely only to be used
-  with python versions older than 2.5
-
-  Parameters
-  ----------
-  element: dom
-      The Document Object Model
-  string:tagName
-      The XML tag Name
-
-  Returns
-  -------
-  dict
-      Attributes from an EXL document
-
-  """
   elem = dom.getElementsByTagName(tagName)[0]
   return dict(list(elem.attributes.items()))
 
 
 def getConfig():
-  """Download the speedtest.net configuration and return only the data
-  we are interested in
-
-  Returns
-  -------
-  dict
-      Pertinent data from configuration
-
-  Raises
-  ------
-  AttributeError
-      Failure of an attribute assignment
-  SyntaxError
-
-  """
-
   request = build_request('https://www.speedtest.net/speedtest-config.php')
   uh = catch_request(request)
   if uh is False:
@@ -517,30 +339,6 @@ def getConfig():
 
 
 def closestServers(client, all=False):
-  """Determine the 5 closest speedtest.net servers based on geographic  distance
-
-  Parameters
-  ----------
-  client : string
-      Physical location of the client
-
-  all : bool
-      * False if the 5 closest servers have not been determined
-      * True if they have.
-
-  Returns
-  -------
-  array_like
-    The Five Closest Servers
-
-  Raises
-  ------
-  AttributeError
-      Failure of an attribute assignment
-  SyntaxError
-
-  """
-
   urls = [
     'https://www.speedtest.net/speedtest-servers-static.php',
     'http://c.speedtest.net/speedtest-servers-static.php',
@@ -613,20 +411,6 @@ def closestServers(client, all=False):
 
 
 def getBestServer(servers):
-  """Perform a speedtest.net latency request to determine which speedtest.net server has the lowest latency
-
-  Parameters
-  ----------
-  servers : dict
-      Servers that will be checked to see which one has the lowest latency
-
-  Returns
-  -------
-  array_like
-      The Best Server
-
-  """
-
   results = {}
   for server in servers:
     cum = []
@@ -662,55 +446,16 @@ def getBestServer(servers):
 
 
 def ctrl_c(signum, frame):
-  """Catch Ctrl-C key sequence and set a shutdown_event for our threaded operations
-
-  Parameters
-  ----------
-  signum : int
-      The Signal Number
-  frame : abstract data type
-      The Stack Frame
-
-  Raises
-  ------
-  SystemExit
-      If Ctrl-C sequence is detected
-  """
-
   global shutdown_event
   shutdown_event.set()
   raise SystemExit('\nCancelling...')
 
 
 def version():
-  """Print the version
-  
-  Raises
-  ------
-  SystemExit
-
-"""
-
   raise SystemExit(__version__)
 
 
 def speedtest():
-  """Run the full speedtest.net test
-
-  Returns
-  -------
-
-  Raises
-  ------
-  AttributeError
-      Failure of an attribute assignment
-  URLError
-  NameError
-  IOError
-  IndexError
-
-"""
-
   global shutdown_event, source
   shutdown_event = threading.Event()
 
@@ -955,15 +700,6 @@ def speedtest():
 
 
 def main():
-  """
-
-  Raises
-  ------
-  KeyboardInterrupt
-    Cancels execution when a keyboard key is pressed
-
-  """
-
   try:
     speedtest()
   except KeyboardInterrupt:
