@@ -52,7 +52,7 @@ aa = parser.add_argument
 aa('--notebook-dir',
    default=os.path.expanduser(os.path.join('~', 'notebooks')),
    help="Location where the notebooks will be stored")
-aa('--ip', default='*', help='IP the notebook server will bind to')
+aa('--ip', default='0.0.0.0', help='IP the notebook server will bind to')
 aa('--port', default='8888', help='Port the notebook server will bind to')
 aa('--browser', default=False, action='store_true',
    help='Open the web browser on start')
