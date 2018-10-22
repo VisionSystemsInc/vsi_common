@@ -86,10 +86,6 @@ try:
   import builtins
 except ImportError:
   def print_(*args, **kwargs):
-    """The new-style print function taken from
-    https://pypi.python.org/pypi/six/
-
-    """
     fp = kwargs.pop("file", sys.stdout)
     if fp is None:
       return
@@ -140,15 +136,8 @@ else:
 
 
 class SpeedtestCliServerListError(Exception):
-  """Internal Exception class used to indicate to move on to the next
-  URL for retrieving speedtest.net server details
-
-  """
-
 
 def bound_socket(*args, **kwargs):
-  """Bind socket to a specified source IP address"""
-
   global source
   sock = socket_socket(*args, **kwargs)
   sock.bind((source, 0))
@@ -156,7 +145,6 @@ def bound_socket(*args, **kwargs):
 
 
 def distance(origin, destination):
-  """Determine distance between 2 sets of [lat,lon] in km"""
 
   lat1, lon1 = origin
   lat2, lon2 = destination
@@ -173,24 +161,12 @@ def distance(origin, destination):
 
   return d
 
-
 def build_request(url, data=None, headers={}):
-  """Build a urllib2 request object
-
-  This function automatically adds a User-Agent header to all requests
-
-  """
-
   headers['User-Agent'] = user_agent
   return Request(url, data=data, headers=headers)
 
 
 def catch_request(request):
-  """Helper function to catch common exceptions encountered when
-  establishing a connection with a HTTP/HTTPS request
-
-  """
-
   try:
     uh = urlopen(request)
     return uh
@@ -199,7 +175,6 @@ def catch_request(request):
 
 
 class FileGetter(threading.Thread):
-  """Thread class for retrieving a URL"""
 
   def __init__(self, url, start):
     self.url = url
@@ -223,7 +198,6 @@ class FileGetter(threading.Thread):
 
 
 def downloadSpeed(files, quiet=False):
-  """Function to launch FileGetter threads and calculate download speeds"""
 
   start = timeit.default_timer()
 
@@ -260,7 +234,6 @@ def downloadSpeed(files, quiet=False):
 
 
 class FilePutter(threading.Thread):
-  """Thread class for putting a URL"""
 
   def __init__(self, url, start, size):
     self.url = url
@@ -288,7 +261,6 @@ class FilePutter(threading.Thread):
 
 
 def uploadSpeed(url, sizes, quiet=False):
-  """Function to launch FilePutter threads and calculate upload speeds"""
 
   start = timeit.default_timer()
 
@@ -325,21 +297,11 @@ def uploadSpeed(url, sizes, quiet=False):
 
 
 def getAttributesByTagName(dom, tagName):
-  """Retrieve an attribute from an XML document and return it in a
-  consistent format
-
-  Only used with xml.dom.minidom, which is likely only to be used
-  with python versions older than 2.5
-  """
   elem = dom.getElementsByTagName(tagName)[0]
   return dict(list(elem.attributes.items()))
 
 
 def getConfig():
-  """Download the speedtest.net configuration and return only the data
-  we are interested in
-  """
-
   request = build_request('https://www.speedtest.net/speedtest-config.php')
   uh = catch_request(request)
   if uh is False:
@@ -377,10 +339,6 @@ def getConfig():
 
 
 def closestServers(client, all=False):
-  """Determine the 5 closest speedtest.net servers based on geographic
-  distance
-  """
-
   urls = [
     'https://www.speedtest.net/speedtest-servers-static.php',
     'http://c.speedtest.net/speedtest-servers-static.php',
@@ -453,10 +411,6 @@ def closestServers(client, all=False):
 
 
 def getBestServer(servers):
-  """Perform a speedtest.net latency request to determine which
-  speedtest.net server has the lowest latency
-  """
-
   results = {}
   for server in servers:
     cum = []
@@ -492,24 +446,16 @@ def getBestServer(servers):
 
 
 def ctrl_c(signum, frame):
-  """Catch Ctrl-C key sequence and set a shutdown_event for our threaded
-  operations
-  """
-
   global shutdown_event
   shutdown_event.set()
   raise SystemExit('\nCancelling...')
 
 
 def version():
-  """Print the version"""
-
   raise SystemExit(__version__)
 
 
 def speedtest():
-  """Run the full speedtest.net test"""
-
   global shutdown_event, source
   shutdown_event = threading.Event()
 

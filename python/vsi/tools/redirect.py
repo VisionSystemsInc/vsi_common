@@ -17,7 +17,8 @@ class Logger(object):
       Careful when using this, if the logging out goes to a stream that is
       redireted, you have an infinite capture loop and does not go well
 
-      Use PopenRedirect instead of Redirect in that case'''
+      Use PopenRedirect instead of Redirect in that case '''
+      
   def __init__(self, logger, lvl=logging.INFO):
     ''' Create a wrapper for logger using lvl level '''
 
@@ -415,7 +416,7 @@ class Capture(RedirectBase): #version 1
       c stdout/stderr, usually fd 1 and 2. Because of this, there are 4
       streams to consider
 
-      Once Redirect is done, the results are store in
+      Once Redirect is done, the results are stored in
       >>> self.stdout_c - Standard out output for c
       >>> self.stderr_c - Standard error output for c
       >>> self.stdout_py - Standard out output for python
@@ -656,7 +657,7 @@ class StdRedirect(object):
       >>> with StdRedirect(test):
       ...   boxm2_batch.print_db()
 
-      Supports stdout and stderr, and stderr can be set to StdRedirect.STDOUT
+      Supports stdout and stderr, and stderr can be set to StdRedirect. STDOUT
       to use the same output as stdout'''
 
   STDOUT = -1

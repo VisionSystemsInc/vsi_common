@@ -7,24 +7,13 @@ def sub_block(data, block=3, overlap=0, subok=False):
   ''' Return an array of windows into the original data array.
 
       data - N-dimensional array
-      block - The block size of the final blocks. Should have length N or be a
-              single number
-      overlap - The amount of overlap between windows. A value of 0 has no
-                overlap, while positive values overlap by that much, and
-                negative values have gaps of that size.
+      block - The block size of the final blocks. Should have length N or be a single number
+      overlap - The amount of overlap between windows. A value of 0 has no overlap, while positive values overlap by that much, and negative values have gaps of that size.
       subok - Passed to as_strided
 
       Return Values:
-      windows - N + N dimensional array where the first N dimensions are the
-                window indexes, and the next N dimension are the data
-                dimensions. Keep in mind, all the data is linked to the
-                original data array. Changing values in one place changes them
-                all.
-      remainders - An N length list of the number of elements not included in
-                   the windows: the remainder of the sub-blocks. Another
-                   function could use these values to sub_block over them too.
-                   In the 2D case, there would be 3 groups of windows, in 3D
-                   case 6 groups of windows, etc...
+      windows - N + N dimensional array where the first N dimensions are the window indexes, and the next N dimension are the data dimensions. Keep in mind, all the data is linked to the original data array. Changing values in one place changes them all.
+      remainders - An N length list of the number of elements not included in the windows: the remainder of the sub-blocks. Another function could use these values to sub_block over them too. In the 2D case, there would be 3 groups of windows, in 3D case 6 groups of windows, etc...
 
       Usage Example:
 

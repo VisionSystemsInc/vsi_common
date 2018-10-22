@@ -1,0 +1,38 @@
+vsi.windows package
+===================
+
+Submodules
+----------
+
+vsi.windows.find\_process module
+--------------------------------
+
+.. automodule:: vsi.windows.find_process
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+vsi.windows.named\_pipes module
+-------------------------------
+
+.. automodule:: vsi.windows.named_pipes
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+vsi.windows.wmic module
+-----------------------
+
+.. automodule:: vsi.windows.wmic
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+
+Module contents
+---------------
+
+.. automodule:: vsi.windows
+    :members:
+    :undoc-members:
+    :show-inheritance:

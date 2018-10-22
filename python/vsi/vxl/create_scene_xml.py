@@ -157,31 +157,20 @@ def create_scene_xml(gpu_device, refinements, gsd,
   ''' Create a scene xml file based off of input parameters
 
       Required arguments:
-      gpu_device - The GPU device used for the block size calculation. The
-                   scene will be made to fit specifically on that gpu device
-      refinements - Number of refinement passes. Max should be 3, even if you
-                    refine more times than 3 times.
-      gsd - The desired voxel size. This is in meters when using lla notation
+      gpu_device - The GPU device used for the block size calculation. The scene will be made to fit specifically on that gpu device
+      refinements - Number of refinement passes. Max should be 3, even if you refine more times than 3 times. gsd - The desired voxel size. This is in meters when using lla notation
 
       Mutually exclusive arguments:
-      lla1,lla2 - The min and max (in order) longitude, latitude, altitude
-                  coordinates for bounding box of the scene. Will be expanded
-                  to the next sublock
-      lvcs1, lvcs2 - The min and max (in order) x, y, z coordinates for
-                     bounding box of the scene. Will be expanded to the next
-                     sublock
+      lla1,lla2 - The min and max (in order) longitude, latitude, altitude coordinates for bounding box of the scene. Will be expanded to the next sublock
+      lvcs1, lvcs2 - The min and max (in order) x, y, z coordinates for bounding box of the scene. Will be expanded to the next sublock
 
       Optional arguments:
       origin - Origin of scene. Default: lla1 or (0,0,0) if lvcs1 is used
-      output_file - Output file object. Must support .write.
-                    Default: sys.stdout
-      model_dir - The model dir used. is_model_local="true" is always used
-                  Default: "."
-      appearance_models - Tuple of appearance models to be used.
-                          Default: ('boxm2_mog3_grey','boxm2_num_obs')
+      output_file - Output file object. Must support .write.  Default: sys.stdout
+      model_dir - The model dir used. is_model_local="true" is always used  Default: "."
+      appearance_models - Tuple of appearance models to be used. Default: ('boxm2_mog3_grey','boxm2_num_obs')
       number_bins - Sets the num_illumination_bins. Default: 1
-      n_bytes_gpu - Optional override gpu_device memory size. Useful for CPU
-                    OpenCL
+      n_bytes_gpu - Optional override gpu_device memory size. Useful for CPU  OpenCL
       '''
 
   #impose mutually exclusive constraint

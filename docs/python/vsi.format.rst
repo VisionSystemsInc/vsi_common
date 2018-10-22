@@ -1,0 +1,22 @@
+vsi.format package
+==================
+
+Submodules
+----------
+
+vsi.format.format\_long\_g module
+---------------------------------
+
+.. automodule:: vsi.format.format_long_g
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+
+Module contents
+---------------
+
+.. automodule:: vsi.format
+    :members:
+    :undoc-members:
+    :show-inheritance:

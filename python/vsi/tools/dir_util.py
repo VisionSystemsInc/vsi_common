@@ -10,8 +10,7 @@ def is_subdir(path, base_dir):
   ''' Determines if the path is in the base_dir
 
       Returns a tuple containing (True/False, and remainder (relative) of path)
-      Remainder - Windows - If the paths are on two different drives, entire
-                            path is returned
+      Remainder - Windows - If the paths are on two different drives, entire path is returned
 
       This will NOT work with Junctions in Windows... I'm not sure what else'''
 
