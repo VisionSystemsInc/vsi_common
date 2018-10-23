@@ -161,13 +161,15 @@ class Redirect(RedirectBase): #Version 2
       situations are tricky. This class will help you, by using a with
       statement.
 
-      from StringIO import StringIO
-      stdout = StringIO()
-      with Redirect(stdout=stdout):
-        some_library.call157()
+      Example::
 
-      stdout.seek(0,0)
-      print(stdout.read())
+          from StringIO import StringIO
+          stdout = StringIO()
+          with Redirect(stdout=stdout):
+            some_library.call157()
+
+          stdout.seek(0,0)
+          print(stdout.read())
 
       There are 4 output pipe of concern, none of which are synced with
       each other (flushed together).

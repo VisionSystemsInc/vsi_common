@@ -9,10 +9,32 @@ from shutil import Error, copy2, copystat, rmtree
 def is_subdir(path, base_dir):
   ''' Determines if the path is in the base_dir
 
-      Returns a tuple containing (True/False, and remainder (relative) of path)
-      Remainder - Windows - If the paths are on two different drives, entire path is returned
+  Parameters
+  ----------
+  path : str
+    The Path
+  base_dir : str
+    The Base Directory
 
-      This will NOT work with Junctions in Windows... I'm not sure what else'''
+  Returns
+  -------
+  tuple
+      containing (True/False, and remainder (relative) of path)
+
+  str
+      Remainder - Windows - If the paths are on two different drives, entire
+      path is returned
+
+  Raises
+  ------
+  ValueError
+      Inappropriate Value
+
+  Note
+  ----
+  This will NOT work with Junctions in Windows... I'm not sure what else
+  
+  '''
 
   path = os.path.normcase(os.path.normpath(os.path.abspath(os.path.realpath(
       path))))
@@ -30,14 +52,48 @@ def is_subdir(path, base_dir):
   return (True, relative)
 
 def mkdtemp(*args, **kwargs):
-  ''' Version of tempfile.mkdtemp that is r/w by uid and gid'''
+  ''' Version of tempfile.mkdtemp that is r/w by uid and gid
+  
+  Parameters
+  ----------
+  *args
+      Variable length argument list.
+  **kwargs
+      Arbitrary keyword arguments.
+
+  Returns
+  -------
+  str
+      The Temp Directory
+  '''
   tempdir = mkdtemp_orig(*args, **kwargs)
   os.chmod(tempdir, 0o770)
   return tempdir
 
 class Chdir(object):
   ''' Simple helper function to change dir and guarantee you get back to your
-      original directory
+  original directory
+
+      Attributes
+      ----------
+      dir : str
+          the directory you want to change directory to
+      create : str
+          Optional: Create the directory if it doesn't exist (else os error 2
+          will occur) Default: False
+      error_on_exit : bool
+          When exiting the with loop, if the return directory does not exist
+          anymore, (OSError 2), if this is true an error is thrown, else it is
+          ignore and you are left in the new directory. Default: False
+
+    Examples
+    --------
+    These are written in doctest format, and should illustrate how to
+    use the function.
+
+    >>> a=[1,2,3]
+    >>> print [x + 3 for x in a]
+    [4, 5, 6]
 
       Example:
 
@@ -54,19 +110,21 @@ class Chdir(object):
       /
 
       '''
+
   def __init__(self, dir, create=False, error_on_exit=False):
     ''' Create Chdir object
 
-        Required arguments
-        dir - the directory you want to change directory to
-
-        Optional arguments
-        create - Create the directory if it doesn't exist (else os error 2 
+        Parameters
+        ----------
+        dir : str
+            the directory you want to change directory to
+        create : str
+            Optional: Create the directory if it doesn't exist (else os error 2 
                  will occur) Default: False
-        error_on_exit - When exiting the with loop, if the return directory 
-                        does not exist anymore, (OSError 2), if this is true
-                        an error is thrown, else it is ignore and you are left
-                        in the new directory. Default: False
+        error_on_exit : bool
+            When exiting the with loop, if the return directory does not exist
+            anymore, (OSError 2), if this is true an error is thrown, else it
+            is ignore and you are left in the new directory. Default: False
         '''
     self.dir = dir
     self.oldDir = None
@@ -80,6 +138,23 @@ class Chdir(object):
     os.chdir(self.dir)
 
   def __exit__(self, exc_type, exc_value, traceback):
+    ''' Exits if the previous directory no longer exists.
+
+    Parameters
+    ----------
+    exc_type : str
+        The Execption Type
+    exc_value : float
+        The Exception Value
+    traceback : str
+        The Traceback
+
+    Raises
+    ------
+    OSError
+        Previous directory does not exist anymore.
+
+    '''
     try:
       os.chdir(self.oldDir)
     except OSError as osError:
@@ -113,29 +188,35 @@ class TempDir(object):
                delete_if_not_create=False, *args, **kwargs):
     ''' Create a temp dir object
 
-        Arguments
-
-        dir - Base dir must exist. Default is None. None will only work if
-              mkdtemp is true.
-        cd - Change into the temp dir (and change back). Default: false
-        mkdtemp - Call mkdtemp in dir to create a temp dir. Default: false
-                  Try and use this INSTEAD of delete_if_not_create, much safer.
-                  The class must call mkdtemp for you, or else it will not have
-                  "created" the directory, thus introducing unsafe situations
-                  where a directory may be inadvertently deleted if you
-                  accidentally tell it to be.
-        delete - Delete on exit. Default: true
-        delete_if_not_create - Default: false. Delete the directory "dir"
-                               even if it was not created by TempDir. ONLY
-                               TURN THIS ON when you are absolutely sure you
-                               want this directory deleted. Make sure the
-                               input dir is something you want deleted, or
-                               else just don't use this argument! For example,
-                               in an unsanitized case the tempdir could be / or
-                               something like /home/username. Then / or the
-                               entire home directory would be deleted! That
-                               has to be bad, right?
-        *args/**kwargs - Passed on to Chdir (mostly for error_on_exit)'''
+        Parameters
+        ----------
+        dir : 
+            Base dir must exist. Default is None. None will only work if
+            mkdtemp is true.
+        cd : bool
+            Change into the temp dir (and change back). Default: false
+        mkdtemp : array_like
+            Call mkdtemp in dir to create a temp dir. Default: false
+            | Try and use this INSTEAD of delete_if_not_create, much safer.
+            The class must call mkdtemp for you, or else it will not have
+            "created" the directory, thus introducing unsafe situations where
+            a directory may be inadvertently deleted if you accidentally tel
+            it to be.
+        delete : bool
+            Delete on exit. Default: true
+        delete_if_not_create : bool
+          Default: false. Delete the directory "dir" even if it was not created
+           by TempDir. ONLY TURN THIS ON when you are absolutely sure you want
+           this directory deleted. Make sure the input dir is something you
+           want deleted, or else just don't use this argument! For example, in
+           an unsanitized case the tempdir could be / or something like
+           /home/username. Then / or the entire home directory would be
+           deleted! That has to be bad, right?
+        *args
+            Variable length argument list.
+        **kwargs
+            Passed on to Chdir (mostly for error_on_exit)
+    '''
 
     self.base_dir= dir
 
@@ -174,6 +255,18 @@ class TempDir(object):
     return self.dir
 
   def __exit__(self, exc_type, exc_value, traceback):
+    ''' Exits if the previous directory no longer exists.
+
+    Parameters
+    ----------
+    exc_type : str
+        The Execption Type
+    exc_value : float
+        The Exception Value
+    traceback : 
+        The Traceback
+
+    '''
     if self.cd:
       self.cd.__exit__(exc_type, exc_value, traceback)
     #The reason for not making this all automatically work is JUST IN
@@ -186,9 +279,28 @@ class TempDir(object):
 def checksum_dir(checksum, checksum_depth=2, base_dir=None):
   ''' Generate checksum directory name
 
-      For example, if the checksum was 1234567890abcdef, and the depth was 3, 
-      you would get 12/34/56/1234567890abcdef
+      Parameters
+      ---------
+      checksum : float
+          The Checksum
+      checksum_depth : int
+          The Checksum Depth
+      base_dir : str
+          The base Directory
 
+      Returns
+      ------
+      str
+          The Path
+
+
+      Example
+      -------
+      If the checksum was 1234567890abcdef, and the depth was 3, you would get 
+      12/34/56/1234567890abcdef
+
+      Note
+      ----
       An optional base_dir will be prefixed'''
 
   dir_parts = [checksum[x:x+2] if x<checksum_depth*2 else checksum \
@@ -203,31 +315,39 @@ def checksum_dir(checksum, checksum_depth=2, base_dir=None):
 def copytree(src, dst, symlinks=False, ignore=None):
     """Recursively copy a directory tree using copy2().
 
-    The destination directory may not already exist.
-    If exception(s) occur, an Error is raised with a list of reasons.
-
-    If the destination directory exists, it will be clobber by the 
-    source, including replacing entire directory trees with symlinks,
-    if the symlinks flags is true.
-
-    If the optional symlinks flag is true, symbolic links in the
-    source tree result in symbolic links in the destination tree; if
-    it is false, the contents of the files pointed to by symbolic
-    links are copied.
-
-    The optional ignore argument is a callable. If given, it
-    is called with the `src` parameter, which is the directory
-    being visited by copytree(), and `names` which is the list of
-    `src` contents, as returned by os.listdir():
+    Parameters
+    ----------
+    src : array_like
+        The Source Tree
+    dst : str
+        The Destination Directory may not already exist. If exception(s) occur,
+        an Error is raised with a list of reasons.  If the destination
+        directory exists, it will be clobber by the source, including replacing
+        entire directory trees with symlinks, if the symlinks flags is true.
+    symlinks : bool
+        Optional. True if the symbolic links in the source tree result in
+        symbolic links in the destination tree. False if the contents of the
+        files pointed to by symbolic links are copied.
+    ignore : array_like
+        The optional ignore argument is a callable. If given, it is called with
+        the `src` parameter, which is the directory being visited by
+        copytree(), and `names` which is the list of `src` contents, as
+        returned by os.listdir():
 
         callable(src, names) -> ignored_names
 
-    Since copytree() is called recursively, the callable will be
-    called once for each directory that is copied. It returns a
-    list of names relative to the `src` directory that should
-    not be copied.
+        Since copytree() is called recursively, the callable will be called
+        once for each directory that is copied. It returns a list of names
+        relative to the `src` directory that should not be copied.
+
 
     XXX Consider this example code rather than the ultimate tool.
+
+    Raises
+    ------
+        EnvironmentError
+        OSError
+        WindowsError
 
     """
     names = os.listdir(src)
@@ -282,25 +402,53 @@ def copytree(src, dst, symlinks=False, ignore=None):
 def root_dir(directory):
   ''' OS independent way of getting the root directory of a directory
 
+      Parameters
+      ----------
+      directory : array_like
+          The Directory
+
+      Returns
+      -------
+      str
+          The Root Directory
+
+
       On Windows
-      C:\tmp\blah.txt -> C:\
-      D:\Program Files\calc.exe -> D:\
+
+      >>> C:\tmp\blah.txt -> C:\
+         D:\Program Files\calc.exe -> D:\
+
 
       On Linux/Darwin
-      /tmp/blah.txt -> /
+
+      >>> /tmp/blah.txt -> /
   '''
   return os.path.splitdrive(directory)[0] + os.sep
 
 def samefile(path1, path2, normpath=True):
   ''' OS independent version of os.path.samefile
 
-      Optional normpath=True. In posix cases when you want symlinks to be
-      followed instead of normalized out, this would be useful to set to false.
-      For example
-      >> os.symlink('/usr/bin', '/tmp/blah')
-      >> samefile('/usr', '/tmp/blah/..')
+      Parameters
+      ----------
+      path1 : str
+      path2 : str
+      normpath : bool
+          Optional normpath=True. In posix cases when you want symlinks to be
+          followed instead of normalized out, this would be useful to set to
+          false.
+
+      Returns
+      -------
+      str
+          OS independent version of the path
+
+
+      Example:
+
+      >>> os.symlink('/usr/bin', '/tmp/blah')
+      >>> samefile('/usr', '/tmp/blah/..')
       False
-      >> samefile('/usr', '/tmp/blah/..', normpath=False)
+      >>> samefile('/usr', '/tmp/blah/..', normpath=False)
       True
   '''
   if normpath:
@@ -315,7 +463,19 @@ def samefile(path1, path2, normpath=True):
 def prune_dir(directory, top_dir=None):
   ''' Remove directory and ancestor directories if they are empty
 
-      Optional argument top_dir, prevents pruning below that directory'''
+      Parameters
+      ----------
+      directory : str
+          The Directory
+      top_dir : str
+          Optional argument top_dir, prevents pruning below that directory
+
+
+      Raises
+      ------
+      OSError
+
+      '''
 
   #Fill out default value
   if top_dir is None:

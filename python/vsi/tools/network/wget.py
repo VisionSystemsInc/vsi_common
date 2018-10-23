@@ -16,7 +16,25 @@ except ImportError:
 import zlib
 
 def authorize_basic(user=None, password=None, realm=None, uri=None):
-  ''' Call before calling download '''
+  ''' Call before calling download 
+  
+  Parameters
+  ----------
+  user : string
+      The User
+  password : string
+      The Password
+  realm : string
+      The Realm
+  uri : string
+      The Uri
+
+  Returns
+  -------
+  string
+      The filename
+  
+  '''
   if user and password and realm and uri:
     auth_handler = urllib2.HTTPBasicAuthHandler()
     auth_handler.add_password(realm=realm, uri=uri, user=user, passwd=password)

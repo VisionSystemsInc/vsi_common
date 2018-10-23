@@ -3,21 +3,66 @@ from __future__ import print_function # Python2 compat
 import sys
 
 class Try(object):
-  ''' Try catch helper for cases when you want to ignore certain exceptions '''
+  ''' Try catch helper for cases when you want to ignore certain exceptions 
+  
+      Attributes
+      ----------
+      default_ignore : array_like
+        Arguments of Exception classes is set to ignore. Default is all.
+      *other_ignore : str
+      
+      '''
   
   def __init__(self, default_ignore=Exception, *other_ignore):
-    ''' Arguments of Exception classes to ignore. Default is all '''
+    ''' Arguments of Exception classes to ignore. Default is all 
+    
+        Parameters
+        ----------
+        default_ignore : array_like
+            Arguments of Exception classes is set to ignore. Default is all.
+        *other_ignore : str
+      
+        '''
+
     self.ignore = (default_ignore,) + other_ignore
   def __enter__(self):
     pass
   def __exit__(self, exc_type=None, exc_value=None, traceback=None):
+    ''' Exits if the previous directory no longer exists.
+
+    Parameters
+    ----------
+    exc_type : str
+        The Execption Type
+    exc_value : float
+        The Exception Value
+    traceback : str
+        The Traceback
+
+    Returns
+    -------
+    bool
+        True if subclass
+
+    '''
+
     if exc_type is None:
       return
     if issubclass(exc_type, self.ignore):
       return True
 
 def reloadModules(pattern='.*', skipPattern='^IPython'):
-  ''' Reload modules that match pattern regular expression (string or compile re) '''
+  ''' Reload modules that match pattern regular expression (string or
+  compile re) 
+  
+  Parameters
+  ----------
+  pattern : str
+      pattern regular expression
+  skipPattern : str
+
+  
+  '''
 
   from types import ModuleType
   import sys
@@ -45,6 +90,22 @@ def is_string_like(obj):
   Check whether obj behaves like a string.
 
   Copied from numpy
+
+  Parameters
+  ----------
+  obj : str
+      type of object
+
+  Returns
+  -------
+  bool
+      True if object behaves like a string. False otherwise.
+
+  Raises
+  ------
+  TypeError
+  ValueError
+
   """
   try:
     obj + ''
@@ -55,10 +116,19 @@ def is_string_like(obj):
 def get_file(fid, mode='rb'):
   ''' Helper function to take either a filename or fid
 
-      Keyword Arguments:
-      fid - File object or filename
-      mode - Optional, file mode to open file if filename supplied
-      Default rb'''
+      Arguments
+      ---------
+      fid : str
+          File object or filename
+      mode :str
+          Optional, file mode to open file if filename supplied
+          Default rb
+          
+      Returns
+      -------
+      str
+          The Filename
+      '''
 
   if is_string_like(fid):
     fid = open(fid, mode)
@@ -68,13 +138,21 @@ def get_file(fid, mode='rb'):
 def static(**kwargs):
   ''' Decorator for easily defining static variables
 
-      Example:
+      Parameters
+      ----------
+      **kwargs
+          Arbitrary keyword arguments.
 
-      @static(count=0)
-      def test(a, b):
-      |  test.count += 1
-      |  print(a+b, test.count)
+
+      Example::
+
+            @static(count=0)
+            def test(a, b):
+              test.count += 1
+              print(a+b, test.count)
+
   '''
+
   def decorate(func):
     for k in kwargs:
       setattr(func, k, kwargs[k])
@@ -84,10 +162,24 @@ def static(**kwargs):
 class OptionalArgumentDecorator(object):
   ''' Decorator for easily defining a decorator class that may take arguments
 
-      Write a decorator class as normal, that would always take arguments, and make sure they all have default values. Then just add this decorator and both notations will work
+      Write a decorator class as normal, that would always take arguments, and
+      make sure they all have default values. Then just add this decorator and
+      both notations will work
+
+      Attributes
+      ----------
+      *args
+          Variable length argument list.
 
       '''
   def __init__(self, *args):
+    '''
+    Parameters
+    ----------
+    *args
+          Variable length argument list.
+
+    '''
     if len(args)==1:
       #normal use
       self.cls = args[0]
@@ -99,21 +191,60 @@ class OptionalArgumentDecorator(object):
       self.cls = type(args[0], parents, args[2])
 
   def __call__(self, *args, **kwargs):
+    '''
+    Parameters
+    ----------
+    *args
+        Variable length argument list.
+    **kwargs
+        Arbitrary keyword arguments.
+
+    Returns
+    -------
+    array_like
+
+    '''
     if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
       return self.cls()(args[0])
     else:
       return self.cls(*args, **kwargs)
 
 class _BasicDecorator(object):
-  ''' A basic decorator class that does not take arguments'''
+  ''' A basic decorator class that does not take arguments
+  
+      Attributes
+      ----------
+      fun : 
+          
+      '''
 
   def __init__(self, fun):
-    ''' No need to rewrite this '''
+    ''' No need to rewrite this 
+        
+        Parameters
+        ----------
+        fun : 
+
+    '''
 
     self.fun = fun
 
   def __call__(self, *args, **kwargs):
-    '''re-write this. No need for super'''
+    '''re-write this. No need for super
+
+       Parameters
+       ----------
+       *args
+          Variable length argument list.
+       **kwargs
+            Arbitrary keyword arguments.
+
+       Returns
+       -------
+       arrray_like
+            The Result
+
+    '''
 
     #pre wrap code
     result = self.fun(*args, **kwargs)
@@ -126,13 +257,26 @@ class _BasicArgumentDecorator(object):
       It's best to define __init__ with a proper signature when inheriting'''
 
   def __call__(self, fun):
-    ''' No need to rewrite this '''
+    ''' No need to rewrite this 
+
+        Parameters
+        ----------
+        fun : 
+
+    '''
 
     self.fun = fun
     return self.__inner_call__
 
   def __inner_call__(self, *args, **kwargs):
-    '''re-write this. No need for super'''
+    '''re-write this. No need for super
+       Parameters
+       ----------
+       *args
+          Variable length argument list.
+       **kwargs
+            Arbitrary keyword arguments.
+    '''
 
     #pre wrap code
     result = self.fun(*args, **kwargs)
@@ -155,54 +299,68 @@ class BasicDecorator(_BasicArgumentDecorator):
       @OptionalArgumentDecorator decorator yourself, and don't inherit from
       that.
 
-      Example:
+      Example::
 
-      class MyDecor(BasicDecorator):
-        def __init__(self, name='Default'):
-          self.name = name
-        def __inner_call__(self, first_arg, *args, **kwargs):
-          result = self.fun(first_arg, *args, **kwargs)
-          print(self.name, first_arg, result)
-          return result
+          class MyDecor(BasicDecorator):
+            def __init__(self, name='Default'):
+              self.name = name
+            def __inner_call__(self, first_arg, *args, **kwargs):
+              result = self.fun(first_arg, *args, **kwargs)
+              print(self.name, first_arg, result)
+              return result
 
-      @MyDecor
-      def test1(x, y):
-        return x+y
+          @MyDecor
+          def test1(x, y):
+            return x+y
 
-      @MyDecor('not default')
-      def test2(x, y):
-        return x+y
+          @MyDecor('not default')
+          def test2(x, y):
+            return x+y
 
-      test1(11,22)
-      test2(10,2)
+          test1(11,22)
+          test2(10,2)
 
       '''
 
 class WarningDecorator(object):
   ''' Decorator to add to a function to print a message out when called
 
-      Usage:
+      Attributes
+      ----------
+      *args
+          message
+      **kwargs
+          output_stream
 
-      @WarningDecorator
-      def my_prototype(x, y):
-        print(x/y)
+      no arguments (no '()' either)
 
-      @WarningDecorator('Warning: Unstable Code')
-      def my_prototype(x, y):
-        print(x/y)
 
-      @WarningDecorator(output_stream=sys.stdout)
-      def my_prototype(x, y):
-        print(x/y)
+      Example::
+
+          @WarningDecorator
+          def my_prototype(x, y):
+            print(x/y)
+
+          @WarningDecorator('Warning: Unstable Code')
+          def my_prototype(x, y):
+            print(x/y)
+
+          @WarningDecorator(output_stream=sys.stdout)
+          def my_prototype(x, y):
+            print(x/y)
 
   '''
   def __init__(self, *args, **kwargs):
     ''' Initilize decorator
 
-        Arguments:
-          message, output_stream
-         or
-          no arguments (no '()' either)
+        Arguments
+        ---------
+        *args
+            message
+        **kwargs
+            output_stream
+
+        no arguments (no '()' either)
     '''
     if hasattr(args[0], '__call__'): #duck typing
       self.init1(*args, **kwargs)
@@ -219,6 +377,7 @@ class WarningDecorator(object):
     self.output_stream = output_stream
 
   def __call__(self, *args, **kwargs):
+
     if hasattr(self, 'fun'):
       print(self.message, file=self.output_stream)
       return self.fun(*args, **kwargs)
@@ -233,13 +392,31 @@ KWARGS=-2
 def args_to_kwargs(function, args=tuple(), kwargs={}):
   '''returns a single dict of all the args and kwargs
 
-     Should handle: functions, classes (their __init__), bound and unbound versions of methods, class methods, and static methods. Furthermore, if a class instance has a __call__ method, this is used.
+     Should handle: functions, classes (their __init__), bound and unbound
+     versions of methods, class methods, and static methods. Furthermore, if a
+     class instance has a __call__ method, this is used.
 
      It does not call the function.
 
-     The returned dictionary has the keywords that would be received in a real function call. Leftover args are put into the key ARGS(-1), and leftover KWARGS are placed in the key KWARGS(-2). While everything should behave exactly as python would, certain failure situations are not reproduced, for exampled it does not raise exception if you declare the same  parameter in both /*/args and /**/kwargs)
+     Parameters
+     ----------
+     function : func
+        The Function
+     args : tuple
+     kwargs : array_like
 
-     Only works for python2. need to use signature instead of getargspec for python3.
+     Returns
+     -------
+     dict
+        The returned dictionary has the keywords that would be received in a 
+        real function call. Leftover args are put into the key ARGS(-1), and 
+        leftover KWARGS are placed in the key KWARGS(-2). While everything 
+        should behave exactly as python would, certain failure situations are 
+        not reproduced,for exampled it does not raise exception if you declare 
+        the same parameter in both /*/args and /**/kwargs)
+
+     Only works for python2. need to use signature instead of getargspec for
+     python3.
 
      Based on:
      https://github.com/merriam/dectools/blob/master/dectools/dectools.py'''
@@ -313,10 +490,35 @@ def args_to_kwargs(function, args=tuple(), kwargs={}):
   return params
 
 def args_to_kwargs2(function, *args, **kwargs):
+  '''
+     Parameters
+     ----------
+     *args
+          Variable length argument list.
+     **kwargs
+          Arbitrary keyword arguments.
+
+     
+     Returns
+     -------
+     array_like
+
+  '''
   return args_to_kwargs(function, args, kwargs)
 
 
 def command_list_to_string(cmd):
+  '''
+    Parameters
+    ----------
+    cmd : list
+        The Command List
+
+    Returns
+    -------
+    str
+        The Command List as a string
+  '''
   try:
     from shlex import quote
   except:
