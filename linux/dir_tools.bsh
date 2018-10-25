@@ -157,6 +157,103 @@ __make_temp_dir_cleanup()
 }
 
 #**
+# .. function:: normpath
+#
+# :Argumetns: * ``1`` - path
+#
+# :Output: *stdout* - Normalized path
+#
+# Prints out a normalized version of the path. With .., //, and ./ simplified out, and removes trailing /
+#
+# Unlike :file:`real_path`, this works on non-existing path, but is not as reliable as :file:`real_path`
+#**
+
+# sed -nE  ':block_start
+#               # If the beginning pattern matched, start reading the block
+#               /^#\*\*/b read_block
+#               # Else do not print, goes to next line
+#               b noprint
+#               :read_block
+#               # read the next line
+#               n
+#               # If the end of doc comment, move on to noprint
+#               /^ *#\*\*/{
+#                 # Print a blank line. This removes the requirement that
+#                 # the doc writer has to add blank # lines at the end of
+#                 # a comment block. Other wise you get a lot of "Explicit
+#                 # markup ends without a blank line; unexpected unindent."
+#                 # warnings
+#                 s/.*//
+#                 p
+#                 b noprint
+#               }
+#               # If a line starting with #
+#               /^ *#/{
+#                 # Remove those extra spaced, #, and an optional space
+#                 s/#+ ?//
+#                 # print it
+#                 p
+#               }
+#               # continue reading the block
+#               b read_block
+#               # Move on
+#               :noprint
+#              ' "${src_file}" > "${doc_dir}/${doc_file}"
+normpath()
+{
+  local IFS
+  local x
+  local components
+  local new_components=()
+  local absolute=0
+
+  IFS=/
+  components=(${1})
+
+  # Special for absolute path
+  if [ "${1:0:1}" = "/" ]; then
+    absolute=1
+  fi
+
+  for x in "${!components[@]}"; do
+    current="${components[$x]}"
+    if [ "${current}" = "." ] || [ -z "${current}" ]; then
+      continue
+    elif [ "${current}" = ".." ]; then
+      if [ "${#new_components[@]}" = "0" ]; then
+        if [ "${absolute}" = "1" ]; then
+          continue
+        else
+          new_components+=("${current}")
+        fi
+      else
+        if [ "${new_components[${#new_components[@]}-1]}" = ".." ]; then
+          new_components+=("${current}")
+        else
+          unset "new_components[${#new_components[@]}-1]"
+        fi
+      fi
+    else
+      new_components+=("${current}")
+    fi
+  done
+
+  declare -p new_components >&2
+
+  if [ "${absolute}" = "1" ]; then
+    echo "/${new_components+${new_components[*]}}"
+  elif [ "${#new_components[@]}" -gt 0 ] && [ "${new_components[0]}" = ".." ]; then
+    echo "${new_components[*]}"
+  else
+    if [ "${#new_components[@]}" -gt 0 ]; then
+      echo "./${new_components+${new_components[*]}}"
+    else
+      echo "."
+    fi
+  fi
+}
+
+#**
 # .. function:: basenames
 #
 # :Arguments: * ``1`` - Number of levels to keep
@@ -167,9 +264,11 @@ __make_temp_dir_cleanup()
 #**
 basenames()
 {
-  local d="${2}"
+  local y="/${2}"
+  local dirnames="/${2}"
   for ((x=0; x<"${1}"; x++)); do
-    d="${d%/*}"
+    # Remove a single directory layer
+    dirnames="${dirnames%/*}"
   done
-  echo "${2#"${d}"/}"
+  echo "${y#"${dirnames}"/}"
 }
