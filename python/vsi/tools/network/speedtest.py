@@ -136,6 +136,11 @@ else:
 
 
 class SpeedtestCliServerListError(Exception):
+    """Internal Exception class used to indicate to move on to the next
+  URL for retrieving speedtest.net server details
+
+  """
+
 
 def bound_socket(*args, **kwargs):
   global source

@@ -7,6 +7,18 @@ import inspect
 class PopenBg(subprocess.Popen):
 
   def __init__(self, *args, **kwargs):
+    ''' Parameters
+        ----------
+        *args
+            Variable length argument list.
+        **kwargs
+            Arbitrary keyword arguments.
+
+        Returns
+        -------
+        proxy
+            Access the base class.
+        '''
     if subprocess.mswindows:
       kwargs = inspect.getcallargs(
           subprocess.Popen.__init__, self, *args, **kwargs)

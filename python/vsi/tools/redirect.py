@@ -20,13 +20,27 @@ class Logger(object):
       Use PopenRedirect instead of Redirect in that case '''
       
   def __init__(self, logger, lvl=logging.INFO):
-    ''' Create a wrapper for logger using lvl level '''
+    ''' Create a wrapper for logger using lvl level
+
+        Parameters
+        ----------
+        logger : str
+            The logger
+        lvl : str
+            Level
+        '''
 
     self.logger=logger
     self.lvl = lvl
 
   def write(self, str):
-    ''' Write method '''
+    ''' Write method
+
+        Parameters
+        ----------
+        str : str
+            The String
+        '''
     str = str.rstrip()
     if str:
       self.logger.log(self.lvl, str)
@@ -58,9 +72,17 @@ class FileRedirect(object):
   def __init__(self, outputs=[]):
     ''' Create a FileRedirect
 
-        outputs - list of outputs objects to write to. For every output in
-                  outputs, an rid in self.rids and wid in self.wids is created
-                  when call with with '''
+        Parameters
+        ----------
+        outputs : list
+            list of outputs objects to write to. For every output in outputs, 
+            an rid in self.rids and wid in self.wids is created when call with 
+            with
+
+        Yields
+        ------
+        list
+            list of outputs objects. '''
     self.outputs = outputs
 
   def __enter__(self):
@@ -81,7 +103,17 @@ class FileRedirect(object):
   def __exit__(self, exc_type=None, exc_value=None, traceback=None):
     ''' Closes the write ends of the pipes, and join with monitoring threads
 
-        The read pipes are automatically closed by the monitors'''
+        The read pipes are automatically closed by the monitors
+        
+        Parameters
+        ----------
+        exc_type : str
+            The Execption Type
+        exc_value : float
+            The Exception Value
+        traceback : str
+            The Traceback
+            '''
     for wid in self.wids:
       wid.close()
 
@@ -92,7 +124,13 @@ class FileRedirect(object):
     ''' Function to read all the data and write to output
 
         Automactically closes read pipe when done. Can only be stopped by
-        closing the write end of pipe.'''
+        closing the write end of pipe.
+        
+        Parameters
+        ----------
+        streamIndex : int
+            The Stream Index
+        '''
     rid = self.rids[streamIndex]
     wid = self.wids[streamIndex]
     output = self.outputs[streamIndex]
@@ -107,7 +145,13 @@ class FileRedirect(object):
   def startMonitor(self, stream_index):
     ''' Start a new thread to monitor the stream
 
-        Should only be called once per stream_index'''
+        Should only be called once per stream_index
+        
+        Parameters
+        ----------
+        stream_index : int
+            The Stream Index
+        '''
     self.tids.append(threading.Thread(target=self.__bleed, args=(stream_index,)))
     self.tids[-1].start()
 
@@ -127,9 +171,12 @@ class PopenRedirect(FileRedirect):
                      stderr=type('Bar', (object,), {'write':lambda x,y:None})()):
     ''' Create PopenRedirect object
 
-        Parameters:
-        stdout - Stdout File like object, must have .write method
-        stderr - Stderr File like object, must have .write method
+        Parameters
+        ----------
+        stdout : file_like
+            Stdout File like object, must have .write method
+        stderr : file_like
+            Stderr File like object, must have .write method
         '''
     self.stdout_output = stdout
     self.stderr_output = stderr
@@ -138,10 +185,20 @@ class PopenRedirect(FileRedirect):
 
   @property
   def stdout(self):
+    ''' Returns
+        -------
+        str
+            First object in wireless intrusion prevention system list.
+        '''
     return self.wids[0]
 
   @property
   def stderr(self):
+    ''' Returns
+        -------
+        str
+            Second object in wireless intrusion prevention system list.
+        '''
     return self.wids[1]
 
 class Redirect(RedirectBase): #Version 2
@@ -161,13 +218,15 @@ class Redirect(RedirectBase): #Version 2
       situations are tricky. This class will help you, by using a with
       statement.
 
-      from StringIO import StringIO
-      stdout = StringIO()
-      with Redirect(stdout=stdout):
-        some_library.call157()
+      Example::
 
-      stdout.seek(0,0)
-      print(stdout.read())
+          from StringIO import StringIO
+          stdout = StringIO()
+          with Redirect(stdout=stdout):
+            some_library.call157()
+
+          stdout.seek(0,0)
+          print(stdout.read())
 
       There are 4 output pipe of concern, none of which are synced with
       each other (flushed together).
@@ -183,11 +242,17 @@ class Redirect(RedirectBase): #Version 2
       Known bugs: In windows, after stdout_c is done being redirected, stdout
       buffering appears to no longer be disabled in interactive mode. What this
       means is typing
+
       >>> print(123)
+
       No longer returns 123 right away, without a
+
       >>> sys.stdout.flush()
+
       Why? I'm guessing os.dup2 breaks the buffered mode. The fix is to
+
       >>> sys.stdout = os.fdopen(sys.__stdout__.fileno(), 'w', 0)
+
       However this can only be done once or twice, and then starts failing.
 
       Work around is to redirect stdout when calling the command.
@@ -208,33 +273,42 @@ class Redirect(RedirectBase): #Version 2
                stdout_py_name='stdout', stderr_py_name='stderr'):
     ''' Create the Redirect object
 
-        Optional Arguments: File Output Argument. All File output arguments
-          should use File like Python objects that have a .write call.
-          Many of the argument override the other argument for ease of use
+        Optional Arguments
+        ------------------
+        file_like
+            File Output Argument. All File output arguments should use File 
+            like Python objects that have a .write call. Many of the arguments 
+            override the other argument for ease of use
 
-        all - Output stdout_c, stderr_c, stdout_py and stderr_py to the
-              all file.
-        stdout - Output stdout_c and stdout_py to the stdout file.
-        stderr - Output stderr_c and stderr_py to the stderr file.
-        c - Output stdout_c and stderr_c to the c file.
-        py - Output stdout_py and stderr_py to the py file.
+        Parameters
+        ----------
+        all : str
+            Output stdout_c, stderr_c, stdout_py and stderr_py to the all file.
+        stdout : str
+            Output stdout_c and stdout_py to the stdout file.
+        stderr : str
+            Output stderr_c and stderr_py to the stderr file.
+        c : str
+            Output stdout_c and stderr_c to the c file.
+        py : str
+            Output stdout_py and stderr_py to the py file.
         stdout_c, stderr_c, stdout_py, stderr_py - Output to each
               individual stream for maximum customization.
 
-        Other Optional Arguments:
-
-        stdout_c_fd, stderr_c_fd - The default file number used for
-              stdout (1) and stderr (2). There should be no reason to
-              override this
+        Other Optional Arguments
+        ------------------------
+        stdout_c_fd, stderr_c_fd : int
+             The default file number used for stdout (1) and stderr (2). There 
+             should be no reason to override this
         stdout_module, stderr_module
-        stdout_name, stderr_name - Because of the nature of python, in
-              order to replace and restore the python object, the module
-              and name of attribute must be passed through, where name is a
-              string and module and the acutal module. The default is sys
-              module and "stdout" or "stderr" (Including the quotes). Again,
-              there should be no real reason to override these, unless you are
-              doing some IPython/colorama redirecting, or any other library
-              that messes with sys.stdout/sys.stderr
+        stdout_name, stderr_name : str
+            Because of the nature of python, in order to replace and restore 
+            the python object, the module and name of attribute must be passed 
+            through, where name is a string and module and the acutal module. 
+            The default is sys module and "stdout" or "stderr" (Including the 
+            quotes). Again, there should be no real reason to override these, 
+            unless you are doing some IPython/colorama redirecting, or any 
+            other library that messes with sys.stdout/sys.stderr
               '''
     #copy original file information
     self.stdout_c_fd=stdout_c_fd
@@ -349,7 +423,17 @@ class Redirect(RedirectBase): #Version 2
     ''' exit function for with statement.
 
         Restores stdout and sterr, closes write pipe and joins with the
-        threads'''
+        threads
+        
+        Parameters
+        ----------
+        exc_type : str
+            The Execption Type
+        exc_value : float
+            The Exception Value
+        traceback : str
+            The Traceback
+        '''
     #Flush
     self.flush()
 
@@ -374,10 +458,30 @@ class Redirect(RedirectBase): #Version 2
       tid.join()
 
   def startMonitor(self, readPipe, output):
+    ''' Parameters
+        ----------
+        readPipe : str
+            File descriptor number of the read pipe (from by os.pipe)
+        output : int
+            The xth buffer to store the string in.
+
+        Yields
+        ------
+        array_like
+            Appends the thread object to self.tids
+
+    '''
     self.tids.append(threading.Thread(target=self.__bleed, args=(readPipe, output)))
     self.tids[-1].start()
 
   def __bleed(self, fid, output):
+    ''' Parameters
+        ----------
+        fid : str
+            The File Handle
+        output : str
+            A chunk of the file
+        '''
     chunk = True
 
     fid_py = os.fdopen(fid)
@@ -400,10 +504,12 @@ class Capture(RedirectBase): #version 1
       situations are tricky. This class will help you, by using a with
       statement.
 
-      with Redirect() as rid:
-        some_library.call157()
+      Example::
 
-      print(rid.stdout)
+          with Redirect() as rid:
+            some_library.call157()
+
+          print(rid.stdout)
 
       There are 4 output pipe of concern, none of which are synced with
       each other (flushed together).
@@ -417,6 +523,7 @@ class Capture(RedirectBase): #version 1
       streams to consider
 
       Once Redirect is done, the results are stored in
+
       >>> self.stdout_c - Standard out output for c
       >>> self.stderr_c - Standard error output for c
       >>> self.stdout_py - Standard out output for python
@@ -424,8 +531,10 @@ class Capture(RedirectBase): #version 1
 
       When the streams are grouped, they both contain the same data.
       In the group_out and group_err case, an addtion attribute is defined
+
       >>> self.stdout - Standard out output
       >>> self.stderr - Standard error output
+
       Just to make it easier
 
 
@@ -434,9 +543,11 @@ class Capture(RedirectBase): #version 1
       been drinking too much. Well, this is easy to do by calling Redirect
       twice:
 
-      with Redirect(stdout_c=None, stderr_py=None) as rid1:
-        with Redirect(stderr_c=None, stdout_py=None) as rid2:
-          stuff()
+      Example::
+
+          with Redirect(stdout_c=None, stderr_py=None) as rid1:
+            with Redirect(stderr_c=None, stdout_py=None) as rid2:
+              stuff()
 
       Now rid1's buffer has just stderr_c and stdout_py as one group
       stream and rid2 has stfout_c and stderr_py as one grouped stream'''
@@ -447,25 +558,34 @@ class Capture(RedirectBase): #version 1
                      group_outerr=True, group_out=True, group_err=True):
     ''' Initialize the Redirect object
 
-        Optional Arguments:
-        stdout_c - The fd to be replace, usually 1 will work, but change it
-                   in case this is not right in your case (default: 1)
-                   None means to not redirect
-        stderr_c - The fd to be replaced, usually 2 will work, but change it
-                   in case this is not right in your case (default: 2)
-                   None means to not redirect
-        stdout_py - The file object to be replaced (default: sys.stdout)
-                    None means to not redirect
-        stderr_py - The file object to be replaced (default: sys.stderr)
-                    None means to not redirect
-        group - Should ANY of the stream be joined together. This
-                overrides ALL of the following group options
-        group_outerr - Should stdout and stderr use the a group stream or
-                       else it will have separate streams (default: True)
-        group_out - Should stdout_c and stdout_py use the a group stream or
-                    else it will have separate streams (default: True)
-        group_err - Should stderr_c and stderr_py use the a group stream or
-                    else it will have separate streams (default: True)'''
+        Optional Parameters
+        -------------------
+        stdout_c : int
+            The fd to be replace, usually 1 will work, but change it in case 
+            this is not right in your case (default: 1)
+            None means to not redirect
+        stderr_c : int
+            The fd to be replaced, usually 2 will work, but change it in case 
+            this is not right in your case (default: 2)
+            None means to not redirect
+        stdout_py : file_like
+            The file object to be replaced (default: sys.stdout)
+            None means to not redirect
+        stderr_py : file_like
+            The file object to be replaced (default: sys.stderr)
+            None means to not redirect
+        group : bool
+            Should ANY of the stream be joined together. This overrides ALL of 
+            the following group options
+        group_outerr : bool
+            Should stdout and stderr use the a group stream or else it will 
+            have separate streams (default: True)
+        group_out : bool 
+            Should stdout_c and stdout_py use the a group stream or else it 
+            will have separate streams (default: True)
+        group_err : bool
+            Should stderr_c and stderr_py use the a group stream or else it 
+            will have separate streams (default: True)'''
     self.stdout_c_fd=stdout_c
     self.stderr_c_fd=stderr_c
     self.stdout_py_fid=stdout_py
@@ -528,7 +648,14 @@ class Capture(RedirectBase): #version 1
 
         This function reads large chuncks at a time (for efficientcy and then
         appends them to the appropriate bufffer. When the write pipe is closed,
-        the loop will end and then close the read pipe '''
+        the loop will end and then close the read pipe 
+        
+        Parameters
+        ----------
+        fid : str
+            The File Handle
+        output : int
+            The Buffer Index'''
 
     chunk = True
 
@@ -546,9 +673,12 @@ class Capture(RedirectBase): #version 1
 
         Appends the thread object to self.tids
 
-        Arguments:
-        readPipe - File descriptor number of the read pipe (from by os.pipe)
-        bufferIndex - The xth buffer to store the string in. '''
+        Parameters
+        ----------
+        readPipe : str
+            File descriptor number of the read pipe (from by os.pipe)
+        bufferIndex : int
+            The xth buffer to store the string in. '''
     self.tids.append(threading.Thread(target=self.__bleed, args=(readPipe, bufferIndex)))
     self.tids[-1].start()
 
@@ -598,7 +728,17 @@ class Capture(RedirectBase): #version 1
     ''' exit function for with statement.
 
         Restores stdout and sterr, closes write pipe and joins with the
-        threads'''
+        threads
+        
+        Parameters
+        ----------
+        exc_type : str
+            The Execption Type
+        exc_value : float
+            The Exception Value
+        traceback : str
+            The Traceback
+            '''
     #Flush
     self.flush()
 
@@ -662,6 +802,13 @@ class StdRedirect(object):
 
   STDOUT = -1
   def __init__(self, stdout=None, stderr=None):
+    ''' Parameters
+        ==========
+        stdout : str
+            Standard Output
+        stderr : str
+            Standard Error
+        '''
     self.new_stdout = stdout
     self.new_stderr = stderr
 
@@ -681,6 +828,15 @@ class StdRedirect(object):
         os.dup2(self.new_stderr.fileno(), self.stderr_c_fd)
 
   def __exit__(self, exc_type=None, exc_value=None, traceback=None):
+    ''' Parameters
+        ----------
+        exc_type : str
+            The Execption Type
+        exc_value : float
+            The Exception Value
+        traceback : str
+            The Traceback
+            '''
     if self.new_stdout:
       os.dup2(self.old_stdout, self.stdout_c_fd)
       os.close(self.old_stdout)
