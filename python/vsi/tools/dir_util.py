@@ -71,45 +71,31 @@ def mkdtemp(*args, **kwargs):
   return tempdir
 
 class Chdir(object):
-  ''' Simple helper function to change dir and guarantee you get back to your
+  '''Simple helper function to change dir and guarantee you get back to your 
   original directory
 
-      Attributes
-      ----------
-      dir : str
-          the directory you want to change directory to
-      create : str
-          Optional: Create the directory if it doesn't exist (else os error 2
-          will occur) Default: False
-      error_on_exit : bool
-          When exiting the with loop, if the return directory does not exist
-          anymore, (OSError 2), if this is true an error is thrown, else it is
-          ignore and you are left in the new directory. Default: False
+    Example::
 
-    Examples
-    --------
-    These are written in doctest format, and should illustrate how to
-    use the function.
+        These are written in doctest format, and should illustrate how to
+        use the function.
 
-    >>> a=[1,2,3]
-    >>> print [x + 3 for x in a]
-    [4, 5, 6]
+        >>> a=[1,2,3]
+        >>> print [x + 3 for x in a]
+        [4, 5, 6]
 
-      Example:
+        >>> import os
+        >>> import tempfile
+        >>> from vsi.tools.dir_util import Chdir
+        >>> os.chdir(os.path.abspath(os.sep))
+        >>> print(os.getcwd())
+        /
+        >>> with Chdir(tempfile.tempdir):
+        ...   print(os.getcwd())
+        /tmp
+        >>> print(os.getcwd())
+        /
 
-      >>> import os
-      >>> import tempfile
-      >>> from vsi.tools.dir_util import Chdir
-      >>> os.chdir(os.path.abspath(os.sep))
-      >>> print(os.getcwd())
-      /
-      >>> with Chdir(tempfile.tempdir):
-      ...   print(os.getcwd())
-      /tmp
-      >>> print(os.getcwd())
-      /
-
-      '''
+    '''
 
   def __init__(self, dir, create=False, error_on_exit=False):
     ''' Create Chdir object
@@ -120,7 +106,7 @@ class Chdir(object):
             the directory you want to change directory to
         create : str
             Optional: Create the directory if it doesn't exist (else os error 2 
-                 will occur) Default: False
+            will occur) Default: False
         error_on_exit : bool
             When exiting the with loop, if the return directory does not exist
             anymore, (OSError 2), if this is true an error is thrown, else it

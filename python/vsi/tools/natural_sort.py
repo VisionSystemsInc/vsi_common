@@ -5,6 +5,21 @@ import re
 def natural_sorted(iterable, key=None, *args, **kwargs):
     """Return sorted list of strings according to (sub)string numerical value.
 
+    Parameters
+    ----------
+    iterable :
+    key :
+    *args
+        Variable length argument list.
+    **kwargs
+        Arbitrary keyword arguments.
+
+    Returns
+    -------
+    list
+        A sorted list of strings according to (sub)string numerical value.
+    
+
     >>> natural_sorted(['f10', 'f2', 'f1'])
     ['f1', 'f2', 'f10']
 
@@ -14,6 +29,16 @@ def natural_sorted(iterable, key=None, *args, **kwargs):
     if key is None: key = lambda x: x
 
     def sortkey(x):
+        """ Parameters
+            ----------
+            x : 
+
+            Returns
+            -------
+            int
+                The Sort Key
+
+        """
         return [(int(c) if c.isdigit() else c) for c in re.split(numbers, key(x))]
     numbers = re.compile('(\d+)')
     return sorted(iterable, key=sortkey, *args, **kwargs)

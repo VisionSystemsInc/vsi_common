@@ -5,6 +5,19 @@ import matplotlib.pyplot as plt
 
 
 def zoom_factory(ax=None,base_scale=1.5):
+    ''' Parameters
+        ----------
+        ax : 
+            The Axis
+        base_scale : float
+            The Base Scale
+
+        Returns
+        -------
+        func
+            The Zoom Function
+    
+    '''
     if ax is None: ax = plt.gca()
 
     def zoom_fun(event):
@@ -58,6 +71,18 @@ def zoom_factory(ax=None,base_scale=1.5):
 
 
 def figure_with_zoom(*args, **kwargs):
+    ''' Parameters
+        ----------
+        *args
+            Variable length argument list.
+        **kwargs
+            Arbitrary keyword arguments.
+
+        Returns
+        -------
+        array_like
+            The Zoomed Figure
+    '''
     # add zooming capabilities to figures
     f = plt._figure(*args, **kwargs)
     z = zoom_factory()
