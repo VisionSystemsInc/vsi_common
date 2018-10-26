@@ -145,7 +145,7 @@ source "${VSI_COMMON_DIR}/linux/elements.bsh"
 #**
 
 # The above need the ## before foo|bar, or else just help will pick it up as a
-# valid command. ## is a special pattern in the docs entrypoint 
+# valid command. ## is a special pattern in the docs entrypoint
 
 #**
 # .. envvar:: JUST_PLUGIN_FILE
@@ -218,6 +218,16 @@ fi
 # Absolute path to the project env file used
 #**
 
+# _get_owner_id {path} -> owner user id
+function _get_owner_id()
+{
+  if [[ ${OSTYPE} = darwin* ]]; then
+    stat -f %u "${1}"
+  else
+    stat -c %u "${1}"
+  fi
+}
+
 #**
 # .. function:: source_environment_files
 #
@@ -262,7 +272,6 @@ fi
 #
 #   :func:`just_common.bsh _just_get_plugins` :file:`Just_wrap`
 #**
-
 function source_environment_files()
 {
   local project_dir="$(dirname "${1}")"
@@ -274,15 +283,27 @@ function source_environment_files()
   JUST_PROJECT_FILE="$(cd "${project_dir}"; pwd)/${1##*/}"
 
   if [ ! -e "${JUST_LOCAL_SETTINGS}" ]; then
-    echo "# Put local setting in this file" > "${JUST_LOCAL_SETTINGS}"
-    echo "# You should edit this file and not \"${project_file}\"" >> "${JUST_LOCAL_SETTINGS}"
-    echo "# to customize setting just for your setup/computer" >> "${JUST_LOCAL_SETTINGS}"
-    echo >> "${JUST_LOCAL_SETTINGS}"
-    echo "# If you need a value from \"${project_file}\" to set a custom" >> "${JUST_LOCAL_SETTINGS}"
-    echo "# value, use \"$(basename "${JUST_LOCAL_SETTINGS_POST}")\"" >> "${JUST_LOCAL_SETTINGS}"
-    echo >> "${JUST_LOCAL_SETTINGS}"
-    echo "# NEVER commit this file. Tracked environment changes go in" >> "${JUST_LOCAL_SETTINGS}"
-    echo "# \"${project_file}\" only" >> "${JUST_LOCAL_SETTINGS}"
+    local perm
+    if [ -e "${1}" ]; then
+      perm=$(_get_owner_id "${1}")
+    else
+      perm=$(_get_owner_id "${project_dir}")
+    fi
+
+    # If the current user is the same who owns the repo files, then generate
+    # the local file. The prevents other users from creating local.env files in
+    # your directory by accident.
+    if [ "${perm}" = "$(id -u)" ]; then
+      echo "# Put local setting in this file" > "${JUST_LOCAL_SETTINGS}"
+      echo "# You should edit this file and not \"${project_file}\"" >> "${JUST_LOCAL_SETTINGS}"
+      echo "# to customize setting just for your setup/computer" >> "${JUST_LOCAL_SETTINGS}"
+      echo >> "${JUST_LOCAL_SETTINGS}"
+      echo "# If you need a value from \"${project_file}\" to set a custom" >> "${JUST_LOCAL_SETTINGS}"
+      echo "# value, use \"$(basename "${JUST_LOCAL_SETTINGS_POST}")\"" >> "${JUST_LOCAL_SETTINGS}"
+      echo >> "${JUST_LOCAL_SETTINGS}"
+      echo "# NEVER commit this file. Tracked environment changes go in" >> "${JUST_LOCAL_SETTINGS}"
+      echo "# \"${project_file}\" only" >> "${JUST_LOCAL_SETTINGS}"
+    fi
   fi
 
   # if [ ! -e "${JUST_LOCAL_SETTINGS_POST}" ]; then
@@ -307,7 +328,7 @@ function source_environment_files()
 
   set_flag a
   for x in "${JUST_LOCAL_SETTINGS}" \
-           "$1" \
+           "${1}" \
            "${JUST_LOCAL_SETTINGS_POST}"; do
     if [ -f "${x}" ]; then
       . "${x}"
