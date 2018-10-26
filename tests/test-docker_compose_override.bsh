@@ -76,7 +76,14 @@ end_test
 begin_test "COMPOSE_VERSION 2.3"
 (
   setup_test
-  ans="$(head 2.3)$(service test1)$(service test2)"
+  ans="$(head 2.3)$(service test1)"
+  if [ "${OS-}" = "Windows_NT" ]; then
+    ans+="$(environment)$(envi "JUST_HOST_WINDOWS=1")"
+  fi
+  ans+="$(service test2)"
+  if [ "${OS-}" = "Windows_NT" ]; then
+    ans+="$(environment)$(envi "JUST_HOST_WINDOWS=1")"
+  fi
   COMPOSE_VERSION=2.3
   [ "$(generate_docker_compose_override PROJECT test1 test2)" = "${ans}" ]
 )
@@ -88,6 +95,9 @@ begin_test "Just docker compose dynamic volumes"
   ans="$(head)$(service test1)$(volumes)"
 
   ans1="${ans}$(vol "$(real_path "${TESTDIR}")":/trash:z)"
+  if [ "${OS-}" = "Windows_NT" ]; then
+    ans1+="$(environment)$(envi "JUST_HOST_WINDOWS=1")"
+  fi
   TEST_VOLUMES=(".:/trash:z")
   override="$(generate_docker_compose_override TEST test1)"
   [ "${override}" = "${ans1}" ]
@@ -95,10 +105,17 @@ begin_test "Just docker compose dynamic volumes"
   TEST_VOLUMES=("/tmp:/temp:ro")
   ans+="$(vol "$(real_path "/tmp")":/temp:ro)"
   override="$(generate_docker_compose_override TEST test1)"
-  [ "${override}" = "${ans}" ]
+  if [ "${OS-}" = "Windows_NT" ]; then
+    [ "${override}" = "${ans}$(environment)$(envi "JUST_HOST_WINDOWS=1")" ]
+  else
+    [ "${override}" = "${ans}" ]
+  fi
 
   TEST_TEST1_VOLUMES=("/src:/source:rw")
   ans+="$(vol "$(real_path "/src")":/source:rw)"
+  if [ "${OS-}" = "Windows_NT" ]; then
+    ans+="$(environment)$(envi "JUST_HOST_WINDOWS=1")"
+  fi
   override="$(generate_docker_compose_override TEST test1)"
   [ "${override}" = "${ans}" ]
 )
@@ -109,19 +126,30 @@ begin_test "Just docker compose dynamic environment"
   setup_test
 
   # Basic test
-  ans="$(head)$(service test1)$(environment)$(envi TEST_ONE=2)$(envi TEST_ONE_HOST=1)"
+  ans="$(head)$(service test1)$(environment)"
+  if [ "${OS-}" = "Windows_NT" ]; then
+    ans+="$(envi "JUST_HOST_WINDOWS=1")"
+  fi
+  ans+="$(envi TEST_ONE=2)$(envi TEST_ONE_HOST=1)"
   override="$(TEST_ONE_HOST=1 TEST_ONE_DOCKER=2 \
               generate_docker_compose_override TEST test1)"
   [ "${override}" = "${ans}" ]
 
   # Test with JUST_DISABLE_ENVIRONMENT_SWAP
-  ans="$(head)$(service test1)$(environment)$(envi TEST_ONE_DOCKER=2)$(envi TEST_ONE_HOST=1)"
+  ans="$(head)$(service test1)$(environment)"
+  if [ "${OS-}" = "Windows_NT" ]; then
+    ans+="$(envi "JUST_HOST_WINDOWS=1")"
+  fi
+  ans+="$(envi TEST_ONE_DOCKER=2)$(envi TEST_ONE_HOST=1)"
   override="$(TEST_ONE_HOST=1 TEST_ONE_DOCKER=2 JUST_DISABLE_ENVIRONMENT_SWAP=1 \
               generate_docker_compose_override TEST test1)"
   [ "${override}" = "${ans}" ]
 
   # Ignores non-project variables
   ans="$(head)$(service test1)"
+  if [ "${OS-}" = "Windows_NT" ]; then
+    ans+="$(environment)$(envi "JUST_HOST_WINDOWS=1")"
+  fi
   override="$(TEST_ONE_HOST=1 TEST_ONE_DOCKER=2 \
               generate_docker_compose_override TEST2 test1)"
   [ "${override}" = "${ans}" ]
@@ -167,6 +195,9 @@ begin_test "Generate docker-compose override"
   ans+="$(vol "vol2:/test2")"
   ans+="$(vol "vol3:/test3:ro")"
   ans+="$(environment)"
+  if [ "${OS-}" = "Windows_NT" ]; then
+    ans+="$(envi "JUST_HOST_WINDOWS=1")"
+  fi
   ans+="$(envi JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES=/test1///test2)"
   ans+="$(envi JUST_DOCKER_ENTRYPOINT_INTERNAL_RO_VOLUMES=/test3)"
 
@@ -218,6 +249,9 @@ begin_test "Generate docker-compose override on nfs"
   ans_el+="/this is  a   test/subdir:"
   ans_el+="/host_mnt${TESTDIR}/b/a:"
   ans_el+="/foo/bar"
+  if [ "${OS-}" = "Windows_NT" ]; then
+    ans+="$(envi "JUST_HOST_WINDOWS=1")"
+  fi
   ans+="$(envi "JUST_DOCKER_ENTRYPOINT_LINKS=${ans_el}")"
 
   [ "${override}" = "${ans}" ]
@@ -256,6 +290,9 @@ begin_expected_fail_test "Issue #7 Scenario 1"
   ans+="$(environment)"
   ans_el="/host_mnt${TESTDIR}/a/a:"
   ans_el+="/home/andy"
+  if [ "${OS-}" = "Windows_NT" ]; then
+    ans+="$(envi "JUST_HOST_WINDOWS=1")"
+  fi
   ans+="$(envi "JUST_DOCKER_ENTRYPOINT_LINKS=${ans_el}")"
 
   [ "${override}" = "${ans}" ]
@@ -278,6 +315,9 @@ begin_test "Issue #7 Scenario 2"
   ans+="$(environment)"
   ans_el="/host_mnt${TESTDIR}/a/a:"
   ans_el+="/this"
+  if [ "${OS-}" = "Windows_NT" ]; then
+    ans+="$(envi "JUST_HOST_WINDOWS=1")"
+  fi
   ans+="$(envi "JUST_DOCKER_ENTRYPOINT_LINKS=${ans_el}")"
 
   [ "${override}" = "${ans}" ]
@@ -301,6 +341,9 @@ begin_expected_fail_test "Issue #7 Scenario 3"
   ans+="$(environment)"
   ans_el="/host_mnt${TESTDIR}/a/a:"
   ans_el+="/this"
+  if [ "${OS-}" = "Windows_NT" ]; then
+    ans+="$(envi "JUST_HOST_WINDOWS=1")"
+  fi
   ans+="$(envi "JUST_DOCKER_ENTRYPOINT_LINKS=${ans_el}")"
 
   [ "${override}" = "${ans}" ]
@@ -324,6 +367,9 @@ begin_test "Issue #7 Scenario 4"
   ans+="$(environment)"
   ans_el="/host_mnt${TESTDIR}/a/a:"
   ans_el+="/home/andy"
+  if [ "${OS-}" = "Windows_NT" ]; then
+    ans+="$(envi "JUST_HOST_WINDOWS=1")"
+  fi
   ans+="$(envi "JUST_DOCKER_ENTRYPOINT_LINKS=${ans_el}")"
 )
 end_test
