@@ -4,14 +4,18 @@
 
 VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.."; pwd)"
 . uwecho.bsh
+. common_source.sh
 
 begin_test "New Just with defaults"
 (
   setup_test
   echo y | "${VSI_COMMON_DIR}/linux/new_just" --defaults --use-vsi
 
-  # This SHOULD work on mingw64, I think it creates a copy
-  ln -s ${VSI_COMMON_DIR} "${TESTDIR}/external/vsi_common"
+  if [ "${OS-}" = "Windows_NT" ]; then
+    cp -r ${VSI_COMMON_DIR} "${TESTDIR}/external/vsi_common"
+  else
+    ln -s ${VSI_COMMON_DIR} "${TESTDIR}/external/vsi_common"
+  fi
 
   project_name=$(basename "${TESTDIR}" | tr '[a-z]' '[A-Z]' | sed -E 's|[^A-Z0-9_]+||g')
 
@@ -84,7 +88,7 @@ services:
   fi
   ans+="
       - JTEST_SOURCE_DIR_HOST=${TESTDIR}
-      - JTEST_SOURCE_DIR=/src"
+      - JTEST_SOURCE_DIR=${VSI_PATH_ESC}/src"
 
   [ "$(cat "${tmp_file}")" = "${ans}" ]
 
@@ -108,7 +112,11 @@ begin_test "New Just no pipenv"
   setup_test
   "${VSI_COMMON_DIR}/linux/new_just" --defaults --continue --prefix JTEST --use-vsi --no-use-pipenv
 
-  ln -s ${VSI_COMMON_DIR} "${TESTDIR}/external/vsi_common"
+  if [ "${OS-}" = "Windows_NT" ]; then
+    cp -r ${VSI_COMMON_DIR} "${TESTDIR}/external/vsi_common"
+  else
+    ln -s ${VSI_COMMON_DIR} "${TESTDIR}/external/vsi_common"
+  fi
 
   [ "$(. setup.env; just --wrap bash -c 'echo $JTEST_CWD')" = "${TESTDIR}" ]
 
@@ -143,7 +151,7 @@ services:
   fi
   ans+="
       - JTEST_SOURCE_DIR_HOST=${TESTDIR}
-      - JTEST_SOURCE_DIR=/src"
+      - JTEST_SOURCE_DIR=${VSI_PATH_ESC}/src"
 
   [ "$(cat "${tmp_file}")" = "${ans}" ]
 
@@ -157,7 +165,11 @@ begin_test "New Just no docker"
 
   "${VSI_COMMON_DIR}/linux/new_just" --defaults --continue --prefix JTEST --use-vsi --no-use-docker
 
-  ln -s ${VSI_COMMON_DIR} "${TESTDIR}/external/vsi_common"
+  if [ "${OS-}" = "Windows_NT" ]; then
+    cp -r ${VSI_COMMON_DIR} "${TESTDIR}/external/vsi_common"
+  else
+    ln -s ${VSI_COMMON_DIR} "${TESTDIR}/external/vsi_common"
+  fi
 
   [ "$(. setup.env; just --wrap bash -c 'echo $JTEST_CWD')" = "${TESTDIR}" ]
 
@@ -183,15 +195,23 @@ begin_test "New just instructions test (git)"
 (
   setup_test
 
+  if [ "${OS-}" = "Windows_NT" ]; then
+    # git submodule add on windows won't handle "??? This works on cmd, but not bash.
+    # MSYS2_ARG_CONV_EXCL=* did not fix it, therefore it is not a path mangling issue
+    tough_name=""
+  else
+    tough_name="\""
+  fi
+
   # Evaluate git commands in stdout
   eval "$("${VSI_COMMON_DIR}/linux/new_just" --continue --use-vsi \
                                              --use-docker --use-pipenv \
                                              --prefix JTEST \
                                              --project-dir "${TESTDIR}" \
-                                             --justfile "j.u.s.t  f i'l\"e" \
-                                             --setupfile "set u.p  f i'l\"e" \
-                                             --project-name "je.  t e's\"t" \
-                                             --vsi-dir "v.s.i  d i'r\"" \
+                                             --justfile "j.u.s.t  f i'l${tough_name}e" \
+                                             --setupfile "set u.p  f i'l${tough_name}e" \
+                                             --project-name "je.  t e's${tough_name}t" \
+                                             --vsi-dir "v.s.i  d i'r${tough_name}" \
                                              --app yaan \
                                              --repo tmp)"
 
@@ -209,7 +229,11 @@ begin_test "New just docker test"
   "${VSI_COMMON_DIR}/linux/new_just" --continue --use-vsi --defaults \
                                      --app yaan --repo tmp
 
-  ln -s ${VSI_COMMON_DIR} "${TESTDIR}/external/vsi_common"
+  if [ "${OS-}" = "Windows_NT" ]; then
+    cp -r ${VSI_COMMON_DIR} "${TESTDIR}/external/vsi_common"
+  else
+    ln -s ${VSI_COMMON_DIR} "${TESTDIR}/external/vsi_common"
+  fi
 
   . setup.env
 
@@ -221,6 +245,8 @@ begin_test "New just docker test"
   else
     tar c . | docker run -i --rm -v ${TESTDIR}:/src -w /src alpine:3.8 tar x
   fi
-  [[ $(just run yaan pip freeze --all) =~ pip==.*setuptools==.*wheel==.* ]]
+  
+  # for some reason, only on Windows running through xargs do I have this tty issue, and only here
+  [[ $(DOCKER_COMPOSE_EXTRA_RUN_ARGS='-T' just run yaan pip freeze --all) =~ pip==.*setuptools==.*wheel==.* ]]
 )
 end_test
