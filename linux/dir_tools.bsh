@@ -159,7 +159,7 @@ __make_temp_dir_cleanup()
 #**
 # .. function:: normpath
 #
-# :Argumetns: * ``1`` - path
+# :Argumetns: * ``$1`` - path
 #
 # :Output: *stdout* - Normalized path
 #
@@ -167,38 +167,6 @@ __make_temp_dir_cleanup()
 #
 # Unlike :file:`real_path`, this works on non-existing path, but is not as reliable as :file:`real_path`
 #**
-
-# sed -nE  ':block_start
-#               # If the beginning pattern matched, start reading the block
-#               /^#\*\*/b read_block
-#               # Else do not print, goes to next line
-#               b noprint
-#               :read_block
-#               # read the next line
-#               n
-#               # If the end of doc comment, move on to noprint
-#               /^ *#\*\*/{
-#                 # Print a blank line. This removes the requirement that
-#                 # the doc writer has to add blank # lines at the end of
-#                 # a comment block. Other wise you get a lot of "Explicit
-#                 # markup ends without a blank line; unexpected unindent."
-#                 # warnings
-#                 s/.*//
-#                 p
-#                 b noprint
-#               }
-#               # If a line starting with #
-#               /^ *#/{
-#                 # Remove those extra spaced, #, and an optional space
-#                 s/#+ ?//
-#                 # print it
-#                 p
-#               }
-#               # continue reading the block
-#               b read_block
-#               # Move on
-#               :noprint
-#              ' "${src_file}" > "${doc_dir}/${doc_file}"
 normpath()
 {
   local IFS
@@ -238,8 +206,6 @@ normpath()
     fi
   done
 
-  declare -p new_components >&2
-
   if [ "${absolute}" = "1" ]; then
     echo "/${new_components+${new_components[*]}}"
   elif [ "${#new_components[@]}" -gt 0 ] && [ "${new_components[0]}" = ".." ]; then
@@ -256,19 +222,22 @@ normpath()
 #**
 # .. function:: basenames
 #
-# :Arguments: * ``1`` - Number of levels to keep
-#             * ``2`` - path
+# :Arguments: * ``$1`` - Number of levels to keep
+#             * ``$2`` - path
 # :Output: *stdout* - base name up to ``$1`` levels deep
 #
 # Multiple level version of basename
+#
+# .. note::
+#   ``basenames 2 test`` will result in ``./test`` as the implied dirname is ``.``
 #**
 basenames()
 {
-  local y="/${2}"
-  local dirnames="/${2}"
-  for ((x=0; x<"${1}"; x++)); do
-    # Remove a single directory layer
-    dirnames="${dirnames%/*}"
-  done
-  echo "${y#"${dirnames}"/}"
+  local IFS=/
+  local components=($(normpath "${2}"))
+  local -i min=${#components[@]}-$1
+
+  min=$(($min<0?0:$min))
+
+  echo ${components+"${components[*]:${min}}"}
 }
