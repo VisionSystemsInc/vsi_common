@@ -27,6 +27,19 @@ function caseify()
       TESTS_DIR=int "${VSI_COMMON_DIR}/tests/run_tests.bsh" ${@+"${@}"}
       extra_args+=$#
       ;;
+    test_int_appveyor) # Run integration tests for windows appveyor
+      (
+        source elements.bsh
+        test_list=($(ls "${VSI_COMMON_DIR}/tests/int/"))
+        remove_element_a test_list test-common_source.bsh
+        tests=()
+        for x in "${test_list[@]}"; do
+          x="${x%.bsh}"
+          tests+=("${x#test-}")
+        done
+        justify test int "${tests[@]}"
+      )
+      ;;
     test_recipe) # Run docker recipe tests
       TESTS_DIR="${VSI_COMMON_DIR}/docker/recipes/tests" "${VSI_COMMON_DIR}/tests/run_tests.bsh" ${@+"${@}"}
       extra_args+=$#
