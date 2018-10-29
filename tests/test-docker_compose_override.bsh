@@ -7,32 +7,36 @@ VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 
 function head()
 {
-  echo -e "version: '${1-3.2}'\nservices:"
+  echo "version: '${1-3.2}'"$'\nservices:'
 }
 
 function service()
 {
-  echo -e "\n  ${1}:"
+  echo $'\n'"  ${1}:"
 }
 
 function volumes()
 {
-  echo -e "\n    volumes:"
+  echo $'\n'"    volumes:"
 }
 
 function vol()
 {
-  echo -e "\n      - ${1}"
+  if [ "${1:0:1}" = "/" ] && [ "${OS-}" = "Windows_NT" ]; then
+    echo $'\n'"      - $(cygpath -w "${1}"):${2}"
+  else
+    echo $'\n'"      - ${1}:${2}"
+  fi
 }
 
 function environment()
 {
-  echo -e "\n    environment:"
+  echo $'\n'"    environment:"
 }
 
 function envi()
 {
-  echo -e "\n      - ${1}"
+  echo $'\n'"      - ${1}"
 }
 
 begin_test "Docker compose override variable substitution"
@@ -94,7 +98,7 @@ begin_test "Just docker compose dynamic volumes"
   setup_test
   ans="$(head)$(service test1)$(volumes)"
 
-  ans1="${ans}$(vol "$(real_path "${TESTDIR}")":/trash:z)"
+  ans1="${ans}$(vol "$(real_path "${TESTDIR}")" /trash:z)"
   if [ "${OS-}" = "Windows_NT" ]; then
     ans1+="$(environment)$(envi "JUST_HOST_WINDOWS=1")"
   fi
@@ -103,7 +107,7 @@ begin_test "Just docker compose dynamic volumes"
   [ "${override}" = "${ans1}" ]
 
   TEST_VOLUMES=("/tmp:/temp:ro")
-  ans+="$(vol "$(real_path "/tmp")":/temp:ro)"
+  ans+="$(vol "$(real_path "/tmp")" /temp:ro)"
   override="$(generate_docker_compose_override TEST test1)"
   if [ "${OS-}" = "Windows_NT" ]; then
     [ "${override}" = "${ans}$(environment)$(envi "JUST_HOST_WINDOWS=1")" ]
@@ -112,7 +116,7 @@ begin_test "Just docker compose dynamic volumes"
   fi
 
   TEST_TEST1_VOLUMES=("/src:/source:rw")
-  ans+="$(vol "$(real_path "/src")":/source:rw)"
+  ans+="$(vol "$(real_path "/src")" /source:rw)"
   if [ "${OS-}" = "Windows_NT" ]; then
     ans+="$(environment)$(envi "JUST_HOST_WINDOWS=1")"
   fi
@@ -186,14 +190,14 @@ begin_test "Generate docker-compose override"
   override="$(generate_docker_compose_override TEST test1)"
 
   ans="$(head)$(service test1)$(volumes)"
-  ans+="$(vol "${TESTDIR}/a/a:/this is  a   test")"
-  ans+="$(vol "${TESTDIR}/a:/this is  a   test")"
-  ans+="$(vol "${TESTDIR}/a/b:/this is  a   test")"
-  ans+="$(vol "${TESTDIR}/a/c:/this is  a   test")"
-  ans+="$(vol "${TESTDIR}/b/a:/foo/bar")"
-  ans+="$(vol "vol1:/test1")"
-  ans+="$(vol "vol2:/test2")"
-  ans+="$(vol "vol3:/test3:ro")"
+  ans+="$(vol "${TESTDIR}/a/a" "/this is  a   test")"
+  ans+="$(vol "${TESTDIR}/a" "/this is  a   test")"
+  ans+="$(vol "${TESTDIR}/a/b" "/this is  a   test")"
+  ans+="$(vol "${TESTDIR}/a/c" "/this is  a   test")"
+  ans+="$(vol "${TESTDIR}/b/a" "/foo/bar")"
+  ans+="$(vol "vol1" "/test1")"
+  ans+="$(vol "vol2" "/test2")"
+  ans+="$(vol "vol3" "/test3:ro")"
   ans+="$(environment)"
   if [ "${OS-}" = "Windows_NT" ]; then
     ans+="$(envi "JUST_HOST_WINDOWS=1")"
@@ -207,13 +211,17 @@ end_test
 
 setup_mock()
 {
-  TESTDIR="$(real_path "${TESTDIR}")"
+  TESTDIR_df="$(real_path "${TESTDIR}")"
+  # if [ "${OS-}" = "Windows_NT" ]; then
+  #   TESTDIR_df="$(cygpath -w "${TESTDIR_df}")"
+  # fi
+
   function df()
   {
     local last_arg=${!#}
 
-    if [[ ${last_arg} = ${TESTDIR}* ]]; then
-      echo "${linux_nfs} ${TESTDIR}/${last_arg:${#TESTDIR}+1:1}"
+    if [[ ${last_arg} = "${TESTDIR_df}"* ]]; then
+      echo "${linux_nfs} ${TESTDIR_df}/${last_arg:${#TESTDIR_df}+1:1}"
       return 0
     fi
     return 1
@@ -235,9 +243,9 @@ begin_test "Generate docker-compose override on nfs"
   override="$(generate_docker_compose_override TEST test1)"
 
   ans="$(head)$(service test1)$(volumes)"
-  ans+="$(vol "${TESTDIR}/a:/host_mnt${TESTDIR}/a")"
-  ans+="$(vol "${TESTDIR}/a:/this is  a   test")"
-  ans+="$(vol "${TESTDIR}/b:/host_mnt${TESTDIR}/b")"
+  ans+="$(vol "${TESTDIR}/a" "/host_mnt${TESTDIR}/a")"
+  ans+="$(vol "${TESTDIR}/a" "/this is  a   test")"
+  ans+="$(vol "${TESTDIR}/b" "/host_mnt${TESTDIR}/b")"
   ans+="$(environment)"
   ans_el="/host_mnt${TESTDIR}/a/a:"
   ans_el+="/this is  a   test:"
@@ -286,7 +294,7 @@ begin_expected_fail_test "Issue #7 Scenario 1"
   ans="$(head)$(service test1)$(volumes)"
   # This should not be here, that's the point of Scenario #1
   # ans+="$(vol "home_mount:/home/andy")"
-  ans+="$(vol "${TESTDIR}:/host_mnt${TESTDIR}")"
+  ans+="$(vol "${TESTDIR}" "/host_mnt${TESTDIR}")"
   ans+="$(environment)"
   ans_el="/host_mnt${TESTDIR}/a/a:"
   ans_el+="/home/andy"
@@ -310,8 +318,8 @@ begin_test "Issue #7 Scenario 2"
   override="$(generate_docker_compose_override TEST test1)"
 
   ans="$(head)$(service test1)$(volumes)"
-  ans+="$(vol "${TESTDIR}:/host_mnt${TESTDIR}")"
-  ans+="$(vol "${TESTDIR}:/this")"
+  ans+="$(vol "${TESTDIR}" "/host_mnt${TESTDIR}")"
+  ans+="$(vol "${TESTDIR}" "/this")"
   ans+="$(environment)"
   ans_el="/host_mnt${TESTDIR}/a/a:"
   ans_el+="/this"
@@ -337,7 +345,7 @@ begin_expected_fail_test "Issue #7 Scenario 3"
   ans="$(head)$(service test1)$(volumes)"
   # This should not be here, that's the point of Scenario #3
   # ans+="$(vol "${TESTDIR}:/this")"
-  ans+="$(vol "${TESTDIR}:/host_mnt${TESTDIR}")"
+  ans+="$(vol "${TESTDIR}" "/host_mnt${TESTDIR}")"
   ans+="$(environment)"
   ans_el="/host_mnt${TESTDIR}/a/a:"
   ans_el+="/this"
@@ -362,8 +370,8 @@ begin_test "Issue #7 Scenario 4"
 
   ans="$(head)$(service test1)$(volumes)"
   # This should not be here, that's the point of Scenario #4
-  ans+="$(vol "home_mount:/home")"
-  ans+="$(vol "${TESTDIR}:/host_mnt${TESTDIR}")"
+  ans+="$(vol "home_mount" "/home")"
+  ans+="$(vol "${TESTDIR}" "/host_mnt${TESTDIR}")"
   ans+="$(environment)"
   ans_el="/host_mnt${TESTDIR}/a/a:"
   ans_el+="/home/andy"
