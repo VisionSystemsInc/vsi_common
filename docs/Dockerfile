@@ -1,11 +1,13 @@
 FROM vsiri/recipe:gosu as gosu
 FROM vsiri/recipe:tini as tini
+FROM vsiri/recipe:pipenv as pipenv
 
 FROM python:3.7.0
 
 SHELL ["/usr/bin/env", "bash", "-euxvc"]
 
-RUN pip install pipenv
+COPY --from=pipenv /tmp/pipenv /tmp/pipenv
+RUN /tmp/pipenv/get-pipenv; rm -rf /tmp/pipenv || :
 
 ENV WORKON_HOME=/venv \
     PIPENV_PIPFILE=/vsi/docs/Pipfile \
@@ -23,7 +25,7 @@ RUN packages=(wxpython pyopencl boxm2_adaptor boxm2_scene_adaptor brl_init vtk v
     done; \
     echo "boxm2_scene_adaptor=1" >> /opt/fake_package_boxm2_scene_adaptor/boxm2_scene_adaptor/__init__.py; \
     echo "create_scene_and_blocks=1; ocl_info=2" >> /opt/fake_package_boxm2_adaptor/boxm2_adaptor/__init__.py; \
-    pipenv install --keep-outdated /opt/fake_package_*; \
+    pipenv install --keep-outdated; \
     cp "${PIPENV_PIPFILE}.lock" /venv; \
     rm -rf /vsi/* /tmp/pip*
 

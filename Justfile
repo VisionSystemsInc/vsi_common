@@ -104,6 +104,7 @@ function caseify()
       ;;
 
     build_docs) # Build docs image
+      (justify build recipes gosu tini pipenv)
       Docker-compose build docs
       image_name=$(docker create ${VSI_COMMON_DOCKER_REPO}:compile_docs)
       docker cp ${image_name}:/venv/Pipfile.lock "${VSI_COMMON_DIR}/docs/Pipfile.lock"
