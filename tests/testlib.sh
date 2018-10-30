@@ -114,7 +114,7 @@ skipped=0
 #
 # Automatically generated and removed (unless :envvar:`TEST_KEEP_TEMP_DIRS` is changed)
 #
-# .. seealso:: 
+# .. seealso::
 #   :envvar:`TRASHDIR`
 #
 # :Author: Ryan Tomayko
