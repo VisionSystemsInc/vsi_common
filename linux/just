@@ -144,14 +144,22 @@ set -euE
 #**
 # .. envvar:: JUST_VERBOSE
 #
-# :Values: * **1** - Basic bash verbose. Uses ``set -v``
-#          * **2** - Fully verbose. ``set -xv`` plus a useful ``PS4``
+# :Values: * **1** - Prints any dryrun-able commands as they are executed
+#          * **2** - Basic bash verbose. Uses ``set -v``
+#          * **3** - Fully verbose. ``set -xv`` plus a useful ``PS4``
 #
 # :envvar:`JUST_VERBOSE` sets verbosity level of just execution. Useful to debug problems, especially in the just executable.
 #**
-if [ "${JUST_VERBOSE-}" = 1 ]; then
+if [ "${JUST_VERBOSE-}" = "1" ]; then
+  function print_and_run()
+  {
+    print_command ${@+"${@}"} >&2
+    ${@+"${@}"}
+  }
+  DRYRUN=print_and_run
+elif [ "${JUST_VERBOSE-}" = "2" ]; then
   set -v
-elif [ "${JUST_VERBOSE-}" = 2 ]; then
+elif [ "${JUST_VERBOSE-}" = "3" ]; then
   PS4='+${BASH_SOURCE[0]}:${LINENO} '
   set -xv
 fi
@@ -197,16 +205,6 @@ source "${VSI_COMMON_DIR}/linux/just_functions.bsh"
 
 setup_powershell ${@+"${@}"}
 
-# Special cases that don't use JUSTFILE and run alone
-if [ "${1-}" == "--version" ]; then
-  echo "${0##*/} version ${JUST_VERSION}"
-  exit 0
-elif [ "${1-}" == "--new" ]; then
-  shift 1
-  "${VSI_COMMON_DIR}/linux/new_just" ${@+"${@}"}
-  exit 0
-fi
-
 #**
 # :envvar:`JUSTFILE` is an optional variable for the location of :file:`Justfile`. The default :file:`Justfile` that :func:`just_common.bsh _just_load_justfile` searches for is called ``Justfile``. In order to change this default behavior, this environment variable needs to be set so that :file:`just` knows what file name to look for.
 #
@@ -225,16 +223,13 @@ fi
 #**
 
 : ${JUSTFILE=Justfile}
-_just_load_justfile "${JUSTFILE}"
-
-if [ "${JUSTFILE}" = "" ]; then
-  echo "Can't find a suitable configuration file in this directory or any"
-  echo "parent. Are you in the right directory?"
-  echo
-  echo "Supported filenames: \"Justfile\" or value of \${JUSTFILE}"
-  exit 1
+if ! _just_load_justfile "${JUSTFILE}" && [ "${1-}" != "--new" ] && [ "${1-}" != "--version" ]; then
+    echo "Can't find a suitable configuration file in this directory or any" >&2
+    echo "parent. Are you in the right directory?" >&2
+    echo >&2
+    echo "Supported filenames: \"Justfile\" or value of \${JUSTFILE}" >&2
+    echo >&2
 fi
-
 justify ${@+"${@}"}
 
 #**

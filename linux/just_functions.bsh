@@ -725,9 +725,11 @@ function defaultify()
       ;;
     --version) # Print version
       # This is just a help placeholder. The REAL --version is in just
+      echo "${0##*/} version ${JUST_VERSION}"
       ;;
     --new) # Run the new just wizard
-      # This is just a help placeholder. The REAL --new is in just
+      "${VSI_COMMON_DIR}/linux/new_just" ${@+"${@}"}
+      extra_args+=$#
       ;;
     --latest) # Print latest juste version install instructions
       (
@@ -944,16 +946,30 @@ function _justify()
         # Execute all subtargets
         while (( $# > 0 )) && isin "${1}" ${just_subtargets+"${just_subtargets[@]}"}; do
           extra_args=0
-          caseify "${target}${@}"
+          if command -v caseify &> /dev/null; then
+            caseify "${target}${@}"
+          else
+            defaultify "${target}${@}"
+          fi
           shift $extra_args
           shift 1
         done
         continue
       else
-        caseify "${@}"
+        if command -v caseify &> /dev/null; then
+          caseify "${@}"
+        else
+          # If caseify isn't found, just call defaultify. This is useful for
+          # commands that don't require a Justfile
+          defaultify "${@}"
+        fi
       fi
     else
-      caseify "${@}"
+      if command -v caseify &> /dev/null; then
+        caseify "${@}"
+      else
+        defaultify "${@}"
+      fi
     fi
     shift $extra_args
     shift 1
