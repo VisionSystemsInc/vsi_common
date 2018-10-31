@@ -23,15 +23,35 @@ def dbclear_if_error():
 def dbstop_if_error(interactive=False, ip=DEFAULT_IP, port=DEFAULT_PORT):
   ''' Run this to auto start the debugger on an exception.
 
-      Optional arguments:
-      interactive - see vsi.tools.vdb.dbstop_if_error
-      ip - Default 127.0.0.1 - Ip to bind to for remote debugger
-      port - Default 4444 - Port to bind to for remote debugger'''
+      Optional arguments
+
+      Parameters
+      ----------
+      interactive : bool
+          see vsi.tools.vdb.dbstop_if_error
+      ip : str
+          Default 127.0.0.1 - Ip to bind to for remote debugger
+      port : int
+        Default 4444 - Port to bind to for remote debugger'''
 
   RpdbPostMortemHook.dbstop_if_error(interactive=interactive,
                                      ip=ip, port=port)
 
 def post_mortem(tb=None, ip=DEFAULT_IP, port=DEFAULT_PORT):
+  ''' Parameters
+      ---------
+      tb : str
+          The Traceback
+      ip : str
+          The IP Address
+      port : int
+          The Port
+
+      Raises
+      ------
+      ValueError
+          Passes a valied traceback
+      '''
   if tb is None:
     # sys.exc_info() returns (type, value, traceback) if an exception is
     # being handled, otherwise it returns None
@@ -53,7 +73,19 @@ class DbStopIfError(vdb.DbStopIfErrorGeneric):
 def set_trace(frame=None, depth=None, ip=DEFAULT_IP, port=DEFAULT_PORT):
   ''' Wrapper function to keep the same import x; x.set_trace() interface.
 
-      We catch all the possible exceptions from pdb and cleanup. '''
+      We catch all the possible exceptions from pdb and cleanup. 
+      
+      Parameters
+      ----------
+      frame : str
+          The Frame
+      depth : int
+          The Depth
+      ip : str
+          The IP Address
+      port : int
+          The Port
+      '''
   frame = vdb.find_frame(frame, depth if depth is not None else 2 if frame is None else 0)
 
   try:
@@ -74,9 +106,26 @@ def set_trace(frame=None, depth=None, ip=DEFAULT_IP, port=DEFAULT_PORT):
 
 
 def attach(pid, ip=DEFAULT_IP, port=DEFAULT_PORT):
-  ''' NOT IMPLEMENTED! Needs a telnet client '''
+  ''' NOT IMPLEMENTED! Needs a telnet client 
+  
+      Parameters
+      ----------
+      pid : str
+          The Process ID
+      ip : str
+          The IP Address
+      port : str
+          The Port
+      '''
   vdb.attach(pid)
   assert(False)
 
 def set_attach(ip=DEFAULT_IP, port=DEFAULT_PORT):
+  ''' Parameters
+      ----------
+      ip : str
+          The IP Address
+      port : str
+          The Port
+      '''
   vdb.set_attach(db_cmd=partial(set_trace, ip=ip, port=port))

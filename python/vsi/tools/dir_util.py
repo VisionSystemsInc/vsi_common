@@ -98,6 +98,13 @@ class Chdir(object):
     '''
 
   def __init__(self, dir, create=False, error_on_exit=False):
+    
+    self.dir = dir
+    self.oldDir = None
+    self.create = create
+    self.error_on_exit = error_on_exit
+
+
     ''' Create Chdir object
 
         Parameters
@@ -112,10 +119,6 @@ class Chdir(object):
             anymore, (OSError 2), if this is true an error is thrown, else it
             is ignore and you are left in the new directory. Default: False
         '''
-    self.dir = dir
-    self.oldDir = None
-    self.create = create
-    self.error_on_exit = error_on_exit
 
   def __enter__(self):
     self.oldDir = os.getcwd()
@@ -172,6 +175,11 @@ class TempDir(object):
 
   def __init__(self, dir=None, cd=False, delete=True, mkdtemp=False,
                delete_if_not_create=False, *args, **kwargs):
+
+    self.base_dir= dir
+
+    self.mkdtemp = mkdtemp
+
     ''' Create a temp dir object
 
         Parameters
@@ -203,10 +211,6 @@ class TempDir(object):
         **kwargs
             Passed on to Chdir (mostly for error_on_exit)
     '''
-
-    self.base_dir= dir
-
-    self.mkdtemp = mkdtemp
 
     if self.mkdtemp and not self.base_dir:
       self.base_dir = gettempdir()
