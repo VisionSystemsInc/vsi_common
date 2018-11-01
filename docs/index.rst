@@ -12,6 +12,7 @@ VSI Common documentation
 
    just/index
    linux/index
+   windows/index
    tests/index
    python/modules
 

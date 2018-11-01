@@ -200,7 +200,7 @@ __version__ = "0.1"
 release = __version__
 version = release.rsplit('.', 1)[0]
 
-function_sig_re = re.compile(r'^([\w.]+) ?(.*)')
+function_sig_re = re.compile(r'^([\w.-]+)( (.*))?')
 
 def parse_bash(options, env, sig, signode, sigtype='unknown'):
 
@@ -218,7 +218,7 @@ def parse_bash(options, env, sig, signode, sigtype='unknown'):
     # normalize whitespace like XRefRole does
     return ws_re.sub('', sig)
 
-  name, args = m.groups()
+  name, _, args = m.groups()
 
   filename = env.ref_context.get('bash:file')
   functionname = env.ref_context.get('bash:function')

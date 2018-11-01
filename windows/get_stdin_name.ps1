@@ -1,10 +1,17 @@
 
-#*# windows/get_stdin_name.ps1
+#*# windows/get_stdin_name
 
+# Technically not the bash domain, but good enough for now...
 #**
+# .. default-domain:: bash
+#
+# ==================
+# get_stdin_name.ps1
+# ==================
+#
 # .. file:: get_stdin_name.ps1
 #
-# Gets the name of the stdin file/pipe on Windows. This only has a meaning in consoles like mintty like Git for Windows (mingw64), msys, cygwin, etc... On consoles like cmd.exe and powershell, they have no name, and the string "None" is returned
+# Gets the name of the stdin file/pipe on Windows. This only has a meaning in consoles like mintty, such as Git for Windows (mingw64), msys, cygwin, etc... On consoles like cmd.exe and powershell, they have no name, and the string "None" is returned
 #
 # ============ =========================================
 # console      value
