@@ -17,6 +17,13 @@ else:
   ATTACH_SIGNAL=signal.SIGUSR1
 
 def find_frame(frame, depth=0):
+  ''' Parameters
+      ---------
+      frame : str
+          The Frame
+      depth : int
+          The Depth
+      '''
   if not frame:
     frame = sys._getframe()
   for d in range(depth):
@@ -27,6 +34,14 @@ def find_frame(frame, depth=0):
 
 def set_attach(db_cmd=None, signal=ATTACH_SIGNAL):
   ''' Set up this process to be "debugger attachable"
+
+      Parameters
+      ----------
+      db_cmd : str
+          The Debugger Command
+      signal : var
+          The Attach Signal
+
 
       Just like gdb can attach to a running process, if you execute this on a
       process, now you can "attach" to the running python using the attach
@@ -45,6 +60,14 @@ def set_attach(db_cmd=None, signal=ATTACH_SIGNAL):
 
 def attach(pid, signal=ATTACH_SIGNAL):
   ''' Trigger a python pid that's been already run set_attach
+
+      Parameters
+      ----------
+      pid : str
+          The Process ID
+      signal : var
+          The Attach Signal
+
 
       This is the second part of attaching to a python process. Once
       set_attach is run, on another prompt running attach will trigger
@@ -68,7 +91,17 @@ def pipe_server():
     pipe.close()
 
 def handle_db(sig, frame, db_cmd=None, signal=ATTACH_SIGNAL):
-  ''' signal handler part of attach/set_attach '''
+  ''' signal handler part of attach/set_attach 
+  
+      Parameters
+      ----------
+      sig :
+      frame :
+      db_cmd : str
+          The Debugger Command
+      signal : var
+          The Attach Signal
+      '''
   if sig == signal:
     #if not hasattr(sys, 'ps1'): #If not interactive
     if db_cmd:
@@ -87,13 +120,36 @@ class PostMortemHook(object):
 
   @classmethod
   def dbstop_if_error(cls, interactive=False, *args, **kwargs):
+    ''' Parameters
+        ----------
+        cls : array_like
+            Colors
+        interactive : bool
+            True if interactive. False if not.
+        *args
+            Variable length argument list.
+        **kwargs
+            Arbitrary keyword arguments.
+        '''
+
     if PostMortemHook.original_excepthook == None:
       PostMortemHook.original_excepthook = sys.excepthook
     cls.set_post_mortem(interactive, *args, **kwargs)
 
   @staticmethod
   def set_post_mortem(interactive=False):
-    ''' Overrite this function for each debugger '''
+    ''' Overrite this function for each debugger
+
+        Parameters
+        ----------
+        interactive : bool
+            True if interactive. False if not.
+
+        Raises
+        ------
+        Exception
+            Makes users aware that this is purely a virtual function
+    '''
     raise Exception('Purely virtual function')
 
 class DbStopIfErrorGeneric(object):
@@ -105,15 +161,22 @@ class DbStopIfErrorGeneric(object):
     self.args = args
     self.kwargs = kwargs
 
-    ''' Optional arguments:
-        threading_support - Support the threading module and patch a bug
-                            preventing catching exceptions in other threads.
-                            See add_threading_excepthook for more info. Only
-                            neccesary if you want to catch exceptions not on
-                            the main thread. This is only patched after
-                            __enter__ unpatched at __exit__
+    ''' Parameters
+        ----------
+        threading_support : bool
+            Optional. Support the threading module and patch a bug preventing catching 
+            exceptions in other threads. See add_threading_excepthook for more 
+            info. Only neccesary if you want to catch exceptions not on the 
+            main thread. This is only patched after __enter__ unpatched at 
+            __exit__
+        *args
+            Variable length argument list.
+        **kwargs
+            Arbitrary keyword arguments.
+            
 
-        All other args from db_stop_if_error()'''
+        All other args from db_stop_if_error()
+        '''
     self.threading_support=threading_support
 
   def __enter__(self):
@@ -126,6 +189,15 @@ class DbStopIfErrorGeneric(object):
       self.get_post_mortem_class().set_post_mortem(*self.args, **self.kwargs)
 
   def __exit__(self, exc_type, exc_value, tb):
+    ''' Parameters
+        ----------
+        exc_type : str
+            The Execption Type
+        exc_value : float
+            The Exception Value
+        tb : str
+            The Traceback
+        '''
     if self.threading_support:
       import threading
       threading.Thread.__init__ = self.threading_init
@@ -139,13 +211,28 @@ class DbStopIfErrorGeneric(object):
         return True
 
   def get_post_mortem(self):
-    ''' Should return a function that takes a traceback as the first argument
-        and any additional args/kwargs sent to __init__ after that'''
+    ''' Returns
+        -------
+        func
+            Should return a function that takes a traceback as the first 
+            argument and any additional args/kwargs sent to __init__ after that
+        
+        Raises
+        ------
+        Exception
+            For a virtual function
+        '''
     raise Exception('Purely virtual function')
 
   @classmethod
   def set_continue_exception(cls):
     ''' Continue running code after exception
+
+        Parameters
+        ---------
+        cls : bool
+            True to continue to run code after the exception. Default: False.
+
 
         After the with statement scope fails, if this is called, python will
         continue running as if there was no error. Can be useful, can also be
@@ -155,6 +242,16 @@ class DbStopIfErrorGeneric(object):
 def dbstop_exception_hook(type, value, tb,
                           post_mortem,
                           interactive=False):
+    ''' Parameters
+        ----------
+        type :
+        value :
+        tb : str
+            The Traceback
+        post_mortem : 
+        Interactive : bool
+            True if interactive. False if not.
+        '''
     if not interactive and (hasattr(sys, 'ps1') or not sys.stderr.isatty()):
     # we are in interactive mode or we don't have a tty-like
     # device, so we call the default hook
@@ -182,22 +279,40 @@ def break_pool_worker():
       http://bugs.python.org/issue1230540
       In order to make THIS work, call add_threading_excepthook too
 
-      Example:
-      >>> from multiprocessing.pool import ThreadPool
-      >>> import vsi.tools.vdb as vdb
-      >>> def a(b):
-      ...   print(b)
-      ...   if b==3:
-      ...     does_not_exist()
-      >>> vdb.dbstop_if_error()
-      >>> vdb.break_pool_worker()
-      >>> vdb.add_threading_excepthook()
-      >>> tp = ThreadPool(3)
-      >>> tp.map(a, range(10))
+      Example::
+
+          >>> from multiprocessing.pool import ThreadPool
+          >>> import vsi.tools.vdb as vdb
+          >>> def a(b):
+          ...   print(b)
+          ...   if b==3:
+          ...     does_not_exist()
+          >>> vdb.dbstop_if_error()
+          >>> vdb.break_pool_worker()
+          >>> vdb.add_threading_excepthook()
+          >>> tp = ThreadPool(3)
+          >>> tp.map(a, range(10))
       '''
   import multiprocessing.pool
 
   def worker(inqueue, outqueue, initializer=None, initargs=(), maxtasks=None):
+    '''
+    Parameters
+    ----------
+    inqueue :
+    outqueue :
+    initializer :
+    initargs : array_like
+        The Initial Argurments
+    maxtasks : int
+        The Maximum Number of Tasks
+
+    Raises
+    ------
+    EOFError
+    IOError
+    Exception
+    '''
     assert maxtasks is None or (type(maxtasks) == int and maxtasks > 0)
     put = outqueue.put
     get = inqueue.get
@@ -245,14 +360,33 @@ def add_threading_excepthook():
   Call once from __main__ before creating any threads.
   If using psyco, call psyco.cannotcompile(threading.Thread.run)
   since this replaces a new-style class method.
+
+  Raises
+  ------
+  KeyboardInterrupt
+  SystemExit
   """
   import threading, sys
   init_old = threading.Thread.__init__
   def init(self, *args, **kwargs):
+    ''' Parameters
+        ----------
+        *args
+            Variable length argument list.
+        **kwargs
+            Arbitrary keyword arguments.
+        '''
     import sys
     init_old(self, *args, **kwargs)
     run_old = self.run
     def run_with_except_hook(*args, **kw):
+      ''' Parameters
+          ----------
+          *args
+              Variable length argument list.
+          **kw
+              Arbitrary keyword arguments.
+          '''
       try:
         run_old(*args, **kw)
       except (KeyboardInterrupt, SystemExit):

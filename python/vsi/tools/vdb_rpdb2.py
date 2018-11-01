@@ -9,6 +9,20 @@ def dbstop_if_error(_rpdb2_pwd='vsi', fAllowUnencrypted=True,
                          fDebug=False, depth=0):
   ''' Run this to auto start the debugger on an exception.
 
+      Parameters
+      ----------
+      _rpdb2_pwd : str
+          The Remote Python Debugger Password
+      fAllowUnencrypted : bool
+          True if unencrypted is allowed. False if not.
+      fAllowRemote : bool
+          True if a remote is allowed. False if not. Default: False
+      timeout : int
+      source_provider : 'str'
+      fDebug : bool
+      depth : int
+
+
       I THINK rpdb2 does no use the same traceback or the frame/stack objects
       as pdb. So there is no way to just hand the debugger a traceback (yet)
       So by starting the debugger, all exceptions will be cause, and just
@@ -25,7 +39,8 @@ def dbstop_if_error(_rpdb2_pwd='vsi', fAllowUnencrypted=True,
 #not have a Post Mortem equivalent... yet. Need to find a way to push the pm
 #data into whatever the analyze command uses, so that it can be faked out
 
-""" I can't get this working yet either. rpdb uses the profiler to catch exceptions, NOT excepthook
+""" I can't get this working yet either. rpdb uses the profiler to catch 
+  exceptions, NOT excepthook
   #old_excepthook = rpdb2.__excepthook
   #rpdb2.__excepthook = partial(rpdb_exception_hook, old_excepthook)
   #sys.excepthook = rpdb_exception_hook
@@ -72,7 +87,21 @@ def rpdb_dbstop_exception_hook(type, value, tb, _rpdb2_pwd='vsi', *args, **kwarg
 def set_trace(_rpdb2_pwd='vsi', fAllowUnencrypted=True,
                    fAllowRemote=False, timeout=5*60, source_provider=None,
                    fDebug=False, depth=1):
-  ''' Works, but without the other parts, it's far from auto '''
+  ''' Works, but without the other parts, it's far from auto 
+  
+      Parameters
+      ----------
+      _rpdb2_pwd : str
+          The Remote Python Debugger Password
+      fAllowUnencrypted : bool
+          True if unencrypted is allowed. False if not.
+      fAllowRemote : bool
+          True if a remote is allowed. False if not. Default: False
+      timeout : int
+      source_provider : str
+      fDebug : bool
+      depth : int
+      '''
   print('Starting rpdb2...')
   rpdb2.start_embedded_debugger(_rpdb2_pwd, fAllowUnencrypted, fAllowRemote,
                                 timeout, source_provider, fDebug, depth)
@@ -89,6 +118,17 @@ def set_trace(_rpdb2_pwd='vsi', fAllowUnencrypted=True,
 #  rpdb2.g_debugger.settrace(frame)
 
 def attach(pid, ip='127.0.0.1', password='vsi', gui=False, break_exit=False):
+  ''' Parameters
+      ----------
+      pid : str
+          The Process ID
+      ip : str
+          The IP Address
+      password : str
+          The Password
+      gui : bool
+      break_exit : bool
+      '''
   vdb.attach(pid)
   import sys
   old_args = sys.argv
@@ -112,6 +152,15 @@ def attach(pid, ip='127.0.0.1', password='vsi', gui=False, break_exit=False):
   sys.argv = old_args
 
 def set_attach(_rpdb2_pwd='vsi', *args, **kwargs):
+  ''' Parameters
+      ----------
+      _rpdb2_pwd : str
+          The Remote Python Debugger Password
+      *args
+            Variable length argument list.
+      **kwargs
+            Arbitrary keyword arguments.
+      '''
   vdb.set_attach(partial(set_trace, *args, **kwargs))
 
 class CDebuggerCoreThread2(rpdb2.CDebuggerCoreThread):
@@ -119,6 +168,22 @@ class CDebuggerCoreThread2(rpdb2.CDebuggerCoreThread):
   def profile(self, frame, event, arg):
     """
     Profiler method.
+
+    Parameters
+    ----------
+    frame : str
+        The Frame
+    event : str
+        The Event
+    arg : array_like
+        The Argument
+
+    Raises
+    ------
+    AttributeError
+        An Unhandled Exception
+
+
     The Python profiling mechanism is used by the debugger
     mainly to handle synchronization issues related to the
     life time of the frame structure.
