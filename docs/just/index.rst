@@ -18,5 +18,6 @@ J.U.S.T. Useful Simple Tasking
    just_git_functions.auto
    just_wrap.auto
    new_just.auto
+   just_diff.auto
 
    plugins/index
