@@ -16,13 +16,46 @@ source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
 #
 # .. function:: docker_defaultify
 #
+# .. command:: build_recipes
+#
+# :Arguments: [``$1``]... - Recipe names to run
+#
+# Runs ``docker-compose build`` for the docker recipes. Useful command to call before ``docker build`` on your own project that uses recipes in vsi_common, to keep them synced with your build.
+#
+# .. command:: log
+#
+# :Arguments: [``$1``]... - Service names
+#
 # Show logs from all service containers. Optionally specify service names to only log specific containers.
 #
-# .. rubric:: Bug
+# .. warning::
 #
 # Does not pick up containers that didn't exist when starting ``just`` log
 #
 # Override the log target in your ``Justfile`` and call ``__docker-compose-log`` if you need to set other parameter.
+#
+# .. command:: docker_clean
+#
+# :Arguments: ``$1`` - Volume to be removed
+#
+# Runs ``docker volume rm`` on the specified volume. If the volume is in use, there are total of four options
+#
+# 1. ``ask`` - Default action to ask you if you want to stop and remove the current containers mounting the volume
+# 2. ``delete`` - Mounts the volume, and removes all of the files.
+# 3. ``stop`` - Stop and remove the current containers mounting the volume, without asking
+# 4. ``error`` - Errors out instead
+#
+# The action for a specific volume is specified by setting the label ``com.vsi.just.clean_action``
+#
+# For example, in a ``docker-compose.yaml`` file:
+#
+# .. code-block:: yaml
+#
+#   volumes:
+#     venv:
+#       labels:
+#         com.vsi.just.clean_action: ask
+#
 #**
 function docker_defaultify()
 {
@@ -33,6 +66,73 @@ function docker_defaultify()
       JUST_DOCKER_COMPOSE_DIR="${VSI_COMMON_DIR}/docker/recipes" Docker-compose build ${@+"${@}"}
       extra_args+=$#
       ;;
+    docker_clean) # Delete a docker volume. The next container to use this \
+                  # volume will automatically copy any content from the image.
+      if docker volume inspect "${1}" &> /dev/null; then
+        local x=0
+        local rm_out
+        rm_out="$(Docker volume rm "${1}" 2>&1)" || x=$?
+
+        echo "${rm_out}"
+
+        if [ "${x}" != "0" ]; then
+          local pattern='volume is in use - \[(.*)\]'
+          [[ ${rm_out} =~ ${pattern} ]]
+          local containers=(${BASH_REMATCH[1]})
+
+          pattern='"com\.vsi\.just\.clean_action": "([^"]+)"'
+          local action
+          if [[ $(docker volume inspect andyterra_venv) =~ $pattern ]]; then
+            action="${BASH_REMATCH[1]}"
+          else
+            action=ask
+          fi
+
+          case $action in
+            ask)
+              echo "Would you like to stop and remove the following containers?"
+              echo "${containers[*]}"
+              if command ask_question "Stop and try again?" y; then
+                for x in "${containers[@]}"; do
+                  docker stop "${x}"
+                  docker rm "${x}" || :
+                done
+                Docker volume rm "${1}"
+              else
+                false
+              fi
+              ;;
+            delete)
+              docker run -it --rm -v ${1}:/data alpine rm '/data/*' '/data/.*'
+              ;;
+            stop)
+              for x in "${containers[@]}"; do
+                docker stop -t 30 "${x}"
+                docker rm -f "${x}" || :
+              done
+              Docker volume rm "${1}"
+              ;;
+            error)
+              false
+              ;;
+            *)
+              echo "Unknown action ${action}"
+              false
+              ;;
+          esac
+        fi
+      else
+        echo "${1} already removed" >&2
+      fi
+
+      extra_args+=1
+      ;;
+    docker-compose_clean) # Delete a docker-compose volume. The next container \
+                          # to use this volume will automatically copy any
+                          # content from the image.
+      (justify docker_clean "${COMPOSE_PROJECT_NAME}_${1}")
+      extra_args+=1
+      ;;
     log) # Show logs from all service containers. Optionally specify service \
          # names to only log specific containers. Bug: Does not pick up \
          # containers that didn't exist when starting just log
@@ -41,27 +141,6 @@ function docker_defaultify()
       # if you need to set other parameters
       (justify __docker-compose-log ${@+"${@}"})
       extra_args+=$#
-      ;;
-    docker_clean) # Delete a docker volume. The next container to use this \
-                  # volume will automatically copy any content from the image.
-      if docker volume inspect "${1}" &> /dev/null; then
-        Docker volume rm "${1}"
-      else
-        echo "${1} already removed" >&2
-      #   run docker to delete all files
-      fi
-      extra_args+=1
-      ;;
-    docker-compose_clean) # Delete a docker-compose volume. The next container \
-                          # to use this volume will automatically copy any
-                          # content from the image.
-      if docker volume inspect "${COMPOSE_PROJECT_NAME}_${1}" &> /dev/null; then
-        Docker volume rm "${COMPOSE_PROJECT_NAME}_${1}"
-      else
-        echo "${COMPOSE_PROJECT_NAME}_${1} already removed" >&2
-      #   run docker to delete all files
-      fi
-      extra_args+=1
       ;;
     __docker-compose-log)
       function stop_logging(){ JUST_STOP_LOGGING=1; }
