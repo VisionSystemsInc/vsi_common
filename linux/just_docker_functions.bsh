@@ -40,10 +40,10 @@ source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
 #
 # Runs ``docker volume rm`` on the specified volume. If the volume is in use, there are total of four options
 #
-# 1. ``ask`` - Default action to ask you if you want to stop and remove the current containers mounting the volume
-# 2. ``delete`` - Mounts the volume, and removes all of the files.
-# 3. ``stop`` - Stop and remove the current containers mounting the volume, without asking
-# 4. ``error`` - Errors out instead
+# 1. ``ask`` - (default) asks you if you want to attempt to stop the containers with a 30 second timeout and then forcefully remove the current containers mounting the volume
+# 2. ``delete`` - Mounts the volume, and deletes all of the files. May not work when a container is running a database, or the volume is
+# 3. ``stop`` - Attempts to stop the containers with a 30 second timeout and then forcefully remove the current containers mounting the volume, without prompting
+# 4. ``error`` - Errors out instead of cleaning the volume
 #
 # The action for a specific volume is specified by setting the label ``com.vsi.just.clean_action``
 #
@@ -78,11 +78,14 @@ function docker_defaultify()
         if [ "${x}" != "0" ]; then
           local pattern='volume is in use - \[(.*)\]'
           [[ ${rm_out} =~ ${pattern} ]]
+          local OLD_IFS="${IFS}"
+          IFS=", "
           local containers=(${BASH_REMATCH[1]})
+          IFS="${OLD_IFS}"
 
           pattern='"com\.vsi\.just\.clean_action": "([^"]+)"'
           local action
-          if [[ $(docker volume inspect andyterra_venv) =~ $pattern ]]; then
+          if [[ $(docker volume inspect "${1}") =~ $pattern ]]; then
             action="${BASH_REMATCH[1]}"
           else
             action=ask
@@ -90,9 +93,9 @@ function docker_defaultify()
 
           case $action in
             ask)
-              echo "Would you like to stop and remove the following containers?"
+              echo "The following containers are using ${1}:"
               echo "${containers[*]}"
-              if command ask_question "Stop and try again?" y; then
+              if command ask_question "Stop and remove these containers then try again?" n; then
                 for x in "${containers[@]}"; do
                   docker stop "${x}"
                   docker rm "${x}" || :
