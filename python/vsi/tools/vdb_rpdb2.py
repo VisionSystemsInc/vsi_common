@@ -18,13 +18,17 @@ def dbstop_if_error(_rpdb2_pwd='vsi', fAllowUnencrypted=True,
       fAllowRemote : bool
           True if a remote is allowed. False if not. Default: False
       timeout : int
+          The timeout period in seconds.
       source_provider : 'str'
+          The Source Provider
       fDebug : bool
+          The Debug Output
       depth : int
+          The Depth of the frame. Default: 0
 
 
-      I THINK rpdb2 does no use the same traceback or the frame/stack objects
-      as pdb. So there is no way to just hand the debugger a traceback (yet)
+      I THINK rpdb2 does not use the same traceback or the frame/stack objects
+      as pdb. So there is no way to just hand the debugger a traceback (yet).
       So by starting the debugger, all exceptions will be cause, and just
       attach to the debugger and type "analyze" to start debugging the last
       exception.
@@ -98,9 +102,13 @@ def set_trace(_rpdb2_pwd='vsi', fAllowUnencrypted=True,
       fAllowRemote : bool
           True if a remote is allowed. False if not. Default: False
       timeout : int
-      source_provider : str
+          The timeout period in seconds.
+      source_provider : 'str'
+          The Source Provider
       fDebug : bool
+          The Debug Output
       depth : int
+          The Depth of the frame. Default: 0
       '''
   print('Starting rpdb2...')
   rpdb2.start_embedded_debugger(_rpdb2_pwd, fAllowUnencrypted, fAllowRemote,

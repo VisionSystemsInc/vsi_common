@@ -4,11 +4,27 @@ import vsi.utils.geometry_utils as geometry_utils
 
 
 def construct_K(image_size, focal_len=None, fov_degrees=None, fov_radians=None):
-  """ create calibration matrix K using the image size and focal length or field of view angle
-  Assumes 0 skew and principal point at center of image
-  Note that image_size = (width, height)
-  Note that fov is assumed to be measured horizontally
-  """
+  """ Create calibration matrix K using the image size and focal length or 
+      field of view angle.
+
+      Parameters
+      ----------
+      image_size : array_like
+          The Image Size. Note that image_size = (width, height)
+      focal_len : float
+          The Focal Length
+      fov_degrees : float
+          The Field of View Angle in Degrees
+      fov_radians : float
+          The Field of View Angle in Radians
+
+
+      Assumes 0 skew and principal point at center of image
+
+      Notes
+      -----
+      The fov is assumed to be measured horizontally
+      """
   if not np.sum([focal_len is not None, fov_degrees is not None, fov_radians is not None]) == 1:
     raise Exception('Specify exactly one of [focal_len, fov_degrees, fov_radians]')
 
@@ -30,18 +46,39 @@ class ProjectiveCamera(object):
       self.P /= self.P[2,3]
 
   def as_P(self, fd):
-    """ write the projection matrix to an ascii text file """
+    """ write the projection matrix to an ascii text file 
+    
+        Parameters
+        ----------
+        fd : file_like
+        """
     # write 3x4 projection matrix
     for row in self.P:
       fd.write('%f %f %f %f\n' % (row[0],row[1],row[2],row[3]))
 
   def saveas_P(self, filename):
-    """ write the projection matrix to an ascii text file """
+    """ write the projection matrix to an ascii text file 
+    
+        Parameters
+        ----------
+        filename : str
+            The File Name of the Projection Matrix"""
     with open(filename, 'w') as fd:
       self.as_P(fd)
 
   def project_points(self, pts_3d):
-    """ project pts_3d into image coordinates """
+    """ project pts_3d into image coordinates 
+    
+        Parameters
+        ----------
+        pts_3d : array_like
+            The 3D Points
+        
+        Returns
+        -------
+        array_like
+            A 2 Dimensional array of coordinates.
+        """
     num_pts = len(pts_3d)
     # create 3xN matrix from set of 3d points
     pts_3d_m = np.array(pts_3d).transpose()
@@ -53,12 +90,35 @@ class ProjectiveCamera(object):
     return pts_2d
 
   def project_point(self, pt_3d):
-    """ convenience wrapper around project_points """
+    """ convenience wrapper around project_points 
+    
+        Parameters
+        ----------
+        pt_3d : array_like
+            The 3D Point
+        
+        Returns
+        -------
+        array_like
+            The First Point
+        """
     pts = self.project_points((pt_3d,))
     return pts[0]
 
   def project_vectors(self, vecs_3d):
-    """ compute projection matrix from K,R,T and project vecs_3d into image coordinates """
+    """ compute projection matrix from K,R,T and project vecs_3d into image 
+        coordinates
+
+        Parameters
+        ----------
+        vecs_3d : array_like
+            The 3D Vectors
+
+        Returns
+        -------
+        array_like
+            Two Dimensional Vectors
+        """
     num_vecs = len(vecs_3d)
     # create 3xN matrix from set of 3d vectors
     vecs_3d_m = np.array(vecs_3d).transpose()
@@ -70,12 +130,36 @@ class ProjectiveCamera(object):
     return vecs_2d
 
   def project_vector(self, vecs_3d):
-    """ convenience wrapper around project_vectors """
+    """ convenience wrapper around project_vectors
+        Parameters
+        ----------
+        vecs_3d : array_like
+            The 3D Vectors
+
+        Returns
+        -------
+        array_like
+            The First Point
+        """
     pts = self.project_vectors((vecs_3d,))
     return pts[0]
 
   def backproject_point_plane(self, pt_2d, plane, return_homogeneous=False):
-    """ backproject a point onto a 3-d plane """
+    """ backproject a point onto a 3-d plane
+
+        Parameters
+        ----------
+        pt_2d : array_like
+            Two Dimensional Point
+        plane :
+            The 3-D Plane
+        return_homogeneous : bool
+
+        Returns
+        -------
+        array_like
+            The Point
+        """
     A = np.zeros((3,4))
     A[0,:] = self.P[0,:] - self.P[2,:]*pt_2d[0]
     A[1,:] = self.P[1,:] - self.P[2,:]*pt_2d[1]
@@ -92,15 +176,40 @@ class ProjectiveCamera(object):
     return point 
 
   def backproject_points_plane(self, pts_2d, plane, return_homogeneous=False):
-    """ backproject a list of points onto a 3-d plane
-      mostly here to mimic interface to PinholeCamera 
-    """
+    """ backproject a list of points onto a 3-d plane mostly here to mimic 
+        interface to PinholeCamera 
+
+        Parameters
+        ----------
+        pt_2d : array_like
+            Two Dimensional Point
+        plane :
+            The 3-D Plane
+        return_homogeneous : bool
+
+        Returns
+        -------
+        array_like
+            The 3D Points
+        """
     pts_3d = [self.backproject_point_plane(p, plane, return_homogeneous) for p in pts_2d]
     return pts_3d
 
   def plane2image(self, plane_origin, plane_x, plane_y):
-    """ compute the transformation from points on a 3-d plane to image coordinates
-    """
+    """ compute the transformation from points on a 3-d plane to image 
+        coordinates
+
+        Parameters
+        ----------
+        plane_origin :
+        plane_x :
+        plane_y :
+
+        Returns
+        -------
+        array_like
+            The Plane Image Coordinates
+        """
     # normalize plane_x and plane_y to unit vectors
     plane_xlen = np.sqrt(np.dot(plane_x, plane_x))
     plane_ylen = np.sqrt(np.dot(plane_y, plane_y))
@@ -129,8 +238,21 @@ class ProjectiveCamera(object):
     return plane2img3x3
 
   def image2plane(self, plane_origin, plane_x, plane_y):
-    """ compute the transformation from image coordinates to points on a 3-d plane
-    """
+    """ compute the transformation from image coordinates to points on a 3-d 
+        plane
+
+        Parameters
+        ----------
+        plane_origin :
+        plane_x :
+        plane_y :
+
+        Returns
+        -------
+        array_like
+            The Plane Image Coordinates
+
+        """
     #plane_xlen = np.sqrt(np.dot(plane_x, plane_x))
     #plane_ylen = np.sqrt(np.dot(plane_y, plane_y))
     #plane_xu = plane_x / plane_xlen
@@ -156,11 +278,20 @@ class ProjectiveCamera(object):
 
 
 class PinholeCamera(ProjectiveCamera):
-  """ Models a pinhole camera, i.e. one with a single center of projection and no lens distortion """
+  """ Models a pinhole camera, i.e. one with a single center of projection and 
+      no lens distortion
+      
+      """
   def __init__(self, K, R, T):
     self.K = K
     self.R = R
     self.T = T
+    """ Parameters
+        ---------
+        K : array_like
+        R : array_like
+        T : array_like
+        """
     # compute projection matrix
     P = np.dot( K, np.hstack((R, T.reshape(3, 1))) )
     super(PinholeCamera, self).__init__(P)
@@ -171,7 +302,19 @@ class PinholeCamera(ProjectiveCamera):
     self.KRinv = np.dot(R.transpose(), self.Kinv)
 
   def viewing_rays(self, pts_2d):
-    """ backproject the 2d image points to unit ray directions (with origin at camera center) """
+    """ backproject the 2d image points to unit ray directions (with origin at 
+        camera center)
+
+        Parameters
+        ----------
+        pts_2d : array_like
+            The 2D Image Points
+
+        Returns
+        -------
+        list
+            The Unit Rays List
+        """
     N = len(pts_2d)
     pts_2d_h_np = np.hstack((np.array(pts_2d), np.ones((N,1))))  # create an Nx3 numpy array
     rays_np = np.dot(self.KRinv, pts_2d_h_np.T)
@@ -181,13 +324,38 @@ class PinholeCamera(ProjectiveCamera):
     return unit_rays_list
 
   def viewing_ray(self, pt_2d):
-    """ backproject the 2d image point (convenience wrapper around viewing_rays) """
+    """ backproject the 2d image point (convenience wrapper around 
+        viewing_rays)
+
+        Parameters
+        ----------
+        pt_2d : array_like
+            The 2D Image Point
+
+        Returns
+        -------
+        list
+            The Viewing Ray
+        """
     pts = [pt_2d,]
     rays = self.viewing_rays(pts)
     return rays[0]
 
   def backproject_points_plane(self, pts_2d, plane):
-    """ backproject a point onto a 3-d plane """
+    """ backproject a point onto a 3-d plane
+    
+        Parameters
+        ----------
+        pts_2d : array_like
+            The 2D Image Points
+        plane : array_like
+            A 3-D Plane
+
+        Returns
+        -------
+        array_like
+            The 3D Points
+        """
     unit_rays = np.array(self.viewing_rays(pts_2d)).T
     depths = -np.dot(plane, np.append(self.center,1)) / np.dot(plane[0:3], unit_rays)
     pts_3d_np = self.center.reshape((3,1)) + unit_rays * depths
@@ -196,12 +364,43 @@ class PinholeCamera(ProjectiveCamera):
     return pts_3d
 
   def backproject_point_plane(self, pt_2d, plane):
-    """ backproject a point onto a 3-d plane """
+    """ backproject a point onto a 3-d plane
+    
+        Parameters
+        ----------
+        pt_2d : array_like
+            The 2D Image Point
+        plane : array_like
+            A 3-D Plane
+
+        Returns
+        -------
+        array_like
+            The First Point
+        """
     pts = self.backproject_points_plane((pt_2d,), plane)
     return pts[0]
 
   def backproject_points(self, pts_2d, depths):
-    """ backproject a point given camera params, image position, and depth """
+    """ backproject a point given camera params, image position, and depth
+        
+        Parameters
+        ----------
+        pts_2d : array_like
+            The 2D Image Points
+        depths : array_like
+            Points used to find the depth.
+
+        Raises
+        ------
+        Exception
+            The number of points is not equal to the number of depths.
+
+        Returns
+        -------
+        array_like
+            An array of 3D Points
+        """
     N = len(depths)
     if not len(pts_2d) == len(depths):
       raise Exception('number of points %d != number of depths %d' % (len(pts_2d),len(depths)))
@@ -212,7 +411,18 @@ class PinholeCamera(ProjectiveCamera):
     return pts_3d
 
   def backproject_depthmap(self, dmap):
-    """ convert a depthmap image to x,y,z """
+    """ convert a depthmap image to x,y,z
+        
+        Parameters
+        ----------
+        dmap : array_like
+            The Depthmap Image
+
+        Returns
+        -------
+        array_like
+            The x, y, and z coordinates of the depth
+        """
     x,y = np.meshgrid(np.arange(dmap.shape[1]), np.arange(dmap.shape[0]))
     pts_2d_h_np = np.vstack((x.flat, y.flat, np.ones_like(dmap).flat))
     rays_np = np.dot(self.KRinv, pts_2d_h_np)
@@ -225,14 +435,40 @@ class PinholeCamera(ProjectiveCamera):
     return x,y,z
 
   def backproject_point(self, pt_2d, depth):
-    """ convenience wrapper around backproject_points """
+    """ convenience wrapper around backproject_points
+        
+        Parameters
+        ----------
+        pt_2d : array_like
+            Two Dimensional Point
+        depth : array_like
+            The Depth
+
+        Returns
+        -------
+        array_like
+            The First Point
+        """
     pts = self.backproject_points((pt_2d,), (depth,))
     return pts[0]
 
   def rescale(self, scale_factor):
     """ Return a new camera corresponding to a resampled image
-      Note: leaves calling object unmodified.
-    """
+
+        Parameters
+        ----------
+        scale_factor : float
+            The Scale Factor
+
+        Notes
+        -----
+        Leaves calling object unmodified.
+
+        Returns
+        -------
+        array_like
+            A New Camera
+        """
     Knew = self.K * scale_factor
     Knew[2,2] = self.K[2,2]
     return PinholeCamera(Knew, self.R, self.T)
@@ -254,7 +490,13 @@ class PinholeCamera(ProjectiveCamera):
     return self.R[1,:]
 
   def as_KRT(self, fd):
-    """ write the K,R,T matrices to an ascii text file """
+    """ write the K,R,T matrices to an ascii text file
+    
+        Parameters
+        ----------
+        fd : file_like
+            The file containing the K,R, and T matrices.
+        """
     # write intrinsics K matrix
     for row in self.K:
       fd.write('%f %f %f\n' % (row[0],row[1],row[2]))
@@ -268,13 +510,37 @@ class PinholeCamera(ProjectiveCamera):
     return
 
   def saveas_KRT(self, filename):
-    """ open the file and write K,R,T """
+    """ open the file and write K,R,T
+        
+        Parameters
+        ----------
+        filename : str
+            The File Name
+        """
     with open(filename, 'w') as fd:
       self.as_KRT(fd)
 
 
 def triangulate_point(cameras, projections, return_homogeneous=True):
-  """ Triangulate a 3-d point given it's projection in two images """
+  """ Triangulate a 3-d point given it's projection in two images
+  
+      Parameters
+      ----------
+      cameras : array_like
+      projections : array_like
+      return_homogeneous : bool
+          Default: True
+
+      Returns
+      -------
+      array_like
+          The Point
+
+      Raises
+      ------
+      Exception
+          When the number of cameras and 2-d projections are not the same.
+      """
   num_obs = len(cameras)
   if len(projections) != num_obs:
     raise Exception('Expecting same number of cameras and 2-d projections')

@@ -18,10 +18,8 @@ class Try(object):
     
         Parameters
         ----------
-        default_ignore : array_like
-            Arguments of Exception classes is set to ignore. Default is all.
-        *other_ignore : str
-      
+        *ignore_exceptions : exception class
+            Exception classes to be ignored. Default is all.
         '''
 
     self.ignore = (default_ignore,) + other_ignore
@@ -58,8 +56,9 @@ def reloadModules(pattern='.*', skipPattern='^IPython'):
   Parameters
   ----------
   pattern : str
-      pattern regular expression
+      The regular expression pattern of modules that will be reloaded.
   skipPattern : str
+      The regular expression pattern of modules that will not be reloaded.
 
   
   '''
@@ -100,12 +99,6 @@ def is_string_like(obj):
   -------
   bool
       True if object behaves like a string. False otherwise.
-
-  Raises
-  ------
-  TypeError
-  ValueError
-
   """
   try:
     obj + ''
@@ -201,7 +194,8 @@ class OptionalArgumentDecorator(object):
 
     Returns
     -------
-    array_like
+    class
+        The decorated class
 
     '''
     if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
@@ -214,20 +208,22 @@ class _BasicDecorator(object):
   
       Attributes
       ----------
-      fun : 
+      fun : func
+          It gets wrapped.
           
       '''
 
   def __init__(self, fun):
+
+    self.fun = fun
     ''' No need to rewrite this 
         
         Parameters
         ----------
-        fun : 
+        fun : func
+          It gets wrapped
 
     '''
-
-    self.fun = fun
 
   def __call__(self, *args, **kwargs):
     '''re-write this. No need for super
@@ -283,6 +279,7 @@ class _BasicArgumentDecorator(object):
     #postwrap code
     return result
 
+# Decorated methods do not show up in sphinx unless we use functools.wraps
 @OptionalArgumentDecorator
 class BasicDecorator(_BasicArgumentDecorator):
   ''' A basic decorator class that can optionally take arguments
@@ -331,6 +328,7 @@ class WarningDecorator(object):
           message
       **kwargs
           output_stream
+
 
       no arguments (no '()' either)
 

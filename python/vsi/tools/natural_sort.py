@@ -7,8 +7,10 @@ def natural_sorted(iterable, key=None, *args, **kwargs):
 
     Parameters
     ----------
-    iterable :
-    key :
+    iterable : iterable
+        The data to be sorted.
+    key : func
+        The sorting function.
     *args
         Variable length argument list.
     **kwargs
@@ -29,16 +31,6 @@ def natural_sorted(iterable, key=None, *args, **kwargs):
     if key is None: key = lambda x: x
 
     def sortkey(x):
-        """ Parameters
-            ----------
-            x : 
-
-            Returns
-            -------
-            int
-                The Sort Key
-
-        """
         return [(int(c) if c.isdigit() else c) for c in re.split(numbers, key(x))]
     numbers = re.compile('(\d+)')
     return sorted(iterable, key=sortkey, *args, **kwargs)

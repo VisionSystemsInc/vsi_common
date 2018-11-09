@@ -26,8 +26,8 @@ class Logger(object):
         ----------
         logger : str
             The logger
-        lvl : str
-            Level
+        lvl : int
+            Logging Level
         '''
 
     self.logger=logger
@@ -76,7 +76,7 @@ class FileRedirect(object):
         ----------
         outputs : list
             list of outputs objects to write to. For every output in outputs, 
-            an rid in self.rids and wid in self.wids is created when call with 
+            a rid in self.rids and wid in self.wids is created when call with 
             with
 
         Yields
@@ -271,6 +271,21 @@ class Redirect(RedirectBase): #Version 2
                stdout_c_fd=1, stderr_c_fd=2,
                stdout_py_module=sys,    stderr_py_module=sys,
                stdout_py_name='stdout', stderr_py_name='stderr'):
+    
+    #copy original file information
+    self.stdout_c_fd=stdout_c_fd
+    self.stderr_c_fd=stderr_c_fd
+    self.stdout_py_module=stdout_py_module
+    self.stdout_py_name=stdout_py_name
+    self.stderr_py_module=stderr_py_module
+    self.stderr_py_name=stderr_py_name
+
+    #Determine the "who gets router who" pattern
+    self.stdout_c_out = stdout_c
+    self.stderr_c_out = stderr_c
+    self.stdout_py_out = stdout_py
+    self.stderr_py_out = stderr_py
+
     ''' Create the Redirect object
 
         Optional Arguments
@@ -309,20 +324,7 @@ class Redirect(RedirectBase): #Version 2
             quotes). Again, there should be no real reason to override these, 
             unless you are doing some IPython/colorama redirecting, or any 
             other library that messes with sys.stdout/sys.stderr
-              '''
-    #copy original file information
-    self.stdout_c_fd=stdout_c_fd
-    self.stderr_c_fd=stderr_c_fd
-    self.stdout_py_module=stdout_py_module
-    self.stdout_py_name=stdout_py_name
-    self.stderr_py_module=stderr_py_module
-    self.stderr_py_name=stderr_py_name
-
-    #Determine the "who gets router who" pattern
-    self.stdout_c_out = stdout_c
-    self.stderr_c_out = stderr_c
-    self.stdout_py_out = stdout_py
-    self.stderr_py_out = stderr_py
+            '''
 
     if c is not None:
       self.stdout_c_out = c
@@ -460,7 +462,7 @@ class Redirect(RedirectBase): #Version 2
   def startMonitor(self, readPipe, output):
     ''' Parameters
         ----------
-        readPipe : str
+        readPipe : int
             File descriptor number of the read pipe (from by os.pipe)
         output : int
             The xth buffer to store the string in.
@@ -477,8 +479,8 @@ class Redirect(RedirectBase): #Version 2
   def __bleed(self, fid, output):
     ''' Parameters
         ----------
-        fid : str
-            The File Handle
+        fid : int
+            The File Descriptor
         output : str
             A chunk of the file
         '''
@@ -556,6 +558,16 @@ class Capture(RedirectBase): #version 1
                      stdout_py=sys.stdout, stderr_py=sys.stderr,
                      group=True,
                      group_outerr=True, group_out=True, group_err=True):
+    
+    self.stdout_c_fd=stdout_c
+    self.stderr_c_fd=stderr_c
+    self.stdout_py_fid=stdout_py
+    self.stderr_py_fid=stderr_py
+    self.group_outerr=group_outerr
+    self.group_out=group_out
+    self.group_err=group_err
+
+
     ''' Initialize the Redirect object
 
         Optional Parameters
@@ -586,13 +598,6 @@ class Capture(RedirectBase): #version 1
         group_err : bool
             Should stderr_c and stderr_py use the a group stream or else it 
             will have separate streams (default: True)'''
-    self.stdout_c_fd=stdout_c
-    self.stderr_c_fd=stderr_c
-    self.stdout_py_fid=stdout_py
-    self.stderr_py_fid=stderr_py
-    self.group_outerr=group_outerr
-    self.group_out=group_out
-    self.group_err=group_err
 
     if not group:
       self.group_outerr=False
@@ -802,6 +807,10 @@ class StdRedirect(object):
 
   STDOUT = -1
   def __init__(self, stdout=None, stderr=None):
+    
+    self.new_stdout = stdout
+    self.new_stderr = stderr
+
     ''' Parameters
         ==========
         stdout : str
@@ -809,8 +818,6 @@ class StdRedirect(object):
         stderr : str
             Standard Error
         '''
-    self.new_stdout = stdout
-    self.new_stderr = stderr
 
     self.stdout_c_fd = 1
     self.stderr_c_fd = 2
