@@ -741,10 +741,7 @@ if [ ! -e "${JUSTFILE}" ]; then
                       # to be run the first time sync is run.
                       touch "${'"${PROJECT_PREFIX}"'_CWD}/.just_synced"
                     fi
-                    (justify _sync)
                     # Add any extra steps run when syncing everytime
-                    ;;
-                  _sync)
                     Docker-compose down
                     (justify git_submodule-update) # For those users who don'"'"'t remember!
                     (justify build)
@@ -852,8 +849,6 @@ if [ "${USE_DOCKER}" = "1" ]; then
 
     if [ "${USE_PIPENV}" = "1" ]; then
       uwecho 'FROM vsiri/recipe:pipenv as pipenv
-              # # Uncomment for GDAL
-              # FROM vsiri/recipe:jq as jq
 
               FROM debian:stretch as dep_stage
               SHELL ["/usr/bin/env", "bash", "-euxvc"]
@@ -893,8 +888,6 @@ if [ "${USE_DOCKER}" = "1" ]; then
               #     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
               #       libgdal-dev python3-dev g++ ; \
               #     rm -r /var/lib/apt/lists/*
-              #
-              # COPY --from=jq /usr/local/bin/jq /usr/local/bin/jq
 
               ADD Pipfile Pipfile.lock /src/
               # Simple packages can be added as dependencies to your project by:
@@ -925,6 +918,7 @@ if [ "${USE_DOCKER}" = "1" ]; then
               #    Note: the version of the pypi package should match (as closely as
               #    possible) to the version of the GDAL-binary dependency (gdal-bin)
               # 2) Uncomment all the "Uncomment for GDAL" sections
+              # 3) Remove the old pipenv install section below
 
               # # Uncomment for GDAL
               # RUN \
@@ -932,10 +926,12 @@ if [ "${USE_DOCKER}" = "1" ]; then
               #     export CPLUS_INCLUDE_PATH=/usr/include/gdal; \
               #     export C_INCLUDE_PATH=/usr/include/gdal; \
               #
-              #     # Get the version of numpy specified in the lock file, else blank
-              #     numpy_version="$(jq --raw-output ".default.numpy.version // empty" "${PIPENV_PIPFILE}".lock)"; \
-              #     # Install numpy first; then the other packages are installed.
-              #     pipenv install --keep-outdated numpy${numpy_version}; \
+              #     # Get the version marker of numpy specified in the lock file, else blank
+              #     numpy_version="$(python -c "import json; print(json.load(open('"'"'${PIPENV_PIPFILE}.lock'"'"', '"'"'r'"'"'))['"'"'default'"'"']['"'"'numpy'"'"']['"'"'version'"'"'])" 2>/dev/null)"; \
+              #     # Install numpy first, so that the gdal install works.
+              #     pipenv run pip install numpy${numpy_version}; \
+              #     # Now install all the packages.
+              #     pipenv install --keep-outdated; \
               #
               #     cp "${PIPENV_PIPFILE}".lock /venv; \
               #     rm -rf /src/* /tmp/pip*
@@ -1044,6 +1040,7 @@ if [ "${USE_DOCKER}" = "1" ]; then
               source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
               # Remove duplicate '"${PROJECT_PREFIX}"'_*_DOCKER variables
               filter_docker_variables
+              docker_convert_paths
 
               ' >> "docker/${APP_NAME}_entrypoint.bsh"
 
@@ -1108,7 +1105,9 @@ if [ "${USE_DOCKER}" = "1" ]; then
             #         target: ${'"${PROJECT_PREFIX}"'_HOME} # home-volume should be overridable' >> "docker-compose.yml"
     if [ "${USE_PIPENV}" = "1" ]; then
       uwecho 'volumes:
-                venv:' >> "docker-compose.yml"
+                venv:
+                  labels:
+                    com.vsi.just.clean_action: ask' >> "docker-compose.yml"
     else
       echo   '# volumes:' >> "docker-compose.yml"
     fi
