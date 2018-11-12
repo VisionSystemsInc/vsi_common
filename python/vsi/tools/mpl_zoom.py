@@ -7,8 +7,8 @@ import matplotlib.pyplot as plt
 def zoom_factory(ax=None,base_scale=1.5):
     ''' Parameters
         ----------
-        ax : 
-            The Axis
+        ax : axes
+            The Axes
         base_scale : float
             The Base Scale
 
@@ -80,7 +80,7 @@ def figure_with_zoom(*args, **kwargs):
 
         Returns
         -------
-        array_like
+        figure
             The Zoomed Figure
     '''
     # add zooming capabilities to figures

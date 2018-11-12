@@ -13,11 +13,6 @@ class PopenBg(subprocess.Popen):
             Variable length argument list.
         **kwargs
             Arbitrary keyword arguments.
-
-        Returns
-        -------
-        proxy
-            Access the base class.
         '''
     if subprocess.mswindows:
       kwargs = inspect.getcallargs(
@@ -29,7 +24,7 @@ class PopenBg(subprocess.Popen):
         startup_info = subprocess.STARTUPINFO()
       startup_info.dwFlags |= subprocess.STARTF_USESHOWWINDOW
       kwargs['startupinfo'] = startup_info
-    return super(PopenBg, self).__init__(*args, **kwargs)
+    super(PopenBg, self).__init__(*args, **kwargs)
 
 if __name__ == '__main__':
   import sys

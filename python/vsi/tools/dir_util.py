@@ -71,31 +71,31 @@ def mkdtemp(*args, **kwargs):
   return tempdir
 
 class Chdir(object):
-  '''Simple helper function to change dir and guarantee you get back to your 
-  original directory
+    ''' Simple helper function to change dir and guarantee you get back to your 
+        original directory
 
-    Example::
+        Example::
 
-        These are written in doctest format, and should illustrate how to
-        use the function.
+            These are written in doctest format, and should illustrate how to
+            use the function.
 
-        >>> a=[1,2,3]
-        >>> print [x + 3 for x in a]
-        [4, 5, 6]
+            >>> a=[1,2,3]
+            >>> print [x + 3 for x in a]
+            [4, 5, 6]
 
-        >>> import os
-        >>> import tempfile
-        >>> from vsi.tools.dir_util import Chdir
-        >>> os.chdir(os.path.abspath(os.sep))
-        >>> print(os.getcwd())
-        /
-        >>> with Chdir(tempfile.tempdir):
-        ...   print(os.getcwd())
-        /tmp
-        >>> print(os.getcwd())
-        /
+            >>> import os
+            >>> import tempfile
+            >>> from vsi.tools.dir_util import Chdir
+            >>> os.chdir(os.path.abspath(os.sep))
+            >>> print(os.getcwd())
+            /
+            >>> with Chdir(tempfile.tempdir):
+            ...   print(os.getcwd())
+            /tmp
+            >>> print(os.getcwd())
+            /
 
-    '''
+        '''
 
   def __init__(self, dir, create=False, error_on_exit=False):
     
@@ -137,12 +137,6 @@ class Chdir(object):
         The Exception Value
     traceback : str
         The Traceback
-
-    Raises
-    ------
-    OSError
-        Previous directory does not exist anymore.
-
     '''
     try:
       os.chdir(self.oldDir)
@@ -253,7 +247,7 @@ class TempDir(object):
         The Execption Type
     exc_value : float
         The Exception Value
-    traceback : 
+    traceback : str
         The Traceback
 
     '''
@@ -332,13 +326,6 @@ def copytree(src, dst, symlinks=False, ignore=None):
 
 
     XXX Consider this example code rather than the ultimate tool.
-
-    Raises
-    ------
-        EnvironmentError
-        OSError
-        WindowsError
-
     """
     names = os.listdir(src)
     if ignore is not None:
@@ -421,7 +408,9 @@ def samefile(path1, path2, normpath=True):
       Parameters
       ----------
       path1 : str
+            The File Name
       path2 : str
+            The File Name
       normpath : bool
           Optional normpath=True. In posix cases when you want symlinks to be
           followed instead of normalized out, this would be useful to set to
