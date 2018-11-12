@@ -38,14 +38,14 @@ source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
 #
 # :Arguments: ``$1`` - Volume to be removed
 #
-# Runs ``docker volume rm`` on the specified volume. If the volume is in use, there are total of four options
+# Runs ``docker volume rm`` on the specified volume. If the volume is in use, there are four strategies to handle this:
 #
 # 1. ``ask`` - (default) Asks you if you want to attempt to stop the containers with a 30 second timeout and then forcefully remove the current containers mounting the volume
-# 2. ``delete`` - Mounts the volume and deletes all of the files. May not work when a container is running a database, or the volume is populated on container start.
+# 2. ``delete`` - Mounts the volume and deletes all of the files. May not work when a container is running a database, or the volumes modified by the entrypoint, i.e. adding user permissions.
 # 3. ``stop`` - Attempts to stop the containers with a 30 second timeout and then forcefully remove the current containers mounting the volume, without prompting
 # 4. ``error`` - Errors out instead of cleaning the volume
 #
-# The action for a specific volume is specified by setting the label ``com.vsi.just.clean_action``
+# The action for a specific volume is specified by setting the label ``com.vsi.just.clean_action``.
 #
 # For example, in a ``docker-compose.yaml`` file:
 #
@@ -55,6 +55,11 @@ source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
 #     venv:
 #       labels:
 #         com.vsi.just.clean_action: ask
+#
+# delete
+# ------
+#
+# In the case of ``delete`` strategy, an optional labels ``com.vsi.just.clean_setup`` can be specified to designate what just target to run to repopulate a volume. Typically this just target should run ``sh -c ":"`` or similar. This allows the entrypoint or another command to properply setup the volume, and set permissions, etc...
 #
 #**
 function docker_defaultify()
@@ -85,7 +90,8 @@ function docker_defaultify()
 
           pattern='"com\.vsi\.just\.clean_action": "([^"]+)"'
           local action
-          if [[ $(docker volume inspect "${1}") =~ $pattern ]]; then
+          local volume_inspect="$(docker volume inspect "${1}")"
+          if [[ ${volume_inspect} =~ $pattern ]]; then
             action="${BASH_REMATCH[1]}"
           else
             action=ask
@@ -106,7 +112,19 @@ function docker_defaultify()
               fi
               ;;
             delete)
-              Docker run -it --rm -v ${1}:/data alpine rm '/data/*' '/data/.*'
+              # Remove the files
+              Docker run --rm --mount "type=volume,src=${1},dst=/data" alpine sh -c "find /data -maxdepth 1 -mindepth 1 -print0 | xargs -0 rm -rf"
+
+              # If there is a com.vsi.just.clean_setup label
+              pattern=$'"com\.vsi\.just\.clean_setup": "([^\n]*)"\n'
+              if [[ ${volume_inspect} =~ $pattern ]]; then
+                # Parse \" to "
+                setup_cmd="${BASH_REMATCH[1]//\\\"/\"}"
+                # Evaluate this string into arguments
+                eval "setup_cmd=(${setup_cmd})"
+                # Run the just target
+                (justify "${setup_cmd[@]}")
+              fi
               ;;
             stop)
               for x in "${containers[@]}"; do
