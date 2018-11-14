@@ -1045,21 +1045,32 @@ if [ "${USE_DOCKER}" = "1" ]; then
               ' >> "docker/${APP_NAME}_entrypoint.bsh"
 
     if [ "${USE_PIPENV}" = "1" ]; then
-      uwecho '# default CMD
-              if [ "$1" == "'"${APP_NAME}"'" ]; then
-                pipenv shell
-              elif [ "$1" == "nopipenv" ]; then
-                shift 1
-                exec "${@}"
-              else
-                exec pipenv run "${@}"
-              fi' >> "docker/${APP_NAME}_entrypoint.bsh"
+      uwecho 'cmd="${1}"
+              shift 1
+              case "${cmd}" in
+              # default CMD
+                '"${APP_NAME}"')
+                  pipenv shell
+                  ;;
+                nopipenv)
+                  exec "${@}"
+                  ;;
+                *)
+                  exec pipenv run "${cmd}" ${@+"${@}"}
+                  ;;
+              esac' >> "docker/${APP_NAME}_entrypoint.bsh"
     else
-      uwecho 'if [ "$1" == "'"${APP_NAME}"'" ]; then
-                echo "Run '"${APP_NAME}"' here: ${@+${@}}"
-              else
-                exec "${@}"
-              fi' >> "docker/${APP_NAME}_entrypoint.bsh"
+      uwecho 'cmd="${1}"
+              shift 1
+              case "${cmd}" in
+              # default CMD
+                '"${APP_NAME}"')
+                  echo "Run '"${APP_NAME}"' here: ${cmd} ${@+${@}}"
+                  ;;
+                *)
+                  exec "${cmd}" ${@+"${@}"}
+                  ;;
+              esac' >> "docker/${APP_NAME}_entrypoint.bsh"
     fi
   else
     echo     "docker/${APP_NAME}_entrypoint.bsh exists, skipping..."
@@ -1086,9 +1097,10 @@ if [ "${USE_DOCKER}" = "1" ]; then
                   - DOCKER_GROUP_NAMES=${'"${PROJECT_PREFIX}"'_GROUP_NAMES}
                   - DOCKER_USERNAME=user
 
-                  #- DOCKER_HOME=${'"${PROJECT_PREFIX}"'_HOME}
+                  # - DOCKER_HOME=${'"${PROJECT_PREFIX}"'_HOME}
 
                   - DISPLAY
+            #     runtime: nvidia  # Uncomment for nvidia gpu support
             #     cap_add:
             #       - SYS_PTRACE # Useful for gdb
                 volumes:
@@ -1141,9 +1153,9 @@ if [ "${USE_DOCKER}" = "1" ]; then
   ######################
 
   if [ ! -e ".gitattributes" ]; then
-    uwecho '#These file types are being explicitly set to linux line endings for windows.
-            #This is to allow windows user to edit and run these files inside a linux docker
-            #this list may need additions as time goes on
+    uwecho '# These file types are being explicitly set to linux line endings for windows.
+            # This is to allow windows user to edit and run these files inside a linux docker
+            # this list may need additions as time goes on
             *.sh eol=lf
             *.bsh eol=lf
             *.py eol=lf
