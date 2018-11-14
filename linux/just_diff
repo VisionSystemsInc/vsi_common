@@ -15,24 +15,44 @@
 #
 # Prints the differemve between the output of :file:`new_just` for two different versions
 #
-# :Arguments: * ``$1`` - Version 1 to compare with. Can be a SHA, tag, etc...
-#             * ``$2`` - Version 2 to compare with. Can be a SHA, tag, etc...
+# :Arguments: * ``$1`` - Version 1 to compare with. Can be a SHA, tag, etc... Use -- to autodetect assuming external/vsi_common. Can also be ``--help`` to print :file:`new_just` help
+#             * ``$2`` - Version 2 to compare with. Can be a SHA, tag, etc... Use -- for autodetect HEAD assuming external/vsi_common
+#             * [``$3`` ...] - Flags to pass to :file:`new_just`
 # :Parameters: ``JUST_DIFF`` - The diff program used on two directories, such as ``meld``. Default: ``colordiff`` if it exists, else ``diff``.
 #
 # Example
 # -------
 #
-# Show the difference between your current version and the latest tag
+# Show the difference between your current version and the latest tag, assuming you are in vsi_common and have already checkedout the newest commit
 #
 # .. code::
 #
 #   just_diff $(git rev-parse HEAD) $(git describe --abbrev=0 --tags origin/master)
+#
+# Another use case, is in a ``just`` project, if you have checkout out the newest vsi_common commit, but not commit that change to the project:
+#
+# .. code::
+#
+#   just_diff -- --
 #**
 
 set -eu
 
-version1="$1"
-version2="$2"
+if [ "$1" = "--help" ]; then
+  new_just --help
+  exit $?
+fi
+
+if [ "$1" = "--" ]; then
+  version1=$(git diff --raw external/vsi_common | awk '{print $3}')
+else
+  version1="${1}"
+fi
+if [ "$2" = "--" ]; then
+  version2="$(cd external/vsi_common; git rev-parse HEAD)"
+else
+  version2="$2"
+fi
 shift 2
 
 # Self cleaning tmp dir
