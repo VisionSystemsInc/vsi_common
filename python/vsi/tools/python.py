@@ -1,21 +1,22 @@
 from __future__ import print_function # Python2 compat
 
+from functools import wraps, update_wrapper, partial
+from inspect import isclass
 import sys
 
 class Try(object):
-  ''' Try catch helper for cases when you want to ignore certain exceptions 
-  
+  ''' Try catch helper for cases when you want to ignore certain exceptions
+
       Attributes
       ----------
       default_ignore : array_like
         Arguments of Exception classes is set to ignore. Default is all.
       *other_ignore : str
-      
       '''
-  
+
   def __init__(self, default_ignore=Exception, *other_ignore):
-    ''' Arguments of Exception classes to ignore. Default is all 
-    
+    ''' Arguments of Exception classes to ignore. Default is all
+
         Parameters
         ----------
         *ignore_exceptions : exception class
@@ -41,7 +42,6 @@ class Try(object):
     -------
     bool
         True if subclass
-
     '''
 
     if exc_type is None:
@@ -51,16 +51,14 @@ class Try(object):
 
 def reloadModules(pattern='.*', skipPattern='^IPython'):
   ''' Reload modules that match pattern regular expression (string or
-  compile re) 
-  
+  compile re)
+
   Parameters
   ----------
   pattern : str
       The regular expression pattern of modules that will be reloaded.
   skipPattern : str
       The regular expression pattern of modules that will not be reloaded.
-
-  
   '''
 
   from types import ModuleType
@@ -73,7 +71,7 @@ def reloadModules(pattern='.*', skipPattern='^IPython'):
 
   modules = sys.modules.keys()
   #In case something is loaded in the background, it will craete a
-  #"dictionary changed size during iteration" error 
+  #"dictionary changed size during iteration" error
 
   for m in modules:
     if isinstance(sys.modules[m], ModuleType) and \
@@ -116,7 +114,7 @@ def get_file(fid, mode='rb'):
       mode :str
           Optional, file mode to open file if filename supplied
           Default rb
-          
+
       Returns
       -------
       str
@@ -143,7 +141,6 @@ def static(**kwargs):
             def test(a, b):
               test.count += 1
               print(a+b, test.count)
-
   '''
 
   def decorate(func):
@@ -152,78 +149,67 @@ def static(**kwargs):
     return func
   return decorate
 
-class OptionalArgumentDecorator(object):
+# This can't be a class, https://stackoverflow.com/q/6394511/4166604
+def OptionalArgumentDecorator(*args, **kwargs):
   ''' Decorator for easily defining a decorator class that may take arguments
 
       Write a decorator class as normal, that would always take arguments, and
       make sure they all have default values. Then just add this decorator and
       both notations will work
 
-      Attributes
+      Attributes #TODO FIX
       ----------
       *args
           Variable length argument list.
 
       '''
-  def __init__(self, *args):
-    '''
-    Parameters
-    ----------
-    *args
-          Variable length argument list.
 
-    '''
-    if len(args)==1:
-      #normal use
-      self.cls = args[0]
-    else:
-      #inheritance
-      #args = (class_name_str, (parent_class,), {'__module__': module_name})
-      parents = tuple(x.cls if type(x) == OptionalArgumentDecorator else x
-                      for x in args[1])
-      self.cls = type(args[0], parents, args[2])
+  if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
+    #normal use, no arguments
+    wrappee = args[0]
+  # Not sure why I wrote this case... Probably not applicable anymore, since
+  # this is no longer a class
+  # elif len(args) == 3 and len(kwargs) == 0 and \
+  #     callable(args[0]) and \
+  #     isinstance(args[1], tuple) and all(isclass(x) for x in args[1]) and \
+  #     isinstance(args[2], dict):
+  #   #inheritance use case?
+  #   #args = (class_name_str, (parent_class,), {'__module__': module_name})
+  #   parents = tuple(x.cls if type(x) == OptionalArgumentDecorator else x
+  #                   for x in args[1])
+  #   wrappee = type(args[0], parents, args[2])
+  else:
+    # Else OptionalArgumentDecorator was called. In this case, I'm not using
+    # any any of the arguments, otherwise I'd use args and kwargs here.
+    return OptionalArgumentDecorator
 
-  def __call__(self, *args, **kwargs):
-    '''
-    Parameters
-    ----------
-    *args
-        Variable length argument list.
-    **kwargs
-        Arbitrary keyword arguments.
+  @wraps(wrappee)
+  def wrapped(*args, **kwargs):
+    return wrappee(*args, **kwargs)
 
-    Returns
-    -------
-    class
-        The decorated class
+  return wrapped
 
-    '''
-    if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
-      return self.cls()(args[0])
-    else:
-      return self.cls(*args, **kwargs)
 
 class _BasicDecorator(object):
   ''' A basic decorator class that does not take arguments
-  
+
       Attributes
       ----------
       fun : func
           It gets wrapped.
-          
       '''
 
   def __init__(self, fun):
+    ''' No need to rewrite this
 
-    self.fun = fun
-    ''' No need to rewrite this 
-        
         Parameters
         ----------
         fun : func
           It gets wrapped
 
     '''
+
+    self.fun = fun
 
   def __call__(self, *args, **kwargs):
     '''re-write this. No need for super
@@ -239,7 +225,6 @@ class _BasicDecorator(object):
        -------
        arrray_like
             The Result
-
     '''
 
     #pre wrap code
@@ -253,19 +238,22 @@ class _BasicArgumentDecorator(object):
       It's best to define __init__ with a proper signature when inheriting'''
 
   def __call__(self, fun):
-    ''' No need to rewrite this 
+    ''' No need to rewrite this
 
         Parameters
         ----------
-        fun : 
-
+        fun :
     '''
 
+    @wraps(fun)
+    def wrapped(*args, **kwargs):
+      return self.__inner_call__(*args, **kwargs)
+
     self.fun = fun
-    return self.__inner_call__
+    return wrapped
 
   def __inner_call__(self, *args, **kwargs):
-    '''re-write this. No need for super
+    '''re-write THAT. No need for super
        Parameters
        ----------
        *args
@@ -280,7 +268,7 @@ class _BasicArgumentDecorator(object):
     return result
 
 # Decorated methods do not show up in sphinx unless we use functools.wraps
-@OptionalArgumentDecorator
+@OptionalArgumentDecorator()
 class BasicDecorator(_BasicArgumentDecorator):
   ''' A basic decorator class that can optionally take arguments
 
@@ -406,11 +394,11 @@ def args_to_kwargs(function, args=tuple(), kwargs={}):
      Returns
      -------
      dict
-        The returned dictionary has the keywords that would be received in a 
-        real function call. Leftover args are put into the key ARGS(-1), and 
-        leftover KWARGS are placed in the key KWARGS(-2). While everything 
-        should behave exactly as python would, certain failure situations are 
-        not reproduced,for exampled it does not raise exception if you declare 
+        The returned dictionary has the keywords that would be received in a
+        real function call. Leftover args are put into the key ARGS(-1), and
+        leftover KWARGS are placed in the key KWARGS(-2). While everything
+        should behave exactly as python would, certain failure situations are
+        not reproduced,for exampled it does not raise exception if you declare
         the same parameter in both /*/args and /**/kwargs)
 
      Only works for python2. need to use signature instead of getargspec for
@@ -496,11 +484,9 @@ def args_to_kwargs2(function, *args, **kwargs):
      **kwargs
           Arbitrary keyword arguments.
 
-     
      Returns
      -------
      array_like
-
   '''
   return args_to_kwargs(function, args, kwargs)
 
