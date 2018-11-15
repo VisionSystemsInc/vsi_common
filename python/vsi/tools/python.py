@@ -1,6 +1,6 @@
 from __future__ import print_function # Python2 compat
 
-from functools import wraps, update_wrapper, partial
+from functools import wraps, update_wrapper, WRAPPER_UPDATES, WRAPPER_ASSIGNMENTS
 from inspect import isclass
 import sys
 
@@ -62,7 +62,6 @@ def reloadModules(pattern='.*', skipPattern='^IPython'):
   '''
 
   from types import ModuleType
-  import sys
   import os
   import re
 
@@ -149,111 +148,76 @@ def static(**kwargs):
     return func
   return decorate
 
-<<<<<<< Updated upstream
-# This can't be a class, https://stackoverflow.com/q/6394511/4166604
-def OptionalArgumentDecorator(*args, **kwargs):
-=======
-def OptionalArgumentDecorator(*args):
-  if len(args)==1:
-    print("Should be wrapping BasicDecorator")
-    print(args)
-    #normal use, when decorating a decorator
-    cls = args[0]
-  else:
-    print("Should be wrapping MyDecor")
-    #inheritance case, when the decorated decorator is a parent to another
-    #args = (class_name_str, (parent_class,), {'__module__': module_name})
-    parents = tuple(x.cls if type(x) == OptionalArgumentDecorator else x
-                    for x in args[1])
-    cls = type(args[0], parents, args[2])
-
-  @wraps(args[0])
-  def wrapped(*args, **kwargs):
-    return cls(*args, **kwargs)
-
-class Wrapped:
-    def __init__(self, *args):
-      if len(args)==1:
-        #normal use, when decorating a decorator
-        self.cls = args[0]
-      else:
-        #inheritance case, when the decorated decorator is a parent to another
-        #args = (class_name_str, (parent_class,), {'__module__': module_name})
-        parents = tuple(x.cls if type(x) == OptionalArgumentDecorator else x
-                        for x in args[1])
-        self.cls = type(args[0], parents, args[2])
-
-    def __call__(self, *args, **kwargs):
-      if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
-        return self.cls()(args[0])
-      else:
-        return self.cls(*args, **kwargs)
-
-def OptionalArgumentDecorator(*args):
-  return Wrapped(*args)
-
-class OptionalArgumentDecoratorOld(object):
->>>>>>> Stashed changes
+def OptionalArgumentDecorator(cls):
   ''' Decorator for easily defining a decorator class that may take arguments
 
       Write a decorator class as normal, that would always take arguments, and
       make sure they all have default values. Then just add this decorator and
       both notations will work
 
-      Attributes #TODO FIX
+      Attributes
       ----------
       *args
           Variable length argument list.
-
       '''
 
-<<<<<<< Updated upstream
-  if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
-    #normal use, no arguments
-    wrappee = args[0]
-  # Not sure why I wrote this case... Probably not applicable anymore, since
-  # this is no longer a class
-  # elif len(args) == 3 and len(kwargs) == 0 and \
-  #     callable(args[0]) and \
-  #     isinstance(args[1], tuple) and all(isclass(x) for x in args[1]) and \
-  #     isinstance(args[2], dict):
-  #   #inheritance use case?
-  #   #args = (class_name_str, (parent_class,), {'__module__': module_name})
-  #   parents = tuple(x.cls if type(x) == OptionalArgumentDecorator else x
-  #                   for x in args[1])
-  #   wrappee = type(args[0], parents, args[2])
+  class _Wrapper(object):
+    def __init__(self, *args):
+      '''
+      Parameters
+      ----------
+      *args
+            Variable length argument list.
+      '''
+
+      if len(args)==1:
+        #normal use, when decorating a decorator
+        self.cls = args[0]
+      else:
+        #inheritance case, when the decorated decorator is a parent to another
+        #args = (class_name_str, (parent_class,), {'__module__': module_name})
+        parents = tuple(x.cls if isinstance(x, _Wrapper) else x
+                        for x in args[1])
+        self.cls = type(args[0], parents, args[2])
+
+    def __call__(self, *args, **kwargs):
+      '''
+      Parameters
+      ----------
+      *args
+          Variable length argument list.
+      **kwargs
+          Arbitrary keyword arguments.
+
+      Returns
+      -------
+      class
+          The decorated class
+      '''
+
+      print('damn')
+
+      if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
+        return self.cls()(args[0])
+      else:
+        return self.cls(*args, **kwargs)
+
+  # Convert mappingproxy to dict
+  __dict__ = dict(getattr(_Wrapper, '__dict__'))
+  __dict__.update(getattr(cls, '__dict__', {}))
+  Wrapper = type("Wrapper", (_Wrapper,), __dict__)
+
+  if sys.version_info.major == 2:
+    update_wrapper(Wrapper, cls,
+        assigned = (x for x in WRAPPER_ASSIGNMENTS if x != '__doc__'),
+        updated = (x for x in WRAPPER_UPDATES if x != '__dict__'))
   else:
-    # Else OptionalArgumentDecorator was called. In this case, I'm not using
-    # any any of the arguments, otherwise I'd use args and kwargs here.
-    return OptionalArgumentDecorator
-=======
-    '''
-    if len(args)==1:
-      #normal use, when decorating a decorator
-      self.cls = args[0]
-    else:
-      #inheritance case, when the decorated decorator is a parent to another
-      #args = (class_name_str, (parent_class,), {'__module__': module_name})
-      parents = tuple(x.cls if type(x) == OptionalArgumentDecorator else x
-                      for x in args[1])
-      self.cls = type(args[0], parents, args[2])
->>>>>>> Stashed changes
+    update_wrapper(Wrapper, cls,
+        updated = (x for x in WRAPPER_UPDATES if x != '__dict__'))
 
-  @wraps(wrappee)
-  def wrapped(*args, **kwargs):
-    return wrappee(*args, **kwargs)
+  print('WTF',cls)
+  return Wrapper(cls)
 
-  return wrapped
-
-<<<<<<< Updated upstream
-=======
-    '''
-
-    if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
-      return self.cls()(args[0])
-    else:
-      return self.cls(*args, **kwargs)
->>>>>>> Stashed changes
 
 class _BasicDecorator(object):
   ''' A basic decorator class that does not take arguments
@@ -271,13 +235,12 @@ class _BasicDecorator(object):
         ----------
         fun : func
           It gets wrapped
-
     '''
 
     self.fun = fun
 
   def __call__(self, *args, **kwargs):
-    '''re-write this. No need for super
+    '''re-write this. No need to call super().__call__
 
        Parameters
        ----------
@@ -302,9 +265,6 @@ class _BasicArgumentDecorator(object):
 
       It's best to define __init__ with a proper signature when inheriting'''
 
-  def __init__(self, *args, **kwargs):
-    print('delme')
-
   def __call__(self, fun):
     ''' No need to rewrite this
 
@@ -321,7 +281,7 @@ class _BasicArgumentDecorator(object):
     return wrapped
 
   def __inner_call__(self, *args, **kwargs):
-    '''re-write THAT. No need for super
+    '''re-write THIS. No need for super().__inner_call__
        Parameters
        ----------
        *args
@@ -336,7 +296,7 @@ class _BasicArgumentDecorator(object):
     return result
 
 # Decorated methods do not show up in sphinx unless we use functools.wraps
-@OptionalArgumentDecorator()
+# @OptionalArgumentDecorator
 class BasicDecorator(_BasicArgumentDecorator):
   ''' A basic decorator class that can optionally take arguments
 
@@ -372,7 +332,6 @@ class BasicDecorator(_BasicArgumentDecorator):
 
           test1(11,22)
           test2(10,2)
-
       '''
 
 class WarningDecorator(object):
@@ -402,7 +361,6 @@ class WarningDecorator(object):
           @WarningDecorator(output_stream=sys.stdout)
           def my_prototype(x, y):
             print(x/y)
-
   '''
   def __init__(self, *args, **kwargs):
     ''' Initilize decorator
