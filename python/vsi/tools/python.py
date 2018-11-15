@@ -149,8 +149,51 @@ def static(**kwargs):
     return func
   return decorate
 
+<<<<<<< Updated upstream
 # This can't be a class, https://stackoverflow.com/q/6394511/4166604
 def OptionalArgumentDecorator(*args, **kwargs):
+=======
+def OptionalArgumentDecorator(*args):
+  if len(args)==1:
+    print("Should be wrapping BasicDecorator")
+    print(args)
+    #normal use, when decorating a decorator
+    cls = args[0]
+  else:
+    print("Should be wrapping MyDecor")
+    #inheritance case, when the decorated decorator is a parent to another
+    #args = (class_name_str, (parent_class,), {'__module__': module_name})
+    parents = tuple(x.cls if type(x) == OptionalArgumentDecorator else x
+                    for x in args[1])
+    cls = type(args[0], parents, args[2])
+
+  @wraps(args[0])
+  def wrapped(*args, **kwargs):
+    return cls(*args, **kwargs)
+
+class Wrapped:
+    def __init__(self, *args):
+      if len(args)==1:
+        #normal use, when decorating a decorator
+        self.cls = args[0]
+      else:
+        #inheritance case, when the decorated decorator is a parent to another
+        #args = (class_name_str, (parent_class,), {'__module__': module_name})
+        parents = tuple(x.cls if type(x) == OptionalArgumentDecorator else x
+                        for x in args[1])
+        self.cls = type(args[0], parents, args[2])
+
+    def __call__(self, *args, **kwargs):
+      if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
+        return self.cls()(args[0])
+      else:
+        return self.cls(*args, **kwargs)
+
+def OptionalArgumentDecorator(*args):
+  return Wrapped(*args)
+
+class OptionalArgumentDecoratorOld(object):
+>>>>>>> Stashed changes
   ''' Decorator for easily defining a decorator class that may take arguments
 
       Write a decorator class as normal, that would always take arguments, and
@@ -164,6 +207,7 @@ def OptionalArgumentDecorator(*args, **kwargs):
 
       '''
 
+<<<<<<< Updated upstream
   if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
     #normal use, no arguments
     wrappee = args[0]
@@ -182,6 +226,18 @@ def OptionalArgumentDecorator(*args, **kwargs):
     # Else OptionalArgumentDecorator was called. In this case, I'm not using
     # any any of the arguments, otherwise I'd use args and kwargs here.
     return OptionalArgumentDecorator
+=======
+    '''
+    if len(args)==1:
+      #normal use, when decorating a decorator
+      self.cls = args[0]
+    else:
+      #inheritance case, when the decorated decorator is a parent to another
+      #args = (class_name_str, (parent_class,), {'__module__': module_name})
+      parents = tuple(x.cls if type(x) == OptionalArgumentDecorator else x
+                      for x in args[1])
+      self.cls = type(args[0], parents, args[2])
+>>>>>>> Stashed changes
 
   @wraps(wrappee)
   def wrapped(*args, **kwargs):
@@ -189,6 +245,15 @@ def OptionalArgumentDecorator(*args, **kwargs):
 
   return wrapped
 
+<<<<<<< Updated upstream
+=======
+    '''
+
+    if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
+      return self.cls()(args[0])
+    else:
+      return self.cls(*args, **kwargs)
+>>>>>>> Stashed changes
 
 class _BasicDecorator(object):
   ''' A basic decorator class that does not take arguments
@@ -236,6 +301,9 @@ class _BasicArgumentDecorator(object):
   ''' A basic decorator class that takes arguments
 
       It's best to define __init__ with a proper signature when inheriting'''
+
+  def __init__(self, *args, **kwargs):
+    print('delme')
 
   def __call__(self, fun):
     ''' No need to rewrite this
