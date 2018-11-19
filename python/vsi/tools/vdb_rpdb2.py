@@ -1,8 +1,10 @@
-import rpdb2
 import os
 import sys
 import vsi.tools.vdb as vdb
 from functools import partial
+
+import rpdb2
+
 
 def dbstop_if_error(_rpdb2_pwd='vsi', fAllowUnencrypted=True,
                          fAllowRemote=False, timeout=0, source_provider=None,

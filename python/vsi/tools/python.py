@@ -148,76 +148,66 @@ def static(**kwargs):
     return func
   return decorate
 
-def OptionalArgumentDecorator(cls):
+class OptionalArgumentDecorator(object):
   ''' Decorator for easily defining a decorator class that may take arguments
 
       Write a decorator class as normal, that would always take arguments, and
       make sure they all have default values. Then just add this decorator and
       both notations will work
-
-      Attributes
-      ----------
-      *args
-          Variable length argument list.
       '''
 
-  class _Wrapper(object):
-    def __init__(self, *args):
-      '''
-      Parameters
-      ----------
-      *args
-            Variable length argument list.
-      '''
+  def __new__(cls, *args, **kwargs):
+    if len(args)==1:
+      #normal use, when decorating a decorator
+      WrappedClass = args[0]
+    else: # three args
+      #inheritance case, when a decorated class is being inherited from
+      #args = (class_name_str, (parent_class,), {'__module__': module_name})
+      parents = tuple(x.__wrapped_cls__
+                      if isinstance(x, OptionalArgumentDecorator)
+                      else x
+                      for x in args[1])
+      WrappedClass = type(args[0], parents, args[2])
 
-      if len(args)==1:
-        #normal use, when decorating a decorator
-        self.cls = args[0]
-      else:
-        #inheritance case, when the decorated decorator is a parent to another
-        #args = (class_name_str, (parent_class,), {'__module__': module_name})
-        parents = tuple(x.cls if isinstance(x, _Wrapper) else x
-                        for x in args[1])
-        self.cls = type(args[0], parents, args[2])
+    __dict__ = dict(getattr(cls, '__dict__'))
+    # Init is a special case, that if set before __new__ is done, then the
+    # WrappedClass's init is called insted of OptionalArgumentDecorator
+    __dict__.update({k:v for (k,v) in \
+        getattr(WrappedClass, '__dict__', {}).items() if k != '__init__'})
+    __dict__['__wrapped_cls__'] = WrappedClass
 
-    def __call__(self, *args, **kwargs):
-      '''
-      Parameters
-      ----------
-      *args
-          Variable length argument list.
-      **kwargs
-          Arbitrary keyword arguments.
+    Wrapper = type("Wrapper", (cls,), __dict__)
 
-      Returns
-      -------
-      class
-          The decorated class
-      '''
+    if sys.version_info.major == 2:
+      update_wrapper(Wrapper, WrappedClass,
+          assigned = (x for x in WRAPPER_ASSIGNMENTS if x != '__doc__'),
+          updated = (x for x in WRAPPER_UPDATES if x != '__dict__'))
+    else:
+      update_wrapper(Wrapper, WrappedClass,
+          updated = (x for x in WRAPPER_UPDATES if x != '__dict__'))
 
-      print('damn')
+    return super(OptionalArgumentDecorator, cls).__new__(Wrapper)
 
-      if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
-        return self.cls()(args[0])
-      else:
-        return self.cls(*args, **kwargs)
 
-  # Convert mappingproxy to dict
-  __dict__ = dict(getattr(_Wrapper, '__dict__'))
-  __dict__.update(getattr(cls, '__dict__', {}))
-  Wrapper = type("Wrapper", (_Wrapper,), __dict__)
+  def __call__(self, *args, **kwargs):
+    '''
+    Parameters
+    ----------
+    *args
+        Variable length argument list.
+    **kwargs
+        Arbitrary keyword arguments.
 
-  if sys.version_info.major == 2:
-    update_wrapper(Wrapper, cls,
-        assigned = (x for x in WRAPPER_ASSIGNMENTS if x != '__doc__'),
-        updated = (x for x in WRAPPER_UPDATES if x != '__dict__'))
-  else:
-    update_wrapper(Wrapper, cls,
-        updated = (x for x in WRAPPER_UPDATES if x != '__dict__'))
+    Returns
+    -------
+    class
+        The decorated class
+    '''
 
-  print('WTF',cls)
-  return Wrapper(cls)
-
+    if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
+      return self.__wrapped_cls__()(args[0])
+    else:
+      return self.__wrapped_cls__(*args, **kwargs)
 
 class _BasicDecorator(object):
   ''' A basic decorator class that does not take arguments
@@ -296,7 +286,7 @@ class _BasicArgumentDecorator(object):
     return result
 
 # Decorated methods do not show up in sphinx unless we use functools.wraps
-# @OptionalArgumentDecorator
+@OptionalArgumentDecorator
 class BasicDecorator(_BasicArgumentDecorator):
   ''' A basic decorator class that can optionally take arguments
 
@@ -396,6 +386,15 @@ class WarningDecorator(object):
     else:
       self.fun = args[0]
       return self
+
+class WarningDecorator(BasicDecorator):
+  def __init__(self, message='Warning', output_stream=sys.stderr):
+    self.message = message
+    self.output_stream = output_stream
+  def __inner_call__(self, *args, **kwargs):
+    print(self.message, file=self.output_stream)
+    return self.fun(*args, **kwargs)
+
 
 ARGS=-1
 KWARGS=-2

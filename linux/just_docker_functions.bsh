@@ -40,9 +40,9 @@ source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
 #
 # Runs ``docker volume rm`` on the specified volume. If the volume is in use, there are four strategies to handle this:
 #
-# 1. ``ask`` - (default) Asks you if you want to attempt to stop the containers with a 30 second timeout and then forcefully remove the current containers mounting the volume
-# 2. ``delete`` - Mounts the volume and deletes all of the files. May not work when a container is running a database, or the volumes modified by the entrypoint, i.e. adding user permissions.
-# 3. ``stop`` - Attempts to stop the containers with a 30 second timeout and then forcefully remove the current containers mounting the volume, without prompting
+# 1. ``ask`` - (default) Interactively asks you if you want to use the stop, delete, or error strategy.
+# 2. ``stop`` - Attempts to stop the containers with a 30 second timeout and then forcefully remove the current containers mounting the volume, without prompting
+# 3. ``delete`` - Mounts the volume and deletes all of the files. May not work when a container is running a database, or the volumes modified by the entrypoint, i.e. adding user permissions.
 # 4. ``error`` - Errors out instead of cleaning the volume
 #
 # The action for a specific volume is specified by setting the label ``com.vsi.just.clean_action``.
@@ -97,50 +97,7 @@ function docker_defaultify()
             action=ask
           fi
 
-          case $action in
-            ask)
-              echo "The following containers are using ${1}:"
-              echo "${containers[*]}"
-              if command ask_question "Stop and forcefully remove these containers then try again?" n; then
-                for x in "${containers[@]}"; do
-                  Docker stop "${x}"
-                  Docker rm "${x}" || :
-                done
-                Docker volume rm "${1}"
-              else
-                false
-              fi
-              ;;
-            delete)
-              # Remove the files
-              Docker run --rm --mount "type=volume,src=${1},dst=/data" alpine sh -c "find /data -maxdepth 1 -mindepth 1 -print0 | xargs -0 rm -rf"
-
-              # If there is a com.vsi.just.clean_setup label
-              pattern=$'"com\.vsi\.just\.clean_setup": "([^\n]*)"\n'
-              if [[ ${volume_inspect} =~ $pattern ]]; then
-                # Parse \" to "
-                setup_cmd="${BASH_REMATCH[1]//\\\"/\"}"
-                # Evaluate this string into arguments
-                eval "setup_cmd=(${setup_cmd})"
-                # Run the just target
-                (justify "${setup_cmd[@]}")
-              fi
-              ;;
-            stop)
-              for x in "${containers[@]}"; do
-                Docker stop -t 30 "${x}"
-                Docker rm -f "${x}" || :
-              done
-              Docker volume rm "${1}"
-              ;;
-            error)
-              false
-              ;;
-            *)
-              echo "Unknown action ${action}"
-              false
-              ;;
-          esac
+          _docker_clean_actions "${1}" "${action}"
         fi
       else
         echo "${1} already removed" >&2
@@ -183,4 +140,65 @@ function docker_defaultify()
       ;;
   esac
   return 0
+}
+
+# :Arguments: ``$1`` - Volume to be removed
+#             ``$2`` - Action to take
+# :Parameters: ``containers`` - Array of containers using volume
+#              ``volume_inspect`` - String of the result from ``docker volume inspect ${1}``
+function _docker_clean_actions()
+{
+  case "${2}" in
+    ask)
+      echo "The following containers are using ${1}:"
+      echo "${containers[*]}"
+
+      local action
+      picker "Stop and forcefully remove these containers then try again" \
+             "Deletes all of the volumes files and repopulate" \
+             "Do nothing and error" > /dev/null || action=$?
+
+      if [ "${action}" = "1" ]; then
+        _docker_clean_actions "${1}" stop
+      elif  [ "${action}" = "2" ]; then
+        _docker_clean_actions "${1}" delete
+      elif  [ "${action}" = "3" ]; then
+        _docker_clean_actions "${1}" error
+      else
+        _docker_clean_actions "${1}" unknown
+      fi
+      ;;
+    delete)
+      # Remove the files
+      Docker run --rm --mount "type=volume,src=${1},dst=/data" alpine sh -c "find /data -maxdepth 1 -mindepth 1 -print0 | xargs -0 rm -rf"
+
+      # If there is a com.vsi.just.clean_setup label
+      pattern=$'"com\.vsi\.just\.clean_setup": "([^\n]*)"\n'
+      if [[ ${volume_inspect} =~ $pattern ]]; then
+        # Parse \" to "
+        setup_cmd="${BASH_REMATCH[1]//\\\"/\"}"
+        # Evaluate this string into arguments
+        eval "setup_cmd=(${setup_cmd})"
+        # Run the just target
+        (justify "${setup_cmd[@]}")
+      else
+        echo "No 'com.vsi.just.clean_setup' label found for volume ${1}" >&2
+        # false
+      fi
+      ;;
+    stop)
+      for x in "${containers[@]}"; do
+        Docker stop -t 30 "${x}"
+        Docker rm -f "${x}" || :
+      done
+      Docker volume rm "${1}"
+      ;;
+    error)
+      false
+      ;;
+    *)
+      echo "Unknown action ${2}"
+      false
+      ;;
+  esac
 }
