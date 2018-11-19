@@ -58,8 +58,8 @@ function caseify()
       ;;
     build_docker) # Build docker image
       Docker-compose build
-      (justify docker-compose clean venv2 docker-compose clean venv3)
-      (justify _post_build_docker)
+      justify docker-compose clean venv2 docker-compose clean venv3
+      justify _post_build_docker
       ;;
 
     _post_build_docker)
@@ -75,18 +75,18 @@ function caseify()
       extra_args+=$#
       ;;
     test_wine) # Run unit tests using wine
-      (justify run wine -c "
+      justify run wine -c "
         cd /z/vsi_common
         . setup.env
         just test ${*}"'
         rv=$?
         read -p "Press any key to close" -r -e -n1
-        exit ${rv}')
+        exit ${rv}'
       extra_args+=$#
       ;;
 
     build_docs) # Build docs image
-      (justify build recipes gosu tini pipenv)
+      justify build recipes gosu tini pipenv
       Docker-compose build docs
       image_name=$(docker create ${VSI_COMMON_DOCKER_REPO}:compile_docs)
       docker cp ${image_name}:/venv/Pipfile.lock "${VSI_COMMON_DIR}/docs/Pipfile.lock"
