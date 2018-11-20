@@ -1,7 +1,7 @@
 from __future__ import print_function # Python2 compat
 
 from functools import wraps, update_wrapper, WRAPPER_UPDATES, WRAPPER_ASSIGNMENTS
-from inspect import isclass
+import inspect
 import sys
 
 class Try(object):
@@ -395,70 +395,128 @@ class WarningDecorator(BasicDecorator):
     print(self.message, file=self.output_stream)
     return self.fun(*args, **kwargs)
 
+# Fix of https://gist.github.com/MacHu-GWU/0170849f693aa5f8d129aa03fc358305
+def __is__method(cls, attribute, kind, exceptions):
+  value = getattr(cls, attribute)
 
-ARGS=-1
-KWARGS=-2
+  if attribute in exceptions:
+    return True
 
+  if inspect.isclass(cls):
+    for cls in inspect.getmro(cls):
+      if inspect.isroutine(value): # No else, no builtin statics?
+        if attribute in cls.__dict__:
+          if isinstance(cls.__dict__[attribute], kind):
+            return True
+          else:
+            return False
+  else: # class instance
+    if attribute in cls.__dict__:
+      value = cls.__dict__[attribute]
+    elif attribute in type(cls).__dict__:
+      value = type(cls).__dict__[attribute]
+    else:
+      return False
+
+    if isinstance(value, kind):
+      return True
+    else:
+      return False
+
+  return False
+
+def is_static_method(cls, attribute):
+  return __is__method(cls, attribute, staticmethod,
+      # https://docs.python.org/3.7/reference/datamodel.html#object.__new__
+      ('__new__',))
+
+def is_class_method(cls, attribute):
+  return __is__method(cls, attribute, classmethod,
+      # https://docs.python.org/3/library/abc.html#abc.ABCMeta.__subclasshook__
+      ('__subclasshook__',))
+
+
+class ARGS:
+  pass
+
+class KWARGS:
+  pass
 
 def args_to_kwargs(function, args=tuple(), kwargs={}):
   '''returns a single dict of all the args and kwargs
 
-     Should handle: functions, classes (their __init__), bound and unbound
-     versions of methods, class methods, and static methods. Furthermore, if a
-     class instance has a __call__ method, this is used.
+    Should handle: functions, classes (their __init__), bound and unbound
+    versions of methods, class methods, and static methods. Furthermore, if a
+    class instance has a __call__ method, this is used.
 
-     It does not call the function.
+    It does not call the function.
 
-     Parameters
-     ----------
-     function : func
+    Parameters
+    ----------
+    function : func
         The Function
-     args : tuple
-     kwargs : array_like
+    args : tuple
+    kwargs : array_like
 
-     Returns
-     -------
-     dict
+    Returns
+    -------
+    dict
         The returned dictionary has the keywords that would be received in a
-        real function call. Leftover args are put into the key ARGS(-1), and
-        leftover KWARGS are placed in the key KWARGS(-2). While everything
+        real function call. Leftover args are put into the key ARGS, and
+        leftover KWARGS are placed in the key KWARGS. While everything
         should behave exactly as python would, certain failure situations are
-        not reproduced,for exampled it does not raise exception if you declare
+        not reproduced, for exampled it does not raise exception if you declare
         the same parameter in both /*/args and /**/kwargs)
 
-     Only works for python2. need to use signature instead of getargspec for
-     python3.
+    Only works for python2. need to use signature instead of getargspec for
+    python3.
 
-     Based on:
-     https://github.com/merriam/dectools/blob/master/dectools/dectools.py'''
+    Based on:
+    https://github.com/merriam/dectools/blob/master/dectools/dectools.py'''
 
-  import inspect
+  return args_to_kwargs_unbound(function, None, args, kwargs)
 
-  pop_self = False
-
+def args_to_kwargs_unbound(function, attribute=None, args=tuple(), kwargs={}):
+  pop_first = False
   args=tuple(args)
+
+  if attribute:
+    parent = function
+    function = getattr(function, attribute)
+  else:
+    parent = None
+
 
   if inspect.isclass(function):
     function = function.__init__
     args = (None,)+args #Dummy for self
-    pop_self = True
+    pop_first = True
+  # Check for bound function or class function, both treated the same
   elif inspect.ismethod(function):
-    #check if bound/unbound doesn't seem to matter
-    #if function.im_self is not None
     if hasattr(function, '__self__'):
-      #Check if class/normal method doesn't matter
-      #if inspect.isclass(function.__self__):
+      #if it has a __self__, then it is a class/normal method (not static)
       args = (None,)+args #Dummy for self/cls
-      pop_self = True
-    else:
-      #static method
-      pass
+      pop_first = True
+  # Check to see if it is a class instance with __call__. Only class
+  # instanaces can have bound methods in python3
   elif hasattr(function, '__call__') and inspect.ismethod(function.__call__):
     function = function.__call__
     args = (None,)+args
-    pop_self = True
+    pop_first = True
+  # This is how to handle unbound functions
+  elif parent:
+    if not is_static_method(parent, attribute):
+      # Must be class/normal method
+      args = (None,)+args
+      pop_first = True
 
-  names, args_name, kwargs_name, defaults = inspect.getargspec(function)
+  kwonly_args=None
+  kwonly_defaults=None
+
+  try:
+    names, args_name, kwargs_name, defaults, kwonly_args, kwonly_defaults, annotations = inspect.getfullargspec(function)
+  except:
+    names, args_name, kwargs_name, defaults = inspect.getargspec(function)
 
   # assign basic args
   params = {}
@@ -472,7 +530,7 @@ def args_to_kwargs(function, args=tuple(), kwargs={}):
   # assign kwargs given
   if kwargs_name:
     params[KWARGS] = {}
-    for kw, value in kwargs.iteritems():
+    for kw, value in kwargs.items():
       if kw in names:
         params[kw] = value
       else:
@@ -488,19 +546,19 @@ def args_to_kwargs(function, args=tuple(), kwargs={}):
 
   # check we did it correctly.  Each param and only params are set
 
-  assert set(params.iterkeys()) == (set(names)|
-                                    set([KWARGS if kwargs_name else None,
-                                         ARGS if args_name else None]) \
-                                   -set([None]))
+  assert set(params.keys()) == (set(names)|
+                                set([KWARGS if kwargs_name else None,
+                                    ARGS if args_name else None]) \
+                                -set([None]))
   #Remove None, since if *args/**kwargs isn't used, it will have the value None
   #And that is not used
 
-  if pop_self:
+  if pop_first:
     params.pop(names[0])
 
   return params
 
-def args_to_kwargs2(function, *args, **kwargs):
+def args_to_kwargs_easy(function, *args, **kwargs):
   '''
      Parameters
      ----------
@@ -515,6 +573,20 @@ def args_to_kwargs2(function, *args, **kwargs):
   '''
   return args_to_kwargs(function, args, kwargs)
 
+def args_to_kwargs_unbound_easy(function, attribute, *args, **kwargs):
+  '''
+     Parameters
+     ----------
+     *args
+          Variable length argument list.
+     **kwargs
+          Arbitrary keyword arguments.
+
+     Returns
+     -------
+     array_like
+  '''
+  return args_to_kwargs_unbound(function, attribute, args, kwargs)
 
 def command_list_to_string(cmd):
   '''
