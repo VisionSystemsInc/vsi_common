@@ -52,37 +52,19 @@ function caseify()
       extra_args+=$#
       ;;
     test_python) # Run python unit tests
-      Docker-compose run python2
       Docker-compose run python3
+      Docker-compose run python2
       # python3 -B -m unittest discover -s "${VSI_COMMON_DIR}/python/vsi/test"
       ;;
     build_docker) # Build docker image
       Docker-compose build
-      (justify clean venv)
-      (justify _post_build_docker)
-      ;;
-    clean_venv) # Delete the virtual environment volume. The next container \
-                # to use this volume will automatically copy the contents from \
-                # the image.
-      if docker volume inspect "${COMPOSE_PROJECT_NAME}_venv2" &> /dev/null; then
-        Docker volume rm "${COMPOSE_PROJECT_NAME}_venv2"
-      else
-        echo "${COMPOSE_PROJECT_NAME}_venv2 already removed" >&2
-      fi
-      if docker volume inspect "${COMPOSE_PROJECT_NAME}_venv3" &> /dev/null; then
-        Docker volume rm "${COMPOSE_PROJECT_NAME}_venv3"
-      else
-        echo "${COMPOSE_PROJECT_NAME}_venv3 already removed" >&2
-      fi
+      justify docker-compose clean venv2 docker-compose clean venv3
+      justify _post_build_docker
       ;;
 
     _post_build_docker)
-      image_name=$(docker create ${VSI_COMMON_DOCKER_REPO}:python2_test)
-      docker cp ${image_name}:/venv/Pipfile2.lock "${VSI_COMMON_DIR}/docker/tests/Pipfile2.lock"
-      docker rm ${image_name}
-      image_name=$(docker create ${VSI_COMMON_DOCKER_REPO}:python3_test)
-      docker cp ${image_name}:/venv/Pipfile3.lock "${VSI_COMMON_DIR}/docker/tests/Pipfile3.lock"
-      docker rm ${image_name}
+      docker_cp_image "${VSI_COMMON_DOCKER_REPO}:python2_test" "/venv/Pipfile2.lock" "${VSI_COMMON_DIR}/docker/tests/Pipfile2.lock"
+      docker_cp_image "${VSI_COMMON_DOCKER_REPO}:python3_test" "/venv/Pipfile3.lock" "${VSI_COMMON_DIR}/docker/tests/Pipfile3.lock"
       ;;
     run_wine) # Start a wine bash window
       Docker-compose run -e USER_ID="$(id -u)" wine ${@+"${@}"} || :
@@ -93,18 +75,18 @@ function caseify()
       extra_args+=$#
       ;;
     test_wine) # Run unit tests using wine
-      (justify run wine -c "
+      justify run wine -c "
         cd /z/vsi_common
         . setup.env
         just test ${*}"'
         rv=$?
         read -p "Press any key to close" -r -e -n1
-        exit ${rv}')
+        exit ${rv}'
       extra_args+=$#
       ;;
 
     build_docs) # Build docs image
-      (justify build recipes gosu tini pipenv)
+      justify build recipes gosu tini pipenv
       Docker-compose build docs
       image_name=$(docker create ${VSI_COMMON_DOCKER_REPO}:compile_docs)
       docker cp ${image_name}:/venv/Pipfile.lock "${VSI_COMMON_DIR}/docs/Pipfile.lock"

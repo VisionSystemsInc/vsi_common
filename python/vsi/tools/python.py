@@ -1,21 +1,22 @@
 from __future__ import print_function # Python2 compat
 
+from functools import wraps, update_wrapper, WRAPPER_UPDATES, WRAPPER_ASSIGNMENTS
+from inspect import isclass
 import sys
 
 class Try(object):
-  ''' Try catch helper for cases when you want to ignore certain exceptions 
-  
+  ''' Try catch helper for cases when you want to ignore certain exceptions
+
       Attributes
       ----------
       default_ignore : array_like
         Arguments of Exception classes is set to ignore. Default is all.
       *other_ignore : str
-      
       '''
-  
+
   def __init__(self, default_ignore=Exception, *other_ignore):
-    ''' Arguments of Exception classes to ignore. Default is all 
-    
+    ''' Arguments of Exception classes to ignore. Default is all
+
         Parameters
         ----------
         *ignore_exceptions : exception class
@@ -41,7 +42,6 @@ class Try(object):
     -------
     bool
         True if subclass
-
     '''
 
     if exc_type is None:
@@ -51,20 +51,17 @@ class Try(object):
 
 def reloadModules(pattern='.*', skipPattern='^IPython'):
   ''' Reload modules that match pattern regular expression (string or
-  compile re) 
-  
+  compile re)
+
   Parameters
   ----------
   pattern : str
       The regular expression pattern of modules that will be reloaded.
   skipPattern : str
       The regular expression pattern of modules that will not be reloaded.
-
-  
   '''
 
   from types import ModuleType
-  import sys
   import os
   import re
 
@@ -73,7 +70,7 @@ def reloadModules(pattern='.*', skipPattern='^IPython'):
 
   modules = sys.modules.keys()
   #In case something is loaded in the background, it will craete a
-  #"dictionary changed size during iteration" error 
+  #"dictionary changed size during iteration" error
 
   for m in modules:
     if isinstance(sys.modules[m], ModuleType) and \
@@ -116,7 +113,7 @@ def get_file(fid, mode='rb'):
       mode :str
           Optional, file mode to open file if filename supplied
           Default rb
-          
+
       Returns
       -------
       str
@@ -143,7 +140,6 @@ def static(**kwargs):
             def test(a, b):
               test.count += 1
               print(a+b, test.count)
-
   '''
 
   def decorate(func):
@@ -158,30 +154,40 @@ class OptionalArgumentDecorator(object):
       Write a decorator class as normal, that would always take arguments, and
       make sure they all have default values. Then just add this decorator and
       both notations will work
-
-      Attributes
-      ----------
-      *args
-          Variable length argument list.
-
       '''
-  def __init__(self, *args):
-    '''
-    Parameters
-    ----------
-    *args
-          Variable length argument list.
 
-    '''
+  def __new__(cls, *args, **kwargs):
     if len(args)==1:
-      #normal use
-      self.cls = args[0]
-    else:
-      #inheritance
+      #normal use, when decorating a decorator
+      WrappedClass = args[0]
+    else: # three args
+      #inheritance case, when a decorated class is being inherited from
       #args = (class_name_str, (parent_class,), {'__module__': module_name})
-      parents = tuple(x.cls if type(x) == OptionalArgumentDecorator else x
+      parents = tuple(x.__wrapped_cls__
+                      if isinstance(x, OptionalArgumentDecorator)
+                      else x
                       for x in args[1])
-      self.cls = type(args[0], parents, args[2])
+      WrappedClass = type(args[0], parents, args[2])
+
+    __dict__ = dict(getattr(cls, '__dict__'))
+    # Init is a special case, that if set before __new__ is done, then the
+    # WrappedClass's init is called insted of OptionalArgumentDecorator
+    __dict__.update({k:v for (k,v) in \
+        getattr(WrappedClass, '__dict__', {}).items() if k != '__init__'})
+    __dict__['__wrapped_cls__'] = WrappedClass
+
+    Wrapper = type("Wrapper", (cls,), __dict__)
+
+    if sys.version_info.major == 2:
+      update_wrapper(Wrapper, WrappedClass,
+          assigned = (x for x in WRAPPER_ASSIGNMENTS if x != '__doc__'),
+          updated = (x for x in WRAPPER_UPDATES if x != '__dict__'))
+    else:
+      update_wrapper(Wrapper, WrappedClass,
+          updated = (x for x in WRAPPER_UPDATES if x != '__dict__'))
+
+    return super(OptionalArgumentDecorator, cls).__new__(Wrapper)
+
 
   def __call__(self, *args, **kwargs):
     '''
@@ -196,37 +202,35 @@ class OptionalArgumentDecorator(object):
     -------
     class
         The decorated class
-
     '''
+
     if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
-      return self.cls()(args[0])
+      return self.__wrapped_cls__()(args[0])
     else:
-      return self.cls(*args, **kwargs)
+      return self.__wrapped_cls__(*args, **kwargs)
 
 class _BasicDecorator(object):
   ''' A basic decorator class that does not take arguments
-  
+
       Attributes
       ----------
       fun : func
           It gets wrapped.
-          
       '''
 
   def __init__(self, fun):
+    ''' No need to rewrite this
 
-    self.fun = fun
-    ''' No need to rewrite this 
-        
         Parameters
         ----------
         fun : func
           It gets wrapped
-
     '''
 
+    self.fun = fun
+
   def __call__(self, *args, **kwargs):
-    '''re-write this. No need for super
+    '''re-write this. No need to call super().__call__
 
        Parameters
        ----------
@@ -239,7 +243,6 @@ class _BasicDecorator(object):
        -------
        arrray_like
             The Result
-
     '''
 
     #pre wrap code
@@ -253,19 +256,22 @@ class _BasicArgumentDecorator(object):
       It's best to define __init__ with a proper signature when inheriting'''
 
   def __call__(self, fun):
-    ''' No need to rewrite this 
+    ''' No need to rewrite this
 
         Parameters
         ----------
-        fun : 
-
+        fun :
     '''
 
+    @wraps(fun)
+    def wrapped(*args, **kwargs):
+      return self.__inner_call__(*args, **kwargs)
+
     self.fun = fun
-    return self.__inner_call__
+    return wrapped
 
   def __inner_call__(self, *args, **kwargs):
-    '''re-write this. No need for super
+    '''re-write THIS. No need for super().__inner_call__
        Parameters
        ----------
        *args
@@ -316,7 +322,6 @@ class BasicDecorator(_BasicArgumentDecorator):
 
           test1(11,22)
           test2(10,2)
-
       '''
 
 class WarningDecorator(object):
@@ -346,7 +351,6 @@ class WarningDecorator(object):
           @WarningDecorator(output_stream=sys.stdout)
           def my_prototype(x, y):
             print(x/y)
-
   '''
   def __init__(self, *args, **kwargs):
     ''' Initilize decorator
@@ -383,6 +387,15 @@ class WarningDecorator(object):
       self.fun = args[0]
       return self
 
+class WarningDecorator(BasicDecorator):
+  def __init__(self, message='Warning', output_stream=sys.stderr):
+    self.message = message
+    self.output_stream = output_stream
+  def __inner_call__(self, *args, **kwargs):
+    print(self.message, file=self.output_stream)
+    return self.fun(*args, **kwargs)
+
+
 ARGS=-1
 KWARGS=-2
 
@@ -406,11 +419,11 @@ def args_to_kwargs(function, args=tuple(), kwargs={}):
      Returns
      -------
      dict
-        The returned dictionary has the keywords that would be received in a 
-        real function call. Leftover args are put into the key ARGS(-1), and 
-        leftover KWARGS are placed in the key KWARGS(-2). While everything 
-        should behave exactly as python would, certain failure situations are 
-        not reproduced,for exampled it does not raise exception if you declare 
+        The returned dictionary has the keywords that would be received in a
+        real function call. Leftover args are put into the key ARGS(-1), and
+        leftover KWARGS are placed in the key KWARGS(-2). While everything
+        should behave exactly as python would, certain failure situations are
+        not reproduced,for exampled it does not raise exception if you declare
         the same parameter in both /*/args and /**/kwargs)
 
      Only works for python2. need to use signature instead of getargspec for
@@ -496,11 +509,9 @@ def args_to_kwargs2(function, *args, **kwargs):
      **kwargs
           Arbitrary keyword arguments.
 
-     
      Returns
      -------
      array_like
-
   '''
   return args_to_kwargs(function, args, kwargs)
 

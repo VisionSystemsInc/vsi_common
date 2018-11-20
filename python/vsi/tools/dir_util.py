@@ -71,34 +71,34 @@ def mkdtemp(*args, **kwargs):
   return tempdir
 
 class Chdir(object):
-    ''' Simple helper function to change dir and guarantee you get back to your 
-        original directory
+  ''' Simple helper function to change dir and guarantee you get back to your
+      original directory
 
-        Example::
+      Example::
 
-            These are written in doctest format, and should illustrate how to
-            use the function.
+          These are written in doctest format, and should illustrate how to
+          use the function.
 
-            >>> a=[1,2,3]
-            >>> print [x + 3 for x in a]
-            [4, 5, 6]
+          >>> a=[1,2,3]
+          >>> print [x + 3 for x in a]
+          [4, 5, 6]
 
-            >>> import os
-            >>> import tempfile
-            >>> from vsi.tools.dir_util import Chdir
-            >>> os.chdir(os.path.abspath(os.sep))
-            >>> print(os.getcwd())
-            /
-            >>> with Chdir(tempfile.tempdir):
-            ...   print(os.getcwd())
-            /tmp
-            >>> print(os.getcwd())
-            /
+          >>> import os
+          >>> import tempfile
+          >>> from vsi.tools.dir_util import Chdir
+          >>> os.chdir(os.path.abspath(os.sep))
+          >>> print(os.getcwd())
+          /
+          >>> with Chdir(tempfile.tempdir):
+          ...   print(os.getcwd())
+          /tmp
+          >>> print(os.getcwd())
+          /
 
-        '''
+      '''
 
   def __init__(self, dir, create=False, error_on_exit=False):
-    
+
     self.dir = dir
     self.oldDir = None
     self.create = create
