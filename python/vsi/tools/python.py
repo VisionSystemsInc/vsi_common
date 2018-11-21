@@ -548,37 +548,35 @@ def args_to_kwargs_unbound(function, attribute=None, args=tuple(), kwargs={}):
         inspect.getargspec(function)
 
   # assign basic args
-  params = {}
+  params = dict(zip(args_names, args))  # zip stops at shorter sequence
   if extra_args_name:
-    basic_arg_count = len(args_names)
-    params.update(zip(args_names, args))  # zip stops at shorter sequence
-    params[ARGS] = args[basic_arg_count:]
-  else:
-    params.update(zip(args_names, args))
-    if len(args_names) != len(args):
+    params[ARGS] = args[len(args_names):]
+  elif len(args_names) < len(args):
       logger.warning("args_to_kwargs: Too many positional arguments specified")
 
   # assign kwargs given
-  # params[KWARGS] = {}
-  # for keyword, value in kwargs.items():
-  #   if keyword in args_names + kwonly_args_names:
-  #     params[keyword] = value
-  #   else:
-  #     if extra_kwargs_name:
-  #       params[KWARGS][keyword] = value
-  #     else:
-  #       logger.warning("args_to_kwargs: Unspecified keyword argument '%s' "
-  #                      "used", keyword)
-  #       params[keyword] = value
   if extra_kwargs_name:
     params[KWARGS] = {}
-    for kw, value in kwargs.items():
-      if kw in args_names:
-        params[kw] = value
+  for keyword, value in kwargs.items():
+    if keyword in args_names + kwonly_args_names:
+      params[keyword] = value
+    else:
+      if extra_kwargs_name:
+        params[KWARGS][keyword] = value
       else:
-        params[KWARGS][kw] = value
-  else:
-      params.update(kwargs)
+        logger.warning("args_to_kwargs: Unspecified keyword argument '%s' "
+                       "used", keyword)
+        params[keyword] = value
+
+  # if extra_kwargs_name:
+  #   params[KWARGS] = {}
+  #   for kw, value in kwargs.items():
+  #     if kw in args_names:
+  #       params[kw] = value
+  #     else:
+  #       params[KWARGS][kw] = value
+  # else:
+  #     params.update(kwargs)
 
 
 
@@ -589,18 +587,21 @@ def args_to_kwargs_unbound(function, attribute=None, args=tuple(), kwargs={}):
         params[args_names[-len(defaults) + pos]] = value
 
   # assign keyword only defaults
-  # if kwonly_defaults:
-  #   for key, value in kwonly_defaults.items():
-  #     if key not in params:
-  #       params[key] = value
+  if kwonly_defaults:
+    for key, value in kwonly_defaults.items():
+      if key not in params:
+        params[key] = value
 
   # check we did it correctly.  Each param and only params are set
-  assert set(params.keys()) == (set(args_names)|
-                                set([KWARGS if extra_kwargs_name else None,
-                                    ARGS if extra_args_name else None]) \
-                                -set([None]))
+  if set(params.keys()) != (set(args_names)|set(kwonly_args_names)|
+                            set([KWARGS if extra_kwargs_name else None,
+                                 ARGS if extra_args_name else None]) -
+                            set([None])):
   #Remove None, since if *args/**kwargs isn't used, it will have the value None
   #And that is not used
+    logger.warning("args_to_kwargs: Number of names arguments used does not "
+                   "equal arguments parsed. This can mean you are "
+                   "missing required arguments")
 
   if pop_first:
     params.pop(args_names[0])
