@@ -12,6 +12,9 @@ from vsi.tools.python import (Try, is_string_like, BasicDecorator, static,
 
 import sys
 
+if sys.version_info.major > 2:
+  from .py3_python import *
+
 try:
   from StringIO import StringIO
 except ImportError:

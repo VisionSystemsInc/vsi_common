@@ -4,6 +4,9 @@ from functools import wraps, update_wrapper, WRAPPER_UPDATES, WRAPPER_ASSIGNMENT
 import inspect
 import sys
 
+import logging
+logger = logging.getLogger(__name__)
+
 class Try(object):
   ''' Try catch helper for cases when you want to ignore certain exceptions
 
@@ -426,6 +429,21 @@ def __is__method(cls, attribute, kind, exceptions):
   return False
 
 def is_static_method(cls, attribute):
+  ''' Returns whether the attribute refers to a staticmethod or not
+
+      Parameters
+      ----------
+      cls : object
+          The class/instance being checked
+      attribute : str
+          The name of the function to be checked
+
+      Returns
+      -------
+      bool
+          True if the attribute is a static function, else false if anything
+          else
+  '''
   return __is__method(cls, attribute, staticmethod,
       # https://docs.python.org/3.7/reference/datamodel.html#object.__new__
       ('__new__',))
@@ -456,7 +474,7 @@ def args_to_kwargs(function, args=tuple(), kwargs={}):
     function : func
         The Function
     args : tuple
-    kwargs : array_like
+    kwargs : dict
 
     Returns
     -------
@@ -468,8 +486,8 @@ def args_to_kwargs(function, args=tuple(), kwargs={}):
         not reproduced, for exampled it does not raise exception if you declare
         the same parameter in both /*/args and /**/kwargs)
 
-    Only works for python2. need to use signature instead of getargspec for
-    python3.
+    On python3, ``args_to_kwargs_unbound`` must be used for unbound class
+    methods
 
     Based on:
     https://github.com/merriam/dectools/blob/master/dectools/dectools.py'''
@@ -477,6 +495,9 @@ def args_to_kwargs(function, args=tuple(), kwargs={}):
   return args_to_kwargs_unbound(function, None, args, kwargs)
 
 def args_to_kwargs_unbound(function, attribute=None, args=tuple(), kwargs={}):
+
+  # Clean up the inputs
+
   pop_first = False
   args=tuple(args)
 
@@ -510,55 +531,102 @@ def args_to_kwargs_unbound(function, attribute=None, args=tuple(), kwargs={}):
       args = (None,)+args
       pop_first = True
 
-  kwonly_args=None
-  kwonly_defaults=None
+  ###################
+  # Parse into kwargs
+  ###################
+
+  kwonly_args_names = []
+  kwonly_defaults = None
+  annotations = {}
 
   try:
-    names, args_name, kwargs_name, defaults, kwonly_args, kwonly_defaults, annotations = inspect.getfullargspec(function)
+    args_names, extra_args_name, extra_kwargs_name, defaults, \
+        kwonly_args_names, kwonly_defaults, annotations = \
+        inspect.getfullargspec(function)
   except:
-    names, args_name, kwargs_name, defaults = inspect.getargspec(function)
+    args_names, extra_args_name, extra_kwargs_name, defaults = \
+        inspect.getargspec(function)
 
   # assign basic args
   params = {}
-  if args_name:
-    basic_arg_count = len(names)
-    params.update(zip(names[:], args))  # zip stops at shorter sequence
+  if extra_args_name:
+    basic_arg_count = len(args_names)
+    params.update(zip(args_names, args))  # zip stops at shorter sequence
     params[ARGS] = args[basic_arg_count:]
   else:
-    params.update(zip(names, args))
+    params.update(zip(args_names, args))
+    if len(args_names) != len(args):
+      logger.warning("args_to_kwargs: Too many positional arguments specified")
 
   # assign kwargs given
-  if kwargs_name:
+  # params[KWARGS] = {}
+  # for keyword, value in kwargs.items():
+  #   if keyword in args_names + kwonly_args_names:
+  #     params[keyword] = value
+  #   else:
+  #     if extra_kwargs_name:
+  #       params[KWARGS][keyword] = value
+  #     else:
+  #       logger.warning("args_to_kwargs: Unspecified keyword argument '%s' "
+  #                      "used", keyword)
+  #       params[keyword] = value
+  if extra_kwargs_name:
     params[KWARGS] = {}
     for kw, value in kwargs.items():
-      if kw in names:
+      if kw in args_names:
         params[kw] = value
       else:
         params[KWARGS][kw] = value
   else:
       params.update(kwargs)
 
+
+
   # assign defaults
   if defaults:
     for pos, value in enumerate(defaults):
-      if names[-len(defaults) + pos] not in params:
-        params[names[-len(defaults) + pos]] = value
+      if args_names[-len(defaults) + pos] not in params:
+        params[args_names[-len(defaults) + pos]] = value
+
+  # assign keyword only defaults
+  # if kwonly_defaults:
+  #   for key, value in kwonly_defaults.items():
+  #     if key not in params:
+  #       params[key] = value
 
   # check we did it correctly.  Each param and only params are set
-
-  assert set(params.keys()) == (set(names)|
-                                set([KWARGS if kwargs_name else None,
-                                    ARGS if args_name else None]) \
+  assert set(params.keys()) == (set(args_names)|
+                                set([KWARGS if extra_kwargs_name else None,
+                                    ARGS if extra_args_name else None]) \
                                 -set([None]))
   #Remove None, since if *args/**kwargs isn't used, it will have the value None
   #And that is not used
 
   if pop_first:
-    params.pop(names[0])
+    params.pop(args_names[0])
 
   return params
 
-def args_to_kwargs_easy(function, *args, **kwargs):
+# def args_to_kwargs_easy(function, *args, **kwargs):
+def args_to_kwargs_easy(*args, **kwargs):
+  '''
+     Parameters
+     ----------
+     function
+          Function being parsed
+     *args
+          Variable length argument list.
+     **kwargs
+          Arbitrary keyword arguments.
+
+     Returns
+     -------
+     array_like
+  '''
+  return args_to_kwargs(args[0], args[1:], kwargs)
+
+# def args_to_kwargs_unbound_easy(function, attribute, *args, **kwargs):
+def args_to_kwargs_unbound_easy(*args, **kwargs):
   '''
      Parameters
      ----------
@@ -571,22 +639,7 @@ def args_to_kwargs_easy(function, *args, **kwargs):
      -------
      array_like
   '''
-  return args_to_kwargs(function, args, kwargs)
-
-def args_to_kwargs_unbound_easy(function, attribute, *args, **kwargs):
-  '''
-     Parameters
-     ----------
-     *args
-          Variable length argument list.
-     **kwargs
-          Arbitrary keyword arguments.
-
-     Returns
-     -------
-     array_like
-  '''
-  return args_to_kwargs_unbound(function, attribute, args, kwargs)
+  return args_to_kwargs_unbound(args[0], args[1], args[2:], kwargs)
 
 def command_list_to_string(cmd):
   '''
