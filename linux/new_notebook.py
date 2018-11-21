@@ -2,7 +2,6 @@
 
 import argparse
 import atexit
-import imp
 import os
 import sys
 import shutil

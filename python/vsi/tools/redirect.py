@@ -18,7 +18,7 @@ class Logger(object):
       redireted, you have an infinite capture loop and does not go well
 
       Use PopenRedirect instead of Redirect in that case '''
-      
+
   def __init__(self, logger, lvl=logging.INFO):
     ''' Create a wrapper for logger using lvl level
 
@@ -104,7 +104,7 @@ class FileRedirect(object):
     ''' Closes the write ends of the pipes, and join with monitoring threads
 
         The read pipes are automatically closed by the monitors
-        
+
         Parameters
         ----------
         exc_type : str
@@ -125,7 +125,7 @@ class FileRedirect(object):
 
         Automactically closes read pipe when done. Can only be stopped by
         closing the write end of pipe.
-        
+
         Parameters
         ----------
         streamIndex : int
@@ -146,7 +146,7 @@ class FileRedirect(object):
     ''' Start a new thread to monitor the stream
 
         Should only be called once per stream_index
-        
+
         Parameters
         ----------
         stream_index : int
@@ -271,7 +271,7 @@ class Redirect(RedirectBase): #Version 2
                stdout_c_fd=1, stderr_c_fd=2,
                stdout_py_module=sys,    stderr_py_module=sys,
                stdout_py_name='stdout', stderr_py_name='stderr'):
-    
+
     #copy original file information
     self.stdout_c_fd=stdout_c_fd
     self.stderr_c_fd=stderr_c_fd
@@ -288,11 +288,11 @@ class Redirect(RedirectBase): #Version 2
 
     ''' Create the Redirect object
 
-        Optional Arguments
-        ------------------
-        file_like
-            File Output Argument. All File output arguments should use File 
-            like Python objects that have a .write call. Many of the arguments 
+        Arguments
+        ---------
+        file_like : optional
+            File Output Argument. All File output arguments should use File
+            like Python objects that have a .write call. Many of the arguments
             override the other argument for ease of use
 
         Parameters
@@ -317,12 +317,12 @@ class Redirect(RedirectBase): #Version 2
              should be no reason to override this
         stdout_module, stderr_module
         stdout_name, stderr_name : str
-            Because of the nature of python, in order to replace and restore 
-            the python object, the module and name of attribute must be passed 
-            through, where name is a string and module and the acutal module. 
-            The default is sys module and "stdout" or "stderr" (Including the 
-            quotes). Again, there should be no real reason to override these, 
-            unless you are doing some IPython/colorama redirecting, or any 
+            Because of the nature of python, in order to replace and restore
+            the python object, the module and name of attribute must be passed
+            through, where name is a string and module and the acutal module.
+            The default is sys module and "stdout" or "stderr" (Including the
+            quotes). Again, there should be no real reason to override these,
+            unless you are doing some IPython/colorama redirecting, or any
             other library that messes with sys.stdout/sys.stderr
             '''
 
@@ -426,7 +426,7 @@ class Redirect(RedirectBase): #Version 2
 
         Restores stdout and sterr, closes write pipe and joins with the
         threads
-        
+
         Parameters
         ----------
         exc_type : str
@@ -570,33 +570,33 @@ class Capture(RedirectBase): #version 1
 
     ''' Initialize the Redirect object
 
-        Optional Parameters
-        -------------------
-        stdout_c : int
-            The fd to be replace, usually 1 will work, but change it in case 
+        Parameters
+        ----------
+        stdout_c : int, optional
+            The fd to be replace, usually 1 will work, but change it in case
             this is not right in your case (default: 1)
             None means to not redirect
-        stderr_c : int
-            The fd to be replaced, usually 2 will work, but change it in case 
+        stderr_c : int, optional
+            The fd to be replaced, usually 2 will work, but change it in case
             this is not right in your case (default: 2)
             None means to not redirect
-        stdout_py : file_like
+        stdout_py : file_like, optional
             The file object to be replaced (default: sys.stdout)
             None means to not redirect
-        stderr_py : file_like
+        stderr_py : file_like, optional
             The file object to be replaced (default: sys.stderr)
             None means to not redirect
-        group : bool
-            Should ANY of the stream be joined together. This overrides ALL of 
+        group : bool, optional
+            Should ANY of the stream be joined together. This overrides ALL of
             the following group options
-        group_outerr : bool
-            Should stdout and stderr use the a group stream or else it will 
+        group_outerr : bool, optional
+            Should stdout and stderr use the a group stream or else it will
             have separate streams (default: True)
-        group_out : bool 
-            Should stdout_c and stdout_py use the a group stream or else it 
+        group_out : bool, optional
+            Should stdout_c and stdout_py use the a group stream or else it
             will have separate streams (default: True)
-        group_err : bool
-            Should stderr_c and stderr_py use the a group stream or else it 
+        group_err : bool, optional
+            Should stderr_c and stderr_py use the a group stream or else it
             will have separate streams (default: True)'''
 
     if not group:
