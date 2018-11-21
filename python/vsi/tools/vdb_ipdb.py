@@ -69,15 +69,17 @@ def dbclear_if_error():
 def dbstop_if_error(interactive=False, colors=None):
   ''' Run this to auto start the vdb debugger on an exception.
 
-      Optional arguments:
-      interactive - Default False. dbstop if console is interactive. You are
-                    still able to print and run commands in the debugger, just
-                    listing code declared interactively will not work. Does
-                    not appear to work in ipython. Use %debug instead. This
-                    will not help in the multithread case in ipython...
-                    ipython does too much, just don't try that. Unless
-                    someone adds a way to override ipython's override.
-      colors - Default None. Set ipython debugger color scheme'''
+  Arguments
+  ---------
+  interactive : bool, optional
+      Default False. dbstop if console is interactive. You are still able to
+      print and run commands in the debugger, just listing code declared
+      interactively will not work. Does not appear to work in ipython. Use
+      %debug instead. This will not help in the multithread case in ipython...
+      ipython does too much, just don't try that. Unless someone adds a way to
+      override ipython's override.
+  colors : str
+      Default None. Set ipython debugger color scheme'''
   VdbPostMortemHook.dbstop_if_error(interactive=interactive, colors=colors)
 
 class DbStopIfError(vdb.DbStopIfErrorGeneric):
@@ -94,11 +96,15 @@ class DbStopIfError(vdb.DbStopIfErrorGeneric):
 def runpdb(lines, debugger=None):
   ''' Executes a list of vdb command
 
-      Arguments:
-      lines - list/tuple/etc... of strings to be executed as if you were
-              already in the debugger. Useful for setting breakpoints
-              programatically.
+  Arguments
+  ---------
+  lines : array_like
+      Collection of strings to be executed as if you were already in the
+      debugger. Useful for setting breakpoints programatically.
 
+  Return
+  ------
+  debugger
       Returns the debugger object, since this can only be executed on the
       debugger object, you can optionally pass it in as the second argument
       if you want to call runpdb multiple times. If you do not, a new
@@ -136,7 +142,7 @@ def get_colors(colors=None):
 def set_trace(frame=None, colors=None, depth=None):
   ''' Helper function, like pdb.set_trace
 
-      set colors = "NoColor", "Linux", or "LightBG"  '''
+  set colors = "NoColor", "Linux", or "LightBG"  '''
   colors=get_colors(colors)
   frame = vdb.find_frame(frame, depth if depth is not None else 2 if frame is None else 0)
   Tracer(skipInput=False, colors=colors).debugger.set_trace(frame)

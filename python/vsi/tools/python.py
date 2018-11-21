@@ -1,6 +1,7 @@
 from __future__ import print_function # Python2 compat
 
-from functools import wraps, update_wrapper, WRAPPER_UPDATES, WRAPPER_ASSIGNMENTS
+from functools import (wraps, update_wrapper, WRAPPER_UPDATES,
+                       WRAPPER_ASSIGNMENTS)
 import inspect
 import sys
 
@@ -10,57 +11,38 @@ logger = logging.getLogger(__name__)
 class Try(object):
   ''' Try catch helper for cases when you want to ignore certain exceptions
 
-      Attributes
-      ----------
-      default_ignore : array_like
-        Arguments of Exception classes is set to ignore. Default is all.
-      *other_ignore : str
-      '''
+  Parameters
+  ----------
+  *ignore_exceptions : exception class
+      Exception classes to be ignored. Default is all.
+
+  Attributes
+  ----------
+  default_ignore : array_like
+    Arguments of Exception classes is set to ignore. Default is all.
+  *other_ignore : str
+  '''
 
   def __init__(self, default_ignore=Exception, *other_ignore):
-    ''' Arguments of Exception classes to ignore. Default is all
-
-        Parameters
-        ----------
-        *ignore_exceptions : exception class
-            Exception classes to be ignored. Default is all.
-        '''
-
     self.ignore = (default_ignore,) + other_ignore
+
   def __enter__(self):
     pass
+
   def __exit__(self, exc_type=None, exc_value=None, traceback=None):
-    ''' Exits if the previous directory no longer exists.
-
-    Parameters
-    ----------
-    exc_type : str
-        The Execption Type
-    exc_value : float
-        The Exception Value
-    traceback : str
-        The Traceback
-
-    Returns
-    -------
-    bool
-        True if subclass
-    '''
-
     if exc_type is None:
       return
     if issubclass(exc_type, self.ignore):
       return True
 
 def reloadModules(pattern='.*', skipPattern='^IPython'):
-  ''' Reload modules that match pattern regular expression (string or
-  compile re)
+  ''' Reload modules that match pattern regular expression (string or re)
 
   Parameters
   ----------
-  pattern : str
+  pattern : str or re.Pattern
       The regular expression pattern of modules that will be reloaded.
-  skipPattern : str
+  skipPattern : str or re.Pattern
       The regular expression pattern of modules that will not be reloaded.
   '''
 
@@ -85,15 +67,14 @@ def reloadModules(pattern='.*', skipPattern='^IPython'):
         reload(sys.modules[m])
 
 def is_string_like(obj):
-  """
-  Check whether obj behaves like a string.
+  """ Check whether obj behaves like a string.
 
   Copied from numpy
 
   Parameters
   ----------
-  obj : str
-      type of object
+  obj : instance
+      Object being tested for string like behavior
 
   Returns
   -------
@@ -109,19 +90,19 @@ def is_string_like(obj):
 def get_file(fid, mode='rb'):
   ''' Helper function to take either a filename or fid
 
-      Arguments
-      ---------
-      fid : str
-          File object or filename
-      mode :str
-          Optional, file mode to open file if filename supplied
-          Default rb
+  Arguments
+  ---------
+  fid : str or File
+      File object or filename
+  mode : str, optional
+      Optional, file mode to open file if filename supplied
+      Default is 'rb'
 
-      Returns
-      -------
-      str
-          The Filename
-      '''
+  Returns
+  -------
+  File
+      The opened file object
+  '''
 
   if is_string_like(fid):
     fid = open(fid, mode)
@@ -131,121 +112,186 @@ def get_file(fid, mode='rb'):
 def static(**kwargs):
   ''' Decorator for easily defining static variables
 
-      Parameters
-      ----------
-      **kwargs
-          Arbitrary keyword arguments.
+  Parameters
+  ----------
+  **kwargs
+      Arbitrary keyword arguments.
 
 
-      Example::
+  Example::
 
-            @static(count=0)
-            def test(a, b):
-              test.count += 1
-              print(a+b, test.count)
+        @static(count=0)
+        def test(a, b):
+          test.count += 1
+          print(a+b, test.count)
   '''
 
+  # Note: don't need functools.wraps, since I'm returning the same func
   def decorate(func):
     for k in kwargs:
       setattr(func, k, kwargs[k])
     return func
   return decorate
 
+def update_wrapper_class(wrapper, wrapped):
+  '''functools.update_wrapper for classes
+
+  Version of ``functools.update_wrapper`` that works when the wrapper is a
+  class
+
+  Parameters
+  ----------
+  wrapper : class
+      The class to be updated
+  wrapped :
+      The original function/class
+
+  Returns
+  -------
+  class
+      A subclass of ``wrapper`` that has the updated attributes. If ``wrapped``
+      was a function, ``wrapper`` is still a class.
+  '''
+
+  __dict__ = dict(getattr(wrapper, '__dict__'))
+  # Init is a special case, that if set before __new__ is done, then the
+  # wrapped's init is called insted of OptionalArgumentDecorator
+  __dict__.update({k:v for (k,v) in \
+      getattr(wrapped, '__dict__', {}).items() if k != '__init__'})
+  __dict__['__wrapped__'] = wrapped
+
+  Wrapper = type("Wrapper", (wrapper,), __dict__)
+
+  if sys.version_info.major == 2:
+    update_wrapper(Wrapper, wrapped,
+        assigned = (x for x in WRAPPER_ASSIGNMENTS if x != '__doc__'),
+        updated = (x for x in WRAPPER_UPDATES if x != '__dict__'))
+  else:
+    update_wrapper(Wrapper, wrapped,
+        updated = (x for x in WRAPPER_UPDATES if x != '__dict__'))
+
+  return Wrapper
+
+def _meta_generate_class(cls, *args, **kwargs):
+  '''Determine class to use for decorators
+
+  Parameters
+  ----------
+  cls : class
+      The class of the decorator type
+  args : tuple
+      The arguments passed to the decorate, when decorating a class
+  kwargs : dict
+      The keyword arguments passed to the decorate, when decorating a class
+
+
+  Helper function to parse the arguments from a class's __new__ or __init__
+  to handle both the normal case, and when the class is being inherited by
+  another class::
+
+      class A:
+        def __new__(cls, *args):
+          return super(A, cls).__new__(_meta_generate_class(A, *args))
+      @A
+      class B():
+        pass
+      class C(B):
+        pass
+
+  When B is decorated by A, ``A.__new__/__init__`` is called with 1 argument,
+  ``B``.
+  When C inherits from B, ``A.__new__/__init__`` is called with 3 arguments
+  instead of one, the 3 arguments to a ``type()`` call.
+
+  This helper will run all that logic for you, and just always return the class
+  you need.
+  '''
+
+  if len(args)==1:
+    #normal use, when decorating a decorator
+    return args[0]
+  else: # three args
+    #inheritance case, when a decorated class is being inherited from
+    #args = (class_name_str, (parent_class,), {'__module__': module_name})
+    parents = tuple(x.__wrapped__
+                    if isinstance(x, cls)
+                    else x
+                    for x in args[1])
+    return type(args[0], parents, args[2])
+
 class OptionalArgumentDecorator(object):
   ''' Decorator for easily defining a decorator class that may take arguments
 
-      Write a decorator class as normal, that would always take arguments, and
-      make sure they all have default values. Then just add this decorator and
-      both notations will work
-      '''
+  Write a decorator class as normal, that would always take arguments, and
+  make sure they all have default values. Then decorate that decorator with
+  this decorator and both ``@decorator`` and ``@decorator()`` notations will
+  work.
+
+  See Also
+  --------
+  BasicDecorator : Simple decorator with optional arguments
+  '''
 
   def __new__(cls, *args, **kwargs):
-    if len(args)==1:
-      #normal use, when decorating a decorator
-      WrappedClass = args[0]
-    else: # three args
-      #inheritance case, when a decorated class is being inherited from
-      #args = (class_name_str, (parent_class,), {'__module__': module_name})
-      parents = tuple(x.__wrapped_cls__
-                      if isinstance(x, OptionalArgumentDecorator)
-                      else x
-                      for x in args[1])
-      WrappedClass = type(args[0], parents, args[2])
-
-    __dict__ = dict(getattr(cls, '__dict__'))
-    # Init is a special case, that if set before __new__ is done, then the
-    # WrappedClass's init is called insted of OptionalArgumentDecorator
-    __dict__.update({k:v for (k,v) in \
-        getattr(WrappedClass, '__dict__', {}).items() if k != '__init__'})
-    __dict__['__wrapped_cls__'] = WrappedClass
-
-    Wrapper = type("Wrapper", (cls,), __dict__)
-
-    if sys.version_info.major == 2:
-      update_wrapper(Wrapper, WrappedClass,
-          assigned = (x for x in WRAPPER_ASSIGNMENTS if x != '__doc__'),
-          updated = (x for x in WRAPPER_UPDATES if x != '__dict__'))
-    else:
-      update_wrapper(Wrapper, WrappedClass,
-          updated = (x for x in WRAPPER_UPDATES if x != '__dict__'))
-
-    return super(OptionalArgumentDecorator, cls).__new__(Wrapper)
-
+    WrappedClass = _meta_generate_class(cls, *args, **kwargs)
+    return super(OptionalArgumentDecorator, cls).__new__(
+      update_wrapper_class(cls, WrappedClass))
 
   def __call__(self, *args, **kwargs):
-    '''
-    Parameters
-    ----------
-    *args
-        Variable length argument list.
-    **kwargs
-        Arbitrary keyword arguments.
-
-    Returns
-    -------
-    class
-        The decorated class
-    '''
-
     if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
-      return self.__wrapped_cls__()(args[0])
+      return self.__wrapped__()(args[0])
     else:
-      return self.__wrapped_cls__(*args, **kwargs)
+      return self.__wrapped__(*args, **kwargs)
 
 class _BasicDecorator(object):
   ''' A basic decorator class that does not take arguments
 
-      Attributes
-      ----------
-      fun : func
-          It gets wrapped.
-      '''
+  Parameters
+  ----------
+  fun : func
+      The function that gets wrapped
+
+  Attributes
+  ----------
+  fun : func
+      The function that is being wrapped
+
+  Examples
+  --------
+  Usage::
+
+      class MyDecorAdd1(_BasicDecorator):
+        def __call__(self, *args, **kwargs):
+          result = self.fun(*args, **kwargs)
+          res
+
+      @MyDecorAdd1
+      def fun(a, b=2):
+        return a+b
+  '''
+
+  def __new__(cls, *args, **kwargs):
+    WrappedClass = _meta_generate_class(cls, *args, **kwargs)
+    # In python3, the use of "_BasicDecorator" can be "__class__" instead, but
+    # must not be "cls", that won't work
+    return super(_BasicDecorator, cls).__new__(
+        update_wrapper_class(cls, WrappedClass))
 
   def __init__(self, fun):
-    ''' No need to rewrite this
-
-        Parameters
-        ----------
-        fun : func
-          It gets wrapped
+    ''' No need to rewrite this in the child class
     '''
 
     self.fun = fun
+    update_wrapper(self, fun)
 
   def __call__(self, *args, **kwargs):
-    '''re-write this. No need to call super().__call__
+    '''Re-write this. Do need to call ``super().__call__``
 
-       Parameters
-       ----------
-       *args
-          Variable length argument list.
-       **kwargs
-            Arbitrary keyword arguments.
-
-       Returns
-       -------
-       arrray_like
-            The Result
+    The general idea of this class is you re-write the ``__call__`` method to
+    do what you want, and call ``self.fun`` and return the result. This can
+    be accomplished by ``return super().__call__(*args, **kwargs)``, but more
+    often then not, you will want the result of ``self.fun``, and will call
+    ``result = self.fun(*args, **kwargs)`` yourself, and then ``return result``
     '''
 
     #pre wrap code
@@ -463,34 +509,34 @@ class KWARGS:
 def args_to_kwargs(function, args=tuple(), kwargs={}):
   '''returns a single dict of all the args and kwargs
 
-    Should handle: functions, classes (their __init__), bound and unbound
-    versions of methods, class methods, and static methods. Furthermore, if a
-    class instance has a __call__ method, this is used.
+     Should handle: functions, classes (their __init__), bound and unbound
+     versions of methods, class methods, and static methods. Furthermore, if a
+     class instance has a __call__ method, this is used.
 
-    It does not call the function.
+     It does not call the function.
 
-    Parameters
-    ----------
-    function : func
-        The Function
-    args : tuple
-    kwargs : dict
+     Parameters
+     ----------
+     function : func
+         The Function
+     args : tuple
+     kwargs : dict
 
-    Returns
-    -------
-    dict
-        The returned dictionary has the keywords that would be received in a
-        real function call. Leftover args are put into the key ARGS, and
-        leftover KWARGS are placed in the key KWARGS. While everything
-        should behave exactly as python would, certain failure situations are
-        not reproduced, for exampled it does not raise exception if you declare
-        the same parameter in both /*/args and /**/kwargs)
+     Returns
+     -------
+     dict
+         The returned dictionary has the keywords that would be received in a
+         real function call. Leftover args are put into the key ARGS, and
+         leftover KWARGS are placed in the key KWARGS. While everything
+         should behave exactly as python would, certain failure situations are
+         not reproduced, for exampled it does not raise exception if you declare
+         the same parameter in both /*/args and /**/kwargs)
 
-    On python3, ``args_to_kwargs_unbound`` must be used for unbound class
-    methods
+     On python3, ``args_to_kwargs_unbound`` must be used for unbound class
+     methods
 
-    Based on:
-    https://github.com/merriam/dectools/blob/master/dectools/dectools.py'''
+     Based on:
+     https://github.com/merriam/dectools/blob/master/dectools/dectools.py'''
 
   return args_to_kwargs_unbound(function, None, args, kwargs)
 
@@ -506,7 +552,6 @@ def args_to_kwargs_unbound(function, attribute=None, args=tuple(), kwargs={}):
     function = getattr(function, attribute)
   else:
     parent = None
-
 
   if inspect.isclass(function):
     function = function.__init__
@@ -531,9 +576,9 @@ def args_to_kwargs_unbound(function, attribute=None, args=tuple(), kwargs={}):
       args = (None,)+args
       pop_first = True
 
-  ###################
-  # Parse into kwargs
-  ###################
+  ############
+  # Parse args
+  ############
 
   kwonly_args_names = []
   kwonly_defaults = None
@@ -567,18 +612,6 @@ def args_to_kwargs_unbound(function, attribute=None, args=tuple(), kwargs={}):
         logger.warning("args_to_kwargs: Unspecified keyword argument '%s' "
                        "used", keyword)
         params[keyword] = value
-
-  # if extra_kwargs_name:
-  #   params[KWARGS] = {}
-  #   for kw, value in kwargs.items():
-  #     if kw in args_names:
-  #       params[kw] = value
-  #     else:
-  #       params[KWARGS][kw] = value
-  # else:
-  #     params.update(kwargs)
-
-
 
   # assign defaults
   if defaults:
