@@ -13,7 +13,7 @@ from vsi.tools.python import (Try, is_string_like, BasicDecorator, static,
 import sys
 
 if sys.version_info.major > 2:
-  from .py3_python import *
+  from vsi.test.py3_python import *
 
 try:
   from StringIO import StringIO
@@ -264,6 +264,12 @@ class PythonTest(unittest.TestCase):
       pass
     def e(a, **kwargs):
       pass
+    def g(x=11):
+      pass
+    def h(*args):
+      pass
+    def i(**kwargs):
+      pass
 
     class A(object):
       def __init__(self, a, b=15, *args, **kwargs):
@@ -298,6 +304,12 @@ class PythonTest(unittest.TestCase):
              (d, [11, 12, 13, 14], {'x':15, 'z':37}),
              (e, [1], {'x':14}),
              (e, [], {'a':2, 'x':14}),
+             (g, [], {}),
+             (g, [1], {}),
+             (h, [], {}),
+             (h, [100, 202, 303], {}),
+             (i, [], {}),
+             (i, [], {'a': 31, 'b':29}),
              (A, [11, 22, 33], {'x':14}),
              (A, [11], {}),
              (aa.fun, [13, 23, 34], {'x':16}),
@@ -327,6 +339,12 @@ class PythonTest(unittest.TestCase):
                {'a': 11, 'y': 12, KWARGS: {'x': 15, 'z': 37}, ARGS: (13, 14)},
                {'a': 1, KWARGS: {'x': 14}},
                {'a': 2, KWARGS: {'x': 14}},
+               {'x': 11},
+               {'x': 1},
+               {ARGS: ()},
+               {ARGS: (100, 202, 303)},
+               {KWARGS: {}},
+               {KWARGS: {'a': 31, 'b': 29}},
                {'a': 11, 'b': 22, KWARGS: {'x': 14}, ARGS: (33,)},
                {'a': 11, 'b': 15, KWARGS: {}, ARGS: ()},
                {'a': 13, 'b': 23, KWARGS: {'x': 16}, ARGS: (34,)},
