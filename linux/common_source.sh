@@ -340,12 +340,12 @@ if [ -f /etc/os-release ]; then
 
                 # copy right
                 : ${ID_LIKE="${ID}"}
-                : ${VERSION_LIKE="${VERSION_ID}"}
+                : ${VERSION_LIKE="${VERSION_ID-}"}
                 : ${ID_CORE="${ID_LIKE}"}
                 : ${VERSION_CORE="${VERSION_LIKE}"}
 
                 # Pass the results out out
-                echo "${ID}:${VERSION_ID}:${ID_LIKE}:${VERSION_LIKE}:${ID_CORE}:${VERSION_CORE}"
+                echo "${ID}:${VERSION_ID-}:${ID_LIKE}:${VERSION_LIKE}:${ID_CORE}:${VERSION_CORE}"
               )
 
   #DISTRO:VERSION:MIDDLE_DISTRO:MIDDLE_VERSION:CORE_DISTRO:CORE_VERSION
