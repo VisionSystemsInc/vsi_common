@@ -290,7 +290,7 @@ class Redirect(RedirectBase): #Version 2
 
         Arguments
         ---------
-        file_like : File, optional
+        file_like : file_like, optional
             File Output Argument. All File output arguments should use File
             like Python objects that have a .write call. Many of the arguments
             override the other argument for ease of use

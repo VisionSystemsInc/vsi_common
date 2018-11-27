@@ -13,7 +13,7 @@ class Try(object):
 
   Parameters
   ----------
-  *ignore_exceptions : exception class
+  *ignore_exceptions : Exception
       Exception classes to be ignored. Default is all.
 
   Attributes
@@ -73,7 +73,7 @@ def is_string_like(obj):
 
   Parameters
   ----------
-  obj : instance
+  obj : object
       Object being tested for string like behavior
 
   Returns
@@ -92,7 +92,7 @@ def get_file(fid, mode='rb'):
 
   Arguments
   ---------
-  fid : str or File
+  fid : str or file_like
       File object or filename
   mode : str, optional
       Optional, file mode to open file if filename supplied
@@ -100,7 +100,7 @@ def get_file(fid, mode='rb'):
 
   Returns
   -------
-  File
+  file_like
       The opened file object
   '''
 
@@ -309,7 +309,7 @@ class _BasicArgumentDecorator(object):
 
         Parameters
         ----------
-        fun :
+        fun : func
     '''
 
     @wraps(fun)
@@ -646,7 +646,7 @@ def args_to_kwargs_easy(*args, **kwargs):
   '''
      Parameters
      ----------
-     function
+     function : func
           Function being parsed
      *args
           Variable length argument list.
