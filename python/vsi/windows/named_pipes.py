@@ -28,11 +28,11 @@ class PipeException(Exception):
 
 def open(name, server=False):
   ''' Helper open function
-  
+
       Give it the look and feel of python's open command'''
   pipe = Pipe(name, server)
   return pipe
-  
+
 class Pipe(object):
   ''' Windows Named Pipe class similar to File objects '''
   def __init__(self, name, server=False):
@@ -47,44 +47,44 @@ class Pipe(object):
                     PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT,
                     PIPE_UNLIMITED_INSTANCES, BUFSIZE, BUFSIZE,
                     NMPWAIT_USE_DEFAULT_WAIT, None)
-                    
+
       if (self.hPipe == INVALID_HANDLE_VALUE):
         raise PipeException('Invalid Handle Value')
 
       fConnected = windll.kernel32.ConnectNamedPipe(self.hPipe, None)
       if ((fConnected == 0) and (windll.kernel32.GetLastError() == ERROR_PIPE_CONNECTED)):
         fConnected = 1
-      
+
       if fConnected != 1:
         self.close()
         raise PipeException("Could not connect to the Named Pipe")
 
     else:
       self.hPipe = windll.kernel32.CreateFileA(self.name, GENERIC_READ | GENERIC_WRITE, 0, None, OPEN_EXISTING, 0, None)
-      
+
       if (self.hPipe == INVALID_HANDLE_VALUE):
         if (windll.kernel32.GetLastError() != ERROR_PIPE_BUSY):
           raise PipeException('Error Pipe Busy')
         else:
           raise PipeException('Invalid Handle Value')
-        
-      
+
+
       dwMode = c_ulong(PIPE_READMODE_MESSAGE)
       fSuccess = windll.kernel32.SetNamedPipeHandleState(self.hPipe, byref(dwMode), None, None)
       if (not fSuccess):
         raise PipeException('SetNamedPipeHandleState failed')
 
- 
+
   def read(self, bufferSize=4096):
     ''' Read up to bufferSize bytes '''
-    
+
     chBuf = create_string_buffer(bufferSize)
     cbRead = c_ulong(0)
 
-    fSuccess = windll.kernel32.ReadFile(self.hPipe, chBuf, bufferSize, 
+    fSuccess = windll.kernel32.ReadFile(self.hPipe, chBuf, bufferSize,
                                         byref(cbRead), None)
-    if fSuccess == 1 or windll.kernel32.GetLastError() == ERROR_MORE_DATA: 
-    #ERROR_MORE_DATA is only important in message mode, currently only using 
+    if fSuccess == 1 or windll.kernel32.GetLastError() == ERROR_MORE_DATA:
+    #ERROR_MORE_DATA is only important in message mode, currently only using
     #byte mode
       return chBuf.value
 
@@ -95,17 +95,17 @@ class Pipe(object):
   def disconnect(self):
     ''' Send disconnect to client, forcing them to disconnect from the pipe '''
     windll.kernel32.DisconnectNamedPipe(self.hPipe)
-    
+
   def write(self, message):
     cbWritten = c_ulong(0)
-    fSuccess = windll.kernel32.WriteFile(self.hPipe, c_char_p(message), 
+    fSuccess = windll.kernel32.WriteFile(self.hPipe, c_char_p(message),
                                          len(message), byref(cbWritten), None)
     if not fSuccess:
       return None
 #    if len(message) != cbWritten.value:
 #      raise PipeException('Number of byte written does not match string length')
     return cbWritten.value
-    
-    
+
+
   def close(self):
     windll.kernel32.CloseHandle(self.hPipe)

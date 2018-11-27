@@ -21,7 +21,7 @@ def dbstop_if_error(_rpdb2_pwd='vsi', fAllowUnencrypted=True,
           True if a remote is allowed. False if not. Default: False
       timeout : int
           The timeout period in seconds.
-      source_provider : 'str'
+      source_provider : str
           The Source Provider
       fDebug : bool
           The Debug Output
@@ -45,7 +45,7 @@ def dbstop_if_error(_rpdb2_pwd='vsi', fAllowUnencrypted=True,
 #not have a Post Mortem equivalent... yet. Need to find a way to push the pm
 #data into whatever the analyze command uses, so that it can be faked out
 
-""" I can't get this working yet either. rpdb uses the profiler to catch 
+""" I can't get this working yet either. rpdb uses the profiler to catch
   exceptions, NOT excepthook
   #old_excepthook = rpdb2.__excepthook
   #rpdb2.__excepthook = partial(rpdb_exception_hook, old_excepthook)
@@ -93,8 +93,8 @@ def rpdb_dbstop_exception_hook(type, value, tb, _rpdb2_pwd='vsi', *args, **kwarg
 def set_trace(_rpdb2_pwd='vsi', fAllowUnencrypted=True,
                    fAllowRemote=False, timeout=5*60, source_provider=None,
                    fDebug=False, depth=1):
-  ''' Works, but without the other parts, it's far from auto 
-  
+  ''' Works, but without the other parts, it's far from auto
+
       Parameters
       ----------
       _rpdb2_pwd : str
@@ -105,7 +105,7 @@ def set_trace(_rpdb2_pwd='vsi', fAllowUnencrypted=True,
           True if a remote is allowed. False if not. Default: False
       timeout : int
           The timeout period in seconds.
-      source_provider : 'str'
+      source_provider : str
           The Source Provider
       fDebug : bool
           The Debug Output

@@ -91,8 +91,8 @@ def pipe_server():
     pipe.close()
 
 def handle_db(sig, frame, db_cmd=None, signal=ATTACH_SIGNAL):
-  ''' signal handler part of attach/set_attach 
-  
+  ''' signal handler part of attach/set_attach
+
       Parameters
       ----------
       sig :
@@ -164,16 +164,16 @@ class DbStopIfErrorGeneric(object):
     ''' Parameters
         ----------
         threading_support : bool
-            Optional. Support the threading module and patch a bug preventing catching 
-            exceptions in other threads. See add_threading_excepthook for more 
-            info. Only neccesary if you want to catch exceptions not on the 
-            main thread. This is only patched after __enter__ unpatched at 
-            __exit__
+            Optional. Support the threading module and patch a bug preventing
+            catching exceptions in other threads. See add_threading_excepthook
+            for more info. Only neccesary if you want to catch exceptions not
+            on the main thread. This is only patched after __enter__ unpatched
+            at __exit__
         *args
             Variable length argument list.
         **kwargs
             Arbitrary keyword arguments.
-            
+
 
         All other args from db_stop_if_error()
         '''
@@ -214,9 +214,9 @@ class DbStopIfErrorGeneric(object):
     ''' Returns
         -------
         func
-            Should return a function that takes a traceback as the first 
+            Should return a function that takes a traceback as the first
             argument and any additional args/kwargs sent to __init__ after that
-        
+
         Raises
         ------
         Exception
@@ -248,7 +248,7 @@ def dbstop_exception_hook(type, value, tb,
         value :
         tb : str
             The Traceback
-        post_mortem : 
+        post_mortem :
         Interactive : bool
             True if interactive. False if not.
         '''

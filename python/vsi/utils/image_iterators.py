@@ -35,17 +35,24 @@ class IterateOverWindows(object):
 
     Parameters
     ----------
-    pixels_per_cell: x,y - let x,y be odd so the window can be easily centered
-    pixel_stride : x,y
-    image : like numpy.array (ndim == 2 or 3)
-    mode : Points outside the boundaries of the input are filled according
-         to the given mode. Only ``mode='constant'``, ``mode='discard'`` and
-         ``mode='reflect'`` are currently supported, although others could
-         be added (e.g., 'nearest' and 'wrap')
-    cval : Value used for points outside the boundaries of the input if
-         ``mode='constant'``. Default is 0.0
-    start_pt : (x,y)
-    stop_pt  : (x,y)
+    pixels_per_cell : array_like
+        x,y - let x,y be odd so the window can be easily centered
+    pixel_stride : array_like
+        x,y
+    image : array_like
+        like numpy.array (ndim == 2 or 3)
+    mode : str
+        Points outside the boundaries of the input are filled according to the
+        given mode. Only ``mode='constant'``, ``mode='discard'`` and
+        ``mode='reflect'`` are currently supported, although others could be
+        added (e.g., 'nearest' and 'wrap')
+    cval : float
+        Value used for points outside the boundaries of the input if
+        ``mode='constant'``. Default is 0.0
+    start_pt : array_like
+        (x,y)
+    stop_pt  : array_like
+        (x,y)
 
     >>> tot = 0; im = np.arange(100).reshape((10,10))
     >>> for i,ret in enumerate(IterateOverWindows((5,5),(2,2),cval=1).iter(im)):
@@ -76,7 +83,8 @@ class IterateOverWindows(object):
     '''
     Parameters
     ----------
-    image : like numpy.array (ndim == 2 or 3)
+    image : array_like
+        like numpy.array (ndim == 2 or 3)
     '''
 
     self.image = image
@@ -103,7 +111,8 @@ class IterateOverWindows(object):
 
     Parameters
     ----------
-    image : like numpy.array (ndim == 2 or 3)
+    image : array_like
+        like numpy.array (ndim == 2 or 3)
 
     Returns
     -------
@@ -204,7 +213,8 @@ class IterateOverSuperpixels(object):
     segmented : superpixel labeled segmentation (like numpy.array)
           NOTE regionprops expects labels to be sequential and start
           at 1: {1,2,...}. label 0 is treated as unlabeled.
-    image : like numpy.array (ndim == 2 or 3)
+    image : array_like
+        like numpy.array (ndim == 2 or 3)
     '''
 
     self.segmented = segmented
@@ -214,7 +224,8 @@ class IterateOverSuperpixels(object):
     '''
     Parameters
     ----------
-    image : like numpy.array (ndim == 2 or 3)
+    image : array_like
+        like numpy.array (ndim == 2 or 3)
     '''
 
     self.image = image
@@ -225,7 +236,8 @@ class IterateOverSuperpixels(object):
 
     Parameters
     ----------
-    image : like numpy.array (ndim == 2 or 3)
+    image : array_like
+        like numpy.array (ndim == 2 or 3)
 
     Returns
     -------
