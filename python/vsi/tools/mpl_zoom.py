@@ -16,7 +16,7 @@ def zoom_factory(ax=None,base_scale=1.5):
         -------
         func
             The Zoom Function
-    
+
     '''
     if ax is None: ax = plt.gca()
 

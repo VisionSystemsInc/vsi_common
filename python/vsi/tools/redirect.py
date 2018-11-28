@@ -75,8 +75,8 @@ class FileRedirect(object):
         Parameters
         ----------
         outputs : list
-            list of outputs objects to write to. For every output in outputs, 
-            a rid in self.rids and wid in self.wids is created when call with 
+            list of outputs objects to write to. For every output in outputs,
+            a rid in self.rids and wid in self.wids is created when call with
             with
 
         Yields
@@ -290,7 +290,7 @@ class Redirect(RedirectBase): #Version 2
 
         Arguments
         ---------
-        file_like : optional
+        file_like : file_like, optional
             File Output Argument. All File output arguments should use File
             like Python objects that have a .write call. Many of the arguments
             override the other argument for ease of use
@@ -307,16 +307,22 @@ class Redirect(RedirectBase): #Version 2
             Output stdout_c and stderr_c to the c file.
         py : str
             Output stdout_py and stderr_py to the py file.
-        stdout_c, stderr_c, stdout_py, stderr_py - Output to each
-              individual stream for maximum customization.
+        stdout_c : str
+        stderr_c : str
+        stdout_py : str
+        stderr_py : str
+            Output to each individual stream for maximum customization.
 
         Other Optional Arguments
         ------------------------
-        stdout_c_fd, stderr_c_fd : int
-             The default file number used for stdout (1) and stderr (2). There 
+        stdout_c_fd : int
+        stderr_c_fd : int
+             The default file number used for stdout (1) and stderr (2). There
              should be no reason to override this
-        stdout_module, stderr_module
-        stdout_name, stderr_name : str
+        stdout_module : module
+        stderr_module : module
+        stdout_name : str
+        stderr_name : str
             Because of the nature of python, in order to replace and restore
             the python object, the module and name of attribute must be passed
             through, where name is a string and module and the acutal module.
@@ -558,7 +564,7 @@ class Capture(RedirectBase): #version 1
                      stdout_py=sys.stdout, stderr_py=sys.stderr,
                      group=True,
                      group_outerr=True, group_out=True, group_err=True):
-    
+
     self.stdout_c_fd=stdout_c
     self.stderr_c_fd=stderr_c
     self.stdout_py_fid=stdout_py
@@ -653,8 +659,8 @@ class Capture(RedirectBase): #version 1
 
         This function reads large chuncks at a time (for efficientcy and then
         appends them to the appropriate bufffer. When the write pipe is closed,
-        the loop will end and then close the read pipe 
-        
+        the loop will end and then close the read pipe
+
         Parameters
         ----------
         fid : str
@@ -734,7 +740,7 @@ class Capture(RedirectBase): #version 1
 
         Restores stdout and sterr, closes write pipe and joins with the
         threads
-        
+
         Parameters
         ----------
         exc_type : str
@@ -807,12 +813,12 @@ class StdRedirect(object):
 
   STDOUT = -1
   def __init__(self, stdout=None, stderr=None):
-    
+
     self.new_stdout = stdout
     self.new_stderr = stderr
 
     ''' Parameters
-        ==========
+        ----------
         stdout : str
             Standard Output
         stderr : str

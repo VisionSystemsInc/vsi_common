@@ -7,11 +7,11 @@ def commonpath(uris):
   # '/root'
   # >>> common_dirname(['root/path/file.txt', 'root/file.txt'])
   # 'root'
-  
+
   def subdirs(stems):
     if isinstance(stems, basestring): # Python 3: isinstance(v, str)
       stems = [stems]
-    
+
     def isroot(p):
       return path.dirname(p) == p
     stems.append(path.dirname(stems[-1]))

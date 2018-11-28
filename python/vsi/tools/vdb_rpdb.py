@@ -73,8 +73,8 @@ class DbStopIfError(vdb.DbStopIfErrorGeneric):
 def set_trace(frame=None, depth=None, ip=DEFAULT_IP, port=DEFAULT_PORT):
   ''' Wrapper function to keep the same import x; x.set_trace() interface.
 
-      We catch all the possible exceptions from pdb and cleanup. 
-      
+      We catch all the possible exceptions from pdb and cleanup.
+
       Parameters
       ----------
       frame : str
@@ -106,8 +106,8 @@ def set_trace(frame=None, depth=None, ip=DEFAULT_IP, port=DEFAULT_PORT):
 
 
 def attach(pid, ip=DEFAULT_IP, port=DEFAULT_PORT):
-  ''' NOT IMPLEMENTED! Needs a telnet client 
-  
+  ''' NOT IMPLEMENTED! Needs a telnet client
+
       Parameters
       ----------
       pid : str

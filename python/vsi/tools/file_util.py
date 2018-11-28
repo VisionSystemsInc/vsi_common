@@ -2,7 +2,7 @@ import os
 import shutil
 
 def lncp(source, dest):
-  ''' Symlink or copy if that fails. Should work for Linux and Windows 
+  ''' Symlink or copy if that fails. Should work for Linux and Windows
 
       Parameters
       ----------
@@ -10,7 +10,7 @@ def lncp(source, dest):
         The Source
       dest : str
           The Destination
-  
+
   '''
 
   if os.path.isdir(dest):

@@ -5,7 +5,6 @@ import signal
 class WatchDog(object):
   # WatchDog(1).start()
   def __init__(self, timeout=20):
-    
     self.timeout = timeout
 
     ''' Parameters
@@ -18,7 +17,6 @@ class WatchDog(object):
         Exception
             When there is no usual signal found.
         '''
-        
     if hasattr(signal, 'CTRL_BREAK_EVENT'):
       signal.signal(signal.CTRL_BREAK_EVENT, self.reset)
     elif hasattr(signal, 'SIGUSR1'):

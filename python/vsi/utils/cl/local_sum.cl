@@ -2,14 +2,14 @@ __kernel void local_sum(__global const float *img,
                             __global float *result,
                             int img_nx, int img_ny,
                             int window_radius)
-                            
+
 {
     int gid_x = get_global_id(1);
     int gid_y = get_global_id(0);
     int idx = gid_y*img_nx + gid_x;
 
     // make sure we have enough room to compute a window around the current pixel
-    if ( (gid_x < window_radius) || (gid_x >= (img_nx - window_radius)) || 
+    if ( (gid_x < window_radius) || (gid_x >= (img_nx - window_radius)) ||
          (gid_y < window_radius) || (gid_y >= (img_ny - window_radius)) ) {
         result[idx] = NAN;
         return;

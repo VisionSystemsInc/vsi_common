@@ -86,6 +86,48 @@ napoleon_use_ivar = True
 napoleon_include_private_with_doc = True
 napoleon_include_special_with_doc = True
 
+# Remove warnings due to a bug in the Python docs with nitpick_ignore
+nitpick_ignore = [('py:class', 'bool'),
+                  ('py:class', 'array_like'),
+                  ('py:class', 'object'),
+                  ('py:class', 'str'),
+                  ('py:class', 'string'),
+                  ('py:class', 'int'),
+                  ('py:class', 'float'),
+                  ('py:class', 'figure'),
+                  ('py:class', 'axes'),
+                  ('py:class', 'func'),
+                  ('py:class', 'dict'),
+                  ('py:class', 'iterable'),
+                  ('py:class', 'list'),
+                  ('py:class', 'class'),
+                  ('py:class', 'tuple'),
+                  ('py:class', 'module'),
+                  ('py:class', 'Other'),
+                  ('py:class', 'optional'),
+                  ('py:class', 'var'),
+                  ('py:class', 'file_like'),
+                  ('py:class', 'like numpy.array'),
+                  ('py:class', 'unittest.case.TestCase'),
+                  ('py:class', 'subprocess.Popen'),
+                  ('py:class', 'rpdb2.CDebuggerCoreThread'),
+                  ('py:class', 'IPython.core.debugger.Tracer'),
+                  ('py:class', 'IPython.core.debugger.Pdb'),
+                  ('py:class', 'debugger'),
+                  ('py:class', 'threading.Thread'),
+                  ('py:class', 'Exception'),
+                  ('py:class', 're.Pattern'),
+                  ('py:obj', '*other_ignore'),
+                  ('py:obj', 'fun'),
+                  ('py:obj', '*args'),
+                  ('py:obj', '**kwargs'),
+                  ('py:obj', 'default_ignore'),
+                  ('py:exc', 'OSError'),
+                  ('py:exc', 'Exception'),
+                  ('py:exc', 'ValueError'),
+                  ('py:exc', 'SystemExit'),
+                  ('py:exc', 'AttributeError'),
+                  ('py:exc', 'KeyboardInterrupt')]
 
 # -- Options for HTML output -------------------------------------------------
 

@@ -49,7 +49,7 @@ class CorrClicker:
     if self.pt_idx is not None:
       if event.button == 1:
         pt = np.array((event.xdata, event.ydata))
-        self.points[self.img_idx][self.pt_idx] = pt 
+        self.points[self.img_idx][self.pt_idx] = pt
       elif event.button == 2:
         print("left click to select point, right click for none")
       elif event.button == 3:
@@ -128,7 +128,7 @@ def read_corrs(filename):
     num_points = int(next(tokgen))
     print(str(num_images) + ' images')
     print(str(num_points) + ' points')
-      
+
     points = [[] for _ in range(num_images)]
     for i in range(num_images):
       img_pts = []

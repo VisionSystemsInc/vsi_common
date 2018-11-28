@@ -20,7 +20,7 @@ def natural_sorted(iterable, key=None, *args, **kwargs):
     -------
     list
         A sorted list of strings according to (sub)string numerical value.
-    
+
 
     >>> natural_sorted(['f10', 'f2', 'f1'])
     ['f1', 'f2', 'f10']

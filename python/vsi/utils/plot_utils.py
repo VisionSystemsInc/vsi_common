@@ -11,32 +11,32 @@ import skimage.color
 def grouped_bar(features, bar_labels=None, group_labels=None, ax=None, colors=None):
   '''
   features.shape like np.array([n_bars, n_groups])
-  
+
   >>> bars = np.random.rand(5,3)
   >>> grouped_bar(bars)
-  
+
   >>> group_labels = ['group%d' % i for i in range(bars.shape[1])]
   >>> bar_labels = ['bar%d' % i for i in range(bars.shape[0])]
   >>> grouped_bar(bars, group_labels=group_labels, bar_labels=bar_labels)
   '''
-  
+
   n_bars, n_groups = features.shape[0:2]
 
-  if ax is None: 
+  if ax is None:
     fig, ax = plt.subplots()
     fig.set_size_inches(9,6)
   else:
     fig = ax.get_figure()
-  
-  if colors is None: 
+
+  if colors is None:
     colors = mpl.cm.spectral(np.linspace(0, 1, n_bars))
-  
+
   index = np.arange(n_groups)
   bar_width = 1.0/(n_bars) * 0.75
 
   for j,group in enumerate(features):
     label = bar_labels[j] if bar_labels is not None else None
-    ax.bar(index + j*bar_width - bar_width*n_bars/2.0, 
+    ax.bar(index + j*bar_width - bar_width*n_bars/2.0,
       group, bar_width, color=colors[j], label=label, alpha=0.4)
     ax.margins(0.05,0.0) # so the bar graph is nicely padded
 
@@ -57,10 +57,14 @@ def lblshow(label_img, labels_str=None, f=None, ax=None, cmap=None, *args, **kwa
 
   Parameters
   ----------
-  label_img : labeled image [nrows, ncols] = numpy.array.shape
-  labels_str : a complete list of labels
-  f : (optional) a figure handle
-  cmap : the color of each label (optional). like a list of colors, e.g.,
+  label_img : array_like
+      labeled image [nrows, ncols] = numpy.array.shape
+  labels_str : list
+      a complete list of labels
+  f : array_like
+      (optional) a figure handle
+  cmap : array_like
+      the color of each label (optional). like a list of colors, e.g.,
       ['Red','Green',...] or a matplotlib.colors.ListedColormap)
   '''
 
@@ -74,7 +78,7 @@ def lblshow(label_img, labels_str=None, f=None, ax=None, cmap=None, *args, **kwa
     else:
       ax = f.gca()
   elif f is None:
-    f = ax.get_figure() 
+    f = ax.get_figure()
 
 
   nlabels = len(labels_str)
@@ -105,12 +109,12 @@ def lblshow(label_img, labels_str=None, f=None, ax=None, cmap=None, *args, **kwa
     cbar.ax.text(1.3, float(2 * j + 1) / (nlabels*2), lab, ha='left', va='center')
 
   return f
-    
+
 def imshow(X, *args, **kwargs):
   """ modify the coordinate formatter to report the image "z"
     from http://matplotlib.org/examples/api/image_zcoord.html
   """
-  
+
   _, ax = plt.subplots()
   ax.imshow(X, *args, **kwargs)
 
@@ -127,7 +131,7 @@ def imshow(X, *args, **kwargs):
 
   ax.format_coord = format_coord
   plt.show()
-  
+
 def plot_vector(x, axis, axis_order, *args, **kwargs):
   """ conveniance method for plotting 2 or 3-d data stored in numpy array """
 
@@ -218,7 +222,7 @@ class OrthoAnd3DPlot:
 
     self.ax_array[0][0].plot(items[self.aligned_x_dim,:],
               items[self.aligned_y_dim,:], *args, **kwargs)
-    
+
     self.ax_array[0][1].plot(items[self.extra_dim,:],
               items[self.aligned_y_dim,:], *args, **kwargs)
 

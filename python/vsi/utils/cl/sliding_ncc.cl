@@ -8,7 +8,7 @@ __kernel void sliding_ncc(__global const float *a,
     int idx = gid_y*img_nx + gid_x;
 
     // make sure we have enough room to compute a window around the current pixel
-    if ( (gid_x < window_radius) || (gid_x >= (img_nx - window_radius)) || 
+    if ( (gid_x < window_radius) || (gid_x >= (img_nx - window_radius)) ||
          (gid_y < window_radius) || (gid_y >= (img_ny - window_radius)) ) {
         result[idx] = NAN;
         return;
