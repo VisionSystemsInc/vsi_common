@@ -15,12 +15,6 @@ class Try(object):
   ----------
   *ignore_exceptions : Exception
       Exception classes to be ignored. Default is all.
-
-  Attributes
-  ----------
-  default_ignore : array_like
-    Arguments of Exception classes is set to ignore. Default is all.
-  *other_ignore : str
   '''
 
   def __init__(self, default_ignore=Exception, *other_ignore):
@@ -270,6 +264,8 @@ class _BasicDecorator(object):
         return a+b
   '''
 
+  fun = None
+
   def __new__(cls, *args, **kwargs):
     WrappedClass = _meta_generate_class(cls, *args, **kwargs)
     # In python3, the use of "_BasicDecorator" can be "__class__" instead, but
@@ -372,69 +368,6 @@ class BasicDecorator(_BasicArgumentDecorator):
           test1(11,22)
           test2(10,2)
       '''
-
-class WarningDecorator(object):
-  ''' Decorator to add to a function to print a message out when called
-
-      Attributes
-      ----------
-      *args
-          message
-      **kwargs
-          output_stream
-
-
-      no arguments (no '()' either)
-
-
-      Example::
-
-          @WarningDecorator
-          def my_prototype(x, y):
-            print(x/y)
-
-          @WarningDecorator('Warning: Unstable Code')
-          def my_prototype(x, y):
-            print(x/y)
-
-          @WarningDecorator(output_stream=sys.stdout)
-          def my_prototype(x, y):
-            print(x/y)
-  '''
-  def __init__(self, *args, **kwargs):
-    ''' Initilize decorator
-
-        Arguments
-        ---------
-        *args
-            message
-        **kwargs
-            output_stream
-
-        no arguments (no '()' either)
-    '''
-    if hasattr(args[0], '__call__'): #duck typing
-      self.init1(*args, **kwargs)
-    else:
-      self.init2(*args, **kwargs)
-
-  def init1(self, fun):
-    self.fun = fun
-    self.message = 'Warning'
-    self.output_stream=sys.stderr
-
-  def init2(self, message='Warning', output_stream=sys.stderr):
-    self.message = message
-    self.output_stream = output_stream
-
-  def __call__(self, *args, **kwargs):
-
-    if hasattr(self, 'fun'):
-      print(self.message, file=self.output_stream)
-      return self.fun(*args, **kwargs)
-    else:
-      self.fun = args[0]
-      return self
 
 class WarningDecorator(BasicDecorator):
   def __init__(self, message='Warning', output_stream=sys.stderr):

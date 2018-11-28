@@ -86,6 +86,18 @@ napoleon_use_ivar = True
 napoleon_include_private_with_doc = True
 napoleon_include_special_with_doc = True
 
+# Autodoc parameters
+
+# from sphinx.autodoc.importer import import_object
+# import_object('IPython', )
+
+autodoc_mock_imports = ["pyopencl", "vtk", "numpy", "matplotlib",
+                        "rpdb", "rpdb2", "PIL", "skimage", "mpl_toolkits",
+                        "scipy", "IPython",
+                        "brl_init", "boxm2_adaptor", "boxm2_scene_adaptor",
+                        "vpgl_adaptor_boxm2_batch"]
+
+
 # Remove warnings due to a bug in the Python docs with nitpick_ignore
 nitpick_ignore = [('py:class', 'bool'),
                   ('py:class', 'array_like'),
@@ -107,7 +119,6 @@ nitpick_ignore = [('py:class', 'bool'),
                   ('py:class', 'optional'),
                   ('py:class', 'var'),
                   ('py:class', 'file_like'),
-                  ('py:class', 'like numpy.array'),
                   ('py:class', 'unittest.case.TestCase'),
                   ('py:class', 'subprocess.Popen'),
                   ('py:class', 'rpdb2.CDebuggerCoreThread'),
@@ -117,11 +128,6 @@ nitpick_ignore = [('py:class', 'bool'),
                   ('py:class', 'threading.Thread'),
                   ('py:class', 'Exception'),
                   ('py:class', 're.Pattern'),
-                  ('py:obj', '*other_ignore'),
-                  ('py:obj', 'fun'),
-                  ('py:obj', '*args'),
-                  ('py:obj', '**kwargs'),
-                  ('py:obj', 'default_ignore'),
                   ('py:exc', 'OSError'),
                   ('py:exc', 'Exception'),
                   ('py:exc', 'ValueError'),

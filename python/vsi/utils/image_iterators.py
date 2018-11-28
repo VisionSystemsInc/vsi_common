@@ -210,7 +210,8 @@ class IterateOverSuperpixels(object):
     '''
     Parameters
     ----------
-    segmented : superpixel labeled segmentation (like numpy.array)
+    segmented : array_like
+          Superpixel labeled segmentation (like numpy.array)
           NOTE regionprops expects labels to be sequential and start
           at 1: {1,2,...}. label 0 is treated as unlabeled.
     image : array_like
