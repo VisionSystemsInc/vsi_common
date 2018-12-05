@@ -37,7 +37,8 @@ def dbstop_if_error(_rpdb2_pwd='vsi', fAllowUnencrypted=True,
 
       Of course, this means that if the debugger slows down execution, it will
       have to slow down all of the execution, instead of being loaded "just in
-      time"'''
+      time"
+  '''
   rpdb2.start_embedded_debugger(_rpdb2_pwd, fAllowUnencrypted, fAllowRemote,
                                 timeout, source_provider, fDebug, depth)
 
@@ -88,7 +89,8 @@ def rpdb_dbstop_exception_hook(type, value, tb, _rpdb2_pwd='vsi', *args, **kwarg
     import traceback
     traceback.print_exception(type, value, tb)
 
-    rpdb_post_mortem(tb, _rpdb2_pwd, *args, **kwargs) # more "modern" """
+    rpdb_post_mortem(tb, _rpdb2_pwd, *args, **kwargs) # more "modern"
+"""
 
 def set_trace(_rpdb2_pwd='vsi', fAllowUnencrypted=True,
                    fAllowRemote=False, timeout=5*60, source_provider=None,
@@ -111,7 +113,7 @@ def set_trace(_rpdb2_pwd='vsi', fAllowUnencrypted=True,
           The Debug Output
       depth : int
           The Depth of the frame. Default: 0
-      '''
+  '''
   print('Starting rpdb2...')
   rpdb2.start_embedded_debugger(_rpdb2_pwd, fAllowUnencrypted, fAllowRemote,
                                 timeout, source_provider, fDebug, depth)
@@ -138,7 +140,7 @@ def attach(pid, ip='127.0.0.1', password='vsi', gui=False, break_exit=False):
           The Password
       gui : bool
       break_exit : bool
-      '''
+  '''
   vdb.attach(pid)
   import sys
   old_args = sys.argv
@@ -170,7 +172,7 @@ def set_attach(_rpdb2_pwd='vsi', *args, **kwargs):
             Variable length argument list.
       **kwargs
             Arbitrary keyword arguments.
-      '''
+  '''
   vdb.set_attach(partial(set_trace, *args, **kwargs))
 
 class CDebuggerCoreThread2(rpdb2.CDebuggerCoreThread):

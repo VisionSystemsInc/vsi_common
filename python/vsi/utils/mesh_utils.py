@@ -41,7 +41,9 @@ def write_grid_vtk(image_stack_glob, output_filename, origin=(0,0,0), vox_len=1.
 
 
 def marching_cubes(grid_fname_vtk, mesh_filename_ply, value=0.5):
-  """ read in a grid in vtk format, run marching cubes, save the result as ply mesh """
+  """ read in a grid in vtk format, run marching cubes, save the result as ply
+  mesh
+  """
   reader = vtk.vtkStructuredPointsReader()
   reader.SetFileName(grid_fname_vtk)
   reader.Update()

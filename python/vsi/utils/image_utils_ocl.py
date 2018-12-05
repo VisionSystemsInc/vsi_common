@@ -45,7 +45,9 @@ def NCC_score_image(ocl_ctx, images_and_masks, window_radius):
 
 
 def sliding_NCC(ocl_ctx, img1, img2, window_radius):
-  """ perform normalized cross-corellation on a window centered around every pixel """
+  """ perform normalized cross-corellation on a window centered around every
+  pixel
+  """
 
   cl_queue = cl.CommandQueue(ocl_ctx)
 
@@ -65,7 +67,7 @@ def sliding_NCC(ocl_ctx, img1, img2, window_radius):
   prg = cl.Program(ocl_ctx, clstr).build()
   prg.sliding_ncc(cl_queue, img1_np.shape, None,
                   i1_buf, i2_buf, dest_buf,
-                  np.int32(img1_np.shape[1]), np.int32(img1_np.shape[0]), 
+                  np.int32(img1_np.shape[1]), np.int32(img1_np.shape[0]),
                   np.int32(window_radius))
 
   ncc_img = np.zeros_like(img1_np)
@@ -76,7 +78,9 @@ def sliding_NCC(ocl_ctx, img1, img2, window_radius):
 
 
 def sliding_SSD(ocl_ctx, img1, img2, window_radius):
-  """ perform sum of squared differences on a window centered around every pixel """
+  """ perform sum of squared differences on a window centered around every
+  pixel
+  """
 
   cl_queue = cl.CommandQueue(ocl_ctx)
 
@@ -96,7 +100,7 @@ def sliding_SSD(ocl_ctx, img1, img2, window_radius):
   prg = cl.Program(ocl_ctx, clstr).build()
   prg.sliding_ssd(cl_queue, img1_np.shape, None,
                   i1_buf, i2_buf, dest_buf,
-                  np.int32(img1_np.shape[1]), np.int32(img1_np.shape[0]), 
+                  np.int32(img1_np.shape[1]), np.int32(img1_np.shape[0]),
                   np.int32(window_radius))
 
   ssd_img = np.zeros_like(img1_np)
@@ -145,7 +149,7 @@ def score_rectified_row(ocl_ctx, img1, img2, window_radius, row, method='NCC'):
   prg.score_rectified_row(cl_queue, output_shape, None,
                           i1_buf, i2_buf, dest_buf,
                           np.int32(row), np.int32(nrows),
-                          np.int32(img1_np.shape[1]), 
+                          np.int32(img1_np.shape[1]),
                           np.int32(img2_np.shape[1]),
                           np.int32(window_radius))
 
@@ -170,7 +174,9 @@ def compute_scale_image_ssd(ocl_ctx, img, thresh=0.2):
 
 
 def compute_scale_image_entropy(ocl_ctx, img, entropy_thresh=100, num_bins=8):
-  """ compute local scale at each pixel in the image entropy_thresh as units bits """
+  """ compute local scale at each pixel in the image entropy_thresh as units
+  bits
+  """
   num_levels = 7
   window_rads = [2**l for l in range(num_levels)]
   scale_img = np.zeros_like(img,dtype=np.uint8)
@@ -183,7 +189,9 @@ def compute_scale_image_entropy(ocl_ctx, img, entropy_thresh=100, num_bins=8):
 
 
 def compute_scale_image_gradx(ocl_ctx, img, grad_sum_thresh=1.0):
-  """ compute local scale at each pixel based on the absolute gradient (x component) """
+  """ compute local scale at each pixel based on the absolute gradient
+  (x component)
+  """
   num_levels = 7
   window_radii = [2**l for l in range(num_levels)]
   scale_img = np.zeros_like(img,dtype=np.uint8)
@@ -197,7 +205,9 @@ def compute_scale_image_gradx(ocl_ctx, img, grad_sum_thresh=1.0):
 
 
 def compute_scale_image(ocl_ctx, img, entropy_thresh=100, num_bins=8):
-  """ compute local scale at each pixel in the image entropy_thresh as units bits """
+  """ compute local scale at each pixel in the image entropy_thresh as units
+  bits
+  """
   num_levels = 7
   window_rads = [2**l for l in range(num_levels)]
   scale_img = np.zeros_like(img,dtype=np.uint8)

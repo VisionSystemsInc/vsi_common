@@ -2,7 +2,8 @@
  - get width and height of console
  - works on linux,os x,windows,cygwin(windows)
 
-Harco Kuppens - https://stackoverflow.com/questions/566746/how-to-get-console-window-width-in-python
+Harco Kuppens - https://stackoverflow.com/questions/566746/how-to-get-console-
+window-width-in-python
 """
 
 __all__=['getTerminalSize']
@@ -28,11 +29,11 @@ def _getTerminalSize_windows():
   res=None
   try:
     from ctypes import windll, create_string_buffer
-  
+
     # stdin handle is -10
     # stdout handle is -11
     # stderr handle is -12
-  
+
     h = windll.kernel32.GetStdHandle(-12)
     csbi = create_string_buffer(22)
     res = windll.kernel32.GetConsoleScreenBufferInfo(h, csbi)

@@ -11,7 +11,7 @@ def argumet_parser():
       -------
       str
           The Parser
-      '''
+'''
   parser = argparse.ArgumentParser(prefix_chars='\0')
   parser.add_argument('command', nargs='+')
   return parser
@@ -22,7 +22,7 @@ def main(args=sys.argv[1:]):
       ----------
       args : array_like
           An array of arguments
-      '''
+'''
   parser = argumet_parser()
   arguments = parser.parse_args(args)
   pid = Popen(arguments.command, stdout=PIPE)

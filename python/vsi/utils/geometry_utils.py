@@ -70,7 +70,8 @@ def fit_plane_3d(points):
 
 
 def fit_plane_3d_RANSAC(points, inlier_thresh=1.0, max_draws=100):
-  """ fit a plane to a noisy set of points. returns the plane and the indices of inliers """
+  """ fit a plane to a noisy set of points. returns the plane and the indices
+      of inliers """
   num_pts_total = len(points)
   best_inliers = np.zeros(num_pts_total,np.bool)
   best_inlier_sum = 0
@@ -125,7 +126,8 @@ def axis_from_string(axis_string):
 
 
 def Euler_angles_to_quaternion(theta1, theta2, theta3, order='XYZ'):
-  """ default order applies rotation around x axis first, y second, and z third.
+  """ default order applies rotation around x axis first, y second, and z
+      third.
   """
   if not axis_order_is_valid(order):
     raise Exception('Invalid order string: ' + str(order))
@@ -363,13 +365,15 @@ def compose_quaternions(quaternion_list):
 
 
 def Euler_angles_to_matrix(theta1, theta2, theta3, order='XYZ'):
-  """ Convert Euler angles to a rotation matrix. Angles are specified in the order of application.
+  """ Convert Euler angles to a rotation matrix. Angles are specified in the
+      order of application.
   """
   return quaternion_to_matrix(Euler_angles_to_quaternion(theta1, theta2, theta3, order=order))
 
 
 def matrix_to_Euler_angles(M, order='XYZ'):
-  """ Convert a rotation matrix to Euler angles. Angles are returned in the order of application.
+  """ Convert a rotation matrix to Euler angles. Angles are returned in the
+      order of application.
   """
   return quaternion_to_Euler_angles(matrix_to_quaternion(M),order=order)
 
@@ -549,10 +553,12 @@ def compute_bounding_box(pts):
 
 
 def compute_transform_3d_plane_to_2d(plane_origin, plane_x, plane_y, nx, ny):
-  """ compute a 3x3 perspective transform from a planar segment in 3-d to a 2-d image.
+  """ compute a 3x3 perspective transform from a planar segment in 3-d to a 2-d
+    image.
     plane_origin: the 3-d point corresponding to the upper left of the image
     plane_x: a 3-d vector that spans the image "x" direction
-    plane_y: a 3-d vector that spans the image "y" direction (assumed perpendicular to plane_x)
+    plane_y: a 3-d vector that spans the image "y" direction (assumed
+    perpendicular to plane_x)
     nx: number of pixels in the image x dimension
     ny: number of pixels in the image y dimension
   """
@@ -605,7 +611,8 @@ def similarity_transform(scale, translation):
 
 
 def volume_corners(vol_origin, vol_extent):
-  """ return the 8 corners of the axis-aligned volume defined by origin and extent
+  """ return the 8 corners of the axis-aligned volume defined by origin and
+  extent
   """
   corners = []
   for zi in (0,1):

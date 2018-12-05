@@ -7,7 +7,8 @@ from vsi.tools.python import Try
 
 class RedirectBase(object):
   def flush(self):
-    ''' Flushes stdout and stderr '''
+    ''' Flushes stdout and stderr
+    '''
     sys.stdout.flush()
     sys.stderr.flush()
 
@@ -17,7 +18,8 @@ class Logger(object):
       Careful when using this, if the logging out goes to a stream that is
       redireted, you have an infinite capture loop and does not go well
 
-      Use PopenRedirect instead of Redirect in that case '''
+      Use PopenRedirect instead of Redirect in that case
+  '''
 
   def __init__(self, logger, lvl=logging.INFO):
     ''' Create a wrapper for logger using lvl level
@@ -28,7 +30,7 @@ class Logger(object):
             The logger
         lvl : int
             Logging Level
-        '''
+    '''
 
     self.logger=logger
     self.lvl = lvl
@@ -40,7 +42,7 @@ class Logger(object):
         ----------
         str : str
             The String
-        '''
+    '''
     str = str.rstrip()
     if str:
       self.logger.log(self.lvl, str)
@@ -68,7 +70,7 @@ class FileRedirect(object):
       IF you call __enter__ manually, you only need to close the wids file
       objects, and the rest of the threads and file objects are cleaned up,
       of course it would be better to call __exit__ in that case.
-      '''
+  '''
   def __init__(self, outputs=[]):
     ''' Create a FileRedirect
 
@@ -82,7 +84,8 @@ class FileRedirect(object):
         Yields
         ------
         list
-            list of outputs objects. '''
+            list of outputs objects.
+    '''
     self.outputs = outputs
 
   def __enter__(self):
@@ -113,7 +116,7 @@ class FileRedirect(object):
             The Exception Value
         traceback : str
             The Traceback
-            '''
+    '''
     for wid in self.wids:
       wid.close()
 
@@ -130,7 +133,7 @@ class FileRedirect(object):
         ----------
         streamIndex : int
             The Stream Index
-        '''
+    '''
     rid = self.rids[streamIndex]
     wid = self.wids[streamIndex]
     output = self.outputs[streamIndex]
@@ -151,7 +154,7 @@ class FileRedirect(object):
         ----------
         stream_index : int
             The Stream Index
-        '''
+    '''
     self.tids.append(threading.Thread(target=self.__bleed, args=(stream_index,)))
     self.tids[-1].start()
 
@@ -177,7 +180,7 @@ class PopenRedirect(FileRedirect):
             Stdout File like object, must have .write method
         stderr : file_like
             Stderr File like object, must have .write method
-        '''
+    '''
     self.stdout_output = stdout
     self.stderr_output = stderr
 
@@ -189,7 +192,7 @@ class PopenRedirect(FileRedirect):
         -------
         str
             First object in wireless intrusion prevention system list.
-        '''
+    '''
     return self.wids[0]
 
   @property
@@ -198,7 +201,7 @@ class PopenRedirect(FileRedirect):
         -------
         str
             Second object in wireless intrusion prevention system list.
-        '''
+    '''
     return self.wids[1]
 
 class Redirect(RedirectBase): #Version 2
@@ -259,7 +262,7 @@ class Redirect(RedirectBase): #Version 2
       For example 'python | find /v ""' Mostly works.
 
       Basically don't do this in Windows Command line
-      '''
+  '''
 
   def __init__(self,
                all=None,
@@ -330,7 +333,7 @@ class Redirect(RedirectBase): #Version 2
             quotes). Again, there should be no real reason to override these,
             unless you are doing some IPython/colorama redirecting, or any
             other library that messes with sys.stdout/sys.stderr
-            '''
+    '''
 
     if c is not None:
       self.stdout_c_out = c
@@ -391,7 +394,8 @@ class Redirect(RedirectBase): #Version 2
   def __enter__(self):
     ''' enter function for with statement.
 
-        Switched out stderr and stdout, and starts pipe threads'''
+        Switched out stderr and stdout, and starts pipe threads
+    '''
 
     #Clear initial arrays
     self.tids = [] #List of threads running __bleed
@@ -441,7 +445,7 @@ class Redirect(RedirectBase): #Version 2
             The Exception Value
         traceback : str
             The Traceback
-        '''
+    '''
     #Flush
     self.flush()
 
@@ -489,7 +493,7 @@ class Redirect(RedirectBase): #Version 2
             The File Descriptor
         output : str
             A chunk of the file
-        '''
+    '''
     chunk = True
 
     fid_py = os.fdopen(fid)
@@ -558,7 +562,8 @@ class Capture(RedirectBase): #version 1
               stuff()
 
       Now rid1's buffer has just stderr_c and stdout_py as one group
-      stream and rid2 has stfout_c and stderr_py as one grouped stream'''
+      stream and rid2 has stfout_c and stderr_py as one grouped stream
+  '''
 
   def __init__(self, stdout_c=1, stderr_c=2,
                      stdout_py=sys.stdout, stderr_py=sys.stderr,
@@ -603,7 +608,8 @@ class Capture(RedirectBase): #version 1
             will have separate streams (default: True)
         group_err : bool, optional
             Should stderr_c and stderr_py use the a group stream or else it
-            will have separate streams (default: True)'''
+            will have separate streams (default: True)
+    '''
 
     if not group:
       self.group_outerr=False
@@ -666,7 +672,8 @@ class Capture(RedirectBase): #version 1
         fid : str
             The File Handle
         output : int
-            The Buffer Index'''
+            The Buffer Index
+    '''
 
     chunk = True
 
@@ -689,7 +696,8 @@ class Capture(RedirectBase): #version 1
         readPipe : str
             File descriptor number of the read pipe (from by os.pipe)
         bufferIndex : int
-            The xth buffer to store the string in. '''
+            The xth buffer to store the string in.
+    '''
     self.tids.append(threading.Thread(target=self.__bleed, args=(readPipe, bufferIndex)))
     self.tids[-1].start()
 
@@ -697,7 +705,8 @@ class Capture(RedirectBase): #version 1
   def __enter__(self):
     ''' enter function for with statement.
 
-        Switched out stderr and stdout, and starts pipe threads'''
+        Switched out stderr and stdout, and starts pipe threads
+    '''
 
     #Clear initial arrays
     self.tids = [] #List of threads running __bleed
@@ -749,7 +758,7 @@ class Capture(RedirectBase): #version 1
             The Exception Value
         traceback : str
             The Traceback
-            '''
+    '''
     #Flush
     self.flush()
 
@@ -781,7 +790,8 @@ class Capture(RedirectBase): #version 1
         Instead of accessing self.buffers, the strings are copied to common
         names, including stdout_c, stderr_c, stdout_py, stdout_py. If
         group_out/group_err is True, then stdout/stderr is defines
-        (respectively) just to make it easier'''
+        (respectively) just to make it easier
+    '''
     for x in range(len(self.std_cs)):
       for std in self.std_cs[x]:
         setattr(self, std+'_c', self.buffers[x])
@@ -809,7 +819,8 @@ class StdRedirect(object):
       ...   boxm2_batch.print_db()
 
       Supports stdout and stderr, and stderr can be set to StdRedirect. STDOUT
-      to use the same output as stdout'''
+      to use the same output as stdout
+  '''
 
   STDOUT = -1
   def __init__(self, stdout=None, stderr=None):
@@ -823,7 +834,7 @@ class StdRedirect(object):
             Standard Output
         stderr : str
             Standard Error
-        '''
+    '''
 
     self.stdout_c_fd = 1
     self.stderr_c_fd = 2
@@ -849,7 +860,7 @@ class StdRedirect(object):
             The Exception Value
         traceback : str
             The Traceback
-            '''
+    '''
     if self.new_stdout:
       os.dup2(self.old_stdout, self.stdout_c_fd)
       os.close(self.old_stdout)

@@ -115,7 +115,7 @@ class Chdir(object):
             When exiting the with loop, if the return directory does not exist
             anymore, (OSError 2), if this is true an error is thrown, else it
             is ignore and you are left in the new directory. Default: False
-        '''
+    '''
 
   def __enter__(self):
     self.oldDir = os.getcwd()
@@ -282,7 +282,8 @@ def checksum_dir(checksum, checksum_depth=2, base_dir=None):
 
       Note
       ----
-      An optional base_dir will be prefixed'''
+      An optional base_dir will be prefixed
+  '''
 
   dir_parts = [checksum[x:x+2] if x<checksum_depth*2 else checksum \
                for x in range(0,checksum_depth*2+1,2)]
@@ -451,7 +452,7 @@ def prune_dir(directory, top_dir=None):
       ------
       OSError
 
-      '''
+  '''
 
   #Fill out default value
   if top_dir is None:

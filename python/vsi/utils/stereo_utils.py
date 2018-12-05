@@ -81,7 +81,8 @@ def rectify_calibrated_plane(camera0, camera1, img0_shape, img1_shape, plane, im
 
 
 def rectify_calibrated_fov(camera0, camera1, img0_shape, img1_shape, img_scale=1.0, plane=None, mask0=None, mask1=None, check_angles=True, min_graze_angle_degrees=15):
-  """ compute epipolar rectification homographies based on an (optional) plane of interest
+  """ compute epipolar rectification homographies based on an (optional) plane
+  of interest
   """
   def image_corners(img_shape):
     """ return x,y coordinates of the 4 image corners """

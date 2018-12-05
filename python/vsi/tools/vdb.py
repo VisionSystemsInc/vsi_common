@@ -23,7 +23,7 @@ def find_frame(frame, depth=0):
           The Frame
       depth : int
           The Depth
-      '''
+  '''
   if not frame:
     frame = sys._getframe()
   for d in range(depth):
@@ -48,7 +48,8 @@ def set_attach(db_cmd=None, signal=ATTACH_SIGNAL):
       command
 
       This works pretty well, and allows you to resume the code UNLESS you are
-      running in windows and happen to interrupt a sleep command.'''
+      running in windows and happen to interrupt a sleep command.
+  '''
   #Todo: Add tcp OPTION?
 
   signal.signal(signal, partial(handle_db, db_cmd=db_cmd))
@@ -71,7 +72,8 @@ def attach(pid, signal=ATTACH_SIGNAL):
 
       This is the second part of attaching to a python process. Once
       set_attach is run, on another prompt running attach will trigger
-      the interrupt thing attaching or triggering whatever db_cmd was'''
+      the interrupt thing attaching or triggering whatever db_cmd was
+  '''
   if os.name == 'nt':
     pipe = Pipe('vdb_%d' % pid)
     pipe.write('vsi')
@@ -101,7 +103,7 @@ def handle_db(sig, frame, db_cmd=None, signal=ATTACH_SIGNAL):
           The Debugger Command
       signal : var
           The Attach Signal
-      '''
+  '''
   if sig == signal:
     #if not hasattr(sys, 'ps1'): #If not interactive
     if db_cmd:
@@ -130,7 +132,7 @@ class PostMortemHook(object):
             Variable length argument list.
         **kwargs
             Arbitrary keyword arguments.
-        '''
+    '''
 
     if PostMortemHook.original_excepthook == None:
       PostMortemHook.original_excepthook = sys.excepthook
@@ -176,7 +178,7 @@ class DbStopIfErrorGeneric(object):
 
 
         All other args from db_stop_if_error()
-        '''
+    '''
     self.threading_support=threading_support
 
   def __enter__(self):
@@ -197,7 +199,7 @@ class DbStopIfErrorGeneric(object):
             The Exception Value
         tb : str
             The Traceback
-        '''
+    '''
     if self.threading_support:
       import threading
       threading.Thread.__init__ = self.threading_init
@@ -221,7 +223,7 @@ class DbStopIfErrorGeneric(object):
         ------
         Exception
             For a virtual function
-        '''
+    '''
     raise Exception('Purely virtual function')
 
   @classmethod
@@ -236,7 +238,8 @@ class DbStopIfErrorGeneric(object):
 
         After the with statement scope fails, if this is called, python will
         continue running as if there was no error. Can be useful, can also be
-        dangerous. So don't abuse it!'''
+        dangerous. So don't abuse it!
+    '''
     cls.ignore_exception = True
 
 def dbstop_exception_hook(type, value, tb,
@@ -251,7 +254,7 @@ def dbstop_exception_hook(type, value, tb,
         post_mortem :
         Interactive : bool
             True if interactive. False if not.
-        '''
+    '''
     if not interactive and (hasattr(sys, 'ps1') or not sys.stderr.isatty()):
     # we are in interactive mode or we don't have a tty-like
     # device, so we call the default hook
@@ -292,7 +295,7 @@ def break_pool_worker():
           >>> vdb.add_threading_excepthook()
           >>> tp = ThreadPool(3)
           >>> tp.map(a, range(10))
-      '''
+  '''
   import multiprocessing.pool
 
   def worker(inqueue, outqueue, initializer=None, initargs=(), maxtasks=None):
@@ -375,7 +378,7 @@ def add_threading_excepthook():
             Variable length argument list.
         **kwargs
             Arbitrary keyword arguments.
-        '''
+    '''
     import sys
     init_old(self, *args, **kwargs)
     run_old = self.run
@@ -386,7 +389,7 @@ def add_threading_excepthook():
               Variable length argument list.
           **kw
               Arbitrary keyword arguments.
-          '''
+      '''
       try:
         run_old(*args, **kw)
       except (KeyboardInterrupt, SystemExit):
