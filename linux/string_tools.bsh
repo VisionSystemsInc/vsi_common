@@ -87,3 +87,69 @@ function trim()
   x="${1#"${1%%[!${2-[:space:]}]*}"}"
   echo "${x%"${x##*[!${2-[:space:]}]}"}"
 }
+
+
+#**
+# .. function:: quote_escape
+#
+# :Arguments: * ``$1`` - String to escape
+# :Output: *stdout* - The string with ' escaped properly
+#
+# Properly escape string for bash, adds ' for you, does not need extra quotes added to string. Useful for printing out instructions that are meant to be copy and pasted, no matter what characters are in the string. Also useful for ``eval``
+#
+# ``printf '%q' "$foo"`` does not always work exactly as intended with ``eval`` on bash 3.2. Either the ``\`` is not expanded when double quotes are uses, or ``~`` is expanded without double quotes. With this function, no bash expansion ever occurs.
+#
+# Quotes do not need to be added to any expression, as ``'`` are added for you.
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
+#   eval "x=$(quote_escape "Hi \"  'ya \"")" # <-- Never add quotes after the =
+#   [ "${x}" = "Hi \"  'ya \"" ]
+#
+# .. seealso::
+#   :func:`quote_substitute_escape`
+#**
+function quote_escape()
+{
+  local foo=\'\\\'\' # Use variable for bash 3.2 compatibility. *shrugs*
+  echo "'${1//\'/${foo}}'"
+  # All other bash substitutions do not occur in '
+}
+
+#**
+# .. function:: quote_substitute_escape
+#
+# :Arguments: * ``$1`` - String to escape
+# :Output: *stdout* - The string escaped properly
+#
+# Similar to :func:`quote_escape`, but can be used in the same use cases as :func:`quote_escape` and for variable substitution, e.g. the ``bar`` in ``${foo-bar}``.
+#
+# Unlike :func:`quote_escape`, quotes do need to be added to any expression. This is because quotes can be added outside the evaluation point of :func:`quote_substitute_escape`.
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
+#   unset y
+#   eval "x=\"${y-$(quote_substitute_escape "Hi \"  'ya \"")}\"" # <-- Need the \"
+#   # Always add the \" after the =
+#   [ "${x}" = 'Hi "  '\''ya "' ]
+#
+#   #also
+#
+#   eval "x=\"$(quote_substitute_escape "Hi \"  'ya \"")\"" # <-- Need the \"
+#   [ "${x}" = 'Hi "  '\''ya "' ]
+#
+# .. seealso::
+#   :func:`quote_escape`
+#**
+function quote_substitute_escape()
+{
+  local x="${1//\\/\\\\}" # First excape \ to \\
+  x="${x//\"/\\\"}"       # Then escape "
+  x="${x//\$/\\\$}"       # Now start disabling Bash substitutions. $
+  echo "${x//\`/\\\`}"    # And the last bash substitution, `
+  # All other bash substitutions do not occur in "
+}
