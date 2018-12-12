@@ -84,9 +84,9 @@ def is_string_like(obj):
 def get_file(fid, mode='rb'):
   ''' Helper function to take either a filename or fid
 
-  Arguments
-  ---------
-  fid : str or file_like
+  Parameters
+  ----------
+  fid : str
       File object or filename
   mode : str, optional
       Optional, file mode to open file if filename supplied
@@ -137,7 +137,7 @@ def update_wrapper_class(wrapper, wrapped):
   ----------
   wrapper : class
       The class to be updated
-  wrapped :
+  wrapped : class
       The original function/class
 
   Returns
@@ -307,6 +307,7 @@ class _BasicArgumentDecorator(object):
         Parameters
         ----------
         fun : func
+          The Function
     '''
 
     @wraps(fun)

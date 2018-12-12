@@ -31,7 +31,7 @@ class WatchDog(object):
         ----------
         signum : int
             The Signal Number
-        frame : str
+        frame : frame
             The Frame
     '''
     self.watch = time.time() - 1
@@ -41,7 +41,7 @@ class WatchDog(object):
         ----------
         signum : int
             The Signal Number
-        frame : str
+        frame : frame
             The Frame
     '''
     self.watch = time.time() + self.timeout

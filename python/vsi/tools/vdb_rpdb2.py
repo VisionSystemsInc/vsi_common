@@ -132,14 +132,16 @@ def set_trace(_rpdb2_pwd='vsi', fAllowUnencrypted=True,
 def attach(pid, ip='127.0.0.1', password='vsi', gui=False, break_exit=False):
   ''' Parameters
       ----------
-      pid : str
-          The Process ID
+      pid : int
+        The Process ID
       ip : str
-          The IP Address
+        The IP Address
       password : str
-          The Password
+        The Password
       gui : bool
+        If true use winpbd GUI
       break_exit : bool
+        If break_exit is true, it set's a breakpoint when the program extis.
   '''
   vdb.attach(pid)
   import sys
@@ -178,28 +180,6 @@ def set_attach(_rpdb2_pwd='vsi', *args, **kwargs):
 class CDebuggerCoreThread2(rpdb2.CDebuggerCoreThread):
   ''' I just wanted to add some output on exception!!!'''
   def profile(self, frame, event, arg):
-    """
-    Profiler method.
-
-    Parameters
-    ----------
-    frame : str
-        The Frame
-    event : str
-        The Event
-    arg : array_like
-        The Argument
-
-    Raises
-    ------
-    AttributeError
-        An Unhandled Exception
-
-
-    The Python profiling mechanism is used by the debugger
-    mainly to handle synchronization issues related to the
-    life time of the frame structure.
-    """
     #print_debug('profile: %s, %s, %s, %s, %s' % (repr(frame), event, frame.f_code.co_name, frame.f_code.co_filename, repr(arg)[:40]))
 
     if event == 'return':

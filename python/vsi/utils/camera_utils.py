@@ -51,6 +51,7 @@ class ProjectiveCamera(object):
         Parameters
         ----------
         fd : file_like
+          The output file
   """
     # write 3x4 projection matrix
     for row in self.P:
@@ -77,7 +78,7 @@ class ProjectiveCamera(object):
 
         Returns
         -------
-        array_like
+        numpy.array
             A 2 Dimensional array of coordinates.
     """
     num_pts = len(pts_3d)
@@ -100,7 +101,7 @@ class ProjectiveCamera(object):
 
         Returns
         -------
-        array_like
+        numpy.array
             The First Point
     """
     pts = self.project_points((pt_3d,))
@@ -117,7 +118,7 @@ class ProjectiveCamera(object):
 
         Returns
         -------
-        array_like
+        numpy.array
             Two Dimensional Vectors
     """
     num_vecs = len(vecs_3d)
@@ -152,9 +153,10 @@ class ProjectiveCamera(object):
         ----------
         pt_2d : array_like
             Two Dimensional Point
-        plane :
+        plane : array_like
             The 3-D Plane
         return_homogeneous : bool
+            If True it returns a homogenous point
 
         Returns
         -------
@@ -177,14 +179,13 @@ class ProjectiveCamera(object):
     return point
 
   def backproject_points_plane(self, pts_2d, plane, return_homogeneous=False):
-    """ backproject a list of points onto a 3-d plane mostly here to mimic
-        interface to PinholeCamera
+    """ backproject points onto a 3-d plane to mimic interface to PinholeCamera
 
         Parameters
         ----------
         pt_2d : array_like
             Two Dimensional Point
-        plane :
+        plane : array_like
             The 3-D Plane
         return_homogeneous : bool
 
@@ -202,9 +203,12 @@ class ProjectiveCamera(object):
 
         Parameters
         ----------
-        plane_origin :
-        plane_x :
-        plane_y :
+        plane_origin : array_like
+          The Plane Origin
+        plane_x : array_like
+          Plane x
+        plane_y : array_like
+          Plane y
 
         Returns
         -------
@@ -244,9 +248,12 @@ class ProjectiveCamera(object):
 
         Parameters
         ----------
-        plane_origin :
-        plane_x :
-        plane_y :
+        plane_origin : array_like
+          The Plane Origin
+        plane_x : array_like
+          Plane x
+        plane_y : array_like
+          Plane y
 
         Returns
         -------

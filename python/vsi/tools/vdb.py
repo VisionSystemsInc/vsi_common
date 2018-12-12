@@ -124,8 +124,6 @@ class PostMortemHook(object):
   def dbstop_if_error(cls, interactive=False, *args, **kwargs):
     ''' Parameters
         ----------
-        cls : array_like
-            Colors
         interactive : bool
             True if interactive. False if not.
         *args
@@ -247,11 +245,14 @@ def dbstop_exception_hook(type, value, tb,
                           interactive=False):
     ''' Parameters
         ----------
-        type :
-        value :
-        tb : str
-            The Traceback
-        post_mortem :
+        type : class
+          sys.excepthook variable
+        value : object
+          sys.excepthook variable
+        tb : object
+          sys.excepthook variable
+        post_mortem : func
+          The Post Mortem Handler Function
         Interactive : bool
             True if interactive. False if not.
     '''
@@ -299,23 +300,7 @@ def break_pool_worker():
   import multiprocessing.pool
 
   def worker(inqueue, outqueue, initializer=None, initargs=(), maxtasks=None):
-    '''
-    Parameters
-    ----------
-    inqueue :
-    outqueue :
-    initializer :
-    initargs : array_like
-        The Initial Argurments
-    maxtasks : int
-        The Maximum Number of Tasks
 
-    Raises
-    ------
-    EOFError
-    IOError
-    Exception
-    '''
     assert maxtasks is None or (type(maxtasks) == int and maxtasks > 0)
     put = outqueue.put
     get = inqueue.get

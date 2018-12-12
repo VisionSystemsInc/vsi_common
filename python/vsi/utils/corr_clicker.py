@@ -12,7 +12,7 @@ class CorrClicker:
   """ keep track for correspondences """
 
   def __init__(self, img_filenames):
-    """ constructor """
+
     if len(img_filenames) == 0:
       raise Exception('At least one image file needed')
     self.img_filenames = img_filenames
@@ -23,9 +23,16 @@ class CorrClicker:
     self.key_cid = self.fig.canvas.mpl_connect('key_press_event', self.onkey)
     self.img_idx = None
     self.pt_idx = None
+    """ constructor """
 
   def onkey(self, event):
-    """ handle keyboard event """
+    """ handle keyboard event
+
+        Parameters
+        ----------
+        event :
+          The Keyboard Event
+    """
     if event.key == 'left' and self.img_idx > 0:
       self.img_idx -= 1
     elif event.key == 'right' and self.img_idx < len(self.img_filenames) - 1:
@@ -45,7 +52,13 @@ class CorrClicker:
     self.choose_corr()
 
   def onclick(self, event):
-    """ handle mouse click """
+    """ handle mouse click
+
+        Parameters
+        ----------
+        event :
+          The Mouse Click
+    """
     if self.pt_idx is not None:
       if event.button == 1:
         pt = np.array((event.xdata, event.ydata))
@@ -60,7 +73,13 @@ class CorrClicker:
 
 
   def write_corrs(self, filename):
-    """ save the corresppondences out to file """
+    """ save the correspondences out to file
+
+        Parameters
+        ----------
+        filename : str
+          The Filename of the Correspondences.
+    """
     try:
       fd = open(filename,'w')
     except IOError:
@@ -97,7 +116,7 @@ class CorrClicker:
     plt.draw()
 
   def choose_corr(self):
-    """ choose a corresponence point """
+    """ choose a correspondence point """
     if self.pt_idx is not None and self.pt_idx < 0:
       self.pt_idx = len(self.points[0])
       for img_pts in self.points:
@@ -119,7 +138,18 @@ class CorrClicker:
 
 
 def read_corrs(filename):
-  """ read the corresppondences from a file """
+  """ read the correspondences from a file
+
+      Parameters
+      ----------
+      filename : str
+        The Filename being read from.
+
+      Returns
+      -------
+      array_like
+        The points
+  """
   with open(filename,'r') as fd:
 
     tokgen = io_utils.read_token(fd, ignore_char='#')

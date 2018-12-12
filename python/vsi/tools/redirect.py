@@ -72,6 +72,8 @@ class FileRedirect(object):
       of course it would be better to call __exit__ in that case.
   '''
   def __init__(self, outputs=[]):
+    
+    self.outputs = outputs
     ''' Create a FileRedirect
 
         Parameters
@@ -86,7 +88,6 @@ class FileRedirect(object):
         list
             list of outputs objects.
     '''
-    self.outputs = outputs
 
   def __enter__(self):
     ''' Create the pipes and monitoring threads '''
@@ -124,6 +125,10 @@ class FileRedirect(object):
       tid.join()
 
   def __bleed(self, streamIndex):
+
+    rid = self.rids[streamIndex]
+    wid = self.wids[streamIndex]
+    output = self.outputs[streamIndex]
     ''' Function to read all the data and write to output
 
         Automactically closes read pipe when done. Can only be stopped by
@@ -134,10 +139,6 @@ class FileRedirect(object):
         streamIndex : int
             The Stream Index
     '''
-    rid = self.rids[streamIndex]
-    wid = self.wids[streamIndex]
-    output = self.outputs[streamIndex]
-
     #do-while
     chunk = True
     while chunk: #while rid isn't closed
@@ -291,41 +292,35 @@ class Redirect(RedirectBase): #Version 2
 
     ''' Create the Redirect object
 
-        Arguments
-        ---------
+        Parameters
+        ----------
         file_like : file_like, optional
             File Output Argument. All File output arguments should use File
             like Python objects that have a .write call. Many of the arguments
             override the other argument for ease of use
-
-        Parameters
-        ----------
-        all : str
+        all : str, optional
             Output stdout_c, stderr_c, stdout_py and stderr_py to the all file.
-        stdout : str
+        stdout : str, optional
             Output stdout_c and stdout_py to the stdout file.
-        stderr : str
+        stderr : str, optional
             Output stderr_c and stderr_py to the stderr file.
-        c : str
+        c : str, optional
             Output stdout_c and stderr_c to the c file.
-        py : str
+        py : str, optional
             Output stdout_py and stderr_py to the py file.
-        stdout_c : str
-        stderr_c : str
-        stdout_py : str
-        stderr_py : str
+        stdout_c : str, optional
+        stderr_c : str, optional
+        stdout_py : file_like, optional
+        stderr_py : file_like, optional
             Output to each individual stream for maximum customization.
-
-        Other Optional Arguments
-        ------------------------
-        stdout_c_fd : int
-        stderr_c_fd : int
+        stdout_c_fd : int, optional
+        stderr_c_fd : int, optional
              The default file number used for stdout (1) and stderr (2). There
              should be no reason to override this
-        stdout_module : module
-        stderr_module : module
-        stdout_name : str
-        stderr_name : str
+        stdout_py_module : module, optional
+        stderr_py_module : module, optional
+        stdout_py_name : str, optional
+        stderr_py_name : str, optional
             Because of the nature of python, in order to replace and restore
             the python object, the module and name of attribute must be passed
             through, where name is a string and module and the acutal module.
@@ -671,7 +666,7 @@ class Capture(RedirectBase): #version 1
         ----------
         fid : str
             The File Handle
-        output : int
+        bufferIndex : int
             The Buffer Index
     '''
 
