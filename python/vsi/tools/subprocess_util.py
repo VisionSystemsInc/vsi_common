@@ -26,7 +26,7 @@ class PopenBg(subprocess.Popen):
             Variable length argument list.
         **kwargs
             Arbitrary keyword arguments.
-        '''
+    '''
 
 if __name__ == '__main__':
   import sys

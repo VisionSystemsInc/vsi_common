@@ -22,7 +22,7 @@ class WmicProperty(object):
         raise Exception('Unknown type %s' % self.type)
     else:
       self.value = None
-  
+
   def __str__(self):
     s = '%s=%s' % (self.name, self.value)
     return s
@@ -30,29 +30,29 @@ class WmicProperty(object):
 class Wmic(object):
   def __init__(self, path):
     self.path = path
-    
+
   def help(self):
     pid = Popen(['wmic', 'path', self.path, '/?'], stdout=PIPE, stderr=PIPE)
     (o,e) = pid.communicate()
     pid.wait()
     return o
-  
+
   def getProperties(self):
     pid = Popen(['wmic', 'path', self.path, 'GET', '/?'], stdout=PIPE, stderr=PIPE)
     (o,e) = pid.communicate()
     pid.wait()
-    
+
     o = o.split('\n')
     preheader = next(x for x in range(len(o)) if o[x].startswith('The following properties are available:'))
 
-    props = []    
+    props = [] 
     for line in o[preheader+3:]:
       line = map(lambda x:x.strip(), line.split())
       if len(line)<3:
         break
       props.append(WmicProperty(name=line[0], type=line[1], perm=line[2]))
     return props
-  
+
   @staticmethod
   def getPaths():
     ''' Get all possible paths'''
@@ -90,14 +90,14 @@ class Pgrep(object):
 
   def parse(self):
     self.pids = []
-    etree = ElementTree.fromstring(self.rawout) 
+    etree = ElementTree.fromstring(self.rawout)
     results = etree.find('RESULTS')
     if results is None:
       return
     cim = results.find('CIM')
     if cim is None:
       return
-      
+
     for instance in cim:
       pid = {}
       for property in instance:
@@ -106,10 +106,10 @@ class Pgrep(object):
           value = value[0].text
         else:
           value = None
-        
+
         key = property.attrib['NAME'].lower()
         ty = property.attrib['TYPE']
-        
+
         if value is None:
           pid[key] = None
         else:

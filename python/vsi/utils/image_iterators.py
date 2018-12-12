@@ -70,7 +70,7 @@ class IterateOverWindows(object):
     '''
 
     assert pixels_per_cell[0] % 2 == 1 and pixels_per_cell[1] % 2 == 1, \
-        'provide an odd number for pixels_per_cell so the window can be easily centered'
+        'provide an odd number for pixels_per_cell to easily center the window'
     self.pixels_per_cell = tuple(pixels_per_cell)
     self.pixel_stride = self.pixels_per_cell if pixel_stride is None else pixel_stride
     self.image = image
@@ -116,10 +116,11 @@ class IterateOverWindows(object):
 
     Returns
     -------
-    chip : pixels within the current window. Points outside the boundaries of the input
-         are filled according to the given mode.
+    chip : pixels within the current window. Points outside the boundaries of
+    the input are filled according to the given mode.
     mask : the binary mask of the window within the chip
-    bbox : the inclusive extents of the chip (which may exceed the bounds of the image)
+    bbox : the inclusive extents of the chip (which may exceed the bounds of
+    the image)
 
     MODIFICATIONS
     sgr : turned into a class
@@ -242,7 +243,8 @@ class IterateOverSuperpixels(object):
 
     Returns
     -------
-    chip : defined by the escribed bounding box of the segment. (view into image)
+    chip : defined by the escribed bounding box of the segment. (view into
+    image)
     mask : the binary mask of the segment within the chip
     bbox : the inclusive extents of the chip within the original image
 

@@ -84,9 +84,9 @@ def is_string_like(obj):
 def get_file(fid, mode='rb'):
   ''' Helper function to take either a filename or fid
 
-  Arguments
-  ---------
-  fid : str or file_like
+  Parameters
+  ----------
+  fid : str
       File object or filename
   mode : str, optional
       Optional, file mode to open file if filename supplied
@@ -137,7 +137,7 @@ def update_wrapper_class(wrapper, wrapped):
   ----------
   wrapper : class
       The class to be updated
-  wrapped :
+  wrapped : class
       The original function/class
 
   Returns
@@ -298,7 +298,8 @@ class _BasicDecorator(object):
 class _BasicArgumentDecorator(object):
   ''' A basic decorator class that takes arguments
 
-      It's best to define __init__ with a proper signature when inheriting'''
+      It's best to define __init__ with a proper signature when inheriting
+  '''
 
   def __call__(self, fun):
     ''' No need to rewrite this
@@ -306,6 +307,7 @@ class _BasicArgumentDecorator(object):
         Parameters
         ----------
         fun : func
+          The Function
     '''
 
     @wraps(fun)
@@ -367,7 +369,7 @@ class BasicDecorator(_BasicArgumentDecorator):
 
           test1(11,22)
           test2(10,2)
-      '''
+  '''
 
 class WarningDecorator(BasicDecorator):
   def __init__(self, message='Warning', output_stream=sys.stderr):
@@ -469,7 +471,8 @@ def args_to_kwargs(function, args=tuple(), kwargs={}):
      methods
 
      Based on:
-     https://github.com/merriam/dectools/blob/master/dectools/dectools.py'''
+     https://github.com/merriam/dectools/blob/master/dectools/dectools.py
+  '''
 
   return args_to_kwargs_unbound(function, None, args, kwargs)
 

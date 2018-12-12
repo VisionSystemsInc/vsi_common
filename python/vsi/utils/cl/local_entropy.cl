@@ -16,7 +16,7 @@ __kernel void local_entropy(__global const float *img,
     }
 
     // make sure we have enough room to compute a window around the current pixel
-    if ( (gid_x < window_radius) || (gid_x >= (img_nx - window_radius)) || 
+    if ( (gid_x < window_radius) || (gid_x >= (img_nx - window_radius)) ||
          (gid_y < window_radius) || (gid_y >= (img_ny - window_radius)) ) {
         result[idx] = NAN;
         return;

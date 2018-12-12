@@ -79,7 +79,8 @@ def dbstop_if_error(interactive=False, colors=None):
       ipython does too much, just don't try that. Unless someone adds a way to
       override ipython's override.
   colors : str
-      Default None. Set ipython debugger color scheme'''
+      Default None. Set ipython debugger color scheme
+  '''
   VdbPostMortemHook.dbstop_if_error(interactive=interactive, colors=colors)
 
 class DbStopIfError(vdb.DbStopIfErrorGeneric):
@@ -109,7 +110,8 @@ def runpdb(lines, debugger=None):
       debugger object, you can optionally pass it in as the second argument
       if you want to call runpdb multiple times. If you do not, a new
       debugger object is created, and all the "memory" of the last debugger
-      is lost, such as breakpoints, etc...'''
+      is lost, such as breakpoints, etc...
+  '''
 
   try:
     lines + ' ' #Is str like
@@ -142,7 +144,8 @@ def get_colors(colors=None):
 def set_trace(frame=None, colors=None, depth=None):
   ''' Helper function, like pdb.set_trace
 
-  set colors = "NoColor", "Linux", or "LightBG"  '''
+  set colors = "NoColor", "Linux", or "LightBG"
+  '''
   colors=get_colors(colors)
   frame = vdb.find_frame(frame, depth if depth is not None else 2 if frame is None else 0)
   Tracer(skipInput=False, colors=colors).debugger.set_trace(frame)

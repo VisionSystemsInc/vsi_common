@@ -16,7 +16,7 @@ class WatchDog(object):
         ------
         Exception
             When there is no usual signal found.
-        '''
+    '''
     if hasattr(signal, 'CTRL_BREAK_EVENT'):
       signal.signal(signal.CTRL_BREAK_EVENT, self.reset)
     elif hasattr(signal, 'SIGUSR1'):
@@ -31,9 +31,9 @@ class WatchDog(object):
         ----------
         signum : int
             The Signal Number
-        frame : str
+        frame : frame
             The Frame
-        '''
+    '''
     self.watch = time.time() - 1
 
   def reset(self, signum, frame):
@@ -41,9 +41,9 @@ class WatchDog(object):
         ----------
         signum : int
             The Signal Number
-        frame : str
+        frame : frame
             The Frame
-        '''
+    '''
     self.watch = time.time() + self.timeout
 
   def start(self, poll_interval=1):
@@ -51,7 +51,7 @@ class WatchDog(object):
         ----------
         poll_interval : int
             The Poll Interval
-        '''
+    '''
     self.watch = time.time() + self.timeout
     while time.time() < self.watch:
       time.sleep(poll_interval)

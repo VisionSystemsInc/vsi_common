@@ -2,7 +2,8 @@
 '''
 @created: Dec, 2014
 @author: ydong & srichardson
-Script to convert a scene.xml file to a scene.kml file, which can be loaded in Google Earth
+Script to convert a scene.xml file to a scene.kml file, which can be loaded in
+Google Earth
 '''
 
 import sys, os.path

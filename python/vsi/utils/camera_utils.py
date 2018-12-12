@@ -24,7 +24,7 @@ def construct_K(image_size, focal_len=None, fov_degrees=None, fov_radians=None):
       Notes
       -----
       The fov is assumed to be measured horizontally
-      """
+  """
   if not np.sum([focal_len is not None, fov_degrees is not None, fov_radians is not None]) == 1:
     raise Exception('Specify exactly one of [focal_len, fov_degrees, fov_radians]')
 
@@ -51,7 +51,8 @@ class ProjectiveCamera(object):
         Parameters
         ----------
         fd : file_like
-        """
+          The output file
+  """
     # write 3x4 projection matrix
     for row in self.P:
       fd.write('%f %f %f %f\n' % (row[0],row[1],row[2],row[3]))
@@ -62,7 +63,8 @@ class ProjectiveCamera(object):
         Parameters
         ----------
         filename : str
-            The File Name of the Projection Matrix"""
+            The File Name of the Projection Matrix
+    """
     with open(filename, 'w') as fd:
       self.as_P(fd)
 
@@ -76,9 +78,9 @@ class ProjectiveCamera(object):
 
         Returns
         -------
-        array_like
+        numpy.array
             A 2 Dimensional array of coordinates.
-        """
+    """
     num_pts = len(pts_3d)
     # create 3xN matrix from set of 3d points
     pts_3d_m = np.array(pts_3d).transpose()
@@ -99,9 +101,9 @@ class ProjectiveCamera(object):
 
         Returns
         -------
-        array_like
+        numpy.array
             The First Point
-        """
+    """
     pts = self.project_points((pt_3d,))
     return pts[0]
 
@@ -116,9 +118,9 @@ class ProjectiveCamera(object):
 
         Returns
         -------
-        array_like
+        numpy.array
             Two Dimensional Vectors
-        """
+    """
     num_vecs = len(vecs_3d)
     # create 3xN matrix from set of 3d vectors
     vecs_3d_m = np.array(vecs_3d).transpose()
@@ -140,7 +142,7 @@ class ProjectiveCamera(object):
         -------
         array_like
             The First Point
-        """
+    """
     pts = self.project_vectors((vecs_3d,))
     return pts[0]
 
@@ -151,15 +153,16 @@ class ProjectiveCamera(object):
         ----------
         pt_2d : array_like
             Two Dimensional Point
-        plane :
+        plane : array_like
             The 3-D Plane
         return_homogeneous : bool
+            If True it returns a homogenous point
 
         Returns
         -------
         array_like
             The Point
-        """
+    """
     A = np.zeros((3,4))
     A[0,:] = self.P[0,:] - self.P[2,:]*pt_2d[0]
     A[1,:] = self.P[1,:] - self.P[2,:]*pt_2d[1]
@@ -176,14 +179,13 @@ class ProjectiveCamera(object):
     return point
 
   def backproject_points_plane(self, pts_2d, plane, return_homogeneous=False):
-    """ backproject a list of points onto a 3-d plane mostly here to mimic
-        interface to PinholeCamera
+    """ backproject points onto a 3-d plane to mimic interface to PinholeCamera
 
         Parameters
         ----------
         pt_2d : array_like
             Two Dimensional Point
-        plane :
+        plane : array_like
             The 3-D Plane
         return_homogeneous : bool
 
@@ -191,7 +193,7 @@ class ProjectiveCamera(object):
         -------
         array_like
             The 3D Points
-        """
+    """
     pts_3d = [self.backproject_point_plane(p, plane, return_homogeneous) for p in pts_2d]
     return pts_3d
 
@@ -201,15 +203,18 @@ class ProjectiveCamera(object):
 
         Parameters
         ----------
-        plane_origin :
-        plane_x :
-        plane_y :
+        plane_origin : array_like
+          The Plane Origin
+        plane_x : array_like
+          Plane x
+        plane_y : array_like
+          Plane y
 
         Returns
         -------
         array_like
             The Plane Image Coordinates
-        """
+    """
     # normalize plane_x and plane_y to unit vectors
     plane_xlen = np.sqrt(np.dot(plane_x, plane_x))
     plane_ylen = np.sqrt(np.dot(plane_y, plane_y))
@@ -243,16 +248,19 @@ class ProjectiveCamera(object):
 
         Parameters
         ----------
-        plane_origin :
-        plane_x :
-        plane_y :
+        plane_origin : array_like
+          The Plane Origin
+        plane_x : array_like
+          Plane x
+        plane_y : array_like
+          Plane y
 
         Returns
         -------
         array_like
             The Plane Image Coordinates
 
-        """
+    """
     #plane_xlen = np.sqrt(np.dot(plane_x, plane_x))
     #plane_ylen = np.sqrt(np.dot(plane_y, plane_y))
     #plane_xu = plane_x / plane_xlen
@@ -281,7 +289,7 @@ class PinholeCamera(ProjectiveCamera):
   """ Models a pinhole camera, i.e. one with a single center of projection and
       no lens distortion
 
-      """
+  """
   def __init__(self, K, R, T):
     self.K = K
     self.R = R
@@ -291,7 +299,7 @@ class PinholeCamera(ProjectiveCamera):
         K : array_like
         R : array_like
         T : array_like
-        """
+    """
     # compute projection matrix
     P = np.dot( K, np.hstack((R, T.reshape(3, 1))) )
     super(PinholeCamera, self).__init__(P)
@@ -314,7 +322,7 @@ class PinholeCamera(ProjectiveCamera):
         -------
         list
             The Unit Rays List
-        """
+    """
     N = len(pts_2d)
     pts_2d_h_np = np.hstack((np.array(pts_2d), np.ones((N,1))))  # create an Nx3 numpy array
     rays_np = np.dot(self.KRinv, pts_2d_h_np.T)
@@ -336,7 +344,7 @@ class PinholeCamera(ProjectiveCamera):
         -------
         list
             The Viewing Ray
-        """
+    """
     pts = [pt_2d,]
     rays = self.viewing_rays(pts)
     return rays[0]
@@ -355,7 +363,7 @@ class PinholeCamera(ProjectiveCamera):
         -------
         array_like
             The 3D Points
-        """
+    """
     unit_rays = np.array(self.viewing_rays(pts_2d)).T
     depths = -np.dot(plane, np.append(self.center,1)) / np.dot(plane[0:3], unit_rays)
     pts_3d_np = self.center.reshape((3,1)) + unit_rays * depths
@@ -377,7 +385,7 @@ class PinholeCamera(ProjectiveCamera):
         -------
         array_like
             The First Point
-        """
+    """
     pts = self.backproject_points_plane((pt_2d,), plane)
     return pts[0]
 
@@ -400,7 +408,7 @@ class PinholeCamera(ProjectiveCamera):
         -------
         array_like
             An array of 3D Points
-        """
+    """
     N = len(depths)
     if not len(pts_2d) == len(depths):
       raise Exception('number of points %d != number of depths %d' % (len(pts_2d),len(depths)))
@@ -422,7 +430,7 @@ class PinholeCamera(ProjectiveCamera):
         -------
         array_like
             The x, y, and z coordinates of the depth
-        """
+    """
     x,y = np.meshgrid(np.arange(dmap.shape[1]), np.arange(dmap.shape[0]))
     pts_2d_h_np = np.vstack((x.flat, y.flat, np.ones_like(dmap).flat))
     rays_np = np.dot(self.KRinv, pts_2d_h_np)
@@ -448,7 +456,7 @@ class PinholeCamera(ProjectiveCamera):
         -------
         array_like
             The First Point
-        """
+    """
     pts = self.backproject_points((pt_2d,), (depth,))
     return pts[0]
 
@@ -468,7 +476,7 @@ class PinholeCamera(ProjectiveCamera):
         -------
         array_like
             A New Camera
-        """
+    """
     Knew = self.K * scale_factor
     Knew[2,2] = self.K[2,2]
     return PinholeCamera(Knew, self.R, self.T)
@@ -496,7 +504,7 @@ class PinholeCamera(ProjectiveCamera):
         ----------
         fd : file_like
             The file containing the K,R, and T matrices.
-        """
+    """
     # write intrinsics K matrix
     for row in self.K:
       fd.write('%f %f %f\n' % (row[0],row[1],row[2]))
@@ -516,7 +524,7 @@ class PinholeCamera(ProjectiveCamera):
         ----------
         filename : str
             The File Name
-        """
+    """
     with open(filename, 'w') as fd:
       self.as_KRT(fd)
 
@@ -540,7 +548,7 @@ def triangulate_point(cameras, projections, return_homogeneous=True):
       ------
       Exception
           When the number of cameras and 2-d projections are not the same.
-      """
+  """
   num_obs = len(cameras)
   if len(projections) != num_obs:
     raise Exception('Expecting same number of cameras and 2-d projections')

@@ -57,7 +57,7 @@ with Try(ImportError):
       raise Exception('Unimplemented. Used PilReader')
 
     def endian(self):
-      return self.object.byteorder    
+      return self.object.byteorder
 
     def bands(self, segment=0):
       if len(self.object.pages[segment].shape)>2:
@@ -80,7 +80,7 @@ with Try(ImportError):
       ''' ycbcr resampling is missing in both tifffile and PIL '''
       from StringIO import StringIO
       from PIL import JpegImagePlugin
-      
+
       return JpegImagePlugin.JpegImageFile(StringIO(tables + encoded)).tobytes()
     tifffile.TIFF_DECOMPESSORS['jpeg'] = decode_jpeg
     tifffile.decodejpg = decode_jpeg
@@ -99,7 +99,7 @@ with Try(ImportError):
           tifargs['bigtiff'] = True
 
       self.object = tifffile.TiffWriter(filename, **tifargs)
-      
+
       self.object.save(self.array, **kwargs)
 
   TifffileWriter.extensions=['tif', 'tiff']
@@ -139,7 +139,7 @@ with Try(ImportError):
       return mode
 
     def endian(self, segment=0):
-      return self._get_mode_info(segment)['endian']    
+      return self._get_mode_info(segment)['endian']
 
     def raster(self, segment=0):
       self.object.seek(segment)
@@ -166,14 +166,14 @@ with Try(ImportError):
         return band_names
       except KeyError:
         return ('P',) #Panchromatic
-    
+
 
     def shape(self, segment=0):
       #shape is height, width, bands
       self.object.seek(segment)
       shape = self.object.size
       return (shape[1], shape[0])+shape[2:]
-    
+
   registered_readers.register(PilReader)
 
   class PilWriter(Writer):
@@ -220,7 +220,7 @@ with Try(ImportError):
       self._change_segment(segment)
       band = self.object.GetRasterBand(band)
       scanline = band.ReadRaster( 0, 0, band.XSize, 1, \
-                                     band.XSize, 1, GDT_Float32 )      
+                                     band.XSize, 1, GDT_Float32 )
       import struct
       tuple_of_floats = struct.unpack('f' * b2.XSize, scanline)
       #(use a numpy array instead of unpack)
@@ -257,10 +257,10 @@ with Try(ImportError):
           driver = gdal.GetDriverByName('GTiff')
         else:
           raise Exception('Unkown extension. Can not determine driver')
-      
+
       bands = self.array.shape[2] if len(self.array.shape)>2 else 1
 
-      self.object = driver.Create(filename, self.array.shape[1], 
+      self.object = driver.Create(filename, self.array.shape[1],
           self.array.shape[0], bands, GdalWriter.gdal_array_types[np.dtype(self.dtype)])
 
       if bands==1:
@@ -273,7 +273,7 @@ with Try(ImportError):
       #Need to be deleted to actually save
 
       # dst_ds.SetGeoTransform( [ 444720, 30, 0, 3751320, 0, -30 ] )
-      
+
       # srs = osr.SpatialReference()
       # srs.SetUTM( 11, 1 )
       # srs.SetWellKnownGeogCS( 'NAD27' )

@@ -136,7 +136,7 @@ _casecache = {}
 _nocasecache = {}
 
 def fnmatch_filter(names, pat, casesensitive):
-  """Return the subset of the list NAMES that match PAT"""
+  # Return the subset of the list NAMES that match PAT
   result=[]
 
   if casesensitive:

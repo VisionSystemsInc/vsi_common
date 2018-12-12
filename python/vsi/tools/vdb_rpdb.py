@@ -32,7 +32,8 @@ def dbstop_if_error(interactive=False, ip=DEFAULT_IP, port=DEFAULT_PORT):
       ip : str
           Default 127.0.0.1 - Ip to bind to for remote debugger
       port : int
-        Default 4444 - Port to bind to for remote debugger'''
+        Default 4444 - Port to bind to for remote debugger
+  '''
 
   RpdbPostMortemHook.dbstop_if_error(interactive=interactive,
                                      ip=ip, port=port)
@@ -51,7 +52,7 @@ def post_mortem(tb=None, ip=DEFAULT_IP, port=DEFAULT_PORT):
       ------
       ValueError
           Passes a valied traceback
-      '''
+  '''
   if tb is None:
     # sys.exc_info() returns (type, value, traceback) if an exception is
     # being handled, otherwise it returns None
@@ -85,7 +86,7 @@ def set_trace(frame=None, depth=None, ip=DEFAULT_IP, port=DEFAULT_PORT):
           The IP Address
       port : int
           The Port
-      '''
+  '''
   frame = vdb.find_frame(frame, depth if depth is not None else 2 if frame is None else 0)
 
   try:
@@ -116,7 +117,7 @@ def attach(pid, ip=DEFAULT_IP, port=DEFAULT_PORT):
           The IP Address
       port : str
           The Port
-      '''
+  '''
   vdb.attach(pid)
   assert(False)
 
@@ -127,5 +128,5 @@ def set_attach(ip=DEFAULT_IP, port=DEFAULT_PORT):
           The IP Address
       port : str
           The Port
-      '''
+  '''
   vdb.set_attach(db_cmd=partial(set_trace, ip=ip, port=port))

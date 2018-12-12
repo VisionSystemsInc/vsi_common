@@ -176,7 +176,7 @@ def plot_camera(cam, img_dims=(1280,720), axis=None, axis_order=(0,1,2), img_pla
   plot_vector(c3d_np, axis, axis_order, 'k-')
   # plot connecting lines from the center to the image plane
   for x in corners_3d:
-    plot_vector(np.array((cam.center, x)).T, axis, axis_order, 'k-') 
+    plot_vector(np.array((cam.center, x)).T, axis, axis_order, 'k-')
 
 
 class OrthoAnd3DPlot:

@@ -148,7 +148,9 @@ def sample_point(image, pt):
 
 
 def sample_patch(image, corners, patch_size, check_bounds=True):
-  """ return an Image of size patch_size, or None if the patch is outside image bounds """
+  """ return an Image of size patch_size, or None if the patch is outside image
+  bounds
+  """
   if check_bounds:
     if any([c[0] < 0 or c[0] >= image.size[0] or c[1] < 0 or c[1] >= image.size[1] for c in corners]):
       return None
@@ -163,10 +165,12 @@ def sample_patch(image, corners, patch_size, check_bounds=True):
 
 def sample_plane_inverse(planar_patch, plane_origin, plane_x, plane_y, img_shape, camera):
   """ return the projection of a planar patch into the image
-    planar_patch: The planar patch to project into the image (as a 2-d numpy array)
+    planar_patch: The planar patch to project into the image (as a 2-d numpy
+    array)
     plane_origin: 3-d point corresponding to the upper left of the patch
     plane_x: 3-d vector from origin to extent of patch in the "x" direction
-    plane_y: 3-d vector from origin to extent of patch in the "y" direction: assumed perpendicular to plane_x
+    plane_y: 3-d vector from origin to extent of patch in the "y" direction:
+    assumed perpendicular to plane_x
     img_shape: the dimensions (rows, cols) of the image to project into
     camera: a PinholeCamera
   """
@@ -180,10 +184,12 @@ def sample_plane_inverse(planar_patch, plane_origin, plane_x, plane_y, img_shape
 
 
 def sample_plane(image, camera, plane_origin, plane_x, plane_y, patch_shape):
-  """ return a sampled patch based on the 3-d plane defined by plane_origin, plane_x, and plane_y
+  """ return a sampled patch based on the 3-d plane defined by plane_origin,
+    plane_x, and plane_y
     plane_origin: 3-d point corresponding to the upper left of the patch
     plane_x: 3-d vector from origin to extent of patch in the "x" direction
-    plane_y: 3-d vector from origin to extent of patch in the "y" direction: assumed perpendicular to plane_x
+    plane_y: 3-d vector from origin to extent of patch in the "y" direction:
+    assumed perpendicular to plane_x
   """
   plane_xlen = np.linalg.norm(plane_x)
   plane_ylen = np.linalg.norm(plane_y)
@@ -196,8 +202,9 @@ def sample_plane(image, camera, plane_origin, plane_x, plane_y, patch_shape):
 
 
 def sample_patch_projective(image, inv_xform_3x3, patch_shape):
-  """ return a warped image as a numpy array with dtype float64 of size patch_size.
-    if input image is not already of type float64, it will be converted """
+  """ return a warped image as a numpy array with dtype float64 of size
+  patch_size. if input image is not already of type float64, it will be converted
+  """
   P = skimage.transform.ProjectiveTransform(inv_xform_3x3)
   # skimage clips values to range [0,1] for floating point images.  do scale and unscale here.
   do_scale = False

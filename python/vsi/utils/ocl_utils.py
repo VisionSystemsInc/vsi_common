@@ -3,7 +3,8 @@ import pyopencl as cl
 
 
 def init_ocl(device_string=None, platform_idx=0, device_idx=0, verbose=False):
-  """ create an OpenCL context using a device whose name matches device_string """
+  """ create an OpenCL context using a device whose name matches device_string
+  """
   platforms = cl.get_platforms()
 
   if verbose:

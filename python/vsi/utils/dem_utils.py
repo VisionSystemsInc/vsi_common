@@ -7,7 +7,30 @@ import struct
 
 
 def load_srtm(directory, lat_min, lon_min, lat_max, lon_max):
-  """ load a SRTM DEM file with the given lat,lon bounds from directory """
+  """ load a SRTM DEM file with the given lat,lon bounds from directory
+
+      Parameters
+      ----------
+      directory : str
+        The Directory
+      lat_min : float
+        The minimum Lattitude
+      lon_min : float
+        The minimum longitude
+      lat_max : float
+        The maximum latitude
+      lon_max : float
+        The maximum longitude
+
+      Returns
+      -------
+      int
+        The Longitude Values
+      int
+        The Latitude Values
+      array_like
+        The Elevation Geoid
+  """
 
   NS = 'N'
   EW = 'E'
