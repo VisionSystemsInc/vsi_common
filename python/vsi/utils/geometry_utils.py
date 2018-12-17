@@ -190,6 +190,11 @@ def axis_from_string(axis_string):
       -------
       array_like
         The Axis
+
+      Raises
+      ------
+      ValueError
+        Raised when something other than X,Y, or Z gets passed.
   """
   if axis_string == 'X':
     return np.array((1,0,0))
@@ -198,7 +203,7 @@ def axis_from_string(axis_string):
   elif axis_string == 'Z':
     return np.array((0,0,1))
   else:
-    raise Exception('Expecting one of [X,Y,Z], got ' + axis_string)
+    raise ValueError('Expecting one of [X,Y,Z], got ' + axis_string)
 
 
 def Euler_angles_to_quaternion(theta1, theta2, theta3, order='XYZ'):
@@ -219,9 +224,14 @@ def Euler_angles_to_quaternion(theta1, theta2, theta3, order='XYZ'):
       -------
       array_like
         The Quaternions
+
+      Raises
+      ------
+      ValueError
+        Invalid order string
   """
   if not axis_order_is_valid(order):
-    raise Exception('Invalid order string: ' + str(order))
+    raise ValueError('Invalid order string: ' + str(order))
 
   e1 = axis_from_string(order[0])
   e2 = axis_from_string(order[1])
@@ -323,7 +333,7 @@ def quaternion_to_matrix(q):
 
   return R
 
-def Euler_angles_to_matrix(angles, order=(0,1,2), repeat=False, parity_even=True, from_S=True):
+def Euler_angles_to_matrix(angles, order=(0,1,2)):
   """ Convert a rotation matrix to Euler angles (X,Y,Z) order
 
       Parameters
@@ -332,19 +342,17 @@ def Euler_angles_to_matrix(angles, order=(0,1,2), repeat=False, parity_even=True
         The Euler Angles
       order : array_like
         The Order
-      repeat : bool
-      parity_even : bool
-        Even Parity, else negate the angles. Default is True
-      from_S : bool
-
+      
       Returns
       -------
       array_like
         The Euler Angles
 
       From Graphics Gems tog.acm.org/resources/GraphicsGems/gemsiv/euler_angle
-      dec: Not tested for anything other than default args!
   """
+  parity_even=True
+  from_S=True
+  repeat=False
   if not from_S:
     # swap angle order
     angles = (angles[2], angles[1], angles[0])
@@ -385,7 +393,7 @@ def Euler_angles_to_matrix(angles, order=(0,1,2), repeat=False, parity_even=True
   return M
 
 
-def matrix_to_Euler_angles(M, order=(0,1,2), repeat=False, parity_even=True, from_S=True):
+def matrix_to_Euler_angles(M, order=(0,1,2)):
   """ Convert a rotation matrix to Euler angles (X,Y,Z) order
 
       Parameters
@@ -393,10 +401,6 @@ def matrix_to_Euler_angles(M, order=(0,1,2), repeat=False, parity_even=True, fro
       M : array_like
         The Rotation Matrix
       order : array_like
-      repeat : bool
-      parity_even : bool
-        Even Parity, else negate the angles. Default is True
-      from_S : bool
 
       Returns
       -------
@@ -404,8 +408,11 @@ def matrix_to_Euler_angles(M, order=(0,1,2), repeat=False, parity_even=True, fro
         The Euler Angles
 
     From Graphics Gems tog.acm.org/resources/GraphicsGems/gemsiv/euler_angle
-    dec: Not tested for anything other than default args!
   """
+  parity_even=True
+  from_S=True
+  repeat=False
+
   i = order[0]
   j = order[1]
   k = order[2]
@@ -699,19 +706,24 @@ def unitize(v):
 def nonhomogeneous(pt_homg):
   """ convert from homogeneous coordinates to non-homogenous
 
-  Parameters
-  ----------
-  pt_homg : array_like
-    The Homogeneous Coordinates
+      Parameters
+      ----------
+      pt_homg : array_like
+        The Homogeneous Coordinates
 
-  Returns
-  -------
-  array_like
-    The Non-homogenous Coordinates
+      Returns
+      -------
+      array_like
+        The Non-homogenous Coordinates
+
+      Raises
+      ------
+      ValueError
+        Raised if an ideal point is passed
   """
   tolerance = 1e-6
   if abs(pt_homg[-1]) < tolerance:
-    raise Exception('Cannot convert ideal point to non-homogenous coordinates')
+    raise ValueError('Cannot convert ideal point to non-homogenous coordinates')
   return pt_homg[0:-1] / pt_homg[-1]
 
 
@@ -954,7 +966,7 @@ def compute_bounding_box(pts):
 
 def compute_transform_3d_plane_to_2d(plane_origin, plane_x, plane_y, nx, ny):
   """ compute a 3x3 perspective transform from a planar segment in 3-d to a 2-d
-    image.
+      image.
 
       Parameters
       ----------
@@ -994,7 +1006,8 @@ def sample_unit_sphere(N):
 
       Parameters
       ----------
-      N :
+      N : int
+        Number of points
 
       Returns
       -------
