@@ -7,7 +7,21 @@ import os
 
 
 def NCC_score_image(ocl_ctx, images_and_masks, window_radius):
-  """ compute a sliding NCC score based on a set of images with masks """
+  """ compute a sliding NCC score based on a set of images with masks
+  
+  Parameters
+  ----------
+  ocl_ctx :
+  images_and_masks : array_like
+      A set of images with masks
+  window_radius : float
+      The window radius
+
+  Returns
+  -------
+  numpy.array
+      The score image
+  """
 
   cl_queue = cl.CommandQueue(ocl_ctx)
 
@@ -47,6 +61,21 @@ def NCC_score_image(ocl_ctx, images_and_masks, window_radius):
 def sliding_NCC(ocl_ctx, img1, img2, window_radius):
   """ perform normalized cross-corellation on a window centered around every
   pixel
+
+  Parameters
+  ----------
+  ocl_ctx :
+  img1 : array_like
+      The first image
+  img2 : array_like
+      The second image
+  window_radius : float
+      The window radius
+
+  Returns
+  -------
+  numpy.array
+      The normalized cross-correllation image
   """
 
   cl_queue = cl.CommandQueue(ocl_ctx)
@@ -80,6 +109,21 @@ def sliding_NCC(ocl_ctx, img1, img2, window_radius):
 def sliding_SSD(ocl_ctx, img1, img2, window_radius):
   """ perform sum of squared differences on a window centered around every
   pixel
+
+  Parameters
+  ----------
+  ocl_ctx :
+  img1 : array_like
+      The first image
+  img2 : array_like
+      The second image
+  window_radius : float
+      The window radius
+
+  Returns
+  -------
+  numpy.array
+      The sum of squared differences image
   """
 
   cl_queue = cl.CommandQueue(ocl_ctx)
@@ -112,10 +156,35 @@ def sliding_SSD(ocl_ctx, img1, img2, window_radius):
 
 def score_rectified_row(ocl_ctx, img1, img2, window_radius, row, method='NCC'):
   """ compute a matrix containing score for pairs i,j of column coordinates
-    from corresponding rows in img1 and img2
-    method should be one of {'NCC','SSD'}
-    NCC: Normalized Cross Correlation of local patches
-    SSD: Sum of Squared Difference of local patches
+  from corresponding rows in img1 and img2
+
+  Parameters
+  ----------
+  ocl_ctx :
+  img1 : array_like
+      The first image
+  img2 : array_like
+      The second image
+  window_radius : float
+      The window radius
+  row : int
+      The row number
+  method : str, optional
+      method should be one of {'NCC','SSD'}
+        - NCC: Normalized Cross Correlation of local patches
+        - SSD: Sum of Squared Difference of local patches
+
+  Returns
+  -------
+  numpy.array
+      A matrix containing the score image
+
+  Raises
+  ------
+  Exception
+      When there are different number of rows in the images
+  Exception
+      When there is an unrecognized method string. Expecting 'NCC' or 'SSD'
   """
   cl_queue = cl.CommandQueue(ocl_ctx)
 
@@ -160,7 +229,21 @@ def score_rectified_row(ocl_ctx, img1, img2, window_radius, row, method='NCC'):
 
 
 def compute_scale_image_ssd(ocl_ctx, img, thresh=0.2):
-  """ compute local scale at each pixel in the image """
+  """ compute local scale at each pixel in the image
+
+  Parameters
+  ----------
+  ocl_ctx :
+  img : array_like
+      The image
+  thresh : float, optional
+      The threshold
+
+  Returns
+  -------
+  numpy.array
+      The scale image
+  """
   num_levels = 6
   scale_img = np.zeros_like(img,dtype=np.uint8)
   levels = [lvl for lvl in skimage.transform.pyramid_gaussian(img, max_layer=num_levels, mode='nearest' )]
@@ -176,6 +259,21 @@ def compute_scale_image_ssd(ocl_ctx, img, thresh=0.2):
 def compute_scale_image_entropy(ocl_ctx, img, entropy_thresh=100, num_bins=8):
   """ compute local scale at each pixel in the image entropy_thresh as units
   bits
+
+  Parameters
+  ----------
+  ocl_ctx :
+  img : array_like
+      The image
+  entropy_thresh : int, optional
+      The entropy threshold
+  num_bins : int, optional
+      The number of bins
+
+  Returns
+  -------
+  numpy.array
+    The scale image
   """
   num_levels = 7
   window_rads = [2**l for l in range(num_levels)]
@@ -191,6 +289,19 @@ def compute_scale_image_entropy(ocl_ctx, img, entropy_thresh=100, num_bins=8):
 def compute_scale_image_gradx(ocl_ctx, img, grad_sum_thresh=1.0):
   """ compute local scale at each pixel based on the absolute gradient
   (x component)
+
+  Parameters
+  ----------
+  ocl_ctx :
+  img : array_like
+      The image
+  grad_sum_thresh : float, optional
+      The gradient sum threshold
+
+  Returns
+  -------
+  numpy.array
+      The local scale at each pixel based on the absolute gradient
   """
   num_levels = 7
   window_radii = [2**l for l in range(num_levels)]
@@ -207,6 +318,21 @@ def compute_scale_image_gradx(ocl_ctx, img, grad_sum_thresh=1.0):
 def compute_scale_image(ocl_ctx, img, entropy_thresh=100, num_bins=8):
   """ compute local scale at each pixel in the image entropy_thresh as units
   bits
+
+  Parameters
+  ----------
+  ocl_ctx :
+  img : array_like
+      The image
+  entropy_thresh : int, optional
+      The entropy threshold
+  num_bins : int, optional
+      The number of bins
+
+  Returns
+  -------
+  numpy.array
+      The local scale at each pixel in the image entropy_thresh as units bits
   """
   num_levels = 7
   window_rads = [2**l for l in range(num_levels)]
@@ -220,7 +346,21 @@ def compute_scale_image(ocl_ctx, img, entropy_thresh=100, num_bins=8):
 
 
 def local_sum(ocl_ctx, img, window_radius):
-  """ compute the sum of all pixels in an encompassing window """
+  """ compute the sum of all pixels in an encompassing window
+
+  Parameters
+  ----------
+  ocl_ctx :
+  img : array_like
+      The image
+  window_radius : float
+      The window radius
+
+  Returns
+  -------
+  numpy.array
+      The sum of all pixels in an encompassing window
+  """
   mf = cl.mem_flags
   cl_queue = cl.CommandQueue(ocl_ctx)
   img_np = np.array(img).astype(np.float32)
@@ -244,7 +384,23 @@ def local_sum(ocl_ctx, img, window_radius):
 
 
 def local_entropy(ocl_ctx, img, window_radius, num_bins=8):
-  """ compute local entropy using a sliding window """
+  """ compute local entropy using a sliding window
+
+  Parameters
+  ----------
+  ocl_ctx :
+  img : array_like
+      The image
+  window_radius : float
+      The window radius
+  num_bins : int
+      The number of bins
+
+  Returns
+  -------
+  numpy.array
+      The local entropy using a sliding window
+  """
   mf = cl.mem_flags
   cl_queue = cl.CommandQueue(ocl_ctx)
   img_np = np.array(img).astype(np.float32)

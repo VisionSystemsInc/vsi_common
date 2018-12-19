@@ -6,7 +6,20 @@ import vsi.utils.camera_utils as camera_utils
 
 
 def rectify_calibrated_euclidean(camera0, camera1, img0_shape, img1_shape):
-  """ compute epipolar rectification homographies by rotating image planes """
+  """ compute epipolar rectification homographies by rotating image planes
+
+  Parameters
+  ----------
+  camera0 : array_like
+  camera1 : array_like
+  img0_shape : array_like
+  img1_shape : array_like
+
+  Returns
+  -------
+  numpy.array
+      The epipolar rectification homographies
+  """
   baseline = camera1.center - camera0.center
   baseline /= np.linalg.norm(baseline)
   new_look = camera0.principal_ray() + camera1.principal_ray()
@@ -48,7 +61,21 @@ def rectify_calibrated_euclidean(camera0, camera1, img0_shape, img1_shape):
 
 def rectify_calibrated_plane(camera0, camera1, img0_shape, img1_shape, plane, img_scale=1.0, mask0=None, mask1=None, check_angles=False, min_graze_angle_degrees=15):
   """ compute epipolar rectification relative to a scene plane.
-    Points on the plane will be in identical positions in both images.
+
+  Parameters
+  ----------
+  camera0 : array_like
+  camera1 : array_like
+  img0_shape : array_like
+  img1_shape : array_like
+  plane : array_like
+
+  Returns
+  -------
+  numpy.array
+      The epipolar rectification relative to a scene plane
+
+  Points on the plane will be in identical positions in both images.
   """
   # reverse plane normal if facing away from mean look direction
   mean_look = camera0.principal_ray() + camera1.principal_ray()
@@ -83,6 +110,19 @@ def rectify_calibrated_plane(camera0, camera1, img0_shape, img1_shape, plane, im
 def rectify_calibrated_fov(camera0, camera1, img0_shape, img1_shape, img_scale=1.0, plane=None, mask0=None, mask1=None, check_angles=True, min_graze_angle_degrees=15):
   """ compute epipolar rectification homographies based on an (optional) plane
   of interest
+
+   Parameters
+  ----------
+  camera0 : array_like
+  camera1 : array_like
+  img0_shape : array_like
+  img1_shape : array_like
+
+  Returns
+  -------
+  numpy.array
+      The epipolar rectification homographies based on an (optional) plane of
+      interest
   """
   def image_corners(img_shape):
     """ return x,y coordinates of the 4 image corners """
@@ -243,7 +283,20 @@ def rectify_calibrated_fov(camera0, camera1, img0_shape, img1_shape, img_scale=1
 
 
 def disparity_to_depth(disparity_image, cam0, cam1):
-  """ covert a disparity image to a set of triangulated 3-d points """
+  """ covert a disparity image to a set of triangulated 3-d points
+
+  Parameters
+  ----------
+  disparity_image :
+      The disparity image
+  cam0 :
+  cam1 :
+
+  Returns
+  -------
+  numpy.array
+      A set of triangulated 3-d points
+  """
   img_shape = disparity_image.shape
   xvals_lin = np.array(range(0,img_shape[1]))
   yvals_lin = np.array(range(0,img_shape[0]))

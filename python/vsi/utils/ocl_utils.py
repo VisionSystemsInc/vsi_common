@@ -4,6 +4,25 @@ import pyopencl as cl
 
 def init_ocl(device_string=None, platform_idx=0, device_idx=0, verbose=False):
   """ create an OpenCL context using a device whose name matches device_string
+
+  Parameters
+  ----------
+  device_string :
+  platform_idx : int, optional
+      The platform index. Default: 0
+  device_idx : int, optional
+      The device index. Default: 0
+  verbose : bool
+  
+  Returns
+  -------
+  array_like
+      The context
+
+  Raises
+  ------
+  Exception
+      When there are no devices whose name matches the string
   """
   platforms = cl.get_platforms()
 
