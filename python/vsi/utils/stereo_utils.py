@@ -111,7 +111,7 @@ def rectify_calibrated_fov(camera0, camera1, img0_shape, img1_shape, img_scale=1
   """ compute epipolar rectification homographies based on an (optional) plane
   of interest
 
-   Parameters
+  Parameters
   ----------
   camera0 : array_like
   camera1 : array_like

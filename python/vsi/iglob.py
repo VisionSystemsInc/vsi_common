@@ -14,24 +14,46 @@ import re
 __all__ = ["glob", "iglob"]
 
 def path_split(p):
-  ''' Well... it turns out that os.path.split is WRONG for both posix and nt.
+  """ Well... it turns out that os.path.split is WRONG for both posix and nt.
 
-      When you execute os.path.split('.') You SHOULD get ('.','') BUT... due
-      to the simplicity of os.path.split, it only looks for /, and it fails
-      to make an exception for this, which breaks the recursive logic of glob.
-      The ORIGINAL glob does not FIX this, it just doesn't care since it does
-      a lexists on what should have been isdir on a directory. Since I can't
-      use lexists here for case insensitive reasons, the logic needed to be
-      more lock tight... This (hopefully simple and complete?) solution will
-      look for result where dirname is empty and basename is made up of all
-      periods, and if that happens, switch it'''
+  Parameters
+  ----------
+  p : str
+      The Path
+  
+  Returns
+  -------
+  array_like
+      The split path
+
+
+  When you execute os.path.split('.') You SHOULD get ('.','') BUT... due
+  to the simplicity of os.path.split, it only looks for /, and it fails to make
+  an exception for this, which breaks the recursive logic of glob. The ORIGINAL
+  glob does not FIX this, it just doesn't care since it does a lexists on what
+  should have been isdir on a directory. Since I can't
+  use lexists here for case insensitive reasons, the logic needed to be
+  more lock tight... This (hopefully simple and complete?) solution will
+  look for result where dirname is empty and basename is made up of all
+  periods, and if that happens, switch it
+  """
   s = os.path.split(p)
   if not s[0] and s[1] == '.'*len(s[1]):
     return (s[1], s[0])
   return s
 
 def path_join(a, *p):
-  ''' Same as path_split'''
+  ''' Same as path_split
+
+  Parameters
+  ----------
+  a : str
+  *p :
+
+  Returns
+  -------
+  array_like
+  '''
   if p==('',) and a == '.'*len(a):
     return a
   return os.path.join(a, *p)
@@ -39,23 +61,37 @@ def path_join(a, *p):
 def glob(pathname, case=None):
   """Return a list of paths matching a pathname pattern.
 
-  The pattern may contain simple shell-style wildcards a la
-  fnmatch. However, unlike fnmatch, filenames starting with a
-  dot are special cases that are not matched by '*' and '?'
-  patterns.
+  Parameters
+  ----------
+  pathname : str
+      The Path Name
 
-  Set case to true to force case sensitive, false to force
-  case insensitive or None(default) to run glob natively
+  Returns
+  -------
+  array_like
+      A list of paths matching a pathname pattern
+
+
+  The pattern may contain simple shell-style wildcards a la fnmatch. However,
+  unlike fnmatch, filenames starting with a dot are special cases that are not
+  matched by '*' and '?' patterns.
+
+  Set case to true to force case sensitive, false to force case insensitive or
+  None(default) to run glob natively
 
   """
   return list(iglob(pathname, case))
 
 def checkcase(case=None):
-  ''' Determing which case mode to use
+  """ Determing which case mode to use
 
+  Returns
+  -------
+  bool
       If None(default) then uses which ever mode is native to the OS
       If True, forces case sensitive mode
-      If False, forces case insensitive mode '''
+      If False, forces case insensitive mode
+  """
   if case is None:
     return os.path is posixpath
   elif case:
@@ -65,13 +101,18 @@ def checkcase(case=None):
 def iglob(pathname, case=None):
   """Return an iterator which yields the paths matching a pathname pattern.
 
-  The pattern may contain simple shell-style wildcards a la
-  fnmatch. However, unlike fnmatch, filenames starting with a
-  dot are special cases that are not matched by '*' and '?'
-  patterns.
+  Parameters
+  ----------
+  pathname : str
+      The Path Name
 
-  Set case to true to force case sensitive, false to force
-  case insensitive or None(default) to run glob natively
+
+  The pattern may contain simple shell-style wildcards a la fnmatch. However,
+  unlike fnmatch, filenames starting with a dot are special cases that are not
+  matched by '*' and '?' patterns.
+
+  Set case to true to force case sensitive, false to force case insensitive or
+  None(default) to run glob natively
   """
 
   dirname, basename = path_split(pathname)
@@ -110,6 +151,20 @@ def iglob(pathname, case=None):
 # takes a literal basename (so it only has to check for its existence).
 
 def glob0(dirname, basename, case=None):
+  """
+
+  Parameters
+  ----------
+  dirname : str
+      The Directory Name
+  basename : str
+      The Base Name
+  
+  Returns
+  -------
+  array_like
+      A list of basenames
+  """
   if dirname == '':
     dirname = os.curdir
   # `os.path.split()` returns an empty basename for paths ending with a
@@ -119,6 +174,20 @@ def glob0(dirname, basename, case=None):
   return []
 
 def glob1(dirname, pattern, case=None):
+  """
+
+  Parameters
+  ----------
+  dirname : str
+      The Directory Name
+  pattern : str
+      A Pattern
+  
+  Returns
+  -------
+  array_like
+      A list of basenames
+  """
   if not dirname:
     dirname = os.curdir
   if isinstance(pattern, _unicode) and not isinstance(dirname, unicode):
@@ -137,6 +206,22 @@ _nocasecache = {}
 
 def fnmatch_filter(names, pat, casesensitive):
   # Return the subset of the list NAMES that match PAT
+  """
+
+  Parameters
+  ----------
+  names : array_like
+      A list of names
+  pat : str
+      A pattern
+  casesensitive : bool
+      True if case sensitive, False if not.
+
+  Returns
+  -------
+  array_like
+      The subset of the list NAMES that match PAT
+  """
   result=[]
 
   if casesensitive:

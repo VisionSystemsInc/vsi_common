@@ -29,7 +29,18 @@ class PipeException(Exception):
 def open(name, server=False):
   ''' Helper open function
 
-      Give it the look and feel of python's open command'''
+  Parameters
+  ----------
+  name : str
+
+  Returns
+  -------
+  array_like
+      The pipe
+
+
+  Give it the look and feel of python's open command
+  '''
   pipe = Pipe(name, server)
   return pipe
 
@@ -41,6 +52,18 @@ class Pipe(object):
     self.open()
 
   def open(self):
+    """
+    Raises
+    ------
+    PipeException
+        For an invalid handle value
+    PipeException
+        Could not connect to the named pipe
+    PipeException
+        Error pipe busy
+    PipeException
+        SetNamedPipeHandleState failed
+    """
     if self.server:
       self.hPipe = windll.kernel32.CreateNamedPipeA(self.name,
                     PIPE_ACCESS_DUPLEX,
@@ -90,6 +113,18 @@ class Pipe(object):
 
   @staticmethod
   def wait_for(name, timeout__ms):
+    """
+
+    Parameters
+    ----------
+    name : str
+    timeout__ms : int
+        The timeout in milliseconcds
+
+    Returns
+    -------
+    array_like
+    """
     return windll.kernel32.WaitNamedPipeA(PIPE_PREFIX+name, timeout__ms)
 
   def disconnect(self):
@@ -97,6 +132,13 @@ class Pipe(object):
     windll.kernel32.DisconnectNamedPipe(self.hPipe)
 
   def write(self, message):
+    """
+
+    Parameters
+    ----------
+    message : str
+        The message
+    """
     cbWritten = c_ulong(0)
     fSuccess = windll.kernel32.WriteFile(self.hPipe, c_char_p(message),
                                          len(message), byref(cbWritten), None)
