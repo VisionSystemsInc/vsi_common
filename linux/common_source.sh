@@ -304,7 +304,6 @@ if [ -f /etc/os-release ]; then
                   . /etc/lsb-release
                   DISTRIB_ID=$(echo ${DISTRIB_ID} | sed 's|.*|\L&|')
                   if [ "${DISTRIB_ID}" != "${ID}" ]; then
-                    echo "Fixing" >&2
                     ID_CORE="${ID_LIKE}"
                     ID_LIKE="${ID}"
                     ID="${DISTRIB_ID}"
