@@ -3,6 +3,20 @@ from vsi.tools.subprocess_util import PopenBg as Popen
 
 
 def findProcess(imageName, filterString):
+  """
+
+  Parameters
+  ----------
+  imageName : str
+      The image name
+  filterString : str
+      The filter string
+
+  Returns
+  -------
+  array_like
+      The Process
+  """
   pid = Popen(['wmic', 'path', 'win32_process', 'where',
                "Name='%s'" % imageName, 'get',
                'CommandLine,ProcessId', '/VALUE'],

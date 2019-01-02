@@ -10,6 +10,12 @@ class WmicProperty(object):
     self.type = type
     self.perm = perm
 
+    """
+    Raises
+    ------
+    Exception
+        Unknown type
+    """
     if value:
       if self.type=='string':
         self.value = str(value)
@@ -81,6 +87,13 @@ class Pgrep(object):
     self.parse()
 
   def run(self):
+    """
+
+    Raises
+    ------
+    Exception
+        Bad pid return code
+    """
     pid = Popen(self.cmd, stdout=PIPE, stderr=PIPE)
     (self.rawout, self.rawerr) = pid.communicate()
     self.pid = pid.pid
@@ -89,6 +102,13 @@ class Pgrep(object):
       raise Exception('wmic returned %d' % pid.returncode)
 
   def parse(self):
+    """
+
+    Raises
+    ------
+    Exception
+        Unknown type
+    """
     self.pids = []
     etree = ElementTree.fromstring(self.rawout)
     results = etree.find('RESULTS')

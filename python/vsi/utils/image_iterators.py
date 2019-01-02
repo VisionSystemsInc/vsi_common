@@ -31,27 +31,28 @@ class IterateOverWindows(object):
   def __init__(self, pixels_per_cell, pixel_stride=None, image=None,
       mode='constant', cval=0,
       start_pt=(0, 0), stop_pt=(None, None)):
+
     ''' Sliding window iterator.
 
     Parameters
     ----------
     pixels_per_cell : array_like
         x,y - let x,y be odd so the window can be easily centered
-    pixel_stride : array_like
+    pixel_stride : array_like, optional
         x,y
-    image : array_like
+    image : array_like, optional
         like numpy.array (ndim == 2 or 3)
-    mode : str
+    mode : str, optional
         Points outside the boundaries of the input are filled according to the
         given mode. Only ``mode='constant'``, ``mode='discard'`` and
         ``mode='reflect'`` are currently supported, although others could be
         added (e.g., 'nearest' and 'wrap')
-    cval : float
+    cval : float, optional
         Value used for points outside the boundaries of the input if
         ``mode='constant'``. Default is 0.0
-    start_pt : array_like
+    start_pt : array_like, optional
         (x,y)
-    stop_pt  : array_like
+    stop_pt : array_like, optional
         (x,y)
 
     >>> tot = 0; im = np.arange(100).reshape((10,10))
@@ -68,7 +69,7 @@ class IterateOverWindows(object):
     >>> print(tot) # weak test
     25000
     '''
-
+    
     assert pixels_per_cell[0] % 2 == 1 and pixels_per_cell[1] % 2 == 1, \
         'provide an odd number for pixels_per_cell to easily center the window'
     self.pixels_per_cell = tuple(pixels_per_cell)
@@ -116,14 +117,20 @@ class IterateOverWindows(object):
 
     Returns
     -------
-    chip : pixels within the current window. Points outside the boundaries of
-    the input are filled according to the given mode.
-    mask : the binary mask of the window within the chip
-    bbox : the inclusive extents of the chip (which may exceed the bounds of
-    the image)
+    numpy.array, optional
+      chip : pixels within the current window. Points outside the
+      boundaries of the input are filled according to the given mode.
+    numpy.array
+      mask : the binary mask of the window within the chip
+    BoundingBox
+      bbox : the inclusive extents of the chip (which may exceed the bounds
+      of the image)
+
 
     MODIFICATIONS
+
     sgr : turned into a class
+
     sgr : added mode='reflect'
     '''
 
@@ -208,6 +215,9 @@ class IterateOverWindows(object):
 
 class IterateOverSuperpixels(object):
   def __init__(self, segmented, image=None):
+
+    self.segmented = segmented
+    self.image = image
     '''
     Parameters
     ----------
@@ -215,12 +225,9 @@ class IterateOverSuperpixels(object):
           Superpixel labeled segmentation (like numpy.array)
           NOTE regionprops expects labels to be sequential and start
           at 1: {1,2,...}. label 0 is treated as unlabeled.
-    image : array_like
+    image : array_like, optional
         like numpy.array (ndim == 2 or 3)
     '''
-
-    self.segmented = segmented
-    self.image = image
 
   def setImage(self, image):
     '''
@@ -238,18 +245,25 @@ class IterateOverSuperpixels(object):
 
     Parameters
     ----------
-    image : array_like
+    image : array_like, optional
         like numpy.array (ndim == 2 or 3)
 
     Returns
     -------
-    chip : defined by the escribed bounding box of the segment. (view into
-    image)
-    mask : the binary mask of the segment within the chip
-    bbox : the inclusive extents of the chip within the original image
+    numpy.array, optional
+      chip : pixels within the current window. Points outside the
+      boundaries of the input are filled according to the given mode.
+    numpy.array
+      mask : the binary mask of the window within the chip
+    BoundingBox
+      bbox : the inclusive extents of the chip (which may exceed the bounds
+      of the image)
+
 
     MODIFICATIONS
+
     sgr : optimized
+
     sgr : turned into a class
     '''
 
