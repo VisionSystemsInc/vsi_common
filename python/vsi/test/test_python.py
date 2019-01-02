@@ -8,7 +8,8 @@ from vsi.tools.python import (Try, is_string_like, BasicDecorator, static,
                               WarningDecorator, args_to_kwargs,
                               args_to_kwargs_unbound, args_to_kwargs_easy,
                               args_to_kwargs_unbound_easy,
-                              ARGS, KWARGS, is_class_method, is_static_method)
+                              ARGS, KWARGS, is_class_method, is_static_method,
+                              ArgvContext)
 
 import sys
 
@@ -381,3 +382,10 @@ class PythonTest(unittest.TestCase):
         value = getattr(test[0], test[1])
         self.assertEqual(args_to_kwargs(value, test[2], test[3]), answer)
         self.assertEqual(args_to_kwargs_easy(value, *test[2], **test[3]), answer)
+
+  def test_arg_context(self):
+    with mock.patch('sys.argv', ['arg0', 'arg1', 'arg2']):
+      self.assertEqual(sys.argv, ['arg0', 'arg1', 'arg2'])
+      with ArgvContext('00', '11', '22'):
+        self.assertEqual(sys.argv, ['00', '11', '22'])
+      self.assertEqual(sys.argv, ['arg0', 'arg1', 'arg2'])

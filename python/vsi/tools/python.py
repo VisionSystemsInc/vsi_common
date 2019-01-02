@@ -29,6 +29,24 @@ class Try(object):
     if issubclass(exc_type, self.ignore):
       return True
 
+class ArgvContext:
+  ''' Context to temporarily change the ``sys.argv`` variable
+
+  Parameters
+  ----------
+  *args : str
+      Arguments to replace ``sys.argv``, starting with ``argv[0]``
+  '''
+  def __init__(self, *args):
+    self.args = args
+
+  def __enter__(self):
+    self.old_args = sys.argv
+    sys.argv = list(self.args)
+
+  def __exit__(self, *args):
+    sys.argv = self.old_args
+
 def reloadModules(pattern='.*', skipPattern='^IPython'):
   ''' Reload modules that match pattern regular expression (string or re)
 
