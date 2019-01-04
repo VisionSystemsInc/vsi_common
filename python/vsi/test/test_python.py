@@ -9,7 +9,7 @@ from vsi.tools.python import (Try, is_string_like, BasicDecorator, static,
                               args_to_kwargs_unbound, args_to_kwargs_easy,
                               args_to_kwargs_unbound_easy,
                               ARGS, KWARGS, is_class_method, is_static_method,
-                              ArgvContext)
+                              ArgvContext, nested_update)
 
 import sys
 
@@ -389,3 +389,25 @@ class PythonTest(unittest.TestCase):
       with ArgvContext('00', '11', '22'):
         self.assertEqual(sys.argv, ['00', '11', '22'])
       self.assertEqual(sys.argv, ['arg0', 'arg1', 'arg2'])
+
+  def test_nested_update(self):
+    x={"a":1, "b": {"c": 2, "d": 3}, "d": 4}
+
+    # Normal update
+    y={"a":11, "b":{"c":22, "e":33}}
+    ans={"a":11, "b": {"c": 22, "d": 3, "e":33}, "d": 4}
+    z=x.copy()
+    nested_update(z, y)
+    self.assertEqual(z, ans)
+
+    # Keys not there before + replace dict with int
+    y={"b": 5, "e":{"c":22, "e":33}, "f": 6}
+    ans={"a":1, "b": 5, "e": {"c": 22, "e":33}, "d": 4, "f":6}
+    z=x.copy()
+    nested_update(z, y)
+    self.assertEqual(z, ans)
+
+    y={"a": {"g": 15}}
+    z=x.copy()
+    with self.assertRaises(TypeError):
+      nested_update(z, y)
