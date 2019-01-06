@@ -212,9 +212,11 @@ c.NotebookApp.open_browser = {browser}\n""".format(
   if os.name == 'nt':
     bin_dir = 'Scripts'
     lib_dir = 'Lib'
+    bash_kernel = ['bash_kernel']
   else:
     bin_dir = 'bin'
     lib_dir = 'lib/python*'
+    bash_kernel = []
 
   site_file = glob(os.path.join(python_dir, lib_dir, 'site.py'))[0]
   patch_site(site_file,
@@ -224,17 +226,28 @@ c.NotebookApp.open_browser = {browser}\n""".format(
                             os.path.dirname(site_file)))
 
   Popen(['pipenv',
-        'install', 'notebook', 'jupyter-contrib-nbextensions',
-        'bash_kernel', 'ipywidgets']).wait()
+         'install', 'notebook', 'jupyter-contrib-nbextensions',
+         'ipywidgets'] + bash_kernel).wait()
   Popen([os.path.join(os.path.abspath(python_dir), bin_dir, 'python'),
         '-m', 'ipykernel.kernelspec', '--user']).wait()
-  Popen([os.path.join(os.path.abspath(python_dir), bin_dir, 'python'),
-        '-m', 'bash_kernel.install', '--user']).wait()
+  if os.name != "nt":
+    Popen([os.path.join(os.path.abspath(python_dir), bin_dir, 'python'),
+          '-m', 'bash_kernel.install', '--user']).wait()
   Popen([os.path.join(os.path.abspath(python_dir), bin_dir, 'jupyter-contrib'),
         'nbextension', 'install', '--user']).wait()
   Popen([os.path.join(os.path.abspath(python_dir),
                       bin_dir, 'jupyter-nbextension'),
         'enable', '--py', '--user', 'widgetsnbextension']).wait()
+
+  if os.name == "nt":
+    Popen(['c:\\Windows\\System32\\bash.exe',
+           '-c',
+           'tmp_dir="\\$(mktemp -d)";'
+           'cd "\\${tmp_dir}";'
+           'python3 <(curl -L https://bootstrap.pypa.io/get-pip.py) --no-cache-dir -I --root "\\${tmp_dir}" virtualenv;'
+           'PYTHONPATH="\\$(cd "\\${tmp_dir}"/usr/local/lib/python*/*-packages/; pwd)" "\\${tmp_dir}/usr/local/bin/virtualenv" ~/bash_kernel;'
+           '~/bash_kernel/bin/pip install --no-cache-dir bash_kernel;'
+           'rm -r "\\${tmp_dir}"'], shell=False).wait()
 
   if python2 and python3:
     with open(os.path.join(os.environ['JUPYTER_CONFIG_DIR'],
