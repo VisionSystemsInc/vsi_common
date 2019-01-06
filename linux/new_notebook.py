@@ -185,8 +185,8 @@ python_version = "2"''')
     python_dir = python2
 
   # Setup config dir inside virtual env dir by monkey patching python executable
-  os.environ['JUPYTER_CONFIG_DIR'] = os.path.join(python_dir, "jupyter_config")
-  os.environ['JUPYTER_DATA_DIR'] = os.path.join(python_dir, "jupyter_data")
+  os.environ['JUPYTER_CONFIG_DIR'] = os.path.join(os.getcwd(), "jupyter_config")
+  os.environ['JUPYTER_DATA_DIR'] = os.path.join(os.getcwd(), "jupyter_data")
 
   try:
     os.makedirs(os.environ['JUPYTER_CONFIG_DIR'])
