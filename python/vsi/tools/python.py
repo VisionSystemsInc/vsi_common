@@ -2,6 +2,8 @@ from __future__ import print_function # Python2 compat
 
 from functools import (wraps, update_wrapper, WRAPPER_UPDATES,
                        WRAPPER_ASSIGNMENTS)
+
+from collections import Mapping
 import inspect
 import sys
 
@@ -28,6 +30,24 @@ class Try(object):
       return
     if issubclass(exc_type, self.ignore):
       return True
+
+class ArgvContext:
+  ''' Context to temporarily change the ``sys.argv`` variable
+
+  Parameters
+  ----------
+  *args : str
+      Arguments to replace ``sys.argv``, starting with ``argv[0]``
+  '''
+  def __init__(self, *args):
+    self.args = args
+
+  def __enter__(self):
+    self.old_args = sys.argv
+    sys.argv = list(self.args)
+
+  def __exit__(self, *args):
+    sys.argv = self.old_args
 
 def reloadModules(pattern='.*', skipPattern='^IPython'):
   ''' Reload modules that match pattern regular expression (string or re)
@@ -628,3 +648,25 @@ def command_list_to_string(cmd):
   except:
     from pipes import quote
   return ' '.join([quote(x) for x in cmd])
+
+def nested_update(d, u):
+  ''' Updated a dictionary in a nested fashion
+
+  Parameters
+  ----------
+  d : dict
+      The dict to be updated
+  u : dict
+      The new dict values to copy into d
+  '''
+  try:
+    items = u.iteritems()
+  except:
+    items = u.items()
+
+  for k, v in items:
+    if isinstance(v, Mapping):
+      d[k] = nested_update(d.get(k, {}), v)
+    else:
+      d[k] = v
+  return d

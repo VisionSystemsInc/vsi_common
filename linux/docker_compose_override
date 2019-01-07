@@ -94,7 +94,9 @@ function _env_echo()
 #   * Volumes can be added to the services listed in ``$2``...
 #
 #     * Volumes listed in ``${1}_VOLUMES`` are added to every service
+#     * Volumes in ``${1}_VOLUME_1``, ``${1}_VOLUME_2``, ... are added to every service
 #     * Volumes listed in ``${1}_<upper(service_name)>_VOLUMES`` are added just to that service.
+#     * Volumes listed in ``${1}_<upper(service_name)>_VOLUME_1``, ``${1}_<upper(service_name)>_VOLUME_2``, ... are added just to that service.
 #     * **Note**: If the yaml file uses anchors, this will not be reflected in this auto generated file. You will have to set the value of ``${1}_<upper(other_service_name)>_VOLUMES`` as well
 #
 # * Environment features:
@@ -156,7 +158,7 @@ function _env_echo()
 #
 # .. note::
 #
-#   There is no way to use the ``_VOLUMES`` features from the CLI, as arrays cannot be exported.
+#   There is no way to use the ``_VOLUMES`` features from the CLI, as arrays cannot be exported. However the ``_VOLUME_1`` feature will work
 #
 # .. seealso::
 #
@@ -181,6 +183,9 @@ function generate_docker_compose_override()
   local indirect
   local volumes_name_all
   local indirect_all
+  local enumerated_volumes_all=()
+  local enumerated_volumes
+  local -i i=1
 
   # misc
   local host_mount_point
@@ -222,6 +227,17 @@ function generate_docker_compose_override()
     compose_config=""
   fi
 
+  # Parse enumerated_volumes_all
+  volumes_name_all="${project_prefix}_VOLUME_$i"
+  while declare -p "${volumes_name_all}" &> /dev/null; do
+    enumerated_volumes_all+=("${!volumes_name_all}")
+    i+=1
+    volumes_name_all="${project_prefix}_VOLUME_$i"
+  done
+  # Indirect fun
+  volumes_name_all="${project_prefix}_VOLUMES"
+  indirect_all="${volumes_name_all}[@]"
+
   echo "version: '${COMPOSE_VERSION-3.2}'"
   echo "services:"
   for service_index in "${!services_name[@]}"; do
@@ -233,12 +249,18 @@ function generate_docker_compose_override()
     just_docker_entrypoint_internal_ro_volumes=()
     over_volumes=()
 
+    # Parse enumerate_volumes
+    enumerated_volumes=()
+    i=1
+    volumes_name="${project_prefix}_${services_upper[$service_index]}_VOLUME_$i"
+    while declare -p "${volumes_name}" &> /dev/null; do
+      enumerated_volumes+=("${!volumes_name}")
+      i+=1
+      volumes_name="${project_prefix}_${services_upper[$service_index]}_VOLUME_$i"
+    done
     # Indirect fun
     volumes_name="${project_prefix}_${services_upper[$service_index]}_VOLUMES"
     indirect="${volumes_name}[@]"
-    volumes_name_all="${project_prefix}_VOLUMES"
-    indirect_all="${volumes_name_all}[@]"
-
 
     parse-docker-compose-volumes ${services_name[$service_index]} <<< "${compose_config}"
     docker-compose-volumes
@@ -263,7 +285,11 @@ function generate_docker_compose_override()
     done
 
     # Dynamically add volumes
-    for volume in ${!volumes_name_all+"${!indirect_all}"} ${!volumes_name+"${!indirect}"}; do
+    for volume in ${!volumes_name_all+"${!indirect_all}"} \
+                  ${!volumes_name+"${!indirect}"} \
+                  ${enumerated_volumes_all+"${enumerated_volumes_all[@]}"} \
+                  ${enumerated_volumes+"${enumerated_volumes[@]}"}; do
+
       docker_parse_volume_string "$volume" # sets volume_host, volume_docker, and volume_flags
 
       # If it doesn't exist, attempt to make it as this user. Better than root
