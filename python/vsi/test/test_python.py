@@ -9,7 +9,7 @@ from vsi.tools.python import (Try, is_string_like, BasicDecorator, static,
                               args_to_kwargs_unbound, args_to_kwargs_easy,
                               args_to_kwargs_unbound_easy,
                               ARGS, KWARGS, is_class_method, is_static_method,
-                              ArgvContext, nested_update)
+                              ArgvContext, nested_update, nested_in_dict)
 
 import sys
 
@@ -411,3 +411,18 @@ class PythonTest(unittest.TestCase):
     z=x.copy()
     with self.assertRaises(TypeError):
       nested_update(z, y)
+
+  def test_nested_in_dict(self):
+    b = {'a': 5, 'b': 6}
+
+    self.assertTrue(nested_in_dict({'a': 5}, b))
+    self.assertFalse(nested_in_dict({'a': 5, 'b':0}, b))
+    self.assertFalse(nested_in_dict({'a': 5, 'c':7}, b))
+
+    c = {'a': 5, 'b': 6, 'c': { 'd': { 'e': 1 }, 'f': 2} }
+    self.assertTrue(nested_in_dict({'a': 5}, c))
+    self.assertTrue(nested_in_dict({'c': {}}, c))
+    self.assertFalse(nested_in_dict({'g': {}}, c))
+    self.assertTrue(nested_in_dict({'c': {'d':{}}}, c))
+    self.assertTrue(nested_in_dict({'c': {'d':{'e':1}}}, c))
+    self.assertTrue(nested_in_dict(c, c))

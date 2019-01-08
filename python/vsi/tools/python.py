@@ -649,16 +649,17 @@ def command_list_to_string(cmd):
     from pipes import quote
   return ' '.join([quote(x) for x in cmd])
 
-def nested_update(d, u):
+def nested_update(d, *args, **kwargs):
   ''' Updated a dictionary in a nested fashion
 
   Parameters
   ----------
   d : dict
       The dict to be updated
-  u : dict
-      The new dict values to copy into d
+  *args, **kwargs :
+      Same arguments as dict.update
   '''
+  u = dict(*args, **kwargs)
   try:
     items = u.iteritems()
   except:
@@ -670,3 +671,30 @@ def nested_update(d, u):
     else:
       d[k] = v
   return d
+
+def nested_in_dict(dict1, dict2):
+  ''' Checks to see if dict1 is in dict2
+
+  Parameters
+  ----------
+  dict1 : dict
+      Subset dictionary
+  dict2 : dict
+      Superset dictionary
+  '''
+
+  try:
+    items = dict1.iteritems()
+  except:
+    items = dict1.items()
+
+  for key, value1 in items:
+    if key not in dict2:
+      return False
+    if isinstance(value1, Mapping):
+      if not nested_in_dict(value1, dict2[key]):
+        return False
+    elif dict2[key] != value1:
+        return False
+
+  return True
