@@ -65,49 +65,17 @@ def get_parser():
   aa('--token', default='', help='Fixed token to use')
   return parser
 
-def parse_args(args=None):
-  parser = get_parser()
-  return parser.parse_args(args)
-
 
 def main(args=None):
-  args = parse_args(args)
+  args = get_parser().parse_args(args)
 
   tempdir = tempfile.mkdtemp()
 
   atexit.register(shutil.rmtree, tempdir)
-  # d2=os.path.join(tempdir, '2')
-  # d3=os.path.join(tempdir, '3')
-  # os.mkdir(d2)
-  # os.mkdir(d3)
 
   python2 = None
   python3 = None
 
-  # if sys.version_info.major == 3:
-  #   python3 = sys.executable
-  # else:
-  #   python2 = sys.executable
-
-  # If I am supposed to look for the other python, do so.
-  # if not args.one_python:
-  #   if sys.version_info.major == 3:
-  #     python2 = which('python2', 'exe')
-  #   else:
-  #     python3 = which('python3', 'exe')
-
-  # pip_install = urlopen('https://bootstrap.pypa.io/get-pip.py').read().decode(
-  #     "utf-8")
-  # pip_filename = os.path.join(tempdir, 'get-pip.py')
-  # with open(pip_filename, 'w') as fid:
-  #   fid.write(pip_install)
-  #   fid.flush()
-
-  # python2_venv = ''
-  # python2_pipfile = 'Pipfile'
-
-  # Set up python3 venv
-  # python2_venv = 'python2'
   env = dict(os.environ)
   env.pop('PYTHONPATH', None)
 
@@ -136,14 +104,7 @@ python_version = "3"''')
     python3 = Popen(['pipenv', "--venv"], stdout=PIPE).communicate()[0].decode().strip()
     python2 = '2'
 
-  # env['PYTHONUSERBASE'] = d3
-  # Popen(['pipenv', '--user', 'virtualenv', '-U'],
-  #       env=env).wait()
-  # venv_file = find('virtualenv.py', d3)
-  # env['PYTHONPATH'] = os.path.dirname(venv_file)
-  # Popen([python3, venv_file, os.path.abspath(args.venv)]).wait()
-
-  if python2:
+  if python2 and not os.path.exists(python2):
     os.mkdir(python2)
 
   # Set up python2 venv
@@ -169,15 +130,6 @@ python_version = "2"''')
       shutil.rmtree(python2)
   else:
     python2 = Popen(['pipenv', "--venv"], stdout=PIPE, cwd="2").communicate()[0].decode().strip()
-
-
-#     env['PYTHONUSERBASE'] = d2
-#     Popen([python2, pip_filename, '--user', 'virtualenv', '-U'],
-#           env=env).wait()
-#     venv_file = find('virtualenv.py', d2)
-#     env['PYTHONPATH'] = os.path.dirname(venv_file)
-#     Popen([python2, venv_file,
-#           os.path.abspath(os.path.join(args.venv, python2_venv))]).wait()
 
   if python3:
     python_dir = python3
@@ -212,11 +164,11 @@ c.NotebookApp.open_browser = {browser}\n""".format(
   if os.name == 'nt':
     bin_dir = 'Scripts'
     lib_dir = 'Lib'
-    bash_kernel = ['bash_kernel']
+    bash_kernel = []
   else:
     bin_dir = 'bin'
     lib_dir = 'lib/python*'
-    bash_kernel = []
+    bash_kernel = ['bash_kernel']
 
   site_file = glob(os.path.join(python_dir, lib_dir, 'site.py'))[0]
   patch_site(site_file,
@@ -252,7 +204,7 @@ c.NotebookApp.open_browser = {browser}\n""".format(
   if python2 and python3:
     with open(os.path.join(os.environ['JUPYTER_CONFIG_DIR'],
                         'jupyter_notebook_config.py'), 'a') as fid:
-      fid.write("c.MultiKernelManager.default_kernel_name = 'python2'")
+      fid.write("c.MultiKernelManager.default_kernel_name = 'python3'")
 
     site_file = glob(os.path.join(python2, lib_dir, 'site.py'))[0]
 
