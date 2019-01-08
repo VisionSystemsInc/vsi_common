@@ -277,7 +277,8 @@ def read_vsfm_nvm_file(filename):
       cam_center = np.dot(-R.transpose(),T)
     else:
       q = np.zeros(4)
-      for qi in range(4):
+      q[3] = float(next(tokgen))
+      for qi in range(3):
         q[qi] = float(next(tokgen))
       R = geometry_utils.quaternion_to_matrix(q)
       cam_center = np.zeros(3)
