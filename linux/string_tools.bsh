@@ -153,3 +153,51 @@ function quote_substitute_escape()
   echo "${x//\`/\\\`}"    # And the last bash substitution, `
   # All other bash substitutions do not occur in "
 }
+
+#**
+# .. function:: regex_escape
+#
+# :Arguments: * ``$1`` - String to escape
+# :Output: *stdout* - The escaped string
+#
+# Adds '\' to the string, so it can be used as a literal string in a regex expression
+#
+# .. var:: regex_escape_threshold
+#
+# The length threshold between using the pure bash version and sed version to. Set to 1000 on Windows, else 100
+#
+# .. Note::
+#   An extra newline always shows up at the end, just like `echo` (without `-n`) would.
+#**
+
+if [ "${OS-}" = "Windows_NT" ]; then
+  regex_escape_threshold=1000
+else
+  regex_escape_threshold=100
+fi
+
+function regex_escape()
+{
+  local out=''
+  local -i i=0
+  local str="${1}"
+  declare -p str >&2
+  if [ "${#str}" -gt "${regex_escape_threshold}" ]; then
+    # Faster after sed is started
+    sed '# Read all lines into one buffer
+         :combine
+         $bdone
+         N
+         bcombine
+         :done
+         s/./\\&/g' <<< "${str}"
+  else
+    # Slower, but no process to load, so faster for short strings. On windows
+    # this can be a big deal
+    while (( i < ${#str} )); do
+      out+="\\${str:$i:1}"
+      i+=1
+    done
+    echo "$out"
+  fi
+}
