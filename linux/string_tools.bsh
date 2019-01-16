@@ -23,7 +23,7 @@
 # Left trim a string
 #
 # .. seealso::
-#   :func:`trim`
+#   :func:`trim` Trim from both ends in one call
 #**
 function ltrim()
 {
@@ -40,7 +40,7 @@ function ltrim()
 # Right trim a string
 #
 # .. seealso::
-#   :func:`trim`
+#   :func:`trim` Trim from both ends in one call
 #**
 function rtrim()
 {
@@ -79,7 +79,8 @@ function rtrim()
 #   placed inside a set of []
 #
 # .. seealso::
-#   :func:`ltrim` :func:`rtrim`
+#   :func:`ltrim` Trim only from the left
+#   :func:`rtrim` Trim only from the right
 #**
 function trim()
 {
@@ -109,7 +110,7 @@ function trim()
 #   [ "${x}" = "Hi \"  'ya \"" ]
 #
 # .. seealso::
-#   :func:`quote_substitute_escape`
+#   :func:`quote_substitute_escape` for use in ``${x-something}``
 #**
 function quote_escape()
 {
@@ -143,7 +144,7 @@ function quote_escape()
 #   [ "${x}" = 'Hi "  '\''ya "' ]
 #
 # .. seealso::
-#   :func:`quote_escape`
+#   :func:`quote_escape` for the more generic case not in ``${}``
 #**
 function quote_substitute_escape()
 {
@@ -160,28 +161,38 @@ function quote_substitute_escape()
 # :Arguments: * ``$1`` - String to escape
 # :Output: *stdout* - The escaped string
 #
-# Adds '\' to the string, so it can be used as a literal string in a regex expression
+# Adds '\' to the string, so it can be used as a literal string in a regex expression, assuming / is the search command separator
 #
 # .. var:: regex_escape_threshold
 #
-# The length threshold between using the pure bash version and sed version to. Set to 1000 on Windows, else 100
+# The length threshold between using the pure bash version and sed version to. Set to 600 on Windows, else 50
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
+#   $ regex_escape '***TEST***'
+#   \*\*\*TEST\*\*\*
 #
 # .. Note::
 #   An extra newline always shows up at the end, just like `echo` (without `-n`) would.
+#   Only works for Basic Regex Expressions (BRE). A different function/flag would be needed for extended, as the rules are incompatible with each other (for example ``()``)
 #**
-
 if [ "${OS-}" = "Windows_NT" ]; then
-  regex_escape_threshold=1000
+  regex_escape_threshold=600
 else
-  regex_escape_threshold=100
+  regex_escape_threshold=50
 fi
+
+# https://unix.stackexchange.com/a/33005/123413
+# Normal regex escapes $.*[\^,   (){}+?| must NOT be escaped
+# Extended must escape (), and who know whatelse
 
 function regex_escape()
 {
   local out=''
   local -i i=0
   local str="${1}"
-  declare -p str >&2
   if [ "${#str}" -gt "${regex_escape_threshold}" ]; then
     # Faster after sed is started
     sed '# Read all lines into one buffer
@@ -190,14 +201,59 @@ function regex_escape()
          N
          bcombine
          :done
-         s/./\\&/g' <<< "${str}"
+         s/[[$.*\^/]/\\&/g' <<< "${str}"
   else
     # Slower, but no process to load, so faster for short strings. On windows
     # this can be a big deal
+    # local regex='[[$.*\^/]'
     while (( i < ${#str} )); do
-      out+="\\${str:$i:1}"
+      if [[ ${str:$i:1} =~ [[$.*\\/^] ]]; then
+        out+="\\${str:$i:1}"
+      else
+        out+="${str:$i:1}"
+      fi
       i+=1
     done
     echo "$out"
   fi
+}
+
+#**
+# .. function:: regex_escape_range
+#
+# :Arguments: * ``$1`` - String to escape
+# :Output: *stdout* - The escaped string range, including []
+#
+# Adds '\' to the string, so it can be used as a literal string in a regex expression as a character range. Basically this handles the special cases for ``^``, ``-``, and ``]``
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
+#   $ regex_escape_range '^hk]'
+#   []hk^]
+#**
+function regex_escape_range()
+{
+  local str="${1}"
+
+  # Special case of ^ by itself, [^] will not work
+  if [ "${str}" = "^" ]; then
+    echo -n "^"
+    return
+  fi
+
+  # ^ must not be fisrt
+  if [[ ${str} =~ \^ ]]; then
+    str="${str//^/}^"
+  fi
+  # - must be last
+  if [[ ${str} =~ - ]]; then
+    str="${str//-/}-"
+  fi
+  # ] must be first
+  if [[ ${str} =~ ] ]]; then
+    str="]${str//]/}"
+  fi
+  echo -n "[${str}]"
 }
