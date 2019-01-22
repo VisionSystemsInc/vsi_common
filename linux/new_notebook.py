@@ -65,24 +65,16 @@ def get_parser():
   aa('--token', default='', help='Fixed token to use')
   return parser
 
+windows_bash_kernel_json = r'''{
+  "display_name": "Bash",
+  "language": "bash",
+  "argv": [
+   "c:\\Windows\\System32\\bash.exe", "-c",
+   "~/bash_kernel/bin/python -m bash_kernel -f \"`wslpath \"{connection_file}\"`\""
+  ]
+}'''
 
-def main(args=None):
-  args = get_parser().parse_args(args)
-
-  tempdir = tempfile.mkdtemp()
-
-  atexit.register(shutil.rmtree, tempdir)
-
-  python2 = None
-  python3 = None
-
-  env = dict(os.environ)
-  env.pop('PYTHONPATH', None)
-
-  env = dict(os.environ)
-  env.pop('PYTHONPATH', None)
-  with open('Pipfile', 'w') as fid:
-    fid.write('''[[source]]
+pipfile_3 = '''[[source]]
 name = "pypi"
 url = "https://pypi.org/simple"
 verify_ssl = true
@@ -92,26 +84,9 @@ verify_ssl = true
 [packages]
 
 [requires]
-python_version = "3"''')
+python_version = "3"'''
 
-  python2 = None
-
-  try:
-    Popen(['pipenv', "--three", 'install'], env=env).wait()
-  except AssertionError:
-    pass
-  else:
-    python3 = Popen(['pipenv', "--venv"], stdout=PIPE).communicate()[0].decode().strip()
-    python2 = '2'
-
-  if python2 and not os.path.exists(python2):
-    os.mkdir(python2)
-
-  # Set up python2 venv
-  env = dict(os.environ)
-  env.pop('PYTHONPATH', None)
-  with open('2/Pipfile', 'w') as fid:
-    fid.write('''[[source]]
+pipfile_2 = '''[[source]]
 name = "pypi"
 url = "https://pypi.org/simple"
 verify_ssl = true
@@ -121,106 +96,17 @@ verify_ssl = true
 [packages]
 
 [requires]
-python_version = "2"''')
+python_version = "2"'''
 
-  try:
-    Popen(['pipenv', "--two", 'install'], env=env, cwd=python2).wait()
-  except AssertionError:
-    if pythons:
-      shutil.rmtree(python2)
-  else:
-    python2 = Popen(['pipenv', "--venv"], stdout=PIPE, cwd="2").communicate()[0].decode().strip()
-
-  if python3:
-    python_dir = python3
-  else:
-    python_dir = python2
-
-  # Setup config dir inside virtual env dir by monkey patching python executable
-  os.environ['JUPYTER_CONFIG_DIR'] = os.path.join(os.getcwd(), "jupyter_config")
-  os.environ['JUPYTER_DATA_DIR'] = os.path.join(os.getcwd(), "jupyter_data")
-
-  try:
-    os.makedirs(os.environ['JUPYTER_CONFIG_DIR'])
-  except os.error:
-    pass
-
-  with open(os.path.join(os.environ['JUPYTER_CONFIG_DIR'],
-                        'jupyter_notebook_config.py'), 'w') as fid:
-    fid.write("""c.NotebookApp.ip = {ip}
+jupyter_notebook_config_py = """c.NotebookApp.ip = {ip}
 # To link to a specific NIC: pip install netifaces
 # c.NotebookApp.ip=netifaces.ifaddresses('eth0')[netifaces.AF_INET][0]['addr']
 # Put in try/except just in case
 c.NotebookApp.port = {port}
 c.NotebookApp.notebook_dir = {notebooks}
-c.NotebookApp.open_browser = {browser}\n""".format(
-      ip=repr(args.ip), port=args.port,
-      notebooks=repr(args.notebook_dir),
-      browser=str(args.browser)))
-    if not args.random_token:
-      fid.write("c.NotebookApp.token = {token}\n".format(token=repr(args.token)))
-    fid.flush()
+c.NotebookApp.open_browser = {browser}\n"""
 
-  if os.name == 'nt':
-    bin_dir = 'Scripts'
-    lib_dir = 'Lib'
-    bash_kernel = []
-  else:
-    bin_dir = 'bin'
-    lib_dir = 'lib/python*'
-    bash_kernel = ['bash_kernel']
-
-  site_file = glob(os.path.join(python_dir, lib_dir, 'site.py'))[0]
-  patch_site(site_file,
-            os.path.relpath(os.environ['JUPYTER_CONFIG_DIR'],
-                            os.path.dirname(site_file)),
-            os.path.relpath(os.environ['JUPYTER_DATA_DIR'],
-                            os.path.dirname(site_file)))
-
-  Popen(['pipenv',
-         'install', 'notebook', 'jupyter-contrib-nbextensions',
-         'ipywidgets'] + bash_kernel).wait()
-  Popen([os.path.join(os.path.abspath(python_dir), bin_dir, 'python'),
-        '-m', 'ipykernel.kernelspec', '--user']).wait()
-  if os.name != "nt":
-    Popen([os.path.join(os.path.abspath(python_dir), bin_dir, 'python'),
-          '-m', 'bash_kernel.install', '--user']).wait()
-  Popen([os.path.join(os.path.abspath(python_dir), bin_dir, 'jupyter-contrib'),
-        'nbextension', 'install', '--user']).wait()
-  Popen([os.path.join(os.path.abspath(python_dir),
-                      bin_dir, 'jupyter-nbextension'),
-        'enable', '--py', '--user', 'widgetsnbextension']).wait()
-
-  if os.name == "nt":
-    Popen(['c:\\Windows\\System32\\bash.exe',
-           '-c',
-           'tmp_dir="\\$(mktemp -d)";'
-           'cd "\\${tmp_dir}";'
-           'python3 <(curl -L https://bootstrap.pypa.io/get-pip.py) --no-cache-dir -I --root "\\${tmp_dir}" virtualenv;'
-           'PYTHONPATH="\\$(cd "\\${tmp_dir}"/usr/local/lib/python*/*-packages/; pwd)" "\\${tmp_dir}/usr/local/bin/virtualenv" ~/bash_kernel;'
-           '~/bash_kernel/bin/pip install --no-cache-dir bash_kernel;'
-           'rm -r "\\${tmp_dir}"'], shell=False).wait()
-
-  if python2 and python3:
-    with open(os.path.join(os.environ['JUPYTER_CONFIG_DIR'],
-                        'jupyter_notebook_config.py'), 'a') as fid:
-      fid.write("c.MultiKernelManager.default_kernel_name = 'python3'")
-
-    site_file = glob(os.path.join(python2, lib_dir, 'site.py'))[0]
-
-    patch_site(site_file,
-              os.path.relpath(os.environ['JUPYTER_CONFIG_DIR'],
-                              os.path.dirname(site_file)),
-              os.path.relpath(os.environ['JUPYTER_DATA_DIR'],
-                              os.path.dirname(site_file)))
-    Popen(['pipenv', 'install', 'ipywidgets'], cwd="2").wait()
-    Popen([os.path.join(python2, bin_dir, 'python'),
-          '-m', 'ipykernel.kernelspec', '--user', '--name', 'python2']).wait()
-
-
-  # Add add_virtualenv script
-  with open('add_virtualenv', 'w') as fid:
-    fid.write('''#!/usr/bin/env bash
+add_virtualenv = '''#!/usr/bin/env bash
 
 set -eu
 
@@ -250,12 +136,9 @@ cat << EOS > "${venv}/jupyter_data/kernels/${1}/kernel.json"
  "env": {},
  "language": "python"
 }
-EOS''')
-  os.chmod('add_virtualenv', 0o755)
+EOS'''
 
-  # Add add_pipenv script
-  with open('add_pipenv', 'w') as fid:
-    fid.write('''#!/usr/bin/env bash
+add_pipenv = '''#!/usr/bin/env bash
 
 set -eu
 
@@ -287,12 +170,9 @@ cat << EOS > "${venv}/jupyter_data/kernels/${1}/kernel.json"
  "env": {"PIPENV_PIPFILE":"${PIPENV_PIPFILE-$(pipenv --venv)/Pipfile}"},
  "language": "python"
 }
-EOS''')
-  os.chmod('add_pipenv', 0o755)
+EOS'''
 
-  # Add relocate script
-  with open('relocate', 'w') as fid:
-    fid.write('''#!/usr/bin/env bash
+relocate = '''#!/usr/bin/env bash
 
 set -eu
 
@@ -317,7 +197,171 @@ done
 
 find "${full_path}/jupyter_data/" "${full_path}/jupyter_config/" \( -name kernel.json -o -name jupyter_nbconvert_config.json \) \
   -exec sed -i "s|${OLD_LOCATION}|${full_path}|" \{\} \;
-''')
+'''
+
+def main(args=None):
+  args = get_parser().parse_args(args)
+
+  tempdir = tempfile.mkdtemp()
+
+  atexit.register(shutil.rmtree, tempdir)
+
+  env = os.environ.copy()
+  env.pop('PYTHONPATH', None)
+  with open('Pipfile', 'w') as fid:
+    fid.write(pipfile_3)
+
+  python2 = None
+  python3 = None
+
+  ### Setup python 3 ###
+  try:
+    Popen(['pipenv', "--three", 'install'], env=env).wait()
+  except AssertionError:
+    pass
+  else:
+    # Get python3 venv dir
+    python3 = Popen(['pipenv', "--venv"], stdout=PIPE).communicate()[0].decode().strip()
+    python2 = '2'
+
+  ### Setup Python 2 ###
+  if python2:
+    try:
+      os.makedirs(python2)
+    except os.error:
+      pass
+
+  # Set up python2 venv
+  env = dict(os.environ)
+  env.pop('PYTHONPATH', None)
+  with open('2/Pipfile', 'w') as fid:
+    fid.write(pipfile_2)
+
+  try:
+    Popen(['pipenv', "--two", 'install'], env=env, cwd=python2).wait()
+  except AssertionError:
+    # If Python2 failed, and python3 succeeded, remove python2 subdir
+    if python2 == '2':
+      shutil.rmtree(python2)
+    python2 = None
+  else:
+    # get python2 venv dir
+    python2 = Popen(['pipenv', "--venv"], stdout=PIPE, cwd="2").communicate()[0].decode().strip()
+
+  # Determine which python dir is the "main" one, favor 3
+  if python3:
+    python_dir = python3
+  else:
+    python_dir = python2
+
+  # Setup config dir inside virtual env dir by monkey patching python executable
+  os.environ['JUPYTER_CONFIG_DIR'] = os.path.join(os.getcwd(), "jupyter_config")
+  os.environ['JUPYTER_DATA_DIR'] = os.path.join(os.getcwd(), "jupyter_data")
+
+  try:
+    os.makedirs(os.environ['JUPYTER_CONFIG_DIR'])
+  except os.error:
+    pass
+
+  with open(os.path.join(os.environ['JUPYTER_CONFIG_DIR'],
+                        'jupyter_notebook_config.py'), 'w') as fid:
+    fid.write(jupyter_notebook_config_py.format(
+      ip=repr(args.ip), port=args.port,
+      notebooks=repr(args.notebook_dir),
+      browser=str(args.browser)))
+    if not args.random_token:
+      fid.write("c.NotebookApp.token = {token}\n".format(token=repr(args.token)))
+    fid.flush()
+
+  # On windows, we don't install the bash_kernel in windows
+  if os.name == 'nt':
+    bin_dir = 'Scripts'
+    lib_dir = 'Lib'
+    bash_kernel = []
+  else:
+    bin_dir = 'bin'
+    lib_dir = 'lib/python*'
+    bash_kernel = ['bash_kernel']
+
+  # Patch the site.py file
+  site_file = glob(os.path.join(python_dir, lib_dir, 'site.py'))[0]
+  patch_site(site_file,
+            os.path.relpath(os.environ['JUPYTER_CONFIG_DIR'],
+                            os.path.dirname(site_file)),
+            os.path.relpath(os.environ['JUPYTER_DATA_DIR'],
+                            os.path.dirname(site_file)))
+
+  # Install packages
+  Popen(['pipenv',
+         'install', 'notebook', 'jupyter-contrib-nbextensions',
+         'ipywidgets'] + bash_kernel).wait()
+  # Install the main python kernel
+  Popen([os.path.join(os.path.abspath(python_dir), bin_dir, 'python'),
+        '-m', 'ipykernel', 'install', '--user']).wait()
+  # Setup Notebook extensions and widgets
+  Popen([os.path.join(os.path.abspath(python_dir), bin_dir, 'jupyter-contrib'),
+        'nbextension', 'install', '--user']).wait()
+  Popen([os.path.join(os.path.abspath(python_dir),
+                      bin_dir, 'jupyter-nbextension'),
+        'enable', '--py', '--user', 'widgetsnbextension']).wait()
+
+  # Setup bash_kernel
+  if os.name != "nt":
+    Popen([os.path.join(os.path.abspath(python_dir), bin_dir, 'python'),
+          '-m', 'bash_kernel', 'install', '--user', '--name', 'Bash']).wait()
+  else:
+    # on windows, use wsl to setup bash_kernel if available
+    if os.path.exists('c:\\Windows\\System32\\bash.exe'):
+      Popen(['c:\\Windows\\System32\\bash.exe',
+            '-c',
+            'tmp_dir="\\$(mktemp -d)";'
+            'cd "\\${tmp_dir}";'
+            'python3 <(curl -L https://bootstrap.pypa.io/get-pip.py) --no-cache-dir -I --root "\\${tmp_dir}" virtualenv;'
+            'PYTHONPATH="\\$(cd "\\${tmp_dir}"/usr/local/lib/python*/*-packages/; pwd)" "\\${tmp_dir}/usr/local/bin/virtualenv" ~/bash_kernel;'
+            '~/bash_kernel/bin/pip install --no-cache-dir bash_kernel ipykernel;'
+            'rm -r "\\${tmp_dir}"'], shell=False).wait()
+      try:
+        os.makedirs(os.path.join(os.environ['JUPYTER_DATA_DIR'], 'kernels',
+                                 'bash'))
+      except os.error:
+        pass
+      with open(os.path.join(os.environ['JUPYTER_DATA_DIR'], 'kernels', 'bash',
+                            'kernel.json'), 'w') as fid:
+        fid.write(windows_bash_kernel_json)
+
+  # if both pythons worked, setup multi kernels
+  if python2 and python3:
+    with open(os.path.join(os.environ['JUPYTER_CONFIG_DIR'],
+                        'jupyter_notebook_config.py'), 'a') as fid:
+      fid.write("c.MultiKernelManager.default_kernel_name = 'python3'")
+
+    # patch python2's site too
+    site_file = glob(os.path.join(python2, lib_dir, 'site.py'))[0]
+    patch_site(site_file,
+              os.path.relpath(os.environ['JUPYTER_CONFIG_DIR'],
+                              os.path.dirname(site_file)),
+              os.path.relpath(os.environ['JUPYTER_DATA_DIR'],
+                              os.path.dirname(site_file)))
+    # Install python2's ipywidget too
+    Popen(['pipenv', 'install', 'ipywidgets'], cwd="2").wait()
+    # Install the python2 kernel
+    Popen([os.path.join(python2, bin_dir, 'python'),
+          '-m', 'ipykernel', 'install', '--user', '--name', 'python2']).wait()
+
+
+  # Add add_virtualenv script
+  with open('add_virtualenv', 'w') as fid:
+    fid.write(add_virtualenv)
+  os.chmod('add_virtualenv', 0o755)
+
+  # Add add_pipenv script
+  with open('add_pipenv', 'w') as fid:
+    fid.write(add_pipenv)
+  os.chmod('add_pipenv', 0o755)
+
+  # Add relocate script
+  with open('relocate', 'w') as fid:
+    fid.write(relocate)
   os.chmod('relocate', 0o755)
 
   print("\n---------------------------------\n")
