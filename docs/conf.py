@@ -86,6 +86,57 @@ napoleon_use_ivar = True
 napoleon_include_private_with_doc = True
 napoleon_include_special_with_doc = True
 
+# Autodoc parameters
+
+# from sphinx.autodoc.importer import import_object
+# import_object('IPython', )
+
+autodoc_mock_imports = ["pyopencl", "vtk", "numpy", "matplotlib",
+                        "rpdb", "rpdb2", "PIL", "skimage", "mpl_toolkits",
+                        "scipy", "IPython",
+                        "brl_init", "boxm2_adaptor", "boxm2_scene_adaptor",
+                        "vpgl_adaptor_boxm2_batch"]
+
+
+# Remove warnings due to a bug in the Python docs with nitpick_ignore
+nitpick_ignore = [('py:class', 'bool'),
+                  ('py:class', 'array_like'),
+                  ('py:class', 'object'),
+                  ('py:class', 'str'),
+                  ('py:class', 'string'),
+                  ('py:class', 'int'),
+                  ('py:class', 'float'),
+                  ('py:class', 'figure'),
+                  ('py:class', 'axes'),
+                  ('py:class', 'func'),
+                  ('py:class', 'dict'),
+                  ('py:class', 'iterable'),
+                  ('py:class', 'list'),
+                  ('py:class', 'class'),
+                  ('py:class', 'tuple'),
+                  ('py:class', 'module'),
+                  ('py:class', 'Other'),
+                  ('py:class', 'optional'),
+                  ('py:class', 'var'),
+                  ('py:class', 'frame'),
+                  ('py:class', 'file_like'),
+                  ('py:class', 'numpy.array'),
+                  ('py:class', 'BoundingBox'),
+                  ('py:class', 'unittest.case.TestCase'),
+                  ('py:class', 'subprocess.Popen'),
+                  ('py:class', 'rpdb2.CDebuggerCoreThread'),
+                  ('py:class', 'IPython.core.debugger.Tracer'),
+                  ('py:class', 'IPython.core.debugger.Pdb'),
+                  ('py:class', 'debugger'),
+                  ('py:class', 'threading.Thread'),
+                  ('py:class', 'Exception'),
+                  ('py:class', 're.Pattern'),
+                  ('py:exc', 'OSError'),
+                  ('py:exc', 'Exception'),
+                  ('py:exc', 'ValueError'),
+                  ('py:exc', 'SystemExit'),
+                  ('py:exc', 'AttributeError'),
+                  ('py:exc', 'KeyboardInterrupt')]
 
 # -- Options for HTML output -------------------------------------------------
 

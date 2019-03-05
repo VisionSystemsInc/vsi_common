@@ -21,7 +21,7 @@ def dbstop_if_error(_rpdb2_pwd='vsi', fAllowUnencrypted=True,
           True if a remote is allowed. False if not. Default: False
       timeout : int
           The timeout period in seconds.
-      source_provider : 'str'
+      source_provider : str
           The Source Provider
       fDebug : bool
           The Debug Output
@@ -37,7 +37,8 @@ def dbstop_if_error(_rpdb2_pwd='vsi', fAllowUnencrypted=True,
 
       Of course, this means that if the debugger slows down execution, it will
       have to slow down all of the execution, instead of being loaded "just in
-      time"'''
+      time"
+  '''
   rpdb2.start_embedded_debugger(_rpdb2_pwd, fAllowUnencrypted, fAllowRemote,
                                 timeout, source_provider, fDebug, depth)
 
@@ -45,7 +46,7 @@ def dbstop_if_error(_rpdb2_pwd='vsi', fAllowUnencrypted=True,
 #not have a Post Mortem equivalent... yet. Need to find a way to push the pm
 #data into whatever the analyze command uses, so that it can be faked out
 
-""" I can't get this working yet either. rpdb uses the profiler to catch 
+""" I can't get this working yet either. rpdb uses the profiler to catch
   exceptions, NOT excepthook
   #old_excepthook = rpdb2.__excepthook
   #rpdb2.__excepthook = partial(rpdb_exception_hook, old_excepthook)
@@ -88,13 +89,14 @@ def rpdb_dbstop_exception_hook(type, value, tb, _rpdb2_pwd='vsi', *args, **kwarg
     import traceback
     traceback.print_exception(type, value, tb)
 
-    rpdb_post_mortem(tb, _rpdb2_pwd, *args, **kwargs) # more "modern" """
+    rpdb_post_mortem(tb, _rpdb2_pwd, *args, **kwargs) # more "modern"
+"""
 
 def set_trace(_rpdb2_pwd='vsi', fAllowUnencrypted=True,
                    fAllowRemote=False, timeout=5*60, source_provider=None,
                    fDebug=False, depth=1):
-  ''' Works, but without the other parts, it's far from auto 
-  
+  ''' Works, but without the other parts, it's far from auto
+
       Parameters
       ----------
       _rpdb2_pwd : str
@@ -105,13 +107,13 @@ def set_trace(_rpdb2_pwd='vsi', fAllowUnencrypted=True,
           True if a remote is allowed. False if not. Default: False
       timeout : int
           The timeout period in seconds.
-      source_provider : 'str'
+      source_provider : str
           The Source Provider
       fDebug : bool
           The Debug Output
       depth : int
           The Depth of the frame. Default: 0
-      '''
+  '''
   print('Starting rpdb2...')
   rpdb2.start_embedded_debugger(_rpdb2_pwd, fAllowUnencrypted, fAllowRemote,
                                 timeout, source_provider, fDebug, depth)
@@ -130,15 +132,17 @@ def set_trace(_rpdb2_pwd='vsi', fAllowUnencrypted=True,
 def attach(pid, ip='127.0.0.1', password='vsi', gui=False, break_exit=False):
   ''' Parameters
       ----------
-      pid : str
-          The Process ID
+      pid : int
+        The Process ID
       ip : str
-          The IP Address
+        The IP Address
       password : str
-          The Password
+        The Password
       gui : bool
+        If true use winpbd GUI
       break_exit : bool
-      '''
+        If break_exit is true, it set's a breakpoint when the program extis.
+  '''
   vdb.attach(pid)
   import sys
   old_args = sys.argv
@@ -170,34 +174,12 @@ def set_attach(_rpdb2_pwd='vsi', *args, **kwargs):
             Variable length argument list.
       **kwargs
             Arbitrary keyword arguments.
-      '''
+  '''
   vdb.set_attach(partial(set_trace, *args, **kwargs))
 
 class CDebuggerCoreThread2(rpdb2.CDebuggerCoreThread):
   ''' I just wanted to add some output on exception!!!'''
   def profile(self, frame, event, arg):
-    """
-    Profiler method.
-
-    Parameters
-    ----------
-    frame : str
-        The Frame
-    event : str
-        The Event
-    arg : array_like
-        The Argument
-
-    Raises
-    ------
-    AttributeError
-        An Unhandled Exception
-
-
-    The Python profiling mechanism is used by the debugger
-    mainly to handle synchronization issues related to the
-    life time of the frame structure.
-    """
     #print_debug('profile: %s, %s, %s, %s, %s' % (repr(frame), event, frame.f_code.co_name, frame.f_code.co_filename, repr(arg)[:40]))
 
     if event == 'return':

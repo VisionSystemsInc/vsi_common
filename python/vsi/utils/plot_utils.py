@@ -9,34 +9,42 @@ import numpy as np
 import skimage.color
 
 def grouped_bar(features, bar_labels=None, group_labels=None, ax=None, colors=None):
-  '''
-  features.shape like np.array([n_bars, n_groups])
-  
+  ''' features.shape like np.array([n_bars, n_groups])
+
+  Parameters
+  ----------
+  features : numpy.array
+      An array of the features
+
+
+  Example::
+
   >>> bars = np.random.rand(5,3)
   >>> grouped_bar(bars)
-  
+
   >>> group_labels = ['group%d' % i for i in range(bars.shape[1])]
   >>> bar_labels = ['bar%d' % i for i in range(bars.shape[0])]
   >>> grouped_bar(bars, group_labels=group_labels, bar_labels=bar_labels)
+
   '''
-  
+
   n_bars, n_groups = features.shape[0:2]
 
-  if ax is None: 
+  if ax is None:
     fig, ax = plt.subplots()
     fig.set_size_inches(9,6)
   else:
     fig = ax.get_figure()
-  
-  if colors is None: 
+
+  if colors is None:
     colors = mpl.cm.spectral(np.linspace(0, 1, n_bars))
-  
+
   index = np.arange(n_groups)
   bar_width = 1.0/(n_bars) * 0.75
 
   for j,group in enumerate(features):
     label = bar_labels[j] if bar_labels is not None else None
-    ax.bar(index + j*bar_width - bar_width*n_bars/2.0, 
+    ax.bar(index + j*bar_width - bar_width*n_bars/2.0,
       group, bar_width, color=colors[j], label=label, alpha=0.4)
     ax.margins(0.05,0.0) # so the bar graph is nicely padded
 
@@ -57,11 +65,24 @@ def lblshow(label_img, labels_str=None, f=None, ax=None, cmap=None, *args, **kwa
 
   Parameters
   ----------
-  label_img : labeled image [nrows, ncols] = numpy.array.shape
-  labels_str : a complete list of labels
-  f : (optional) a figure handle
-  cmap : the color of each label (optional). like a list of colors, e.g.,
+  label_img : array_like
+      labeled image [nrows, ncols] = numpy.array.shape
+  labels_str : list, optional
+      a complete list of labels
+  f : array_like, optional
+      (optional) a figure handle
+  cmap : array_like, optional
+      the color of each label (optional). like a list of colors, e.g.,
       ['Red','Green',...] or a matplotlib.colors.ListedColormap)
+  *args
+      Variable length argument list.
+  **kwargs
+      Arbitrary keyword arguments.
+
+  Returns
+  -------
+  array_like
+
   '''
 
   if labels_str is None:
@@ -74,7 +95,7 @@ def lblshow(label_img, labels_str=None, f=None, ax=None, cmap=None, *args, **kwa
     else:
       ax = f.gca()
   elif f is None:
-    f = ax.get_figure() 
+    f = ax.get_figure()
 
 
   nlabels = len(labels_str)
@@ -105,18 +126,41 @@ def lblshow(label_img, labels_str=None, f=None, ax=None, cmap=None, *args, **kwa
     cbar.ax.text(1.3, float(2 * j + 1) / (nlabels*2), lab, ha='left', va='center')
 
   return f
-    
+
 def imshow(X, *args, **kwargs):
   """ modify the coordinate formatter to report the image "z"
-    from http://matplotlib.org/examples/api/image_zcoord.html
-  """
+
+  Parameters
+  ----------
+  X : array_like
+  *args
+      Variable length argument list.
+  **kwargs
+      Arbitrary keyword arguments.
   
+  
+  from http://matplotlib.org/examples/api/image_zcoord.html
+  """
+
   _, ax = plt.subplots()
   ax.imshow(X, *args, **kwargs)
 
   numrows, numcols = X.shape[0:2]
   def format_coord(x, y):
-    """ create string representation of x,y coords """
+    """ create string representation of x,y coords 
+  
+    Parameters
+    ----------
+    x : array_like
+        The x coordinates
+    y : array_like
+        The y coordinates
+  
+    Returns
+    -------
+    str
+        String representation of x,y coordinates
+    """
     col = int(x+0.5)
     row = int(y+0.5)
     if col >= 0 and col < numcols and row >= 0 and row < numrows:
@@ -127,7 +171,7 @@ def imshow(X, *args, **kwargs):
 
   ax.format_coord = format_coord
   plt.show()
-  
+
 def plot_vector(x, axis, axis_order, *args, **kwargs):
   """ conveniance method for plotting 2 or 3-d data stored in numpy array """
 
@@ -140,7 +184,19 @@ def plot_vector(x, axis, axis_order, *args, **kwargs):
     axis.plot(x[axis_order[0],:], x[axis_order[1],:], x[axis_order[2],:], *args, **kwargs)
 
 def plot_rectangle(min_pt, max_pt, axis=None, *args, **kwargs):
-  """ plot a 2-d box """
+  """ plot a 2-d box
+
+  Parameters
+  ----------
+  min_pt : array_like
+      The minimum point
+  max_pt : array_like
+      The maximum point
+  *args
+      Variable length argument list.
+  **kwargs
+      Arbitrary keyword arguments.
+  """
   x,y = min_pt
   width, height = max_pt - min_pt
   xvec = [x, x+width, x+width, x, x]
@@ -155,7 +211,13 @@ def plot_cube(x, y, z, width, height, depth, *args, **kwargs):
   pass
 
 def plot_camera(cam, img_dims=(1280,720), axis=None, axis_order=(0,1,2), img_plane_depth=1.0):
-  """ plot a 3-d representation of a perspective camera with image plane """
+  """ plot a 3-d representation of a perspective camera with image plane
+
+  Parameters
+  ----------
+  cam :
+  
+  """
   if axis == None:
     axis = plt.gca()
   # plot camera center
@@ -172,7 +234,7 @@ def plot_camera(cam, img_dims=(1280,720), axis=None, axis_order=(0,1,2), img_pla
   plot_vector(c3d_np, axis, axis_order, 'k-')
   # plot connecting lines from the center to the image plane
   for x in corners_3d:
-    plot_vector(np.array((cam.center, x)).T, axis, axis_order, 'k-') 
+    plot_vector(np.array((cam.center, x)).T, axis, axis_order, 'k-')
 
 
 class OrthoAnd3DPlot:
@@ -214,11 +276,20 @@ class OrthoAnd3DPlot:
 
 
   def plot(self, items, *args, **kwargs):
-    """ add a set of 3-d elements to the plot. """
+    """ add a set of 3-d elements to the plot.
+  
+    Parameters
+    ----------
+    items : array_like
+    *args
+        Variable length argument list.
+    **kwargs
+        Arbitrary keyword arguments.
+    """
 
     self.ax_array[0][0].plot(items[self.aligned_x_dim,:],
               items[self.aligned_y_dim,:], *args, **kwargs)
-    
+
     self.ax_array[0][1].plot(items[self.extra_dim,:],
               items[self.aligned_y_dim,:], *args, **kwargs)
 
@@ -231,7 +302,17 @@ class OrthoAnd3DPlot:
 
 
   def setlim(self, dim, dmin, dmax):
-    """ set the axis limits on all plots for the given data dimension """
+    """ set the axis limits on all plots for the given data dimension
+
+    Parameters
+    ----------
+    dim : array_like
+        The given data dimension
+    dmin : array_like
+        The minimum data dimension
+    dmax : array_like
+        The maximum data dimension
+    """
     if dim == self.aligned_x_dim:
       self.ax_array[0][0].set_xlim(dmin, dmax)
       self.ax_array[1][0].set_xlim(dmin, dmax)
@@ -247,7 +328,13 @@ class OrthoAnd3DPlot:
 
 
   def invert_axis(self, dim):
-    """ invert the display of the given data dimension """
+    """ invert the display of the given data dimension
+
+    Parameters
+    ----------
+    dim : array_like
+        The given data dimension
+    """
     if dim == self.aligned_x_dim:
       self.ax_array[0][0].invert_xaxis()
       self.ax_array[1][0].invert_xaxis()
@@ -263,7 +350,22 @@ class OrthoAnd3DPlot:
 
 
 def imshow_row(images,*args,**kwargs):
-  """ imshow a set of images, arranged in a row """
+  """ imshow a set of images, arranged in a row
+
+  Parameters
+  ----------
+  images : array_like
+      A set of images
+  *args
+      Variable length argument list.
+  **kwargs
+      Arbitrary keyword arguments.
+
+  Returns
+  -------
+  array_like
+      The set of images, arranged in a row
+  """
   nimages = len(images)
   fig,ax = plt.subplots(1,nimages)
   for (axi, imgi) in zip(ax,images):
@@ -272,7 +374,25 @@ def imshow_row(images,*args,**kwargs):
 
 
 def overlay_heatmap(image, heatmap, cmap='jet', vmin=0, vmax=1, img_ratio=0.4):
-  """ create a visualization of the image with overlaid heatmap """
+  """ create a visualization of the image with overlaid heatmap
+
+  Parameters
+  ----------
+  image : array_like
+      The image
+  heatmap :
+      The heatmap
+  
+  Returns
+  -------
+  array_like
+      The heatmap overlay
+  
+  Raises
+  ------
+  Exception
+      If the image is not grayscale or rgb
+  """
   img_gray = image
   if len(image.shape) == 3:
     img_gray = skimage.color.rgb2gray(image)
@@ -291,6 +411,12 @@ def overlay_heatmap(image, heatmap, cmap='jet', vmin=0, vmax=1, img_ratio=0.4):
 
 
 def make_random_colormap():
-  """ return a random colormap (useful for segmentation displays) """
+  """ return a random colormap (useful for segmentation displays)
+  
+      Returns
+      -------
+      array_like
+          A random colormap
+  """
   return mpl.colors.ListedColormap( np.random.rand(256,3))
 

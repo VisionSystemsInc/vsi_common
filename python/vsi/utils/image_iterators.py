@@ -31,21 +31,29 @@ class IterateOverWindows(object):
   def __init__(self, pixels_per_cell, pixel_stride=None, image=None,
       mode='constant', cval=0,
       start_pt=(0, 0), stop_pt=(None, None)):
+
     ''' Sliding window iterator.
 
     Parameters
     ----------
-    pixels_per_cell: x,y - let x,y be odd so the window can be easily centered
-    pixel_stride : x,y
-    image : like numpy.array (ndim == 2 or 3)
-    mode : Points outside the boundaries of the input are filled according
-         to the given mode. Only ``mode='constant'``, ``mode='discard'`` and
-         ``mode='reflect'`` are currently supported, although others could
-         be added (e.g., 'nearest' and 'wrap')
-    cval : Value used for points outside the boundaries of the input if
-         ``mode='constant'``. Default is 0.0
-    start_pt : (x,y)
-    stop_pt  : (x,y)
+    pixels_per_cell : array_like
+        x,y - let x,y be odd so the window can be easily centered
+    pixel_stride : array_like, optional
+        x,y
+    image : array_like, optional
+        like numpy.array (ndim == 2 or 3)
+    mode : str, optional
+        Points outside the boundaries of the input are filled according to the
+        given mode. Only ``mode='constant'``, ``mode='discard'`` and
+        ``mode='reflect'`` are currently supported, although others could be
+        added (e.g., 'nearest' and 'wrap')
+    cval : float, optional
+        Value used for points outside the boundaries of the input if
+        ``mode='constant'``. Default is 0.0
+    start_pt : array_like, optional
+        (x,y)
+    stop_pt : array_like, optional
+        (x,y)
 
     >>> tot = 0; im = np.arange(100).reshape((10,10))
     >>> for i,ret in enumerate(IterateOverWindows((5,5),(2,2),cval=1).iter(im)):
@@ -61,9 +69,9 @@ class IterateOverWindows(object):
     >>> print(tot) # weak test
     25000
     '''
-
+    
     assert pixels_per_cell[0] % 2 == 1 and pixels_per_cell[1] % 2 == 1, \
-        'provide an odd number for pixels_per_cell so the window can be easily centered'
+        'provide an odd number for pixels_per_cell to easily center the window'
     self.pixels_per_cell = tuple(pixels_per_cell)
     self.pixel_stride = self.pixels_per_cell if pixel_stride is None else pixel_stride
     self.image = image
@@ -76,7 +84,8 @@ class IterateOverWindows(object):
     '''
     Parameters
     ----------
-    image : like numpy.array (ndim == 2 or 3)
+    image : array_like
+        like numpy.array (ndim == 2 or 3)
     '''
 
     self.image = image
@@ -103,17 +112,25 @@ class IterateOverWindows(object):
 
     Parameters
     ----------
-    image : like numpy.array (ndim == 2 or 3)
+    image : array_like
+        like numpy.array (ndim == 2 or 3)
 
     Returns
     -------
-    chip : pixels within the current window. Points outside the boundaries of the input
-         are filled according to the given mode.
-    mask : the binary mask of the window within the chip
-    bbox : the inclusive extents of the chip (which may exceed the bounds of the image)
+    numpy.array, optional
+      chip : pixels within the current window. Points outside the
+      boundaries of the input are filled according to the given mode.
+    numpy.array
+      mask : the binary mask of the window within the chip
+    BoundingBox
+      bbox : the inclusive extents of the chip (which may exceed the bounds
+      of the image)
+
 
     MODIFICATIONS
+
     sgr : turned into a class
+
     sgr : added mode='reflect'
     '''
 
@@ -198,23 +215,26 @@ class IterateOverWindows(object):
 
 class IterateOverSuperpixels(object):
   def __init__(self, segmented, image=None):
-    '''
-    Parameters
-    ----------
-    segmented : superpixel labeled segmentation (like numpy.array)
-          NOTE regionprops expects labels to be sequential and start
-          at 1: {1,2,...}. label 0 is treated as unlabeled.
-    image : like numpy.array (ndim == 2 or 3)
-    '''
 
     self.segmented = segmented
     self.image = image
+    '''
+    Parameters
+    ----------
+    segmented : array_like
+          Superpixel labeled segmentation (like numpy.array)
+          NOTE regionprops expects labels to be sequential and start
+          at 1: {1,2,...}. label 0 is treated as unlabeled.
+    image : array_like, optional
+        like numpy.array (ndim == 2 or 3)
+    '''
 
   def setImage(self, image):
     '''
     Parameters
     ----------
-    image : like numpy.array (ndim == 2 or 3)
+    image : array_like
+        like numpy.array (ndim == 2 or 3)
     '''
 
     self.image = image
@@ -225,16 +245,25 @@ class IterateOverSuperpixels(object):
 
     Parameters
     ----------
-    image : like numpy.array (ndim == 2 or 3)
+    image : array_like, optional
+        like numpy.array (ndim == 2 or 3)
 
     Returns
     -------
-    chip : defined by the escribed bounding box of the segment. (view into image)
-    mask : the binary mask of the segment within the chip
-    bbox : the inclusive extents of the chip within the original image
+    numpy.array, optional
+      chip : pixels within the current window. Points outside the
+      boundaries of the input are filled according to the given mode.
+    numpy.array
+      mask : the binary mask of the window within the chip
+    BoundingBox
+      bbox : the inclusive extents of the chip (which may exceed the bounds
+      of the image)
+
 
     MODIFICATIONS
+
     sgr : optimized
+
     sgr : turned into a class
     '''
 

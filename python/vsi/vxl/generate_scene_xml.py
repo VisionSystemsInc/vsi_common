@@ -5,6 +5,18 @@ import sys, os.path
 
 def generate_scene_xml(output_file, model_dir_rel, num_blocks, num_subblocks, subblock_size, appearance_models=None, num_bins=1, max_level=3, lvcs_og=None, local_og=None):
   """ write the scene.xml file
+
+  Parameters
+  ----------
+  output_file : str
+      The output file
+  model_dir_rel :
+  num_blocks : array_like
+  num_subblocks : array_like
+  subblock_size : int
+      The subblock size
+
+
   lvcs_og is a tuple stored as (lon, lat, hae)  (hae -> height above ellipsoid)
   """
 

@@ -10,7 +10,7 @@ __kernel void score_rectified_row(__global const float *a,
     int idx = a_col*ncols_b + b_col;
 
     // make sure we have enough room to compute a window around the current pixel
-    if ( (a_col < window_radius) || (a_col >= (ncols_a - window_radius)) || 
+    if ( (a_col < window_radius) || (a_col >= (ncols_a - window_radius)) ||
          (b_col < window_radius) || (b_col >= (ncols_b - window_radius)) ||
          (row < window_radius) || (row >= (nrows - window_radius)) ) {
         result[idx] = NAN;

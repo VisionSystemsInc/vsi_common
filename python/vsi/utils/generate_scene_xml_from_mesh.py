@@ -7,7 +7,29 @@ import sys
 import numpy as np
 
 def generate_scene_xml_from_mesh(mesh_filename, output_filename, model_dir_rel, num_blocks, max_num_subblocks, appearance_models, num_bins, max_level, lvcs_origin ):
-  """ generate the scene.xml to fit geometry defined in the ply or obj file """
+  """ generate the scene.xml to fit geometry defined in the ply or obj file
+  
+      Parameters
+      ----------
+      mesh_filename : str
+        The file of the mesh vertics
+      output_filename : str
+        The output filename
+      model_dir_rel : str
+        The relative path to the model directory
+      num_blocks : int
+        The number of blocks
+      max_num_subblocks: int
+        The maximum number of subblocks
+      appearance_models : list
+        List of appearance models
+      num_bins : int
+        The number of bins
+      max_level : int
+        The maximum number of octree subdivisions
+      lvcs_origin : array_like
+        A 3D array
+  """
   # get the mesh vertices in numpy matrix form
   verts = mesh_utils.get_mesh_vertices(mesh_filename)
   # compute subblock size needed to contain all vertices

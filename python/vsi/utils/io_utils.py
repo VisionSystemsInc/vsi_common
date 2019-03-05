@@ -12,7 +12,9 @@ except ImportError:
 import vsi.tools
 
 def read_token(file_obj, tok=None, ignore_char=None):
-  """ return a generator that separates file based on whitespace, or optionally, tok """
+  """ return a generator that separates file based on whitespace, or
+  optionally, tok
+  """
   for line in file_obj:
     for token in line.split(tok):
       if len(token) == 0 or (ignore_char is not None and token[0] == ignore_char):
@@ -140,7 +142,8 @@ def read_vector(vec_string):
 
 
 def read_matrix_lines(row_strings):
-  """ read the individual matrix elements from a list of strings (one per row) """
+  """ read the individual matrix elements from a list of strings (one per row)
+  """
   rows = []
   for line in row_strings:
     elements_str = line.split()
@@ -195,7 +198,9 @@ def write_camera_KRT(K,R,T, filename):
 
 
 def read_bundler_file(filename):
-  """ read an output file from the 'bundler' program.  Return the cameras and points """
+  """ read an output file from the 'bundler' program.  Return the cameras and
+  points
+  """
   lines = read_list(filename)
   # first line is comment
   # second line has number of cameras, number of pts
@@ -272,7 +277,8 @@ def read_vsfm_nvm_file(filename):
       cam_center = np.dot(-R.transpose(),T)
     else:
       q = np.zeros(4)
-      for qi in range(4):
+      q[3] = float(next(tokgen))
+      for qi in range(3):
         q[qi] = float(next(tokgen))
       R = geometry_utils.quaternion_to_matrix(q)
       cam_center = np.zeros(3)

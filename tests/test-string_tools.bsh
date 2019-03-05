@@ -59,3 +59,66 @@ begin_test "String trim"
   [ "$(trim "${e}" 'a-m')" == "${be}" ]
 )
 end_test
+
+quote_tests=("hiya"
+      "hi ya"
+      "hi  ya"
+      "hi\0ya"
+      "hi\nya"
+      "Hi \"  'ya \""
+      '*'
+      '<(ls)'
+      '[ 1 = 1 ]'
+      '~'
+      '!! !^ !$ !?'
+      '$[2*2]'
+      '$((2*2))]'
+      '$(ls)'
+      '${q}'
+      '`ls`'
+      'WH\\Z\"AT!@#$q%^&*()_+|}{:?><,./'\'';[]`\=-'
+      'WH\\Z\"AT!@#$q%^&*()_+|}{:?><,./'\'';[]`\=-WH\\Z\"AT!@#$q%^&*()_+|}{:?><,./'\'';[]`\=-')
+unset q
+
+begin_test "Quote Escape"
+(
+  setup_test
+
+  # set -H
+  # set -o history
+  # echo "Hello!Tim"
+  # This will not do history expansion in the unit test, but will outside the
+  # unit test. This makes testing !! impossible.
+
+
+  [ "$(quote_escape "Hiya ")" == "'Hiya '" ]
+  [ "$(quote_escape "Hi \"  'ya \"")" == "'Hi \"  '\\''ya \"'" ]
+
+  for x in "${quote_tests[@]}"; do
+    eval "z=$(quote_escape "${x}")"
+    [ "${z}" = "${x}" ]
+    # eval "z=$(printf '%q' "${x}")"
+    # [ "${z}" = "${x}" ]
+  done
+
+)
+end_test
+
+begin_test "Quote Substitute Escape"
+(
+  setup_test
+
+  [ "$(quote_substitute_escape "Hiya ")" == "Hiya " ]
+  [ "$(quote_substitute_escape "Hi \"  'ya \"")" == "Hi \\\"  'ya \\\"" ]
+
+  for x in "${quote_tests[@]}"; do
+    # eval "z=${y-$(quote_substitute_escape "${x}")}\"" # Wrong!
+    eval "z=\"${y-$(quote_substitute_escape "${x}")}\""
+    [ "${z}" = "${x}" ]
+    eval "z=\"$(quote_substitute_escape "${x}")\""
+    [ "${z}" = "${x}" ]
+    # eval "z=${y-$(printf '%q' "${x}")}"
+    # [ "${z}" = "${x}" ]
+  done
+)
+end_test

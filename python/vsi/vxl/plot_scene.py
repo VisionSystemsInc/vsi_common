@@ -28,7 +28,7 @@ class PlotScene(object):
 
   def draw_scene_box(self, scene):
     bbox = {k:v for (k,v) in zip(['x_min','y_min','z_min',
-                                  'x_max','y_max','z_max'], 
+                                  'x_max','y_max','z_max'],
             [x for y in scene.bbox for x in y])}
     self.draw_cube(**bbox)
 
@@ -87,16 +87,16 @@ def parse_args():
   parser = argparse.ArgumentParser()
   aa = parser.add_argument
   aa('--scene', '-s', default=None, help="Scene file filename")
-  aa('--cameras', '-c', default=None, nargs='+', 
+  aa('--cameras', '-c', default=None, nargs='+',
      help='List of cameras to be plotted, can be camera filenames '
           'or glob expressions')
-  aa('--diff', '-d', default=None, nargs='+', 
+  aa('--diff', '-d', default=None, nargs='+',
      help='List of cameras to be compared, can be camera filenames '
           'or glob expressions')
-  aa('--limits', '-l', default=None, nargs=6, 
+  aa('--limits', '-l', default=None, nargs=6,
      help='Set axis manually, '
           'takes 6 arguments: xmin xmax ymin ymax zmin zmax')
- 
+
 
   args = parser.parse_args()
   return args

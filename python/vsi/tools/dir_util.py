@@ -33,7 +33,7 @@ def is_subdir(path, base_dir):
   Note
   ----
   This will NOT work with Junctions in Windows... I'm not sure what else
-  
+
   '''
 
   path = os.path.normcase(os.path.normpath(os.path.abspath(os.path.realpath(
@@ -53,7 +53,7 @@ def is_subdir(path, base_dir):
 
 def mkdtemp(*args, **kwargs):
   ''' Version of tempfile.mkdtemp that is r/w by uid and gid
-  
+
   Parameters
   ----------
   *args
@@ -71,39 +71,36 @@ def mkdtemp(*args, **kwargs):
   return tempdir
 
 class Chdir(object):
-  ''' Simple helper function to change dir and guarantee you get back to your
-      original directory
+  ''' Context to change dir and guarantee you get back to your last directory
 
-      Example::
+  Example::
 
-          These are written in doctest format, and should illustrate how to
-          use the function.
+      These are written in doctest format, and should illustrate how to
+      use the function.
 
-          >>> a=[1,2,3]
-          >>> print [x + 3 for x in a]
-          [4, 5, 6]
+      >>> a=[1,2,3]
+      >>> print [x + 3 for x in a]
+      [4, 5, 6]
 
-          >>> import os
-          >>> import tempfile
-          >>> from vsi.tools.dir_util import Chdir
-          >>> os.chdir(os.path.abspath(os.sep))
-          >>> print(os.getcwd())
-          /
-          >>> with Chdir(tempfile.tempdir):
-          ...   print(os.getcwd())
-          /tmp
-          >>> print(os.getcwd())
-          /
+      >>> import os
+      >>> import tempfile
+      >>> from vsi.tools.dir_util import Chdir
+      >>> os.chdir(os.path.abspath(os.sep))
+      >>> print(os.getcwd())
+      /
+      >>> with Chdir(tempfile.tempdir):
+      ...   print(os.getcwd())
+      /tmp
+      >>> print(os.getcwd())
+      /
 
-      '''
+  '''
 
   def __init__(self, dir, create=False, error_on_exit=False):
-
     self.dir = dir
     self.oldDir = None
     self.create = create
     self.error_on_exit = error_on_exit
-
 
     ''' Create Chdir object
 
@@ -112,13 +109,13 @@ class Chdir(object):
         dir : str
             the directory you want to change directory to
         create : str
-            Optional: Create the directory if it doesn't exist (else os error 2 
+            Optional: Create the directory if it doesn't exist (else os error 2
             will occur) Default: False
         error_on_exit : bool
             When exiting the with loop, if the return directory does not exist
             anymore, (OSError 2), if this is true an error is thrown, else it
             is ignore and you are left in the new directory. Default: False
-        '''
+    '''
 
   def __enter__(self):
     self.oldDir = os.getcwd()
@@ -178,7 +175,7 @@ class TempDir(object):
 
         Parameters
         ----------
-        dir : 
+        dir : str
             Base dir must exist. Default is None. None will only work if
             mkdtemp is true.
         cd : bool
@@ -280,12 +277,13 @@ def checksum_dir(checksum, checksum_depth=2, base_dir=None):
 
       Example
       -------
-      If the checksum was 1234567890abcdef, and the depth was 3, you would get 
+      If the checksum was 1234567890abcdef, and the depth was 3, you would get
       12/34/56/1234567890abcdef
 
       Note
       ----
-      An optional base_dir will be prefixed'''
+      An optional base_dir will be prefixed
+  '''
 
   dir_parts = [checksum[x:x+2] if x<checksum_depth*2 else checksum \
                for x in range(0,checksum_depth*2+1,2)]
@@ -297,84 +295,84 @@ def checksum_dir(checksum, checksum_depth=2, base_dir=None):
 
 #copy from shutil actually
 def copytree(src, dst, symlinks=False, ignore=None):
-    """Recursively copy a directory tree using copy2().
+  """Recursively copy a directory tree using copy2().
 
-    Parameters
-    ----------
-    src : array_like
-        The Source Tree
-    dst : str
-        The Destination Directory may not already exist. If exception(s) occur,
-        an Error is raised with a list of reasons.  If the destination
-        directory exists, it will be clobber by the source, including replacing
-        entire directory trees with symlinks, if the symlinks flags is true.
-    symlinks : bool
-        Optional. True if the symbolic links in the source tree result in
-        symbolic links in the destination tree. False if the contents of the
-        files pointed to by symbolic links are copied.
-    ignore : array_like
-        The optional ignore argument is a callable. If given, it is called with
-        the `src` parameter, which is the directory being visited by
-        copytree(), and `names` which is the list of `src` contents, as
-        returned by os.listdir():
+  Parameters
+  ----------
+  src : array_like
+      The Source Tree
+  dst : str
+      The Destination Directory may not already exist. If exception(s) occur,
+      an Error is raised with a list of reasons.  If the destination
+      directory exists, it will be clobber by the source, including replacing
+      entire directory trees with symlinks, if the symlinks flags is true.
+  symlinks : bool
+      Optional. True if the symbolic links in the source tree result in
+      symbolic links in the destination tree. False if the contents of the
+      files pointed to by symbolic links are copied.
+  ignore : array_like
+      The optional ignore argument is a callable. If given, it is called with
+      the `src` parameter, which is the directory being visited by
+      copytree(), and `names` which is the list of `src` contents, as
+      returned by os.listdir():
 
-        callable(src, names) -> ignored_names
+      callable(src, names) -> ignored_names
 
-        Since copytree() is called recursively, the callable will be called
-        once for each directory that is copied. It returns a list of names
-        relative to the `src` directory that should not be copied.
+      Since copytree() is called recursively, the callable will be called
+      once for each directory that is copied. It returns a list of names
+      relative to the `src` directory that should not be copied.
 
 
-    XXX Consider this example code rather than the ultimate tool.
-    """
-    names = os.listdir(src)
-    if ignore is not None:
-        ignored_names = ignore(src, names)
-    else:
-        ignored_names = set()
+  XXX Consider this example code rather than the ultimate tool.
+  """
+  names = os.listdir(src)
+  if ignore is not None:
+    ignored_names = ignore(src, names)
+  else:
+    ignored_names = set()
 
-    if not os.path.exists(dst):
-      os.makedirs(dst)
-    else:
-      os.chmod(dst, 0o777)
+  if not os.path.exists(dst):
+    os.makedirs(dst)
+  else:
+    os.chmod(dst, 0o777)
 
-    errors = []
-    for name in names:
-        if name in ignored_names:
-            continue
-        srcname = os.path.join(src, name)
-        dstname = os.path.join(dst, name)
-        try:
-            if symlinks and os.path.islink(srcname):
-                linkto = os.readlink(srcname)
-                if os.path.exists(dstname) and os.path.isdir(dstname):
-                  rmtree(dstname)
-                else:
-                  os.unlink(dstname)
-                os.symlink(linkto, dstname)
-            elif os.path.isdir(srcname):
-                copytree(srcname, dstname, symlinks, ignore)
-            else:
-                if os.path.exists(dstname):
-                  os.unlink(dstname)
-                # Will raise a SpecialFileError for unsupported file types
-                copy2(srcname, dstname)
-        # catch the Error from the recursive copytree so that we can
-        # continue with other files
-        except Error as err:
-            errors.extend(err.args[0])
-        except EnvironmentError as why:
-            errors.append((srcname, dstname, str(why)))
+  errors = []
+  for name in names:
+    if name in ignored_names:
+      continue
+    srcname = os.path.join(src, name)
+    dstname = os.path.join(dst, name)
     try:
-        copystat(src, dst)
-    except OSError as why:
-        if WindowsError is not None and isinstance(why, WindowsError):
-            # Copying file access times may fail on Windows
-            pass
+      if symlinks and os.path.islink(srcname):
+        linkto = os.readlink(srcname)
+        if os.path.exists(dstname) and os.path.isdir(dstname):
+          rmtree(dstname)
         else:
-            errors.append((src, dst, str(why)))
-    if errors:
-        raise Error(errors)
+          os.unlink(dstname)
+        os.symlink(linkto, dstname)
+      elif os.path.isdir(srcname):
+        copytree(srcname, dstname, symlinks, ignore)
+      else:
+        if os.path.exists(dstname):
+          os.unlink(dstname)
+        # Will raise a SpecialFileError for unsupported file types
+        copy2(srcname, dstname)
+    # catch the Error from the recursive copytree so that we can
+    # continue with other files
+    except Error as err:
+      errors.extend(err.args[0])
+    except EnvironmentError as why:
+      errors.append((srcname, dstname, str(why)))
+  try:
+      copystat(src, dst)
+  except OSError as why:
+      if WindowsError is not None and isinstance(why, WindowsError):
+        # Copying file access times may fail on Windows
+        pass
+      else:
+        errors.append((src, dst, str(why)))
+  if errors:
+    raise Error(errors)
 
 def root_dir(directory):
   ''' OS independent way of getting the root directory of a directory
@@ -454,7 +452,7 @@ def prune_dir(directory, top_dir=None):
       ------
       OSError
 
-      '''
+  '''
 
   #Fill out default value
   if top_dir is None:

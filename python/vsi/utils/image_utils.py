@@ -11,7 +11,26 @@ import skimage.transform
 
 def sk_resize(img, nsize=None, nscale=None, **kwargs):
   """ make skimage.transform.resize() behave in a sane way
-    nsize=[nr, nc] : resize each channel of img
+
+  Parameters
+  ----------
+  img : array_like
+      The image
+  nsize : array_like, optional
+      nsize=[nr, nc] : resize each channel of img
+  nscale : array_like, optional
+  **kwargs
+      arbitrary keyword arguments
+  
+  Returns
+  -------
+  numpy.array
+      The image scaled
+
+  Raises
+  ------
+  Exception
+      Where there is an unexpected nsize
   """
 
   assert nsize is not None or nscale is not None, 'either nsize or nscale must be set'
@@ -51,7 +70,18 @@ def sk_resize(img, nsize=None, nscale=None, **kwargs):
 
 
 def rgb2gray(rgb):
-  """ convert an rgb image stored as a numpy array to grayscale """
+  """ convert an rgb image stored as a numpy array to grayscale
+  
+  Parameters
+  ----------
+  rgb : array_like
+      The RGB image
+
+  Returns
+  -------
+  numpy.array
+      A numpy array to grayscale
+  """
   gr = np.dot(rgb[..., :3].astype(np.float), [0.299, 0.587, 0.144])
   if rgb.dtype == np.uint8:
     gr[gr > 255] = 255
@@ -61,7 +91,22 @@ def rgb2gray(rgb):
 
 def weighted_smooth(image, weights, pyramid_min_dim=50, convergence_thresh=0.01, max_its=1000):
   """ smooth the values in image using a multi-scale regularization.
-    weights should be the same dimensions as image, with values in range (0,1)
+
+  Parameters
+  ----------
+  image : array_like
+      The image
+  weights : float
+      weights should be the same dimensions as image, with values in range (0,1)
+  pyramid_min_dim : array_like, optional
+  convergence_thres : float, optional
+      The convergence threshold
+  max_its : int, optional
+
+  Returns
+  -------
+  numpy.array
+      The smooth image
   """
   # create image pyramids
   image_py = [Image.fromarray(image),]
@@ -101,7 +146,25 @@ def weighted_smooth(image, weights, pyramid_min_dim=50, convergence_thresh=0.01,
 
 
 def mutual_information(img1, img2, min_val, max_val, nbins):
-  """ compute mutual information of img1 and img2 """
+  """ compute mutual information of img1 and img2
+
+  Parameters
+  ----------
+  img1 : array_like
+      The first image
+  img2 : array_like
+      The second image
+  min_val : array_like
+      The minimum of an array
+  max_val : array_like
+      The maximum value of an array along a given axis
+  nbins :
+
+  Returns
+  -------
+  numpy.array
+      Mutual information of img1 and img2
+  """
   i1 = np.array(img1).ravel().astype('float')
   i2 = np.array(img2).ravel().astype('float')
   val_range = max_val - min_val
@@ -126,7 +189,20 @@ def mutual_information(img1, img2, min_val, max_val, nbins):
 
 
 def normalized_cross_correlation(img1, img2):
-  """ compute the normalized cross correlation of img1 and img2 """
+  """ compute the normalized cross correlation of img1 and img2
+
+  Parameters
+  ----------
+  img1 : array_like
+      The first image
+  img2 : array_like
+      The second image
+
+  Returns
+  -------
+  numpy.array
+      The normalized cross correlation of image 1 and image 2
+  """
   i1 = np.array(img1,'float').ravel()
   i2 = np.array(img2,'float').ravel()
   i1 -= i1.mean()
@@ -141,14 +217,45 @@ def normalized_cross_correlation(img1, img2):
 
 
 def sample_point(image, pt):
-  """ return the pixel value, or None if the point is outside image bounds """
+  """ return the pixel value, or None if the point is outside image bounds
+
+  Parameters
+  ----------
+  image : array_like
+      The image
+  pt : array_like
+      The point
+
+  Returns
+  -------
+  array_like
+      The pixel value (None if the point is outside the image bounds)
+  """
   if pt[0] >= 0 and pt[0] < image.size[0] and pt[1] >= 0 and pt[1] < image.size[1]:
     return image.getpixel(tuple(pt))
   return None
 
 
 def sample_patch(image, corners, patch_size, check_bounds=True):
-  """ return an Image of size patch_size, or None if the patch is outside image bounds """
+  """ return an Image of size patch_size, or None if the patch is outside image
+  bounds
+
+  Parameters
+  ----------
+  image : array_like
+      The image
+  corners : array_like
+      The four corners
+  patch_size : array_like
+      The patch size
+  check_bounds : bool, optional
+      True if the patch is outside the image bounds.
+  
+  Returns
+  -------
+  array_like
+      The transformed image of size patch_size
+  """
   if check_bounds:
     if any([c[0] < 0 or c[0] >= image.size[0] or c[1] < 0 or c[1] >= image.size[1] for c in corners]):
       return None
@@ -163,12 +270,27 @@ def sample_patch(image, corners, patch_size, check_bounds=True):
 
 def sample_plane_inverse(planar_patch, plane_origin, plane_x, plane_y, img_shape, camera):
   """ return the projection of a planar patch into the image
-    planar_patch: The planar patch to project into the image (as a 2-d numpy array)
-    plane_origin: 3-d point corresponding to the upper left of the patch
-    plane_x: 3-d vector from origin to extent of patch in the "x" direction
-    plane_y: 3-d vector from origin to extent of patch in the "y" direction: assumed perpendicular to plane_x
-    img_shape: the dimensions (rows, cols) of the image to project into
-    camera: a PinholeCamera
+
+  Parameters
+  ----------
+  planar_patch : array_like
+      The planar patch to project into the image (as a 2-d numpy array)
+  plane_origin :array_like
+       3-d point corresponding to the upper left of the patch
+  plane_x : array_like
+      3-d vector from origin to extent of patch in the "x" direction
+  plane_y : array_like
+      3-d vector from origin to extent of patch in the "y" direction:
+      assumed perpendicular to plane_x
+  img_shape : array_like
+      the dimensions (rows, cols) of the image to project into
+  camera : array_like
+      a PinholeCamera
+
+  Returns
+  -------
+  numpy.array
+      The projection of a planar patch into the image
   """
   plane_xlen = np.linalg.norm(plane_x)
   plane_ylen = np.linalg.norm(plane_y)
@@ -180,10 +302,29 @@ def sample_plane_inverse(planar_patch, plane_origin, plane_x, plane_y, img_shape
 
 
 def sample_plane(image, camera, plane_origin, plane_x, plane_y, patch_shape):
-  """ return a sampled patch based on the 3-d plane defined by plane_origin, plane_x, and plane_y
-    plane_origin: 3-d point corresponding to the upper left of the patch
-    plane_x: 3-d vector from origin to extent of patch in the "x" direction
-    plane_y: 3-d vector from origin to extent of patch in the "y" direction: assumed perpendicular to plane_x
+  """ return a sampled patch based on the 3-d plane defined by plane_origin,
+  plane_x, and plane_y
+
+  Parameters
+  ----------
+  image : array_like
+      The image
+  camera : array_like
+      A PinholeCamera
+  plane_origin :array_like
+      3-d point corresponding to the upper left of the patch
+  plane_x : array_like
+      3-d vector from origin to extent of patch in the "x" direction
+  plane_y : array_like
+      3-d vector from origin to extent of patch in the "y" direction:
+      assumed perpendicular to plane_x
+  patch_shape : array_like
+      The patch shape
+
+  Returns
+  -------
+  numpy.array
+      A sampled patch
   """
   plane_xlen = np.linalg.norm(plane_x)
   plane_ylen = np.linalg.norm(plane_y)
@@ -196,8 +337,24 @@ def sample_plane(image, camera, plane_origin, plane_x, plane_y, patch_shape):
 
 
 def sample_patch_projective(image, inv_xform_3x3, patch_shape):
-  """ return a warped image as a numpy array with dtype float64 of size patch_size.
-    if input image is not already of type float64, it will be converted """
+  """ return a warped image as a numpy array with dtype float64 of size
+  patch_size. if input image is not already of type float64, it will be
+  converted
+
+  Parameters
+  ----------
+  image : array_like
+      The image
+  inv_xform_3x3 : array_like
+      Homogeneous transformation matrix
+  patch_shape : array_like
+      The patch shape
+
+  Returns
+  -------
+  numpy.array
+      The warped image of size patch_size
+  """
   P = skimage.transform.ProjectiveTransform(inv_xform_3x3)
   # skimage clips values to range [0,1] for floating point images.  do scale and unscale here.
   do_scale = False
@@ -242,7 +399,22 @@ def sample_patch_projective(image, inv_xform_3x3, patch_shape):
 
 
 def sample_patch_perspective(image, inv_xform_3x3, patch_size):
-  """ return an Image of size patch_size """
+  """ return an Image of size patch_size
+
+  Parameters
+  ----------
+  image : array_like
+      The image
+  inv_xform_3x3 : array_like
+      Homogeneous transformation matrix
+  patch_shape : array_like
+      The patch shape
+
+  Returns
+  -------
+  numpy.array
+      An image of size patch_size
+  """
   patch_size_tuple = (patch_size[0], patch_size[1])
   inv_xform_array = inv_xform_3x3.reshape(9,) / inv_xform_3x3[2,2]
   patch = image.transform(patch_size_tuple, Image.PERSPECTIVE, inv_xform_array, Image.NEAREST)

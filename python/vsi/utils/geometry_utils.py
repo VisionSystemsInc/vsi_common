@@ -9,6 +9,11 @@ axis_order_re = re.compile('[XYZ][XYZ][XYZ]')
 
 def axis_order_is_valid(order):
   """ return true if the axis order has valid form, e.g. 'XYZ'
+
+      Parameters
+      ----------
+      order : str
+        The Axis Order
   """
   if not axis_order_re.match(order):
     return False
@@ -21,7 +26,13 @@ def axis_order_is_valid(order):
 
 
 def fit_plane_3_points(points):
-  """ compute the plane that passes through all 3 points in the list """
+  """ compute the plane that passes through all 3 points in the list
+
+      Parameters
+      ----------
+      points : array_like
+        The Points
+  """
   # compute normal direction which is perpendicular to vectors p1-p0, p2-p0
   # use np.subtact instead of "-" operator so that points can be any array-like type
   norm = np.cross(np.subtract(points[1],points[0]), np.subtract(points[2],points[0]))
@@ -35,7 +46,18 @@ def fit_plane_3_points(points):
 
 
 def fit_plane_3d(points):
-  """ fit a plane to a set of 3-d points """
+  """ fit a plane to a set of 3-d points
+
+      Parameters
+      ----------
+      points : array_like
+        The Set of 3-D Points
+
+      Returns
+      -------
+      array_like
+        The Plane moved away from the origin.
+  """
 
   num_pts = len(points)
   P = np.zeros((4, num_pts))
@@ -70,7 +92,24 @@ def fit_plane_3d(points):
 
 
 def fit_plane_3d_RANSAC(points, inlier_thresh=1.0, max_draws=100):
-  """ fit a plane to a noisy set of points. returns the plane and the indices of inliers """
+  """ fit a plane to a noisy set of points.
+
+      Parameters
+      ----------
+      points : array_like
+        A Noisy Set of Points
+      inlier_thresh : float
+        The Threshold
+      max_draws : int
+        The Maximum Number of Draws
+
+      Returns
+      -------
+      array_like
+        The Plane
+      array_like
+        The Indices of Inliers
+  """
   num_pts_total = len(points)
   best_inliers = np.zeros(num_pts_total,np.bool)
   best_inlier_sum = 0
@@ -99,12 +138,38 @@ def fit_plane_3d_RANSAC(points, inlier_thresh=1.0, max_draws=100):
 
 
 def axis_angle_to_matrix(axis,theta):
-  """ Convert a rotation axis / angle pair to a 3x3 rotation matrix """
+  """ Convert a rotation axis / angle pair to a 3x3 rotation matrix
+
+      Parameters
+      ----------
+      axis : float
+        The Rotation Axis
+      theta : float
+        The Angle
+
+      Returns
+      -------
+      array_like
+        A 3x3 Rotation Matrix
+  """
   return quaternion_to_matrix(axis_angle_to_quaternion(axis,theta))
 
 
 def axis_angle_to_quaternion(axis, theta):
-  """ Convert a rotation axis / angle pair to a quaternion """
+  """ Convert a rotation axis / angle pair to a quaternion
+
+      Parameters
+      ----------
+      axis : float
+        The Rotation Axis
+      theta : float
+        The Angle
+
+      Returns
+      -------
+      array_like
+        The quaternion
+  """
   # make sure axis has unit length
   axis_u = axis / np.linalg.norm(axis)
   sin_half = np.sin(theta/2.0)
@@ -114,6 +179,23 @@ def axis_angle_to_quaternion(axis, theta):
 
 
 def axis_from_string(axis_string):
+  """ Converts the axis in string form into an array.
+
+      Parameters
+      ----------
+      axis_string : str
+        The Axis in String Form
+
+      Returns
+      -------
+      array_like
+        The Axis
+
+      Raises
+      ------
+      ValueError
+        Raised when something other than X,Y, or Z gets passed.
+  """
   if axis_string == 'X':
     return np.array((1,0,0))
   elif axis_string == 'Y':
@@ -121,14 +203,35 @@ def axis_from_string(axis_string):
   elif axis_string == 'Z':
     return np.array((0,0,1))
   else:
-    raise Exception('Expecting one of [X,Y,Z], got ' + axis_string)
+    raise ValueError('Expecting one of [X,Y,Z], got ' + axis_string)
 
 
 def Euler_angles_to_quaternion(theta1, theta2, theta3, order='XYZ'):
-  """ default order applies rotation around x axis first, y second, and z third.
+  """ default order applies rotation around x axis 1st, y 2nd, and z 3rd.
+
+      Parameters
+      ----------
+      theta1 : float
+        The first angle
+      theta2: float
+        The Second Angle
+      theta3 : float
+        The Third Angle
+      order : string
+        The Order of the Axes
+
+      Returns
+      -------
+      array_like
+        The Quaternions
+
+      Raises
+      ------
+      ValueError
+        Invalid order string
   """
   if not axis_order_is_valid(order):
-    raise Exception('Invalid order string: ' + str(order))
+    raise ValueError('Invalid order string: ' + str(order))
 
   e1 = axis_from_string(order[0])
   e2 = axis_from_string(order[1])
@@ -143,9 +246,21 @@ def Euler_angles_to_quaternion(theta1, theta2, theta3, order='XYZ'):
 
 def quaternion_to_Euler_angles(q, order='XYZ'):
   """ convert q to Euler angles
-    angles are returned in the order of application, specified by order
-    adapted and generalized based on code available at the following url:
-    http://bediyap.com/programming/convert-quaternion-to-euler-rotations/
+
+      Parameters
+      ----------
+      q : array_like
+        The Quaternion
+      order : str
+        The Order of the Axes
+
+      Returns
+      -------
+      float
+        Euler angles are returned in the order of application, specified by
+        order adapted and generalized based on code available at the following
+        url:
+        http://bediyap.com/programming/convert-quaternion-to-euler-rotations/
   """
   if not axis_order_is_valid(order):
     raise Exception('Invalid order string: ' + str(order))
@@ -180,7 +295,18 @@ def quaternion_to_Euler_angles(q, order='XYZ'):
 
 
 def quaternion_to_matrix(q):
-  """ Convert a quaternion to an orthogonal rotation matrix """
+  """ Convert a quaternion to an orthogonal rotation matrix
+
+      Parameters
+      ----------
+      q : float
+        The Quaternion
+
+      Returns
+      -------
+      array_like
+        An Orthogonal Rotation Matrix
+  """
   # normalize quaternion
   norm = np.sqrt((q*q).sum())
   q /= norm
@@ -207,11 +333,26 @@ def quaternion_to_matrix(q):
 
   return R
 
-def Euler_angles_to_matrix(angles, order=(0,1,2), repeat=False, parity_even=True, from_S=True):
+def Euler_angles_to_matrix(angles, order=(0,1,2)):
   """ Convert a rotation matrix to Euler angles (X,Y,Z) order
-  From Graphics Gems tog.acm.org/resources/GraphicsGems/gemsiv/euler_angle
-  dec: Not tested for anything other than default args!
+
+      Parameters
+      ----------
+      angles : array_like
+        The Euler Angles
+      order : array_like
+        The Order
+      
+      Returns
+      -------
+      array_like
+        The Euler Angles
+
+      From Graphics Gems tog.acm.org/resources/GraphicsGems/gemsiv/euler_angle
   """
+  parity_even=True
+  from_S=True
+  repeat=False
   if not from_S:
     # swap angle order
     angles = (angles[2], angles[1], angles[0])
@@ -252,11 +393,26 @@ def Euler_angles_to_matrix(angles, order=(0,1,2), repeat=False, parity_even=True
   return M
 
 
-def matrix_to_Euler_angles(M, order=(0,1,2), repeat=False, parity_even=True, from_S=True):
+def matrix_to_Euler_angles(M, order=(0,1,2)):
   """ Convert a rotation matrix to Euler angles (X,Y,Z) order
-  From Graphics Gems tog.acm.org/resources/GraphicsGems/gemsiv/euler_angle
-  dec: Not tested for anything other than default args!
+
+      Parameters
+      ----------
+      M : array_like
+        The Rotation Matrix
+      order : array_like
+
+      Returns
+      -------
+      array_like
+        The Euler Angles
+
+    From Graphics Gems tog.acm.org/resources/GraphicsGems/gemsiv/euler_angle
   """
+  parity_even=True
+  from_S=True
+  repeat=False
+
   i = order[0]
   j = order[1]
   k = order[2]
@@ -291,14 +447,39 @@ def matrix_to_Euler_angles(M, order=(0,1,2), repeat=False, parity_even=True, fro
 
 
 def rotate_vector(v, axis, angle):
-  """ rotate the vector v around axis by angle radians """
+  """ rotate the vector v around axis by angle radians
+
+      Parameters
+      ----------
+      v : array_like
+        The Vector
+      axis : array_like
+        The Axis
+      angle : float
+        The Angle Radians
+
+      Returns
+      -------
+      array_like
+  """
   R = axis_angle_to_matrix(axis,angle)
   return np.dot(R,v)
 
 
 def matrix_to_quaternion(rot):
   """ convert rotation matrix rot to quaternion
-    Adapted from vnl_quaternion.txx in vxl
+
+      Parameters
+      ----------
+      rot : array_like
+        The Rotation Matrix
+
+      Returns
+      -------
+      array_like
+        The Quaternions
+
+      Adapted from vnl_quaternion.txx in vxl
   """
   d0 = rot[0,0]
   d1 = rot[1,1]
@@ -351,6 +532,16 @@ def matrix_to_quaternion(rot):
 
 def compose_quaternions(quaternion_list):
   """ return the composition of a list of quaternions
+
+      Parameters
+      ----------
+      quaternion_list : array_like
+        The List of Quaternions
+
+      Returns
+      -------
+      array_like
+        The Composition of a list of quaternions.
   """
   qtotal = np.array((0,0,0,1))
   for q in quaternion_list:
@@ -363,27 +554,88 @@ def compose_quaternions(quaternion_list):
 
 
 def Euler_angles_to_matrix(theta1, theta2, theta3, order='XYZ'):
-  """ Convert Euler angles to a rotation matrix. Angles are specified in the order of application.
+  """ Convert Euler angles to a rotation matrix.
+
+      Parameters
+      ----------
+      theta1 : float
+        The First Angle
+      theta2 : float
+        The Second Angle
+      theta3 : float
+        The Third Angle
+      order : str
+        The Axes as a string
+
+      Returns
+      -------
+      array_like
+        A Rotation Matrix
+
+      Angles are specified in the order of application.
   """
   return quaternion_to_matrix(Euler_angles_to_quaternion(theta1, theta2, theta3, order=order))
 
 
 def matrix_to_Euler_angles(M, order='XYZ'):
-  """ Convert a rotation matrix to Euler angles. Angles are returned in the order of application.
+  """ Convert a rotation matrix to Euler angles.
+
+      Parameters
+      ----------
+      M : array_like
+        The Rotation Matrix
+      order : str
+        The Axes as a string
+
+      Returns
+      -------
+      array_like
+        The Euler Angles
+
+      Angles are returned in the order of application.
   """
   return quaternion_to_Euler_angles(matrix_to_quaternion(M),order=order)
 
 
 def rotate_vector(v, axis, angle):
-  """ rotate the vector v around axis by angle radians """
+  """ rotate the vector v around axis by angle radians
+
+      Parameters
+      ----------
+      v : array_like
+        The Vector to be rotated
+      axis : array_like
+        The Axis
+      angle : float
+        The Angle of Rotation
+
+      Returns
+      -------
+      array_like
+        The Rotated Vector
+  """
   R = axis_angle_to_matrix(axis,angle)
   return np.dot(R,v)
 
 
 def spherical_to_euclidian(azimuth,elevation):
   """ convert az,el to euclidean vector
-  assumes: azimuth is measured in radians east of north
-  assumes: Euclidean x-east y-north z-up coordinate system """
+
+      Parameters
+      ----------
+      azimuth : float
+        The Azimuth
+      elevation : float
+        The Angle of Elevation
+
+      Returns
+      -------
+      array_like
+        The Euclidean Vector
+
+      assumes: azimuth is measured in radians east of north
+      assumes: Euclidean x-east y-north z-up coordinate system
+  """
   x = np.sin(azimuth)*np.cos(elevation)
   y = np.cos(azimuth)*np.cos(elevation)
   z = np.sin(elevation)
@@ -392,35 +644,107 @@ def spherical_to_euclidian(azimuth,elevation):
 
 def euclidian_to_spherical(x,y,z):
   """ convert a point in eucliean coordinate system to az, el
-  assumes: azimuth is measured in radians east of north.
-  assumes: y-north, x-east z-up coordinate system """
+
+      Parameters
+      ----------
+      x : float
+        The x coordinate
+      y : float
+        The y coordinate
+      z : float
+        The z coordinate
+
+      Returns
+      -------
+      float
+        The azimuth and the elevation
+
+      assumes: azimuth is measured in radians east of north.
+      assumes: y-north, x-east z-up coordinate system
+  """
   azimuth = np.arctan2(x,y)
   elevation = np.arcsin(z)
   return(azimuth,elevation)
 
 
 def patch_corners_3d(c, xv, yv):
-  """ given a centroid and "x" and "y" vectors, return the four corners """
+  """ given a centroid and "x" and "y" vectors, return the four corners
+
+      Parameters
+      ----------
+      c : array_like
+        The Centroid
+      xv : array_like
+        The "x" Vector
+      yv : array_like
+        The "y" Vector
+
+      Returns
+      -------
+      array_like
+        The Four Corners
+  """
   return [c-xv-yv, c-xv+yv, c+xv+yv, c+xv-yv]
 
 
 def unitize(v):
-  """ return the unit vector in the same direction as v """
+  """ return the unit vector in the same direction as v
+
+      Parameters
+      ----------
+      v : array_like
+        The Vector
+
+      Returns
+      -------
+      array_like
+        The Unit Vector
+  """
   return v / np.sqrt(np.dot(v,v))
 
 
 def nonhomogeneous(pt_homg):
-  """ convert from homogeneous coordinates to non-homogenous """
+  """ convert from homogeneous coordinates to non-homogenous
+
+      Parameters
+      ----------
+      pt_homg : array_like
+        The Homogeneous Coordinates
+
+      Returns
+      -------
+      array_like
+        The Non-homogenous Coordinates
+
+      Raises
+      ------
+      ValueError
+        Raised if an ideal point is passed
+  """
   tolerance = 1e-6
   if abs(pt_homg[-1]) < tolerance:
-    raise Exception('Cannot convert ideal point to non-homogenous coordinates')
+    raise ValueError('Cannot convert ideal point to non-homogenous coordinates')
   return pt_homg[0:-1] / pt_homg[-1]
 
 
 def intersect_plane_ray(plane, ray_origin, ray_vector):
   """ Compute and return the intersection point of a plane and ray.
-    plane: The parameters (a,b,c,d) of the plane,  ax + by + cz + d = 0
-    ray_origin and ray_vector can be 3-d vectors or 4-d homogeneous.
+
+      Parameters
+      ----------
+      plane : array_like
+        The Plane. The parameters (a,b,c,d) of the plane,  ax + by + cz + d = 0
+      ray_origin : array_like
+        The Origin of the Ray
+      ray_vector : array_like
+        The direction of the ray
+
+      Returns
+      -------
+      array_like
+        The  intersection point of the plane and the ray.
+
+      ray_origin and ray_vector can be 3-d vectors or 4-d homogeneous.
   """
   # convert to homogeneous coordinates
   ray_origin_h = ray_origin
@@ -437,10 +761,17 @@ def intersect_plane_ray(plane, ray_origin, ray_vector):
 
 def rasterize_plane(grid_origin, grid_dims, vox_len, plane):
   """ Visit each cell of a 3-d grid that intersects the plane.
-  grid_origin: 3-D position of voxel grid origin point (ox, oy, oz)
-  grid_dims: number of voxels in x,y,z dimensions.  (nx, ny, nz)
-  vox_len: The side length of a single voxel (voxels assumed to be cubes)
-  plane: The parameters (a,b,c,d) of the plane.  ax + by + cz + d = 0
+
+      Parameters
+      ----------
+      grid_origin: array_like
+        3-D position of voxel grid origin point (ox, oy, oz)
+      grid_dims: array_like
+        number of voxels in x,y,z dimensions.  (nx, ny, nz)
+      vox_len: float
+        The side length of a single voxel (voxels assumed to be cubes)
+      plane: array_like
+        The parameters (a,b,c,d) of the plane.  ax + by + cz + d = 0
   """
 
   #plane = plane / np.sqrt(np.sum(plane[0:3] * plane[0:3]))
@@ -467,54 +798,117 @@ def rasterize_plane(grid_origin, grid_dims, vox_len, plane):
 
 
 class AxisAlignedBox(object):
-  """  an N-D axis-aligned box """
-
   def __init__(self, min_pt, max_pt):
-    """ constructor """
+    """  """
     self.min_pt = np.array(min_pt)
     self.max_pt = np.array(max_pt)
+
+    """ constructor
+    
+        Parameters
+        ----------
+        min_pt : array_like
+          The Minimum Point
+        max_pt : array_like
+          The Maximum Point
+    """
     # make sure max_pt >= min_pt in all dimensions
     invalid = self.max_pt < self.min_pt
     self.max_pt[invalid] = self.min_pt[invalid]
 
   def area(self):
-    """ area of the 2d box """
+    """ area of the 2d box
+
+        Returns
+        -------
+        float
+          The Area of the 2D Box
+    """
     diff = self.max_pt - self.min_pt
     if any(diff <= 0):
       return 0
     return np.prod(diff)
 
   def centroid(self):
-    """ centroid of 2d box """
+    """ centroid of 2d box
+
+        Returns
+        -------
+        array_like
+          The Centroid of a 2D Box
+    """
     return np.mean((self.min_pt, self.max_pt), axis=0)
 
   def dims(self):
-    """ dimensions of the box """
+    """ dimensions of the box
+
+        Returns
+        -------
+        array_like
+          The Dimensions of the Box
+    """
     return self.max_pt - self.min_pt
 
   def __str__(self):
-    """ return human-readable string representation """
+    """ return human-readable string representation
+
+        Returns
+        -------
+        str
+          A Readable String Representation
+"""
     return 'Box2D: (' + str(self.min_pt) + ', ' + str(self.max_pt) + ')'
 
   def __repr__(self):
-    """ return string representation """
+    """ return string representation
+
+    Returns
+    -------
+    str
+      A String Representation
+    """
     return '%s(%s, %s)' % (self.__class__, self.min_pt, self.max_pt)
 
 
 class Box2D(AxisAlignedBox):
-  """ an 2-D axis-aligned bounding box """
+  """ a 2-D axis-aligned bounding box """
 
   def __str__(self):
-    """ return human-readable string representation """
+    """ return human-readable string representation
+
+        Returns
+        -------
+        str
+          A Readable String Representation
+    """
     return 'Box2D: (' + str(self.min_pt) + ', ' + str(self.max_pt) + ')'
 
   def __repr__(self):
-    """ return string representation """
+    """ return string representation
+
+        Returns
+        -------
+        str
+          A String Representation
+    """
     return '%s(%s, %s)' % (self.__class__, self.min_pt, self.max_pt)
 
 
 def intersection(box0, box1):
-  """ intersection of two bounding boxes """
+  """ intersection of two bounding boxes
+
+      Parameters
+      ----------
+      box0 : array_like
+        The First Bounding Box
+      box1 : array_like
+        The Second Bounding Box
+
+      Returns
+      -------
+      array_like
+        The Intersection of the two bounding boxes
+  """
   if box0 is None or box1 is None:
     return None
   min_pt = np.max((box0.min_pt, box1.min_pt), axis=0)
@@ -523,7 +917,20 @@ def intersection(box0, box1):
 
 
 def union(box0, box1):
-  """ union of two bounding boxes """
+  """ union of two bounding boxes
+
+      Parameters
+      ----------
+      box0 : array_like
+        The First Bounding Box
+      box1 : array_like
+        The Second Bounding Box
+
+      Returns
+      -------
+      array_like
+        The Union of the Two Bounding Boxes
+  """
   if box0 is None:
     return box1
   if box1 is None:
@@ -535,7 +942,16 @@ def union(box0, box1):
 
 def compute_bounding_box(pts):
   """ compute the bounding box of a list of points
-    returns (min_pt, max_pt)
+
+      Parameters
+      ----------
+      pts : array_like
+        A List of Points
+
+      Returns
+      -------
+      array_like
+        The Minumum Point and the Maximum Point
   """
   if len(pts) == 0:
     return None
@@ -549,12 +965,27 @@ def compute_bounding_box(pts):
 
 
 def compute_transform_3d_plane_to_2d(plane_origin, plane_x, plane_y, nx, ny):
-  """ compute a 3x3 perspective transform from a planar segment in 3-d to a 2-d image.
-    plane_origin: the 3-d point corresponding to the upper left of the image
-    plane_x: a 3-d vector that spans the image "x" direction
-    plane_y: a 3-d vector that spans the image "y" direction (assumed perpendicular to plane_x)
-    nx: number of pixels in the image x dimension
-    ny: number of pixels in the image y dimension
+  """ compute a 3x3 perspective transform from a planar segment in 3-d to a 2-d
+      image.
+
+      Parameters
+      ----------
+      plane_origin : array_like
+        the 3-d point corresponding to the upper left of the image
+      plane_x :  array_like
+        a 3-d vector that spans the image "x" direction
+      plane_y :  array_like
+        a 3-d vector that spans the image "y" direction (assumed perpendicular
+        to plane_x)
+      nx : int
+        number of pixels in the image x dimension
+      ny : int
+        number of pixels in the image y dimension
+
+      Returns
+      -------
+      array_like
+        The transformed 2-d image
   """
   plane_xlen = np.sqrt(np.dot(plane_x, plane_x))
   plane_ylen = np.sqrt(np.dot(plane_y, plane_y))
@@ -571,7 +1002,18 @@ def compute_transform_3d_plane_to_2d(plane_origin, plane_x, plane_y, nx, ny):
 
 
 def sample_unit_sphere(N):
-  """ generate a set of points distributed on the unit sphere """
+  """ generate a set of points distributed on the unit sphere
+
+      Parameters
+      ----------
+      N : int
+        Number of points
+
+      Returns
+      -------
+      array_like
+        A set of points distributed on the unit sphere
+  """
   dlong = np.pi*(3-np.sqrt(5))
   dz = 2.0/N
   lon = 0
@@ -586,15 +1028,40 @@ def sample_unit_sphere(N):
 
 
 def stack_RT(R,T):
-  """ convert a 3x3 rotation / 3x1 translation combination
-    to a 4x4 homogeneous transform [R T; 0 0 0 1]
+  """ convert a rotation / translation combination to a homogenous transform 
+
+      Parameters
+      ----------
+      R : array_like
+        The 3x3 Rotation
+      T : array_like
+        The 3x1 Translation
+
+      Returns
+      -------
+      numpy.array
+        The 4x4 homogeneous transform [R T; 0 0 0 1]
+
   """
   return np.vstack((np.hstack((R,T.reshape(3,1))), np.array((0,0,0,1))))
 
 
 def similarity_transform(scale, translation):
   """ Compute a similarity transform matrix.
-    Dimensionality determined from length of translation vector
+
+      Parameters
+      ----------
+      scale : float
+        The Scale Factor
+      translation : file_like
+        The Translation
+
+      Returns
+      -------
+      array_like
+        The Similarity Transform Matrix
+
+      Dimensionality determined from length of translation vector
   """
   D = len(translation.squeeze())
   S = np.zeros((D+1,D+1))
@@ -605,7 +1072,19 @@ def similarity_transform(scale, translation):
 
 
 def volume_corners(vol_origin, vol_extent):
-  """ return the 8 corners of the axis-aligned volume defined by origin and extent
+  """ return the 8 corners of the axis-aligned volume
+
+      Parameters
+      ----------
+      vol_origin : array_like
+        The Volume Origin
+      vol_extent : array_like
+        The Volume Extent
+
+      Returns
+      -------
+      array_like
+        8 corners of the axis-aligned volume defined by origin and extent
   """
   corners = []
   for zi in (0,1):
@@ -616,8 +1095,24 @@ def volume_corners(vol_origin, vol_extent):
 
 
 def compute_2D_affine_xform(from_points, to_points):
-  """ find H such that:
-  to_points = H * from_points, H is of form [a b c; d e f; 0 0 1]
+  """ find H
+  
+      Parameters
+      ----------
+      from_points : array_like
+        The From Points
+      to_points : array_like
+        The To Points. to_points = H * from_points
+
+      Returns
+      -------
+      float
+        H is of form [a b c; d e f; 0 0 1]
+
+      Raises
+      ------
+      Exception
+        The number of points do not match
   """
   from_points_M = np.vstack((np.array(from_points).T, np.ones(len(from_points))))
   to_points_M = np.vstack((np.array(to_points).T, np.ones(len(to_points))))

@@ -3,6 +3,7 @@
 : ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
 source "${VSI_COMMON_DIR}/linux/linux_accounts.bsh"
 source "${VSI_COMMON_DIR}/linux/elements.bsh"
+source "${VSI_COMMON_DIR}/linux/mount_tools.bsh"
 
 #*# just/plugins/docker/docker_entrypoint
 
@@ -204,6 +205,19 @@ function docker_link_mounts()
       if [ -n "${link_destinations[$y]+set}" ] && \
          [ "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}" == "${link_destinations[$y]}" ]; then
         retry_as_user mkdir -p "$(dirname "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}")"
+
+        # Cannot create a symlink over a directory; this will cause the next
+        # step to fail. This can occur in a very specific case where a directory
+        # structure was created in the docker image (usually so that the
+        # entrypoint can run smoothly before docker_entrypoint.bsh is run).
+        # Although it could also potentially be a mount of some sort. Consequently,
+        # only delete the directory if it is part of the docker image.
+        if [ -d "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}" ] && \
+           [ ! -L "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}" ] && \
+           [ "$(mount_point "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}")" = "/" ]; then
+        
+           rm -rf "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}"
+	fi
 
         # Don't overwrite an existing file unless explicitly requested
         if ! retry_as_user test -e "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}" || \

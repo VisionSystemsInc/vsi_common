@@ -111,9 +111,42 @@ function docker_defaultify()
       justify docker_clean "${COMPOSE_PROJECT_NAME}_${1}"
       extra_args+=1
       ;;
-    log) # Show logs from all service containers. Optionally specify service \
-         # names to only log specific containers. Bug: Does not pick up \
-         # containers that didn't exist when starting just log
+    docker-compose_enter) # Enter a running container, running an interactive
+                          # bash session. Set COMPOSE_SERVICES to limit to a
+                          # specific service. Additional arguments are run in
+                          # lieu of bash
+      # not Docker-compose; no quotes
+      local containers=($(docker-compose ps -q ${COMPOSE_SERVICES-} || :))
+      if [ "${#containers[@]}" == 0 ]; then
+        echo "No running containers found"
+        extra_args+=$#
+        return
+      elif [ "${#containers[@]}" == 1 ]; then
+        local picked=1
+      else
+        local picked
+        local pretty=()
+        for picked in "${!containers[@]}"; do
+          pretty[${picked}]="$(docker container inspect -f \
+              '{{index .Config.Labels "com.docker.compose.service"}} - {{.Name}} ({{.Config.Hostname}})' \
+              ${containers[$picked]}) $(docker ps --format {{.Status}} -f id=${containers[$picked]})"
+        done
+        picker "${pretty[@]}" || picked=$?
+      fi
+
+      # Give the dev a way to override the -it flags, should they ever need to
+      local DOCKER_EXTRA_EXEC_ARGS=("${DOCKER_EXTRA_EXEC_ARGS[@]--it}")
+
+      if [ "$#" = "0" ]; then
+        Docker exec "${containers[$((picked-1))]}" bash
+      else
+        Docker exec "${containers[$((picked-1))]}" ${@+"${@}"}
+      fi
+      extra_args+=$#
+      ;;
+    docker-compose_log) # Show logs from all service containers. Optionally \
+         # specify service names to only log specific containers. Bug: Does \
+         # not pick up containers that didn't exist when starting just log
 
       # Override the log target in your Justfile and call __docker-compose-log
       # if you need to set other parameters
@@ -133,6 +166,16 @@ function docker_defaultify()
       done
       trap - INT
       trap - TERM
+      extra_args+=$#
+      ;;
+
+    docker) # Run generic docker command
+      Docker ${@+"${@}"}
+      extra_args+=$#
+      ;;
+
+    docker-compose) # Run generic docker-compose command
+      Just-docker-compose ${@+"${@}"}
       extra_args+=$#
       ;;
     *)
@@ -201,4 +244,18 @@ function _docker_clean_actions()
       false
       ;;
   esac
+}
+
+# Idea from Issue #103
+function set_docker_compose_project_name()
+{
+  if [ "${COMPOSE_PROJECT_NAME:+set}" != "set" ]; then
+    local cwd_var="${JUST_PROJECT_PREFIX}_CWD"
+    local user_var="${JUST_PROJECT_PREFIX}_USERNAME"
+    if [ "${!user_var:+set}" = "set" ]; then
+      COMPOSE_PROJECT_NAME=$(docker_compose_sanitize_project_name "${!cwd_var}" "${!user_var}")
+    else
+      COMPOSE_PROJECT_NAME=$(docker_compose_sanitize_project_name "${!cwd_var}")
+    fi
+  fi
 }

@@ -69,7 +69,7 @@ def sub_block(data, block=3, overlap=0, subok=False):
                     [22, 23, 24]]]])
 
       REVIEW would be nice if this were a generator...
-      '''
+  '''
 
   try:
     iter(block)

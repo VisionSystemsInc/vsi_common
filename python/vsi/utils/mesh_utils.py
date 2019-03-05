@@ -7,7 +7,23 @@ import os.path
 
 
 def write_grid_vtk(image_stack_glob, output_filename, origin=(0,0,0), vox_len=1.0):
-  """ write out an image stack to a VTK "Structured Points" format """
+  """ write out an image stack to a VTK "Structured Points" format
+
+  Parameters
+  ----------
+  image_stack_glob : str
+      The path name
+  output_filename : str
+      The output file name
+  origin : array_like, optional
+      The origin. Default: (0,0,0)
+  vox_len : float, optional
+
+  Raises
+  -------
+  Exception
+      When there are no matching images
+  """
   image_fnames = glob.glob(image_stack_glob)
   image_fnames.sort()
   nk = len(image_fnames)
@@ -41,7 +57,18 @@ def write_grid_vtk(image_stack_glob, output_filename, origin=(0,0,0), vox_len=1.
 
 
 def marching_cubes(grid_fname_vtk, mesh_filename_ply, value=0.5):
-  """ read in a grid in vtk format, run marching cubes, save the result as ply mesh """
+  """ read in a grid in vtk format, run marching cubes, save the result as ply
+  mesh
+
+  Parameters
+  ----------
+  grid_fname_vtk : str
+      The file name of the grid in vtk format
+  mesh_filename_ply : str
+      The file name to save the ply mesh results
+  value : float, optional
+      The value
+  """
   reader = vtk.vtkStructuredPointsReader()
   reader.SetFileName(grid_fname_vtk)
   reader.Update()
@@ -61,7 +88,16 @@ def marching_cubes(grid_fname_vtk, mesh_filename_ply, value=0.5):
 
 
 def colorize_verts_ply(ply_in_filename, ply_out_filename, image, camera):
-  """ add per-vertex color information based on projections into images """
+  """ add per-vertex color information based on projections into images
+
+  Parameters
+  ----------
+  ply_in_filename : str
+  ply_out_filename : str
+  image : array_like
+      The image
+  camera : 
+  """
   # read in PLY file
   reader = vtk.vtkPLYReader()
   reader.SetFileName(ply_in_filename)
@@ -100,7 +136,23 @@ def colorize_verts_ply(ply_in_filename, ply_out_filename, image, camera):
 
 
 def get_mesh_vertices(mesh_filename):
-  """ read a ply file, return vertices in form of 3xN numpy array """
+  """ read a ply file, return vertices in form of 3xN numpy array
+
+  Parameters
+  ----------
+  mesh_filename : str
+      The mesh file name
+
+  Returns
+  -------
+  numpy.array
+      The vertices in the form of a 3xN numpy array
+
+  Raises
+  ------
+  Exception
+      When there is an unsupported filename extension
+  """
   # read in PLY file
   mesh_ext = os.path.splitext(mesh_filename)[1].lower()
   if mesh_ext == '.ply':

@@ -7,13 +7,7 @@ import inspect
 class PopenBg(subprocess.Popen):
 
   def __init__(self, *args, **kwargs):
-    ''' Parameters
-        ----------
-        *args
-            Variable length argument list.
-        **kwargs
-            Arbitrary keyword arguments.
-        '''
+
     if subprocess.mswindows:
       kwargs = inspect.getcallargs(
           subprocess.Popen.__init__, self, *args, **kwargs)
@@ -25,6 +19,14 @@ class PopenBg(subprocess.Popen):
       startup_info.dwFlags |= subprocess.STARTF_USESHOWWINDOW
       kwargs['startupinfo'] = startup_info
     super(PopenBg, self).__init__(*args, **kwargs)
+
+    ''' Parameters
+        ----------
+        *args
+            Variable length argument list.
+        **kwargs
+            Arbitrary keyword arguments.
+    '''
 
 if __name__ == '__main__':
   import sys

@@ -2,6 +2,8 @@ from __future__ import print_function # Python2 compat
 
 from functools import (wraps, update_wrapper, WRAPPER_UPDATES,
                        WRAPPER_ASSIGNMENTS)
+
+from collections import Mapping
 import inspect
 import sys
 
@@ -13,14 +15,8 @@ class Try(object):
 
   Parameters
   ----------
-  *ignore_exceptions : exception class
+  *ignore_exceptions : Exception
       Exception classes to be ignored. Default is all.
-
-  Attributes
-  ----------
-  default_ignore : array_like
-    Arguments of Exception classes is set to ignore. Default is all.
-  *other_ignore : str
   '''
 
   def __init__(self, default_ignore=Exception, *other_ignore):
@@ -34,6 +30,24 @@ class Try(object):
       return
     if issubclass(exc_type, self.ignore):
       return True
+
+class ArgvContext:
+  ''' Context to temporarily change the ``sys.argv`` variable
+
+  Parameters
+  ----------
+  *args : str
+      Arguments to replace ``sys.argv``, starting with ``argv[0]``
+  '''
+  def __init__(self, *args):
+    self.args = args
+
+  def __enter__(self):
+    self.old_args = sys.argv
+    sys.argv = list(self.args)
+
+  def __exit__(self, *args):
+    sys.argv = self.old_args
 
 def reloadModules(pattern='.*', skipPattern='^IPython'):
   ''' Reload modules that match pattern regular expression (string or re)
@@ -73,7 +87,7 @@ def is_string_like(obj):
 
   Parameters
   ----------
-  obj : instance
+  obj : object
       Object being tested for string like behavior
 
   Returns
@@ -90,9 +104,9 @@ def is_string_like(obj):
 def get_file(fid, mode='rb'):
   ''' Helper function to take either a filename or fid
 
-  Arguments
-  ---------
-  fid : str or File
+  Parameters
+  ----------
+  fid : str
       File object or filename
   mode : str, optional
       Optional, file mode to open file if filename supplied
@@ -100,7 +114,7 @@ def get_file(fid, mode='rb'):
 
   Returns
   -------
-  File
+  file_like
       The opened file object
   '''
 
@@ -143,7 +157,7 @@ def update_wrapper_class(wrapper, wrapped):
   ----------
   wrapper : class
       The class to be updated
-  wrapped :
+  wrapped : class
       The original function/class
 
   Returns
@@ -270,6 +284,8 @@ class _BasicDecorator(object):
         return a+b
   '''
 
+  fun = None
+
   def __new__(cls, *args, **kwargs):
     WrappedClass = _meta_generate_class(cls, *args, **kwargs)
     # In python3, the use of "_BasicDecorator" can be "__class__" instead, but
@@ -302,14 +318,16 @@ class _BasicDecorator(object):
 class _BasicArgumentDecorator(object):
   ''' A basic decorator class that takes arguments
 
-      It's best to define __init__ with a proper signature when inheriting'''
+      It's best to define __init__ with a proper signature when inheriting
+  '''
 
   def __call__(self, fun):
     ''' No need to rewrite this
 
         Parameters
         ----------
-        fun :
+        fun : func
+          The Function
     '''
 
     @wraps(fun)
@@ -371,70 +389,7 @@ class BasicDecorator(_BasicArgumentDecorator):
 
           test1(11,22)
           test2(10,2)
-      '''
-
-class WarningDecorator(object):
-  ''' Decorator to add to a function to print a message out when called
-
-      Attributes
-      ----------
-      *args
-          message
-      **kwargs
-          output_stream
-
-
-      no arguments (no '()' either)
-
-
-      Example::
-
-          @WarningDecorator
-          def my_prototype(x, y):
-            print(x/y)
-
-          @WarningDecorator('Warning: Unstable Code')
-          def my_prototype(x, y):
-            print(x/y)
-
-          @WarningDecorator(output_stream=sys.stdout)
-          def my_prototype(x, y):
-            print(x/y)
   '''
-  def __init__(self, *args, **kwargs):
-    ''' Initilize decorator
-
-        Arguments
-        ---------
-        *args
-            message
-        **kwargs
-            output_stream
-
-        no arguments (no '()' either)
-    '''
-    if hasattr(args[0], '__call__'): #duck typing
-      self.init1(*args, **kwargs)
-    else:
-      self.init2(*args, **kwargs)
-
-  def init1(self, fun):
-    self.fun = fun
-    self.message = 'Warning'
-    self.output_stream=sys.stderr
-
-  def init2(self, message='Warning', output_stream=sys.stderr):
-    self.message = message
-    self.output_stream = output_stream
-
-  def __call__(self, *args, **kwargs):
-
-    if hasattr(self, 'fun'):
-      print(self.message, file=self.output_stream)
-      return self.fun(*args, **kwargs)
-    else:
-      self.fun = args[0]
-      return self
 
 class WarningDecorator(BasicDecorator):
   def __init__(self, message='Warning', output_stream=sys.stderr):
@@ -536,7 +491,8 @@ def args_to_kwargs(function, args=tuple(), kwargs={}):
      methods
 
      Based on:
-     https://github.com/merriam/dectools/blob/master/dectools/dectools.py'''
+     https://github.com/merriam/dectools/blob/master/dectools/dectools.py
+  '''
 
   return args_to_kwargs_unbound(function, None, args, kwargs)
 
@@ -646,7 +602,7 @@ def args_to_kwargs_easy(*args, **kwargs):
   '''
      Parameters
      ----------
-     function
+     function : func
           Function being parsed
      *args
           Variable length argument list.
@@ -692,3 +648,53 @@ def command_list_to_string(cmd):
   except:
     from pipes import quote
   return ' '.join([quote(x) for x in cmd])
+
+def nested_update(d, *args, **kwargs):
+  ''' Updated a dictionary in a nested fashion
+
+  Parameters
+  ----------
+  d : dict
+      The dict to be updated
+  *args, **kwargs :
+      Same arguments as dict.update
+  '''
+  u = dict(*args, **kwargs)
+  try:
+    items = u.iteritems()
+  except:
+    items = u.items()
+
+  for k, v in items:
+    if isinstance(v, Mapping):
+      d[k] = nested_update(d.get(k, {}), v)
+    else:
+      d[k] = v
+  return d
+
+def nested_in_dict(dict1, dict2):
+  ''' Checks to see if dict1 is in dict2
+
+  Parameters
+  ----------
+  dict1 : dict
+      Subset dictionary
+  dict2 : dict
+      Superset dictionary
+  '''
+
+  try:
+    items = dict1.iteritems()
+  except:
+    items = dict1.items()
+
+  for key, value1 in items:
+    if key not in dict2:
+      return False
+    if isinstance(value1, Mapping):
+      if not nested_in_dict(value1, dict2[key]):
+        return False
+    elif dict2[key] != value1:
+        return False
+
+  return True
