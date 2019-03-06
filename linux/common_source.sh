@@ -322,6 +322,10 @@ if [ -f /etc/os-release ]; then
                 # Capture ubuntu derivatives are debian derived
                 if [ "${ID_LIKE-}" = "ubuntu" ]; then
                   ID_CORE=debian
+                # Opensuse leap does it in the backwards order of centos
+                elif [ "${ID-}" = "opensuse-leap" ]; then
+                  ID_CORE=${ID_LIKE%% *}
+                  ID_LIKE=${ID_LIKE#* }
                 # If there is a space, this is like centos that says "rhel fedora"
                 elif [ "${ID_LIKE+set}" = "set" ] && [ "${ID_LIKE}" != "${ID_LIKE%% *}" ]; then
                   ID_CORE=${ID_LIKE#* }
