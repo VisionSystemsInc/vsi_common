@@ -27,6 +27,8 @@ Linux Utilities
    picker.auto
    postisin.auto
    preisin.auto
+   print_command.auto
+   quotemire.auto
    real_path.auto
    relpath.auto
    set_flags.auto

@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+
+: ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
+source "${VSI_COMMON_DIR}/linux/print_command"
+
+#*# linux/quotemire
+
+#**
+# =========
+# Quotemire
+# =========
+#
+# .. default-domain:: bash
+#
+# .. file:: quotemire
+#
+# :Arguments: ``$1``... - List of commands in the chain
+# :Output: *stdout* - The final conglomeration of all the commands together, ready to be ``eval``ed
+#
+# ``Bash`` CLI version of :func:`quotemire`
+#**
+
+#**
+# .. function:: quotemire
+#
+# :Arguments: ``$1``... - List of commands in the chain
+# :Output: *stdout* - The final conglomeration of all the arguments together, ready to be eval'ed
+#
+# When you have to execute a command that calls another command, that calls another command, where to put the quotes can get out of hand after the 3rd or 4th iteration.
+#
+# .. rubric:: Problem Example
+#
+# .. code-block:: bash
+#
+#   ssh server "su - ben -c 'bash -c \"ls -la '\''/tmp/foo bar'\''\"'"
+#
+# :func:`quotemire` allows you to instead handle this as this chain of commands as an array of strings, and then it programatically combines it into one long command
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#   args=()
+#   args[0]="ssh server"
+#   args[1]="su - ben -c"
+#   args[2]="bash -c"
+#   args[3]="ls -la"
+#   args[4]="/tmp/foo bar"
+#
+#   # Or if you want to combine args[3] and args[4]
+#   # args[3]="ls -la '/tmp/foo bar'"
+#
+#   eval "$(quotemire "${args[@]}")"
+#   # or
+#   bash -c "$(quotemire "${args[@]}")"
+#
+# This chain quoting is only an issue for commands like ``su -c``, ``bash -c`` and ``ssh`` (because ssh does not handle command arguments correctly). However other commands like ``env``, ``sudo``, etc... do not need this quotation, so should not be made separate arguments:
+#
+# .. rubric:: Mixed Example
+#
+#   args=()
+#   args[0]="$(print_command ssh -t "${@}")"
+#   args[1]="ssh -t -R '${de_socket}:/var/run/docker.sock' ${phone_home}"
+#   args[2]="env 'DOCKER_HOST=unix://${de_socket}' 'DISPLAY=${DISPLAY}' bash -c"
+#   args[3]="cd '$(pwd)'; exec bash"
+#
+# In this example, the ``env`` and ``bash`` are on the same argument, because env does handle multiple arguments for a command correctly
+#**
+. "$(dirname "${BASH_SOURCE[0]}")/just_functions.bsh"
+
+function quotemire()
+{
+  local args
+  if [ "$#" -gt 0 ]; then
+    args="${!#}"
+  fi
+  local x
+  for (( x=$#-2; x>=0; x-- )); do
+    args="${@:$x+1:1} $(print_command "${args}")"
+  done
+  echo "${args}"
+}
+
+if [[ ${BASH_SOURCE[0]} == ${0} ]] || [[ $(basename "${BASH_SOURCE[0]}") == ${0} ]]; then
+  quotemire ${@+"${@}"}
+fi
