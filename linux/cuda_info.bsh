@@ -52,6 +52,11 @@ function discover_cuda_versions()
     CUDA_VERSIONS+=($("${version}" --version | \awk 'END{print substr($6, 2)}'))
   done 2>/dev/null
 
+  if [ "${#CUDA_VERSIONS[@]}" = "0" ] && command -v "${NVIDIA_SMI-nvidia-smi}" &> /dev/null; then
+    echo "No CUDA found: Determining max supported CUDA instead" >&2
+    CUDA_VERSIONS=("$(nvidia-smi | sed -nE '/CUDA Version:/{s|.*CUDA Version: *([0-9.]*).*|\1|;p;q}')")
+  fi
+
   # Prevent macos from crashing. Not sure why this is new. Might be darling
   if [ ${#CUDA_VERSIONS[@]} -gt 1 ]; then
     CUDA_VERSIONS=($(sort -uV <<< ${CUDA_VERSIONS+"${CUDA_VERSIONS[*]}"}))
@@ -413,6 +418,11 @@ function cuda_capabilities()
       CUDA_ARCHES=(30 32 35 37 50 52 53 60 61 62 70 72 75)
       CUDA_CODES=(30 32 35 37 50 52 53 60 61 62 70 72 75)
       CUDA_MINIMAL_DRIVER_VERSION=410.48
+      ;;
+    10.1*) #.105
+      CUDA_ARCHES=(30 32 35 37 50 52 53 60 61 62 70 72 75)
+      CUDA_CODES=(30 32 35 37 50 52 53 60 61 62 70 72 75)
+      CUDA_MINIMAL_DRIVER_VERSION=418.39
       ;;
     # 11*
     # run "strings nvcc | grep compute_" (ARCHES) and "sm_" (CODES) and you'll get a complete list
