@@ -119,11 +119,11 @@ else
   exit 1
 fi
 
-venv="$(PIPENV_PIPFILE="$(dirname "${BASH_SOURCE[0]}")/Pipfile" pipenv --venv)"
+kernels="$(dirname "${BASH_SOURCE[0]}")/jupyter_data/kernels"
 
-mkdir -p "${venv}/jupyter_data/kernels/${1}"
+mkdir -p "${kernels}/${1}"
 
-cat << EOS > "${venv}/jupyter_data/kernels/${1}/kernel.json"
+cat << EOS > "${kernels}/${1}/kernel.json"
 {
  "display_name": "${1}",
  "argv": [
@@ -151,11 +151,11 @@ else
   exit 1
 fi
 
-venv="$(PIPENV_PIPFILE="$(dirname "${BASH_SOURCE[0]}")/Pipfile" pipenv --venv)"
+kernels="$(dirname "${BASH_SOURCE[0]}")/jupyter_data/kernels"
 
-mkdir -p "${venv}/jupyter_data/kernels/${1}"
+mkdir -p "${kernels}/${1}"
 
-cat << EOS > "${venv}/jupyter_data/kernels/${1}/kernel.json"
+cat << EOS > "${kernels}/${1}/kernel.json"
 {
  "display_name": "${1}",
  "argv": [
@@ -167,7 +167,7 @@ cat << EOS > "${venv}/jupyter_data/kernels/${1}/kernel.json"
   "-f",
   "{connection_file}"
  ],
- "env": {"PIPENV_PIPFILE":"${PIPENV_PIPFILE-$(pipenv --venv)/Pipfile}"},
+ "env": {"PIPENV_PIPFILE":"${PIPENV_PIPFILE-$(pwd)/Pipfile}"},
  "language": "python"
 }
 EOS'''

@@ -109,10 +109,10 @@ In order to use these directories, all you have to do is
         '''
         ```
 
-        * This will start the python in your path, and pass the script and all arguments, as uncorrupted as possible in windows batch. 
-        * This can work for anything other than python. 
+        * This will start the python in your path, and pass the script and all arguments, as uncorrupted as possible in windows batch.
+        * This can work for anything other than python.
         * Use pythonw instead for gui tasks.
-        * For special characters (like |), you'll need to add an escape character (^|) just to run the command, and then 2^n more for every batch file. So to call this batch file, you'll need 3 carats (^^^|). To escape !, you'll need to create a setlocal ENABLEDELAYEDEXPANSION arond the python call itself (its the %* part that is important). Side effects are currently unknown for using setlocal in this way, so it is not the default yet... 
+        * For special characters (like |), you'll need to add an escape character (^|) just to run the command, and then 2^n more for every batch file. So to call this batch file, you'll need 3 carats (^^^|). To escape !, you'll need to create a setlocal ENABLEDELAYEDEXPANSION arond the python call itself (its the %* part that is important). Side effects are currently unknown for using setlocal in this way, so it is not the default yet...
 
           ```batch
           setlocal ENABLEDELAYEDEXPANSION
