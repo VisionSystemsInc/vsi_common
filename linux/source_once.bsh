@@ -1,0 +1,30 @@
+
+# How you use source_once
+source_once >&/dev/null && return
+
+# Needs documentation
+function source_once()
+{
+  if [ "${BASH_VERSINFO[0]}" -gt 3 ]; then
+    declare -Ag _VSI_ALREADY_SOURCED
+    local file_var="_${BASH_SOURCE[1]//[^a-zA-Z0-9_]/_}"
+    # If there is no entry, it's never been sourced
+    if [ -z "${_VSI_ALREADY_SOURCED[${file_var}]+set}" ]; then
+      _VSI_ALREADY_SOURCED[${file_var}]=1
+      return 1
+    fi
+  else
+    # Create an indirect variable using the calling file's name
+    local SOURCE_VAR="_VSI_ALREADY_SOURCED_${BASH_SOURCE[1]//[^a-zA-Z0-9_]/_}"
+    if [ -z "${!SOURCE_VAR+set}" ]; then
+      # Have to use eval in bash 3.2, declare won't be global
+      eval "${SOURCE_VAR}=1"
+      return 1
+    fi
+  fi
+  return 0
+}
+
+# Only the ``source_once`` file itself needs to call this at the end. Set's up
+# the already sourced variable for this file
+source_once || :

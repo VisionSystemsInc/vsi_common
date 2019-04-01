@@ -108,4 +108,4 @@ function caseify()
   esac
 }
 
-if [ "${JUST_IN_SCRIPT-0}" = "0" ]; then caseify ${@+"${@}"};fi
+if ! command -v justify &> /dev/null; then caseify ${@+"${@}"};fi
