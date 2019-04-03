@@ -170,16 +170,38 @@ function discover_cuda_info()
       IFS=$'\n'
       CUDA_CARDS=($(echo "${card_info}" | \grep ^Device | \awk '{$1=$2=""; $0=$0; $1=$1}1' | \sed 's|"||g'))
       IFS="${OLD_IFS}"
-      cuda_card_arches=(1 2 3 5 6 7) # Major version
-      cuda_card_families=(Tesla Fermi Kepler Maxwell Pascal Volta) # Family name
+      # Currently these two arrays can't have spaces, if they do, the awk will need to be updated
+      cuda_card_arches=(1 2 3 5 6 7 7.5) # Lowest possible version number, put in ascending order
+      cuda_card_arches="${cuda_card_arches[@]}"
+      cuda_card_families=(Tesla Fermi Kepler Maxwell Pascal Volta Turing) # Matching Family name
+      cuda_card_families="${cuda_card_families[@]}"
       for x in ${CUDA_CARD_ARCHES+"${CUDA_CARD_ARCHES[@]}"}; do
-        for y in "${!cuda_card_arches[@]}"; do
-          if [ "${x:0:1}" == "${cuda_card_arches[$y]}" ]; then
-            CUDA_CARD_FAMILIES+=("${cuda_card_families[$y]}")
-            continue 2
-          fi
-        done
-        CUDA_CARD_FAMILIES+=("Family Unknown")
+        CUDA_CARD_FAMILIES+=("$(awk '
+        BEGIN {
+          # Split the arches array
+          version[0]=""
+          a="'"${cuda_card_arches}"'"
+          n=split(a, version, " ")
+
+          # Split the family array
+          family[0]=""
+          a="'"${cuda_card_families}"'"
+          split(a, family, " ")
+
+          # loop through all the versions
+          for(j = n; j > 0; j--)
+          {
+            # if it matches
+            if ('"${x}"' >= version[j])
+            {
+              # Print it out
+              print family[j]
+              exit(0)
+            }
+          }
+          # Default behavior
+          print "Unknown family"
+        }')")
       done
     fi
   # Else attempt to use the nvidia-docker daemon
