@@ -1,0 +1,148 @@
+JUST_DEFAULTIFY_FUNCTIONS+=(docs_defaultify)
+JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
+
+#*# just/just_docs_functions
+
+#**
+# .. default-domain:: bash
+#
+# ==============
+# Docs Functions
+# ==============
+#
+# .. file:: just_docs_functions.bsh
+#
+# Plugin for building Sphinx docs in any just project
+#**
+
+source "${VSI_COMMON_DIR}/linux/elements.bsh"
+source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
+
+function _docs_serialize_dirs()
+{
+  local tmp="${1-}"
+  shift 1
+
+  set_optflag extglob
+  tmp="${tmp//\/+(\/)/\/}"
+  while [ $# -gt 0 ]; do
+    tmp+="//${1//\/+(\/)/\/}"
+    shift 1
+  done
+  reset_optflag extglob
+  echo "${tmp}"
+}
+
+# Document
+# Need
+#   {JUST_PROJECT_PREFIX}_DOCS_DIR, default ${{JUST_PROJECT_PREFIX}_CWD}/docs
+#   {JUST_PROJECT_PREFIX}_DOCS_SRC_DIR, default ${{JUST_PROJECT_PREFIX}_CWD}
+#   {JUST_PROJECT_PREFIX}_DOCS_EXCLUDE_DIRS, default () relative to source dir
+#   {JUST_PROJECT_PREFIX}_DOCS_PYTHON_DIRS, default () relative to source dir
+#   {JUST_PROJECT_PREFIX}_DOCS_PYTHON_OUTPUT_DIRS, default () relative to docs dir
+
+#**
+# .. function:: docs_defaultify
+#
+# Plugin for building Sphinx docs in any just project
+#**
+function docs_defaultify()
+{
+  local id_project_cwd="${JUST_PROJECT_PREFIX}_CWD"
+  local docs_dir="${JUST_PROJECT_PREFIX}_DOCS_DIR"
+  docs_dir="${!docs_dir:-${!id_project_cwd}/docs}"
+
+  local src_dir="${JUST_PROJECT_PREFIX}_DOCS_SRC_DIR"
+  src_dir="${!src_dir:-${!id_project_cwd}}"
+
+  local tmp="${JUST_PROJECT_PREFIX}_DOCS_EXCLUDE_DIRS"
+  local exclude_dirs="${tmp}[@]"
+  exclude_dirs=(${tmp+"${!exclude_dirs}"})
+
+  tmp="${JUST_PROJECT_PREFIX}_DOCS_PYTHON_DIRS"
+  local python_dirs="${tmp}[@]"
+  python_dirs=(${tmp+"${!python_dirs}"})
+
+  tmp="${JUST_PROJECT_PREFIX}_DOCS_PYTHON_OUTPUT_DIRS"
+  local python_output_dirs="${tmp}[@]"
+  python_output_dirs=(${tmp+"${!python_output_dirs}"})
+
+  arg=$1
+  shift 1
+  case $arg in
+    docs) # Guided make sphinx documents happen (build/setup/compile)
+      # if ! docker image inspect ${VSI_COMMON_DOCKER_REPO}:compile_docs &> /dev/null; then
+        justify docs build
+      # fi
+      if [ ! -d "${docs_dir}" ]; then
+        justify docs setup
+      fi
+      justify docs compile
+      ;;
+    docs_build) # Build the sphinx docker images
+      justify build recipes gosu tini pipenv vsi
+      Docker-compose -f "${VSI_COMMON_DIR}/docker-compose.yml" build docs
+      image_name=$(docker create ${VSI_COMMON_DOCKER_REPO}:compile_docs)
+      docker cp ${image_name}:/venv/Pipfile.lock "${VSI_COMMON_DIR}/docs/Pipfile.lock"
+      docker rm ${image_name}
+      ;;
+    docs_setup) # Setup a new sphinx project
+      mkdir -p "${docs_dir}"
+      DOCS_SOURCE_DIR="${src_dir}" DOCS_DIR="${docs_dir}" Docker-compose \
+          -f "${VSI_COMMON_DIR}/docker-compose.yml" run \
+          -e SPHINXOPTS \
+          -e JUST_PROJECT_FILE="/src/${JUST_PROJECT_FILE##*/}" \
+          -e DOCS_EXCLUDE_DIRS="$(_docs_serialize_dirs "${exclude_dirs[@]}")" \
+          -e DOCS_PYTHON_DIRS="$(_docs_serialize_dirs "${python_dirs[@]}")" \
+          -e DOCS_PYTHON_OUTPUT_DIRS="$(_docs_serialize_dirs "${python_output_dirs[@]}")" \
+          bash -c "cd /src
+                   sphinx-quickstart"
+      ;;
+    docs_compile) # Compile spinx documents
+      DOCS_SOURCE_DIR="${src_dir}" DOCS_DIR="${docs_dir}" Docker-compose \
+          -f "${VSI_COMMON_DIR}/docker-compose.yml" run \
+          -e SPHINXOPTS \
+          -e JUST_PROJECT_FILE="/src/${JUST_PROJECT_FILE##*/}" \
+          -e DOCS_EXCLUDE_DIRS="$(_docs_serialize_dirs "${exclude_dirs[@]}")" \
+          -e DOCS_PYTHON_DIRS="$(_docs_serialize_dirs "${python_dirs[@]}")" \
+          -e DOCS_PYTHON_OUTPUT_DIRS="$(_docs_serialize_dirs "${python_output_dirs[@]}")" \
+          docs ${@+"${@}"}
+      ;;
+    docs_view) # Open a webbrowser to the sphinx docs. First argument must contain the docs build directory
+      local html_file
+      html_file="$(find "${docs_dir}" -path \*html/index.html -print -quit)"
+      if [ -z "${html_file-}" ]; then
+        html_file=${docs_dir}
+      fi
+      if [ "${OS-}" = "Windows_NT" ]; then
+        start "" "${html_file}"
+      else
+        local found=0
+        # "open" is for macos
+        browsers=(xdg-open google-chrome chromium-browser firefox open)
+        for browser in "${browsers[@]}"; do
+          if command -v "${browser}" >& /dev/null; then
+            "${browser}" "${html_file}"
+            found=1
+            break
+          fi
+        done
+        if [ "${found}" = "0" ]; then
+          echo "No webbrowser found. Open:" >&2
+          echo "${html_file}" >&2
+        fi
+      fi
+      ;;
+
+    --docs-nit) # Set nit picky when compiling sphinx docs
+      export SPHINXOPTS="${SPHINXOPTS-} -n"
+      ;;
+    --docs-all) # Set rebuild all when compiling sphinx docs
+      export SPHINXOPTS="${SPHINXOPTS-} -a"
+      ;;
+    *)
+      plugin_not_found=1
+      ;;
+  esac
+  return 0
+}
