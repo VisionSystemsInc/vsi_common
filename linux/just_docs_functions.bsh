@@ -41,6 +41,16 @@ function _docs_serialize_dirs()
 #   {JUST_PROJECT_PREFIX}_DOCS_PYTHON_DIRS, default () relative to source dir
 #   {JUST_PROJECT_PREFIX}_DOCS_PYTHON_OUTPUT_DIRS, default () relative to docs dir
 
+function _docs_docker_compose()
+{
+  DOCS_SOURCE_DIR="${src_dir}" \
+      DOCS_DIR="${docs_dir}" \
+      VSI_COMMON_UID="${uid}" \
+      VSI_COMMON_GID="${gid}" \
+      Docker-compose \
+         -f "${VSI_COMMON_DIR}/docker-compose-docs.yml" ${@+"${@}"}
+}
+
 #**
 # .. function:: docs_defaultify
 #
@@ -67,11 +77,16 @@ function docs_defaultify()
   local python_output_dirs="${tmp}[@]"
   python_output_dirs=(${tmp+"${!python_output_dirs}"})
 
+  local uid="${JUST_PROJECT_PREFIX}_UID"
+  uid="${!uid-1000}"
+  local gid="${JUST_PROJECT_PREFIX}_GID"
+  gid="${!gid-1000}"
+
   arg=$1
   shift 1
   case $arg in
     docs) # Guided make sphinx documents happen (build/setup/compile)
-      # if ! docker image inspect ${VSI_COMMON_DOCKER_REPO}:compile_docs &> /dev/null; then
+      # if ! docker image inspect vsiri/sphinxdocs:compile &> /dev/null; then
         justify docs build
       # fi
       if [ ! -d "${docs_dir}" ]; then
@@ -81,26 +96,25 @@ function docs_defaultify()
       ;;
     docs_build) # Build the sphinx docker images
       justify build recipes gosu tini pipenv vsi
-      Docker-compose -f "${VSI_COMMON_DIR}/docker-compose.yml" build docs
-      image_name=$(docker create ${VSI_COMMON_DOCKER_REPO}:compile_docs)
+      _docs_docker_compose build docs
+      image_name=$(docker create vsiri/sphinxdocs:compile)
       docker cp ${image_name}:/venv/Pipfile.lock "${VSI_COMMON_DIR}/docs/docker/Pipfile.lock"
       docker rm ${image_name}
       ;;
     docs_setup) # Setup a new sphinx project
       mkdir -p "${docs_dir}"
-      DOCS_SOURCE_DIR="${src_dir}" DOCS_DIR="${docs_dir}" Docker-compose \
-          -f "${VSI_COMMON_DIR}/docker-compose.yml" run \
+      _docs_docker_compose \
+          -f "${VSI_COMMON_DIR}/docker-compose-docs.yml" run \
           -e SPHINXOPTS \
           -e JUST_PROJECT_FILE="/src/${JUST_PROJECT_FILE##*/}" \
           -e DOCS_EXCLUDE_DIRS="$(_docs_serialize_dirs "${exclude_dirs[@]}")" \
           -e DOCS_PYTHON_DIRS="$(_docs_serialize_dirs "${python_dirs[@]}")" \
           -e DOCS_PYTHON_OUTPUT_DIRS="$(_docs_serialize_dirs "${python_output_dirs[@]}")" \
-          bash -c "cd /src
-                   sphinx-quickstart"
+          docs bash -c "cd /docs; sphinx-quickstart"
       ;;
     docs_compile) # Compile spinx documents
-      DOCS_SOURCE_DIR="${src_dir}" DOCS_DIR="${docs_dir}" Docker-compose \
-          -f "${VSI_COMMON_DIR}/docker-compose.yml" run \
+      _docs_docker_compose \
+          -f "${VSI_COMMON_DIR}/docker-compose-docs.yml" run \
           -e SPHINXOPTS \
           -e JUST_PROJECT_FILE="/src/${JUST_PROJECT_FILE##*/}" \
           -e DOCS_EXCLUDE_DIRS="$(_docs_serialize_dirs "${exclude_dirs[@]}")" \
