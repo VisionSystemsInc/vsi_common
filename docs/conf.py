@@ -100,14 +100,10 @@ autodoc_mock_imports = ["pyopencl", "vtk", "numpy", "matplotlib",
 
 # Remove warnings due to a bug in the Python docs with nitpick_ignore
 nitpick_ignore = [('py:class', 'bool'),
-                  ('py:class', 'array_like'),
                   ('py:class', 'object'),
                   ('py:class', 'str'),
-                  ('py:class', 'string'),
                   ('py:class', 'int'),
                   ('py:class', 'float'),
-                  ('py:class', 'figure'),
-                  ('py:class', 'axes'),
                   ('py:class', 'func'),
                   ('py:class', 'dict'),
                   ('py:class', 'iterable'),
@@ -115,22 +111,25 @@ nitpick_ignore = [('py:class', 'bool'),
                   ('py:class', 'class'),
                   ('py:class', 'tuple'),
                   ('py:class', 'module'),
-                  ('py:class', 'Other'),
-                  ('py:class', 'optional'),
-                  ('py:class', 'var'),
-                  ('py:class', 'frame'),
                   ('py:class', 'file_like'),
-                  ('py:class', 'numpy.array'),
-                  ('py:class', 'BoundingBox'),
-                  ('py:class', 'unittest.case.TestCase'),
+                  ('py:class', 'frame'), # watch dog
+                  ('py:class', 'Exception'),
+
+                  ('py:class', 'numpy.array'), # numpy
+                  ('py:class', 'array_like'),
+
+                  ('py:class', 'figure'), # Matplotlib
+                  ('py:class', 'axes'),
+
                   ('py:class', 'subprocess.Popen'),
                   ('py:class', 'rpdb2.CDebuggerCoreThread'),
                   ('py:class', 'IPython.core.debugger.Tracer'),
                   ('py:class', 'IPython.core.debugger.Pdb'),
-                  ('py:class', 'debugger'),
                   ('py:class', 'threading.Thread'),
-                  ('py:class', 'Exception'),
                   ('py:class', 're.Pattern'),
+
+                  ('py:class', 'BasicDecorator'), # Using decorator currently blocks sphinx
+
                   ('py:exc', 'OSError'),
                   ('py:exc', 'Exception'),
                   ('py:exc', 'ValueError'),
