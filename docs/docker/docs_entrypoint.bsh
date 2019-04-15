@@ -37,15 +37,18 @@ if [ "$1" == "docs" ]; then
   src_files=()
   doc_files=()
 
-  echo "Pre parsing python sphinx files..."
-  split_s python_dirs ${DOCS_PYTHON_DIRS}
-  split_s python_output_dirs ${DOCS_PYTHON_OUTPUT_DIRS}
-  for x in "${!python_output_dirs[@]}"; do
-    pipenv run sphinx-apidoc --force -o "/docs/${python_output_dirs[$x]}" "/src/${python_dirs[$x]}"
-  done
+  pushd /src > /dev/null # make exclude and python_dirs relative to /src
+    echo "Pre parsing python sphinx files..."
+    split_s python_dirs ${DOCS_PYTHON_DIRS-}
+    split_s python_output_dirs ${DOCS_PYTHON_OUTPUT_DIRS-}
+    split_s python_exclude_dirs ${DOCS_PYTHON_EXCLUDE_DIRS-}
+    for x in "${!python_output_dirs[@]}"; do
+      pipenv run sphinx-apidoc --force -o "/docs/${python_output_dirs[$x]}" "${python_dirs[$x]}" ${python_exclude_dirs+"${python_exclude_dirs[@]}"}
+    done
+  popd
 
   echo "Pre parsing sphinx files..."
-  split_s exclude_dirs ${DOCS_EXCLUDE_DIRS}
+  split_s exclude_dirs ${DOCS_EXCLUDE_DIRS-}
   find_flags=()
   for x in "${exclude_dirs[@]}"; do
     find_flags+=(-path "/src/${x}" -prune -o)

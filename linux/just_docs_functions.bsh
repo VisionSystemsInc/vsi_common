@@ -37,9 +37,12 @@ function _docs_serialize_dirs()
 # Need
 #   {JUST_PROJECT_PREFIX}_DOCS_DIR, default ${{JUST_PROJECT_PREFIX}_CWD}/docs
 #   {JUST_PROJECT_PREFIX}_DOCS_SRC_DIR, default ${{JUST_PROJECT_PREFIX}_CWD}
-#   {JUST_PROJECT_PREFIX}_DOCS_EXCLUDE_DIRS, default () relative to source dir
+#   {JUST_PROJECT_PREFIX}_DOCS_PYTHON_EXCLUDE_DIRS, default (*/tests) passed to sphinx-apidoc. This is relative to the ``/docs`` directory, so it is usually easier to use an absolute path starting with ``/src`` to represent the repository root directory
+#   {JUST_PROJECT_PREFIX}_DOCS_EXCLUDE_DIRS, default (docs) relative to source dir
 #   {JUST_PROJECT_PREFIX}_DOCS_PYTHON_DIRS, default () relative to source dir
 #   {JUST_PROJECT_PREFIX}_DOCS_PYTHON_OUTPUT_DIRS, default () relative to docs dir
+#
+# How to use your own custom docs image. Simply use the name export the environment variable DOCS_COMPILE_IMAGE
 
 function _docs_docker_compose()
 {
@@ -65,18 +68,6 @@ function docs_defaultify()
   local src_dir="${JUST_PROJECT_PREFIX}_DOCS_SRC_DIR"
   src_dir="${!src_dir:-${!id_project_cwd}}"
 
-  local tmp="${JUST_PROJECT_PREFIX}_DOCS_EXCLUDE_DIRS"
-  local exclude_dirs="${tmp}[@]"
-  exclude_dirs=(${tmp+"${!exclude_dirs}"})
-
-  tmp="${JUST_PROJECT_PREFIX}_DOCS_PYTHON_DIRS"
-  local python_dirs="${tmp}[@]"
-  python_dirs=(${tmp+"${!python_dirs}"})
-
-  tmp="${JUST_PROJECT_PREFIX}_DOCS_PYTHON_OUTPUT_DIRS"
-  local python_output_dirs="${tmp}[@]"
-  python_output_dirs=(${tmp+"${!python_output_dirs}"})
-
   local uid="${JUST_PROJECT_PREFIX}_UID"
   uid="${!uid-1000}"
   local gid="${JUST_PROJECT_PREFIX}_GID"
@@ -85,16 +76,19 @@ function docs_defaultify()
   arg=$1
   shift 1
   case $arg in
-    docs) # Guided make sphinx documents happen (build/setup/compile)
-      # if ! docker image inspect vsiri/sphinxdocs:compile &> /dev/null; then
-        justify docs build
-      # fi
+    docs) # Guided "just" make sphinx documents happen (build => setup => compile)
+      justify docs build
       if [ ! -d "${docs_dir}" ]; then
         justify docs setup
       fi
       justify docs compile
       ;;
     docs_build) # Build the sphinx docker images
+      if [ "${DOCS_COMPILE_IMAGE-vsiri/sphinxdocs:compile}" != "vsiri/sphinxdocs:compile" ]; then
+        . "${VSI_COMMON_DIR}/linux/colors.bsh"
+        echo "${RED}ERROR${NC}: You should use your own Justfile to build \"${DOCS_COMPILE_IMAGE}\"" >&2
+        false
+      fi
       justify build recipes gosu tini pipenv vsi
       _docs_docker_compose build docs
       image_name=$(docker create vsiri/sphinxdocs:compile)
@@ -105,19 +99,25 @@ function docs_defaultify()
       mkdir -p "${docs_dir}"
       _docs_docker_compose \
           -f "${VSI_COMMON_DIR}/docker-compose-docs.yml" run \
-          -e SPHINXOPTS \
-          -e JUST_PROJECT_FILE="/src/${JUST_PROJECT_FILE##*/}" \
-          -e DOCS_EXCLUDE_DIRS="$(_docs_serialize_dirs "${exclude_dirs[@]}")" \
-          -e DOCS_PYTHON_DIRS="$(_docs_serialize_dirs "${python_dirs[@]}")" \
-          -e DOCS_PYTHON_OUTPUT_DIRS="$(_docs_serialize_dirs "${python_output_dirs[@]}")" \
           docs bash -c "cd /docs; sphinx-quickstart"
       ;;
     docs_compile) # Compile spinx documents
+      local JUST_TEMP_ARRAY
+      set_temp_array "${JUST_PROJECT_PREFIX}_DOCS_EXCLUDE_DIRS" docs
+      local exclude_dirs=(${JUST_TEMP_ARRAY+"${JUST_TEMP_ARRAY[@]}"})
+      set_temp_array "${JUST_PROJECT_PREFIX}_DOCS_PYTHON_EXCLUDE_DIRS" \*/tests
+      local python_exclude_dirs=(${JUST_TEMP_ARRAY+"${JUST_TEMP_ARRAY[@]}"})
+      set_temp_array "${JUST_PROJECT_PREFIX}_DOCS_PYTHON_DIRS"
+      local python_dirs=(${JUST_TEMP_ARRAY+"${JUST_TEMP_ARRAY[@]}"})
+      set_temp_array "${JUST_PROJECT_PREFIX}_DOCS_PYTHON_OUTPUT_DIRS"
+      local python_output_dirs=(${JUST_TEMP_ARRAY+"${JUST_TEMP_ARRAY[@]}"})
+
       _docs_docker_compose \
           -f "${VSI_COMMON_DIR}/docker-compose-docs.yml" run \
           -e SPHINXOPTS \
           -e JUST_PROJECT_FILE="/src/${JUST_PROJECT_FILE##*/}" \
           -e DOCS_EXCLUDE_DIRS="$(_docs_serialize_dirs "${exclude_dirs[@]}")" \
+          -e DOCS_PYTHON_EXCLUDE_DIRS="$(_docs_serialize_dirs "${python_exclude_dirs[@]}")" \
           -e DOCS_PYTHON_DIRS="$(_docs_serialize_dirs "${python_dirs[@]}")" \
           -e DOCS_PYTHON_OUTPUT_DIRS="$(_docs_serialize_dirs "${python_output_dirs[@]}")" \
           docs ${@+"${@}"}
@@ -152,7 +152,7 @@ function docs_defaultify()
       export SPHINXOPTS="${SPHINXOPTS-} -n"
       ;;
     --docs-all) # Set rebuild all when compiling sphinx docs
-      export SPHINXOPTS="${SPHINXOPTS-} -a"
+      export SPHINXOPTS="${SPHINXOPTS-} -E -a"
       ;;
     *)
       plugin_not_found=1
