@@ -39,7 +39,7 @@ def set_attach(db_cmd=None, signal=ATTACH_SIGNAL):
       ----------
       db_cmd : str
           The Debugger Command
-      signal : var
+      signal : int
           The Attach Signal
 
 
@@ -66,7 +66,7 @@ def attach(pid, signal=ATTACH_SIGNAL):
       ----------
       pid : str
           The Process ID
-      signal : var
+      signal : int
           The Attach Signal
 
 
@@ -101,7 +101,7 @@ def handle_db(sig, frame, db_cmd=None, signal=ATTACH_SIGNAL):
       frame :
       db_cmd : str
           The Debugger Command
-      signal : var
+      signal : int
           The Attach Signal
   '''
   if sig == signal:

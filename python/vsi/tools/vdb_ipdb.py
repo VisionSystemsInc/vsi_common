@@ -71,7 +71,7 @@ def dbstop_if_error(interactive=False, colors=None):
 
   Arguments
   ---------
-  interactive : bool, optional
+  interactive : :class:`bool`, optional
       Default False. dbstop if console is interactive. You are still able to
       print and run commands in the debugger, just listing code declared
       interactively will not work. Does not appear to work in ipython. Use
@@ -105,7 +105,7 @@ def runpdb(lines, debugger=None):
 
   Return
   ------
-  debugger
+  object
       Returns the debugger object, since this can only be executed on the
       debugger object, you can optionally pass it in as the second argument
       if you want to call runpdb multiple times. If you do not, a new

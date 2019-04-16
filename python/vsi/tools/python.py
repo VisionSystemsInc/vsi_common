@@ -108,7 +108,7 @@ def get_file(fid, mode='rb'):
   ----------
   fid : str
       File object or filename
-  mode : str, optional
+  mode : :class:`str`, optional
       Optional, file mode to open file if filename supplied
       Default is 'rb'
 
@@ -656,7 +656,9 @@ def nested_update(d, *args, **kwargs):
   ----------
   d : dict
       The dict to be updated
-  *args, **kwargs :
+  args :
+      Same arguments as dict.update
+  kwargs :
       Same arguments as dict.update
   '''
   u = dict(*args, **kwargs)

@@ -7,6 +7,7 @@ fi
 source "$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)/linux/just_env" "$(dirname "${BASH_SOURCE[0]}")"/vsi_common.env
 
 source "${VSI_COMMON_DIR}/linux/just_docker_functions.bsh"
+source "${VSI_COMMON_DIR}/linux/just_docs_functions.bsh"
 
 cd "$(\dirname "${BASH_SOURCE[0]}")"
 
@@ -83,24 +84,6 @@ function caseify()
         read -p "Press any key to close" -r -e -n1
         exit ${rv}'
       extra_args+=$#
-      ;;
-
-    build_docs) # Build docs image
-      justify build recipes gosu tini pipenv
-      Docker-compose build docs
-      image_name=$(docker create ${VSI_COMMON_DOCKER_REPO}:compile_docs)
-      docker cp ${image_name}:/venv/Pipfile.lock "${VSI_COMMON_DIR}/docs/Pipfile.lock"
-      docker rm ${image_name}
-      ;;
-
-    --nit) # Set nit picky when compiling docs
-      export SPHINXOPTS="${SPHINXOPTS-} -n"
-      ;;
-    --all) # Set rebuild all when compiling docs
-      export SPHINXOPTS="${SPHINXOPTS-} -a"
-      ;;
-    compile_docs) # Compile documentation
-      Docker-compose run -e SPHINXOPTS docs ${@+"${@}"}
       ;;
     *)
       defaultify "${just_arg}" ${@+"${@}"}

@@ -2,16 +2,19 @@
 
 set -eu
 
-JUST_PROJECT_PREFIX=VSI_COMMON
-source "${VSI_COMMON_DIR:-/vsi}/linux/just_env" "${DOCS_SOURCE_DIR-/vsi/docs}/docs.env"
-
 if [ "${ALREADY_RUN_ONCE+set}" != "set" ]; then
-  # create the user and associated groups and handle nfs symlinks
-  /usr/bin/env bash /vsi/linux/docker_entrypoint.bsh
+  (
+    source "${VSI_COMMON_DIR:-/vsi}/linux/just_env" "${JUST_PROJECT_FILE}"
+
+    # create the user and associated groups and handle nfs symlinks
+    /usr/bin/env bash /vsi/linux/docker_entrypoint.bsh
+  )
 
   # Rerun entrypoint as user now, (skipping the root part via ALREADY_RUN_ONCE)
   ALREADY_RUN_ONCE=1 exec gosu ${DOCKER_USERNAME} /usr/bin/env bash $0 ${@+"${@}"}
 fi
+
+source "${VSI_COMMON_DIR:-/vsi}/linux/just_env" "${JUST_PROJECT_FILE}"
 
 function sudo()
 {
@@ -22,23 +25,34 @@ export -f sudo
 source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
 # Remove duplicate DOCS_*_DOCKER variables
 filter_docker_variables
+docker_convert_paths
 
 if [ "$1" == "docs" ]; then
-  if [ ! -s "${DOCS_SOURCE_DIR-/vsi/docs}/Pipfile.lock" ]; then
-    pipenv lock
-  fi
-  cd /vsi/docs
+  source "${VSI_COMMON_DIR}/linux/elements.bsh"
+
+  cd /docs
+
+  pipenv run python -c "import conf,os; [os.makedirs(x) for x in conf.html_static_path if not os.path.exists(x)]"
 
   src_files=()
   doc_files=()
 
-  mkdir -p "${DOCS_SOURCE_DIR-/vsi/docs}/_static"
-
-  echo "Pre parsing python sphinx files..."
-  rm -f "${DOCS_SOURCE_DIR-/vsi/docs}/python/"*.rst
-  pipenv run sphinx-apidoc -o python ../python/vsi
+  pushd /src > /dev/null # make exclude and autodoc_dirs relative to /src
+    echo "Pre parsing autodoc sphinx files..."
+    split_s autodoc_dirs ${DOCS_AUTODOC_DIRS-}
+    split_s autodoc_output_dirs ${DOCS_AUTODOC_OUTPUT_DIRS-}
+    split_s autodoc_exclude_dirs ${DOCS_AUTODOC_EXCLUDE_DIRS-}
+    for x in "${!autodoc_output_dirs[@]}"; do
+      pipenv run sphinx-apidoc --force -o "/docs/${autodoc_output_dirs[$x]}" "${autodoc_dirs[$x]}" ${autodoc_exclude_dirs+"${autodoc_exclude_dirs[@]}"}
+    done
+  popd > /dev/null
 
   echo "Pre parsing sphinx files..."
+  split_s exclude_dirs ${DOCS_EXCLUDE_DIRS-}
+  find_flags=()
+  for x in "${exclude_dirs[@]}"; do
+    find_flags+=(-path "/src/${x}" -prune -o)
+  done
 
   # For now, all languages we are using can use ## as comments. When this
   # is no longer true, the find will need to be extension specific, or
@@ -54,7 +68,7 @@ if [ "$1" == "docs" ]; then
       echo "Pattern does not match"
       continue
     fi
-  done < <(find "${VSI_COMMON_DIR}" -name docs -prune -o -type f -not -name '*.md' -print0 | xargs -0 grep -T -H '^ *#\*# *')
+  done < <(find /src "${find_flags[@]}" -type f -not -name '*.md' -not -name PKG-INFO -print0 | xargs -0 grep -T -H '^ *#\*# *')
 
   [ "${#src_files[@]}" = "${#doc_files[@]}" ]
 
@@ -76,7 +90,7 @@ if [ "$1" == "docs" ]; then
 
     # echo "Processing ${doc_file}"
 
-    doc_file="${VSI_COMMON_DIR}/docs/${doc_file}"
+    doc_file="/docs/${doc_file}"
     doc_dir="$(dirname "${doc_file}")"
     doc_file="$(basename "${doc_file}")"
 
@@ -126,8 +140,5 @@ elif [ "$1" == "nopipenv" ]; then
   shift 1
   exec "${@}"
 else
-  if [ ! -s "${DOCS_SOURCE_DIR-/vsi/docs}/Pipfile.lock" ]; then
-    pipenv lock
-  fi
   exec pipenv run "${@}"
 fi

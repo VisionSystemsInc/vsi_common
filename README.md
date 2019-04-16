@@ -156,8 +156,8 @@ In order to use these directories, all you have to do is
 Documentation uses sphinx. To compile documentation, run
 
 ```
-just build docs
-just compile docs
+just docs
+just docs view
 ```
 
 Sphinx documentation can be embedded in any source file. There must be a `#*#` comment stating the filename and any `#` comments surrounded with `#**` will be added to sphinx documentation
