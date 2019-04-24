@@ -1,6 +1,8 @@
 #!/usr/bin/env false
 #This file should be sourced, NOT run!
 
+source_once >&/dev/null && return
+
 : ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
 source "${VSI_COMMON_DIR}/linux/just_common.bsh"
 source "${VSI_COMMON_DIR}/linux/isin"

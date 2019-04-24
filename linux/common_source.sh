@@ -1,5 +1,7 @@
 #*# linux/common_source
 
+source_once >&/dev/null && return
+
 #**
 # =============
 # Common Source
