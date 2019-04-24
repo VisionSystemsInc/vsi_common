@@ -78,7 +78,7 @@ function caseify()
     test_wine) # Run unit tests using wine
       justify run wine -c "
         cd /z/vsi_common
-        . setup.env
+        source setup.env
         just test ${*}"'
         rv=$?
         read -p "Press any key to close" -r -e -n1

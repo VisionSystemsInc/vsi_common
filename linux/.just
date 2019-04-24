@@ -89,7 +89,7 @@ _just()
 
   # Call local .just if it exists
   if [ -f "${just_dir}/.just" ]; then
-    . "${just_dir}/.just"
+    source "${just_dir}/.just"
   fi
 
   # If the last word completed is a subcommand, only match subtargets
