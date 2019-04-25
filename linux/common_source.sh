@@ -1,6 +1,6 @@
 #*# linux/common_source
 
-source_once >&/dev/null && return
+source_once &> /dev/null && return
 
 #**
 # =============

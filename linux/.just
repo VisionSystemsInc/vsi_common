@@ -1,7 +1,7 @@
 #!/usr/bin/env false
 #This file should be sourced, NOT run!
 
-source_once >&/dev/null && return
+source_once &> /dev/null && return
 
 if [ -z ${VSI_COMMON_DIR+set} ]; then
   VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)"
