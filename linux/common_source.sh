@@ -299,12 +299,12 @@ fi
 
 if [ -f /etc/os-release ]; then
   # Run in a sub-shell so I can source os-release
-  VSI_DISTRO=$( source /etc/os-release;
+  VSI_DISTRO=$( . /etc/os-release;
 
                 # Only Ubuntues have this file
                 # Fix bug https://bugs.launchpad.net/linuxmint/+bug/1641491
                 if [ -f "/etc/lsb-release" ]; then
-                  source /etc/lsb-release
+                  . /etc/lsb-release
                   DISTRIB_ID=$(echo ${DISTRIB_ID} | sed 's|.*|\L&|')
                   if [ "${DISTRIB_ID}" != "${ID}" ]; then
                     echo "Fixing" >&2
