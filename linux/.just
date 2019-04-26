@@ -55,8 +55,16 @@ _just()
   if [ "${JUST_HELP_FILES+set}" != "set" ]; then
     JUST_HELP_FILES=("${VSI_COMMON_DIR}/linux/just_functions.bsh")
   fi
-  # 2. Find Justfile: just_functions.bsh/load_justfile
-  JUST_DRYRUN_SOURCE=: _just_load_justfile "${JUSTFILE-Justfile}"
+
+  # 2. Find Justfile, load it, and copy the JUST_HELP_FILES array
+  local just_files="$(
+    _just_load_justfile "${JUSTFILE-Justfile}" >& /dev/null
+    join_a just_files ${JUST_HELP_FILES+"${JUST_HELP_FILES[@]}"}
+    echo "${just_files}"
+  )"
+  split_s just_files "${just_files}"
+  JUST_HELP_FILES+=(${just_files+"${just_files[@]}"})
+
   # 3. Emulate finding and adding plugins
   # The last JUST_HELP_FILES is the just file now
   local just_dir="$(dirname "${JUST_HELP_FILES[${#JUST_HELP_FILES[@]}-1]}")"
