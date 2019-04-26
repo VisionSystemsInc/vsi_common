@@ -3,6 +3,9 @@
 # How you use source_once
 source_once &> /dev/null && return
 
+# For old sh implementations like dash, use
+# source_once > /dev/null 2>&1 && return
+
 # Needs documentation
 function source_once()
 {
@@ -18,8 +21,10 @@ function source_once()
     # Create an indirect variable using the calling file's name
     local SOURCE_VAR="_VSI_ALREADY_SOURCED_${BASH_SOURCE[1]//[^a-zA-Z0-9_]/_}"
     if [ -z "${!SOURCE_VAR+set}" ]; then
-      # Have to use eval in bash 3.2, declare won't be global
-      eval "${SOURCE_VAR}=1"
+      # Declare global, but make sure it's not exported. This works as intended
+      # in case set -a is turned on. No need for an if statement, as this just
+      # sets it exactly how we want it and is faster than anything else.
+      export -n "${SOURCE_VAR}=1"
       return 1
     fi
   fi
