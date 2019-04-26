@@ -1,6 +1,7 @@
 #*# linux/common_source
 
-source_once &> /dev/null && return
+# Use the sh POSIX compliant version of source_once
+source_once > /dev/null 2>&1 && return
 
 #**
 # =============
@@ -549,6 +550,9 @@ VSI_ARCH="$(uname -m)"
 
 case "${VSI_OS}" in
   darwin)
+    if [ "$(sw_vers -buildVersion)" = "Darling" ]; then
+      VSI_DISTRO=darling
+    fi
     if command -v sysctl >/dev/null 2>&1; then # Normal darwin
       VSI_NUMBER_CORES="$(\sysctl -n hw.ncpu)"
     elif [ -f /Volumes/SystemRoot/proc/cpuinfo ]; then # darling
