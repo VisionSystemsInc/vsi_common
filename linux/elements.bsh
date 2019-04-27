@@ -82,15 +82,25 @@ function dynamic_set_a()
 # Slightly safer indirect clear array
 #
 # .. note::
-#   Still uses eval, but makes sure the variable name appears valid
+#   Still uses eval on older versions of bash, but makes sure the variable name appears valid
 #**
 function clear_a()
 {
-  # https://stackoverflow.com/a/2821201/4166604
-  if [[ ! ${1} =~ [a-zA-Z_]+[a-zA-Z0-9_]* ]]; then
-    return 1
+  if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "44" ]; then
+    local -n localarray="${1}"
+    localarray=()
+  else
+    # https://stackoverflow.com/a/2821201/4166604
+    if [[ ! ${1} =~ [a-zA-Z_]+[a-zA-Z0-9_]* ]]; then
+      return 1
+    fi
+
+    # Do NOT use unset here. If you do that, you will lose "local" status if the
+    # variable that $1 points to has it. This can have MANY unintended
+    # consequences which is generally BAD! Gotta eval :(
+    # https://stackoverflow.com/questions/10497425/is-it-possible-to-use-array-in-bash#comment74842477_10497539
+    eval "${1}=()"
   fi
-  eval "${1}=()"
 }
 
 #**
@@ -132,11 +142,7 @@ function remove_element_a()
     fi
   done
 
-  # Do NOT use unset here. If you do that, you will lose "local" status if the
-  # variable that $1 points to has it. This can have MANY unintended
-  # consequences which is generally BAD! Gotta eval :(
-  # https://stackoverflow.com/questions/10497425/is-it-possible-to-use-array-in-bash#comment74842477_10497539
-  eval "${1}=()"
+  clear_a "${1}"
 
   # You can't use ${t+"${t[@]}"} notation when there is a chance that the first
   # element of an array has been unset. This will falsely trigger ${t} as not
