@@ -1,4 +1,6 @@
-source_once &> /dev/null && return
+if command -v source_once &> /dev/null; then
+  source_once && return
+fi
 
 JUST_DEFAULTIFY_FUNCTIONS+=(docs_defaultify)
 JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
@@ -107,6 +109,7 @@ function _docs_docker_compose()
       DOCS_DIR="${docs_dir}" \
       VSI_COMMON_UID="${uid}" \
       VSI_COMMON_GID="${gid}" \
+      JUST_PROJECT_FILE="${VSI_PATH_ESC}/src/$(basename "${JUST_PROJECT_FILE}")" \
       Docker-compose \
          -f "${VSI_COMMON_DIR}/docker-compose-docs.yml" ${@+"${@}"}
 }
@@ -255,10 +258,44 @@ function docs_defaultify()
       docker cp ${image_name}:/venv/Pipfile.lock "${VSI_COMMON_DIR}/docs/docker/Pipfile.lock"
       docker rm ${image_name}
       ;;
+    # docs_run)
+    #   # For debugging only
+    #   _docs_docker_compose run pipenv-update bash
+    #   ;;
+    # docs_pipenv-update) Update docs Pipenv file
+    #   local container="$(_docs_docker_compose ps -q)"
+
+    #   if [ "${container}" != "" ]; then
+    #     echo "Docs containers (${container}) are already running, please remove containers and try again"
+    #   fi
+
+    #   _docs_docker_compose up --no-start \
+    #     pipenv-update
+
+    #   container="$(_docs_docker_compose ps -q)"
+
+    #   image_name=$(Docker create vsiri/sphinxdocs:compile pipenv update)
+    #   Docker start -a "${container}"
+    #   Docker cp ${container}:/venv/Pipfile.lock "${VSI_COMMON_DIR}/docs/docker/Pipfile.lock"
+    #   Docker rm ${container}
+    #   ;;
+
+    docs_pipenv-update) # Update docs Pipenv file
+      local secs="$(date +%s)" #Get a random (enough) number
+
+      # Invalidate the lock file
+      sed -i 's|"sha256": ".*"|"sha256": "'"${secs}"'"|' "${VSI_COMMON_DIR}/docs/docker/Pipfile.lock"
+
+      justify docs build
+
+      # _docs_docker_compose run docs bash -c '
+      #   gosu root pipenv update
+      #   gosu root chown user:user "${PIPENV_PIPFILE}.lock"'
+      ;;
+
     docs_setup) # Setup a new sphinx project
       mkdir -p "${docs_dir}"
-      _docs_docker_compose \
-          -f "${VSI_COMMON_DIR}/docker-compose-docs.yml" run \
+      _docs_docker_compose run \
           docs bash -c "cd /docs; sphinx-quickstart"
       ;;
     docs_compile) # Compile spinx documents
@@ -272,10 +309,8 @@ function docs_defaultify()
       set_temp_array "${JUST_PROJECT_PREFIX}_DOCS_AUTODOC_OUTPUT_DIRS"
       local autodoc_output_dirs=(${JUST_TEMP_ARRAY+"${JUST_TEMP_ARRAY[@]}"})
 
-      _docs_docker_compose \
-          -f "${VSI_COMMON_DIR}/docker-compose-docs.yml" run \
+      _docs_docker_compose run \
           -e SPHINXOPTS \
-          -e JUST_PROJECT_FILE="${VSI_PATH_ESC}/src/$(basename "${JUST_PROJECT_FILE}")" \
           -e DOCS_EXCLUDE_DIRS="$(_docs_serialize_dirs "${exclude_dirs[@]}")" \
           -e DOCS_AUTODOC_EXCLUDE_DIRS="$(_docs_serialize_dirs "${autodoc_exclude_dirs[@]}")" \
           -e DOCS_AUTODOC_DIRS="$(_docs_serialize_dirs "${autodoc_dirs[@]}")" \
