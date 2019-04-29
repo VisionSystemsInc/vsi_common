@@ -567,9 +567,9 @@ if [ "${USE_VSI_COMMON}" = "1" ]; then
   #################
 
   if [ ! -e "${SETUPFILE}" ]; then
-    uwecho 'export JUST_SETUP_SCRIPT="$(\basename "${BASH_SOURCE[0]}")"
+    uwecho 'export JUST_SETUP_SCRIPT="$(basename "${BASH_SOURCE[0]}")"
             unset JUST_VERSION
-            source "$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)/"'"$(quote_escape "${RELATIVE_PATH}")"'/env.bsh' > "${SETUPFILE}"
+            source "$(dirname "${BASH_SOURCE[0]}")/"'"$(quote_escape "${RELATIVE_PATH}/env.bsh")" > "${SETUPFILE}"
     if [ "${JUSTFILE}" != "Justfile" ]; then
       echo "export JUSTFILE=$(quote_escape "${JUSTFILE}")" >> "${SETUPFILE}"
     else
@@ -605,6 +605,7 @@ if [ ! -e "${PROJECT_NAME}.env" ]; then
             : ${'"${PROJECT_PREFIX}"'_SOURCE_DIR_DOCKER="${VSI_PATH_ESC}/src"}
             : ${'"${PROJECT_PREFIX}"'_SOURCE_DIR_TYPE=bind}
 
+            source "${VSI_COMMON_DIR}/linux/common_source.sh" # define VSI_OS
             if [ "${VSI_OS}" = "linux" ]; then
               '"${PROJECT_PREFIX}"'_VOLUMES=("/tmp/.X11-unix:/tmp/.X11-unix:ro"
                   ${'"${PROJECT_PREFIX}"'_VOLUMES+"${'"${PROJECT_PREFIX}"'_VOLUMES[@]}"})
@@ -630,7 +631,7 @@ if [ ! -e "${PROJECT_NAME}.env" ]; then
             # important when multiple users are using this docker-compose project on a
             # single host. This way all of the docker resources are prefixed with a unique
             # name and do not collide
-            source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
+            source "${VSI_COMMON_DIR}/linux/docker_functions.bsh" # define docker_compose_sanitize_project_name
             : ${COMPOSE_PROJECT_NAME=$(docker_compose_sanitize_project_name "${'"${PROJECT_PREFIX}"'_CWD}" "${'"${PROJECT_PREFIX}"'_USERNAME}")}
             ' >> "${PROJECT_NAME}.env"
   fi
@@ -992,11 +993,13 @@ if [ "${USE_DOCKER}" = "1" ]; then
 
               set -eu
 
+              : ${VSI_COMMON_DIR:=/vsi}
+
               if [ "${ALREADY_RUN_ONCE+set}" != "set" ]; then
                 # create the user and associated groups and handle nfs symlinks
 
                 (
-                  source "${VSI_COMMON_DIR:-/vsi}/linux/just_env" "${'"${PROJECT_PREFIX}"'_SOURCE_DIR-/src}/'"${PROJECT_NAME}"'.env"
+                  source "${VSI_COMMON_DIR}/linux/just_env" "${'"${PROJECT_PREFIX}"'_SOURCE_DIR-/src}/'"${PROJECT_NAME}"'.env"
                   # Setup the container to be more friendly to non-root users and
                   # add other advanced J.U.S.T. features
                   JUST_DOCKER_ENTRYPOINT_CHOWN_DIRS="${JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES-}" \
@@ -1019,7 +1022,7 @@ if [ "${USE_DOCKER}" = "1" ]; then
                 ALREADY_RUN_ONCE=1 exec gosu ${DOCKER_USERNAME} /usr/bin/env bash $0 ${@+"${@}"}
               fi
 
-              source "${VSI_COMMON_DIR:-/vsi}/linux/just_env" "${'"${PROJECT_PREFIX}"'_SOURCE_DIR-/src}/'"${PROJECT_NAME}"'.env"
+              source "${VSI_COMMON_DIR}/linux/just_env" "${'"${PROJECT_PREFIX}"'_SOURCE_DIR-/src}/'"${PROJECT_NAME}"'.env"
 
               function sudo()
               {

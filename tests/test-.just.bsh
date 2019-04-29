@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-. "$(dirname "${BASH_SOURCE[0]}")/testlib.sh"
+. "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
 . "$(dirname "${BASH_SOURCE[0]}")/test_utils.bsh"
 
 VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
@@ -12,7 +12,14 @@ begin_test "just tab complete"
 
   JUST_HELP_SEPARATOR='#@#'
 
-  echo ' a) # A' > Justfile
+  echo 'JUST_HELP_FILES+=("${BASH_SOURCE[0]}")' > plugin1
+  echo ' d) # Plugin target' >> plugin1
+  echo ' e_f) # Plugin subtarget' >> plugin1
+
+  echo 'set -xv' > Justfile
+  echo 'source plugin1' >> Justfile
+
+  echo ' a) # A' >> Justfile
   echo ' b) # b' >> Justfile
   echo ' c) ' >> Justfile # Hidden
 
@@ -45,10 +52,11 @@ begin_test "just tab complete"
   _just just '' just
   # Manually parse defaultify targets, so I quit breaking this test
   ans1=($(sed -En '/^ *-[a-z|-]+\) *#.*/{s:^ *(-[a-z|-]+)\) *#.*:\1:; s/\|/'$'\\\n/g; p;}' "${VSI_COMMON_DIR}/linux/just_functions.bsh"))
-  ans=(a -a apple b cat dog -flag foo -jump -ocean -rope -sea snake -water "${ans1[@]}")
+  ans=(a -a apple b cat d dog -flag foo -jump -ocean -rope -sea snake -water "${ans1[@]}")
   # Resort it because macOS sorts weird. I mean REALLY weird. Must be the locale
   ans=($(IFS=$'\n'; sort <<< "${ans[*]}"))
-  check_a COMPREPLY "${ans[@]}" read run stop
+  sub_ans=(e read run stop)
+  check_a COMPREPLY "${ans[@]}" "${sub_ans[@]}"
 
   # Simple case
   COMP_WORDS=(just f)
@@ -90,7 +98,7 @@ begin_test "just tab complete"
   # Subsequent subcommand case
   COMP_WORDS=(just run car)
   _just just "" car
-  check_a COMPREPLY "${ans[@]}" car house garage read run stop
+  check_a COMPREPLY "${ans[@]}" car house garage "${sub_ans[@]}"
 
   echo 'if [ "${3}" = "-jump" ]; then
           just_commands+=("rope")
@@ -104,7 +112,7 @@ begin_test "just tab complete"
 
   COMP_WORDS=(just -jump)
   _just just "" -jump
-  check_a COMPREPLY "${ans[@]}" rope read run stop
+  check_a COMPREPLY "${ans[@]}" rope "${sub_ans[@]}"
 
 )
 end_test

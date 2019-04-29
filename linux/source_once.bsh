@@ -1,8 +1,24 @@
-
-# How you use source_once
-source_once >&/dev/null && return
+#!/usr/bin/env false
 
 # Needs documentation
+
+# How you use source_once
+if [[ $- != *i* ]]; then
+  source_once &> /dev/null && return
+fi
+
+# A simpler version, that should not be used for files inteded to be source
+# by the user from command line, as packagekit will be triggered, and have
+# undesired time delays
+#
+# source_once &> /dev/null &&  return
+
+# # For old sh implementations like dash, use
+# # source_once > /dev/null 2>&1 && return
+# # Of course, souce_once.bsh is not dash compatible, but at least the line that
+# # attempts to call source_once will be dash compatible
+
+
 function source_once()
 {
   if [ "${BASH_VERSINFO[0]}" -gt 3 ]; then
@@ -17,14 +33,16 @@ function source_once()
     # Create an indirect variable using the calling file's name
     local SOURCE_VAR="_VSI_ALREADY_SOURCED_${BASH_SOURCE[1]//[^a-zA-Z0-9_]/_}"
     if [ -z "${!SOURCE_VAR+set}" ]; then
-      # Have to use eval in bash 3.2, declare won't be global
-      eval "${SOURCE_VAR}=1"
+      # Declare global, but make sure it's not exported. This works as intended
+      # in case set -a is turned on. No need for an if statement, as this just
+      # sets it exactly how we want it and is faster than anything else.
+      export -n "${SOURCE_VAR}=1"
       return 1
     fi
   fi
   return 0
 }
 
-# Only the ``source_once`` file itself needs to call this at the end. Set's up
+# Only the source_once file itself needs to call this at the end. Set's up
 # the already sourced variable for this file
 source_once || :

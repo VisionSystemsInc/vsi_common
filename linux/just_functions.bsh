@@ -1,6 +1,10 @@
 #!/usr/bin/env false
 # Source this script to access just functionality
 
+if [[ $- != *i* ]]; then
+  source_once &> /dev/null && return
+fi
+
 : ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
 
 #*# just/just_functions
@@ -17,16 +21,12 @@
 # A few functions are defined in a common. Sourced here for DRY
 #**
 
-source "${VSI_COMMON_DIR}/linux/just_common.bsh"
-
-#**
 # Preload some files
-#**
-
+source "${VSI_COMMON_DIR}/linux/just_common.bsh"
 source "${VSI_COMMON_DIR}/linux/isin"
 source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
 source "${VSI_COMMON_DIR}/linux/elements.bsh"
-
+source "${VSI_COMMON_DIR}/linux/findin"
 
 #**
 # .. env:: DRYRUN
@@ -334,7 +334,7 @@ function source_environment_files()
            "${1}" \
            "${JUST_LOCAL_SETTINGS_POST}"; do
     if [ -f "${x}" ]; then
-      . "${x}"
+      source "${x}"
     fi
   done
   reset_flag a
@@ -344,9 +344,12 @@ function source_environment_files()
   # macOS case sh somehow get invoked by python on start, and thus complains if
   # a function name with a hyphen in it has been exported. Again, this is
   # harmless but annoying
-  for x in $(declare -Fx | awk '{print $3}'); do
-    export -fn "${x}"
-  done
+  while IFS= read -r x || [[ -n ${x} ]] ; do
+    x=${x##* }
+    if [[ ${x} = *-* ]]; then
+      export -fn $x
+    fi
+  done < <(declare -Fx)
 }
 
 #**
@@ -514,13 +517,17 @@ function print_help()
 
   local OLD_IFS="${IFS}"
   IFS=$'\n'
-  # Print non-flag first and non-subcommand_subtargets
-  ( grep -E -v '^-|^[?*a-zA-Z0-9\-]+_[?*a-zA-Z0-9_\-]+' |
-    sort |
-    pretty_print_help ) <<< "${parsed_help_a[*]}"
+  {
+    # Print non-flag first and non-subcommand_subtargets
+    {
+      grep -E -v '^-|^[?*a-zA-Z0-9\-]+_[?*a-zA-Z0-9_\-]+' | sort
+    } <<< "${parsed_help_a[*]}"
 
-  # Print flags second
-  ( grep -E '^-[?*a-zA-Z0-9\|\-]+( |$)' | sort | pretty_print_help ) <<< "${parsed_help_a[*]}"
+    # Print flags second
+    {
+      grep -E '^-[?*a-zA-Z0-9\|\-]+( |$)' | sort
+    } <<< "${parsed_help_a[*]}"
+  } | pretty_print_help
   IFS="${OLD_IFS}"
 
   echo
@@ -950,7 +957,7 @@ function _justify()
             defaultify "${target}${@}"
           fi
           if (( $extra_args+1 > $# )); then
-            . "${VSI_COMMON_DIR}/linux/colors.bsh"
+            source "${VSI_COMMON_DIR}/linux/colors.bsh"
             echo "${RED}JUST ERROR${NC}: Not enough arguments for \"${target}${1-}\" target" >&2
           fi
           shift $extra_args
@@ -974,7 +981,7 @@ function _justify()
       fi
     fi
     if (( $extra_args+1 > $# )); then
-      . "${VSI_COMMON_DIR}/linux/colors.bsh"
+      source "${VSI_COMMON_DIR}/linux/colors.bsh"
       echo "${RED}JUST ERROR${NC}: Not enough arguments for \"${target}${1-}\" target" >&2
     fi
     shift $extra_args
@@ -1046,11 +1053,6 @@ declare -i get_args_args_used
 function get_args()
 {
   local next_break
-
-  # Since this is not used often, only source in this function
-  if ! decalre -f findin &> /dev/null; then
-    source "${VSI_COMMON_DIR-"$(dirname "${BASH_SOURCE[0]}")/.."}/linux/findin"
-  fi
 
   args=()
   : ${extra_args=0}

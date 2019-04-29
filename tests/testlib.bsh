@@ -9,13 +9,13 @@
 #
 # .. default-domain:: bash
 #
-# .. file:: testlib.sh
+# .. file:: testlib.bsh
 #
 # Simple shell command language test library
 #
 # .. rubric:: Usage
 #
-# . testlib.sh
+# . testlib.bsh
 #
 # .. rubric:: Example
 #
@@ -23,7 +23,7 @@
 #
 #   Tests must follow the basic form:
 #
-#   source testlib.sh
+#   source testlib.bsh
 #
 #   begin_test "the thing"
 #   (
@@ -61,9 +61,7 @@
 #              * Added custom PS4
 #**
 
-# The above must be the first command executed, or else it won't work. Use this
-# instead of BASH_SOURCE to maintain sh compatibility
-: ${VSI_COMMON_DIR="$(cd "$(dirname "$_")/.."; pwd)"}
+: ${VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"}
 
 set -e
 
@@ -267,7 +265,7 @@ _begin_common_test ()
     ttouch "${track_touched_file}"
   fi
 
-  if [ "${TESTLIB_SHOW_TIMING-0}" == "1" ]; then
+  if [ "${TESTLIB_SHOW_TIMING-0}" = "1" ]; then
     _time_0=$(get_time_seconds)
   fi
 
@@ -405,7 +403,7 @@ end_test ()
   popd &> /dev/null
 
   local time_e=''
-  if [ "${TESTLIB_SHOW_TIMING-0}" == "1" ]; then
+  if [ "${TESTLIB_SHOW_TIMING-0}" = "1" ]; then
     time_e=$(awk "BEGIN {print \"\t\" $(get_time_seconds)-${_time_0}}")
   fi
 
@@ -468,7 +466,7 @@ end_test ()
 #
 #   For example, skip if docker command not found
 #
-#     command -v docker &>/dev/null && skip_next_test
+#     command -v docker &> /dev/null && skip_next_test
 #     begin_test "My test"
 #     (
 #       setup_test
@@ -675,15 +673,12 @@ cleanup_touched_files()
   # This will normally get called an extra time at exit, so the existence of
   # the file acts as a check.
   if [ -f "${track_touched_file}" ]; then
-    while IFS='' read -r -d '' line 2>/dev/null || [ -n "$line" ]; do
-      touched_files+=("$line")
-      line='' #Have to clear it, in case the timeout times out
-    done < "${track_touched_file}"
-
-    for touched_file in ${touched_files+"${touched_files[@]}"}; do
+    while IFS='' read -r -d '' touched_file 2>/dev/null || [ -n "$touched_file" ]; do
       if [ -e "${touched_file}" ] && [ ! -d "${touched_file}" ]; then
         \rm "${touched_file}"
       fi
-    done
+
+      touched_file='' #Have to clear it, in case the timeout times out
+    done < "${track_touched_file}"
   fi
 }

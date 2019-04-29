@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+if [[ $- != *i* ]]; then
+  source_once &> /dev/null && return
+fi
+
 #*# linux/real_path
 
 #**
@@ -26,23 +30,24 @@
 #**
 function real_path_manual()
 { # Mainly for Darwin
-  cd "$(dirname "$1")"
-  local target="$(basename "$1")"
+  pushd "$(dirname "${1}")" &> /dev/null
+    local target="$(basename "${1}")"
 
-  while [ -L "$target" ]
-  do
-    target="$(readlink "$target")"
-    cd "$(dirname "$target")"
-    target="$(basename "$target")"
-  done
+    while [ -L "$target" ]
+    do
+      target="$(readlink "$target")"
+      cd "$(dirname "${target}")"
+      target="$(basename "${target}")"
+    done
 
-  local physical_dir="$(pwd -P)"
+    local physical_dir="$(pwd -P)"
 
-  if [ "${target}" = "." ]; then
-    target=""
-  else
-    target="/${target}"
-  fi
+    if [ "${target}" = "." ]; then
+      target=""
+    else
+      target="/${target}"
+    fi
+  popd &> /dev/null
 
   if [ "${physical_dir}" = "/" ]; then
     # Special case: because pwd and basename are both /, it became // because
@@ -57,7 +62,7 @@ function real_path_manual()
   fi
 }
 
-if [[ ${BASH_SOURCE[0]} == ${0} ]] || [[ $(basename "${BASH_SOURCE[0]}") == ${0} ]]; then
+if [ "${BASH_SOURCE[0]}" = "${0}" ] || [ "$(basename "${BASH_SOURCE[0]}")" = "${0}" ]; then
   if ! cmd=$(command -v realpath); then
     cmd="readlink -f"
     if ! ${cmd} / > /dev/null 2>&1; then

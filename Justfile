@@ -4,12 +4,16 @@ if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then #If being sourced
   set -euE
 fi
 
-source "$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)/linux/just_env" "$(dirname "${BASH_SOURCE[0]}")"/vsi_common.env
+# VSI_COMMON_DIR is a special var, handle is carefully.
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)"
+fi
+source "${VSI_COMMON_DIR}/linux/just_env" "${VSI_COMMON_DIR}/vsi_common.env"
 
 source "${VSI_COMMON_DIR}/linux/just_docker_functions.bsh"
 source "${VSI_COMMON_DIR}/linux/just_docs_functions.bsh"
 
-cd "$(\dirname "${BASH_SOURCE[0]}")"
+cd "${VSI_COMMON_DIR}"
 
 function caseify()
 {
@@ -78,7 +82,7 @@ function caseify()
     test_wine) # Run unit tests using wine
       justify run wine -c "
         cd /z/vsi_common
-        . setup.env
+        source setup.env
         just test ${*}"'
         rv=$?
         read -p "Press any key to close" -r -e -n1
