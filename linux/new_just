@@ -173,8 +173,9 @@ while (($#)); do
       echo "  --[no-]use-pipenv - Enable/[disable] using pipenv in docker"
       echo "  --app APP - Application name for docker-compose service"
       echo "  --repo REPO - Docker repo name for compiled images"
-      echo "  --defaults - use all defaults without prompting"
+      echo "  --defaults - Use all defaults without prompting"
       echo "  --continue - Set to auto continue summary without prompting"
+      echo "  --[no-]setup-git - Run the neccessary git command to init repo"
       echo
       exit 0
       ;;
@@ -183,6 +184,7 @@ while (($#)); do
       : ${USE_VSI_COMMON=n}
       : ${USE_DOCKER=y}
       : ${USE_PIPENV=y}
+      : ${SETUP_GIT=n}
       ;;
     --project-dir)
       PROJECT_DIR="$1"
@@ -236,6 +238,12 @@ while (($#)); do
       ;;
     --continue)
       CONTINUE=y
+      ;;
+    --setup-git)
+      SETUP_GIT=y
+      ;;
+    --no-setup-git)
+      SETUP_GIT=n
       ;;
     *)
       echo "Unknown argument: $arg"
@@ -445,7 +453,7 @@ if [ "${USE_VSI_COMMON}" = "1" ]; then
                  pwd;
                  cd "${PROJECT_DIR}";
                  rmdir "${VSI_DIR}";
-               fi)"  # VSCode highlighter bug -->"
+               fi )"  # <- the space after the fi fixes a VSCode highlighter bug
   fi
 fi
 
@@ -1149,37 +1157,54 @@ fi
 # ****************************************************************************
 # ****DONE****DONE****DONE****DONE****DONE****DONE****DONE****DONE****DONE****
 # ****************************************************************************
+
+cmds=()
+
 uwecho "Done!
 
 
         To complete your git initialization:
-
-        cd $(quote_escape "${PROJECT_DIR}")"
+        ------------------------------------"
+cmds+=("cd $(quote_escape "${PROJECT_DIR}")")
 if [ ! -e .git ]; then
-  echo "git init ." >&3
+  cmds+=("git init .")
 fi
 
 if [ "${USE_VSI_COMMON}" = "1" ]; then
-  uwecho "git submodule add https://github.com/visionsystemsinc/vsi_common.git $(quote_escape "${RELATIVE_PATH}")
-          git submodule update --init --recursive
-          pushd $(quote_escape "${RELATIVE_PATH}")
-          git remote set-url origin --push git@github.com:visionsystemsinc/vsi_common.git
-          popd" >&3
-  echo   "git add $(quote_escape "${SETUPFILE}") .gitmodules" >&3
+  cmds+=("git submodule add https://github.com/visionsystemsinc/vsi_common.git $(quote_escape "${RELATIVE_PATH}")"
+         "git submodule update --init --recursive"
+         "pushd $(quote_escape "${RELATIVE_PATH}")"
+         "git remote set-url origin --push git@github.com:visionsystemsinc/vsi_common.git"
+         "popd"
+         "git add $(quote_escape "${SETUPFILE}") .gitmodules")
 fi
 
-echo   "git add .gitignore README.md $(quote_escape "${JUSTFILE}") $(quote_escape "${PROJECT_NAME}").env" >&3
+cmds+=("git add .gitignore README.md $(quote_escape "${JUSTFILE}") $(quote_escape "${PROJECT_NAME}").env")
 
 if [ "${USE_DOCKER}" = "1" ]; then
-  echo "git add .gitattributes .dockerignore docker-compose.yml docker/${APP_NAME}.Dockerfile docker/Justfile.${APP_NAME}" >&3
+  cmds+=("git add .gitattributes .dockerignore docker-compose.yml docker/${APP_NAME}.Dockerfile docker/Justfile.${APP_NAME}")
 else
-  echo "git add hi.cpp" >&3
+  cmds+=("git add hi.cpp")
 fi
 if [ "${USE_PIPENV}" = "1" ]; then
-  echo "git add Pipfile Pipfile.lock" >&3
+  cmds+=("git add Pipfile Pipfile.lock")
 fi
 
-echo "git commit -m 'Initial commit'"  >&3
+cmds+=("git commit -m 'Initial commit'")
+
+for cmd in "${cmds[@]}"; do
+  echo "${cmd}" >&3
+done
+
+ask_question "Do you want to execute these git commands and setup the repo for you?" SETUP_GIT n
+set -xv
+if [ "${SETUP_GIT}" = "1" ]; then
+  for cmd in "${cmds[@]}"; do
+    eval "${cmd}"
+  done
+fi
+set +xv
+
 uwecho "
 
 
