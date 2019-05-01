@@ -22,15 +22,15 @@ function caseify()
   case ${just_arg} in
     test) # Run unit tests
       "${VSI_COMMON_DIR}/tests/run_tests.bsh" ${@+"${@}"}
-      extra_args+=$#
+      extra_args=$#
       ;;
     --test) # Run only this test
       export TESTLIB_RUN_SINGLE_TEST="${1}"
-      extra_args+=1
+      extra_args=1
       ;;
     test_int) # Run integration tests
       TESTS_DIR=int "${VSI_COMMON_DIR}/tests/run_tests.bsh" ${@+"${@}"}
-      extra_args+=$#
+      extra_args=$#
       ;;
     test_int_appveyor) # Run integration tests for windows appveyor
       (
@@ -47,14 +47,14 @@ function caseify()
       ;;
     test_recipe) # Run docker recipe tests
       TESTS_DIR="${VSI_COMMON_DIR}/docker/recipes/tests" "${VSI_COMMON_DIR}/tests/run_tests.bsh" ${@+"${@}"}
-      extra_args+=$#
+      extra_args=$#
       ;;
     test_darling) # Run unit tests using darling
       (
         cd "${VSI_COMMON_DIR}"
         env -i HOME="${HOME}" darling shell env TESTS_PARALLEL=8 ./tests/run_tests.bsh ${@+"${@}"}
       )
-      extra_args+=$#
+      extra_args=$#
       ;;
     test_python) # Run python unit tests
       Docker-compose run python3
@@ -73,11 +73,11 @@ function caseify()
       ;;
     run_wine) # Start a wine bash window
       Docker-compose run -e USER_ID="$(id -u)" wine ${@+"${@}"} || :
-      extra_args+=$#
+      extra_args=$#
       ;;
     run_wine-gui) # Start a wine bash window in gui mode
       Docker-compose run -e USER_ID="$(id -u)" wine_gui ${@+"${@}"}&
-      extra_args+=$#
+      extra_args=$#
       ;;
     test_wine) # Run unit tests using wine
       justify run wine -c "
@@ -87,7 +87,7 @@ function caseify()
         rv=$?
         read -p "Press any key to close" -r -e -n1
         exit ${rv}'
-      extra_args+=$#
+      extra_args=$#
       ;;
     *)
       defaultify "${just_arg}" ${@+"${@}"}
