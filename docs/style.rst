@@ -45,6 +45,26 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
 
     run_some_command >& /dev/null # Works, but wrong style
 
+* Checking to see if a variable exists
+
+.. code-block:: bash
+
+    if [ -z "${variable+set}" ]; then # If not set
+      do_something
+    fi
+
+    if [ -n "${variable+set}" ]; then # If set
+      do_something
+    fi
+
+    if [ -z "${variable:+set}" ]; then # If (not set) or (set to null)
+      do_something
+    fi
+
+    if [ -n "${variable:+set}" ]; then # If set and not null
+      do_something
+    fi
+
 Python
 ------
 

@@ -10,6 +10,7 @@ J.U.S.T. Useful Simple Tasking
    installation
    quickstart
    files
+   just_entrypoint.auto
    just-tab.auto
    just.auto
    just_common.auto

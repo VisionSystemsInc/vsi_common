@@ -185,6 +185,10 @@ function _sphinx_docker_compose()
 #
 #  Default: ``(*/tests)`` passed to ``sphinx-apidoc``. This is relative to the ``/docs`` directory, so it is usually easier to use an absolute path starting with ``/src`` to represent the repository root directory
 #
+# .. env:: ${JUST_PROJECT_PREFIX}_DOCS_PRECOMPILE_SCRIPT
+#
+# An optional script that will be run after any parsing but before compiling the sphinx docs. This allows easy customization steps to be added into the existing chain, primarily to auto generate additional files used in documentation.
+#
 # ----------------
 # J.U.S.T. Targets
 # ----------------
@@ -311,12 +315,19 @@ function docs_defaultify()
       set_temp_array "${JUST_PROJECT_PREFIX}_DOCS_AUTODOC_OUTPUT_DIRS"
       local autodoc_output_dirs=(${JUST_TEMP_ARRAY+"${JUST_TEMP_ARRAY[@]}"})
 
+      JUST_TEMP_ARRAY="${JUST_PROJECT_PREFIX}_DOCS_PRECOMPILE_SCRIPT"
+      local precompile_script
+      if declare -p "${JUST_TEMP_ARRAY}" &> /dev/null; then
+        precompile_script="${!JUST_TEMP_ARRAY}"
+      fi
+
       _sphinx_docker_compose run \
           -e SPHINXOPTS \
           -e DOCS_EXCLUDE_DIRS="$(_docs_serialize_dirs "${exclude_dirs[@]}")" \
           -e DOCS_AUTODOC_EXCLUDE_DIRS="$(_docs_serialize_dirs "${autodoc_exclude_dirs[@]}")" \
           -e DOCS_AUTODOC_DIRS="$(_docs_serialize_dirs "${autodoc_dirs[@]}")" \
           -e DOCS_AUTODOC_OUTPUT_DIRS="$(_docs_serialize_dirs "${autodoc_output_dirs[@]}")" \
+          -e DOCS_PRECOMPILE_SCRIPT=${precompile_script+"${precompile_script}"} \
           sphinx ${@+"${@}"}
       extra_args+=$#
       ;;

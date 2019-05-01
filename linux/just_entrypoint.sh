@@ -2,6 +2,21 @@
 
 set -eu
 
+#*# just/just_entrypoint
+
+#**
+# .. default-domain:: bash
+#
+# ===================
+# J.U.S.T. Entrypoint
+# ===================
+#
+# In an attempt to con
+#
+# .. literalinclude:: just_entrypoint.auto.sh
+#    :language: bash
+#**
+
 # Note:
 # -----
 # This is the default entrypoint sources for J.U.S.T. projects. If a project
@@ -15,6 +30,17 @@ set -eu
 # Internal use
 # ALREADY_RUN_ONCE
 # JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES
+
+# - JUST_DOCKER_ENTRYPOINT_CHOWN_DIRS - automatically chown all files in the
+#   volumes listed to match the user. This could be slow with many files, but
+#   it only executes when the volumes permissions are bad. If you don't
+#   need this feature, save time by removing the
+#   JUST_DOCKER_ENTRYPOINT_CHOWN_DIRS line, but leave rest.
+# - JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS - non-recursively chmod the directories
+#   listed to 777 so that any initial ownership issues are avoided. Can also
+#   be disabled by removing the JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS line
+# These two features give volumes a much more desirable default behavior for
+# non-root users. Add any other custom behavior here.
 
 : ${VSI_COMMON_DIR=/vsi}
 
@@ -32,16 +58,6 @@ if [ "${ALREADY_RUN_ONCE+set}" != "set" ]; then
     /usr/bin/env bash "${VSI_COMMON_DIR}/linux/just_entrypoint_functions.bsh"
   )
 
-  # - JUST_DOCKER_ENTRYPOINT_CHOWN_DIRS - automatically chown all files in the
-  #   volumes listed to match the user. This could be slow with many files, but
-  #   it only executes when the volumes permissions are bad. If you don't
-  #   need this feature, save time by removing the
-  #   JUST_DOCKER_ENTRYPOINT_CHOWN_DIRS line, but leave rest.
-  # - JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS - non-recursively chmod the directories
-  #   listed to 777 so that any initial ownership issues are avoided. Can also
-  #   be disabled by removing the JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS line
-  # These two features give volumes a much more desirable default behavior for
-  # non-root users. Add any other custom behavior here.
 
   if [ -n "${BASH_SOURCE+set}" ]; then
     file="${BASH_SOURCE[0]}"

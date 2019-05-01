@@ -724,7 +724,7 @@ if [ ! -e "${JUSTFILE}" ]; then
                     docker_cp_image "${'"${PROJECT_PREFIX}"'_DOCKER_REPO}:'"${APP_NAME}"'_${'"${PROJECT_PREFIX}"'_USERNAME}" "/venv/Pipfile.lock" "${'"${PROJECT_PREFIX}"'_CWD}/Pipfile.lock"
                     ;;' >> "${JUSTFILE}"
     else
-      uwecho '        justify build_recipes gosu tini vsi
+    uwecho   '        justify build_recipes gosu tini vsi
                       Docker-compose build
                     fi
                     ;;' >> "${JUSTFILE}"
@@ -745,12 +745,14 @@ if [ ! -e "${JUSTFILE}" ]; then
                     Docker-compose down
                     justify git_submodule-update # For those users who don'"'"'t remember!
                     justify build
-                    ;;' >> "${JUSTFILE}"
+                    ;;
+              ' >> "${JUSTFILE}"
     if [ "${USE_PIPENV}" = "1" ]; then
       uwecho '    clean_all) # Delete all local volumes
                     ask_question "Are you sure? This will remove packages not in Pipfile!" n
                     justify docker-compose clean venv
-                    ;;' >> "${JUSTFILE}"
+                    ;;
+              ' >> "${JUSTFILE}"
     fi
     uwecho   '    *)
                     defaultify "${just_arg}" ${@+"${@}"}
@@ -768,10 +770,12 @@ if [ ! -e "${JUSTFILE}" ]; then
                   compile) # Build program
                     g++ hi.cpp -o hi
                     ;;
+
                   run) # Run program
                     ./hi ${@+"${@}"}
                     extra_args+=$#
                     ;;
+
                   *)
                     defaultify "${just_arg}" ${@+"${@}"}
                     ;;
@@ -979,9 +983,9 @@ if [ "${USE_DOCKER}" = "1" ]; then
               ADD '"${PROJECT_NAME}.env"' /src/
               ADD docker/Justfile.'"${APP_NAME}"' /src/docker/
 
-              ENTRYPOINT ["/usr/local/bin/tini", "--", "/usr/bin/env", "--", "bash", "/vsi/linux/just_entrypoint.bsh"]
+              ENTRYPOINT ["/usr/local/bin/tini", "--", "/usr/bin/env", "--", "bash", "/vsi/linux/just_entrypoint.sh"]
               # Does not require execute permissions, unlike:
-              # ENTRYPOINT ["/usr/local/bin/tini", "--", "/vsi/linux/just_entrypoint.bsh"]
+              # ENTRYPOINT ["/usr/local/bin/tini", "--", "/vsi/linux/just_entrypoint.sh"]
 
               CMD ["'"${APP_NAME}"'"]' >> docker/${APP_NAME}.Dockerfile
   else
@@ -1003,24 +1007,26 @@ if [ "${USE_DOCKER}" = "1" ]; then
               ' > "docker/Justfile.${APP_NAME}"
 
     if [ "${USE_PIPENV}" = "1" ]; then
-      uwecho '# default CMD
-                  '"${APP_NAME}"')
+      uwecho '    '"${APP_NAME}"') # Run example shell
                     pipenv shell
                     ;;
-                  nopipenv)
+
+                  nopipenv) # Run command without pipenv
                     exec "${@}"
                     ;;
-                  *)
+
+                  *) # Default: Run command in pipenv
                     exec pipenv run "${cmd}" ${@+"${@}"}
                     ;;
                 esac
               }' >> "docker/Justfile.${APP_NAME}"
     else
       uwecho '# default CMD
-                  '"${APP_NAME}"')
+                  '"${APP_NAME}"') # Run example
                     echo "Run '"${APP_NAME}"' here: ${cmd} ${@+${@}}"
                     ;;
-                  *)
+
+                  *) # Default: Run command
                     exec "${cmd}" ${@+"${@}"}
                     ;;
                 esac
@@ -1163,8 +1169,8 @@ cmds=()
 uwecho "Done!
 
 
-        To complete your git initialization:
-        ------------------------------------"
+        To complete your git initialization, the following commands must be run:
+        ------------------------------------------------------------------------"
 cmds+=("cd $(quote_escape "${PROJECT_DIR}")")
 if [ ! -e .git ]; then
   cmds+=("git init .")
@@ -1196,7 +1202,8 @@ for cmd in "${cmds[@]}"; do
   echo "${cmd}" >&3
 done
 
-ask_question "Do you want to execute these git commands and setup the repo for you?" SETUP_GIT n
+echo ""
+ask_question "Do you want these git commands to be executed for you now?" SETUP_GIT n
 set -xv
 if [ "${SETUP_GIT}" = "1" ]; then
   for cmd in "${cmds[@]}"; do
