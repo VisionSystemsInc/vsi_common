@@ -11,7 +11,7 @@ fi
 source "${VSI_COMMON_DIR}/linux/just_env" "${VSI_COMMON_DIR}/vsi_common.env"
 
 source "${VSI_COMMON_DIR}/linux/just_docker_functions.bsh"
-source "${VSI_COMMON_DIR}/linux/just_docs_functions.bsh"
+source "${VSI_COMMON_DIR}/linux/just_sphinx_functions.bsh"
 
 cd "${VSI_COMMON_DIR}"
 

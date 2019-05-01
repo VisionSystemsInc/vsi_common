@@ -33,7 +33,6 @@ RUN chmod u+s /usr/local/bin/gosu
 
 COPY --from=vsi /vsi /vsi
 
-ADD docs_entrypoint.bsh /
-ENTRYPOINT ["/usr/local/bin/tini", "--", "/usr/bin/env", "bash", "/docs_entrypoint.bsh"]
+ENTRYPOINT ["/usr/local/bin/tini", "--", "/usr/bin/env", "bash", "/vsi/linux/just_entrypoint.bsh"]
 
 CMD ["docs"]
