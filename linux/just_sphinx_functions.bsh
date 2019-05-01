@@ -131,12 +131,12 @@ function _sphinx_docker_compose()
 # :env:`SPHINXOPTS` is passed to make and is passed to ``sphinx-build`` as arguments
 #
 
-# .. env:: DOCS_COMPILE_IMAGE
+# .. env:: SPHINX_COMPILE_IMAGE
 #
 # The name of the docker image used for compiling sphinx docs. Default: ``vsiri/sphinxdocs:compile``
 #
 
-# .. env:: ${JUST_PROJECT_PREFIX}_DOCS_DIR
+# .. env:: ${JUST_PROJECT_PREFIX}_SPHINX_DIR
 #
 # The location of the docs directory on the host.
 #
@@ -146,7 +146,7 @@ function _sphinx_docker_compose()
 #   Must be set before running :cmd:`sphinx_setup`
 #
 
-# .. env:: ${JUST_PROJECT_PREFIX}_DOCS_SRC_DIR
+# .. env:: ${JUST_PROJECT_PREFIX}_SPHINX_SRC_DIR
 #
 # The location of the source directory where files will be scanned for ``#**`` comments and auto generate rst files. This does not affect autodocs
 #
@@ -155,37 +155,37 @@ function _sphinx_docker_compose()
 # Does not usually need to be changed.
 #
 
-# .. env:: ${JUST_PROJECT_PREFIX}_DOCS_EXCLUDE_DIRS
+# .. env:: ${JUST_PROJECT_PREFIX}_SPHINX_EXCLUDE_DIRS
 #
 # An array of directories that will be excluded when searching for ``#**`` comments, relative to source dir. This does not affect autodocs
 #
 # .. note::
-#   If using absolute paths, they will be in the docker filesystem, meaning the :env:`${JUST_PROJECT_PREFIX}_DOCS_SRC_DIR` directory starts with ``/src``
+#   If using absolute paths, they will be in the docker filesystem, meaning the :env:`${JUST_PROJECT_PREFIX}_SPHINX_SRC_DIR` directory starts with ``/src``
 #
 # Default: ``(docs)``
 #
 
-# .. env:: ${JUST_PROJECT_PREFIX}_DOCS_AUTODOC_DIRS
+# .. env:: ${JUST_PROJECT_PREFIX}_SPHINX_AUTODOC_DIRS
 #
 # An array of directories that will be processed as packages for autodoc.
 #
 # Default: ``()`` (relative to source dir)
 #
 
-# .. env:: ${JUST_PROJECT_PREFIX}_DOCS_AUTODOC_OUTPUT_DIRS
+# .. env:: ${JUST_PROJECT_PREFIX}_SPHINX_AUTODOC_OUTPUT_DIRS
 #
-#  An array of output directories that the processed package documentation will go. This array must be the same length as :env:`${JUST_PROJECT_PREFIX}_DOCS_AUTODOC_DIRS`. The output files for autodoc should be thought of as transient files, and do not need to be checked into source control, and should be added to your ``.gitignore`` file.
+#  An array of output directories that the processed package documentation will go. This array must be the same length as :env:`${JUST_PROJECT_PREFIX}_SPHINX_AUTODOC_DIRS`. The output files for autodoc should be thought of as transient files, and do not need to be checked into source control, and should be added to your ``.gitignore`` file.
 #
 #  Default: ``()`` (relative to docs dir)
 #
 
-# .. env:: ${JUST_PROJECT_PREFIX}_DOCS_AUTODOC_EXCLUDE_DIRS
+# .. env:: ${JUST_PROJECT_PREFIX}_SPHINX_AUTODOC_EXCLUDE_DIRS
 #
 #  A list of directories that will be excluded when running autodoc on every package. Supports the same ``fnmatch`` behavior as ``sphinx-build``
 #
 #  Default: ``(*/tests)`` passed to ``sphinx-apidoc``. This is relative to the ``/docs`` directory, so it is usually easier to use an absolute path starting with ``/src`` to represent the repository root directory
 #
-# .. env:: ${JUST_PROJECT_PREFIX}_DOCS_PRECOMPILE_SCRIPT
+# .. env:: ${JUST_PROJECT_PREFIX}_SPHINX_PRECOMPILE_SCRIPT
 #
 # An optional script that will be run after any parsing but before compiling the sphinx docs. This allows easy customization steps to be added into the existing chain, primarily to auto generate additional files used in documentation.
 #
@@ -204,7 +204,7 @@ function _sphinx_docker_compose()
 
 # .. command:: sphinx_build
 #
-# Builds the default docker image for compiling sphinx documentation. By default, the image name used is :env:`DOCS_COMPILE_IMAGE` or ``vsiri/sphinxdocs:compile`` if unset. If an image name other than the default is set, then :cmd:`sphinx_build` should not be used, instead use your own :file:`Justfile` targets to build the image.
+# Builds the default docker image for compiling sphinx documentation. By default, the image name used is :env:`SPHINX_COMPILE_IMAGE` or ``vsiri/sphinxdocs:compile`` if unset. If an image name other than the default is set, then :cmd:`sphinx_build` should not be used, instead use your own :file:`Justfile` targets to build the image.
 #
 
 # .. command:: sphinx_setup
@@ -231,10 +231,10 @@ function _sphinx_docker_compose()
 function docs_defaultify()
 {
   local id_project_cwd="${JUST_PROJECT_PREFIX}_CWD"
-  local docs_dir="${JUST_PROJECT_PREFIX}_DOCS_DIR"
+  local docs_dir="${JUST_PROJECT_PREFIX}_SPHINX_DIR"
   docs_dir="${!docs_dir:-${!id_project_cwd}/docs}"
 
-  local src_dir="${JUST_PROJECT_PREFIX}_DOCS_SRC_DIR"
+  local src_dir="${JUST_PROJECT_PREFIX}_SPHINX_SRC_DIR"
   src_dir="${!src_dir:-${!id_project_cwd}}"
 
   local uid="${JUST_PROJECT_PREFIX}_UID"
@@ -253,9 +253,9 @@ function docs_defaultify()
       justify sphinx compile
       ;;
    sphinx_build) # Build the sphinx docker images
-      if [ "${DOCS_COMPILE_IMAGE-vsiri/sphinxdocs:compile}" != "vsiri/sphinxdocs:compile" ]; then
+      if [ "${SPHINX_COMPILE_IMAGE-vsiri/sphinxdocs:compile}" != "vsiri/sphinxdocs:compile" ]; then
         source "${VSI_COMMON_DIR}/linux/colors.bsh"
-        echo "${RED}ERROR${NC}: You should use your own Justfile to build \"${DOCS_COMPILE_IMAGE}\"" >&2
+        echo "${RED}ERROR${NC}: You should use your own Justfile to build \"${SPHINX_COMPILE_IMAGE}\"" >&2
         false
       fi
       justify build recipes gosu tini pipenv vsi
@@ -306,16 +306,16 @@ function docs_defaultify()
       ;;
     sphinx_compile) # Compile spinx documents
       local JUST_TEMP_ARRAY
-      set_temp_array "${JUST_PROJECT_PREFIX}_DOCS_EXCLUDE_DIRS" docs
+      set_temp_array "${JUST_PROJECT_PREFIX}_SPHINX_EXCLUDE_DIRS" docs
       local exclude_dirs=(${JUST_TEMP_ARRAY+"${JUST_TEMP_ARRAY[@]}"})
-      set_temp_array "${JUST_PROJECT_PREFIX}_DOCS_AUTODOC_EXCLUDE_DIRS" \*/tests
+      set_temp_array "${JUST_PROJECT_PREFIX}_SPHINX_AUTODOC_EXCLUDE_DIRS" \*/tests
       local autodoc_exclude_dirs=(${JUST_TEMP_ARRAY+"${JUST_TEMP_ARRAY[@]}"})
-      set_temp_array "${JUST_PROJECT_PREFIX}_DOCS_AUTODOC_DIRS"
+      set_temp_array "${JUST_PROJECT_PREFIX}_SPHINX_AUTODOC_DIRS"
       local autodoc_dirs=(${JUST_TEMP_ARRAY+"${JUST_TEMP_ARRAY[@]}"})
-      set_temp_array "${JUST_PROJECT_PREFIX}_DOCS_AUTODOC_OUTPUT_DIRS"
+      set_temp_array "${JUST_PROJECT_PREFIX}_SPHINX_AUTODOC_OUTPUT_DIRS"
       local autodoc_output_dirs=(${JUST_TEMP_ARRAY+"${JUST_TEMP_ARRAY[@]}"})
 
-      JUST_TEMP_ARRAY="${JUST_PROJECT_PREFIX}_DOCS_PRECOMPILE_SCRIPT"
+      JUST_TEMP_ARRAY="${JUST_PROJECT_PREFIX}_SPHINX_PRECOMPILE_SCRIPT"
       local precompile_script
       if declare -p "${JUST_TEMP_ARRAY}" &> /dev/null; then
         precompile_script="${!JUST_TEMP_ARRAY}"
