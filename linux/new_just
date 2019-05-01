@@ -173,8 +173,9 @@ while (($#)); do
       echo "  --[no-]use-pipenv - Enable/[disable] using pipenv in docker"
       echo "  --app APP - Application name for docker-compose service"
       echo "  --repo REPO - Docker repo name for compiled images"
-      echo "  --defaults - use all defaults without prompting"
+      echo "  --defaults - Use all defaults without prompting"
       echo "  --continue - Set to auto continue summary without prompting"
+      echo "  --[no-]setup-git - Run the neccessary git command to init repo"
       echo
       exit 0
       ;;
@@ -183,6 +184,7 @@ while (($#)); do
       : ${USE_VSI_COMMON=n}
       : ${USE_DOCKER=y}
       : ${USE_PIPENV=y}
+      : ${SETUP_GIT=n}
       ;;
     --project-dir)
       PROJECT_DIR="$1"
@@ -236,6 +238,12 @@ while (($#)); do
       ;;
     --continue)
       CONTINUE=y
+      ;;
+    --setup-git)
+      SETUP_GIT=y
+      ;;
+    --no-setup-git)
+      SETUP_GIT=n
       ;;
     *)
       echo "Unknown argument: $arg"
@@ -445,7 +453,7 @@ if [ "${USE_VSI_COMMON}" = "1" ]; then
                  pwd;
                  cd "${PROJECT_DIR}";
                  rmdir "${VSI_DIR}";
-               fi)"  # VSCode highlighter bug -->"
+               fi )"  # <- the space after the fi fixes a VSCode highlighter bug
   fi
 fi
 
@@ -682,13 +690,14 @@ fi
 ################
 
 if [ ! -e "${JUSTFILE}" ]; then
-  if [ "${USE_DOCKER}" = "1" ]; then
-    uwecho   '#!/usr/bin/env bash
+  uwecho     '#!/usr/bin/env bash
 
-              source "${VSI_COMMON_DIR}/linux/just_env" "$(dirname "${BASH_SOURCE[0]}")"/'"$(quote_escape "${PROJECT_NAME}")"'.env
+              source "${VSI_COMMON_DIR}/linux/just_env" "$(dirname "${BASH_SOURCE[0]}")"/'"$(quote_escape "${PROJECT_NAME}.env")"'
               cd "${'"${PROJECT_PREFIX}"'_CWD}"
+              ' > "${JUSTFILE}"
 
-              # Plugins
+  if [ "${USE_DOCKER}" = "1" ]; then
+    uwecho   '# Plugins
               source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
               source "${VSI_COMMON_DIR}/linux/just_docker_functions.bsh"
               source "${VSI_COMMON_DIR}/linux/just_git_functions.bsh"
@@ -751,12 +760,7 @@ if [ ! -e "${JUSTFILE}" ]; then
 
               if ! command -v justify &> /dev/null; then caseify ${@+"${@}"};fi' >> "${JUSTFILE}"
   else
-    uwecho   '#!/usr/bin/env bash
-
-              source "${VSI_COMMON_DIR}/linux/just_env" "$(dirname "${BASH_SOURCE[0]}")"/'"${PROJECT_NAME}"'.env
-              cd "${'"${PROJECT_PREFIX}"'_CWD}"
-
-              function caseify()
+    uwecho   'function caseify()
               {
                 local just_arg=$1
                 shift 1
@@ -972,101 +976,58 @@ if [ "${USE_DOCKER}" = "1" ]; then
 
     uwecho   '
               COPY --from=vsi /vsi /vsi
-              ADD docker/'"${APP_NAME}"'_entrypoint.bsh /
               ADD '"${PROJECT_NAME}.env"' /src/
+              ADD docker/Justfile.'"${APP_NAME}"' /src/docker/
 
-              ENTRYPOINT ["/usr/local/bin/tini", "--", "/usr/bin/env", "--", "bash", "/'"${APP_NAME}"'_entrypoint.bsh"]
+              ENTRYPOINT ["/usr/local/bin/tini", "--", "/usr/bin/env", "--", "bash", "/vsi/linux/just_entrypoint.bsh"]
               # Does not require execute permissions, unlike:
-              # ENTRYPOINT ["/usr/local/bin/tini", "--", "/'"${APP_NAME}"'_entrypoint.bsh"]
+              # ENTRYPOINT ["/usr/local/bin/tini", "--", "/vsi/linux/just_entrypoint.bsh"]
 
               CMD ["'"${APP_NAME}"'"]' >> docker/${APP_NAME}.Dockerfile
   else
     echo     "docker/${APP_NAME}.Dockerfile exists, skipping..."
   fi
 
-  ######################
-  ### entrypoint.bsh ###
-  ######################
+  ####################
+  ### Justfile.app ###
+  ####################
 
-  if [ ! -e "docker/${APP_NAME}_entrypoint.bsh" ]; then
-    uwecho   '#!/usr/bin/env bash
+  if [ ! -e "docker/Justfile.${APP_NAME}" ]; then
+    uwecho   '#!/usr/bin/env false
 
-              set -eu
-
-              : ${VSI_COMMON_DIR:=/vsi}
-
-              if [ "${ALREADY_RUN_ONCE+set}" != "set" ]; then
-                # create the user and associated groups and handle nfs symlinks
-
-                (
-                  source "${VSI_COMMON_DIR}/linux/just_env" "${'"${PROJECT_PREFIX}"'_SOURCE_DIR-/src}/'"${PROJECT_NAME}"'.env"
-                  # Setup the container to be more friendly to non-root users and
-                  # add other advanced J.U.S.T. features
-                  JUST_DOCKER_ENTRYPOINT_CHOWN_DIRS="${JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES-}" \
-                  JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS="${JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES-}" \
-                  /usr/bin/env bash /vsi/linux/docker_entrypoint.bsh
-                )
-
-                # - JUST_DOCKER_ENTRYPOINT_CHOWN_DIRS - automatically chown all files in the
-                #   volumes listed to match the user. This could be slow with many files, but
-                #   it only executes when the volumes permissions are bad. If you don'"'"'t
-                #   need this feature, save time by removing the
-                #   JUST_DOCKER_ENTRYPOINT_CHOWN_DIRS line, but leave rest.
-                # - JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS - non-recursively chmod the directories
-                #   listed to 777 so that any initial ownership issues are avoided. Can also
-                #   be disabled by removing the JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS line
-                # These two features give volumes a much more desirable default behavior for
-                # non-root users. Add any other custom behavior here.
-
-                # Rerun entrypoint as user now, (skipping the root part via ALREADY_RUN_ONCE)
-                ALREADY_RUN_ONCE=1 exec gosu ${DOCKER_USERNAME} /usr/bin/env bash $0 ${@+"${@}"}
-              fi
-
-              source "${VSI_COMMON_DIR}/linux/just_env" "${'"${PROJECT_PREFIX}"'_SOURCE_DIR-/src}/'"${PROJECT_NAME}"'.env"
-
-              function sudo()
+              function caseify()
               {
-                gosu root ${@+"${@}"}
-              }
-              export -f sudo
-
-              source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
-              # Remove duplicate '"${PROJECT_PREFIX}"'_*_DOCKER variables
-              filter_docker_variables
-              docker_convert_paths
-
-              ' >> "docker/${APP_NAME}_entrypoint.bsh"
+                local cmd="${1}"
+                shift 1
+                case "${cmd}" in
+              ' > "docker/Justfile.${APP_NAME}"
 
     if [ "${USE_PIPENV}" = "1" ]; then
-      uwecho 'cmd="${1}"
-              shift 1
-              case "${cmd}" in
-              # default CMD
-                '"${APP_NAME}"')
-                  pipenv shell
-                  ;;
-                nopipenv)
-                  exec "${@}"
-                  ;;
-                *)
-                  exec pipenv run "${cmd}" ${@+"${@}"}
-                  ;;
-              esac' >> "docker/${APP_NAME}_entrypoint.bsh"
+      uwecho '# default CMD
+                  '"${APP_NAME}"')
+                    pipenv shell
+                    ;;
+                  nopipenv)
+                    exec "${@}"
+                    ;;
+                  *)
+                    exec pipenv run "${cmd}" ${@+"${@}"}
+                    ;;
+                esac
+              }' >> "docker/Justfile.${APP_NAME}"
     else
-      uwecho 'cmd="${1}"
-              shift 1
-              case "${cmd}" in
-              # default CMD
-                '"${APP_NAME}"')
-                  echo "Run '"${APP_NAME}"' here: ${cmd} ${@+${@}}"
-                  ;;
-                *)
-                  exec "${cmd}" ${@+"${@}"}
-                  ;;
-              esac' >> "docker/${APP_NAME}_entrypoint.bsh"
+      uwecho '# default CMD
+                  '"${APP_NAME}"')
+                    echo "Run '"${APP_NAME}"' here: ${cmd} ${@+${@}}"
+                    ;;
+                  *)
+                    exec "${cmd}" ${@+"${@}"}
+                    ;;
+                esac
+              }' >> "docker/Justfile.${APP_NAME}"
     fi
   else
-    echo     "docker/${APP_NAME}_entrypoint.bsh exists, skipping..."
+    echo     "docker/Justfile.${APP_NAME} exists, skipping..."
   fi
 
   ##########################
@@ -1084,7 +1045,7 @@ if [ "${USE_DOCKER}" = "1" ]; then
                 # prevent different users from clobbering each others images
                 image: ${'"${PROJECT_PREFIX}"'_DOCKER_REPO}:'"${APP_NAME}"'_${'"${PROJECT_PREFIX}"'_USERNAME}
                 environment:
-                  # Variables for docker_entrypoint.bsh
+                  # Variables for just_entrypoint_functions.bsh
                   - DOCKER_UID=${'"${PROJECT_PREFIX}"'_UID}
                   - DOCKER_GIDS=${'"${PROJECT_PREFIX}"'_GIDS}
                   - DOCKER_GROUP_NAMES=${'"${PROJECT_PREFIX}"'_GROUP_NAMES}
@@ -1093,6 +1054,8 @@ if [ "${USE_DOCKER}" = "1" ]; then
                   # - DOCKER_HOME=${'"${PROJECT_PREFIX}"'_HOME}
 
                   - DISPLAY
+                  - JUSTFILE=/src/docker/Justfile.'"${APP_NAME}"'
+                  - JUST_SETTINGS=/src/'"${PROJECT_NAME}"'.env
             #     runtime: nvidia  # Uncomment for nvidia gpu support
             #     cap_add:
             #       - SYS_PTRACE # Useful for gdb
@@ -1194,37 +1157,54 @@ fi
 # ****************************************************************************
 # ****DONE****DONE****DONE****DONE****DONE****DONE****DONE****DONE****DONE****
 # ****************************************************************************
+
+cmds=()
+
 uwecho "Done!
 
 
         To complete your git initialization:
-
-        cd $(quote_escape "${PROJECT_DIR}")"
+        ------------------------------------"
+cmds+=("cd $(quote_escape "${PROJECT_DIR}")")
 if [ ! -e .git ]; then
-  echo "git init ." >&3
+  cmds+=("git init .")
 fi
 
 if [ "${USE_VSI_COMMON}" = "1" ]; then
-  uwecho "git submodule add https://github.com/visionsystemsinc/vsi_common.git $(quote_escape "${RELATIVE_PATH}")
-          git submodule update --init --recursive
-          pushd $(quote_escape "${RELATIVE_PATH}")
-          git remote set-url origin --push git@github.com:visionsystemsinc/vsi_common.git
-          popd" >&3
-  echo   "git add $(quote_escape "${SETUPFILE}") .gitmodules" >&3
+  cmds+=("git submodule add https://github.com/visionsystemsinc/vsi_common.git $(quote_escape "${RELATIVE_PATH}")"
+         "git submodule update --init --recursive"
+         "pushd $(quote_escape "${RELATIVE_PATH}")"
+         "git remote set-url origin --push git@github.com:visionsystemsinc/vsi_common.git"
+         "popd"
+         "git add $(quote_escape "${SETUPFILE}") .gitmodules")
 fi
 
-echo   "git add .gitignore README.md $(quote_escape "${JUSTFILE}") $(quote_escape "${PROJECT_NAME}").env" >&3
+cmds+=("git add .gitignore README.md $(quote_escape "${JUSTFILE}") $(quote_escape "${PROJECT_NAME}").env")
 
 if [ "${USE_DOCKER}" = "1" ]; then
-  echo "git add .gitattributes .dockerignore docker-compose.yml docker/${APP_NAME}.Dockerfile docker/${APP_NAME}_entrypoint.bsh" >&3
+  cmds+=("git add .gitattributes .dockerignore docker-compose.yml docker/${APP_NAME}.Dockerfile docker/Justfile.${APP_NAME}")
 else
-  echo "git add hi.cpp" >&3
+  cmds+=("git add hi.cpp")
 fi
 if [ "${USE_PIPENV}" = "1" ]; then
-  echo "git add Pipfile Pipfile.lock" >&3
+  cmds+=("git add Pipfile Pipfile.lock")
 fi
 
-echo "git commit -m 'Initial commit'"  >&3
+cmds+=("git commit -m 'Initial commit'")
+
+for cmd in "${cmds[@]}"; do
+  echo "${cmd}" >&3
+done
+
+ask_question "Do you want to execute these git commands and setup the repo for you?" SETUP_GIT n
+set -xv
+if [ "${SETUP_GIT}" = "1" ]; then
+  for cmd in "${cmds[@]}"; do
+    eval "${cmd}"
+  done
+fi
+set +xv
+
 uwecho "
 
 
