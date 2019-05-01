@@ -2,7 +2,7 @@
 
 set -eu
 
-#*# just/just_entrypoint
+#*# just/plugins/docker/just_entrypoint
 
 #**
 # .. default-domain:: bash

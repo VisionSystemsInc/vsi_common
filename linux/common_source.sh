@@ -21,7 +21,7 @@ source_once > /dev/null 2>&1 && return
 #**
 
 #**
-# .. function:: VSI_OS
+# .. envvar:: VSI_OS
 #
 # Operating system name
 #
