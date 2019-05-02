@@ -22,7 +22,7 @@ source "${VSI_COMMON_DIR}/linux/elements.bsh"
 #
 # *Tab* completion suggestions based on parsing the :file:`Justfile` case statements can easily be added to your bash session by sourcing the :file:`.just` file. This file is sourced for you when you source the :ref:`setup file <just-setup-file>`
 #
-# The *tab* completion script can be extended by adding a ``.just`` file to your project next to the :file:`Justfile`. Write what would normally go inside the ``complete`` function to the ``.just`` file (without the bash ``function()`` header). This file will be sourced by :file:`.just` after the ``just_commands`` and ``_just_subcommands`` arrays are populated. See `here <https://github.com/visionsystemsinc/vsi_common/blob/master/.just>`_ for an example;
+# The *tab* completion script can be extended by adding a ``.just`` file to your project next to the :file:`Justfile`. Write what would normally go inside the ``complete`` function to the ``.just`` file (without the bash ``function()`` header). This file will be sourced by :file:`.just` after the ``just_commands`` and ``_just_subcommands`` arrays are populated. See :ref:`here <just_autocomplete>` for an example:
 #
 # .. seealso::
 #

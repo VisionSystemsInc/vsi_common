@@ -6,9 +6,31 @@ services:
     build:
       context: ..
       dockerfile: ./docker/Dockerfile
-  robodoc:
+  robodoc: #Deprecated
     image: andyneff/robodoc:latest
     volumes:
-      - "${SRC_DIR}:/src"
-      - "${DOC_DIR}:/doc"
+      - "${SRC_DIR-.}:/src"
+      - "${DOC_DIR-./docs}:/doc"
     command: ['--rc', '/src/robodoc.rc']
+  sphinx:
+    build:
+      context: .
+      dockerfile: sphinx.Dockerfile
+    image: ${SPHINX_COMPILE_IMAGE-vsiri/sphinxdocs:compile}
+    environment:
+      - DOCKER_UID=${VSI_COMMON_UID-1000}
+      - DOCKER_GIDS=${VSI_COMMON_GIDS-1000}
+      - DOCKER_GROUP_NAMES=user
+      - DOCKER_USERNAME=user
+      - JUST_SETTINGS
+      - JUSTFILE=/vsi/docker/vsi_common/sphinx.Justfile
+    volumes:
+      - type: bind
+        source: ${VSI_COMMON_DIR}
+        target: /vsi
+      - type: bind
+        source: ${DOCS_SOURCE_DIR-}
+        target: /src
+      - type: bind
+        source: ${DOCS_DIR-}
+        target: /docs

@@ -15,6 +15,7 @@ VSI Common documentation
    windows/index
    tests/index
    python/modules
+   style.rst
 
 Indices and tables
 ==================
@@ -22,3 +23,9 @@ Indices and tables
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
+
+VSI Common is a set of tools and scripts that are not specific to any project, but useful to have on any project. The most significant of these tools being :ref:`just`.
+
+.. envvar:: VSI_COMMON_DIR
+
+  The location of the root of the VSI common code repository. Most scripts will determine :envvar:`VSI_COMMON_DIR` automatically, and use it to find other scripts in VSI Common. :envvar:`VSI_COMMON_DIR` is almost always overrideable, should you need to reference a different location/version of VSI Common.

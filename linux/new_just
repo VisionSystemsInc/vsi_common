@@ -711,7 +711,7 @@ if [ ! -e "${JUSTFILE}" ]; then
                   build) # Build Docker image
                     if [ "$#" -gt "0" ]; then
                       Docker-compose "${just_arg}" ${@+"${@}"}
-                      extra_args+=$#
+                      extra_args=$#
                     else' >> "${JUSTFILE}"
     if [ "${USE_PIPENV}" = "1" ]; then
       uwecho '        justify build_recipes gosu tini vsi pipenv
@@ -724,14 +724,14 @@ if [ ! -e "${JUSTFILE}" ]; then
                     docker_cp_image "${'"${PROJECT_PREFIX}"'_DOCKER_REPO}:'"${APP_NAME}"'_${'"${PROJECT_PREFIX}"'_USERNAME}" "/venv/Pipfile.lock" "${'"${PROJECT_PREFIX}"'_CWD}/Pipfile.lock"
                     ;;' >> "${JUSTFILE}"
     else
-      uwecho '        justify build_recipes gosu tini vsi
+    uwecho   '        justify build_recipes gosu tini vsi
                       Docker-compose build
                     fi
                     ;;' >> "${JUSTFILE}"
     fi
     uwecho   '    run_'"${APP_NAME}"') # Run '"${APP_NAME}"' 1
                     Just-docker-compose run --service-ports '"${APP_NAME}"' ${@+"${@}"}
-                    extra_args+=$#
+                    extra_args=$#
                     ;;
 
                   sync) # Synchronize the many aspects of the project when new code changes \
@@ -745,12 +745,14 @@ if [ ! -e "${JUSTFILE}" ]; then
                     Docker-compose down
                     justify git_submodule-update # For those users who don'"'"'t remember!
                     justify build
-                    ;;' >> "${JUSTFILE}"
+                    ;;
+              ' >> "${JUSTFILE}"
     if [ "${USE_PIPENV}" = "1" ]; then
       uwecho '    clean_all) # Delete all local volumes
                     ask_question "Are you sure? This will remove packages not in Pipfile!" n
                     justify docker-compose clean venv
-                    ;;' >> "${JUSTFILE}"
+                    ;;
+              ' >> "${JUSTFILE}"
     fi
     uwecho   '    *)
                     defaultify "${just_arg}" ${@+"${@}"}
@@ -768,10 +770,12 @@ if [ ! -e "${JUSTFILE}" ]; then
                   compile) # Build program
                     g++ hi.cpp -o hi
                     ;;
+
                   run) # Run program
                     ./hi ${@+"${@}"}
-                    extra_args+=$#
+                    extra_args=$#
                     ;;
+
                   *)
                     defaultify "${just_arg}" ${@+"${@}"}
                     ;;
@@ -977,11 +981,11 @@ if [ "${USE_DOCKER}" = "1" ]; then
     uwecho   '
               COPY --from=vsi /vsi /vsi
               ADD '"${PROJECT_NAME}.env"' /src/
-              ADD docker/Justfile.'"${APP_NAME}"' /src/docker/
+              ADD docker/'"${APP_NAME}"'.Justfile /src/docker/
 
-              ENTRYPOINT ["/usr/local/bin/tini", "--", "/usr/bin/env", "--", "bash", "/vsi/linux/just_entrypoint.bsh"]
+              ENTRYPOINT ["/usr/local/bin/tini", "--", "/usr/bin/env", "--", "bash", "/vsi/linux/just_entrypoint.sh"]
               # Does not require execute permissions, unlike:
-              # ENTRYPOINT ["/usr/local/bin/tini", "--", "/vsi/linux/just_entrypoint.bsh"]
+              # ENTRYPOINT ["/usr/local/bin/tini", "--", "/vsi/linux/just_entrypoint.sh"]
 
               CMD ["'"${APP_NAME}"'"]' >> docker/${APP_NAME}.Dockerfile
   else
@@ -989,10 +993,10 @@ if [ "${USE_DOCKER}" = "1" ]; then
   fi
 
   ####################
-  ### Justfile.app ###
+  ### app.Justfile ###
   ####################
 
-  if [ ! -e "docker/Justfile.${APP_NAME}" ]; then
+  if [ ! -e "docker/${APP_NAME}.Justfile" ]; then
     uwecho   '#!/usr/bin/env false
 
               function caseify()
@@ -1000,34 +1004,36 @@ if [ "${USE_DOCKER}" = "1" ]; then
                 local cmd="${1}"
                 shift 1
                 case "${cmd}" in
-              ' > "docker/Justfile.${APP_NAME}"
+              ' > "docker/${APP_NAME}.Justfile"
 
     if [ "${USE_PIPENV}" = "1" ]; then
-      uwecho '# default CMD
-                  '"${APP_NAME}"')
+      uwecho '    '"${APP_NAME}"') # Run example shell
                     pipenv shell
                     ;;
-                  nopipenv)
+
+                  nopipenv) # Run command without pipenv
                     exec "${@}"
                     ;;
-                  *)
+
+                  *) # Default: Run command in pipenv
                     exec pipenv run "${cmd}" ${@+"${@}"}
                     ;;
                 esac
-              }' >> "docker/Justfile.${APP_NAME}"
+              }' >> "docker/${APP_NAME}.Justfile"
     else
       uwecho '# default CMD
-                  '"${APP_NAME}"')
+                  '"${APP_NAME}"') # Run example
                     echo "Run '"${APP_NAME}"' here: ${cmd} ${@+${@}}"
                     ;;
-                  *)
+
+                  *) # Default: Run command
                     exec "${cmd}" ${@+"${@}"}
                     ;;
                 esac
-              }' >> "docker/Justfile.${APP_NAME}"
+              }' >> "docker/${APP_NAME}.Justfile"
     fi
   else
-    echo     "docker/Justfile.${APP_NAME} exists, skipping..."
+    echo     "docker/${APP_NAME}.Justfile exists, skipping..."
   fi
 
   ##########################
@@ -1045,7 +1051,7 @@ if [ "${USE_DOCKER}" = "1" ]; then
                 # prevent different users from clobbering each others images
                 image: ${'"${PROJECT_PREFIX}"'_DOCKER_REPO}:'"${APP_NAME}"'_${'"${PROJECT_PREFIX}"'_USERNAME}
                 environment:
-                  # Variables for just_entrypoint_functions.bsh
+                  # Variables for just_entrypoint_functions
                   - DOCKER_UID=${'"${PROJECT_PREFIX}"'_UID}
                   - DOCKER_GIDS=${'"${PROJECT_PREFIX}"'_GIDS}
                   - DOCKER_GROUP_NAMES=${'"${PROJECT_PREFIX}"'_GROUP_NAMES}
@@ -1054,7 +1060,7 @@ if [ "${USE_DOCKER}" = "1" ]; then
                   # - DOCKER_HOME=${'"${PROJECT_PREFIX}"'_HOME}
 
                   - DISPLAY
-                  - JUSTFILE=/src/docker/Justfile.'"${APP_NAME}"'
+                  - JUSTFILE=/src/docker/'"${APP_NAME}"'.Justfile
                   - JUST_SETTINGS=/src/'"${PROJECT_NAME}"'.env
             #     runtime: nvidia  # Uncomment for nvidia gpu support
             #     cap_add:
@@ -1163,8 +1169,8 @@ cmds=()
 uwecho "Done!
 
 
-        To complete your git initialization:
-        ------------------------------------"
+        To complete your git initialization, the following commands must be run:
+        ------------------------------------------------------------------------"
 cmds+=("cd $(quote_escape "${PROJECT_DIR}")")
 if [ ! -e .git ]; then
   cmds+=("git init .")
@@ -1182,7 +1188,7 @@ fi
 cmds+=("git add .gitignore README.md $(quote_escape "${JUSTFILE}") $(quote_escape "${PROJECT_NAME}").env")
 
 if [ "${USE_DOCKER}" = "1" ]; then
-  cmds+=("git add .gitattributes .dockerignore docker-compose.yml docker/${APP_NAME}.Dockerfile docker/Justfile.${APP_NAME}")
+  cmds+=("git add .gitattributes .dockerignore docker-compose.yml docker/${APP_NAME}.Dockerfile docker/${APP_NAME}.Justfile")
 else
   cmds+=("git add hi.cpp")
 fi
@@ -1196,14 +1202,14 @@ for cmd in "${cmds[@]}"; do
   echo "${cmd}" >&3
 done
 
-ask_question "Do you want to execute these git commands and setup the repo for you?" SETUP_GIT n
-set -xv
+echo ""
+ask_question "Do you want these git commands to be executed for you now?" SETUP_GIT n
+
 if [ "${SETUP_GIT}" = "1" ]; then
   for cmd in "${cmds[@]}"; do
     eval "${cmd}"
   done
 fi
-set +xv
 
 uwecho "
 

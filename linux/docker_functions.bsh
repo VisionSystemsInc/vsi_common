@@ -1099,7 +1099,7 @@ function _Docker-compose()
 # ``Docker-compose`` with advance just features
 #
 # To provide a smoother just experience, advanced features are baked into
-# ``Just-docker-compose`` to work with Just and :file:`docker_entrypoint.bsh` to cover the
+# ``Just-docker-compose`` to work with Just and :file:`just_entrypoint_functions` to cover the
 # last mile in getting docker started and setup with a predictable environment
 # user permissions, mounts (and more...)
 #
@@ -1247,32 +1247,6 @@ function docker_compose_service_names()
 }
 
 #**
-# .. function:: filter_docker_variables
-#
-# :Arguments: [``$1``] - The prefix of the variables you want cleared, typically
-#          ``JUST_PROJECT_PREFIX``. Default: ``${JUST_PROJECT_PREFIX}``
-# :Parameters: [``JUST_FILTER_DOCKER``] - If this is set to ``1``, and this script is being
-#                          executed inside a docker, then ``${1}_.*_DOCKER``
-#                          variables are unset. Default: ``on``
-#
-# Helper function to remove variables in a docker
-# Filters out environment variables ``$1_*_DOCKER`` if ``JUST_FILTER_DOCKER`` is
-# enabled. Should be called from the entrypoint.
-#**
-
-function filter_docker_variables()
-{
-  local temp_var_name
-  # This feature was enabled
-  if [ "${JUST_FILTER_DOCKER-1}" == "1" ]; then
-    for temp_var_name in $(compgen -A variable | \
-                           grep "^${1-${JUST_PROJECT_PREFIX}}_.*_DOCKER$"); do
-      unset "${temp_var_name}"
-    done
-  fi
-}
-
-#**
 # .. function:: docker_compose_sanitize_project_name
 #
 # :Arguments:  * ``$1`` - Directory name. Can also be any name really. But directory name is what docker-compose uses to come up with the project name
@@ -1307,59 +1281,6 @@ function docker_compose_sanitize_project_name()
         a=tolower("'"${2+$2}"'" arr[n])
         gsub(/[^a-z0-9]/,"",a)
         print a}' <<< "${1}"
-}
-
-#**
-# .. function:: docker_convert_paths
-#
-# Remove double slash from environment variables
-#
-# Using docker on Windows has many complexities. This function fixes the case ``MSYS2/MINGW/CYGWIN`` converts paths for you too aggressively. The official solution from http://www.mingw.org/wiki/Posix_path_conversion is to use // on Windows.
-#
-# While this is annoying and ugly, it is usually harmless... However not always harmless and can and does create errors sometimes with no good solution.
-#
-# Using ``MSYS_NO_PATHCONV`` only works on Git for Windows, and will end up breaking a lot more than it fixes. This function will remove the //'s on the docker side.
-#
-# :Parameters:
-#   * [``JUST_NO_PATHCONV``] - Regex expression for variable names that should not be converted. It is anticipated this will never be needed but in case there is an environment variable that validly contains //, putting its name in here will exclude it from the conversion. Remember, the pattern '' matches everything.
-#   * [``LC_COLLATE``] - Has significant affect on regex ranges. [a-z] and [A-Z] has most of both upper and lower cases in their range on en_US.utf-8, which is probably not the intended result. Use ``LC_COLLATE=C`` or ``POSIX`` to get a more basic result.
-#
-# .. rubric:: Example
-#
-# .. code-block:: bash
-#
-#     JUST_1="this is a :// test" # Excluded from converted
-#     JUST_2="dir1://dir2"        # Converted
-#     JUST_3="this is // test"    # Excluded from converted
-#     JUST_4="test // this"       # Not converted, doesn't match pattern
-#     JUST_5=//dir1://dir2"       # Converted
-#
-#     JUST_NO_PATHCONV="JUST_1|JUST_3" docker_convert_paths # Run conversion
-#     JUST_NO_PATHCONV="JUST_{1,3}" docker_convert_paths    # Same thing
-#
-# .. Note::
-#   Only checks exported variables, and does not work on arrays, which aren't exported in the first place
-#
-#   Pure Bash implementation should decreases forking.
-#**
-
-function docker_convert_paths()
-{
-  if [ "${JUST_HOST_WINDOWS-}" = "1" ]; then
-    local var
-    local value
-    for var in $(compgen -A export); do
-      if ! [[ ${var} =~ ${JUST_NO_PATHCONV-nomatch^} ]]; then
-        value="${!var}"
-        #Check leading //
-        if [ "${value#//}" != "${value}" ]; then
-          value="${value:1}"
-        fi
-        # Replace for internal ://
-        export "${var}=${value//:\/\//:/}"
-      fi
-    done
-  fi
 }
 
 #**

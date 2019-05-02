@@ -29,7 +29,7 @@ source "${VSI_COMMON_DIR}/linux/elements.bsh"
 source "${VSI_COMMON_DIR}/linux/findin"
 
 #**
-# .. env:: DRYRUN
+# .. envvar:: DRYRUN
 #
 # Print out some commands instead of executing.
 #
@@ -49,7 +49,7 @@ source "${VSI_COMMON_DIR}/linux/findin"
 #
 # .. note::
 #
-#   :env:`DRYRUN` doesn't just echo out the command, it uses the :func:`print_command print_command` function
+#   :envvar:`DRYRUN` doesn't just echo out the command, it uses the :func:`print_command print_command` function
 #   to print out a command that can be copied and pasted in. This handles spaces
 #   correctly unlike echo.
 #
@@ -90,10 +90,6 @@ source "${VSI_COMMON_DIR}/linux/findin"
 : ${JUST_SAFE_LOAD_DELIMITER='='}
 
 #**
-# :ref:`plugin-concept`
-#
-# .. _plugin-concept:
-#
 # just_plugins
 # ------------
 #
@@ -134,7 +130,7 @@ source "${VSI_COMMON_DIR}/linux/findin"
 ##       case $arg in
 ##         foo|bar) #Foobar test
 ##           echo "Foo or bar: $1"
-##           extra_args+=1
+##           extra_args=1
 ##           ;;
 ##         *)
 ##           return 1
@@ -213,7 +209,7 @@ fi
 #**
 
 #**
-# .. envvar:: JUST_PROJECT_FILE
+# .. envvar:: JUST_SETTINGS
 #
 # Absolute path to the project env file used
 #**
@@ -280,7 +276,7 @@ function source_environment_files()
   local JUST_LOCAL_SETTINGS="${JUST_LOCAL_SETTINGS:-${project_dir}/local.env}"
   local JUST_LOCAL_SETTINGS_POST="${JUST_LOCAL_SETTINGS_POST:-${project_dir}/local_post.env}"
 
-  export JUST_PROJECT_FILE="$(cd "${project_dir}"; pwd)/${1##*/}"
+  export JUST_SETTINGS="$(cd "${project_dir}"; pwd)/${1##*/}"
 
   if [ ! -e "${JUST_LOCAL_SETTINGS}" ]; then
     local perm
@@ -733,14 +729,14 @@ function defaultify()
                  # arguments. If -- is needed for other things, specify a custom \
                  # separator
       JUST_SEPARATOR=$1
-      extra_args+=1
+      extra_args=1
       ;;
     --version) # Print version
       echo "${0##*/} version ${JUST_VERSION}"
       ;;
     --new) # Run the new just wizard
       "${VSI_COMMON_DIR}/linux/new_just" ${@+"${@}"}
-      extra_args+=$#
+      extra_args=$#
       ;;
     --latest) # Print latest juste version install instructions
       (
@@ -784,11 +780,11 @@ function defaultify()
       )
       ;;
     --wrap) # Wraps command with Just_wrap ... Useful for just executable
-      exec "${VSI_COMMON_DIR}/linux/Just_wrap" "${JUST_PROJECT_FILE}" ${@+"${@}"}
+      exec "${VSI_COMMON_DIR}/linux/Just_wrap" "${JUST_SETTINGS}" ${@+"${@}"}
       ;;
     --run) # Run arbitrary command in just environment
       ${@+"${@}"}
-      extra_args+=$#
+      extra_args=$#
       ;;
     --tab) # Tab complete script (takes about 300ms). Usage: source <(juste --tab)
       if [ "$#" = "0" ]; then
@@ -805,13 +801,13 @@ function defaultify()
         local COMP_WORDS
 
         shift 3
-        extra_args+=3
+        extra_args=3
 
         COMP_WORDS=(${@+"${@}"})
 
         _just "${one}" "${two}" "${three}" ${@+"${@}"}
         echo "${COMPREPLY[*]}"
-        extra_args+=$#
+        extra_args=$#
       fi
       ;;
     -h|--help|help) #Print help
@@ -845,20 +841,27 @@ function unknownify()
 #
 # The number of additional arguments consumed in a caseify target
 #
-# When writing a caseify target, by default one argument is consumed. This is
-# enough for any simple target. However some targets need additional arguments.
+# When writing a caseify target, by default one argument is consumed. This is enough for any simple target. However some targets need additional arguments.
 #
 # There are really three situation when extra arguments are needed
 #
-# - 1. A fixed number of arguments. For example, if 3 arguments are needed,
-#      just use $1, $2, $3, and set extra_args+=3
-# - 2. The rest of the arguments are going to be consumed. In this case, use
-#      all the arguments (typically by $@) and set extra_args+=$#
-# - 3. An unknown number of arguments need to be used, and maybe multiple
-#      groups of unknown arguments. This is the case where JUST_SEPARATOR is
-#      used. (See EXAMPLE)
+# #. A fixed number of arguments. For example, if 3 arguments are needed, just use $1, $2, $3, and set ``extra_args=3``
+# #. The rest of the arguments are going to be consumed. In this case, use all the arguments (typically by $@) and set extra_args=$#
+# #. An unknown number of arguments need to be used, and maybe multiple groups of unknown arguments. This is the case where JUST_SEPARATOR is used. (See EXAMPLE)
 #
 # .. rubric:: Example
+#
+# .. code-block:: bash
+#
+#    # Lets say we call:
+#
+#    just test 11 22 33 -- aa bb cc dd -- _null
+#
+#    # test is called with 3 arguments
+#    # aa is called with 3 arguments
+#    # _null is called
+#
+# .. rubric:: The deprecated way
 #
 # .. code-block:: bash
 #
@@ -876,10 +879,6 @@ function unknownify()
 #     ;;
 #
 # In this case, there is no need to add :var:`extra_args`, :func:`get_args` does this already
-#
-# .. note::
-#
-#   :var:`extra_args` should be added to, never set.
 #**
 
 declare -i extra_args
