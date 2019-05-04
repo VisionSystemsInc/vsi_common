@@ -106,97 +106,78 @@ c.NotebookApp.port = {port}
 c.NotebookApp.notebook_dir = {notebooks}
 c.NotebookApp.open_browser = {browser}\n"""
 
-add_virtualenv = '''#!/usr/bin/env bash
+add_header = '''#!/usr/bin/env python
 
-set -eu
+import json
+import os
+import sys
+import argparse
 
-if python -c "import ipykernel_launcher" > /dev/null 2>&1; then
-  ipykernel=ipykernel_launcher
-elif python -c "import ipykernel" > /dev/null 2>&1; then
-  ipykernel=ipykernel
-else
-  echo "IPython kernel not found."
-  exit 1
-fi
+parser = argparse.ArgumentParser(description='Add kernel.json for {}')
+parser.add_argument('name', help='Name of kernel')
+args = parser.parse_args()
 
-kernels="$(dirname "${BASH_SOURCE[0]}")/jupyter_data/kernels"
+try:
+  import ipykernel_launcher
+  ipykernel = 'ipykernel_launcher'
+except ImportError:
+  try:
+    import ipykernel
+    ipykernel = 'ipykernel'
+  except ImportError:
+    print('IPython kernel not found. "pip install ipykernel" and try again')
+    exit(1)
 
-mkdir -p "${kernels}/${1}"
+kernel_dir = os.path.join(os.path.dirname(__file__),
+                          'jupyter_data',
+                          'kernels',
+                          args.name)
 
-cat << EOS > "${kernels}/${1}/kernel.json"
-{
- "display_name": "${1}",
- "argv": [
-  "$(command -v python)",
-  "-m",
-  "${ipykernel}",
-  "-f",
-  "{connection_file}"
- ],
- "env": {},
- "language": "python"
-}
-EOS'''
+try:
+  os.makedirs(kernel_dir)
+except:
+  pass
+'''
 
-add_pipenv = '''#!/usr/bin/env bash
+add_virtualenv = add_header.format('virtualenv. Run script from within an activated virtualenv.') + '''
+kernel = {'display_name': args.name,
+          'argv': [sys.executable, '-m', ipykernel, 
+                   '-f', '{connection_file}'],
+          'env': {}}
 
-set -eu
+with open(os.path.join(kernel_dir, 'kernel.json'), 'w') as fid:
+  json.dump(kernel, fid)
 
-if pipenv run python -c "import ipykernel_launcher" > /dev/null 2>&1; then
-  ipykernel=ipykernel_launcher
-elif pipenv run python -c "import ipykernel" > /dev/null 2>&1; then
-  ipykernel=ipykernel
-else
-  echo "IPython kernel not found."
-  exit 1
-fi
+print('{} created'.format(kernel_dir))
+'''
 
-kernels="$(dirname "${BASH_SOURCE[0]}")/jupyter_data/kernels"
+add_pipenv = add_header.format('pipenv. Run script from within a pipenv virtualenv ("pipenv run" or "pipenv shell").') + '''
+import distutils.spawn
+pipenv = distutils.spawn.find_executable('pipenv')
 
-mkdir -p "${kernels}/${1}"
+pipfile = os.environ.get('PIPENV_PIPFILE', None)
+if pipfile is None:
+  from subprocess import Popen, PIPE
 
-cat << EOS > "${kernels}/${1}/kernel.json"
-{
- "display_name": "${1}",
- "argv": [
-  "$(command -v pipenv)",
-  "run",
-  "python",
-  "-m",
-  "${ipykernel}",
-  "-f",
-  "{connection_file}"
- ],
- "env": {"PIPENV_PIPFILE":"${PIPENV_PIPFILE-$(pwd)/Pipfile}"},
- "language": "python"
-}
-EOS'''
+  pid = Popen([pipenv, '--where'], stdout=PIPE)
+  pipfile = pid.communicate()[0]
+  if sys.version_info[0] == 3:
+    pipfile = pipfile.decode()
+  pipfile = pipfile.rstrip('\\r\\n')
 
-relocate = '''#!/usr/bin/env bash
+  if not pipfile: # If empty, then it wasn't found
+    pipfile = os.getcwd()
+  pipfile = os.path.join(pipfile, 'Pipfile')
 
-set -eu
+kernel = {'display_name': args.name,
+          'argv': [pipenv, 'run', 'python', '-m', ipykernel, 
+                   '-f', '{connection_file}'],
+          'env': {'PIPENV_PIPFILE': pipfile}, 'language': 'python'}
 
-full_path="$(cd "${1-"$(dirname "${BASH_SOURCE[0]}")/.."}"; pwd)"
+with open(os.path.join(kernel_dir, 'kernel.json'), 'w') as fid:
+  json.dump(kernel, fid)
 
-VIRTUAL_ENV_DISABLE_PROMPT=1
-OLD_LOCATION=$(source "${full_path}/bin/activate"; echo "${VIRTUAL_ENV}")
-
-# Make sure activate is bash/zsh compliant _\|
-sed -i 's|^VIRTUAL_ENV=.*|VIRTUAL_ENV="$(cd "$(dirname "${BASH_SOURCE-"$0"}")/.."; pwd)"|' "${full_path}/bin/activate"
-sed -i "s|^setenv VIRTUAL_ENV.*|setenv VIRTUAL_ENV '${full_path}'|" "${full_path}/bin/activate.csh"
-sed -i "s|^set -gx VIRTUAL_ENV.*|set -gx VIRTUAL_ENV '${full_path}'|" "${full_path}/bin/activate.fish"
-
-IFS=$'\n'
-files=($(find "${full_path}/bin" -type f))
-
-for f in "${files[@]}"; do
-  if grep -qi 'python.* script' <(file "${f}"); then
-    sed -i "1 s|#!.*/bin/|#!${full_path}/bin/|" "${f}"
-  fi
-done
-
-find "${full_path}/jupyter_data/" "${full_path}/jupyter_config/" \( -name kernel.json -o -name jupyter_nbconvert_config.json \) \
-  -exec sed -i "s|${OLD_LOCATION}|${full_path}|" \{\} \;
+print('{} created'.format(kernel_dir))
 '''
 
 def main(args=None):
@@ -313,13 +294,13 @@ def main(args=None):
     # on windows, use wsl to setup bash_kernel if available
     if os.path.exists('c:\\Windows\\System32\\bash.exe'):
       Popen(['c:\\Windows\\System32\\bash.exe',
-            '-c',
-            'tmp_dir="\\$(mktemp -d)";'
-            'cd "\\${tmp_dir}";'
-            'python3 <(curl -L https://bootstrap.pypa.io/get-pip.py) --no-cache-dir -I --root "\\${tmp_dir}" virtualenv;'
-            'PYTHONPATH="\\$(cd "\\${tmp_dir}"/usr/local/lib/python*/*-packages/; pwd)" "\\${tmp_dir}/usr/local/bin/virtualenv" ~/bash_kernel;'
-            '~/bash_kernel/bin/pip install --no-cache-dir bash_kernel ipykernel;'
-            'rm -r "\\${tmp_dir}"'], shell=False).wait()
+             '-c',
+             'tmp_dir="\\$(mktemp -d)";'
+             'cd "\\${tmp_dir}";'
+             'python3 <(curl -L https://bootstrap.pypa.io/get-pip.py) --no-cache-dir -I --root "\\${tmp_dir}" virtualenv;'
+             'PYTHONPATH="\\$(cd "\\${tmp_dir}"/usr/local/lib/python*/*-packages/; pwd)" "\\${tmp_dir}/usr/local/bin/virtualenv" ~/bash_kernel;'
+             '~/bash_kernel/bin/pip install --no-cache-dir bash_kernel ipykernel;'
+             'rm -r "\\${tmp_dir}"'], shell=False).wait()
       try:
         os.makedirs(os.path.join(os.environ['JUPYTER_DATA_DIR'], 'kernels',
                                  'bash'))
@@ -350,19 +331,14 @@ def main(args=None):
 
 
   # Add add_virtualenv script
-  with open('add_virtualenv', 'w') as fid:
+  with open('add_virtualenv.py', 'w') as fid:
     fid.write(add_virtualenv)
-  os.chmod('add_virtualenv', 0o755)
+  os.chmod('add_virtualenv.py', 0o755)
 
   # Add add_pipenv script
-  with open('add_pipenv', 'w') as fid:
+  with open('add_pipenv.py', 'w') as fid:
     fid.write(add_pipenv)
-  os.chmod('add_pipenv', 0o755)
-
-  # Add relocate script
-  with open('relocate', 'w') as fid:
-    fid.write(relocate)
-  os.chmod('relocate', 0o755)
+  os.chmod('add_pipenv.py', 0o755)
 
   print("\n---------------------------------\n")
   print("Notebook configured successfully!")
