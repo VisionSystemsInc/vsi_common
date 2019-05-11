@@ -110,3 +110,8 @@ Python
 ------
 
 * We use pep8, except two spaces per indent
+
+J.U.S.T. Plugins
+----------------
+
+* Just plugins that use docker-compose should specify the ``docker-compose.yml`` file with every command, to prevent unintended consequences in case the user sets ``COMPOSE_FILE``
