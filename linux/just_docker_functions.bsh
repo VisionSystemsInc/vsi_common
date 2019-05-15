@@ -26,6 +26,12 @@ source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
 #
 # Runs ``docker-compose build`` for the docker recipes. Useful command to call before ``docker build`` on your own project that uses recipes in vsi_common, to keep them synced with your build.
 #
+# .. command:: build_recipes-auto
+#
+# :Arguments: ``$1``... - Dockerfiles to parse
+#
+# Scans dockerfiles for ``vsiri/recipe:`` images, and calls :cmd:`build_recipes` on the recipes discovered. Accepts multiple files and ``-`` for stdin
+#
 # .. command:: log
 #
 # :Arguments: [``$1``]... - Service names
@@ -75,6 +81,24 @@ function docker_defaultify()
       JUST_DOCKER_COMPOSE_DIR="${VSI_COMMON_DIR}/docker/recipes" \
           COMPOSE_FILE="${VSI_COMMON_DIR}/docker/recipes/docker-compose.yml" \
           Docker-compose build ${@+"${@}"}
+      extra_args=$#
+      ;;
+    build_recipes-auto) # Build recipes used in specified dockerfiles. "-" for \
+                        # stdin; multiple files (via wildcards) accepted
+      if [ "$#" = "0" ]; then
+        source "${VSI_COMMON_DIR}/linux/colors.bsh"
+        echo "${RED}ERROR:${NC} You must pass at least one argument to build recipes-auto" >&2
+        return 1
+      fi
+
+      local recipes=($(sed -nE '/^ *[fF][rR][oO][mM] vsiri\/recipe:/{
+                                  s|.*vsiri/recipe:([^ ]+).*|\1|
+                                  /\$/d
+                                  p
+                                }' ${@+"${@}"} | sort -u))
+      if [ "${#recipes[@]}" != "0" ]; then
+        justify build recipes "${recipes[@]}"
+      fi
       extra_args=$#
       ;;
     docker_clean) # Delete a docker volume. The next container to use this \
