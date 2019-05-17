@@ -74,7 +74,7 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
         #!/usr/bin/env false bash
 
         if [[ $- != *i* ]]; then
-          source_once &> /dev/null && return
+          source_once &> /dev/null && return 0
         fi
 
     * The ``false`` signifies this file if for sourcing only. The ``bash`` at the end of the line tricks most editors into parsing the file as bash.
