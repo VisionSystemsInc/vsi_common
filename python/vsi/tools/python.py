@@ -620,9 +620,9 @@ def args_to_kwargs_unbound_easy(*args, **kwargs):
   '''
      Parameters
      ----------
-     *args
+     *args : args
           Variable length argument list.
-     **kwargs
+     **kwargs : args
           Arbitrary keyword arguments.
 
      Returns
@@ -656,9 +656,9 @@ def nested_update(d, *args, **kwargs):
   ----------
   d : dict
       The dict to be updated
-  args :
+  *args : args
       Same arguments as dict.update
-  kwargs :
+  **kwargs : args
       Same arguments as dict.update
   '''
   u = dict(*args, **kwargs)

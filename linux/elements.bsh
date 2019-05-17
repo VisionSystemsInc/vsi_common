@@ -419,7 +419,7 @@ function join_a()
 # .. function:: join_a_out
 #
 # :Arguments: * ``$1`` - Hex code for IFS
-#             * ``$1``... - Strings
+#             * ``$2``... - Strings
 # :Parameters: * [``MIFS``] - A Multichararater Internal Field Separator, using awk escape format. (Except for null, which is a double backslash \\x00).
 #              * Default: //
 #              * Note: If you are using "" or $'' notation, you will need "\\\\x00"
@@ -455,4 +455,59 @@ function join_a_out()
           }
         }
       }' ${@+"${@}"}
+}
+
+#**
+# .. function:: is_array
+#
+# :Arguments: * ``$1`` - variable name
+#
+# :Output: Returns ``0`` if variable is an array, else ``1``
+#
+# Determines if ``$1`` is an array or not. If it is not defined, still returns ``1``
+#**
+function is_array()
+{
+  local var_name="${1}"
+  local signature="$(declare -p "${var_name}")"
+
+  # Handle Bash 4.2 namereffing https://stackoverflow.com/a/42877229/4166604
+  local regex='^declare -[[:alpha:]]*n[[:alpha:]]* [^=]+=\"([^\"]+)\"$'
+  while [[ ${signature} =~ ${regex} ]]; do
+    signature="$(declare -p ${BASH_REMATCH[1]})"
+  done
+
+  # Check if is array
+  regex='^declare -[[:alpha:]]*a[[:alpha:]]* '
+  [[ ${signature} =~ ${regex} ]]
+}
+
+#**
+# .. function:: to_array
+#
+# :Arguments: * ``$1`` - variable name
+#
+# .. Note::
+#   Uses eval to convert to array, because of this, () and other special characters can cause code injection
+#
+#   .. code-block:: bash
+#
+#     $ x="test); echo foo; q=("
+#     $ to_array x
+#     foo
+#
+#     $ x="test\)\; echo foo; \("
+#     # or
+#     $ x="'test);' echo 'foo;' '('"
+#     $ to_array x
+#     # Works without side effect
+#**
+function to_array()
+{
+  # Don't try and escape special characters, cause then you end up putting \'s
+  # in quoted string, which is not what we want
+  if ! is_array "${1}"; then
+    # Eval method :(
+    eval "$1=(${!1})"
+  fi
 }
