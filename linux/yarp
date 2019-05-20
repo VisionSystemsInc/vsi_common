@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+
+if [[ $- != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
+# Things not supported
+# - Multiple documents: ---/...
+# - key names with colons
+# - ? multiline keys
+# - Streams (So no % tags)
+# - type tags !!
+# - !!binary
+# - sets ?
+#
+# Probably never supported
+# - anchors &/* (only at end of line)
+#
+# Things supported
+# - mapping :
+# - mapping : value
+# - nested mapping indent+:
+# - nested mapping indent+: value
+#
+# Things not supported YET
+# - - sequence
+# - | multiline
+# - > multiline
+# sequence of maps
+
+function _yarp_meta()
+{
+  # BEGIN { ORS=" " };
+  awk '{
+         indent=match($0, "[^ ]")
+         sequence=substr($0, indent, 1)
+         if ( sequence == "-" )
+           sequence=1
+         else
+           sequence=0
+         print indent-1" "sequence
+       }'
+}
+
+function yarp()
+{
+  local line
+  local t=()
+  local last_indent=0
+
+  local meta=
+
+  while IFS='' read -r line || [[ -n "${line}" ]]; do
+    echo "${line}" | sed -E 's|( *[^-:][^:]*): *|\1 = |'
+  done
+  # key: value
+}
+
+if [ "${BASH_SOURCE[0]}" = "${0}" ] || [ "$(basename "${BASH_SOURCE[0]}")" = "${0}" ]; then
+  yarp
+  exit $?
+fi
