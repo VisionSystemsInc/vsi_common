@@ -14,22 +14,54 @@ function max(a, b)
 
 function join(array, sep)
 {
+  # print length(array)
+  if (!length(array))
+    return
   result = array[0]
-  for (i = 1; i < length(array); i++)
+# for ( q in array )
+#   print q
+  for (join_i = 1; join_i < length(array); ++join_i)
   {
-    result = result sep array[i]
+    assert(join_i < 100, "Ah shit")
+    result = result sep array[join_i]
   }
+  # print length(array)
   return result
 }
 
+function pa(array)
+{
+  print "----"
+  for (xx in array)
+    print "["xx"]"array[xx]
+  print "---"
+}
+
+function assert(condition, string)
+{
+  if (! condition) {
+    printf("%s:%d: assertion failed: %s\n", FILENAME, FNR, string) > "/dev/stderr"
+    _assert_exit = 1
+    exit 1
+  }
+}
+
 BEGIN {
+  # Initialize empty arrays
   delete path[0]
   delete indents[0]
+  delete sequences[0]
 
-  last_indent = -1
+  last_indent = 0
+}
+
+function get_path()
+{
+
 }
 
 {
+  #### Parse line ####
   match($0, "^ *")
   indent = RLENGTH
   # 0 no match, 1 match
@@ -51,7 +83,6 @@ BEGIN {
   # remain = substr(remain, RLENGTH)
   # key = substr(key, 1, length(key))
 
-
   # anchor=match($0, "&[^ '\"]+ *$")
   # if ( anchor == 0 )
   # {
@@ -64,21 +95,33 @@ BEGIN {
   #   anchor=1
   # }
 
-  # No support for array (-) yet or multiline (|)
+  #### Process line ####
+
+  # No support for multiline (|)
   if ( indent < last_indent )
   {
-    for (i = length(indents)-1; i>=0; i++)
+
+    while ( length(indents) && indents[length(indents)-1] >= indent )
+    # for (i = length(indents)-1; i>=0; i++)
     {
-      if ( indent < indents[i] )
-      {
-        delete indents[i]
-        delete path[i]
-      }
-      else
-        break
+      # print "zz"length(indents)
+      # for ( q in indents )
+      #   print q
+      # if ( indent < indents[i] )
+      # {
+        delete indents[length(indents)-1]
+        delete path[length(path)-1]
+        delete sequences[length(sequences)-1]
+      # print "yy"length(indents)
+      # for ( q in indents )
+      #   print q
+      # }
+      # else
+      #   break
     }
     last_indent = indent
   }
+
 
   if ( indent > last_indent )
   {
@@ -86,28 +129,56 @@ BEGIN {
     if ( sequence )
     {
       path[length(path)] = "[0]"
+      sequences[length(sequences)] = 0
+
+      if ( key != "\"\"" )
+      {
+        # print "i", join(indents, ",")
+        # print "p", join(path, ",")
+        # print "s", join(sequences, ",")
+
+        last_indent = indent + 1
+        indents[length(indents)] = indent + 1
+        path[length(path)] = key
+        sequences[length(sequences)] = -1
+        # pa(indents)
+        # print "i", join(indents, ",")
+        # print "p", join(path, ",")
+        # print "s", join(sequences, ",")
+      }
     }
     else
     {
       path[length(path)] = key
+      sequences[length(sequences)] = -1
     }
   }
   else if (indent == last_indent )
   {
-    path[length(path)-1] = key
-  }
-  else
-  {
+    if ( length(path) == 0)
+    {
+      path[0]
+      sequences[0]=0
+      indents[0]
+    }
 
+    if ( sequence )
+    {
+      sequences[length(sequences)-1]++
+      path[length(path)-1] = "["sequences[length(sequences)-1]"]"
+    }
+    else
+      path[length(path)-1] = key
   }
   last_indent = indent
 
-  print join(path, "."), "=", remain
-  # print indent, sequence, key
-  # print remain
+   print join(path, "."), "=", remain
+  # print indent, sequence, key, remain
 }
 
 END {
+  if (_assert_exit)
+    exit 1
   # print join(q, ".")
   # print(length(q))
   # for (x in q)
