@@ -5,13 +5,6 @@ function max(a, b)
   return b
 }
 
-# Prints out
-# Line 1
-# 1 - Number of spaced indent
-# 2 - is sequence?
-# 3 - key name, "" for no key
-# Line 2 - Value
-
 function join(array, sep)
 {
   # print length(array)
@@ -27,6 +20,11 @@ function join(array, sep)
   }
   # print length(array)
   return result
+}
+
+function get_path()
+{
+
 }
 
 function pa(array)
@@ -55,11 +53,6 @@ BEGIN {
   last_indent = 0
 }
 
-function get_path()
-{
-
-}
-
 {
   #### Parse line ####
   match($0, "^ *")
@@ -79,50 +72,27 @@ function get_path()
   else
     key = "\"\""
 
-
-  # remain = substr(remain, RLENGTH)
-  # key = substr(key, 1, length(key))
-
-  # anchor=match($0, "&[^ '\"]+ *$")
-  # if ( anchor == 0 )
-  # {
-  #   anchor_name="-"
-  #   anchor=0
-  # }
-  # else
-  # {
-  #   anchor_name=substr($0, anchor+1)
-  #   anchor=1
-  # }
-
+  # Count the - as an indent of 2, since the space after the - is required
+  indent = indent + sequence * 2
   #### Process line ####
 
   # No support for multiline (|)
+
+  print indent
+
+  # Unindenting
   if ( indent < last_indent )
   {
-
     while ( length(indents) && indents[length(indents)-1] >= indent )
-    # for (i = length(indents)-1; i>=0; i++)
     {
-      # print "zz"length(indents)
-      # for ( q in indents )
-      #   print q
-      # if ( indent < indents[i] )
-      # {
-        delete indents[length(indents)-1]
-        delete path[length(path)-1]
-        delete sequences[length(sequences)-1]
-      # print "yy"length(indents)
-      # for ( q in indents )
-      #   print q
-      # }
-      # else
-      #   break
+      delete indents[length(indents)-1]
+      delete path[length(path)-1]
+      delete sequences[length(sequences)-1]
     }
     last_indent = indent
   }
 
-
+  # Indenting
   if ( indent > last_indent )
   {
     indents[length(indents)] = indent
@@ -133,18 +103,10 @@ function get_path()
 
       if ( key != "\"\"" )
       {
-        # print "i", join(indents, ",")
-        # print "p", join(path, ",")
-        # print "s", join(sequences, ",")
-
-        last_indent = indent + 1
-        indents[length(indents)] = indent + 1
+        last_indent = indent
+        indents[length(indents)] = indent
         path[length(path)] = key
         sequences[length(sequences)] = -1
-        # pa(indents)
-        # print "i", join(indents, ",")
-        # print "p", join(path, ",")
-        # print "s", join(sequences, ",")
       }
     }
     else
@@ -152,9 +114,10 @@ function get_path()
       path[length(path)] = key
       sequences[length(sequences)] = -1
     }
-  }
+  } # Same indent
   else if (indent == last_indent )
   {
+    # Corner case
     if ( length(path) == 0)
     {
       path[0]
@@ -164,6 +127,7 @@ function get_path()
 
     if ( sequence )
     {
+      print "-===-"
       sequences[length(sequences)-1]++
       path[length(path)-1] = "["sequences[length(sequences)-1]"]"
     }
@@ -172,7 +136,7 @@ function get_path()
   }
   last_indent = indent
 
-   print join(path, "."), "=", remain
+  print join(path, "."), "=", remain
   # print indent, sequence, key, remain
 }
 
