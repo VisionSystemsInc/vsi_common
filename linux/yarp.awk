@@ -72,16 +72,14 @@ BEGIN {
   else
     key = "\"\""
 
-  # Count the - as an indent of 2, since the space after the - is required
-  indent = indent + sequence * 2
+  # Count the - as an indent
+  indent = indent + sequence*2
   #### Process line ####
 
   # No support for multiline (|)
 
-  print indent
-
   # Unindenting
-  if ( indent < last_indent )
+  if ( indent < last_indent ) # || (sequence && indent == last_indent) )
   {
     while ( length(indents) && indents[length(indents)-1] >= indent )
     {
@@ -91,6 +89,18 @@ BEGIN {
     }
     last_indent = indent
   }
+
+  # if ( sequence && indent == last_indent )
+  # {
+  #   print "ping"
+  #   while ( length(indents) && indents[length(indents)-1] > indent )
+  #   {
+  #     print indent, indents[length(indents)-1], "deleting", path[length(path)-1]
+  #     delete indents[length(indents)-1]
+  #     delete path[length(path)-1]
+  #     delete sequences[length(sequences)-1]
+  #   }
+  # }
 
   # Indenting
   if ( indent > last_indent )
