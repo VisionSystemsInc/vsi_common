@@ -115,8 +115,7 @@ def handle_db(sig, frame, db_cmd=None, signal=ATTACH_SIGNAL):
 class RunningTrace():
   ''' Mixin to give any bdb a running settrace
 
-      Example
-      -------
+      Example::
 
           from pdb import Pdb as OldPdb
           from vsi.tools.vdb import RunningTrace
