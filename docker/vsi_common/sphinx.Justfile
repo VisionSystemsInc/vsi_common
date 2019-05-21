@@ -46,7 +46,9 @@ function caseify()
           echo "Pattern does not match"
           continue
         fi
-      done < <(find /src "${find_flags[@]}" -type f -not -name '*.md' -not -name PKG-INFO -print0 | xargs -0 grep -T -H '^ *#\*# *')
+      done < <(find /src "${find_flags[@]}" -type f -not -name '*.md' -not -name PKG-INFO -print0 | xargs -0 grep -T -H '^ *#\*# *' || :)
+
+      echo "Processing sphinx files..."
 
       [ "${#src_files[@]}" = "${#doc_files[@]}" ]
 
