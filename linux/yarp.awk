@@ -83,6 +83,11 @@ function get_indent(str)
 }
 
 {
+  # Add compatibility for handling Windows line endings on Linux
+  # (Still works in Windows with \r removed)
+  if (length($0) && substr($0, length($0)) == "\r" )
+    $0 = substr($0, 0, length($0)-1)
+
   # Handle multiline output from docker-compose config
   while (match($0, /\\$/))
   {
@@ -95,7 +100,6 @@ function get_indent(str)
   # Skip blank lines
   if ($0 ~ /^[ #]*$/)
   {
-    # print "Whaaaaat"
     next
   }
   # else
