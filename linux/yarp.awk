@@ -24,7 +24,23 @@ function join(array, sep)
 
 function get_path()
 {
-  return join(path, ".")
+  result=""
+  sep="" # Make it so the first key doesn't have a period before it
+  for (join_i = 0; join_i < length(indents); ++join_i)
+  {
+    if (sequences[join_i] != -1)
+    {
+      result = result"["sequences[join_i]"]"
+    }
+    else if (paths[join_i] != "" )
+    {
+      result = result sep paths[join_i]
+      # Make addition keys separated by a period
+      sep="."
+    }
+  }
+
+  return result
 }
 
 function pa(array)
@@ -46,7 +62,7 @@ function assert(condition, string)
 
 BEGIN {
   # Initialize empty arrays
-  delete path[0]
+  delete paths[0]
   delete indents[0]
   delete sequences[0]
 
@@ -56,7 +72,6 @@ BEGIN {
 {
   if ($0 ~ /^ *$/)
     next
-
 
   #### Parse line ####
   match($0, "^ *")
@@ -89,7 +104,7 @@ BEGIN {
     while ( length(indents) && indents[length(indents)-1] >= indent + sequence )
     {
       delete indents[length(indents)-1]
-      delete path[length(path)-1]
+      delete paths[length(paths)-1]
       delete sequences[length(sequences)-1]
     }
     last_indent = indent
@@ -101,40 +116,48 @@ BEGIN {
     indents[length(indents)] = indent
     if ( sequence )
     {
-      path[length(path)] = "[0]"
+      paths[length(paths)] = ""
       sequences[length(sequences)] = 0
 
       if ( key != "\"\"" )
       {
         indent += 2
         indents[length(indents)] = indent
-        path[length(path)] = key
+        paths[length(paths)] = key
         sequences[length(sequences)] = -1
       }
     }
     else
     {
-      path[length(path)] = key
+      paths[length(paths)] = key
       sequences[length(sequences)] = -1
     }
   } # Same indent
   else if (indent == last_indent )
   {
     # Corner case
-    if ( length(path) == 0)
+    if ( length(paths) == 0)
     {
-      path[0]
-      sequences[0]=0
+      paths[0]
+      sequences[0]=-1
       indents[0]=0
     }
 
     if ( sequence )
     {
       sequences[length(sequences)-1]++
-      path[length(path)-1] = "["sequences[length(sequences)-1]"]"
+      # paths[length(paths)-1] = "["sequences[length(sequences)-1]"]"
+
+      if ( key != "\"\"" )
+      {
+        indent += 2
+        indents[length(indents)] = indent
+        paths[length(paths)] = key
+        sequences[length(sequences)] = -1
+      }
     }
     else
-      path[length(path)-1] = key
+      paths[length(paths)-1] = key
   }
   last_indent = indent
 
