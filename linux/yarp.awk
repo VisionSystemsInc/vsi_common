@@ -1,25 +1,14 @@
+function lstrip(str)
+{
+  strip = match(str, /[^ ]/)
+  return substr(str, strip)
+}
+
 function max(a, b)
 {
   if ( a > b )
     return a
   return b
-}
-
-function join(array, sep)
-{
-  # print length(array)
-  if (!length(array))
-    return
-  result = array[0]
-# for ( q in array )
-#   print q
-  for (join_i = 1; join_i < length(array); ++join_i)
-  {
-    assert(join_i < 100, "Ah shit")
-    result = result sep array[join_i]
-  }
-  # print length(array)
-  return result
 }
 
 function get_path()
@@ -60,6 +49,24 @@ function assert(condition, string)
   }
 }
 
+function process_sequence(sequence, key, indents, paths, sequences)
+{
+  if ( sequence )
+  {
+    sequences[length(sequences)-1]++
+
+    if ( key != "\"\"" )
+    {
+      indent += 2
+      indents[length(indents)] = indent
+      paths[length(paths)] = key
+      sequences[length(sequences)] = -1
+    }
+  }
+  else
+    sequences[length(sequences)-1] = -1
+}
+
 BEGIN {
   # Initialize empty arrays
   delete paths[0]
@@ -70,8 +77,18 @@ BEGIN {
 }
 
 {
-  if ($0 ~ /^ *$/)
+  # Skip blank lines
+  if ($0 ~ /^[ #]*$/)
     next
+
+  # Handle multiline output from docker-compose config
+  while (match($0, /\\$/))
+  {
+    $0 = substr($0, 0, length($0)-1)
+    getline line
+    line = lstrip(line)
+    $0 = $0 line
+  }
 
   #### Parse line ####
   match($0, "^ *")
@@ -91,8 +108,13 @@ BEGIN {
   else
     key = "\"\""
 
-  # # Count the - as an indent
-  # indent = indent + sequence*2
+# if (key == "command")
+# {
+#   print key, sequence, indent, last_indent
+#   pa(paths)
+#   pa(indents)
+# }
+
   #### Process line ####
 
   # No support for multiline (|)
@@ -101,7 +123,7 @@ BEGIN {
   if ( indent < last_indent )
   {
     # Add sequence, because in the sequence case, it's > not >=
-    while ( length(indents) && indents[length(indents)-1] >= indent + sequence )
+    while ( length(indents) && indents[length(indents)-1] > indent) # + sequence )
     {
       delete indents[length(indents)-1]
       delete paths[length(paths)-1]
@@ -110,31 +132,29 @@ BEGIN {
     last_indent = indent
   }
 
+# if (key == "command")
+# {
+#   print key, sequence, indent, last_indent
+#   pa(paths)
+#   pa(indents)
+#   print get_path(), "==", remain
+# }
+
   # Indenting
   if ( indent > last_indent )
   {
+# if (key == "command")
+#   print "***"
     indents[length(indents)] = indent
-    if ( sequence )
-    {
-      paths[length(paths)] = ""
-      sequences[length(sequences)] = 0
+    paths[length(paths)] = key
+    sequences[length(sequences)] = -1
 
-      if ( key != "\"\"" )
-      {
-        indent += 2
-        indents[length(indents)] = indent
-        paths[length(paths)] = key
-        sequences[length(sequences)] = -1
-      }
-    }
-    else
-    {
-      paths[length(paths)] = key
-      sequences[length(sequences)] = -1
-    }
+    process_sequence(sequence, key, indents, paths, sequences)
   } # Same indent
   else if (indent == last_indent )
   {
+# if (key == "command")
+#   print "%%%", indent, last_indent, sequence
     # Corner case
     if ( length(paths) == 0)
     {
@@ -143,33 +163,28 @@ BEGIN {
       indents[0]=0
     }
 
-    if ( sequence )
-    {
-      sequences[length(sequences)-1]++
-      # paths[length(paths)-1] = "["sequences[length(sequences)-1]"]"
+    paths[length(paths)-1] = key
 
-      if ( key != "\"\"" )
-      {
-        indent += 2
-        indents[length(indents)] = indent
-        paths[length(paths)] = key
-        sequences[length(sequences)] = -1
-      }
-    }
-    else
-      paths[length(paths)-1] = key
+    process_sequence(sequence, key, indents, paths, sequences)
   }
   last_indent = indent
 
+  assert(length(paths) == length(indents), "#Path != #indents")
+  assert(length(paths) == length(sequences), "#Path != #sequences")
+
+# if (key == "command")
+# {
+#   print key, sequence, indent, last_indent
+#   pa(paths)
+#   pa(indents)
+#   print get_path(), "=", remain
+#   print "==="
+#   exit
+# }
   print get_path(), "=", remain
-  # print indent, sequence, key, remain
 }
 
 END {
   if (_assert_exit)
     exit 1
-  # print join(q, ".")
-  # print(length(q))
-  # for (x in q)
-  #   print x":"q[x]
 }
