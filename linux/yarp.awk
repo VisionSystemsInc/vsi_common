@@ -90,6 +90,10 @@ BEGIN {
     $0 = $0 line
   }
 
+  # No support for multiline (|) or (>)
+  # Doesn't handle # comment, since they might be quoted, and I just don't want
+  # to deal with that
+
   #### Parse line ####
   match($0, "^ *")
   indent = RLENGTH
@@ -108,16 +112,7 @@ BEGIN {
   else
     key = "\"\""
 
-# if (key == "command")
-# {
-#   print key, sequence, indent, last_indent
-#   pa(paths)
-#   pa(indents)
-# }
-
   #### Process line ####
-
-  # No support for multiline (|)
 
   # Unindenting
   if ( indent < last_indent )
@@ -132,19 +127,9 @@ BEGIN {
     last_indent = indent
   }
 
-# if (key == "command")
-# {
-#   print key, sequence, indent, last_indent
-#   pa(paths)
-#   pa(indents)
-#   print get_path(), "==", remain
-# }
-
   # Indenting
   if ( indent > last_indent )
   {
-# if (key == "command")
-#   print "***"
     indents[length(indents)] = indent
     paths[length(paths)] = key
     sequences[length(sequences)] = -1
@@ -153,12 +138,10 @@ BEGIN {
   } # Same indent
   else if (indent == last_indent )
   {
-# if (key == "command")
-#   print "%%%", indent, last_indent, sequence
     # Corner case
     if ( length(paths) == 0)
     {
-      paths[0]
+      paths[0]=""
       sequences[0]=-1
       indents[0]=0
     }
@@ -172,15 +155,6 @@ BEGIN {
   assert(length(paths) == length(indents), "#Path != #indents")
   assert(length(paths) == length(sequences), "#Path != #sequences")
 
-# if (key == "command")
-# {
-#   print key, sequence, indent, last_indent
-#   pa(paths)
-#   pa(indents)
-#   print get_path(), "=", remain
-#   print "==="
-#   exit
-# }
   print get_path(), "=", remain
 }
 
