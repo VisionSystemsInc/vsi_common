@@ -54,6 +54,10 @@ BEGIN {
 }
 
 {
+  if ($0 ~ /^ *$/)
+    next
+
+
   #### Parse line ####
   match($0, "^ *")
   indent = RLENGTH
