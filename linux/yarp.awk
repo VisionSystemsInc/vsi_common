@@ -76,11 +76,13 @@ BEGIN {
   last_indent = 0
 }
 
+function get_indent(str)
 {
-  # Skip blank lines
-  if ($0 ~ /^[ #]*$/)
-    next
+  match(str, "^ *")
+  return RLENGTH
+}
 
+{
   # Handle multiline output from docker-compose config
   while (match($0, /\\$/))
   {
@@ -90,13 +92,37 @@ BEGIN {
     $0 = $0 line
   }
 
-  # No support for multiline (|) or (>)
+  # Skip blank lines
+  if ($0 ~ /^[ #]*$/)
+  {
+    # print "Whaaaaat"
+    next
+  }
+  # else
+  # {
+  #   print "huh "length($0)" X"$0"X"
+  # }
+
+  # # No support for multiline (|) or (>)
+  # if (match($0, /\|$/))
+  # {
+  #   1
+  # }
+
+  # if (match($0, />$/))
+  # {
+  #   1
+  # }
+
+  # If a commented line, skip it too
+  if ($0 ~ /^ *#/)
+    next
+
   # Doesn't handle # comment, since they might be quoted, and I just don't want
   # to deal with that
 
   #### Parse line ####
-  match($0, "^ *")
-  indent = RLENGTH
+  indent = get_indent($0)
   # 0 no match, 1 match
   sequence = match($0, "^ *- *")
   remain = substr($0, 1+max(RLENGTH, indent))
