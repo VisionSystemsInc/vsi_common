@@ -24,7 +24,7 @@ function join(array, sep)
 
 function get_path()
 {
-
+  return join(path, ".")
 }
 
 function pa(array)
@@ -72,16 +72,17 @@ BEGIN {
   else
     key = "\"\""
 
-  # Count the - as an indent
-  indent = indent + sequence*2
+  # # Count the - as an indent
+  # indent = indent + sequence*2
   #### Process line ####
 
   # No support for multiline (|)
 
   # Unindenting
-  if ( indent < last_indent ) # || (sequence && indent == last_indent) )
+  if ( indent < last_indent )
   {
-    while ( length(indents) && indents[length(indents)-1] >= indent )
+    # Add sequence, because in the sequence case, it's > not >=
+    while ( length(indents) && indents[length(indents)-1] >= indent + sequence )
     {
       delete indents[length(indents)-1]
       delete path[length(path)-1]
@@ -89,18 +90,6 @@ BEGIN {
     }
     last_indent = indent
   }
-
-  # if ( sequence && indent == last_indent )
-  # {
-  #   print "ping"
-  #   while ( length(indents) && indents[length(indents)-1] > indent )
-  #   {
-  #     print indent, indents[length(indents)-1], "deleting", path[length(path)-1]
-  #     delete indents[length(indents)-1]
-  #     delete path[length(path)-1]
-  #     delete sequences[length(sequences)-1]
-  #   }
-  # }
 
   # Indenting
   if ( indent > last_indent )
@@ -113,7 +102,7 @@ BEGIN {
 
       if ( key != "\"\"" )
       {
-        last_indent = indent
+        indent += 2
         indents[length(indents)] = indent
         path[length(path)] = key
         sequences[length(sequences)] = -1
@@ -132,12 +121,11 @@ BEGIN {
     {
       path[0]
       sequences[0]=0
-      indents[0]
+      indents[0]=0
     }
 
     if ( sequence )
     {
-      print "-===-"
       sequences[length(sequences)-1]++
       path[length(path)-1] = "["sequences[length(sequences)-1]"]"
     }
@@ -146,7 +134,7 @@ BEGIN {
   }
   last_indent = indent
 
-  print join(path, "."), "=", remain
+  print get_path(), "=", remain
   # print indent, sequence, key, remain
 }
 
