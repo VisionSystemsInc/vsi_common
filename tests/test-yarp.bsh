@@ -4,23 +4,91 @@
 
 VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 
-common_yarp_test()
+check_ans()
 {
-  [ "$(echo 'a:' | yarp)" = "a = " ]
+  [ "$(yarp <<< "${doc}")" = "${ans}" ]
 }
 
-begin_test "yarp metadata"
-(
-  setup_test
-  . "${VSI_COMMON_DIR}/linux/yarp"
+common_yarp_test()
+{
+  doc="a:"
+  ans="a ="
+  check_ans
 
-  [ "$(_yarp_meta < /dev/null)" = "" ]
-  [ "$(echo "" | _yarp_meta)" = "-1 0" ]
-  [ "$(echo "a:" | _yarp_meta)" = "0 0" ]
-  [ "$(echo "  a:" | _yarp_meta)" = "2 0" ]
-  [ "$(echo $'a:\n  b:\n    c: \n - d' | _yarp_meta)" = $'0 0\n2 0\n4 0\n1 1' ]
-)
-end_test
+  doc="
+a:"
+  check_ans
+
+  doc="
+a:
+"
+  check_ans
+
+  doc="\
+a:
+  - 1
+  - 2"
+  ans="\
+a =
+a[0] = 1
+a[1] = 2"
+  check_ans
+
+  doc="\
+a:
+- 1
+- 2"
+  # check_ans # This actually fails, and needs to be fixed
+
+  doc="\
+a:
+  b:
+  - 1
+  - 2"
+  ans="\
+a =
+a.b =
+a.b[0] = 1
+a.b[1] = 2"
+  # check_ans # This actually fails, and needs to be fixed
+
+  doc="\
+a:
+  - kit
+  - kat
+b:
+  c: car
+d:
+  - food: true
+    cool: cat
+  - fruit: loop"
+  ans="\
+a =
+a[0] = kit
+a[1] = kat
+b =
+b.c = car
+d =
+d[0].food = true
+d[0].cool = cat
+d[1].fruit = loop"
+  check_ans
+
+  doc="\
+a:
+  b:
+    c:
+      - d
+      - e
+f:"
+  ans="\
+a =
+a.b =
+a.b.c =
+a.b.c[0] = d
+a.b.c[1] = e
+f ="
+}
 
 begin_test "yarp function"
 (

@@ -138,7 +138,10 @@ function process_line(str)
 
 function print_line()
 {
-  print get_path(), "=", remain
+  if (remain == "")
+    print get_path(), "="
+  else
+    print get_path(), "=", remain
 }
 
 function pre_process_line()
