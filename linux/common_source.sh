@@ -1,7 +1,7 @@
 #*# linux/common_source
 
 # Use the sh POSIX compliant version of source_once
-source_once > /dev/null 2>&1 && return
+source_once > /dev/null 2>&1 && return 0
 
 #**
 # =============
