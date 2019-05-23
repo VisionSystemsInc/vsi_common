@@ -63,7 +63,7 @@ source "${VSI_COMMON_DIR}/linux/isin"
 # .. note::
 #   Does not clear the array named by ``$1``. So if the array had 4 elements in it and :func:`dynamic_set_a` is called with 3 elements, the 4th element is still set.
 #
-# This is not a bug, but by design. "unset" the array prior to calling :func:`dynamic_set_a` if you wish to avoid this.
+#   This is not a bug, but by design. If this was done for you, array attributes would be lost. "unset" the array prior to calling :func:`dynamic_set_a` if you wish to avoid this.
 #**
 function dynamic_set_a()
 {
@@ -541,36 +541,30 @@ function array_length()
 #             * ``$3`` - Destination Array
 #
 # Destination array becomes values of array 2 not in array 1 (1 - 2)
-#
-# .. note::
-#   Does not clear the destinations array named by ``$3``. So if the array had 4 elements in it and only 3 elements are written, the 4th element is still set. Be sure to clear your arrays.
 #**
 function subtract_array()
 {
   local __element_array_target_a="$1[@]"
   local __element_array_target_a2="$2[@]"
+  local __element_array_target=() # Copy of output
 
-  if [ "$(array_length "$2")" -le 0 ]; then
-    dynamic_set_a $3 "${!__element_array_target_a}"
-    return 0
-  elif [ "$(array_length "$1")" -le 0 ]; then
-    return 0
-  fi
+  local __element_array_target_x= # Skip variable
+  local __element_array_target_s
+  local __element_array_target_s2
 
-  local skip=
-  local -i k=0
-
-  for __element_array_target_s in "${!__element_array_target_a}"; do
-    for __element_array_target_s2 in "${!__element_array_target_a2}"; do
+  for __element_array_target_s in ${!1+"${!__element_array_target_a}"}; do
+    for __element_array_target_s2 in ${!2+"${!__element_array_target_a2}"}; do
       if [ "${__element_array_target_s}" = "${__element_array_target_s2}" ]; then
-        skip=1
+        __element_array_target_x=1
         break
       fi
     done
-    if [ -z $skip ]; then
-      read -r "$3[$k]" <<< "${__element_array_target_s}"
-      k+=1
+    if [ -z $__element_array_target_x ]; then
+      __element_array_target+=("${__element_array_target_s}")
     fi
-    skip=
+    __element_array_target_x=
   done
+
+  clear_a "$3"
+  dynamic_set_a "$3" ${__element_array_target+"${__element_array_target[@]}"}
 }
