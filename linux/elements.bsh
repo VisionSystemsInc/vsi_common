@@ -26,11 +26,13 @@ fi
 #
 # Don't use arrays element_array variable
 #
+#   * __element_array_target
 #   * __element_array_target_a
 #   * __element_array_target_a2
 #   * __element_array_target_s
 #   * __element_array_target_s2
 #   * __element_array_target_d
+#   * __element_array_target_x
 #
 # as the target. It will cause name collision
 #
@@ -128,9 +130,8 @@ function remove_element_a()
   local __element_array_target_a=()
 
   if [ "${!1+set}" == "set" ]; then
-    local target=${1}[@]
-    __element_array_target_a=( ${!target} )
-    unset target
+    __element_array_target_a="${1}[@]"
+    __element_array_target_a=( ${!__element_array_target_a} )
   else # If it's empty/does not exist, there is nothing to remove
     return 0
   fi
@@ -167,13 +168,12 @@ function remove_element_a()
 #**
 function remove_element()
 {
-  local target="${1}"
   local __element_array_target_s=()
-  if [ "${!target+set}" == "set" ]; then
-    __element_array_target_s=( ${!target} )
+  if [ "${!1+set}" == "set" ]; then
+    __element_array_target_s=( ${!1} )
   fi
   remove_element_a __element_array_target_s "${2}"
-  export $target=${__element_array_target_s+"${__element_array_target_s[*]}"}
+  export $1=${__element_array_target_s+"${__element_array_target_s[*]}"}
 }
 
 #**
@@ -201,10 +201,10 @@ function remove_element()
 function add_element_post_a()
 {
   remove_element_a "${1}" "${2}"
-  local target="${1}[@]"
   local __element_array_target_a=()
   if [ "${!1+set}" == "set" ]; then
-    __element_array_target_a=( ${!target} )
+    __element_array_target_a="${1}[@]"
+    __element_array_target_a=( ${!__element_array_target_a} )
   fi
   dynamic_set_a "${1}" ${__element_array_target_a+"${__element_array_target_a[@]}"} "${2}"
 }
@@ -220,13 +220,12 @@ function add_element_post_a()
 #**
 function add_element_post()
 {
-  local target="${1}"
   local __element_array_target_s=()
-  if [ "${!target+set}" == "set" ]; then
-    __element_array_target_s=( ${!target} )
+  if [ "${!1+set}" == "set" ]; then
+    __element_array_target_s=( ${!1} )
   fi
   add_element_post_a __element_array_target_s "${2}"
-  export $target=${__element_array_target_s+"${__element_array_target_s[*]}"}
+  export $1=${__element_array_target_s+"${__element_array_target_s[*]}"}
 }
 
 #**
@@ -254,10 +253,10 @@ function add_element_post()
 function add_element_pre_a()
 {
   remove_element_a "${1}" "${2}"
-  local target="${1}[@]"
   local __element_array_target_a=()
   if [ "${!1+set}" == "set" ]; then
-    __element_array_target_a=( ${!target} )
+    __element_array_target_a="${1}[@]"
+    __element_array_target_a=( ${!__element_array_target_a} )
   fi
   dynamic_set_a "${1}" "${2}" ${__element_array_target_a+"${__element_array_target_a[@]}"}
 }
@@ -273,13 +272,12 @@ function add_element_pre_a()
 #**
 function add_element_pre ()
 {
-  local target="${1}"
   local __element_array_target_s=()
-  if [ "${!target+set}" == "set" ]; then
-    __element_array_target_s=( ${!target} )
+  if [ "${!1+set}" == "set" ]; then
+    __element_array_target_s=( ${!1} )
   fi
   add_element_pre_a __element_array_target_s "${2}"
-  export $target=${__element_array_target_s+"${__element_array_target_s[*]}"}
+  export $1=${__element_array_target_s+"${__element_array_target_s[*]}"}
 }
 
 #**
@@ -298,10 +296,10 @@ function cmp_elements_a()
   local __element_array_target_a2
 
   # Have to copy https://unix.stackexchange.com/a/374094/123413 Thanks darwin!
-  x="${1}[@]"
-  __element_array_target_a=(${!1+"${!x}"})
-  x="${2}[@]"
-  __element_array_target_a2=(${!2+"${!x}"})
+  __element_array_target_a="${1}[@]"
+  __element_array_target_a=(${!1+"${!__element_array_target_a}"})
+  __element_array_target_a2="${2}[@]"
+  __element_array_target_a2=(${!2+"${!__element_array_target_a2}"})
 
   if [ ${#__element_array_target_a[@]} -ne ${#__element_array_target_a2[@]} ]; then
     return 1
@@ -400,7 +398,7 @@ function join_a()
     # in remove_element_a
   fi
 
-  local target="$1"
+  local __element_array_target="$1"
   shift 1
 
   local MIFS="${MIFS-//}"
@@ -413,7 +411,7 @@ function join_a()
     shift 1
   done
 
-  read -r "${target}" <<< "${__element_array_target_s-}"
+  read -r "${__element_array_target}" <<< "${__element_array_target_s-}"
 }
 
 #**
@@ -470,7 +468,7 @@ function join_a_out()
 function is_array()
 {
   local var_name="${1}"
-  local signature="$(declare -p "${var_name}")"
+  local signature="$(declare -p "${var_name}" 2>/dev/null)"
 
   # Handle Bash 4.2 namereffing https://stackoverflow.com/a/42877229/4166604
   local regex='^declare -[[:alpha:]]*n[[:alpha:]]* [^=]+=\"([^\"]+)\"$'
@@ -514,6 +512,28 @@ function to_array()
 }
 
 #**
+# .. function:: array_length
+#
+# :Arguments: * ``$1`` - Array name
+# :Output: *stdout* - number of elements in the array. -1 for variable not defined.
+#
+# Echoes out the length of the array. If the variable is not defined, echos -1.
+#
+# .. note::
+#   Does not differentiate between an array of legnth 1 and a non-array variable. Use :func:`is_array` for that
+#**
+function array_length()
+{
+  if ! declare -p "$1" &> /dev/null; then
+    echo -1
+  else
+    local __element_array_target_x="$1[@]"
+    __element_array_target_x=(${!1+"${!__element_array_target_x}"})
+    echo "${#__element_array_target_x[@]}"
+  fi
+}
+
+#**
 # .. function:: subtract_array
 #
 # :Arguments: * ``$1`` - Array 1
@@ -527,26 +547,28 @@ function to_array()
 #**
 function subtract_array()
 {
-  local __element_array_target_a
+  local __element_array_target_a="$1[@]"
+  local __element_array_target_a2="$2[@]"
 
-  local a3_len="#$3[@]"
+  if [ "$(array_length "$2")" -le 0 ]; then
+    dynamic_set_a $3 "${!__element_array_target_a}"
+    return 0
+  elif [ "$(array_length "$1")" -le 0 ]; then
+    return 0
+  fi
+
   local skip=
-  local a1="$1[@]"
-  local a2="$2[@]"
-
-  local i1
-  local i2
   local -i k=0
 
-  for i1 in "${!a1}"; do
-    for i2 in "${!a2}"; do
-      if [ "${i1}" = "${i2}" ]; then
+  for __element_array_target_s in "${!__element_array_target_a}"; do
+    for __element_array_target_s2 in "${!__element_array_target_a2}"; do
+      if [ "${__element_array_target_s}" = "${__element_array_target_s2}" ]; then
         skip=1
         break
       fi
     done
     if [ -z $skip ]; then
-      read -r "$3[$k]" <<< "${i1}"
+      read -r "$3[$k]" <<< "${__element_array_target_s}"
       k+=1
     fi
     skip=
