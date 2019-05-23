@@ -1,3 +1,20 @@
+# function pa(array)
+# {
+#   print "----"
+#   for (xx in array)
+#     print "["xx"]"array[xx]
+#   print "---"
+# }
+
+# function assert(condition, string)
+# {
+#   if (! condition) {
+#     printf("%s:%d: assertion failed: %s\n", FILENAME, FNR, string) > "/dev/stderr"
+#     _assert_exit = 1
+#     exit 1
+#   }
+# }
+
 function lstrip(str)
 {
   strip = match(str, /[^ ]/)
@@ -32,23 +49,6 @@ function get_path()
   return result
 }
 
-function pa(array)
-{
-  print "----"
-  for (xx in array)
-    print "["xx"]"array[xx]
-  print "---"
-}
-
-function assert(condition, string)
-{
-  if (! condition) {
-    printf("%s:%d: assertion failed: %s\n", FILENAME, FNR, string) > "/dev/stderr"
-    _assert_exit = 1
-    exit 1
-  }
-}
-
 function process_sequence(sequence, key, indents, paths, sequences)
 {
   if ( sequence )
@@ -67,75 +67,25 @@ function process_sequence(sequence, key, indents, paths, sequences)
     sequences[length(sequences)-1] = -1
 }
 
-BEGIN {
-  # Initialize empty arrays
-  delete paths[0]
-  delete indents[0]
-  delete sequences[0]
-
-  last_indent = 0
-}
-
 function get_indent(str)
 {
-  match(str, "^ *")
+  match(str, /^ */)
   return RLENGTH
 }
 
+function process_line(str)
 {
-  # Add compatibility for handling Windows line endings on Linux
-  # (Still works in Windows with \r removed)
-  if (length($0) && substr($0, length($0)) == "\r" )
-    $0 = substr($0, 0, length($0)-1)
-
-  # Handle multiline output from docker-compose config
-  while (match($0, /\\$/))
-  {
-    $0 = substr($0, 0, length($0)-1)
-    getline line
-    line = lstrip(line)
-    $0 = $0 line
-  }
-
-  # Skip blank lines
-  if ($0 ~ /^[ #]*$/)
-  {
-    next
-  }
-  # else
-  # {
-  #   print "huh "length($0)" X"$0"X"
-  # }
-
-  # # No support for multiline (|) or (>)
-  # if (match($0, /\|$/))
-  # {
-  #   1
-  # }
-
-  # if (match($0, />$/))
-  # {
-  #   1
-  # }
-
-  # If a commented line, skip it too
-  if ($0 ~ /^ *#/)
-    next
-
-  # Doesn't handle # comment, since they might be quoted, and I just don't want
-  # to deal with that
-
   #### Parse line ####
-  indent = get_indent($0)
+  indent = get_indent(str)
   # 0 no match, 1 match
-  sequence = match($0, "^ *- *")
-  remain = substr($0, 1+max(RLENGTH, indent))
+  sequence = match(str, /^ *- */)
+  remain = substr(str, 1+max(RLENGTH, indent))
 
-  key = match(remain, "^[^ '\":]+ *: *")
+  key = match(remain, /^[^ '":]+ *: */)
   if ( key )
   {
     tmp = RLENGTH
-    match(remain, " *: *")
+    match(remain, / *: */)
     key = substr(remain, 1, tmp-RLENGTH)
     remain = substr(remain, tmp+1)
   }
@@ -182,13 +132,90 @@ function get_indent(str)
   }
   last_indent = indent
 
-  assert(length(paths) == length(indents), "#Path != #indents")
-  assert(length(paths) == length(sequences), "#Path != #sequences")
+  # assert(length(paths) == length(indents), "#Path != #indents")
+  # assert(length(paths) == length(sequences), "#Path != #sequences")
+}
 
+function print_line()
+{
   print get_path(), "=", remain
 }
 
-END {
-  if (_assert_exit)
-    exit 1
+function pre_process_line()
+{
+  # Add compatibility for handling Windows line endings on Linux
+  # (Still works in Windows with \r removed)
+  if (length($0) && substr($0, length($0)) == "\r" )
+    $0 = substr($0, 0, length($0)-1)
+
+  # Handle multiline output from docker-compose config
+  while (match($0, /\\$/))
+  {
+    $0 = substr($0, 0, length($0)-1)
+    getline line
+    line = lstrip(line)
+    $0 = $0 line
+  }
+
+  # Skip blank lines and comment lines (This doesn't include comments after
+  # valid yaml... That's harder to parse validly in awk :-P
+  if ($0 ~ /^ *($|#)/)
+  {
+    return 1
+  }
+
+  # The idea was to:
+  # 1) detect a multiline
+  # 2) getline
+  # 3) store indent as multiline indent
+  # 4) add everything after intent to value
+  # 5) getline
+  #    - check if indent is greater than or equal to
+  #    - remove multiline indent spaces
+  #    - Add \n + rest to value
+  #    - (blank lines count as new lines)
+  #    - Repeat until indent is less than multiline indent
+  #    - Process line, then take the line that was just read that wasn't part
+  #      of the multiline, and start the main awk loop all over again with that
+  #      value. This part is try, since I can only do next in the main loop
+
+  # However... docker-compose parses this for you, so there's no need to do
+  # this anymore :)
+
+  # Detect multiline (|)
+  # if (match($0, /^[^#|'"]*\| *($|#)/))
+  # {
+  #   print "MULTILINE"
+  # }
+  # if (match($0, /^[^#|'"]*> *($|#)/))
+  # {
+  #   1
+  # }
+
+  # Doesn't handle # comment, since they might be quoted, and I just don't want
+  # to deal with that
+
+  return 0
 }
+
+BEGIN {
+  # Initialize empty arrays
+  delete paths[0]
+  delete indents[0]
+  delete sequences[0]
+
+  last_indent = 0
+}
+
+# Main
+{
+  if (pre_process_line())
+    next
+  process_line($0)
+  print_line()
+}
+
+# END {
+#   if (_assert_exit)
+#     exit 1
+# }
