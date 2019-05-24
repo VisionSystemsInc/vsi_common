@@ -1,10 +1,17 @@
-# function pa(array)
-# {
-#   print "----"
-#   for (xx in array)
-#     print "["xx"]"array[xx]
-#   print "---"
-# }
+function pa(array)
+{
+  print "----"
+  for (xx in array)
+    print "["xx"]"array[xx]
+  print "---"
+}
+
+function d()
+{
+  print "P", join(paths)
+  print "S", join(sequences)
+  print "I", join(indents)
+}
 
 # function assert(condition, string)
 # {
@@ -14,6 +21,19 @@
 #     exit 1
 #   }
 # }
+
+function join(a)
+{
+  if (length(a) > 0)
+  {
+    r = a[0]
+    for (x = 1; x < length(a); x++)
+      r += ","a[x]
+    return r
+  }
+  else
+    return "\"\""
+}
 
 function lstrip(str)
 {
@@ -91,6 +111,10 @@ function process_line(str)
   }
   else
     key = "\"\""
+
+  # # This will make unindented sequences work.
+  # if (indent == last_indent)
+  #   indent = indent + 0.1 * sequence
 
   #### Process line ####
 
