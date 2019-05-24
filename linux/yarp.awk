@@ -1,40 +1,3 @@
-function pa(array)
-{
-  print "----"
-  for (xx in array)
-    print "["xx"]"array[xx]
-  print "---"
-}
-
-function d()
-{
-  print "P", join(paths)
-  print "S", join(sequences)
-  print "I", join(indents)
-}
-
-# function assert(condition, string)
-# {
-#   if (! condition) {
-#     printf("%s:%d: assertion failed: %s\n", FILENAME, FNR, string) > "/dev/stderr"
-#     _assert_exit = 1
-#     exit 1
-#   }
-# }
-
-function join(a)
-{
-  if (length(a) > 0)
-  {
-    r = a[0]
-    for (x = 1; x < length(a); x++)
-      r += ","a[x]
-    return r
-  }
-  else
-    return "\"\""
-}
-
 function lstrip(str)
 {
   strip = match(str, /[^ ]/)
@@ -112,10 +75,6 @@ function process_line(str)
   else
     key = "\"\""
 
-  # # This will make unindented sequences work.
-  # if (indent == last_indent)
-  #   indent = indent + 0.1 * sequence
-
   #### Process line ####
 
   # Unindenting
@@ -155,9 +114,6 @@ function process_line(str)
     process_sequence(sequence, key, indents, paths, sequences)
   }
   last_indent = indent
-
-  # assert(length(paths) == length(indents), "#Path != #indents")
-  # assert(length(paths) == length(sequences), "#Path != #sequences")
 }
 
 function print_line()
@@ -241,8 +197,3 @@ BEGIN {
   process_line($0)
   print_line()
 }
-
-# END {
-#   if (_assert_exit)
-#     exit 1
-# }
