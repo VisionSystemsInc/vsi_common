@@ -792,3 +792,28 @@ def nested_patch(obj, condition, patch, _spare_key = None):
     if condition(_spare_key, obj):
       return patch(_spare_key, obj)
     return obj
+
+def nested_patch_inplace(obj, condition, patch, _spare_key = None):
+  ''' Destructive inplace version of :func:vsi.tools.python.nested_patch`
+  '''
+  # Handle mapping
+  if isinstance(obj, Mapping):
+    for key, value in obj.items():
+      if isinstance(value, Mapping):
+        nested_patch_inplace(value, condition, patch) # Inplace
+      # This would work but adds extra recursions and tests
+      # else:
+      #   obj[key] = nested_patch_inplace(value, condition, patch, key)
+      elif not isinstance(value, str) and isinstance(value, Iterable):
+        obj[key] = nested_patch_inplace(value, condition, patch, key)
+      elif condition(key, value):
+        obj[key] = patch(key, value)
+    return obj
+  # Handle iterable
+  elif not isinstance(obj, str) and isinstance(obj, Iterable):
+    return type(obj)(nested_patch_inplace(val, condition, patch, _spare_key) for val in obj)
+  # Handle everything else
+  else:
+    if condition(_spare_key, obj):
+      return patch(_spare_key, obj)
+    return obj
