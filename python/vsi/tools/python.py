@@ -3,7 +3,7 @@ from __future__ import print_function # Python2 compat
 from functools import (wraps, update_wrapper, WRAPPER_UPDATES,
                        WRAPPER_ASSIGNMENTS)
 
-from collections import Mapping, Iterable
+from collections.abc import Mapping, Iterable
 import inspect
 import sys
 
@@ -654,12 +654,12 @@ def nested_update(d, *args, **kwargs):
 
   Parameters
   ----------
-  d : dict
-      The dict to be updated
+  d : MutableMapping
+      The MutableMapping (such as dict) to be updated
   *args : args
-      Same arguments as dict.update
+      Same arguments as dict.update (Mapping __init__)
   **kwargs : args
-      Same arguments as dict.update
+      Same arguments as dict.update (Mapping __init__)
   '''
   u = dict(*args, **kwargs)
   try:
@@ -669,7 +669,7 @@ def nested_update(d, *args, **kwargs):
 
   for k, v in items:
     if isinstance(v, Mapping):
-      d[k] = nested_update(d.get(k, {}), v)
+      d[k] = nested_update(d.get(k, type(d)()), v)
     else:
       d[k] = v
   return d

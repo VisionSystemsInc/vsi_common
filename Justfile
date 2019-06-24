@@ -58,7 +58,7 @@ function caseify()
       ;;
     test_python) # Run python unit tests
       Docker-compose run python3
-      Docker-compose run python2
+      # Docker-compose run python2
       # python3 -B -m unittest discover -s "${VSI_COMMON_DIR}/python/vsi/test"
       ;;
     build_docker) # Build docker image

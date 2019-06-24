@@ -651,7 +651,7 @@ class Capture(RedirectBase): #version 1
         self.std_cs.append([])
         self.std_pys.append(['stderr'])
 
-    self.buffers = [''] * len(self.std_cs)
+    self.buffers = [bytes()] * len(self.std_cs)
 
     super(Capture, self).__init__()
 
