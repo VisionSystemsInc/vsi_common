@@ -649,30 +649,32 @@ def command_list_to_string(cmd):
     from pipes import quote
   return ' '.join([quote(x) for x in cmd])
 
-def nested_update(d, *args, **kwargs):
+def nested_update(dict_, *args, **kwargs):
   ''' Updated a dictionary in a nested fashion
 
   Parameters
   ----------
-  d : MutableMapping
-      The MutableMapping (such as dict) to be updated
+  dict_ : dict
+      The dict to be updated
   *args : args
-      Same arguments as dict.update (Mapping __init__)
+      Same arguments as dict.update
   **kwargs : args
-      Same arguments as dict.update (Mapping __init__)
+      Same arguments as dict.update
   '''
-  u = dict(*args, **kwargs)
-  try:
-    items = u.iteritems()
-  except:
-    items = u.items()
 
-  for k, v in items:
-    if isinstance(v, Mapping):
-      d[k] = nested_update(d.get(k, type(d)()), v)
+  # Don't use dict comprehension or constructor here!
+  for key, value in dict(*args, **kwargs).items():
+    if isinstance(value, Mapping):
+      dict_[key] =  nested_update(dict_.get(key, type(dict_)()), value)
+    elif isinstance(value, Iterable) and not isinstance(value, str):
+      dict_[key] = type(value)(type(dict_)(item)
+                               if isinstance(item, Mapping)
+                               and not isinstance(item, type(dict_))
+                               else item for item in value)
     else:
-      d[k] = v
-  return d
+      dict_[key] = value
+
+  return dict_
 
 def nested_in_dict(dict1, dict2):
   ''' Checks to see if dict1 is in dict2
