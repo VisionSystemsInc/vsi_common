@@ -662,15 +662,27 @@ def nested_update(dict_, *args, **kwargs):
       Same arguments as dict.update
   '''
 
+  # patch iterables
+  def patch_it(v):
+                   # Handle Mappings
+    return type(v)(type(dict_)(item)
+                   if isinstance(item, Mapping)
+                   and not isinstance(item, type(dict_))
+                   # Handle Iterables
+                   else patch_it(item)
+                   if isinstance(item, Iterable)
+                   and not isinstance(item, str)
+                   # Handle Everything else
+                   else item
+                   # Loop through v items
+                   for item in v)
+
   # Don't use dict comprehension or constructor here!
   for key, value in dict(*args, **kwargs).items():
     if isinstance(value, Mapping):
       dict_[key] =  nested_update(dict_.get(key, type(dict_)()), value)
     elif isinstance(value, Iterable) and not isinstance(value, str):
-      dict_[key] = type(value)(type(dict_)(item)
-                               if isinstance(item, Mapping)
-                               and not isinstance(item, type(dict_))
-                               else item for item in value)
+      dict_[key] = patch_it(value)
     else:
       dict_[key] = value
 
