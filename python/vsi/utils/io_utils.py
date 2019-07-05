@@ -251,8 +251,8 @@ def read_vsfm_nvm_file(filename):
     return None
   if len(first_line_toks) > 1 and first_line_toks[1] == 'FixedK':
     # file has fixed calibration info
-    # skip for now
-    print('WARNING: skipping read of fixed calibration info')
+    print('Fixed Calibration Info\nfx:%s\ncx:%s\nfy:%s\ncy:%s\nd:%s\n' % (first_line_toks[2],
+        first_line_toks[3], first_line_toks[4], first_line_toks[5], first_line_toks[6]))
 
   # from here on out, read file on token at a time
   tokgen = read_token(fd, ignore_char='#')
