@@ -1,5 +1,9 @@
 #!/usr/bin/env false
 
+if [[ $- != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
 #*# linux/dir_tools
 
 #**
@@ -36,23 +40,23 @@ parent_find_files()
   done
 
   \pushd . > /dev/null
-  # Search for the file until some match is found
-  while [ "${#file_matches[@]}" -eq 0 ]; do
-    for name in "${@}"; do
-      if [ -f "${name}" ]; then
-        file_matches+=("$(\cd "$(\dirname "${name}")"; \pwd)/$(\basename "${name}")")
+    # Search for the file until some match is found
+    while [ "${#file_matches[@]}" -eq 0 ]; do
+      for name in "${@}"; do
+        if [ -f "${name}" ]; then
+          file_matches+=("$(\cd "$(dirname "${name}")"; \pwd)/$(basename "${name}")")
+        fi
+      done
+
+      pwd_before="${PWD}"
+
+      \cd ..
+
+      # This works both when PWD starts with / and //
+      if [ "${PWD}" == "${pwd_before}" ]; then
+        break
       fi
     done
-
-    pwd_before="${PWD}"
-
-    cd ..
-
-    # This works both when PWD starts with / and //
-    if [ "${PWD}" == "${pwd_before}" ]; then
-      break
-    fi
-  done
   \popd > /dev/null
 }
 
@@ -240,4 +244,30 @@ basenames()
   min=$(($min<0?0:$min))
 
   echo ${components+"${components[*]:${min}}"}
+}
+
+dirname()
+{
+  # Remove trailing slashes
+  local dn="${1%${1##*[!/]}}"
+  dn=${dn%/*}
+  # If no slashes were found
+  if [ "${dn}" = "${1}" ]; then
+    # must be .
+    echo -n .
+  # /abc should be /, not empty
+  elif [ -z "${dn}" ]; then
+    echo -n /
+  else
+    # else found
+    echo -n "${dn}"
+  fi
+}
+
+basename()
+{
+  # Remove trailing slashes
+  local bn="${1%${1##*[!/]}}"
+  bn=${bn##*/}
+  echo -n "${bn}"
 }

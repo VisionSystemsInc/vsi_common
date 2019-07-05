@@ -1,5 +1,8 @@
 #*# linux/common_source
 
+# Use the sh POSIX compliant version of source_once
+source_once > /dev/null 2>&1 && return 0
+
 #**
 # =============
 # Common Source
@@ -18,7 +21,7 @@
 #**
 
 #**
-# .. function:: VSI_OS
+# .. envvar:: VSI_OS
 #
 # Operating system name
 #
@@ -322,6 +325,10 @@ if [ -f /etc/os-release ]; then
                 # Capture ubuntu derivatives are debian derived
                 if [ "${ID_LIKE-}" = "ubuntu" ]; then
                   ID_CORE=debian
+                # Opensuse leap does it in the backwards order of centos
+                elif [ "${ID-}" = "opensuse-leap" ]; then
+                  ID_CORE=${ID_LIKE%% *}
+                  ID_LIKE=${ID_LIKE#* }
                 # If there is a space, this is like centos that says "rhel fedora"
                 elif [ "${ID_LIKE+set}" = "set" ] && [ "${ID_LIKE}" != "${ID_LIKE%% *}" ]; then
                   ID_CORE=${ID_LIKE#* }
@@ -543,6 +550,9 @@ VSI_ARCH="$(uname -m)"
 
 case "${VSI_OS}" in
   darwin)
+    if [ "$(sw_vers -buildVersion)" = "Darling" ]; then
+      VSI_DISTRO=darling
+    fi
     if command -v sysctl >/dev/null 2>&1; then # Normal darwin
       VSI_NUMBER_CORES="$(\sysctl -n hw.ncpu)"
     elif [ -f /Volumes/SystemRoot/proc/cpuinfo ]; then # darling

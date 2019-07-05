@@ -1,3 +1,7 @@
+if [[ $- != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
 JUST_DEFAULTIFY_FUNCTIONS+=(docker_defaultify)
 JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 
@@ -21,6 +25,12 @@ source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
 # :Arguments: [``$1``]... - Recipe names to run
 #
 # Runs ``docker-compose build`` for the docker recipes. Useful command to call before ``docker build`` on your own project that uses recipes in vsi_common, to keep them synced with your build.
+#
+# .. command:: build_recipes-auto
+#
+# :Arguments: ``$1``... - Dockerfiles to parse
+#
+# Scans dockerfiles for ``vsiri/recipe:`` images, and calls :cmd:`build_recipes` on the recipes discovered. Accepts multiple files and ``-`` for stdin
 #
 # .. command:: log
 #
@@ -68,8 +78,41 @@ function docker_defaultify()
   shift 1
   case $arg in
     build_recipes) # Build recipes
-      JUST_DOCKER_COMPOSE_DIR="${VSI_COMMON_DIR}/docker/recipes" Docker-compose build ${@+"${@}"}
-      extra_args+=$#
+      JUST_DOCKER_COMPOSE_DIR="${VSI_COMMON_DIR}/docker/recipes" \
+          COMPOSE_FILE="${VSI_COMMON_DIR}/docker/recipes/docker-compose.yml" \
+          Docker-compose build ${@+"${@}"}
+      extra_args=$#
+      ;;
+    build_recipes-auto) # Build recipes used in specified dockerfiles. "-" for \
+                        # stdin; multiple files (via wildcards) accepted
+      if [ "$#" = "0" ]; then
+        source "${VSI_COMMON_DIR}/linux/colors.bsh"
+        echo "${RED}ERROR:${NC} You must pass at least one argument to build recipes-auto" >&2
+        return 1
+      fi
+
+      source "${VSI_COMMON_DIR}/linux/elements.bsh"
+
+      if ! is_array JUST_DOCKER_RECIPES; then
+        JUST_DOCKER_RECIPES=()
+      fi
+
+      local recipes=($(sed -nE '/^ *[fF][rR][oO][mM] vsiri\/recipe:/{
+                                  s|.*vsiri/recipe:([^ ]+).*|\1|
+                                  /\$/d
+                                  p
+                                }' ${@+"${@}"} | sort -u))
+
+      local tmp=()
+      subtract_array recipes JUST_DOCKER_RECIPES tmp
+      recipes=(${tmp+"${tmp[@]}"})
+
+      JUST_DOCKER_RECIPES=(${JUST_DOCKER_RECIPES+"${JUST_DOCKER_RECIPES[@]}"} ${recipes+"${recipes[@]}"})
+
+      if [ "${#recipes[@]}" != "0" ]; then
+        justify build recipes "${recipes[@]}"
+      fi
+      extra_args=$#
       ;;
     docker_clean) # Delete a docker volume. The next container to use this \
                   # volume will automatically copy any content from the image.
@@ -103,13 +146,13 @@ function docker_defaultify()
         echo "${1} already removed" >&2
       fi
 
-      extra_args+=1
+      extra_args=1
       ;;
     docker-compose_clean) # Delete a docker-compose volume. The next container \
                           # to use this volume will automatically copy any
                           # content from the image.
       justify docker_clean "${COMPOSE_PROJECT_NAME}_${1}"
-      extra_args+=1
+      extra_args=1
       ;;
     docker-compose_enter) # Enter a running container, running an interactive
                           # bash session. Set COMPOSE_SERVICES to limit to a
@@ -119,8 +162,8 @@ function docker_defaultify()
       local containers=($(docker-compose ps -q ${COMPOSE_SERVICES-} || :))
       if [ "${#containers[@]}" == 0 ]; then
         echo "No running containers found"
-        extra_args+=$#
-        return
+        extra_args=$#
+        return 0
       elif [ "${#containers[@]}" == 1 ]; then
         local picked=1
       else
@@ -135,15 +178,14 @@ function docker_defaultify()
       fi
 
       # Give the dev a way to override the -it flags, should they ever need to
-      which set_temp_array
-      local DOCKER_EXTRA_EXEC_ARGS="${DOCKER_EXTRA_EXEC_ARGS--it}"
+      local DOCKER_EXTRA_EXEC_ARGS=("${DOCKER_EXTRA_EXEC_ARGS[@]--it}")
 
       if [ "$#" = "0" ]; then
         Docker exec "${containers[$((picked-1))]}" bash
       else
         Docker exec "${containers[$((picked-1))]}" ${@+"${@}"}
       fi
-      extra_args+=$#
+      extra_args=$#
       ;;
     docker-compose_log) # Show logs from all service containers. Optionally \
          # specify service names to only log specific containers. Bug: Does \
@@ -152,7 +194,7 @@ function docker_defaultify()
       # Override the log target in your Justfile and call __docker-compose-log
       # if you need to set other parameters
       justify __docker-compose-log ${@+"${@}"}
-      extra_args+=$#
+      extra_args=$#
       ;;
     __docker-compose-log)
       function stop_logging(){ JUST_STOP_LOGGING=1; }
@@ -167,17 +209,17 @@ function docker_defaultify()
       done
       trap - INT
       trap - TERM
-      extra_args+=$#
+      extra_args=$#
       ;;
 
     docker) # Run generic docker command
       Docker ${@+"${@}"}
-      extra_args+=$#
+      extra_args=$#
       ;;
 
     docker-compose) # Run generic docker-compose command
       Just-docker-compose ${@+"${@}"}
-      extra_args+=$#
+      extra_args=$#
       ;;
     *)
       plugin_not_found=1
@@ -221,7 +263,8 @@ function _docker_clean_actions()
       if [[ ${volume_inspect} =~ $pattern ]]; then
         # Parse \" to "
         setup_cmd="${BASH_REMATCH[1]//\\\"/\"}"
-        # Evaluate this string into arguments
+        # Evaluate this string into arguments. By definition this is arbitrary
+        # code execution, so eval is acceptable.
         eval "setup_cmd=(${setup_cmd})"
         # Run the just target
         justify "${setup_cmd[@]}"

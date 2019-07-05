@@ -178,14 +178,24 @@ function print_error()
   local stack=''
   local line
   echo
-  echo 'Call stack'
-  echo '----------'
+  if [ -e /.dockerenv ]; then
+    source "${VSI_COMMON_DIR}/linux/colors.bsh"
+    echo "Call stack ${YELLOW-}(in docker container)${NC-}"
+    echo '--------------------------------'
+  else
+    echo 'Call stack'
+    echo '----------'
+  fi
   local -i i=0
   while line=("$(caller $i)"); do
-    stack+="$(sed $'s| |\t|;s| |\t|' <<< "${line}")"$'\n'
+    stack+="$(sed $'s| |\t|2' <<< "${line}")"$'\n'
     ((++i))
   done
-  column -c1 -s $'\t' -t <<< "${stack}"
+  if command -v column &> /dev/null; then
+    column -c1 -s $'\t' -t <<< "${stack}"
+  else
+    echo "${stack}"
+  fi
   echo
   echo "$1: line $2: Returned $rv" >&2
   # echo
@@ -195,7 +205,6 @@ function print_error()
   #   echo "${BASH_LINENO[$i]} ${FUNCNAME[$i]} ${BASH_SOURCE[$i]}"
   #   ((++i))
   # done
-
 }
 trap 'print_error "${BASH_SOURCE[0]}" "${LINENO}"' ERR
 
@@ -207,8 +216,13 @@ trap 'print_error "${BASH_SOURCE[0]}" "${LINENO}"' ERR
 # Currently one use of this is dual purposing a file, so that it behaves differently when sourced by just or by a user on the prompts
 #**
 JUST_IN_SCRIPT=1
-
-: ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
+# Speed up dirname/basename
+source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
+# Activate source_once
+source "${VSI_COMMON_DIR}/linux/source_once.bsh"
 source "${VSI_COMMON_DIR}/linux/just_functions.bsh"
 
 #**
@@ -231,15 +245,23 @@ source "${VSI_COMMON_DIR}/linux/just_functions.bsh"
 #**
 
 : ${JUSTFILE=Justfile}
+
+# Solve #130
+if [ "${JUSTFILE:0:1}" = "." ]; then
+  JUSTFILE="$(real_path "${JUSTFILE}")"
+fi
+
 if ! _just_load_justfile "${JUSTFILE}" && \
    [ "${1-}" != "--new" ] && \
    [ "${1-}" != "--tab" ] && \
    [ "${1-}" != "--latest" ] && \
    [ "${1-}" != "--version" ]; then
-    echo "Can't find a suitable configuration file in this directory or any" >&2
-    echo "parent. Are you in the right directory?" >&2
+    source "${VSI_COMMON_DIR}/linux/colors.bsh"
+
+    echo "${RED}Can't find a suitable configuration file in this directory or any" >&2
+    echo "parent. Are you in the right directory?${NC}" >&2
     echo >&2
-    echo "Supported filenames: \"Justfile\" or value of \${JUSTFILE}" >&2
+    echo "Supported filenames: ${YELLOW}\"Justfile\" or value of \${JUSTFILE} (${JUSTFILE-unset})${NC}" >&2
     echo >&2
 fi
 

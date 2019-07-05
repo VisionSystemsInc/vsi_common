@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-. "$(dirname "${BASH_SOURCE[0]}")/testlib.sh"
+. "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
 . "$(dirname "${BASH_SOURCE[0]}")/test_utils.bsh"
 
 VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
@@ -387,15 +387,6 @@ begin_test "print help test it all"
 )
 end_test
 
-begin_test "print_command"
-(
-  setup_test
-
-  [ "$(print_command)" = "" ]
-  [ "$(print_command echo test "this'this" "f o  o")" = "echo test 'this'\"'\"'this' 'f o  o'" ]
-)
-end_test
-
 begin_test "defaultify DRYRUN trigger"
 (
   setup_test
@@ -446,7 +437,7 @@ begin_test "justify calls"
     echo "$1) # Blah" >> file1
     echo '  echo ":'"$1"':" ${@+"${@}"}' >> file1
     echo "  extra=${2-0}" >> file1
-    echo '  extra_args+=$(( extra > $# ? $# : extra))' >> file1
+    echo '  extra_args=$(( extra > $# ? $# : extra))' >> file1
     echo '  ;;' >> file1
   }
 
@@ -552,28 +543,27 @@ begin_test "recursive justify calls #81"
 
   JUST_HELP_FILES=(file1)
 
-  echo 'function caseify()' > file1
-  echo '{' >> file1
-  echo '  local just_arg=$1' >> file1
-  echo '  shift 1' >> file1
-  echo '  case ${just_arg} in' >> file1
-  echo '    a) # A' >> file1
-  echo '      echo ":a:" $1' >> file1
-  echo '      justify b $1' >> file1
-  echo '      extra_args+=1' >> file1
-  echo '      ;;' >> file1
-  echo '    b) # B' >> file1
-  echo '      echo ":b:" $1' >> file1
-  echo '      extra_args+=1' >> file1
-  echo '      ;;' >> file1
-  echo '  esac' >> file1
-  echo '}' >> file1
+  function caseify()
+  {
+    local just_arg=$1
+    shift 1
+    case ${just_arg} in
+      a) # A
+        echo ":a:" $1
+        justify b $1
+        extra_args=1
+        ;;
+      b) # B
+        echo ":b:" $1
+        extra_args=1
+        ;;
+    esac
+  }
 
-  . file1
+  declare -pf > file1
 
   [ "$(justify a apple a tree)" = $':a: apple\n:b: apple\n:a: tree\n:b: tree' ]
 )
-
 end_test
 
 begin_test "justify with .justplugins"
@@ -583,7 +573,7 @@ begin_test "justify with .justplugins"
   # Create min plugin
   echo 'JUST_DEFAULTIFY_FUNCTIONS+=(my_defaultify)' > my_plugin
   echo 'JUST_HELP_FILES+=("${BASH_SOURCE[0]}")' >> my_plugin
-  echo 'my_defaultify(){ if [ "$1" = "apple" ]; then echo tree; else return 1; fi; }' >> my_plugin
+  echo 'my_defaultify(){ if [ "$1" = "apple" ]; then echo tree; else plugin_not_found=1; fi; }' >> my_plugin
 
   # Set plugin
   echo 'my_plugin' > .justplugins
@@ -595,7 +585,8 @@ begin_test "justify with .justplugins"
   echo 'source_environment_files blah.env' > Justfile # This is needed, or else plugins don't work
   echo 'caseify(){ defaultify ${@+"${@}"}; }' >> Justfile
 
-  [ "$(just apple)" = "tree" ]
+  [ "$(just apple 2>&1)" = "tree" ]
+  [ "$(just notapple 2>&1 || :)" = "$(set +xv; unknownify notapple 2>&1 || :)" ]
 )
 end_test
 

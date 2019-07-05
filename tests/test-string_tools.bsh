@@ -1,4 +1,6 @@
-. "$(dirname "${BASH_SOURCE[0]}")/testlib.sh"
+#!/usr/bin/env bash
+
+. "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
 . "$(dirname "${BASH_SOURCE[0]}")/test_utils.bsh"
 
 VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
@@ -120,5 +122,36 @@ begin_test "Quote Substitute Escape"
     # eval "z=${y-$(printf '%q' "${x}")}"
     # [ "${z}" = "${x}" ]
   done
+)
+end_test
+
+begin_test "Regex Escape"
+(
+  setup_test
+
+  [ "$(regex_escape abc)" = 'abc' ]
+  [ "$(regex_escape '$.*[\^/')" = '\$\.\*\[\\\^\/' ]
+  [ "$(regex_escape $'ab\nc\n'; echo -n ":")" = $'ab\nc\n\n:' ]
+
+  regex_escape_threshold=2
+  [ "$(regex_escape abc)" = 'abc' ]
+  [ "$(regex_escape '$.*[\^/')" = '\$\.\*\[\\\^\/' ]
+  [ "$(regex_escape $'ab\nc\n'; echo -n ":")" = $'ab\nc\n\n:' ]
+)
+end_test
+
+begin_test "Regex Escape Range"
+(
+  setup_test
+
+  [ "$(regex_escape_range a)" = "[a]" ]
+  [ "$(regex_escape_range abc)" = "[abc]" ]
+  # Normal special characters
+  [ "$(regex_escape_range '!@#$%&*()_+={};'"'"':",./<>?')" = '[!@#$%&*()_+={};'"'"':",./<>?]' ]
+  # ^ by self special case
+  [ "$(regex_escape_range ^)" = "^" ]
+  # other special cases
+  [ "$(regex_escape_range '-^]')" = "[]^-]" ]
+  [ "$(regex_escape_range 'd-a^b]c')" = "[]dabc^-]" ]
 )
 end_test

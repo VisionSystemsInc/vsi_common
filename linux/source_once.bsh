@@ -1,0 +1,84 @@
+#!/usr/bin/env false bash
+
+#*# linux/source_once
+
+#**
+# .. default-domain:: bash
+#
+# ===========
+# Source once
+# ===========
+#
+# .. file:: source_once.bsh
+#
+# The :file:`source_once.bsh` script gives an easy way to have a complex set of scripts that can potentially source the same file, only load a file onces. This will prevent both circular source loops and save time loading less files, in addition to producing less debugging output.
+#
+# To activate the source once feature, the main script need only:
+#
+# .. code:: bash
+#
+#    source ${VSI_COMMON_DIR}/linux/source_once.bsh
+#
+# Every file that you want to be able to used this feature should have the following header
+#
+# .. code:: bash
+#
+#    #!/usr/bin/env bash
+#
+#    if [[ $- != *i* ]]; then
+#      source_once &> /dev/null && return 0
+#    fi
+#
+# This header is written such that ``source_once`` is an optional component. If :file:`source_once.bsh` hasn't been sourced, this feature will do nothing, and continue.
+#
+# In interactive mode, :func:`source_once` is disabled and files are always source. This gives a more reliable experience to users in case files are updated, and prevents `command_not_found_handle <http://tldp.org/LDP/abs/html/bashver4.html#CNFH>`_ from triggering, which can be very costly.
+#
+# Even though :file:`source_once.bsh` is not ``dash`` compatible, a modified header can at least make the line that attempts to call :func:`source_once` be ``dash`` compatible:
+#
+# .. code:: bash
+#
+#    source_once > /dev/null 2>&1 && return 0
+#
+# .. function:: source_once
+#
+# :Output: Returns ``1`` if this is the first time, else ``0`` for already called
+# :Internal Use: * ``_VSI_ALREADY_SOURCED`` - State array used on ``bash`` 4 or newer
+#                * ``_VSI_ALREADY_SOURCED_*`` - State variables used for ``bash`` 3.2
+#
+# Checks to see if the calling file has been used to call :func:`source_once`. The intended use is to check if a file has been sourced already or not (by using ``BASH_SOURCE``).
+#**
+
+# The zero here is important for when a script is called inside an error trap
+# handler. This is an undocumented bug in bash :(
+if [[ $- != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
+
+function source_once()
+{
+  if [ "${BASH_VERSINFO[0]}" -gt 3 ]; then
+    declare -Ag _VSI_ALREADY_SOURCED
+    local file_var="_${BASH_SOURCE[1]//[^a-zA-Z0-9_]/_}"
+    # If there is no entry, it's never been sourced
+    if [ -z "${_VSI_ALREADY_SOURCED[${file_var}]+set}" ]; then
+      _VSI_ALREADY_SOURCED[${file_var}]=1
+      return 1
+    fi
+  else
+    # Create an indirect variable using the calling file's name
+    local SOURCE_VAR="_VSI_ALREADY_SOURCED_${BASH_SOURCE[1]//[^a-zA-Z0-9_]/_}"
+    if [ -z "${!SOURCE_VAR+set}" ]; then
+      # Declare global, but make sure it's not exported. This works as intended
+      # in case set -a is turned on. No need for an if statement, as this just
+      # sets it exactly how we want it and is faster than anything else.
+      export -n "${SOURCE_VAR}=1"
+      return 1
+    fi
+  fi
+  return 0
+}
+
+# Only the source_once file itself needs to call this at the end. Set's up
+# the already sourced variable for this file
+source_once || :

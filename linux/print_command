@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+
+if [[ $- != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
+#*# linux/print_command
+
+#**
+# =============
+# Print Command
+# =============
+#
+# .. default-domain:: bash
+#
+# .. file:: print_command
+#
+# :Arguments: ``$1``... - List of command + arguments to be echoed
+# :Output: *stdout* - A quote escaped version of the command + arguments, ready for ``eval``
+#
+# Bash CLI version of :func:`print_command`
+#**
+
+#**
+# .. function:: print_command
+#
+# :Arguments: ``$1``... - List of command + arguments to be echoed
+# :Output: *stdout* - A quote escaped version of the command + arguments, ready for ``eval``
+#
+# Accurately echoes out a properly escaped single string representation of a command + arguments.
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
+#   print_command this is a t\ e\ \ s\'\"t
+#
+#   # Results in
+#   this is a 't e  s'"'"'"t'
+#
+#   # Typical usage
+#   eval "$(print_command "${stuff[@]}")"
+#   or
+#   bash -c "$(print_command "${stuff[@]}")"
+#**
+function print_command()
+{
+  while [ "$#" -gt 0 ]; do
+    # if [[ ${1} =~ ^[a-zA-Z0-9_.:/=-]*$ ]]; then
+    # https://unix.stackexchange.com/a/357932/123413
+    if [[ ${1} =~ ^[a-zA-Z0-9_.:/=@%^,+-]*$ ]]; then
+      printf -- "${1}"
+    else
+      printf "'${1//\'/\'\"\'\"\'}'"
+    fi
+    shift 1
+    [ "$#" -gt 0 ] && printf " "
+  done
+  printf "\n"
+
+  # if command -v python &> /dev/null; then
+  #   python -c "import pipes as p; import sys as s; print(' '.join([p.quote(x) for x in s.argv[1:]]))" "${@}"
+  # else
+  #   # FAR from perfect... Need to escape " and not always print ''
+  #   while [ "$#" -gt 0 ]; do
+  #     printf \'"$1"\'
+  #     shift 1
+  #     [ "$#" -gt 0 ] && printf " "
+  #   done
+  #   printf "\n"
+  # fi
+}
+
+if [ "${BASH_SOURCE[0]}" = "${0}" ] || [ "$(basename "${BASH_SOURCE[0]}")" = "${0}" ]; then
+  print_command ${@+"${@}"}
+fi

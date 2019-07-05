@@ -212,13 +212,11 @@ def parse_bash(options, env, sig, signode, sigtype='unknown'):
 
   m = function_sig_re.match(sig)
   if not m:
-    logger.warning(__('Signature does not match pattern: "%s"'), sig, location=__file__)
-    signode.clear()
-    signode += addnodes.desc_name(sig, sig)
-    # normalize whitespace like XRefRole does
-    return ws_re.sub('', sig)
-
-  name, _, args = m.groups()
+    name = sig
+    args = ''
+    logger.debug(__('Signature did not match pattern: "%s"'), name, location=__file__)
+  else:
+    name, _, args = m.groups()
 
   filename = env.ref_context.get('bash:file')
   functionname = env.ref_context.get('bash:function')

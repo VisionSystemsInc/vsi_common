@@ -3,7 +3,10 @@ import os
 from setuptools import find_packages, setup
 
 def read(fname):
-  return open(os.path.join(os.path.dirname(__file__), fname)).read()
+  try:
+    return open(os.path.join(os.path.dirname(__file__), fname)).read()
+  except:
+    return ''
 
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), 'python'))

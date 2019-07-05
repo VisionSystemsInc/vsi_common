@@ -147,115 +147,116 @@ class Chdir(object):
       else:
         raise(osError)
 
-class TempDir(object):
-  ''' Create and clean up a temp directory
+# Deprecated: Python3 tempfile.TemporaryDirectory
+# class TempDir(object):
+#   ''' Create and clean up a temp directory
 
-      The most common usage for this would be to create a random directory
-      each time. The mkdtemp flag was added to facilitate this.
+#       The most common usage for this would be to create a random directory
+#       each time. The mkdtemp flag was added to facilitate this.
 
-      Example:
+#       Example:
 
-      >>> from vsi.tools.dir_util import TempDir
-      >>> import tempfile
-      >>> from glob import glob
-      >>> with TempDir(tempfile.tempdir, mkdtemp=True) as tempDir:
-      ...   print(tempDir)
-      ...   print(glob(tempDir))
-      >>> print(glob(tempDir))
-  '''
+#       >>> from vsi.tools.dir_util import TempDir
+#       >>> import tempfile
+#       >>> from glob import glob
+#       >>> with TempDir(tempfile.tempdir, mkdtemp=True) as tempDir:
+#       ...   print(tempDir)
+#       ...   print(glob(tempDir))
+#       >>> print(glob(tempDir))
+#   '''
 
-  def __init__(self, dir=None, cd=False, delete=True, mkdtemp=False,
-               delete_if_not_create=False, *args, **kwargs):
+#   def __init__(self, dir=None, cd=False, delete=True, mkdtemp=False,
+#                delete_if_not_create=False, *args, **kwargs):
 
-    self.base_dir= dir
+#     self.base_dir= dir
 
-    self.mkdtemp = mkdtemp
+#     self.mkdtemp = mkdtemp
 
-    ''' Create a temp dir object
+#     ''' Create a temp dir object
 
-        Parameters
-        ----------
-        dir : str
-            Base dir must exist. Default is None. None will only work if
-            mkdtemp is true.
-        cd : bool
-            Change into the temp dir (and change back). Default: false
-        mkdtemp : array_like
-            Call mkdtemp in dir to create a temp dir. Default: false
-            | Try and use this INSTEAD of delete_if_not_create, much safer.
-            The class must call mkdtemp for you, or else it will not have
-            "created" the directory, thus introducing unsafe situations where
-            a directory may be inadvertently deleted if you accidentally tel
-            it to be.
-        delete : bool
-            Delete on exit. Default: true
-        delete_if_not_create : bool
-          Default: false. Delete the directory "dir" even if it was not created
-           by TempDir. ONLY TURN THIS ON when you are absolutely sure you want
-           this directory deleted. Make sure the input dir is something you
-           want deleted, or else just don't use this argument! For example, in
-           an unsanitized case the tempdir could be / or something like
-           /home/username. Then / or the entire home directory would be
-           deleted! That has to be bad, right?
-        *args
-            Variable length argument list.
-        **kwargs
-            Passed on to Chdir (mostly for error_on_exit)
-    '''
+#         Parameters
+#         ----------
+#         dir : str
+#             Base dir must exist. Default is None. None will only work if
+#             mkdtemp is true.
+#         cd : bool
+#             Change into the temp dir (and change back). Default: false
+#         mkdtemp : array_like
+#             Call mkdtemp in dir to create a temp dir. Default: false
+#             | Try and use this INSTEAD of delete_if_not_create, much safer.
+#             The class must call mkdtemp for you, or else it will not have
+#             "created" the directory, thus introducing unsafe situations where
+#             a directory may be inadvertently deleted if you accidentally tel
+#             it to be.
+#         delete : bool
+#             Delete on exit. Default: true
+#         delete_if_not_create : bool
+#           Default: false. Delete the directory "dir" even if it was not created
+#            by TempDir. ONLY TURN THIS ON when you are absolutely sure you want
+#            this directory deleted. Make sure the input dir is something you
+#            want deleted, or else just don't use this argument! For example, in
+#            an unsanitized case the tempdir could be / or something like
+#            /home/username. Then / or the entire home directory would be
+#            deleted! That has to be bad, right?
+#         *args
+#             Variable length argument list.
+#         **kwargs
+#             Passed on to Chdir (mostly for error_on_exit)
+#     '''
 
-    if self.mkdtemp and not self.base_dir:
-      self.base_dir = gettempdir()
+#     if self.mkdtemp and not self.base_dir:
+#       self.base_dir = gettempdir()
 
-    self.cd = Chdir(self.base_dir, *args, **kwargs) if cd else None
+#     self.cd = Chdir(self.base_dir, *args, **kwargs) if cd else None
 
-    self.delete = delete
-    self.delete_if_not_create=delete_if_not_create
+#     self.delete = delete
+#     self.delete_if_not_create=delete_if_not_create
 
-    self.created_dir = False
+#     self.created_dir = False
 
-  def __enter__(self):
-    if self.mkdtemp:
-      if not os.path.exists(self.base_dir):
-        os.makedirs(self.base_dir)
+#   def __enter__(self):
+#     if self.mkdtemp:
+#       if not os.path.exists(self.base_dir):
+#         os.makedirs(self.base_dir)
 
-      self.dir = mkdtemp(dir=self.base_dir)
-      if self.cd:
-        self.cd.dir = self.dir #<-- hack
-      self.created_dir = True
-    else:
-      #These two are separate variables incase with is called twice on the
-      #same instance... It COULD happen
-      self.dir = self.base_dir
+#       self.dir = mkdtemp(dir=self.base_dir)
+#       if self.cd:
+#         self.cd.dir = self.dir #<-- hack
+#       self.created_dir = True
+#     else:
+#       #These two are separate variables incase with is called twice on the
+#       #same instance... It COULD happen
+#       self.dir = self.base_dir
 
-    if not os.path.exists(self.dir):
-      os.makedirs(self.dir)
-      self.created_dir = True
+#     if not os.path.exists(self.dir):
+#       os.makedirs(self.dir)
+#       self.created_dir = True
 
-    if self.cd:
-      self.cd.__enter__()
-    return self.dir
+#     if self.cd:
+#       self.cd.__enter__()
+#     return self.dir
 
-  def __exit__(self, exc_type, exc_value, traceback):
-    ''' Exits if the previous directory no longer exists.
+#   def __exit__(self, exc_type, exc_value, traceback):
+#     ''' Exits if the previous directory no longer exists.
 
-    Parameters
-    ----------
-    exc_type : str
-        The Execption Type
-    exc_value : float
-        The Exception Value
-    traceback : str
-        The Traceback
+#     Parameters
+#     ----------
+#     exc_type : str
+#         The Execption Type
+#     exc_value : float
+#         The Exception Value
+#     traceback : str
+#         The Traceback
 
-    '''
-    if self.cd:
-      self.cd.__exit__(exc_type, exc_value, traceback)
-    #The reason for not making this all automatically work is JUST IN
-    #CASE someone says something like / is the temp dir... Can you
-    #Imagine running remove tree on / or /home/user? BAD THINGS.
-    #It is up to the dev to make sure he knows what he is doing
-    if self.delete and (self.created_dir or self.delete_if_not_create):
-      remove_tree(self.dir)
+#     '''
+#     if self.cd:
+#       self.cd.__exit__(exc_type, exc_value, traceback)
+#     #The reason for not making this all automatically work is JUST IN
+#     #CASE someone says something like / is the temp dir... Can you
+#     #Imagine running remove tree on / or /home/user? BAD THINGS.
+#     #It is up to the dev to make sure he knows what he is doing
+#     if self.delete and (self.created_dir or self.delete_if_not_create):
+#       remove_tree(self.dir)
 
 def checksum_dir(checksum, checksum_depth=2, base_dir=None):
   ''' Generate checksum directory name

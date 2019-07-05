@@ -1,6 +1,10 @@
 #!/usr/bin/env false
 # Source this file
 
+if [[ $- != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
 #*# linux/elements
 
 #**
@@ -22,11 +26,13 @@
 #
 # Don't use arrays element_array variable
 #
+#   * __element_array_target
 #   * __element_array_target_a
 #   * __element_array_target_a2
 #   * __element_array_target_s
 #   * __element_array_target_s2
 #   * __element_array_target_d
+#   * __element_array_target_x
 #
 # as the target. It will cause name collision
 #
@@ -36,6 +42,7 @@
 
 : ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
 source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
+source "${VSI_COMMON_DIR}/linux/isin"
 
 #**
 # .. function:: dynamic_set_a
@@ -56,7 +63,7 @@ source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
 # .. note::
 #   Does not clear the array named by ``$1``. So if the array had 4 elements in it and :func:`dynamic_set_a` is called with 3 elements, the 4th element is still set.
 #
-# This is not a bug, but by design. "unset" the array prior to calling :func:`dynamic_set_a` if you wish to avoid this.
+#   This is not a bug, but by design. If this was done for you, array attributes would be lost. "unset" the array prior to calling :func:`dynamic_set_a` if you wish to avoid this.
 #**
 function dynamic_set_a()
 {
@@ -78,15 +85,25 @@ function dynamic_set_a()
 # Slightly safer indirect clear array
 #
 # .. note::
-#   Still uses eval, but makes sure the variable name appears valid
+#   Still uses eval on older versions of bash, but makes sure the variable name appears valid
 #**
 function clear_a()
 {
-  # https://stackoverflow.com/a/2821201/4166604
-  if [[ ! ${1} =~ [a-zA-Z_]+[a-zA-Z0-9_]* ]]; then
-    return 1
+  if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "44" ]; then
+    local -n localarray="${1}"
+    localarray=()
+  else
+    # https://stackoverflow.com/a/2821201/4166604
+    if [[ ! ${1} =~ [a-zA-Z_]+[a-zA-Z0-9_]* ]]; then
+      return 1
+    fi
+
+    # Do NOT use unset here. If you do that, you will lose "local" status if the
+    # variable that $1 points to has it. This can have MANY unintended
+    # consequences which is generally BAD! Gotta eval :(
+    # https://stackoverflow.com/questions/10497425/is-it-possible-to-use-array-in-bash#comment74842477_10497539
+    eval "${1}=()"
   fi
-  eval "${1}=()"
 }
 
 #**
@@ -113,9 +130,8 @@ function remove_element_a()
   local __element_array_target_a=()
 
   if [ "${!1+set}" == "set" ]; then
-    local target=${1}[@]
-    __element_array_target_a=( ${!target} )
-    unset target
+    __element_array_target_a="${1}[@]"
+    __element_array_target_a=( ${!__element_array_target_a} )
   else # If it's empty/does not exist, there is nothing to remove
     return 0
   fi
@@ -128,11 +144,7 @@ function remove_element_a()
     fi
   done
 
-  # Do NOT use unset here. If you do that, you will lose "local" status if the
-  # variable that $1 points to has it. This can have MANY unintended
-  # consequences which is generally BAD! Gotta eval :(
-  # https://stackoverflow.com/questions/10497425/is-it-possible-to-use-array-in-bash#comment74842477_10497539
-  eval "${1}=()"
+  clear_a "${1}"
 
   # You can't use ${t+"${t[@]}"} notation when there is a chance that the first
   # element of an array has been unset. This will falsely trigger ${t} as not
@@ -156,13 +168,12 @@ function remove_element_a()
 #**
 function remove_element()
 {
-  local target="${1}"
   local __element_array_target_s=()
-  if [ "${!target+set}" == "set" ]; then
-    __element_array_target_s=( ${!target} )
+  if [ "${!1+set}" == "set" ]; then
+    __element_array_target_s=( ${!1} )
   fi
   remove_element_a __element_array_target_s "${2}"
-  export $target=${__element_array_target_s+"${__element_array_target_s[*]}"}
+  export $1=${__element_array_target_s+"${__element_array_target_s[*]}"}
 }
 
 #**
@@ -190,10 +201,10 @@ function remove_element()
 function add_element_post_a()
 {
   remove_element_a "${1}" "${2}"
-  local target="${1}[@]"
   local __element_array_target_a=()
   if [ "${!1+set}" == "set" ]; then
-    __element_array_target_a=( ${!target} )
+    __element_array_target_a="${1}[@]"
+    __element_array_target_a=( ${!__element_array_target_a} )
   fi
   dynamic_set_a "${1}" ${__element_array_target_a+"${__element_array_target_a[@]}"} "${2}"
 }
@@ -209,13 +220,12 @@ function add_element_post_a()
 #**
 function add_element_post()
 {
-  local target="${1}"
   local __element_array_target_s=()
-  if [ "${!target+set}" == "set" ]; then
-    __element_array_target_s=( ${!target} )
+  if [ "${!1+set}" == "set" ]; then
+    __element_array_target_s=( ${!1} )
   fi
   add_element_post_a __element_array_target_s "${2}"
-  export $target=${__element_array_target_s+"${__element_array_target_s[*]}"}
+  export $1=${__element_array_target_s+"${__element_array_target_s[*]}"}
 }
 
 #**
@@ -243,10 +253,10 @@ function add_element_post()
 function add_element_pre_a()
 {
   remove_element_a "${1}" "${2}"
-  local target="${1}[@]"
   local __element_array_target_a=()
   if [ "${!1+set}" == "set" ]; then
-    __element_array_target_a=( ${!target} )
+    __element_array_target_a="${1}[@]"
+    __element_array_target_a=( ${!__element_array_target_a} )
   fi
   dynamic_set_a "${1}" "${2}" ${__element_array_target_a+"${__element_array_target_a[@]}"}
 }
@@ -262,13 +272,12 @@ function add_element_pre_a()
 #**
 function add_element_pre ()
 {
-  local target="${1}"
   local __element_array_target_s=()
-  if [ "${!target+set}" == "set" ]; then
-    __element_array_target_s=( ${!target} )
+  if [ "${!1+set}" == "set" ]; then
+    __element_array_target_s=( ${!1} )
   fi
   add_element_pre_a __element_array_target_s "${2}"
-  export $target=${__element_array_target_s+"${__element_array_target_s[*]}"}
+  export $1=${__element_array_target_s+"${__element_array_target_s[*]}"}
 }
 
 #**
@@ -287,10 +296,10 @@ function cmp_elements_a()
   local __element_array_target_a2
 
   # Have to copy https://unix.stackexchange.com/a/374094/123413 Thanks darwin!
-  x="${1}[@]"
-  __element_array_target_a=(${!1+"${!x}"})
-  x="${2}[@]"
-  __element_array_target_a2=(${!2+"${!x}"})
+  __element_array_target_a="${1}[@]"
+  __element_array_target_a=(${!1+"${!__element_array_target_a}"})
+  __element_array_target_a2="${2}[@]"
+  __element_array_target_a2=(${!2+"${!__element_array_target_a2}"})
 
   if [ ${#__element_array_target_a[@]} -ne ${#__element_array_target_a2[@]} ]; then
     return 1
@@ -389,10 +398,9 @@ function join_a()
     # in remove_element_a
   fi
 
-  local target="$1"
+  local __element_array_target="$1"
   shift 1
 
-  local bit
   local MIFS="${MIFS-//}"
 
   local __element_array_target_s="${1-}"
@@ -403,14 +411,14 @@ function join_a()
     shift 1
   done
 
-  read -r "${target}" <<< "${__element_array_target_s-}"
+  read -r "${__element_array_target}" <<< "${__element_array_target_s-}"
 }
 
 #**
 # .. function:: join_a_out
 #
 # :Arguments: * ``$1`` - Hex code for IFS
-#             * ``$1``... - Strings
+#             * ``$2``... - Strings
 # :Parameters: * [``MIFS``] - A Multichararater Internal Field Separator, using awk escape format. (Except for null, which is a double backslash \\x00).
 #              * Default: //
 #              * Note: If you are using "" or $'' notation, you will need "\\\\x00"
@@ -446,4 +454,117 @@ function join_a_out()
           }
         }
       }' ${@+"${@}"}
+}
+
+#**
+# .. function:: is_array
+#
+# :Arguments: * ``$1`` - variable name
+#
+# :Output: Returns ``0`` if variable is an array, else ``1``
+#
+# Determines if ``$1`` is an array or not. If it is not defined, still returns ``1``
+#**
+function is_array()
+{
+  local var_name="${1}"
+  local signature="$(declare -p "${var_name}" 2>/dev/null)"
+
+  # Handle Bash 4.2 namereffing https://stackoverflow.com/a/42877229/4166604
+  local regex='^declare -[[:alpha:]]*n[[:alpha:]]* [^=]+=\"([^\"]+)\"$'
+  while [[ ${signature} =~ ${regex} ]]; do
+    signature="$(declare -p ${BASH_REMATCH[1]})"
+  done
+
+  # Check if is array
+  regex='^declare -[[:alpha:]]*a[[:alpha:]]* '
+  [[ ${signature} =~ ${regex} ]]
+}
+
+#**
+# .. function:: to_array
+#
+# :Arguments: * ``$1`` - variable name
+#
+# .. Note::
+#   Uses eval to convert to array, because of this, () and other special characters can cause code injection
+#
+#   .. code-block:: bash
+#
+#     $ x="test); echo foo; q=("
+#     $ to_array x
+#     foo
+#
+#     $ x="test\)\; echo foo; \("
+#     # or
+#     $ x="'test);' echo 'foo;' '('"
+#     $ to_array x
+#     # Works without side effect
+#**
+function to_array()
+{
+  # Don't try and escape special characters, cause then you end up putting \'s
+  # in quoted string, which is not what we want
+  if ! is_array "${1}"; then
+    # Eval method :(
+    eval "$1=(${!1})"
+  fi
+}
+
+#**
+# .. function:: array_length
+#
+# :Arguments: * ``$1`` - Array name
+# :Output: *stdout* - number of elements in the array. -1 for variable not defined.
+#
+# Echoes out the length of the array. If the variable is not defined, echos -1.
+#
+# .. note::
+#   Does not differentiate between an array of legnth 1 and a non-array variable. Use :func:`is_array` for that
+#**
+function array_length()
+{
+  if ! declare -p "$1" &> /dev/null; then
+    echo -1
+  else
+    local __element_array_target_x="$1[@]"
+    __element_array_target_x=(${!1+"${!__element_array_target_x}"})
+    echo "${#__element_array_target_x[@]}"
+  fi
+}
+
+#**
+# .. function:: subtract_array
+#
+# :Arguments: * ``$1`` - Array 1
+#             * ``$2`` - Array 2
+#             * ``$3`` - Destination Array
+#
+# Destination array becomes values of array 2 not in array 1 (1 - 2)
+#**
+function subtract_array()
+{
+  local __element_array_target_a="$1[@]"
+  local __element_array_target_a2="$2[@]"
+  local __element_array_target=() # Copy of output
+
+  local __element_array_target_x= # Skip variable
+  local __element_array_target_s
+  local __element_array_target_s2
+
+  for __element_array_target_s in ${!1+"${!__element_array_target_a}"}; do
+    for __element_array_target_s2 in ${!2+"${!__element_array_target_a2}"}; do
+      if [ "${__element_array_target_s}" = "${__element_array_target_s2}" ]; then
+        __element_array_target_x=1
+        break
+      fi
+    done
+    if [ -z $__element_array_target_x ]; then
+      __element_array_target+=("${__element_array_target_s}")
+    fi
+    __element_array_target_x=
+  done
+
+  clear_a "$3"
+  dynamic_set_a "$3" ${__element_array_target+"${__element_array_target[@]}"}
 }

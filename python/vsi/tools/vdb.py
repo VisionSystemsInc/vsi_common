@@ -1,6 +1,7 @@
 import sys
 import pdb
 from bdb import BdbQuit
+from pdb import Pdb
 import os
 import signal
 from functools import partial
@@ -39,7 +40,7 @@ def set_attach(db_cmd=None, signal=ATTACH_SIGNAL):
       ----------
       db_cmd : str
           The Debugger Command
-      signal : var
+      signal : int
           The Attach Signal
 
 
@@ -66,7 +67,7 @@ def attach(pid, signal=ATTACH_SIGNAL):
       ----------
       pid : str
           The Process ID
-      signal : var
+      signal : int
           The Attach Signal
 
 
@@ -101,7 +102,7 @@ def handle_db(sig, frame, db_cmd=None, signal=ATTACH_SIGNAL):
       frame :
       db_cmd : str
           The Debugger Command
-      signal : var
+      signal : int
           The Attach Signal
   '''
   if sig == signal:
@@ -110,6 +111,55 @@ def handle_db(sig, frame, db_cmd=None, signal=ATTACH_SIGNAL):
       db_cmd()
     else: #default behavior
       set_trace(frame)
+
+class RunningTrace():
+  ''' Mixin to give any bdb a running settrace
+
+      Example::
+
+          from pdb import Pdb as OldPdb
+          from vsi.tools.vdb import RunningTrace
+          class Pdb(OldPdb, RunningTrace):
+            pass
+
+          p = Pdb()
+          p.set_running_trace()
+          p.onecmd('b my_function')
+  '''
+
+  def set_running_trace(self, frame=None):
+    ''' Start debugging from frame, but don't enter interactive mode
+
+        If frame is not specified, debugging starts from caller's frame.
+    '''
+    if frame is None:
+      frame = sys._getframe().f_back
+    self.botframe = None
+    self.setup(frame, None)
+    while frame:
+      frame.f_trace = self.trace_dispatch
+      self.botframe = frame
+      frame = frame.f_back
+    self.set_continue()
+    sys.settrace(self.trace_dispatch)
+
+  @classmethod
+  def get_db(cls, debugger_cls=Pdb):
+    ''' Helper function to mixin and instantiate in simple cases
+
+        Parameters
+        ----------
+        debugger_cls : class
+            Bdb based Debugger class to be mixed in
+
+        Returns
+        -------
+        obj
+            An instance of the debugger class with ``set_runnable_trace`` added
+    '''
+    new_cls = type(debugger_cls.__name__+"Runnable", (debugger_cls, cls), {})
+    return new_cls()
+
 
 class PostMortemHook(object):
   original_excepthook = None

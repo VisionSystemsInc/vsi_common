@@ -8,7 +8,7 @@ J.U.S.T. Files
 
 .. file:: Justfile
 
-The file sourced by just. The primary purpose of the Justfile is to define the function caseify. caseify should try to match ``$1`` and the number of additional arguments used should be added to extra_args
+The file sourced by just. The primary purpose of the Justfile is to define the function caseify. caseify should try to match ``$1`` and the number of additional arguments used should be stored in ``extra_args``
 
 .. rubric:: Example
 
@@ -33,7 +33,7 @@ The file sourced by just. The primary purpose of the Justfile is to define the f
           ;;
         two) # Target with two arguments
           echo $1 $2
-          extra_args+=2
+          extra_args=2
         group) # Two groups of args
           get_args ${@+"${@}"}
           echo ${args+"${args[@]}"}

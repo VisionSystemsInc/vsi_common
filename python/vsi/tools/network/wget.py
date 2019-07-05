@@ -20,18 +20,18 @@ def authorize_basic(user=None, password=None, realm=None, uri=None):
 
   Parameters
   ----------
-  user : string
+  user : str
       The User
-  password : string
+  password : str
       The Password
-  realm : string
+  realm : str
       The Realm
-  uri : string
+  uri : str
       The Uri
 
   Returns
   -------
-  string
+  str
       The filename
 
   '''

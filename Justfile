@@ -4,11 +4,16 @@ if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then #If being sourced
   set -euE
 fi
 
-source "$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)/linux/just_env" "$(dirname "${BASH_SOURCE[0]}")"/vsi_common.env
+# VSI_COMMON_DIR is a special var, handle is carefully.
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)"
+fi
+source "${VSI_COMMON_DIR}/linux/just_env" "${VSI_COMMON_DIR}/vsi_common.env"
 
 source "${VSI_COMMON_DIR}/linux/just_docker_functions.bsh"
+source "${VSI_COMMON_DIR}/linux/just_sphinx_functions.bsh"
 
-cd "$(\dirname "${BASH_SOURCE[0]}")"
+cd "${VSI_COMMON_DIR}"
 
 function caseify()
 {
@@ -17,15 +22,15 @@ function caseify()
   case ${just_arg} in
     test) # Run unit tests
       "${VSI_COMMON_DIR}/tests/run_tests.bsh" ${@+"${@}"}
-      extra_args+=$#
+      extra_args=$#
       ;;
     --test) # Run only this test
       export TESTLIB_RUN_SINGLE_TEST="${1}"
-      extra_args+=1
+      extra_args=1
       ;;
     test_int) # Run integration tests
       TESTS_DIR=int "${VSI_COMMON_DIR}/tests/run_tests.bsh" ${@+"${@}"}
-      extra_args+=$#
+      extra_args=$#
       ;;
     test_int_appveyor) # Run integration tests for windows appveyor
       (
@@ -42,18 +47,18 @@ function caseify()
       ;;
     test_recipe) # Run docker recipe tests
       TESTS_DIR="${VSI_COMMON_DIR}/docker/recipes/tests" "${VSI_COMMON_DIR}/tests/run_tests.bsh" ${@+"${@}"}
-      extra_args+=$#
+      extra_args=$#
       ;;
     test_darling) # Run unit tests using darling
       (
         cd "${VSI_COMMON_DIR}"
         env -i HOME="${HOME}" darling shell env TESTS_PARALLEL=8 ./tests/run_tests.bsh ${@+"${@}"}
       )
-      extra_args+=$#
+      extra_args=$#
       ;;
     test_python) # Run python unit tests
       Docker-compose run python3
-      Docker-compose run python2
+      # Docker-compose run python2
       # python3 -B -m unittest discover -s "${VSI_COMMON_DIR}/python/vsi/test"
       ;;
     build_docker) # Build docker image
@@ -68,39 +73,21 @@ function caseify()
       ;;
     run_wine) # Start a wine bash window
       Docker-compose run -e USER_ID="$(id -u)" wine ${@+"${@}"} || :
-      extra_args+=$#
+      extra_args=$#
       ;;
     run_wine-gui) # Start a wine bash window in gui mode
       Docker-compose run -e USER_ID="$(id -u)" wine_gui ${@+"${@}"}&
-      extra_args+=$#
+      extra_args=$#
       ;;
     test_wine) # Run unit tests using wine
       justify run wine -c "
         cd /z/vsi_common
-        . setup.env
+        source setup.env
         just test ${*}"'
         rv=$?
         read -p "Press any key to close" -r -e -n1
         exit ${rv}'
-      extra_args+=$#
-      ;;
-
-    build_docs) # Build docs image
-      justify build recipes gosu tini pipenv
-      Docker-compose build docs
-      image_name=$(docker create ${VSI_COMMON_DOCKER_REPO}:compile_docs)
-      docker cp ${image_name}:/venv/Pipfile.lock "${VSI_COMMON_DIR}/docs/Pipfile.lock"
-      docker rm ${image_name}
-      ;;
-
-    --nit) # Set nit picky when compiling docs
-      export SPHINXOPTS="${SPHINXOPTS-} -n"
-      ;;
-    --all) # Set rebuild all when compiling docs
-      export SPHINXOPTS="${SPHINXOPTS-} -a"
-      ;;
-    compile_docs) # Compile documentation
-      Docker-compose run -e SPHINXOPTS docs ${@+"${@}"}
+      extra_args=$#
       ;;
     *)
       defaultify "${just_arg}" ${@+"${@}"}
@@ -108,4 +95,4 @@ function caseify()
   esac
 }
 
-if [ "${JUST_IN_SCRIPT-0}" = "0" ]; then caseify ${@+"${@}"};fi
+if ! command -v justify &> /dev/null; then caseify ${@+"${@}"};fi

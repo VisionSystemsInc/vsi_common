@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-. "$(dirname "${BASH_SOURCE[0]}")/testlib.sh"
+. "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
 . "$(dirname "${BASH_SOURCE[0]}")/test_utils.bsh"
 . "$(dirname "${BASH_SOURCE[0]}")/../linux/elements.bsh"
 
@@ -31,6 +31,54 @@ begin_test "Dynamic Set Array"
   dynamic_set_a y "${x[@]}"
   [ "${y[0]}" = " one " ]
   [ "${y[1]}" = " t w  o  " ]
+)
+end_test
+
+begin_test "Clear Array"
+(
+  setup_test
+  function foo()
+  {
+    local x=(12 101 15 23 49) # global being shadowed by local
+    local y=(12 101 15 23 49) # local only
+    z=(12 101 15 23 49)       # global set in function only
+
+    clear_a x
+    clear_a y
+    clear_a z
+
+    check_a x
+    check_a y
+    check_a z
+  }
+
+  x=(11 22 33)
+
+  foo
+  not declare -p y
+  declare -p z
+
+  clear_a x
+  check_a x
+)
+end_test
+
+begin_test "Remove from Local Array"
+(
+  setup_test
+  function foo()
+  {
+    local x=(12 101 15 23 49)
+
+    remove_element_a x 15
+    check_a x 12 101 23 49
+    contiguous_a x
+  }
+
+  foo
+
+  not declare -p x
+
 )
 end_test
 
@@ -408,5 +456,94 @@ begin_test "Joining arrays to stdout"
   [ "$(MIFS='\\x00' join_a_out hear see speak | xxd -ps)" = \
     "$(printf 'hear\0see\0speak' | xxd -ps)" ]
 
+)
+end_test
+
+begin_test "Is array"
+(
+  setup_test
+
+  foo="ok"
+  bar=("ok")
+  declare -ra bar2=("doe")
+  declare bar3=()
+
+  is_array bar
+  is_array bar2
+  is_array bar3
+  not is_array foo
+
+  if [ "${BASH_VERSINFO[0]}" -gt "4" ] || ( [ "${BASH_VERSINFO[0]}" = "4" ] && [ "${BASH_VERSINFO[1]}" -ge "2" ] ); then
+    declare -n bar4=bar3
+    declare -n bar5=bar4
+    declare -rau bar6=("doe")
+
+    is_array bar4
+    is_array bar5
+    is_array bar6
+  fi
+)
+end_test
+
+begin_test "To array"
+(
+  setup_test
+
+  x="this is a test"
+  ans=(this is a test)
+  to_array x
+  check_a x "${ans[@]}"
+
+  unset x
+  x="  yet another : test "
+  ans=(yet another : test)
+  to_array x
+  check_a x "${ans[@]}"
+
+  unset x
+  x="  yet another :   : test "
+  ans=(yet another : : test)
+  to_array x
+  check_a x "${ans[@]}"
+
+  unset x
+  x=(11 22 "3 3")
+  ans=(11 22 "3 3")
+  to_array x
+  check_a x "${ans[@]}"
+)
+end_test
+
+begin_test "Subtract array"
+(
+  setup_test
+  a=(11 22 33 00)
+  b=(44 33 22)
+  c=(55 66 77 88 99 1010 1111)
+  subtract_array a b c
+  check_a c 11 00
+
+  c=()
+  subtract_array b a c
+  check_a c 44
+
+  # Only a empty
+  a=()
+  c=()
+  subtract_array a b c
+  check_a c
+
+  # Only b empty
+  a=(11 22 33)
+  b=()
+  c=()
+  subtract_array a b c
+  check_a c 11 22 33
+
+  # Both empty
+  a=()
+  c=()
+  subtract_array a b c
+  check_a c
 )
 end_test

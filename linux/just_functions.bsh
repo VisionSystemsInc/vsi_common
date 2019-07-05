@@ -1,6 +1,10 @@
 #!/usr/bin/env false
 # Source this script to access just functionality
 
+if [[ $- != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
 : ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
 
 #*# just/just_functions
@@ -17,19 +21,15 @@
 # A few functions are defined in a common. Sourced here for DRY
 #**
 
-source "${VSI_COMMON_DIR}/linux/just_common.bsh"
-
-#**
 # Preload some files
-#**
-
+source "${VSI_COMMON_DIR}/linux/just_common.bsh"
 source "${VSI_COMMON_DIR}/linux/isin"
 source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
 source "${VSI_COMMON_DIR}/linux/elements.bsh"
-
+source "${VSI_COMMON_DIR}/linux/findin"
 
 #**
-# .. env:: DRYRUN
+# .. envvar:: DRYRUN
 #
 # Print out some commands instead of executing.
 #
@@ -49,13 +49,13 @@ source "${VSI_COMMON_DIR}/linux/elements.bsh"
 #
 # .. note::
 #
-#   :env:`DRYRUN` doesn't just echo out the command, it uses the :func:`just_functions.bsh print_command` function
+#   :envvar:`DRYRUN` doesn't just echo out the command, it uses the :func:`print_command print_command` function
 #   to print out a command that can be copied and pasted in. This handles spaces
 #   correctly unlike echo.
 #
 # .. seealso::
 #
-#   :func:`just_functions.bsh print_command`
+#   :func:`print_command print_command`
 #**
 
 : ${DRYRUN=}
@@ -90,10 +90,6 @@ source "${VSI_COMMON_DIR}/linux/elements.bsh"
 : ${JUST_SAFE_LOAD_DELIMITER='='}
 
 #**
-# :ref:`plugin-concept`
-#
-# .. _plugin-concept:
-#
 # just_plugins
 # ------------
 #
@@ -134,10 +130,10 @@ source "${VSI_COMMON_DIR}/linux/elements.bsh"
 ##       case $arg in
 ##         foo|bar) #Foobar test
 ##           echo "Foo or bar: $1"
-##           extra_args+=1
+##           extra_args=1
 ##           ;;
 ##         *)
-##           return 1
+##           plugin_not_found=1
 ##           ;;
 ##       esac
 ##       return 0
@@ -213,7 +209,7 @@ fi
 #**
 
 #**
-# .. envvar:: JUST_PROJECT_FILE
+# .. envvar:: JUST_SETTINGS
 #
 # Absolute path to the project env file used
 #**
@@ -280,7 +276,7 @@ function source_environment_files()
   local JUST_LOCAL_SETTINGS="${JUST_LOCAL_SETTINGS:-${project_dir}/local.env}"
   local JUST_LOCAL_SETTINGS_POST="${JUST_LOCAL_SETTINGS_POST:-${project_dir}/local_post.env}"
 
-  JUST_PROJECT_FILE="$(cd "${project_dir}"; pwd)/${1##*/}"
+  export JUST_SETTINGS="$(cd "${project_dir}"; pwd)/${1##*/}"
 
   if [ ! -e "${JUST_LOCAL_SETTINGS}" ]; then
     local perm
@@ -334,7 +330,7 @@ function source_environment_files()
            "${1}" \
            "${JUST_LOCAL_SETTINGS_POST}"; do
     if [ -f "${x}" ]; then
-      . "${x}"
+      source "${x}"
     fi
   done
   reset_flag a
@@ -344,9 +340,12 @@ function source_environment_files()
   # macOS case sh somehow get invoked by python on start, and thus complains if
   # a function name with a hyphen in it has been exported. Again, this is
   # harmless but annoying
-  for x in $(declare -Fx | awk '{print $3}'); do
-    export -fn "${x}"
-  done
+  while IFS= read -r x || [[ -n ${x} ]] ; do
+    x=${x##* }
+    if [[ ${x} = *-* ]]; then
+      export -fn $x
+    fi
+  done < <(declare -Fx)
 }
 
 #**
@@ -514,13 +513,17 @@ function print_help()
 
   local OLD_IFS="${IFS}"
   IFS=$'\n'
-  # Print non-flag first and non-subcommand_subtargets
-  ( grep -E -v '^-|^[?*a-zA-Z0-9\-]+_[?*a-zA-Z0-9_\-]+' |
-    sort |
-    pretty_print_help ) <<< "${parsed_help_a[*]}"
+  {
+    # Print non-flag first and non-subcommand_subtargets
+    {
+      grep -E -v '^-|^[?*a-zA-Z0-9\-]+_[?*a-zA-Z0-9_\-]+' | sort
+    } <<< "${parsed_help_a[*]}"
 
-  # Print flags second
-  ( grep -E '^-[?*a-zA-Z0-9\|\-]+( |$)' | sort | pretty_print_help ) <<< "${parsed_help_a[*]}"
+    # Print flags second
+    {
+      grep -E '^-[?*a-zA-Z0-9\|\-]+( |$)' | sort
+    } <<< "${parsed_help_a[*]}"
+  } | pretty_print_help
   IFS="${OLD_IFS}"
 
   echo
@@ -682,40 +685,6 @@ function setup_tty()
 }
 
 #**
-# .. function:: print_command
-#
-# Echo out a command
-#
-# Accurately echoes out a properly escaped representation of the arguments.
-#**
-
-function print_command()
-{
-  while [ "$#" -gt 0 ]; do
-    if [[ ${1} =~ ^[a-zA-Z0-9_.:/-]*$ ]]; then
-      printf -- "${1}"
-    else
-      printf "'${1//\'/\'\"\'\"\'}'"
-    fi
-    shift 1
-    [ "$#" -gt 0 ] && printf " "
-  done
-  printf "\n"
-
-  # if command -v python &> /dev/null; then
-  #   python -c "import pipes as p; import sys as s; print(' '.join([p.quote(x) for x in s.argv[1:]]))" "${@}"
-  # else
-  #   # FAR from perfect... Need to escape " and not always print ''
-  #   while [ "$#" -gt 0 ]; do
-  #     printf \'"$1"\'
-  #     shift 1
-  #     [ "$#" -gt 0 ] && printf " "
-  #   done
-  #   printf "\n"
-  # fi
-}
-
-#**
 # .. function:: defaultify
 #
 # Default commands for just
@@ -723,7 +692,7 @@ function print_command()
 # Handles a few default commands for just:
 #
 # - Calls plugins specified in :envvar:`JUST_DEFAULTIFY_FUNCTIONS`
-# - --dryrun|-n - Sets DRYRUN to :func:`print_command`. This way ${DRYRUN} can be put
+# - --dryrun|-n - Sets DRYRUN to :func:`print_command print_command`. This way ${DRYRUN} can be put
 #                 in front of any command and be printed instead of executed
 #                 when in dryrun mode
 # - --separator - Used to override the :envvar:`JUST_SEPARATOR` (default --) to anything
@@ -742,10 +711,10 @@ function defaultify()
 
   # Loop through the plugins, and call them
   for arg in ${JUST_DEFAULTIFY_FUNCTIONS+"${JUST_DEFAULTIFY_FUNCTIONS[@]}"}; do
-    unset plugin_not_found # Still local after unset
+    plugin_not_found=0
     ${arg} ${@+"${@}"}
-    if [ -z "${plugin_not_found+set}" ]; then
-      return
+    if [ "${plugin_not_found-}" != "1" ]; then
+      return 0
     fi
   done
 
@@ -760,14 +729,14 @@ function defaultify()
                  # arguments. If -- is needed for other things, specify a custom \
                  # separator
       JUST_SEPARATOR=$1
-      extra_args+=1
+      extra_args=1
       ;;
     --version) # Print version
       echo "${0##*/} version ${JUST_VERSION}"
       ;;
     --new) # Run the new just wizard
       "${VSI_COMMON_DIR}/linux/new_just" ${@+"${@}"}
-      extra_args+=$#
+      extra_args=$#
       ;;
     --latest) # Print latest juste version install instructions
       (
@@ -811,11 +780,11 @@ function defaultify()
       )
       ;;
     --wrap) # Wraps command with Just_wrap ... Useful for just executable
-      exec "${VSI_COMMON_DIR}/linux/Just_wrap" "${JUST_PROJECT_FILE}" ${@+"${@}"}
+      exec "${VSI_COMMON_DIR}/linux/Just_wrap" "${JUST_SETTINGS}" ${@+"${@}"}
       ;;
     --run) # Run arbitrary command in just environment
       ${@+"${@}"}
-      extra_args+=$#
+      extra_args=$#
       ;;
     --tab) # Tab complete script (takes about 300ms). Usage: source <(juste --tab)
       if [ "$#" = "0" ]; then
@@ -832,13 +801,13 @@ function defaultify()
         local COMP_WORDS
 
         shift 3
-        extra_args+=3
+        extra_args=3
 
         COMP_WORDS=(${@+"${@}"})
 
         _just "${one}" "${two}" "${three}" ${@+"${@}"}
         echo "${COMPREPLY[*]}"
-        extra_args+=$#
+        extra_args=$#
       fi
       ;;
     -h|--help|help) #Print help
@@ -872,20 +841,27 @@ function unknownify()
 #
 # The number of additional arguments consumed in a caseify target
 #
-# When writing a caseify target, by default one argument is consumed. This is
-# enough for any simple target. However some targets need additional arguments.
+# When writing a caseify target, by default one argument is consumed. This is enough for any simple target. However some targets need additional arguments.
 #
 # There are really three situation when extra arguments are needed
 #
-# - 1. A fixed number of arguments. For example, if 3 arguments are needed,
-#      just use $1, $2, $3, and set extra_args+=3
-# - 2. The rest of the arguments are going to be consumed. In this case, use
-#      all the arguments (typically by $@) and set extra_args+=$#
-# - 3. An unknown number of arguments need to be used, and maybe multiple
-#      groups of unknown arguments. This is the case where JUST_SEPARATOR is
-#      used. (See EXAMPLE)
+# #. A fixed number of arguments. For example, if 3 arguments are needed, just use $1, $2, $3, and set ``extra_args=3``
+# #. The rest of the arguments are going to be consumed. In this case, use all the arguments (typically by $@) and set extra_args=$#
+# #. An unknown number of arguments need to be used, and maybe multiple groups of unknown arguments. This is the case where JUST_SEPARATOR is used. (See EXAMPLE)
 #
 # .. rubric:: Example
+#
+# .. code-block:: bash
+#
+#    # Lets say we call:
+#
+#    just test 11 22 33 -- aa bb cc dd -- _null
+#
+#    # test is called with 3 arguments
+#    # aa is called with 3 arguments
+#    # _null is called
+#
+# .. rubric:: The deprecated way
 #
 # .. code-block:: bash
 #
@@ -903,10 +879,6 @@ function unknownify()
 #     ;;
 #
 # In this case, there is no need to add :var:`extra_args`, :func:`get_args` does this already
-#
-# .. note::
-#
-#   :var:`extra_args` should be added to, never set.
 #**
 
 declare -i extra_args
@@ -983,6 +955,10 @@ function _justify()
           else
             defaultify "${target}${@}"
           fi
+          if (( $extra_args+1 > $# )); then
+            source "${VSI_COMMON_DIR}/linux/colors.bsh"
+            echo "${RED}JUST ERROR${NC}: Not enough arguments for \"${target}${1-}\" target" >&2
+          fi
           shift $extra_args
           shift 1
         done
@@ -1002,6 +978,10 @@ function _justify()
       else
         defaultify "${@}"
       fi
+    fi
+    if (( $extra_args+1 > $# )); then
+      source "${VSI_COMMON_DIR}/linux/colors.bsh"
+      echo "${RED}JUST ERROR${NC}: Not enough arguments for \"${target}${1-}\" target" >&2
     fi
     shift $extra_args
     shift 1
@@ -1072,11 +1052,6 @@ declare -i get_args_args_used
 function get_args()
 {
   local next_break
-
-  # Since this is not used often, only source in this function
-  if ! decalre -f findin &> /dev/null; then
-    source "${VSI_COMMON_DIR-"$(dirname "${BASH_SOURCE[0]}")/.."}/linux/findin"
-  fi
 
   args=()
   : ${extra_args=0}

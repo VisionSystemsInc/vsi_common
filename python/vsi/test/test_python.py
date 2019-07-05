@@ -412,6 +412,20 @@ class PythonTest(unittest.TestCase):
     with self.assertRaises(TypeError):
       nested_update(z, y)
 
+  # Test for dict derived classes
+  def test_nested_update_dervied(self):
+    class FooDict(dict):
+      pass
+
+    foo = FooDict({'a': 15, 'b': FooDict({'c': 14, 'f': 18})})
+    bar = {'a': 16, 'd': {'e': 17}, 'b': {'c': 24}}
+    nested_update(foo, bar)
+    ans = {'a': 16, 'd': {'e': 17}, 'b': {'c': 24, 'f':18}}
+    self.assertEqual(foo, ans)
+    self.assertIsInstance(foo, FooDict)
+    self.assertIsInstance(foo['b'], FooDict)
+    self.assertIsInstance(foo['d'], FooDict)
+
   def test_nested_in_dict(self):
     b = {'a': 5, 'b': 6}
 

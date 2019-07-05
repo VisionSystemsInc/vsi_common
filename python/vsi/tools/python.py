@@ -3,7 +3,7 @@ from __future__ import print_function # Python2 compat
 from functools import (wraps, update_wrapper, WRAPPER_UPDATES,
                        WRAPPER_ASSIGNMENTS)
 
-from collections import Mapping
+from collections.abc import Mapping, Iterable
 import inspect
 import sys
 
@@ -108,7 +108,7 @@ def get_file(fid, mode='rb'):
   ----------
   fid : str
       File object or filename
-  mode : str, optional
+  mode : :class:`str`, optional
       Optional, file mode to open file if filename supplied
       Default is 'rb'
 
@@ -484,8 +484,8 @@ def args_to_kwargs(function, args=tuple(), kwargs={}):
          real function call. Leftover args are put into the key ARGS, and
          leftover KWARGS are placed in the key KWARGS. While everything
          should behave exactly as python would, certain failure situations are
-         not reproduced, for exampled it does not raise exception if you declare
-         the same parameter in both /*/args and /**/kwargs)
+         not reproduced, for exampled it does not raise exception if you
+         declare the same parameter in both /*/args and /**/kwargs)
 
      On python3, ``args_to_kwargs_unbound`` must be used for unbound class
      methods
@@ -588,7 +588,7 @@ def args_to_kwargs_unbound(function, attribute=None, args=tuple(), kwargs={}):
                             set([None])):
   #Remove None, since if *args/**kwargs isn't used, it will have the value None
   #And that is not used
-    logger.warning("args_to_kwargs: Number of names arguments used does not "
+    logger.warning("args_to_kwargs: Number of named arguments used does not "
                    "equal arguments parsed. This can mean you are "
                    "missing required arguments")
 
@@ -620,9 +620,9 @@ def args_to_kwargs_unbound_easy(*args, **kwargs):
   '''
      Parameters
      ----------
-     *args
+     *args : args
           Variable length argument list.
-     **kwargs
+     **kwargs : args
           Arbitrary keyword arguments.
 
      Returns
@@ -649,28 +649,32 @@ def command_list_to_string(cmd):
     from pipes import quote
   return ' '.join([quote(x) for x in cmd])
 
-def nested_update(d, *args, **kwargs):
+def nested_update(dict_, *args, **kwargs):
   ''' Updated a dictionary in a nested fashion
 
   Parameters
   ----------
-  d : dict
+  dict_ : dict
       The dict to be updated
-  *args, **kwargs :
+  *args : args
+      Same arguments as dict.update
+  **kwargs : args
       Same arguments as dict.update
   '''
-  u = dict(*args, **kwargs)
-  try:
-    items = u.iteritems()
-  except:
-    items = u.items()
 
-  for k, v in items:
-    if isinstance(v, Mapping):
-      d[k] = nested_update(d.get(k, {}), v)
+  # Don't use dict comprehension or constructor here!
+  for key, value in dict(*args, **kwargs).items():
+    if isinstance(value, Mapping):
+      dict_[key] =  nested_update(dict_.get(key, type(dict_)()), value)
+    elif isinstance(value, Iterable) and not isinstance(value, str):
+      dict_[key] = type(value)(type(dict_)(item)
+                               if isinstance(item, Mapping)
+                               and not isinstance(item, type(dict_))
+                               else item for item in value)
     else:
-      d[k] = v
-  return d
+      dict_[key] = value
+
+  return dict_
 
 def nested_in_dict(dict1, dict2):
   ''' Checks to see if dict1 is in dict2
@@ -698,3 +702,120 @@ def nested_in_dict(dict1, dict2):
         return False
 
   return True
+
+def nested_patch(obj, condition, patch, _spare_key = None):
+  ''' Patch strings in a nested python dict
+
+  Will patch values in mapping and iterable containers recursively. This
+  includes (but is not limited to) ``set``, ``list``, ``dict``, ``tuple``,
+  etc... Only iterates through values, not keys.
+
+  When the condition is met for a given key,value pair, then the patch function
+  is used to replace the value.
+
+  Parameters
+  ----------
+  obj: Mapping or Iterable or object
+      The python object to be patched. Typically a dict, but can be a list,
+      etc... or even a normal object, but that kind of defeats the purpose
+  condition: func
+      The condition function to decide if each value should be patched.
+      ``condition`` takes two arguments, ``(key, value)``
+  patch: func
+      Callable that should return a patched version of the value. ``patch``
+      takes two arguments, ``(key, value)``
+
+  Returns
+  -------
+  object
+      Returns a patched version of the object. This should not be though of as
+      a deep-copy of the original object, as unpatched values will still be the
+      same python objects, not copies.
+
+  Example::
+
+      patterns = ['_file', '_dir', '_path',
+            '_files', '_dirs', '_paths']
+      condition = lambda key, value: isinstance(key, str) and \\
+                  any(key.endswith(pattern) for pattern in patterns)
+
+      def patch_value(value, volume_map):
+        for vol_from, vol_to in volume_map:
+          if isinstance(value, str) and value.startswith(vol_from):
+            return value.replace(vol_from, vol_to, 1)
+        return value
+
+      volume_map = [['/tmp', '/temp'],
+                    ['/tmp/home', '/nope'],
+                    ['/home', '/Home']]
+      patch = lambda key, value: patch_value(value, reversed(volume_map))
+
+      z = {'test': '/tmp',
+          'foo_file': '/tmp',
+          'foo': 15,
+          17: 'bar',
+          'foo_dir': ['/tmp', '/home'],
+          'foo_files': 15,
+          'stuff': {
+            'this_path': '/home',
+            'a': {
+              'b': {
+                'c': {
+                  'e': [{'b_path': '/home'}, {'c_dir': '/tmp'}],
+                  'd': {
+                    'q_path': (('/home', '/opt'), ('/tmp', '/tmp/home/foo/bar')),
+                    'q_orig': (('/home', '/opt'), ('/tmp', '/tmp/home/foo/bar')),
+                    'a_path': ('/home', '/opt', '/tmp', '/tmp/home/foo/bar')
+                  }
+                }
+              }
+            }
+          }
+          }
+
+      z2 = nested_patch(z, condition, patch)
+  '''
+
+  # Handle mapping
+  if isinstance(obj, Mapping):
+    # Muttable mappings could be in-place patched, but for symmetry and DRY,
+    # just return it like everything else, plus this would work on an immutable
+    # mapping should one ever be used?
+    return type(obj)((key,nested_patch(value, condition, patch, key)) \
+                     for key,value in obj.items())
+
+  # Handle iterables
+  elif not isinstance(obj, str) and isinstance(obj, Iterable):
+    return type(obj)(nested_patch(val, condition, patch, _spare_key) \
+                     for val in obj)
+
+  # Handle everything else
+  else:
+    if condition(_spare_key, obj):
+      return patch(_spare_key, obj)
+    return obj
+
+def nested_patch_inplace(obj, condition, patch, _spare_key = None):
+  ''' Destructive inplace version of :func:vsi.tools.python.nested_patch`
+  '''
+  # Handle mapping
+  if isinstance(obj, Mapping):
+    for key, value in obj.items():
+      if isinstance(value, Mapping):
+        nested_patch_inplace(value, condition, patch) # Inplace
+      # This would work but adds extra recursions and tests
+      # else:
+      #   obj[key] = nested_patch_inplace(value, condition, patch, key)
+      elif not isinstance(value, str) and isinstance(value, Iterable):
+        obj[key] = nested_patch_inplace(value, condition, patch, key)
+      elif condition(key, value):
+        obj[key] = patch(key, value)
+    return obj
+  # Handle iterable
+  elif not isinstance(obj, str) and isinstance(obj, Iterable):
+    return type(obj)(nested_patch_inplace(val, condition, patch, _spare_key) for val in obj)
+  # Handle everything else
+  else:
+    if condition(_spare_key, obj):
+      return patch(_spare_key, obj)
+    return obj

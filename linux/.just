@@ -1,11 +1,13 @@
 #!/usr/bin/env false
 #This file should be sourced, NOT run!
 
-: ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
-. "${VSI_COMMON_DIR}/linux/just_common.bsh"
-. "${VSI_COMMON_DIR}/linux/isin"
-. "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
-. "${VSI_COMMON_DIR}/linux/elements.bsh"
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)"
+fi
+source "${VSI_COMMON_DIR}/linux/just_common.bsh"
+source "${VSI_COMMON_DIR}/linux/isin"
+source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/elements.bsh"
 
 #*# just/just-tab.rst
 
@@ -20,7 +22,7 @@
 #
 # *Tab* completion suggestions based on parsing the :file:`Justfile` case statements can easily be added to your bash session by sourcing the :file:`.just` file. This file is sourced for you when you source the :ref:`setup file <just-setup-file>`
 #
-# The *tab* completion script can be extended by adding a ``.just`` file to your project next to the :file:`Justfile`. Write what would normally go inside the ``complete`` function to the ``.just`` file (without the bash ``function()`` header). This file will be sourced by :file:`.just` after the ``just_commands`` and ``_just_subcommands`` arrays are populated. See `here <https://github.com/visionsystemsinc/vsi_common/blob/master/.just>`_ for an example;
+# The *tab* completion script can be extended by adding a ``.just`` file to your project next to the :file:`Justfile`. Write what would normally go inside the ``complete`` function to the ``.just`` file (without the bash ``function()`` header). This file will be sourced by :file:`.just` after the ``just_commands`` and ``_just_subcommands`` arrays are populated. See :ref:`here <just_autocomplete>` for an example:
 #
 # .. seealso::
 #
@@ -53,11 +55,19 @@ _just()
   if [ "${JUST_HELP_FILES+set}" != "set" ]; then
     JUST_HELP_FILES=("${VSI_COMMON_DIR}/linux/just_functions.bsh")
   fi
-  # 2. Find Justfile: just_functions.bsh/load_justfile
-  JUST_DRYRUN_SOURCE=: _just_load_justfile "${JUSTFILE-Justfile}"
+
+  # 2. Find Justfile, load it, and copy the JUST_HELP_FILES array
+  local just_files="$(
+    _just_load_justfile "${JUSTFILE-Justfile}" >& /dev/null
+    join_a just_files ${JUST_HELP_FILES+"${JUST_HELP_FILES[@]}"}
+    echo "${just_files}"
+  )"
+  split_s just_files "${just_files}"
+  JUST_HELP_FILES+=(${just_files+"${just_files[@]}"})
+
   # 3. Emulate finding and adding plugins
   # The last JUST_HELP_FILES is the just file now
-  local just_dir="$(\dirname "${JUST_HELP_FILES[${#JUST_HELP_FILES[@]}-1]}")"
+  local just_dir="$(dirname "${JUST_HELP_FILES[${#JUST_HELP_FILES[@]}-1]}")"
   _just_get_plugins "${just_dir}"
   for just_plugin in ${JUST_PLUGINS+"${JUST_PLUGINS[@]}"}; do
     JUST_HELP_FILES+=("${just_plugin}")
@@ -87,7 +97,7 @@ _just()
 
   # Call local .just if it exists
   if [ -f "${just_dir}/.just" ]; then
-    . "${just_dir}/.just"
+    source "${just_dir}/.just"
   fi
 
   # If the last word completed is a subcommand, only match subtargets

@@ -1,7 +1,9 @@
 #!/usr/bin/env false
 # Source this file
 
-: ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
+if [[ $- != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
 
 #*# linux/cuda_info
 
@@ -52,6 +54,11 @@ function discover_cuda_versions()
     CUDA_VERSIONS+=($("${version}" --version | \awk 'END{print substr($6, 2)}'))
   done 2>/dev/null
 
+  if [ "${#CUDA_VERSIONS[@]}" = "0" ] && command -v "${NVIDIA_SMI-nvidia-smi}" &> /dev/null; then
+    echo "No CUDA found: Determining max supported CUDA instead" >&2
+    CUDA_VERSIONS=("$(nvidia-smi | sed -nE '/CUDA Version:/{s|.*CUDA Version: *([0-9.]*).*|\1|;p;q}')")
+  fi
+
   # Prevent macos from crashing. Not sure why this is new. Might be darling
   if [ ${#CUDA_VERSIONS[@]} -gt 1 ]; then
     CUDA_VERSIONS=($(sort -uV <<< ${CUDA_VERSIONS+"${CUDA_VERSIONS[*]}"}))
@@ -66,7 +73,7 @@ function discover_cuda_versions()
 # :Parameter: ``CUDA_DISCOVER`` - Default is disabled, set to ``1`` to enable.
 #
 # Flag to enable the discovery of CUDA cards and capabilities
-# 
+#
 # Because the ``CUDA`` card discovery can be expensive (milliseconds on some computers, hundreds on others), it is disabled by default.
 #
 # There are two methods for CUDA device discovery (in order):
@@ -165,16 +172,36 @@ function discover_cuda_info()
       IFS=$'\n'
       CUDA_CARDS=($(echo "${card_info}" | \grep ^Device | \awk '{$1=$2=""; $0=$0; $1=$1}1' | \sed 's|"||g'))
       IFS="${OLD_IFS}"
-      cuda_card_arches=(1 2 3 5 6 7) # Major version
-      cuda_card_families=(Tesla Fermi Kepler Maxwell Pascal Volta) # Family name
+      # Currently these two arrays can't have spaces, if they do, the awk will need to be updated
+      cuda_card_arches=(1 2 3 5 6 7 7.5) # Lowest possible version number, put in ascending order
+      cuda_card_families=(Tesla Fermi Kepler Maxwell Pascal Volta Turing) # Matching Family name
       for x in ${CUDA_CARD_ARCHES+"${CUDA_CARD_ARCHES[@]}"}; do
-        for y in "${!cuda_card_arches[@]}"; do
-          if [ "${x:0:1}" == "${cuda_card_arches[$y]}" ]; then
-            CUDA_CARD_FAMILIES+=("${cuda_card_families[$y]}")
-            continue 2
-          fi
-        done
-        CUDA_CARD_FAMILIES+=("Family Unknown")
+        CUDA_CARD_FAMILIES+=("$(awk '
+        BEGIN {
+          # Split the arches array
+          version[0]=""
+          a="'"${cuda_card_arches[*]}"'"
+          n=split(a, version, " ")
+
+          # Split the family array
+          family[0]=""
+          a="'"${cuda_card_families[*]}"'"
+          split(a, family, " ")
+
+          # loop through all the versions
+          for(j = n; j > 0; j--)
+          {
+            # if it matches
+            if ('"${x}"' >= version[j])
+            {
+              # Print it out
+              print family[j]
+              exit(0)
+            }
+          }
+          # Default behavior
+          print "Unknown family"
+        }')")
       done
     fi
   # Else attempt to use the nvidia-docker daemon
@@ -414,9 +441,21 @@ function cuda_capabilities()
       CUDA_CODES=(30 32 35 37 50 52 53 60 61 62 70 72 75)
       CUDA_MINIMAL_DRIVER_VERSION=410.48
       ;;
+    10.1*) #.105
+      CUDA_ARCHES=(30 32 35 37 50 52 53 60 61 62 70 72 75)
+      CUDA_CODES=(30 32 35 37 50 52 53 60 61 62 70 72 75)
+      CUDA_MINIMAL_DRIVER_VERSION=418.39
+      ;;
+    10.2*) #.105
+      echo "CUDA Version ${CUDA_VERSION} is not programmed in here yet... Using 10.1 values instead" >&2
+      CUDA_ARCHES=(30 32 35 37 50 52 53 60 61 62 70 72 75)
+      CUDA_CODES=(30 32 35 37 50 52 53 60 61 62 70 72 75)
+      CUDA_MINIMAL_DRIVER_VERSION=418.39
+      ;;
     # 11*
     # run "strings nvcc | grep compute_" (ARCHES) and "sm_" (CODES) and you'll get a complete list
     *)
+      echo "CUDA Version ${CUDA_VERSION} is not programmed in here yet..." >&2
       CUDA_ARCHES=()
       CUDA_CODES=()
       ;;

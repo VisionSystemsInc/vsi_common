@@ -294,33 +294,33 @@ class Redirect(RedirectBase): #Version 2
 
         Parameters
         ----------
-        file_like : file_like, optional
+        file_like : :class:`file_like`, optional
             File Output Argument. All File output arguments should use File
             like Python objects that have a .write call. Many of the arguments
             override the other argument for ease of use
-        all : str, optional
+        all : :class:`str`, optional
             Output stdout_c, stderr_c, stdout_py and stderr_py to the all file.
-        stdout : str, optional
+        stdout : :class:`str`, optional
             Output stdout_c and stdout_py to the stdout file.
-        stderr : str, optional
+        stderr : :class:`str`, optional
             Output stderr_c and stderr_py to the stderr file.
-        c : str, optional
+        c : :class:`str`, optional
             Output stdout_c and stderr_c to the c file.
-        py : str, optional
+        py : :class:`str`, optional
             Output stdout_py and stderr_py to the py file.
-        stdout_c : str, optional
-        stderr_c : str, optional
-        stdout_py : file_like, optional
-        stderr_py : file_like, optional
+        stdout_c : :class:`str`, optional
+        stderr_c : :class:`str`, optional
+        stdout_py : :class:`file_like`, optional
+        stderr_py : :class:`file_like`, optional
             Output to each individual stream for maximum customization.
-        stdout_c_fd : int, optional
-        stderr_c_fd : int, optional
+        stdout_c_fd : :class:`int`, optional
+        stderr_c_fd : :class:`int`, optional
              The default file number used for stdout (1) and stderr (2). There
              should be no reason to override this
-        stdout_py_module : module, optional
-        stderr_py_module : module, optional
-        stdout_py_name : str, optional
-        stderr_py_name : str, optional
+        stdout_py_module : :class:`module`, optional
+        stderr_py_module : :class:`module`, optional
+        stdout_py_name : :class:`str`, optional
+        stderr_py_name : :class:`str`, optional
             Because of the nature of python, in order to replace and restore
             the python object, the module and name of attribute must be passed
             through, where name is a string and module and the acutal module.
@@ -578,30 +578,30 @@ class Capture(RedirectBase): #version 1
 
         Parameters
         ----------
-        stdout_c : int, optional
+        stdout_c : :class:`int`, optional
             The fd to be replace, usually 1 will work, but change it in case
             this is not right in your case (default: 1)
             None means to not redirect
-        stderr_c : int, optional
+        stderr_c : :class:`int`, optional
             The fd to be replaced, usually 2 will work, but change it in case
             this is not right in your case (default: 2)
             None means to not redirect
-        stdout_py : file_like, optional
+        stdout_py : :class:`file_like`, optional
             The file object to be replaced (default: sys.stdout)
             None means to not redirect
-        stderr_py : file_like, optional
+        stderr_py : :class:`file_like`, optional
             The file object to be replaced (default: sys.stderr)
             None means to not redirect
-        group : bool, optional
+        group : :class:`bool`, optional
             Should ANY of the stream be joined together. This overrides ALL of
             the following group options
-        group_outerr : bool, optional
+        group_outerr : :class:`bool`, optional
             Should stdout and stderr use the a group stream or else it will
             have separate streams (default: True)
-        group_out : bool, optional
+        group_out : :class:`bool`, optional
             Should stdout_c and stdout_py use the a group stream or else it
             will have separate streams (default: True)
-        group_err : bool, optional
+        group_err : :class:`bool`, optional
             Should stderr_c and stderr_py use the a group stream or else it
             will have separate streams (default: True)
     '''
@@ -651,7 +651,7 @@ class Capture(RedirectBase): #version 1
         self.std_cs.append([])
         self.std_pys.append(['stderr'])
 
-    self.buffers = [''] * len(self.std_cs)
+    self.buffers = [bytes()] * len(self.std_cs)
 
     super(Capture, self).__init__()
 
