@@ -649,45 +649,72 @@ def command_list_to_string(cmd):
     from pipes import quote
   return ' '.join([quote(x) for x in cmd])
 
+class NestedUpdate:
+  def __init__(self, dict_, patch=None):
+    '''
+    Parameters
+    ----------
+    dict_ : dict
+        The dict to be updated
+    patch : :class:`function`, optional
+        Patch values as they are set by wrapping in this function
+    '''
+
+    self.dict = dict_
+    self.patch = patch
+
+  def update(self, *args, **kwargs):
+    ''' Updated a dictionary in a nested fashion
+
+    Parameters
+    ----------
+    *args : args
+        Same arguments as dict.update
+    **kwargs : args
+        Same arguments as dict.update
+    '''
+
+    # patch iterables
+    def patch_it(v):  # Handle Mappings
+      return type(v)(type(self.dict)(item)
+                     if isinstance(item, Mapping)
+                     and not isinstance(item, type(self.dict))
+                     # Handle Iterables
+                     else patch_it(item)
+                     if isinstance(item, Iterable)
+                     and not isinstance(item, str)
+                     # Handle Everything else
+                     else item
+                     # Loop through v items
+                     for item in v)
+
+    # Don't use dict comprehension (I forget why, readability?) or constructor
+    # here (infinite recursion)!
+    for key, value in dict(*args, **kwargs).items():
+      if isinstance(value, Mapping):
+        self.dict[key] = nested_update(self.dict.get(key, type(self.dict)()),
+                                       value)
+      elif isinstance(value, Iterable) and not isinstance(value, str):
+        self.dict[key] = patch_it(value)
+      else:
+        self.dict[key] = value
+
+      if self.patch:
+        self.patch(key, self.dict[key])
+
+    return self.dict
+
+
 def nested_update(dict_, *args, **kwargs):
-  ''' Updated a dictionary in a nested fashion
-
-  Parameters
-  ----------
-  dict_ : dict
-      The dict to be updated
-  *args : args
-      Same arguments as dict.update
-  **kwargs : args
-      Same arguments as dict.update
   '''
+  Simple function version of :class:`NestedUpdate`
 
-  # patch iterables
-  def patch_it(v):
-                   # Handle Mappings
-    return type(v)(type(dict_)(item)
-                   if isinstance(item, Mapping)
-                   and not isinstance(item, type(dict_))
-                   # Handle Iterables
-                   else patch_it(item)
-                   if isinstance(item, Iterable)
-                   and not isinstance(item, str)
-                   # Handle Everything else
-                   else item
-                   # Loop through v items
-                   for item in v)
+  .. note::
 
-  # Don't use dict comprehension (I forget why, readability?) or constructor
-  # here (infinite recursion)!
-  for key, value in dict(*args, **kwargs).items():
-    if isinstance(value, Mapping):
-      dict_[key] = nested_update(dict_.get(key, type(dict_)()), value)
-    elif isinstance(value, Iterable) and not isinstance(value, str):
-      dict_[key] = patch_it(value)
-    else:
-      dict_[key] = value
-
-  return dict_
+      You cannot update a key whose name is ``dict_``, use the class directly
+      if this is a possibility
+  '''
+  return NestedUpdate(dict_).update(*args, **kwargs)
 
 def nested_in_dict(dict1, dict2):
   ''' Checks to see if dict1 is in dict2
