@@ -677,10 +677,11 @@ def nested_update(dict_, *args, **kwargs):
                    # Loop through v items
                    for item in v)
 
-  # Don't use dict comprehension or constructor here!
+  # Don't use dict comprehension (I forget why, readability?) or constructor
+  # here (infinite recursion)!
   for key, value in dict(*args, **kwargs).items():
     if isinstance(value, Mapping):
-      dict_[key] =  nested_update(dict_.get(key, type(dict_)()), value)
+      dict_[key] = nested_update(dict_.get(key, type(dict_)()), value)
     elif isinstance(value, Iterable) and not isinstance(value, str):
       dict_[key] = patch_it(value)
     else:
