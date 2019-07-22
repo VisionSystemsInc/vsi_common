@@ -109,7 +109,12 @@ fi
 source "${VSI_COMMON_DIR}/linux/just_env" "${JUST_SETTINGS-/dev/null}"
 
 # Remove _DOCKER variables and undo // expansion
-"${VSI_COMMON_DIR}/linux/just_entrypoint_user_functions"
+source "${VSI_COMMON_DIR}/linux/just_entrypoint_user_functions"
+if [ -n "${JUST_PROJECT_PREFIX+set}" ]; then
+  # Remove duplicate ${JUST_PROJECT_PREFIX}_*_DOCKER variables
+  filter_docker_variables
+fi
+docker_convert_paths
 
 if [ "${run_just}" = "1" ]; then
   exec /vsi/linux/just "${@}"
