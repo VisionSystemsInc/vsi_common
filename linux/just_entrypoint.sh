@@ -39,7 +39,7 @@ set -eu
 # 6. Next the entrypoint (and everything else from here on) is re-executed as the user that was created in :func:`just_entrypoint_functions docker_setup_user`. If you need to give the user root privliges, the suggested method is to use ``gosu``. Giving ``gosu`` ``chmod u+s /usr/local/bin/gosu`` permissions will accomplish this, but should not be suggested for deployment situations.
 # #. Loads the just environment for the user accoring to :envvar:`JUST_SETTINGS`.
 # #. If :envvar:`JUSTFILE` is set, runs :func:`docker_functions.bsh filter_docker_variables` to remove project variables ending in ``_DOCKER``
-# #. Replace ``//`` with `/` in project variables if running on windows using mingw or cygwin. Cygwin-like systems have a habit of `expanding variables <http://mingw.org/wiki/Posix_path_conversion>`_. Extra slashes are added in project environment files using :envvar:`VSI_PATH_ESC`, which cygwin-like systems evaluate as a ``/``, else empty. An unfortunate side effect of this is the `//` is still in the container. While this is usually harmeless, there are cases when the extra slash in the variables cause code to crash.
+# #. Replace ``//`` with `/` in project variables if running ongit  windows using mingw or cygwin. Cygwin-like systems have a habit of `expanding variables <http://mingw.org/wiki/Posix_path_conversion>`_. Extra slashes are added in project environment files using :envvar:`VSI_PATH_ESC`, which cygwin-like systems evaluate as a ``/``, else empty. An unfortunate side effect of this is the `//` is still in the container. While this is usually harmeless, there are cases when the extra slash in the variables cause code to crash.
 # #. If :envvar:`JUSTFILE` was passed in, this signifies to the entrypoint that an internal just call will be used. This means ``just`` is prepended to the command to ``exec``, so you don't have to.
 # #. If :envvar:`JUSTFILE` is not set, the command arguments are run using ``exec``
 #
@@ -109,7 +109,12 @@ fi
 source "${VSI_COMMON_DIR}/linux/just_env" "${JUST_SETTINGS-/dev/null}"
 
 # Remove _DOCKER variables and undo // expansion
-"${VSI_COMMON_DIR}/linux/just_entrypoint_user_functions"
+source "${VSI_COMMON_DIR}/linux/just_entrypoint_user_functions"
+if [ -n "${JUST_PROJECT_PREFIX+set}" ]; then
+  # Remove duplicate ${JUST_PROJECT_PREFIX}_*_DOCKER variables
+  filter_docker_variables
+fi
+docker_convert_paths
 
 if [ "${run_just}" = "1" ]; then
   exec /vsi/linux/just "${@}"
