@@ -647,6 +647,8 @@ if [ ! -e "${PROJECT_NAME}.env" ]; then
 
             # Put variables that do not begin with '"${PROJECT_PREFIX}"' here.
 
+            : ${TZ=/usr/share/zoneinfo/UTC}
+
             # Use this to add the user name to the docker-compose project name. This is
             # important when multiple users are using this docker-compose project on a
             # single host. This way all of the docker resources are prefixed with a unique
@@ -873,7 +875,7 @@ if [ "${USE_DOCKER}" = "1" ]; then
                   DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
                     # # Uncomment for GDAL
                     # gdal-bin \
-                    python3; \
+                    python3 tzdata; \
                   rm -r /var/lib/apt/lists/*
 
               ENV \
@@ -969,8 +971,13 @@ if [ "${USE_DOCKER}" = "1" ]; then
               ###############################################################################
 
               FROM debian:stretch
-              SHELL ["/usr/bin/env", "bash", "-euxvc"]' >> docker/${APP_NAME}.Dockerfile
+              SHELL ["/usr/bin/env", "bash", "-euxvc"]
 
+              # Install any runtime dependencies
+              RUN apt-get update; \
+                  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                    tzdata; \
+                  rm -r /var/lib/apt/lists/*' >> docker/${APP_NAME}.Dockerfile
     fi
 
     uwecho   '
@@ -1085,6 +1092,7 @@ if [ "${USE_DOCKER}" = "1" ]; then
                   - DISPLAY
                   - JUSTFILE=/src/docker/'"${APP_NAME}"'.Justfile
                   - JUST_SETTINGS=/src/'"${PROJECT_NAME}"'.env
+                  - TZ
             #     runtime: nvidia  # Uncomment for nvidia gpu support
             #     cap_add:
             #       - SYS_PTRACE # Useful for gdb
