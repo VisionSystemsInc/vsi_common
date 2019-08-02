@@ -730,19 +730,12 @@ if [ ! -e "${JUSTFILE}" ]; then
                     else
                       justify build recipes-auto "${'"${PROJECT_PREFIX}"'_CWD}/docker"/*.Dockerfile
                       Docker-compose build
-                    ' >> "${JUSTFILE}"
+              ' >> "${JUSTFILE}"
     if [ "${USE_PIPENV}" = "1" ]; then
-      uwecho '        justify docker-compose clean venv
-                      justify _post_build
-                    fi
-                    ;;
-                  _post_build)
-                    docker_cp_image "${'"${PROJECT_PREFIX}"'_DOCKER_REPO}:'"${APP_NAME}"'_${'"${PROJECT_PREFIX}"'_USERNAME}" "/venv/Pipfile.lock" "${'"${PROJECT_PREFIX}"'_CWD}/Pipfile.lock"
-                    ;;' >> "${JUSTFILE}"
-    else
-      uwecho '      fi
-                    ;;' >> "${JUSTFILE}"
+      uwecho '        justify docker-compose clean venv' >> "${JUSTFILE}"
     fi
+    uwecho   '      fi
+                    ;;' >> "${JUSTFILE}" >> "${JUSTFILE}"
     uwecho   '    run_'"${APP_NAME}"') # Run '"${APP_NAME}"' 1
                     Just-docker-compose run --service-ports '"${APP_NAME}"' ${@+"${@}"}
                     extra_args=$#
@@ -762,7 +755,14 @@ if [ ! -e "${JUSTFILE}" ]; then
                     ;;
               ' >> "${JUSTFILE}"
     if [ "${USE_PIPENV}" = "1" ]; then
-      uwecho '    clean_all) # Delete all local volumes
+      uwecho '    pipenv_install) # Install/update pipenv packages
+                    Just-docker-compose run example_pipenv bash -c \
+                      '"'"'pipenv install ${@+"${@}"}
+                      chown ${DOCKER_UID}:${DOCKER_GIDS%% *} "${PIPENV_PIPFILE}" "${PIPENV_PIPFILE}.lock" || :'"'"' \
+                      bash ${@+"${@}"} # Pass the arguments to pipenv, starting with $0
+                    extra_args=$#
+                    ;;
+                  clean_all) # Delete all local volumes
                     ask_question "Are you sure? This will remove packages not in Pipfile!" n
                     justify docker-compose clean venv
                     ;;
@@ -899,7 +899,7 @@ if [ "${USE_DOCKER}" = "1" ]; then
 
               ###############################################################################
 
-              FROM dep_stage as pipenv_cache
+              FROM dep_stage as dep_pipenv
 
               # # Uncomment for GDAL
               # # Install any build dependencies
@@ -907,59 +907,66 @@ if [ "${USE_DOCKER}" = "1" ]; then
               #     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
               #       libgdal-dev python3-dev g++ ; \
               #     rm -r /var/lib/apt/lists/*
+              #
+              #     # GDAL specific hacks
+              # ENV CPLUS_INCLUDE_PATH=/usr/include/gdal \
+              #     C_INCLUDE_PATH=/usr/include/gdal
 
               ADD Pipfile Pipfile.lock /src/
               # Simple packages can be added as dependencies to your project by:
               # - Running the container and installing them with pipenv; e.g.,
-              #     just run '"${APP_NAME}"'
-              #     pipenv install --keep-outdated scipy
+              #     just pipenv install --keep-outdated scipy
               #     # install scipy without updating other packages
-              # Packages that require compiling should be added by
+              # Packages can also be added by
               # - Editing the Pipfile and adding lines to the [packages] section
               #     scipy = "*"
               # - Rebuiling the image
               #     just build
 
+              FROM dep_pipenv as pipenv_cache
+
               # GDAL, for example, is a more complicated example
               # - GDAL has extra build dependencies. The apt-get pattern above will install
               #   these dependencies.
-              # - GDAL'"'"'s build script needs some customization. The exports
-              #   below accomplish this
+              # - GDAL'"'"'s build script needs some customization. The ENV exports
+              #   above accomplish this
               # - GDAL needs numpy installed before it is built, otherwise, numpy
               #   integration will not be compiled
               #
               # To test this out:
-              # 1) Edit your Pipfile and add the following lines (or similar)
+              # 1) Uncomment all the "Uncomment for GDAL" sections
+              # 2) just sync
+              # 3) Remove the old pipenv install section below
+              # 4) Edit your Pipfile and add the following lines (or similar)
               #        gdal = "==2.1.0"
               #        numpy = "*"
               #    This will add the latest version of numpy and the version of
               #    gdal compatible with debian:stretch to your pipenv environment.
               #    Note: the version of the pypi package should match (as closely as
               #    possible) to the version of the GDAL-binary dependency (gdal-bin)
-              # 2) Uncomment all the "Uncomment for GDAL" sections
-              # 3) Remove the old pipenv install section below
+              # 5) just pipenv install
+              # 6) just sync (optionally update docker image)
+              #
+              # Steps 4 and 5 can also be done by:
+              # - just pipenv install numpy gdal==2.1.0
+              # - These can be combined because numpy is already installed at
+              #   just sync time, so numpy was already installed before gdal
+              # - All other pipenv install arguments can be passed in, such as
+              #   --keep-outdated, --pre, etc...
 
               # # Uncomment for GDAL
               # RUN \
-              #     # GDAL specific hacks
-              #     export CPLUS_INCLUDE_PATH=/usr/include/gdal; \
-              #     export C_INCLUDE_PATH=/usr/include/gdal; \
-              #
               #     # Get the version marker of numpy specified in the lock file, else blank
               #     numpy_version="$(python -c "import json; print(json.load(open('"'"'${PIPENV_PIPFILE}.lock'"'"', '"'"'r'"'"'))['"'"'default'"'"']['"'"'numpy'"'"']['"'"'version'"'"'])" 2>/dev/null)" || :; \
               #     # Install numpy first, so that the gdal install works.
               #     pipenv run pip install numpy${numpy_version}; \
               #     # Now install all the packages.
-              #     pipenv install --keep-outdated; \
-              #
-              #     cp "${PIPENV_PIPFILE}".lock /venv; \
+              #     pipenv sync; \
               #     rm -rf /src/* /tmp/pip*
 
               RUN \
                   # Install all packages into the image
-                  pipenv install --keep-outdated; \
-                  # Copy the lock file, so that it can be copied out of the image in "just _post_build"
-                  cp "${PIPENV_PIPFILE}".lock /venv; \
+                  pipenv sync; \
                   # Cleanup and make way for the real /src that will be mounted at runtime
                   rm -rf /src/* /tmp/pip*
 
@@ -1026,7 +1033,7 @@ if [ "${USE_DOCKER}" = "1" ]; then
   ####################
 
   if [ ! -e "docker/${APP_NAME}.Justfile" ]; then
-    uwecho   '#!/usr/bin/env false
+    uwecho   '#!/usr/bin/env false bash
 
               function caseify()
               {
@@ -1071,45 +1078,57 @@ if [ "${USE_DOCKER}" = "1" ]; then
   ##########################
 
   if [ ! -e "docker-compose.yml" ]; then
-    uwecho 'version: "2.3"
+    uwecho   'version: "2.3"
 
-            services:
-              '"${APP_NAME}"':
-                build:
-                  context: .
-                  dockerfile: docker/'"${APP_NAME}"'.Dockerfile
-                # prevent different users from clobbering each others images
-                image: ${'"${PROJECT_PREFIX}"'_DOCKER_REPO}:'"${APP_NAME}"'_${'"${PROJECT_PREFIX}"'_USERNAME}
-                environment:
-                  # Variables for just_entrypoint_functions
-                  - DOCKER_UID=${'"${PROJECT_PREFIX}"'_UID}
-                  - DOCKER_GIDS=${'"${PROJECT_PREFIX}"'_GIDS}
-                  - DOCKER_GROUP_NAMES=${'"${PROJECT_PREFIX}"'_GROUP_NAMES}
-                  - DOCKER_USERNAME=user
+              services:' > "docker-compose.yml"
 
-                  # - DOCKER_HOME=${'"${PROJECT_PREFIX}"'_HOME}
+    if [ "${USE_PIPENV}" = "1" ]; then
+      uwecho '  '"${APP_NAME}"': &'"${APP_NAME}"'
+                  build: &'"${APP_NAME}"'_build' >> "docker-compose.yml"
+    else
+      uwecho '  '"${APP_NAME}"':
+                  build:' >> "docker-compose.yml"
+    fi
+    uwecho   '      context: .
+                    dockerfile: docker/'"${APP_NAME}"'.Dockerfile
+                  # prevent different users from clobbering each others images
+                  image: ${'"${PROJECT_PREFIX}"'_DOCKER_REPO}:'"${APP_NAME}"'_${'"${PROJECT_PREFIX}"'_USERNAME}
+                  environment:
+                    # Variables for just_entrypoint_functions
+                    - DOCKER_UID=${'"${PROJECT_PREFIX}"'_UID}
+                    - DOCKER_GIDS=${'"${PROJECT_PREFIX}"'_GIDS}
+                    - DOCKER_GROUP_NAMES=${'"${PROJECT_PREFIX}"'_GROUP_NAMES}
+                    - DOCKER_USERNAME=user
 
-                  - DISPLAY
-                  - JUSTFILE=/src/docker/'"${APP_NAME}"'.Justfile
-                  - JUST_SETTINGS=/src/'"${PROJECT_NAME}"'.env
-                  - TZ
-            #     runtime: nvidia  # Uncomment for nvidia gpu support
-            #     cap_add:
-            #       - SYS_PTRACE # Useful for gdb
-                volumes:
-                  - type: ${'"${PROJECT_PREFIX}"'_SOURCE_DIR_TYPE}
-                    source: ${'"${PROJECT_PREFIX}"'_SOURCE_DIR}
-                    target: ${'"${PROJECT_PREFIX}"'_SOURCE_DIR_DOCKER}' > "docker-compose.yml"
+              #       - DOCKER_HOME=${'"${PROJECT_PREFIX}"'_HOME}
+
+                    - DISPLAY
+                    - JUSTFILE=/src/docker/'"${APP_NAME}"'.Justfile
+                    - JUST_SETTINGS=/src/'"${PROJECT_NAME}"'.env
+                    - TZ
+              #     runtime: nvidia  # Uncomment for nvidia gpu support
+              #     cap_add:
+              #       - SYS_PTRACE # Useful for gdb
+                  volumes:
+                    - type: ${'"${PROJECT_PREFIX}"'_SOURCE_DIR_TYPE}
+                      source: ${'"${PROJECT_PREFIX}"'_SOURCE_DIR}
+                      target: ${'"${PROJECT_PREFIX}"'_SOURCE_DIR_DOCKER}' >> "docker-compose.yml"
     if [ "${USE_PIPENV}" = "1" ]; then
       uwecho '      - type: volume
                       source: venv
                       target: /venv' >> "docker-compose.yml"
     fi
-    uwecho '#       - type: volume
-            #         source: home-volume
-            #         target: ${'"${PROJECT_PREFIX}"'_HOME} # home-volume should be overridable' >> "docker-compose.yml"
+    uwecho   '#       - type: volume
+              #         source: home-volume
+              #         target: ${'"${PROJECT_PREFIX}"'_HOME} # home-volume should be overridable' >> "docker-compose.yml"
     if [ "${USE_PIPENV}" = "1" ]; then
-      uwecho 'volumes:
+      uwecho '  '"${APP_NAME}"'_pipenv:
+                  <<: *'"${APP_NAME}"'
+                  build:
+                    <<: *'"${APP_NAME}"'_build
+                    target: dep_pipenv
+                  image: ${'"${PROJECT_PREFIX}"'_DOCKER_REPO}:'"${APP_NAME}"'_pipenv_${'"${PROJECT_PREFIX}"'_USERNAME}
+              volumes:
                 venv:
                   labels:
                     com.vsi.just.clean_action: ask' >> "docker-compose.yml"
