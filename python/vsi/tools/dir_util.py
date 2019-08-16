@@ -25,11 +25,6 @@ def is_subdir(path, base_dir):
       Remainder - Windows - If the paths are on two different drives, entire
       path is returned
 
-  Raises
-  ------
-  ValueError
-      Inappropriate Value
-
   Note
   ----
   This will NOT work with Junctions in Windows... I'm not sure what else
