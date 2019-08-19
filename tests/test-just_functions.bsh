@@ -47,6 +47,43 @@ begin_test "source_environment_files"
 )
 end_test
 
+begin_test "Windows path escape"
+(
+  setup_test
+
+  JUST_PROJECT_PREFIX=TESTTHIS
+
+  auto_path_escape # No error when undefined
+
+  TESTTHIS_AUTO_ESCAPE='TESTTHAT_.*_LOCKER'
+
+  # Non-matches
+  export TESTTHAT=/a
+  export TESTTHAT_LOCKER=/b
+  export TESTTHIS_BAR_LOCKER=/foo
+  # Matches
+  export TESTTHAT_FOO_LOCKER=/bar
+  export TESTTHAT_FOO2_LOCKER=/
+  export TESTTHAT_FOO3_LOCKER=bar/car
+  export TESTTHAT_FOO4_LOCKER=./bar
+  export TESTTHAT_FOO5_LOCKER=nothing
+  export TESTTHAT_FOO6_LOCKER=//foo/bar/
+
+  auto_path_escape
+  echo "${TESTTHAT_FOO_LOCKER}"
+
+  [ "${TESTTHAT}" = "/a" ]
+  [ "${TESTTHAT_LOCKER}" = "/b" ]
+  [ "${TESTTHIS_BAR_LOCKER}" == "/foo" ]
+  [ "${TESTTHAT_FOO_LOCKER}" = "//bar" ]
+  [ "${TESTTHAT_FOO2_LOCKER}" = "//" ]
+  [ "${TESTTHAT_FOO3_LOCKER}" = "bar/car" ]
+  [ "${TESTTHAT_FOO4_LOCKER}" = "./bar" ]
+  [ "${TESTTHAT_FOO5_LOCKER}" = "nothing" ]
+  [ "${TESTTHAT_FOO6_LOCKER}" = "//foo/bar/" ]
+)
+end_test
+
 begin_test "local.env in read-only (#84)"
 (
   setup_test
@@ -722,5 +759,27 @@ begin_test "safe_load"
   safe_load file2
   [ "${d}" = "21" ]
 
+)
+end_test
+
+begin_test "Need tty"
+(
+  setup_test
+
+  function powershell()
+  {
+    echo "${result}"
+  }
+
+  SSH_TTY= OS=not_windows not need_tty
+  SSH_TTY= OS=Windows_NT JUST_IS_TTY=1 not need_tty
+  JUST_IS_TTY=0 OS=Windows_NT need_tty
+
+  unset JUST_IS_TTY
+  unset JUST_IS_TTY
+
+  SSH_TTY= result="None" OS=Windows_NT not need_tty
+  SSH_TTY= result="\msys-1888ae32e00d56aa-pty0-from-master" OS=Windows_NT need_tty
+  SSH_TTY=windows-pty result="None" OS=Windows_NT need_tty
 )
 end_test

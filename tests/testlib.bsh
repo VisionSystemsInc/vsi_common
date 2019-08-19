@@ -69,6 +69,7 @@ if [ "${TESTLIB_SHOW_TIMING-0}" == "1" ] || [[ ${OSTYPE} = darwin* ]]; then
   . "${VSI_COMMON_DIR}/linux/time_tools.bsh"
 fi
 . "${VSI_COMMON_DIR}/linux/file_tools.bsh"
+. "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
 . "${VSI_COMMON_DIR}/tests/test_colors.sh"
 
 # create a temporary work space
@@ -274,10 +275,15 @@ _begin_common_test ()
     skip_next_test
   fi
 
-  find_open_fd stdout
-  eval "exec ${stdout}>&1"
-  find_open_fd stderr
-  eval "exec ${stderr}>&2"
+  if [ "${BASH_VERSINFO[0]}" -gt "4" ] || [ "${BASH_VERSINFO[0]}" == "4" ] && [ "${BASH_VERSINFO[1]}" -ge "1" ]; then
+    exec {stdout}>&1
+    exec {stderr}>&2
+  else
+    find_open_fd stdout
+    find_open_fd stderr
+    eval "exec ${stdout}>&1"
+    eval "exec ${stderr}>&2"
+  fi
 
   out="${TESTDIR}/out"
   err="${TESTDIR}/err"
@@ -399,7 +405,8 @@ end_test ()
 {
   test_status="${1:-$?}" # This MUST be the first line of this function
   set +x -e
-  eval "exec 1>&${stdout} 2>&${stderr}"
+  # Tested, this apparently works on bash 3.2
+  exec 1>&${stdout} 2>&${stderr}
   popd &> /dev/null
 
   local time_e=''
