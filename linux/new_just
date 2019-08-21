@@ -757,11 +757,9 @@ if [ ! -e "${JUSTFILE}" ]; then
                     ;;
               ' >> "${JUSTFILE}"
     if [ "${USE_PIPENV}" = "1" ]; then
-      uwecho '    pipenv_install) # Install/update pipenv packages
-                    Just-docker-compose run example_pipenv bash -c \
-                      '"'"'pipenv install ${@+"${@}"}
-                      chown ${DOCKER_UID}:${DOCKER_GIDS%% *} "${PIPENV_PIPFILE}" "${PIPENV_PIPFILE}.lock" || :'"'"' \
-                      bash ${@+"${@}"} # Pass the arguments to pipenv, starting with $0
+      uwecho '    pipenv) # Run pipenv commands in pipenv conatainer. Useful for \
+                          # installing/updating pipenv packages
+                    Just-docker-compose run example_pipenv pipenv ${@+"${@}"}
                     extra_args=$#
                     ;;
                   clean_all) # Delete all local volumes
@@ -901,7 +899,7 @@ if [ "${USE_DOCKER}" = "1" ]; then
 
               ###############################################################################
 
-              FROM dep_stage as dep_pipenv
+              FROM dep_stage as pipenv_cache
 
               # # Uncomment for GDAL
               # # Install any build dependencies
@@ -924,8 +922,6 @@ if [ "${USE_DOCKER}" = "1" ]; then
               #     scipy = "*"
               # - Rebuiling the image
               #     just build
-
-              FROM dep_pipenv as pipenv_cache
 
               # GDAL, for example, is a more complicated example
               # - GDAL has extra build dependencies. The apt-get pattern above will install
@@ -971,6 +967,17 @@ if [ "${USE_DOCKER}" = "1" ]; then
                   pipenv sync; \
                   # Cleanup and make way for the real /src that will be mounted at runtime
                   rm -rf /src/* /tmp/pip*
+
+              ###############################################################################
+
+              FROM pipenv_cache as pipenv_run
+
+              COPY --from=gosu /usr/local/bin/gosu /usr/local/bin/gosu
+              COPY --from=vsi /vsi /vsi
+
+              ENTRYPOINT ["/usr/bin/env", "bash", "/vsi/linux/just_entrypoint.sh"]
+
+              CMD ["bash"]
 
               ###############################################################################
 
@@ -1128,7 +1135,7 @@ if [ "${USE_DOCKER}" = "1" ]; then
                   <<: *'"${APP_NAME}"'
                   build:
                     <<: *'"${APP_NAME}"'_build
-                    target: dep_pipenv
+                    target: pipenv_run
                   image: ${'"${PROJECT_PREFIX}"'_DOCKER_REPO}:'"${APP_NAME}"'_pipenv_${'"${PROJECT_PREFIX}"'_USERNAME}
               volumes:
                 venv:
