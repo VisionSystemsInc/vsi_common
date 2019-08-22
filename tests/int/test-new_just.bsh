@@ -5,6 +5,30 @@
 VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.."; pwd)"
 . uwecho.bsh
 
+function setup()
+{
+  local container_name
+
+  # If this failed, then the docker server is on another host. TEST_DIR is a
+  # random name so there's practically no possibility of a false positive
+  if container_name=$(docker create --mount "type=bind,source=${TESTDIR},destination=${JUST_PATH_ESC}/src" alpine:3.8); then
+    docker_is_local=1
+    docker rm "${container_name}" &> /dev/null
+  else
+    docker_is_local=0
+
+    # No need to rm, because it failed to be created
+    tmp_volume="$(docker volume create)"
+  fi
+}
+
+function teardown()
+{
+  if [[ ${docker_is_local} == 0 ]]; then
+    docker volume rm "${tmp_volume}" &> /dev/null
+  fi
+}
+
 begin_test "New Just with defaults"
 (
   setup_test
@@ -69,7 +93,7 @@ mockd volume rm testpro_venv" ]
 
   tmp_file="${BASH_REMATCH[1]}"
 
-  ans="version: '2.3'
+  ans="version: '2.4'
 services:
   yaan:
 "
@@ -147,7 +171,7 @@ mockdc -f ${TESTDIR}/docker-compose.yml build" ]
 
   tmp_file="${BASH_REMATCH[1]}"
 
-  ans="version: '2.3'
+  ans="version: '2.4'
 services:
   example:
 "
@@ -252,8 +276,7 @@ begin_test "New just docker test"
   setup_test
 
   if [ "${OS-}" = "Windows_NT" ]; then
-    # git submodule add on windows won't handle "??? This works on cmd, but not bash.
-    # MSYS2_ARG_CONV_EXCL=* did not fix it, therefore it is not a path mangling issue
+    # Windows does not allow " in filenames
     tough_name=""
   else
     tough_name="\""
@@ -278,28 +301,19 @@ begin_test "New just docker test"
 
   just build
 
-  rv=0
-  container_name=$(docker create --mount "type=bind,source=${TESTDIR},destination=/src" alpine:3.8) || rv=$?
-  # If this failed, then the docker server is on another host
-  if [[ ${rv} == 0 ]]; then
-    docker rm "${container_name}"
-  else
-    # No need to rm, because it failed to be created
-    tmp_volume="$(docker volume create)"
-    tar c . | docker run -i --rm -v "${tmp_volume}:/src" -w /src alpine:3.8 tar x
+  if [[ ${docker_is_local} == 0 ]]; then
+    tar c . | docker run -i --rm -v "${tmp_volume}:${JUST_PATH_ESC}/src" -w "${JUST_PATH_ESC}/src" alpine:3.8 tar x
+
+    # Change the source dir to a volume
     export JTEST_SOURCE_DIR="${tmp_volume}"
     export JTEST_SOURCE_DIR_TYPE=volume
+    echo "  ${tmp_volume}:" >> "${TESTDIR}/docker-compose.yml"
+    echo "    name: ${tmp_volume}" >> "${TESTDIR}/docker-compose.yml"
   fi
 
-  rv=0
   # for some reason, only on Windows running through xargs do I have this tty issue, and only here
-  python_packages="$(DOCKER_COMPOSE_EXTRA_RUN_ARGS='-T' just run yaan pip freeze --all)" || rv=$?
+  [[ $(DOCKER_COMPOSE_EXTRA_RUN_ARGS='-T' just run yaan pip freeze --all) =~ pip==.*setuptools==.*wheel==.* ]]
 
-  if declare -p tmp_volume &> /dev/null; then
-    docker volume rm "${tmp_volume}"
-  fi
-
-  [[ ${rv} = 0 ]]
-  [[ ${python_packages} =~ pip==.*setuptools==.*wheel==.* ]]
+  just docker-compose down
 )
 end_test
