@@ -68,6 +68,11 @@ set -eu
 
 : ${VSI_COMMON_DIR=/vsi}
 
+if [ -n "${SINGULARITY_NAME+set}" ]; then
+  # Disable the special docker magic in singularity
+  export ALREADY_RUN_ONCE=1
+fi
+
 if [ "${ALREADY_RUN_ONCE+set}" != "set" ]; then
   # create the user and associated groups and handle nfs symlinks
 
