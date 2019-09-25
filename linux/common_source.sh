@@ -476,17 +476,19 @@ fi
 # https://wiki.ubuntu.com/Releases
 if [ "${VSI_DISTRO_LIKE-}" = "ubuntu" ]; then
   case "${VSI_DISTRO_VERSION_LIKE-}" in
-    precise) VSI_DISTRO_VERSION_LIKE=12.04 ;; # EOL April 28, 2017
-    trusty)  VSI_DISTRO_VERSION_LIKE=14.04 ;; # EOL April, 2019
-    utopic)  VSI_DISTRO_VERSION_LIKE=14.10 ;; # EOL July 23,  2015
+    precise) VSI_DISTRO_VERSION_LIKE=12.04 ;; # EOL Apr 28, 2017
+    trusty)  VSI_DISTRO_VERSION_LIKE=14.04 ;; # EOL Apr, 2019, ESM Apr 2022
+    utopic)  VSI_DISTRO_VERSION_LIKE=14.10 ;; # EOL Jul 23,  2015
     vivid)   VSI_DISTRO_VERSION_LIKE=15.04 ;; # EOL Feb 4, 2016
-    wily)    VSI_DISTRO_VERSION_LIKE=15.10 ;; # EOL July 28, 2016
-    xenial)  VSI_DISTRO_VERSION_LIKE=16.04 ;; # EOL ~July 2021
-    yakkety) VSI_DISTRO_VERSION_LIKE=16.10 ;; # EOL July 20, 2017
-    zesty)   VSI_DISTRO_VERSION_LIKE=17.04 ;; # EOL Jan 2018
-    artful)  VSI_DISTRO_VERSION_LIKE=17.10 ;; # Release Oct 2017
-    bionic)  VSI_DISTRO_VERSION_LIKE=18.04 ;; # Released April 2018
-    cosmic)  VSI_DISTRO_VERSION_LIKE=18.10 ;; # To be released October 18, 2018
+    wily)    VSI_DISTRO_VERSION_LIKE=15.10 ;; # EOL Jul 28, 2016
+    xenial)  VSI_DISTRO_VERSION_LIKE=16.04 ;; # EOL Apr 2021, ESM Apr 2024
+    yakkety) VSI_DISTRO_VERSION_LIKE=16.10 ;; # EOL Jul 20, 2017
+    zesty)   VSI_DISTRO_VERSION_LIKE=17.04 ;; # EOL Jan 13, 2018
+    artful)  VSI_DISTRO_VERSION_LIKE=17.10 ;; # EOL Jul 19, 2018
+    bionic)  VSI_DISTRO_VERSION_LIKE=18.04 ;; # EOL Apr 2023, ESM Apr 2028
+    cosmic)  VSI_DISTRO_VERSION_LIKE=18.10 ;; # EOL Jul 18, 2019
+    disco)   VSI_DISTRO_VERSION_LIKE=19.04 ;; # EOL Jan 2020
+    eoan)    VSI_DISTRO_VERSION_LIKE=19.10 ;; # Release Oct 2019
   esac
 fi
 
