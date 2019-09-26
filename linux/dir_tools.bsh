@@ -15,6 +15,7 @@ fi
 #
 # .. file:: dir_tools.bsh
 #
+# Tools that deal with directories and paths, including making temporary file paths.
 #**
 
 #**
@@ -61,24 +62,25 @@ parent_find_files()
 }
 
 #**
-# .. var:: _VSI_TEMP_DIRS
+# .. var:: _VSI_TEMP_PATHS
 #
 # .. note::
 #   Do **NOT** mess with this variable. It is used to force recursive remove directories, and any mishaps could result in serious injury to computer, and you, depending on how upset you get by losing your computer.
 #**
-_VSI_TEMP_DIRS=()
+_VSI_TEMP_PATHS=()
 
 #**
-# .. function:: make_temp_dir
+# .. function:: make_temp_path
 #
-# :Arguments: [``$1``...] - Optionally add additional arguments to mktemp call. The most useful thing to add would be -t, as this is in all the OSes
-# :Output: ``temp_dir`` - Name of temporary directory
+# :Arguments: ``$1`` - Name of variable where temporary path will be stored
+#             [``$2``...] - Optionally add additional arguments to mktemp call. The most useful thing to add would be ``-t``, as this is in all the OSes. ``-d`` is often used to make a directory
+# :Output: ``$1`` - Name of temporary path
 #
 # Create self cleaning temp directories
 #
 # .. rubric:: Usage
 #
-# Use this to create a self deleting temp file. If you do not want to have it self delete, just use "mktemp -d".
+# Use this to create a self deleting temp file/directory. If you do not want to have it self delete, just use ``mktemp`` instead.
 #
 # Can be called multiple times
 #
@@ -86,76 +88,84 @@ _VSI_TEMP_DIRS=()
 #
 # .. code-block:: bash
 #
-#   make_temp_dir
+#   make_temp_path temp_dir -d
 #   touch "${temp_dir}"/file1
 #
 #   # Do NOT
-#   t=$(make_temp_dir)
+#   t="$(make_temp_path temp_dir -d; echo "${temp_dir}")"
 #   # or
 #   (
-#     make_temp_dir
+#     make_temp_path temp_dir -d
 #     touch "${temp_dir}"/file2
 #   ) # The temp_dir is deleted here
 #   cat "${temp_dir}"/file2 # Fails
 #   # As these will create and delete the temp dir within the subcommand
 #
+#   # This is good, as the temp files will be cleaned up sooner
+#   (
+#     make_temp_path temp_dir -d
+#     touch "${temp_dir}"/file2
+#     cat "${temp_dir}"/file2 # Success!
+#   ) # The temp_dir is deleted here
+
 # .. note::
-#   This uses the EXIT, INT, and TERM traps. If you use these too, they will be lost. Override :func:`make_temp_dir_cleanup_exit`, :func:`make_temp_dir_cleanup_int`, or :func:`make_temp_dir_cleanup_term` to customize with your trap and still call :func:`__make_temp_dir_cleanup`.
+#   This uses the EXIT, INT, and TERM traps. If you use these too, they will be lost. Override :func:`make_temp_path_cleanup_exit`, :func:`make_temp_path_cleanup_int`, or :func:`make_temp_path_cleanup_term` to customize with your trap and still call :func:`__make_temp_path_cleanup`.
 #**
-make_temp_dir()
+make_temp_path()
 {
-  temp_dir="$(mktemp -d ${@+"${@}"})"
-  _VSI_TEMP_DIRS+=("${temp_dir}")
-  trap make_temp_dir_cleanup_exit EXIT
-  trap make_temp_dir_cleanup_int INT
-  trap make_temp_dir_cleanup_term TERM
+  local _local_variable_name="${1}"
+  shift 1
+
+  local _vsi_temporary_directory="$(mktemp ${@+"${@}"})"
+  export -n "${_local_variable_name}=$_vsi_temporary_directory"
+  declare -p _vsi_temporary_directory
+  _VSI_TEMP_PATHS+=("${_vsi_temporary_directory}")
+  trap make_temp_path_cleanup_exit EXIT
+  trap make_temp_path_cleanup_int INT
+  trap make_temp_path_cleanup_term TERM
 }
 
 #**
-# .. Rubric:: make_temp_dir_cleanup_*
+# .. Rubric:: make_temp_path_cleanup_*
 #
-# .. function:: make_temp_dir_cleanup_exit
+# .. function:: make_temp_path_cleanup_exit
 #
 #   cleanup routine on atexit
 #
-# .. function:: make_temp_dir_cleanup_int
+# .. function:: make_temp_path_cleanup_int
 #
 #   cleanup routine on interrupt
 #
-# .. function:: make_temp_dir_cleanup_term
+# .. function:: make_temp_path_cleanup_term
 #
 #   cleanup routine on terminate
 #
-# Since :func:`make_temp_dir` sets the trap every time :func:`make_temp_dir` is called, these functions provide a way to override the behavior of the trap, allowing you to write your own make_temp_dir_cleanup_* functions. Just don't forget to add :func:`__make_temp_dir_cleanup` to your function, or else it will not cleanup properly.
+# Since :func:`make_temp_dir` sets the trap every time :func:`make_temp_dir` is called, these functions provide a way to override the behavior of the trap, allowing you to write your own make_temp_path_cleanup_* functions. Just don't forget to add :func:`__make_temp_path_cleanup` to your function, or else it will not cleanup properly.
 #
 # This is only needed for exit, int, and term. No other traps are set up.
 #**
-make_temp_dir_cleanup_exit()
+make_temp_path_cleanup_exit()
 {
-  __make_temp_dir_cleanup
+  __make_temp_path_cleanup
 }
-make_temp_dir_cleanup_int()
+make_temp_path_cleanup_int()
 {
-  __make_temp_dir_cleanup
+  __make_temp_path_cleanup
 }
-make_temp_dir_cleanup_term()
+make_temp_path_cleanup_term()
 {
-  __make_temp_dir_cleanup
+  __make_temp_path_cleanup
 }
 
-#**
-# .. function:: __make_temp_dir_cleanup
-#
-# .. rubric:: Used By
-#
-# :func:`make_temp_dir`, make_temp_dir_cleanup_*
-#**
-__make_temp_dir_cleanup()
+__make_temp_path_cleanup()
 {
-  local temp_dir
-  for temp_dir in ${_VSI_TEMP_DIRS+"${_VSI_TEMP_DIRS[@]}"}; do
-    if [ -d "${temp_dir}" ]; then
-      rm -rf "${temp_dir}"
+  local temp_path
+  for temp_path in ${_VSI_TEMP_PATHS+"${_VSI_TEMP_PATHS[@]}"}; do
+    if [ -d "${temp_path}" ]; then
+      # a little safer than rm -rf, in case of bind mounts
+      find "${temp_path}" -mount -depth -delete
+    elif [ -e "${temp_path}" ]; then
+      rm -f "${temp_path}"
     fi
   done
 }
