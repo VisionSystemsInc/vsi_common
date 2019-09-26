@@ -359,7 +359,7 @@ function auto_path_escape()
 #
 # :Output: ``JUST_TEMP_ARRAY`` - Destination for all the values set
 #
-# Set array to default values if not already set.
+# DEPRECATED: Set array to default values if not already set.
 #
 # In bash, when setting a variable to a default value if it has not already been set, it is typical to follow the pattern:
 #
@@ -378,10 +378,15 @@ function auto_path_escape()
 #
 #     # And when done, clean up
 #     unset JUST_TEMP_ARRAY
+#
+# .. seealso::
+#
+#   :func:`default_set_array`
 #**
 
 function set_temp_array()
 {
+  echo "set_temp_array is deprecated: use default_set_array" >&2
   local default="$1"
   shift
   if declare -p $default &> /dev/null; then
@@ -389,6 +394,55 @@ function set_temp_array()
     JUST_TEMP_ARRAY=(${!default+"${!default}"})
   else
     JUST_TEMP_ARRAY=(${@+"${@}"})
+  fi
+}
+
+#**
+# .. function:: set_array_default
+#
+# :Arguments: ``$1`` - Name of array to check if it is already set
+#
+#              ``$2...`` - Default values of the array
+#
+# :Output: ``JUST_TEMP_ARRAY`` - Destination for all the values set
+#
+# Set array to default values if not already set.
+#
+# In bash, when setting a variable to a default value if it has not already been set, it is typical to follow the pattern:
+#
+#   ``: ${MY_VAR=default}``
+#
+# However, this syntax does not work for an array. Bash 3.2 does not give an equivalent 1 line version of this. To cover this scenario, :func:`set_array_default` is used to set a default value if an array is not already set.
+#
+# It works by checking if an array is set. If it is set, nothing happens. If it is not set, it will copy the rest of the arguments (the default values) to the array named.
+#
+# .. note::
+#
+#     An empty array counts as set
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
+#     set_array_default MY_ARRAY default1 default\ 2 "default  3"
+#**
+
+function set_array_default()
+{
+  local default="$1"
+  shift 1
+
+  if ! declare -p $default &> /dev/null; then
+    local IFS=''
+    if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "42" ]; then
+      declare -ag "${default}=()"
+    else
+      eval "${default}=()"
+    fi
+    for (( i=0; $#; i++ )); do
+      read -r "${default}[$i]" <<< "${1}"
+      shift 1
+    done
   fi
 }
 
