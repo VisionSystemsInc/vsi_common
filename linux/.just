@@ -24,6 +24,8 @@ source "${VSI_COMMON_DIR}/linux/elements.bsh"
 #
 # The *tab* completion script can be extended by adding a ``.just`` file to your project next to the :file:`Justfile`. Write what would normally go inside the ``complete`` function to the ``.just`` file (without the bash ``function()`` header). This file will be sourced by :file:`.just` after the ``just_commands`` and ``_just_subcommands`` arrays are populated. See :ref:`here <just_autocomplete>` for an example:
 #
+# The ``.just`` can optionally set a ``JUST_RETURN`` variable that will be stop the execution of the rest of :file:`.just` and return the vaule of ``JUST_RETURN``. This is useful when you do not want the rest of the default behavior in a particular case.
+#
 # .. seealso::
 #
 #   :cmd:`just help`
@@ -63,11 +65,11 @@ _just()
     echo "${just_files}"
   )"
   split_s just_files "${just_files}"
-  JUST_HELP_FILES+=(${just_files+"${just_files[@]}"})
+  JUST_HELP_FILES=(${just_files+"${just_files[@]}"})
 
   # 3. Emulate finding and adding plugins
-  # The last JUST_HELP_FILES is the just file now
-  local just_dir="$(dirname "${JUST_HELP_FILES[${#JUST_HELP_FILES[@]}-1]}")"
+  # _just_load_justfile should have made the justfile the first entry in JUST_HELP_FILES
+  local just_dir="$(dirname "${JUST_HELP_FILES[0]}")"
   _just_get_plugins "${just_dir}"
   for just_plugin in ${JUST_PLUGINS+"${JUST_PLUGINS[@]}"}; do
     JUST_HELP_FILES+=("${just_plugin}")
@@ -98,6 +100,11 @@ _just()
   # Call local .just if it exists
   if [ -f "${just_dir}/.just" ]; then
     source "${just_dir}/.just"
+    if [ -n "${JUST_RETURN+set}" ]; then
+      local just_return="${JUST_RETURN}"
+      unset JUST_RETURN
+      return ${JUST_RETURN}
+    fi
   fi
 
   # If the last word completed is a subcommand, only match subtargets
@@ -123,4 +130,11 @@ _just()
   return 0
 }
 
-complete -F _just just
+# https://stackoverflow.com/a/19062943/4166604
+if ! command -v compopt &>/dev/null; then
+  # While this won't allow compopt to behave the way we always want on bash 3.2
+  # It's the best "default" behavior
+  complete -o default -F _just just
+else
+  complete -F _just just
+fi
