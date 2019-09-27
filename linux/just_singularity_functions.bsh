@@ -1,0 +1,64 @@
+if [[ $- != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
+JUST_DEFAULTIFY_FUNCTIONS+=(singular_defaultify)
+JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
+
+source "${VSI_COMMON_DIR}/linux/just_container_override.bsh"
+source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
+
+function singular_defaultify()
+{
+  arg=$1
+  shift 1
+  case $arg in
+    # singularity_run) # Run a singularity container
+    # singularity_exec) # Exec a command with a singularity container
+    # singularity_shell) # Run a singularity container shell
+    # singularity_instance-start) # Start a singularity container in the background
+    # singularity_test) # Run the singularity container's tests
+    singularity_*)
+      extra_args=$#
+      local image_name="${1}"
+      shift 1
+      local i
+
+      local cmd="${arg#*_}"
+      if [ "${cmd}" = "instance-start" ]; then
+        cmd="instance start"
+      fi
+
+      function _env_echo()
+      { # BUG! This doesn't handle " in values rignt now :(
+        echo export "${1}=\"${2}\"" >> "${env_file}"
+      }
+      make_temp_path env_file
+
+      if [ -n "${SINGULARITY_ENV_VARS+set}" ]; then
+        for (( i=0; i+1<${#SINGULARITY_ENV_VARS[@]}; i+=2 )); do
+          _env_echo "${SINGULARITY_ENV_VARS[${i}]}" "${SINGULARITY_ENV_VARS[${i}+1]}"
+        done
+      fi
+
+      local bind_args=()
+      if [ -n "${SINGULARITY_VOLUMES+set}" ]; then
+        for (( i=0; i<${#SINGULARITY_VOLUMES[@]}; i++ )); do
+          bind_args+=(-B "${SINGULARITY_VOLUMES[${i}]}")
+        done
+      fi
+
+      common_environment_override
+
+      ${DRYRUN} singularity ${cmd} -e -c --nv \
+        ${bind_args+"${bind_args[@]}"} \
+        -B "${env_file}:/.singularity.d/env/91-just-env.sh:ro" \
+        -B "/tmp:/tmp:rw" \
+        ${image_name} ${@+"${@}"}
+      ;;
+    *)
+      plugin_not_found=1
+      ;;
+  esac
+  return 0
+}
