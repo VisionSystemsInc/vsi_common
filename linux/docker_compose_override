@@ -8,6 +8,7 @@ fi
 source "${VSI_COMMON_DIR}/linux/mount_tools.bsh"
 source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
 source "${VSI_COMMON_DIR}/linux/elements.bsh"
+source "${VSI_COMMON_DIR}/linux/just_container_override.bsh"
 
 #*# just/plugins/docker/docker_compose_override
 
@@ -80,7 +81,7 @@ function _env_echo()
     echo "    environment:"
     new_environment=0
   fi
-  echo ${@+"${@}"}
+  echo "      - ${1}=${2}"
 }
 
 #**
@@ -206,7 +207,7 @@ function generate_docker_compose_override()
   local new_environment
 
   # Argument parsing
-  local project_prefix=$1
+  local JUST_PROJECT_PREFIX=$1
   shift 1
 
   local services_name=(${@+"${@}"})
@@ -231,14 +232,14 @@ function generate_docker_compose_override()
   fi
 
   # Parse enumerated_volumes_all
-  volumes_name_all="${project_prefix}_VOLUME_$i"
+  volumes_name_all="${JUST_PROJECT_PREFIX}_VOLUME_$i"
   while declare -p "${volumes_name_all}" &> /dev/null; do
     enumerated_volumes_all+=("${!volumes_name_all}")
     i+=1
-    volumes_name_all="${project_prefix}_VOLUME_$i"
+    volumes_name_all="${JUST_PROJECT_PREFIX}_VOLUME_$i"
   done
   # Indirect fun
-  volumes_name_all="${project_prefix}_VOLUMES"
+  volumes_name_all="${JUST_PROJECT_PREFIX}_VOLUMES"
   indirect_all="${volumes_name_all}[@]"
 
   echo "version: '${COMPOSE_VERSION-3.2}'"
@@ -255,14 +256,14 @@ function generate_docker_compose_override()
     # Parse enumerate_volumes
     enumerated_volumes=()
     i=1
-    volumes_name="${project_prefix}_${services_upper[$service_index]}_VOLUME_$i"
+    volumes_name="${JUST_PROJECT_PREFIX}_${services_upper[$service_index]}_VOLUME_$i"
     while declare -p "${volumes_name}" &> /dev/null; do
       enumerated_volumes+=("${!volumes_name}")
       i+=1
-      volumes_name="${project_prefix}_${services_upper[$service_index]}_VOLUME_$i"
+      volumes_name="${JUST_PROJECT_PREFIX}_${services_upper[$service_index]}_VOLUME_$i"
     done
     # Indirect fun
-    volumes_name="${project_prefix}_${services_upper[$service_index]}_VOLUMES"
+    volumes_name="${JUST_PROJECT_PREFIX}_${services_upper[$service_index]}_VOLUMES"
     indirect="${volumes_name}[@]"
 
     parse-docker-compose-volumes ${services_name[$service_index]} <<< "${compose_config}"
@@ -353,51 +354,24 @@ function generate_docker_compose_override()
     fi
     IFS="${OLD_IFS}"
 
+    # Initialize _env_echo command"
     new_environment=1
-
-    if [ "${OS-}" = "Windows_NT" ]; then
-      _env_echo "      - JUST_HOST_WINDOWS=1"
-    fi
 
     if [ -n "${just_docker_entrypoint_links+set}" ]; then
       IFS=:
-      _env_echo "      - JUST_DOCKER_ENTRYPOINT_LINKS=${just_docker_entrypoint_links[*]}"
+      _env_echo JUST_DOCKER_ENTRYPOINT_LINKS "${just_docker_entrypoint_links[*]}"
       IFS="${OLD_IFS}"
     fi
     if [ "${#just_docker_entrypoint_internal_volumes[@]}" -gt 0 ]; then
       MIFS='//' join_a just_docker_entrypoint_internal_volumes "${just_docker_entrypoint_internal_volumes[@]}"
-      _env_echo "      - JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES=${just_docker_entrypoint_internal_volumes}"
+      _env_echo JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES "${just_docker_entrypoint_internal_volumes}"
     fi
     if [ "${#just_docker_entrypoint_internal_ro_volumes[@]}" -gt 0 ]; then
       MIFS='//' join_a just_docker_entrypoint_internal_ro_volumes "${just_docker_entrypoint_internal_ro_volumes[@]}"
-      _env_echo "      - JUST_DOCKER_ENTRYPOINT_INTERNAL_RO_VOLUMES=${just_docker_entrypoint_internal_ro_volumes}"
+      _env_echo JUST_DOCKER_ENTRYPOINT_INTERNAL_RO_VOLUMES "${just_docker_entrypoint_internal_ro_volumes}"
     fi
-    for var in $(compgen -A export); do
-      # For project variables ending in _DOCKER, handle these specially
-      if [[ $var =~ ^${project_prefix}_.*_DOCKER$ ]]; then
-        indirect=${var%_DOCKER}
 
-        # If the non-_DOCKER variables exists
-        if declare -p ${indirect}&>/dev/null; then
-          if [ "${JUST_DISABLE_ENVIRONMENT_SWAP-}" == "1" ]; then
-            _env_echo "      - ${indirect}=${!indirect}"
-          else
-            _env_echo "      - ${indirect}_HOST=${!indirect}"
-          fi
-        fi
-        if [ "${JUST_DISABLE_ENVIRONMENT_SWAP-}" == "1" ]; then
-          _env_echo "      - ${var}=${!var}"
-        else
-          _env_echo "      - ${indirect}=${!var}"
-          if [ "${EXPORT_DOCKER-0}" == "1" ]; then
-            _env_echo "      - ${indirect}_DOCKER=${!var}"
-          fi
-        fi
-      # For project variables ending in _HOST, pass them along as-is
-      elif [[ $var =~ ^${project_prefix}_.*_HOST$ ]]; then
-        _env_echo "      - ${var}=${!var}"
-      fi
-    done
+    common_environment_override
   done
 }
 

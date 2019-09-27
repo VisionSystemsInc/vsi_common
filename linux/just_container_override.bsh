@@ -1,0 +1,57 @@
+#!/usr/bin/env false bash
+
+if [[ $- != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
+#**
+# .. function:: generate_docker_compose_override
+#
+# :Inputs: * ``_env_echo`` - a function that will take two arguments, variable name and variable value and write to the corresponding configuration file.
+#          * ``JUST_PROJECT_PREFIX`` - The Just project prefix value
+#          * ``JUST_DISABLE_ENVIRONMENT_SWAP`` -
+#          * ``EXPORT_DOCKER`` -
+#
+# Sets up a number of environment variables to make containers behave the way we want them to
+#
+# * ``JUST_HOST_WINDOWS`` - Set to ``1`` on windows, else unset. This is primarily used in the entrypoint to remove a second slash at the begining of environment variables that have to be placed there due to limitations in MINGW/Cygwin. These double slashes have on occasion caused apps to fail, so removing them becomes important.
+# * ``${JUST_PROJECT_PREFIX}_DOCKER`` - variables are swapped
+#
+# .. seealso::
+#
+#   :func:`docker_compose_override generate_docker_compose_override`
+#     Uses this for environment variables
+#**
+function common_environment_override()
+{
+  if [ "${OS-}" = "Windows_NT" ]; then
+    _env_echo JUST_HOST_WINDOWS 1
+  fi
+
+  for var in $(compgen -A export); do
+    # For project variables ending in _DOCKER, handle these specially
+    if [[ $var =~ ^${JUST_PROJECT_PREFIX}_.*_DOCKER$ ]]; then
+      indirect=${var%_DOCKER}
+
+      # If the non-_DOCKER variables exists
+      if declare -p ${indirect}&>/dev/null; then
+        if [ "${JUST_DISABLE_ENVIRONMENT_SWAP-}" == "1" ]; then
+          _env_echo ${indirect} "${!indirect}"
+        else
+          _env_echo ${indirect}_HOST "${!indirect}"
+        fi
+      fi
+      if [ "${JUST_DISABLE_ENVIRONMENT_SWAP-}" == "1" ]; then
+        _env_echo ${var} "${!var}"
+      else
+        _env_echo ${indirect} "${!var}"
+        if [ "${EXPORT_DOCKER-0}" == "1" ]; then
+          _env_echo ${indirect}_DOCKER "${!var}"
+        fi
+      fi
+    # For project variables ending in _HOST, pass them along as-is
+    elif [[ $var =~ ^${JUST_PROJECT_PREFIX}_.*_HOST$ ]]; then
+      _env_echo ${var} "${!var}"
+    fi
+  done
+}
