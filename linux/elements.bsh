@@ -20,24 +20,10 @@ fi
 #
 # Set of functions for deleting, prepending and appending without repetition. Versions using actual ``Bash`` arrays are suffixed with an _a, else it works on delimiter (IFS) separated string
 #
-# Most of these functions use variable indirection when possible to make using them friendlier.
-#
-# .. rubric:: Bugs
-#
-# Don't use arrays element_array variable
-#
-#   * __element_array_target
-#   * __element_array_target_a
-#   * __element_array_target_a2
-#   * __element_array_target_s
-#   * __element_array_target_s2
-#   * __element_array_target_d
-#   * __element_array_target_x
-#
-# as the target. It will cause name collision
+# These functions use variable indirection when possible to make using them friendlier.
 #
 # .. note::
-#   Not intended for POSIX sh
+#   Not intended for POSIX sh, works on bash and others like ksh
 #**
 
 : ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
@@ -67,13 +53,26 @@ source "${VSI_COMMON_DIR}/linux/isin"
 #**
 function dynamic_set_a()
 {
-  local __element_array_target_d="${1}"
-  shift 1
-  local IFS='' # If I don't do this, leading and trailing whitespace are dropped
-  for (( i=0; $#; i++ )); do
-    read -r "${__element_array_target_d}[$i]" <<< "${1}"
+  # This way the user may use the names x, y, i, or j
+  if [ "${1}" = "y" ] || [ "${1}" = "j" ]; then
+    local x="${1}"
     shift 1
-  done
+    local IFS='' # If I don't do this, leading and trailing whitespace are dropped
+    local i
+    for (( i=0; $#; i++ )); do
+      read -r "${x}[$i]" <<< "${1}"
+      shift 1
+    done
+  else
+    local y="${1}"
+    shift 1
+    local IFS='' # If I don't do this, leading and trailing whitespace are dropped
+    local j
+    for (( j=0; $#; j++ )); do
+      read -r "${y}[$j]" <<< "${1}"
+      shift 1
+    done
+  fi
 }
 
 #**
@@ -90,8 +89,13 @@ function dynamic_set_a()
 function clear_a()
 {
   if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "44" ]; then
-    local -n localarray="${1}"
-    localarray=()
+    if [ "${1}" = "x" ]; then
+      local -n y="${1}"
+      y=()
+    else
+      local -n x="${1}"
+      x=()
+    fi
   else
     # https://stackoverflow.com/a/2821201/4166604
     if [[ ! ${1} =~ [a-zA-Z_]+[a-zA-Z0-9_]* ]]; then
@@ -127,34 +131,49 @@ function clear_a()
 #**
 function remove_element_a()
 {
-  local __element_array_target_a=()
+  if [ "${1}" = "x" ] || [ "${1}" = "i" ]; then
+    local y=()
 
-  if [ "${!1+set}" == "set" ]; then
-    __element_array_target_a="${1}[@]"
-    __element_array_target_a=( ${!__element_array_target_a} )
-  else # If it's empty/does not exist, there is nothing to remove
-    return 0
-  fi
-  local i
-
-  for i in "${!__element_array_target_a[@]}"; do
-    if [ "${__element_array_target_a[$i]}" == "${2}" ]; then
-      # http://wiki.bash-hackers.org/syntax/arrays#destruction
-      unset "__element_array_target_a[$i]"
+    if [ "${!1+set}" == "set" ]; then
+      y="${1}[@]"
+      y=( ${!y} )
+    else # If it's empty/does not exist, there is nothing to remove
+      return 0
     fi
-  done
+    local j
 
-  clear_a "${1}"
+    for j in "${!y[@]}"; do
+      if [ "${y[$j]}" == "${2}" ]; then
+        # http://wiki.bash-hackers.org/syntax/arrays#destruction
+        unset "y[$j]"
+      fi
+    done
 
-  # You can't use ${t+"${t[@]}"} notation when there is a chance that the first
-  # element of an array has been unset. This will falsely trigger ${t} as not
-  # existing because ${t} REALLY means ${t[0]} which doesn't exist, but the rest
-  # of ${t[@]} DOES! Solution is to disable set -u if it's set, and then
-  # re-enable it if and only if it was set before all this. set_flags contains
-  # this logic. t is __element_array_target_a
-  unset_flag u
-  dynamic_set_a "${1}" "${__element_array_target_a[@]}"
-  reset_flag u
+    clear_a "${1}"
+
+    dynamic_set_a "${1}" ${y[@]+"${y[@]}"}
+  else
+    local x=()
+
+    if [ "${!1+set}" == "set" ]; then
+      x="${1}[@]"
+      x=( ${!x} )
+    else # If it's empty/does not exist, there is nothing to remove
+      return 0
+    fi
+    local i
+
+    for i in "${!x[@]}"; do
+      if [ "${x[$i]}" == "${2}" ]; then
+        # http://wiki.bash-hackers.org/syntax/arrays#destruction
+        unset "x[$i]"
+      fi
+    done
+
+    clear_a "${1}"
+
+    dynamic_set_a "${1}" ${x[@]+"${x[@]}"}
+  fi
 }
 
 #**
@@ -168,12 +187,21 @@ function remove_element_a()
 #**
 function remove_element()
 {
-  local __element_array_target_s=()
-  if [ "${!1+set}" == "set" ]; then
-    __element_array_target_s=( ${!1} )
+  if [ "${1}" = "x" ]; then
+    local y=()
+    if [ "${!1+set}" == "set" ]; then
+      y=( ${!1} )
+    fi
+    remove_element_a y "${2}"
+    export $1=${y+"${y[*]}"}
+  else
+    local x=()
+    if [ "${!1+set}" == "set" ]; then
+      x=( ${!1} )
+    fi
+    remove_element_a x "${2}"
+    export $1=${x+"${x[*]}"}
   fi
-  remove_element_a __element_array_target_s "${2}"
-  export $1=${__element_array_target_s+"${__element_array_target_s[*]}"}
 }
 
 #**
@@ -201,12 +229,21 @@ function remove_element()
 function add_element_post_a()
 {
   remove_element_a "${1}" "${2}"
-  local __element_array_target_a=()
-  if [ "${!1+set}" == "set" ]; then
-    __element_array_target_a="${1}[@]"
-    __element_array_target_a=( ${!__element_array_target_a} )
+  if [ "${1}" = "x" ]; then
+    local y=()
+    if [ "${!1+set}" == "set" ]; then
+      y="${1}[@]"
+      y=( ${!y} )
+    fi
+    dynamic_set_a "${1}" ${y+"${y[@]}"} "${2}"
+  else
+    local x=()
+    if [ "${!1+set}" == "set" ]; then
+      x="${1}[@]"
+      x=( ${!x} )
+    fi
+    dynamic_set_a "${1}" ${x+"${x[@]}"} "${2}"
   fi
-  dynamic_set_a "${1}" ${__element_array_target_a+"${__element_array_target_a[@]}"} "${2}"
 }
 
 #**
@@ -220,12 +257,21 @@ function add_element_post_a()
 #**
 function add_element_post()
 {
-  local __element_array_target_s=()
-  if [ "${!1+set}" == "set" ]; then
-    __element_array_target_s=( ${!1} )
+  if [ "${1}" = "x" ]; then
+    local y=()
+    if [ "${!1+set}" == "set" ]; then
+      y=( ${!1} )
+    fi
+    add_element_post_a y "${2}"
+    export $1=${y+"${y[*]}"}
+  else
+    local x=()
+    if [ "${!1+set}" == "set" ]; then
+      x=( ${!1} )
+    fi
+    add_element_post_a x "${2}"
+    export $1=${x+"${x[*]}"}
   fi
-  add_element_post_a __element_array_target_s "${2}"
-  export $1=${__element_array_target_s+"${__element_array_target_s[*]}"}
 }
 
 #**
@@ -253,12 +299,21 @@ function add_element_post()
 function add_element_pre_a()
 {
   remove_element_a "${1}" "${2}"
-  local __element_array_target_a=()
-  if [ "${!1+set}" == "set" ]; then
-    __element_array_target_a="${1}[@]"
-    __element_array_target_a=( ${!__element_array_target_a} )
+  if [ "${1}" = "x" ]; then
+    local y=()
+    if [ "${!1+set}" == "set" ]; then
+      y="${1}[@]"
+      y=( ${!y} )
+    fi
+    dynamic_set_a "${1}" "${2}" ${y+"${y[@]}"}
+  else
+    local x=()
+    if [ "${!1+set}" == "set" ]; then
+      x="${1}[@]"
+      x=( ${!x} )
+    fi
+    dynamic_set_a "${1}" "${2}" ${x+"${x[@]}"}
   fi
-  dynamic_set_a "${1}" "${2}" ${__element_array_target_a+"${__element_array_target_a[@]}"}
 }
 
 #**
@@ -272,12 +327,21 @@ function add_element_pre_a()
 #**
 function add_element_pre ()
 {
-  local __element_array_target_s=()
-  if [ "${!1+set}" == "set" ]; then
-    __element_array_target_s=( ${!1} )
+  if [ "${1}" = "x" ]; then
+    local y=()
+    if [ "${!1+set}" == "set" ]; then
+      y=( ${!1} )
+    fi
+    add_element_pre_a y "${2}"
+    export $1=${y+"${y[*]}"}
+  else
+    local x=()
+    if [ "${!1+set}" == "set" ]; then
+      x=( ${!1} )
+    fi
+    add_element_pre_a x "${2}"
+    export $1=${x+"${x[*]}"}
   fi
-  add_element_pre_a __element_array_target_s "${2}"
-  export $1=${__element_array_target_s+"${__element_array_target_s[*]}"}
 }
 
 #**
@@ -354,29 +418,55 @@ function cmp_elements()
 #**
 function split_s()
 {
-  local target="${1}"
-  shift 1
+  if [ "${1}" = "x" ] || [ "${1}" = "i" ] || [ "${1}" = "var" ]; then
+    local target="${1}"
+    shift 1
 
-  local __element_array_target_a=()
-  local bit
-  local MIFS="${MIFS-//}"
+    local y=()
+    local j
+    local MIFS="${MIFS-//}"
 
-  if [ "${MIFS-}" == "" ]; then
-    echo "MIFS is not set" >&2
-    return 1
-  fi
+    if [ "${MIFS-}" == "" ]; then
+      echo "MIFS is not set" >&2
+      return 1
+    fi
 
-  for bit in ${@+"${@}"}; do
-    bit+=${MIFS}
-    # If I do this before the for loop, bash 3.2 (macOS) does not work right
-    while [ -n "${bit}" ]; do
-      __element_array_target_a+=( "${bit%%${MIFS}*}" )
-      bit="${bit#*${MIFS}}"
+    for j in ${@+"${@}"}; do
+      j+=${MIFS}
+      # If I do this before the for loop, bash 3.2 (macOS) does not work right
+      while [ -n "${j}" ]; do
+        y+=( "${j%%${MIFS}*}" )
+        j="${j#*${MIFS}}"
+      done
     done
-  done
 
-  # If I don't reset IFS here, dynamic_set_a will set incorrectly on bash 3.2
-  dynamic_set_a "${target}" ${__element_array_target_a+"${__element_array_target_a[@]}"}
+    # If I don't reset IFS here, dynamic_set_a will set incorrectly on bash 3.2
+    dynamic_set_a "${target}" ${y+"${y[@]}"}
+  else
+    local var="${1}"
+    shift 1
+
+    local x=()
+    local i
+    local MIFS="${MIFS-//}"
+
+    if [ "${MIFS-}" == "" ]; then
+      echo "MIFS is not set" >&2
+      return 1
+    fi
+
+    for i in ${@+"${@}"}; do
+      i+=${MIFS}
+      # If I do this before the for loop, bash 3.2 (macOS) does not work right
+      while [ -n "${i}" ]; do
+        x+=( "${i%%${MIFS}*}" )
+        i="${i#*${MIFS}}"
+      done
+    done
+
+    # If I don't reset IFS here, dynamic_set_a will set incorrectly on bash 3.2
+    dynamic_set_a "${var}" ${x+"${x[@]}"}
+  fi
 }
 
 #**
@@ -391,27 +481,51 @@ function split_s()
 #**
 function join_a()
 {
-  if [ $# -eq 1 ]; then
-    return 0
-    # This means target is never set. This mirrors the behavior of split_s.
-    # Note: I do not `unset $1` due to the same locality-is-lost-bug referenced
-    # in remove_element_a
-  fi
+  if [ "${1}" = "x" ] || [ "${1}" = "x_s" ]; then
+    if [ $# -eq 1 ]; then
+      return 0
+      # This means target is never set. This mirrors the behavior of split_s.
+      # Note: I do not `unset $1` due to the same locality-is-lost-bug referenced
+      # in remove_element_a
+    fi
 
-  local __element_array_target="$1"
-  shift 1
-
-  local MIFS="${MIFS-//}"
-
-  local __element_array_target_s="${1-}"
-  shift 1
-
-  while [ $# -gt 0 ]; do
-    __element_array_target_s+="${MIFS}${1}"
+    local y="$1"
     shift 1
-  done
 
-  read -r "${__element_array_target}" <<< "${__element_array_target_s-}"
+    local MIFS="${MIFS-//}"
+
+    local y_s="${1-}"
+    shift 1
+
+    while [ $# -gt 0 ]; do
+      y_s+="${MIFS}${1}"
+      shift 1
+    done
+
+    read -r "${y}" <<< "${y_s-}"
+  else
+    if [ $# -eq 1 ]; then
+      return 0
+      # This means target is never set. This mirrors the behavior of split_s.
+      # Note: I do not `unset $1` due to the same locality-is-lost-bug referenced
+      # in remove_element_a
+    fi
+
+    local x="$1"
+    shift 1
+
+    local MIFS="${MIFS-//}"
+
+    local x_s="${1-}"
+    shift 1
+
+    while [ $# -gt 0 ]; do
+      x_s+="${MIFS}${1}"
+      shift 1
+    done
+
+    read -r "${x}" <<< "${x_s-}"
+  fi
 }
 
 #**
@@ -467,8 +581,7 @@ function join_a_out()
 #**
 function is_array()
 {
-  local var_name="${1}"
-  local signature="$(declare -p "${var_name}" 2>/dev/null)"
+  local signature="$(declare -p "${1}" 2>/dev/null)"
 
   # Handle Bash 4.2 namereffing https://stackoverflow.com/a/42877229/4166604
   local regex='^declare -[[:alpha:]]*n[[:alpha:]]* [^=]+=\"([^\"]+)\"$'
@@ -526,10 +639,14 @@ function array_length()
 {
   if ! declare -p "$1" &> /dev/null; then
     echo -1
+  elif [ "${1}" = "x" ]; then
+    local y="$1[@]"
+    y=(${!1+"${!y}"})
+    echo "${#y[@]}"
   else
-    local __element_array_target_x="$1[@]"
-    __element_array_target_x=(${!1+"${!__element_array_target_x}"})
-    echo "${#__element_array_target_x[@]}"
+    local x="$1[@]"
+    x=(${!1+"${!x}"})
+    echo "${#x[@]}"
   fi
 }
 
