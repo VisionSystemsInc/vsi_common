@@ -355,22 +355,48 @@ function add_element_pre ()
 #**
 function cmp_elements_a()
 {
-  local x
-  local __element_array_target_a
-  local __element_array_target_a2
+  # # Handle the trivial case. This isn't neccessary since as it happens using
+  # # "x x" or "y y" yields the correct answer, this just bypasses that
+  # if [ "${1}" = "${2}" ]; then
+  #   return 0
+  # fi
+  # Handling this corner case would just slow things down in the normal case
+
+  # Swap the order, so that only 1 could be x, and only 2 could be y. This will
+  # simplify the logic below.
+  if [ "${1}" = "y" ] || [ "${2}" = "x" ]; then
+    set -- "${2}" "${1}"
+  fi
+
+  # It happens that the below will work if both arguments are x or y, although
+  # "x" works through a "buggy" route (y ends up being a copy of the copy of x,
+  # rather than just a copy of x), but the answer is correct, so it's all good
 
   # Have to copy https://unix.stackexchange.com/a/374094/123413 Thanks darwin!
-  __element_array_target_a="${1}[@]"
-  __element_array_target_a=(${!1+"${!__element_array_target_a}"})
-  __element_array_target_a2="${2}[@]"
-  __element_array_target_a2=(${!2+"${!__element_array_target_a2}"})
+  if [ "${1}" = "i" -a "${2}" = "j" -o "${1}" = "j" -a "${2}" = "i" ]; then
+    local k="${1}[@]"
+    local x=(${!1+"${!k}"})
+    k="${2}[@]"
+    local y=(${!2+"${!k}"})
+  elif [ "${1}" = "i" -o "${2}" = "i" ]; then
+    local j="${1}[@]"
+    local x=(${!1+"${!j}"})
+    j="${2}[@]"
+    local y=(${!2+"${!j}"})
+  else
+    local i="${1}[@]"
+    local x=(${!1+"${!i}"})
+    i="${2}[@]"
+    local y=(${!2+"${!i}"})
+  fi
 
-  if [ ${#__element_array_target_a[@]} -ne ${#__element_array_target_a2[@]} ]; then
+  if [ ${#x[@]} -ne ${#y[@]} ]; then
     return 1
   fi
 
-  for ((x=0; x<${#__element_array_target_a[@]}; x++)); do
-    if [ "${__element_array_target_a[$x]}" != "${__element_array_target_a2[$x]}" ]; then
+  local z
+  for ((z=0; z<${#x[@]}; z++)); do
+    if [ "${x[$z]}" != "${y[$z]}" ]; then
       return 1
     fi
   done
@@ -389,16 +415,22 @@ function cmp_elements_a()
 #**
 function cmp_elements()
 {
-  local __element_array_target_s=()
-  local __element_array_target_s2=()
-  local target
+  # Handle the trivial case. This is neccessary unlike the array version,
+  # because x/y are strings, not arrays, and the logic breaks down
+  if [ "${1}" = "${2}" ]; then
+    return 0
+  fi
 
-  target="${1}"
-  __element_array_target_s=( ${!target} )
-  target="${2}"
-  __element_array_target_s2=( ${!target} )
+  # Swap the order, so that only 1 could be x, and only 2 could be y. This will
+  # simplify the logic below.
+  if [ "${1}" = "y" ] || [ "${2}" = "x" ]; then
+    set -- "${2}" "${1}"
+  fi
 
-  cmp_elements_a __element_array_target_s __element_array_target_s2
+  local x=( ${!1} )
+  local y=( ${!2} )
+
+  cmp_elements_a x y
   return $?
 }
 
