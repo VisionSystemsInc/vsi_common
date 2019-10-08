@@ -689,31 +689,53 @@ function array_length()
 #             * ``$2`` - Array 2
 #             * ``$3`` - Destination Array
 #
-# Destination array becomes values of array 2 not in array 1 (1 - 2)
+# Destination array becomes values of array 2 not in array 1 (1 - 2). The
+# destination array name can be the same as Array 1 or 2.
+#
+# .. rubric:: Bugs
+#
+# Don't use array names:
+#
+#   * __element_array_target_temp1
+#   * __element_array_target_temp2
+#
+# as an argument. It will cause name collision.
 #**
 function subtract_array()
 {
-  local __element_array_target_a="$1[@]"
-  local __element_array_target_a2="$2[@]"
-  local __element_array_target=() # Copy of output
+  local __element_array_target_temp1=("" "$1[@]" "$2[@]" 0)
+  # __element_array_target_temp1 ends up being a multi-purpose variable in order
+  # to shrink the number of variables that can possibly collide with parent
+  # functions.
+  # - 0 - The loop first loop variable
+  # - 1 - The string $1[@] needed for variable indirection
+  # - 2 - The string $2[@] needed for variable indirection
+  # - 3 - Boolean that stores whether a particular element should be included
+  #       in the final subtracted array
+  local __element_array_target_temp2=("")
+  # - 0 - The loop first loop variable
+  # - 1... - A copy of the output
 
-  local __element_array_target_x= # Skip variable
-  local __element_array_target_s
-  local __element_array_target_s2
-
-  for __element_array_target_s in ${!1+"${!__element_array_target_a}"}; do
-    for __element_array_target_s2 in ${!2+"${!__element_array_target_a2}"}; do
-      if [ "${__element_array_target_s}" = "${__element_array_target_s2}" ]; then
-        __element_array_target_x=1
+  for __element_array_target_temp1 in ${!__element_array_target_temp1[1]+"${!__element_array_target_temp1[1]}"}; do
+    for __element_array_target_temp2 in ${!__element_array_target_temp1[2]+"${!__element_array_target_temp1[2]}"}; do
+      if [ "${__element_array_target_temp1}" = "${__element_array_target_temp2}" ]; then
+        __element_array_target_temp1[3]=1
         break
       fi
     done
-    if [ -z $__element_array_target_x ]; then
-      __element_array_target+=("${__element_array_target_s}")
+
+    # If this element survives subtraction
+    if [ "${__element_array_target_temp1[3]}" = "0" ]; then
+      # Copy it to the output array. This is copied rather than going directly
+      # to the output array, incase the user sets the input and output array
+      # the same
+      __element_array_target_temp2+=("${__element_array_target_temp1[0]}")
     fi
-    __element_array_target_x=
+    __element_array_target_temp1[3]=0
   done
 
   clear_a "$3"
-  dynamic_set_a "$3" ${__element_array_target+"${__element_array_target[@]}"}
+  if [ "${#__element_array_target_temp2[@]}" -gt 1 ]; then
+    dynamic_set_a "$3" "${__element_array_target_temp2[@]:1}"
+  fi
 }
