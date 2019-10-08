@@ -131,7 +131,7 @@ _just()
 }
 
 # https://stackoverflow.com/a/19062943/4166604
-if ! command -v compopt &>/dev/null; then
+if ! command -v compopt &> /dev/null; then
   # While this won't allow compopt to behave the way we always want on bash 3.2
   # It's the best "default" behavior
   complete -o default -F _just just
