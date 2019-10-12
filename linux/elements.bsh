@@ -77,6 +77,54 @@ else
 fi
 
 #**
+# .. function:: dynamic_set
+#
+# :Arguments: * ``$1`` - Name of variable to be set
+#             * ``$2`` - Value to set
+#
+# Dynamically set a variable to a value. There are a number of properties that need to be preserved when setting a variable, export, local, global, etc... This method will allow you to indirectly set a variable while preserving these properties.
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
+#    dynamic_set my_name '11 "2 2" 33'
+#    # Is like executing
+#    # my_array_name='11 "2 2" 33'
+#**
+
+# The following has the following but, which is why only ``read`` is used.
+#
+# .. bugs::
+#
+#    .. code:: bash
+#
+#       $ export foo # no value set, not even null
+#       $ dynamic_set
+#
+# if [[ ${BASH_VERSINFO[0]}${BASH_VERSINFO[1]} -ge 44 ]]; then
+#   function dynamic_set()
+#   {
+#     # Check if is exported, this only works in bash 4.4 or newer, but is very fast
+#     if [[ ${!1@a} = *x* ]]; then # 0.055
+#       # Set and export, very fast
+#       export "${1}=${2-}" # 0.048
+#     else
+#       # Set and don't export. Trying declare will set as a local variable if not
+#       # already set, so we don't do that
+#       export -n "${1}=${2-}" # 0.048
+#     fi
+#   }
+# else
+function dynamic_set()
+{
+  # backwards compat fairly slow method, but faster than using declare -p (20.0!)
+  # compgen (0.779) and will auto handle export vs no export, so just use read
+  IFS='' read -r -d '' "${1}" < <(printf '%s' "${2-}") || : #0.739
+}
+# fi
+
+#**
 # .. function:: clear_a
 #
 # :Arguments: ``$1`` - Name of array to be cleared
@@ -197,35 +245,9 @@ function remove_element()
     # Use already existing funtion
     remove_element_a __x "${2}"
 
-    # Set the result back to the variable
-    if [[ ${BASH_VERSINFO[0]}${BASH_VERSINFO[1]} -ge 44 ]]; then
-      if [[ ${!1@a} = *x* ]]; then
-        export "${1}=${__x+"${__x[*]}"}"
-      else
-        export -n "${1}=${__x+"${__x[*]}"}"
-      fi
-    else
-      read -r "${1}" <<< "${__x+"${__x[*]}"}"
-    fi
+    dynamic_set "${1}" ${__x+"${__x[*]}"}
   fi
 }
-
-# # Common setting variable explained
-# if [[ ${BASH_VERSINFO[0]}${BASH_VERSINFO[1]} -ge 44 ]]; then # 0.082
-#   # Check if is exported, this only works in bash 4.4 or newer, very fast
-#   if [[ ${!1@a} = *x* ]]; then # 0.055
-#     # Set and export, very fast
-#     export "${1}=${__x+"${__x[*]}"}" # 0.048
-#   else
-#     # Set and don't export. Trying declare will set as a local variable if not
-#     # already set, so we don't do that
-#     export -n "${1}=${__x+"${__x[*]}"}" # 0.048
-#   fi
-# else
-#   # backwards compat fairly slow method, but faster than using declare -p (20.0!)
-#   # compgen (0.779) and will auto handle export vs no export, so just use read
-#   read -r "${1}" <<< "${__x+"${__x[*]}"}" #0.739
-# fi
 
 #**
 # .. function:: add_element
@@ -233,7 +255,8 @@ function remove_element()
 # :Arguments: * ``$1`` - Name of array to be set
 #             * ``$2``... - Values to be appended
 #
-# Just appends to array, allows repeats. 1+=(2)
+# Just appends to array, allows repeats. ``${1}+=("${2}")``
+#**
 function add_element_a()
 {
   :
@@ -269,13 +292,8 @@ function add_element_post_a()
     add_element_post_a y "${2}"
     __x=(${y[@]+"${y[@]}"})
   else
-    local __x=()
-    # remove_element_a makes $1 contiguous, so no need to check $!1[@]
-    if [ -n "${!1+set}" ]; then
-      __x="${1}[@]"
-      __x=( ${!__x} )
-    fi
-    dynamic_set_a "${1}" ${__x[@]+"${__x[@]}"} "${2}"
+    local __x="${1}[@]"
+    dynamic_set_a "${1}" ${!__x+"${!__x}"} "${2}"
   fi
 }
 
@@ -301,16 +319,7 @@ function add_element_post()
     fi
     add_element_post_a __x "${2}"
 
-    # Set the result back to the variable
-    if [[ ${BASH_VERSINFO[0]}${BASH_VERSINFO[1]} -ge 44 ]]; then
-      if [[ ${!1@a} = *x* ]]; then
-        export "${1}=${__x+"${__x[*]}"}"
-      else
-        export -n "${1}=${__x+"${__x[*]}"}"
-      fi
-    else
-      read -r "${1}" <<< "${__x+"${__x[*]}"}"
-    fi
+    dynamic_set "${1}" ${__x+"${__x[*]}"}
   fi
 }
 
@@ -376,16 +385,7 @@ function add_element_pre ()
     fi
     add_element_pre_a __x "${2}"
 
-    # Set the result back to the variable
-    if [[ ${BASH_VERSINFO[0]}${BASH_VERSINFO[1]} -ge 44 ]]; then
-      if [[ ${!1@a} = *x* ]]; then
-        export "${1}=${__x+"${__x[*]}"}"
-      else
-        export -n "${1}=${__x+"${__x[*]}"}"
-      fi
-    else
-      read -r "${1}" <<< "${__x+"${__x[*]}"}"
-    fi
+    dynamic_set "${1}" ${__x+"${__x[*]}"}
   fi
 }
 
@@ -560,18 +560,10 @@ function join_a()
     return "${rv}"
   else
     if [ $# -eq 1 ]; then
-      if [[ ${BASH_VERSINFO[0]}${BASH_VERSINFO[1]} -ge 44 ]]; then
-        if [[ ${!1@a} = *x* ]]; then
-          export "${1}="
-        else
-          export -n "${1}="
-        fi
-      else
-        read -r "${1}" <<< ""
-      fi
-      return 1
       # Note: I do not `unset $1` due to the same locality-is-lost-bug referenced
       # in remove_element_a
+      dynamic_set "${1}"
+      return 1
     fi
 
     local __target="$1"
@@ -693,7 +685,7 @@ fi
 #       $ declare -p y
 #       declare -a x=([0]="f\\o\\\\o" [1]="fo\\o" [2]="f\\o\\\\o")
 #       declare -a y=([0]="f\\o\\o" [1]="fo\\o" [2]="f\\o\\\\o")
-#       # Only the double backslash in double quotes comes out wrong, due to a bug in xargs?
+#       # Only the double backslash in double quotes comes out wrong, due to a bug in xargs? To get around this bug, use ``eval`` instead
 #**
 function to_array()
 {
@@ -712,7 +704,7 @@ function to_array()
                 s|\n|^^n|g' <<< "${__x}")"
 
     local -i __i=0
-    while IFS='' read -r -d '' __y || [[ -n "${line}" ]]; do
+    while IFS='' read -r -d '' __y || [[ -n "${__y}" ]]; do
       declare -p __y
       __y="${__y//^^n/$'\n'}"
       __y="${__y//\\^/^}"

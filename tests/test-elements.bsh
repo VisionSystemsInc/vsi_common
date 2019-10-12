@@ -4,7 +4,7 @@
 . "$(dirname "${BASH_SOURCE[0]}")/test_utils.bsh"
 . "$(dirname "${BASH_SOURCE[0]}")/../linux/elements.bsh"
 
-begin_test "Dynamic Set Array"
+begin_test "Dynamic set array"
 (
   setup_test
 
@@ -46,6 +46,66 @@ begin_test "Dynamic set array with special characters"
   dynamic_set_a foo " 1 " $' 3 \t 3 ' $'2 \n - \n 2 ' 'ok\3doe'
   check_a foo " 1 " $' 3 \t 3 ' $'2 \n - \n 2 ' 'ok\3doe'
   contiguous_a z
+)
+end_test
+
+begin_test "Dynamic set variable"
+(
+  setup_test
+
+  # Normal value
+  unset z
+  dynamic_set z
+  [ -n "${z+set}" ]
+  not compgen -e -X '!z' # not exported
+
+  # Set to a value
+  unset z
+  dynamic_set z $' f\\o\\\\o \n bar \t'
+  [ "${z}" = $' f\\o\\\\o \n bar \t' ]
+  not compgen -e -X '!z'
+
+  # export but not set test
+  export foobar1
+  dynamic_set foobar1 "ok"
+  [ "${foobar1}" = "ok" ]
+  compgen -e -X '!foobar1'
+
+  # normal exported variable
+  export foobar2=1
+  dynamic_set foobar2 "ok"
+  [ "${foobar2}" = "ok" ]
+  compgen -e -X '!foobar2'
+
+  # Local tests
+  function a()
+  {
+    local b
+    dynamic_set b 4
+
+    # shadow globa variables
+    local y
+    dynamic_set y 1
+    [ "${y}" = "1" ]
+
+    # A local exported variable
+    local x
+    export x
+    dynamic_set x 2
+    [ "${x}" = "2" ]
+    compgen -e -X '!x'
+
+    dynamic_set z 3
+  }
+
+  unset z b
+  x=0
+  y=0
+  a
+  [ "${x}" = "0" ]
+  [ "${y}" = "0" ]
+  [ "${z}" = "3" ]
+  not declare -p b
 )
 end_test
 
