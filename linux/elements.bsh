@@ -65,12 +65,12 @@ else
       __i=(${@+"${@}"})
     else
       clear_a "${1}"
-      local IFS='' # If I don't do this, leading and trailing whitespace are dropped
       local __i
       for (( __i=2; __i<=$#; __i++ )); do
         # Can't use here-string because that adds an extra newline. Also, since
         # there is no extra newline, read returns false
-        read -r -d '' "${1}[$(($__i-2))]" < <(printf '%s' "${!__i}") || :
+        # If I don't use this IFS, leading and trailing whitespace are dropped
+        IFS='' read -r -d '' "${1}[$(($__i-2))]" < <(printf '%s' "${!__i}") || :
       done
     fi
   }
@@ -92,37 +92,12 @@ fi
 #    # Is like executing
 #    # my_array_name='11 "2 2" 33'
 #**
-
-# The following has the following but, which is why only ``read`` is used.
-#
-# .. bugs::
-#
-#    .. code:: bash
-#
-#       $ export foo # no value set, not even null
-#       $ dynamic_set
-#
-# if [[ ${BASH_VERSINFO[0]}${BASH_VERSINFO[1]} -ge 44 ]]; then
-#   function dynamic_set()
-#   {
-#     # Check if is exported, this only works in bash 4.4 or newer, but is very fast
-#     if [[ ${!1@a} = *x* ]]; then # 0.055
-#       # Set and export, very fast
-#       export "${1}=${2-}" # 0.048
-#     else
-#       # Set and don't export. Trying declare will set as a local variable if not
-#       # already set, so we don't do that
-#       export -n "${1}=${2-}" # 0.048
-#     fi
-#   }
-# else
 function dynamic_set()
 {
   # backwards compat fairly slow method, but faster than using declare -p (20.0!)
   # compgen (0.779) and will auto handle export vs no export, so just use read
   IFS='' read -r -d '' "${1}" < <(printf '%s' "${2-}") || : #0.739
 }
-# fi
 
 #**
 # .. function:: clear_a
@@ -183,14 +158,11 @@ fi
 function remove_element_a()
 {
   # Handle local name collisions
-  if [ "${1}" = "__x" ]; then
-    local y=(${__x[@]+"${__x[@]}"})
+  if [ "${1}" = "__x" -o "${1}" = "__i" ]; then
+    local y="${1}[@]"
+    y=(${!y+"${!y}"})
     remove_element_a y "${2}"
-    __x=(${y[@]+"${y[@]}"})
-  elif [ "${1}" = "__i" ]; then
-    local y=(${__i[@]+"${__i[@]}"})
-    remove_element_a y "${2}"
-    __i=(${y[@]+"${y[@]}"})
+    dynamic_set_a "${1}" ${y[@]+"${y[@]}"}
   else
     # We have to check ${1}[@] here, because there is a change the first
     # element of the array is not set, but the rest of the array is.
@@ -203,16 +175,14 @@ function remove_element_a()
     else # If it's empty/does not exist, there is nothing to remove
       return 0
     fi
-    local __i
 
+    local __i
     for __i in "${!__x[@]}"; do
       if [ "${__x[$__i]}" == "${2}" ]; then
         # http://wiki.bash-hackers.org/syntax/arrays#destruction
         unset "__x[$__i]"
       fi
     done
-
-    clear_a "${1}"
 
     dynamic_set_a "${1}" ${__x[@]+"${__x[@]}"}
   fi
@@ -237,14 +207,9 @@ function remove_element()
     remove_element y "${2}"
     __x=${y+"${y[*]}"}
   else
-    local __x=()
-    if [ -n "${!1+set}" ]; then
-      # Convert to array
-      __x=( ${!1} )
-    fi
+    local __x=(${!1-})
     # Use already existing funtion
     remove_element_a __x "${2}"
-
     dynamic_set "${1}" ${__x+"${__x[*]}"}
   fi
 }
@@ -313,12 +278,8 @@ function add_element_post()
     add_element_post_a y "${2}"
     __x=${y+"${y[*]}"}
   else
-    local __x=()
-    if [ -n "${!1+set}" ]; then
-      __x=( ${!1} )
-    fi
+    local __x=(${!1-})
     add_element_post_a __x "${2}"
-
     dynamic_set "${1}" ${__x+"${__x[*]}"}
   fi
 }
@@ -353,13 +314,8 @@ function add_element_pre_a()
     add_element_pre_a y "${2}"
     __x=(${y[@]+"${y[@]}"})
   else
-    local __x=()
-    # remove_element_a makes $1 contiguous, so no need to check $!1[@]
-    if [ -n "${!1+set}" ]; then
-      __x="${1}[@]"
-      __x=( ${!__x} )
-    fi
-    dynamic_set_a "${1}" "${2}" ${__x+"${__x[@]}"}
+    local __x="${1}[@]"
+    dynamic_set_a "${1}" "${2}" ${!__x+"${!__x}"}
   fi
 }
 
@@ -379,12 +335,8 @@ function add_element_pre ()
     add_element_pre_a y "${2}"
     __x=${y+"${y[*]}"}
   else
-    local __x=()
-    if [ -n "${!1+set}" ]; then
-      __x=( ${!1} )
-    fi
+    local __x=(${!1-})
     add_element_pre_a __x "${2}"
-
     dynamic_set "${1}" ${__x+"${__x[*]}"}
   fi
 }
@@ -485,21 +437,13 @@ function cmp_elements()
 #**
 function split_s()
 {
-  if [ "${1}" = "__x" ]; then
+  # Protect against name collisions
+  if [ "${1}" = "__x" -o "${1}" = "__i" -o "${1}" = "__target" ]; then
     local y
+    local array_name="${1}"
     shift 1
     split_s y ${@+"${@}"}
-    __x=(${y[@]+"${y[@]}"})
-  elif [ "${1}" = "__i" ]; then
-    local y
-    shift 1
-    split_s y ${@+"${@}"}
-    __i=(${y[@]+"${y[@]}"})
-  elif [ "${1}" = "__target" ]; then
-    local y
-    shift 1
-    split_s y ${@+"${@}"}
-    __target=(${y[@]+"${y[@]}"})
+    dynamic_set_a "${array_name}" ${y[@]+"${y[@]}"}
   else
     local __target="${1}"
     shift 1
@@ -544,19 +488,13 @@ function split_s()
 #**
 function join_a()
 {
-  if [ "${1}" = "__target" ]; then
+  if [ "${1}" = "__target" -o "${1}" = "__x" ]; then
+    local array_name="${1}"
     shift 1
     local y
     local rv=0
     join_a y ${@+"${@}"} || rv=$?
-    __target=${y+"${y}"}
-    return "${rv}"
-  elif [ "${1}" = "__x" ]; then
-    shift 1
-    local y
-    local rv=0
-    join_a y ${@+"${@}"} || rv=$?
-    __x=${y+"${y}"}
+    dynamic_set "${array_name}" ${y+"${y}"}
     return "${rv}"
   else
     if [ $# -eq 1 ]; then
@@ -569,17 +507,15 @@ function join_a()
     local __target="$1"
     shift 1
 
-    local MIFS="${MIFS-//}"
-
     local __x="${1-}"
     shift 1
 
     while (( $# )); do
-      __x+="${MIFS}${1}"
+      __x+="${MIFS-//}${1}"
       shift 1
     done
 
-    read -r "${__target}" <<< "${__x-}"
+    dynamic_set "${__target}" "${__x-}"
   fi
 }
 
@@ -836,7 +772,6 @@ function _subtract_array()
     __output+=("${__i}")
   done
 
-  # Clear and copy the output to the targeted name
-  clear_a "$3"
+  # Copy the output to the targeted name
   dynamic_set_a "$3" ${__output[@]+"${__output[@]}"}
 }
