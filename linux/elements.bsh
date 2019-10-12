@@ -45,35 +45,36 @@ source "${VSI_COMMON_DIR}/linux/isin"
 #   dynamic_set_a my_array_name 11 "2 2" 33
 #   # Is like executing
 #   # my_array_name=(11 "2 2" 33)
-#
-# .. note::
-#   Does not clear the array named by ``$1``. So if the array had 4 elements in it and :func:`dynamic_set_a` is called with 3 elements, the 4th element is still set.
-#
-#   This is not a bug, but by design. If this was done for you, array attributes would be lost. "unset" the array prior to calling :func:`dynamic_set_a` if you wish to avoid this.
 #**
-function dynamic_set_a()
-{
-  # This way the user may use the names x, y, i, or j
-  if [ "${1}" = "y" ] || [ "${1}" = "j" ]; then
-    local x="${1}"
+if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "440" ]; then
+  function dynamic_set_a()
+  {
+    # This way the user may use the names x
+    if [ "${1}" != "x" ]; then
+      local -n x="${1}"
+    fi
     shift 1
-    local IFS='' # If I don't do this, leading and trailing whitespace are dropped
-    local i
-    for (( i=0; $#; i++ )); do
-      read -r "${x}[$i]" <<< "${1}"
+    x=(${@+"${@}"})
+  }
+else
+  function dynamic_set_a()
+  {
+    if [ "${1}" = "__i" ]; then
+      # In case the user uses the name __i
       shift 1
-    done
-  else
-    local y="${1}"
-    shift 1
-    local IFS='' # If I don't do this, leading and trailing whitespace are dropped
-    local j
-    for (( j=0; $#; j++ )); do
-      read -r "${y}[$j]" <<< "${1}"
-      shift 1
-    done
-  fi
-}
+      __i=(${@+"${@}"})
+    else
+      clear_a "${1}"
+      local IFS='' # If I don't do this, leading and trailing whitespace are dropped
+      local __i
+      for (( __i=2; __i<=$#; __i++ )); do
+        # Can't use here-string because that adds an extra newline. Also, since
+        # there is no extra newline, read returns false
+        read -r -d '' "${1}[$(($__i-2))]" < <(printf '%s' "${!__i}") || :
+      done
+    fi
+  }
+fi
 
 #**
 # .. function:: clear_a
@@ -86,19 +87,21 @@ function dynamic_set_a()
 # .. note::
 #   Still uses eval on older versions of bash, but makes sure the variable name appears valid
 #**
-function clear_a()
-{
-  if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "44" ]; then
-    if [ "${1}" = "x" ]; then
-      local -n y="${1}"
-      y=()
-    else
+if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "44" ]; then
+  function clear_a()
+  {
+    if [ "${1}" != "x" ]; then
       local -n x="${1}"
-      x=()
     fi
-  else
+    x=()
+  }
+else
+  function clear_a()
+  {
     # https://stackoverflow.com/a/2821201/4166604
     if [[ ! ${1} =~ [a-zA-Z_]+[a-zA-Z0-9_]* ]]; then
+      # Create the same error message as the bash 4.4 version
+      echo "bash: local: \`${1}': invalid variable name for name reference" >&2
       return 1
     fi
 
@@ -107,8 +110,8 @@ function clear_a()
     # consequences which is generally BAD! Gotta eval :(
     # https://stackoverflow.com/questions/10497425/is-it-possible-to-use-array-in-bash#comment74842477_10497539
     eval "${1}=()"
-  fi
-}
+  }
+fi
 
 #**
 # .. function:: remove_element_a
@@ -131,46 +134,43 @@ function clear_a()
 #**
 function remove_element_a()
 {
-  if [ "${1}" = "x" ] || [ "${1}" = "i" ]; then
-    local y="${1}[@]"
-    if [ "${!y+set}" == "set" ]; then
-      y=( ${!y} )
-    else # If it's empty/does not exist, there is nothing to remove
-      return 0
-    fi
-    local j
-
-    for j in "${!y[@]}"; do
-      if [ "${y[$j]}" == "${2}" ]; then
-        # http://wiki.bash-hackers.org/syntax/arrays#destruction
-        unset "y[$j]"
-      fi
-    done
-
-    clear_a "${1}"
-
-    dynamic_set_a "${1}" ${y[@]+"${y[@]}"}
+  # Handle local name collisions
+  if [ "${1}" = "__x" ]; then
+    local y=(${__x[@]+"${__x[@]}"})
+    remove_element_a y "${2}"
+    __x=(${y[@]+"${y[@]}"})
+  elif [ "${1}" = "__i" ]; then
+    local y=(${__i[@]+"${__i[@]}"})
+    remove_element_a y "${2}"
+    __i=(${y[@]+"${y[@]}"})
   else
-    local x="${1}[@]"
-    if [ "${!x+set}" == "set" ]; then
-      x=( ${!x} )
+    # We have to check ${1}[@] here, because there is a change the first
+    # element of the array is not set, but the rest of the array is.
+    local __x="${1}[@]"
+    # Do not use -n here, because "${blah[@]+set}" expands to ZERO arguments,
+    # not one empty one, thus making the final test "test -n -n" which is true
+    # So = "set" is the right way to do this when [@] is involved
+    if [ "${!__x+is_set}" = "is_set" ]; then
+      __x=( ${!__x} )
     else # If it's empty/does not exist, there is nothing to remove
       return 0
     fi
-    local i
+    local __i
 
-    for i in "${!x[@]}"; do
-      if [ "${x[$i]}" == "${2}" ]; then
+    for __i in "${!__x[@]}"; do
+      if [ "${__x[$__i]}" == "${2}" ]; then
         # http://wiki.bash-hackers.org/syntax/arrays#destruction
-        unset "x[$i]"
+        unset "__x[$__i]"
       fi
     done
 
     clear_a "${1}"
 
-    dynamic_set_a "${1}" ${x[@]+"${x[@]}"}
+    dynamic_set_a "${1}" ${__x[@]+"${__x[@]}"}
   fi
 }
+
+# _remove_element_a "${1}" "${1}[@]" "${2}"
 
 #**
 # .. function:: remove_element
@@ -183,21 +183,60 @@ function remove_element_a()
 #**
 function remove_element()
 {
-  if [ "${1}" = "x" ]; then
-    local y=()
-    if [ "${!1+set}" == "set" ]; then
-      y=( ${!1} )
-    fi
-    remove_element_a y "${2}"
-    export $1=${y+"${y[*]}"}
+  if [ "${1}" = "__x" ]; then
+    # In case the user uses the name __y
+    local y="${__x-}"
+    remove_element y "${2}"
+    __x=${y+"${y[*]}"}
   else
-    local x=()
-    if [ "${!1+set}" == "set" ]; then
-      x=( ${!1} )
+    local __x=()
+    if [ -n "${!1+set}" ]; then
+      # Convert to array
+      __x=( ${!1} )
     fi
-    remove_element_a x "${2}"
-    export $1=${x+"${x[*]}"}
+    # Use already existing funtion
+    remove_element_a __x "${2}"
+
+    # Set the result back to the variable
+    if [[ ${BASH_VERSINFO[0]}${BASH_VERSINFO[1]} -ge 44 ]]; then
+      if [[ ${!1@a} = *x* ]]; then
+        export "${1}=${__x+"${__x[*]}"}"
+      else
+        export -n "${1}=${__x+"${__x[*]}"}"
+      fi
+    else
+      read -r "${1}" <<< "${__x+"${__x[*]}"}"
+    fi
   fi
+}
+
+# # Common setting variable explained
+# if [[ ${BASH_VERSINFO[0]}${BASH_VERSINFO[1]} -ge 44 ]]; then # 0.082
+#   # Check if is exported, this only works in bash 4.4 or newer, very fast
+#   if [[ ${!1@a} = *x* ]]; then # 0.055
+#     # Set and export, very fast
+#     export "${1}=${__x+"${__x[*]}"}" # 0.048
+#   else
+#     # Set and don't export. Trying declare will set as a local variable if not
+#     # already set, so we don't do that
+#     export -n "${1}=${__x+"${__x[*]}"}" # 0.048
+#   fi
+# else
+#   # backwards compat fairly slow method, but faster than using declare -p (20.0!)
+#   # compgen (0.779) and will auto handle export vs no export, so just use read
+#   read -r "${1}" <<< "${__x+"${__x[*]}"}" #0.739
+# fi
+
+#**
+# .. function:: add_element
+#
+# :Arguments: * ``$1`` - Name of array to be set
+#             * ``$2``... - Values to be appended
+#
+# Just appends to array, allows repeats. 1+=(2)
+function add_element_a()
+{
+  :
 }
 
 #**
@@ -225,22 +264,18 @@ function remove_element()
 function add_element_post_a()
 {
   remove_element_a "${1}" "${2}"
-  if [ "${1}" = "x" ]; then
-    local y=()
-    # remove_element_a makes $1 contiguous, so no need to check $!1[@]
-    if [ "${!1+set}" == "set" ]; then
-      y="${1}[@]"
-      y=( ${!y} )
-    fi
-    dynamic_set_a "${1}" ${y[@]+"${y[@]}"} "${2}"
+  if [ "${1}" = "__x" ]; then
+    local y=(${__x[@]+"${__x[@]}"})
+    add_element_post_a y "${2}"
+    __x=(${y[@]+"${y[@]}"})
   else
-    local x=()
+    local __x=()
     # remove_element_a makes $1 contiguous, so no need to check $!1[@]
-    if [ "${!1+set}" == "set" ]; then
-      x="${1}[@]"
-      x=( ${!x} )
+    if [ -n "${!1+set}" ]; then
+      __x="${1}[@]"
+      __x=( ${!__x} )
     fi
-    dynamic_set_a "${1}" ${x[@]+"${x[@]}"} "${2}"
+    dynamic_set_a "${1}" ${__x[@]+"${__x[@]}"} "${2}"
   fi
 }
 
@@ -255,20 +290,27 @@ function add_element_post_a()
 #**
 function add_element_post()
 {
-  if [ "${1}" = "x" ]; then
-    local y=()
-    if [ "${!1+set}" == "set" ]; then
-      y=( ${!1} )
-    fi
+  if [ "${1}" = "__x" ]; then
+    local y=( ${__x-} )
     add_element_post_a y "${2}"
-    export $1=${y+"${y[*]}"}
+    __x=${y+"${y[*]}"}
   else
-    local x=()
-    if [ "${!1+set}" == "set" ]; then
-      x=( ${!1} )
+    local __x=()
+    if [ -n "${!1+set}" ]; then
+      __x=( ${!1} )
     fi
-    add_element_post_a x "${2}"
-    export $1=${x+"${x[*]}"}
+    add_element_post_a __x "${2}"
+
+    # Set the result back to the variable
+    if [[ ${BASH_VERSINFO[0]}${BASH_VERSINFO[1]} -ge 44 ]]; then
+      if [[ ${!1@a} = *x* ]]; then
+        export "${1}=${__x+"${__x[*]}"}"
+      else
+        export -n "${1}=${__x+"${__x[*]}"}"
+      fi
+    else
+      read -r "${1}" <<< "${__x+"${__x[*]}"}"
+    fi
   fi
 }
 
@@ -297,22 +339,18 @@ function add_element_post()
 function add_element_pre_a()
 {
   remove_element_a "${1}" "${2}"
-  if [ "${1}" = "x" ]; then
-    local y=()
-    # remove_element_a makes $1 contiguous, so no need to check $!1[@]
-    if [ "${!1+set}" == "set" ]; then
-      y="${1}[@]"
-      y=( ${!y} )
-    fi
-    dynamic_set_a "${1}" "${2}" ${y+"${y[@]}"}
+  if [ "${1}" = "__x" ]; then
+    local y=(${__x[@]+"${__x[@]}"})
+    add_element_pre_a y "${2}"
+    __x=(${y[@]+"${y[@]}"})
   else
-    local x=()
+    local __x=()
     # remove_element_a makes $1 contiguous, so no need to check $!1[@]
-    if [ "${!1+set}" == "set" ]; then
-      x="${1}[@]"
-      x=( ${!x} )
+    if [ -n "${!1+set}" ]; then
+      __x="${1}[@]"
+      __x=( ${!__x} )
     fi
-    dynamic_set_a "${1}" "${2}" ${x+"${x[@]}"}
+    dynamic_set_a "${1}" "${2}" ${__x+"${__x[@]}"}
   fi
 }
 
@@ -327,20 +365,27 @@ function add_element_pre_a()
 #**
 function add_element_pre ()
 {
-  if [ "${1}" = "x" ]; then
-    local y=()
-    if [ "${!1+set}" == "set" ]; then
-      y=( ${!1} )
-    fi
+  if [ "${1}" = "__x" ]; then
+    local y=( ${__x-} )
     add_element_pre_a y "${2}"
-    export $1=${y+"${y[*]}"}
+    __x=${y+"${y[*]}"}
   else
-    local x=()
-    if [ "${!1+set}" == "set" ]; then
-      x=( ${!1} )
+    local __x=()
+    if [ -n "${!1+set}" ]; then
+      __x=( ${!1} )
     fi
-    add_element_pre_a x "${2}"
-    export $1=${x+"${x[*]}"}
+    add_element_pre_a __x "${2}"
+
+    # Set the result back to the variable
+    if [[ ${BASH_VERSINFO[0]}${BASH_VERSINFO[1]} -ge 44 ]]; then
+      if [[ ${!1@a} = *x* ]]; then
+        export "${1}=${__x+"${__x[*]}"}"
+      else
+        export -n "${1}=${__x+"${__x[*]}"}"
+      fi
+    else
+      read -r "${1}" <<< "${__x+"${__x[*]}"}"
+    fi
   fi
 }
 
@@ -356,47 +401,37 @@ function add_element_pre ()
 function cmp_elements_a()
 {
   # # Handle the trivial case. This isn't neccessary since as it happens using
-  # # "x x" or "y y" yields the correct answer, this just bypasses that
+  # # "__x __x" or "__y __y" yields the correct answer, this just bypasses that
   # if [ "${1}" = "${2}" ]; then
   #   return 0
   # fi
   # Handling this corner case would just slow things down in the normal case
 
-  # Swap the order, so that only 1 could be x, and only 2 could be y. This will
+  # Swap the order, so that only 1 could be __x, and only 2 could be __y. This will
   # simplify the logic below.
-  if [ "${1}" = "y" ] || [ "${2}" = "x" ]; then
-    set -- "${2}" "${1}"
-  fi
-
-  # It happens that the below will work if both arguments are x or y, although
-  # "x" works through a "buggy" route (y ends up being a copy of the copy of x,
-  # rather than just a copy of x), but the answer is correct, so it's all good
-
-  # Have to copy https://unix.stackexchange.com/a/374094/123413 Thanks darwin!
-  if [ "${1}" = "i" -a "${2}" = "j" -o "${1}" = "j" -a "${2}" = "i" ]; then
-    local k="${1}[@]"
-    local x=(${!k+"${!k}"})
-    k="${2}[@]"
-    local y=(${!k+"${!k}"})
-  elif [ "${1}" = "i" -o "${2}" = "i" ]; then
-    local j="${1}[@]"
-    local x=(${!j+"${!j}"})
-    j="${2}[@]"
-    local y=(${!j+"${!j}"})
+  if [ "${1}" = "__y" ] || [ "${2}" = "__x" ]; then
+    _cmp_elements_a "${2}[@]" "${1}[@]"
   else
-    local i="${1}[@]"
-    local x=(${!i+"${!i}"})
-    i="${2}[@]"
-    local y=(${!i+"${!i}"})
+    _cmp_elements_a "${1}[@]" "${2}[@]"
   fi
 
-  if [ ${#x[@]} -ne ${#y[@]} ]; then
+  # It happens that the below will work if both arguments are __x or __y, although
+  # "__x" works through a "buggy" route (__y ends up being a copy of the copy of __x,
+  # rather than just a copy of __x), but the answer is correct, so it's all good
+}
+
+function _cmp_elements_a()
+{
+  # Have to copy https://unix.stackexchange.com/a/374094/123413 Thanks darwin!
+  local __x=(${!1+"${!1}"})
+  local __y=(${!2+"${!2}"})
+  if [ ${#__x[@]} -ne ${#__y[@]} ]; then
     return 1
   fi
 
   local z
-  for ((z=0; z<${#x[@]}; z++)); do
-    if [ "${x[$z]}" != "${y[$z]}" ]; then
+  for ((z=0; z<${#__x[@]}; z++)); do
+    if [ "${__x[$z]}" != "${__y[$z]}" ]; then
       return 1
     fi
   done
@@ -423,14 +458,14 @@ function cmp_elements()
 
   # Swap the order, so that only 1 could be x, and only 2 could be y. This will
   # simplify the logic below.
-  if [ "${1}" = "y" ] || [ "${2}" = "x" ]; then
+  if [ "${1}" = "__y" ] || [ "${2}" = "__x" ]; then
     set -- "${2}" "${1}"
   fi
 
-  local x=( ${!1} )
-  local y=( ${!2} )
+  local __x=( ${!1} )
+  local __y=( ${!2} )
 
-  cmp_elements_a x y
+  cmp_elements_a __x __y
   return $?
 }
 
@@ -450,36 +485,27 @@ function cmp_elements()
 #**
 function split_s()
 {
-  if [ "${1}" = "x" ] || [ "${1}" = "i" ] || [ "${1}" = "var" ]; then
-    local target="${1}"
+  if [ "${1}" = "__x" ]; then
+    local y
     shift 1
-
-    local y=()
-    local j
-    local MIFS="${MIFS-//}"
-
-    if [ "${MIFS-}" == "" ]; then
-      echo "MIFS is not set" >&2
-      return 1
-    fi
-
-    for j in ${@+"${@}"}; do
-      j+=${MIFS}
-      # If I do this before the for loop, bash 3.2 (macOS) does not work right
-      while [ -n "${j}" ]; do
-        y+=( "${j%%${MIFS}*}" )
-        j="${j#*${MIFS}}"
-      done
-    done
-
-    # If I don't reset IFS here, dynamic_set_a will set incorrectly on bash 3.2
-    dynamic_set_a "${target}" ${y[@]+"${y[@]}"}
+    split_s y ${@+"${@}"}
+    __x=(${y[@]+"${y[@]}"})
+  elif [ "${1}" = "__i" ]; then
+    local y
+    shift 1
+    split_s y ${@+"${@}"}
+    __i=(${y[@]+"${y[@]}"})
+  elif [ "${1}" = "__target" ]; then
+    local y
+    shift 1
+    split_s y ${@+"${@}"}
+    __target=(${y[@]+"${y[@]}"})
   else
-    local var="${1}"
+    local __target="${1}"
     shift 1
 
-    local x=()
-    local i
+    local __x=()
+    local __i
     local MIFS="${MIFS-//}"
 
     if [ "${MIFS-}" == "" ]; then
@@ -487,76 +513,81 @@ function split_s()
       return 1
     fi
 
-    for i in ${@+"${@}"}; do
-      i+=${MIFS}
+    for __i in ${@+"${@}"}; do
+      __i+=${MIFS}
       # If I do this before the for loop, bash 3.2 (macOS) does not work right
-      while [ -n "${i}" ]; do
-        x+=( "${i%%${MIFS}*}" )
-        i="${i#*${MIFS}}"
+      while [ -n "${__i}" ]; do
+        __x+=( "${__i%%${MIFS}*}" )
+        __i="${__i#*${MIFS}}"
       done
     done
 
     # If I don't reset IFS here, dynamic_set_a will set incorrectly on bash 3.2
-    dynamic_set_a "${var}" ${x[@]+"${x[@]}"}
+    dynamic_set_a "${__target}" ${__x[@]+"${__x[@]}"}
   fi
 }
 
 #**
 # .. function:: join_a
 #
-# :Arguments: * ``$1`` - Target array name
-#             * ``$2``... - Strings
+# :Arguments: * ``$1`` - Target string name
+#             * ``$2``... - Array elements
 # :Parameters: * [``MIFS``] - A Multichararater Internal Field Separator.
-#             * Default: //
+#              * Default: //
+# :Returns: Returns ``0`` on success. If no elements were passed in, returns 1. This is done to create a distinction between ``join_a x`` and ``join_a x ""``.
 #
 # Joins an array into a string, using an ``MIFS``
+#
+# .. note::
+#
+#    When ``1`` is returned, this is the only time the output is not compatible with :func:`split_s`.
 #**
 function join_a()
 {
-  if [ "${1}" = "x" ] || [ "${1}" = "x_s" ]; then
-    if [ $# -eq 1 ]; then
-      return 0
-      # This means target is never set. This mirrors the behavior of split_s.
-      # Note: I do not `unset $1` due to the same locality-is-lost-bug referenced
-      # in remove_element_a
-    fi
-
-    local y="$1"
+  if [ "${1}" = "__target" ]; then
     shift 1
-
-    local MIFS="${MIFS-//}"
-
-    local y_s="${1-}"
+    local y
+    local rv=0
+    join_a y ${@+"${@}"} || rv=$?
+    __target=${y+"${y}"}
+    return "${rv}"
+  elif [ "${1}" = "__x" ]; then
     shift 1
-
-    while [ $# -gt 0 ]; do
-      y_s+="${MIFS}${1}"
-      shift 1
-    done
-
-    read -r "${y}" <<< "${y_s-}"
+    local y
+    local rv=0
+    join_a y ${@+"${@}"} || rv=$?
+    __x=${y+"${y}"}
+    return "${rv}"
   else
     if [ $# -eq 1 ]; then
-      return 0
-      # This means target is never set. This mirrors the behavior of split_s.
+      if [[ ${BASH_VERSINFO[0]}${BASH_VERSINFO[1]} -ge 44 ]]; then
+        if [[ ${!1@a} = *x* ]]; then
+          export "${1}="
+        else
+          export -n "${1}="
+        fi
+      else
+        read -r "${1}" <<< ""
+      fi
+      return 1
       # Note: I do not `unset $1` due to the same locality-is-lost-bug referenced
       # in remove_element_a
     fi
 
-    local x="$1"
+    local __target="$1"
     shift 1
 
     local MIFS="${MIFS-//}"
 
-    local x_s="${1-}"
+    local __x="${1-}"
     shift 1
 
-    while [ $# -gt 0 ]; do
-      x_s+="${MIFS}${1}"
+    while (( $# )); do
+      __x+="${MIFS}${1}"
       shift 1
     done
 
-    read -r "${x}" <<< "${x_s-}"
+    read -r "${__target}" <<< "${__x-}"
   fi
 }
 
@@ -611,48 +642,86 @@ function join_a_out()
 #
 # Determines if ``$1`` is an array or not. If it is not defined, still returns ``1``
 #**
-function is_array()
-{
-  local signature="$(declare -p "${1}" 2>/dev/null)"
+if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "44" ]; then
+  function is_array()
+  {
+    # Yes, this works with namereffing too, without having to iterate!
+    if [[ ${!1@a} = *a* ]]; then
+      return 0
+    fi
+    return 1
+  }
+else
+  function is_array()
+  {
+    local signature="$(declare -p "${1}" 2>/dev/null)"
 
-  # Handle Bash 4.2 namereffing https://stackoverflow.com/a/42877229/4166604
-  local regex='^declare -[[:alpha:]]*n[[:alpha:]]* [^=]+=\"([^\"]+)\"$'
-  while [[ ${signature} =~ ${regex} ]]; do
-    signature="$(declare -p ${BASH_REMATCH[1]})"
-  done
+    # Handle Bash 4.2 namereffing https://stackoverflow.com/a/42877229/4166604
+    local regex='^declare -[[:alpha:]]*n[[:alpha:]]* [^=]+=\"([^\"]+)\"$'
+    while [[ ${signature} =~ ${regex} ]]; do
+      signature="$(declare -p ${BASH_REMATCH[1]})"
+    done
 
-  # Check if is array
-  regex='^declare -[[:alpha:]]*a[[:alpha:]]* '
-  [[ ${signature} =~ ${regex} ]]
-}
+    # Check if is array
+    regex='^declare -[[:alpha:]]*a[[:alpha:]]* '
+    [[ ${signature} =~ ${regex} ]]
+  }
+fi
 
 #**
 # .. function:: to_array
 #
 # :Arguments: * ``$1`` - variable name
 #
-# .. Note::
-#   Uses eval to convert to array, because of this, () and other special characters can cause code injection
+# Convert an string to an array, honoring quotes and newlines
 #
-#   .. code-block:: bash
+# .. code-block:: bash
 #
-#     $ x="test); echo foo; q=("
-#     $ to_array x
-#     foo
+#   $ x=$'11 "2\n2" "3 \t 3 " ""'
+#   $ to_array x
+#   $ declare -p x
+#   declare -a x=([0]="11" [1]=$'2\n2' [2]=$'3 \t 3' [3]="")
 #
-#     $ x="test\)\; echo foo; \("
-#     # or
-#     $ x="'test);' echo 'foo;' '('"
-#     $ to_array x
-#     # Works without side effect
+# .. bugs::
+#
+#    .. code:: bash
+#
+#       $ x='"f\o\\o" f\o\\o '\''f\o\\o'\'
+#       $ eval "y=(${x})"
+#       $ to_array x
+#       $ declare -p x
+#       $ declare -p y
+#       declare -a x=([0]="f\\o\\\\o" [1]="fo\\o" [2]="f\\o\\\\o")
+#       declare -a y=([0]="f\\o\\o" [1]="fo\\o" [2]="f\\o\\\\o")
+#       # Only the double backslash in double quotes comes out wrong, due to a bug in xargs?
 #**
 function to_array()
 {
-  # Don't try and escape special characters, cause then you end up putting \'s
-  # in quoted string, which is not what we want
   if ! is_array "${1}"; then
-    # Eval method :(
-    eval "$1=(${!1})"
+    local __x="${!1}"
+
+    __x="$(sed '# Read all lines into one buffer
+                :combine
+                $bdone
+                N
+                bcombine
+                :done
+                # Escape \s so I can escape newlines
+                s|\^|\\^|g
+                # Escape newlines, since xargs will get confused by it
+                s|\n|^^n|g' <<< "${__x}")"
+
+    local -i __i=0
+    while IFS='' read -r -d '' __y || [[ -n "${line}" ]]; do
+      declare -p __y
+      __y="${__y//^^n/$'\n'}"
+      __y="${__y//\\^/^}"
+      declare -p __y
+
+      # %s is important, so that printf doesn't try to replace special chracters
+      IFS='' read -r -d "" "${1}[$__i]" < <(printf '%s' "${__y}") || :
+      __i+=1
+    done < <(xargs -n 1 printf '%s\0' <<< "${__x}")
   fi
 }
 
@@ -671,15 +740,15 @@ function array_length()
 {
   if ! declare -p "$1" &> /dev/null; then
     echo -1
-  elif [ "${1}" = "x" ]; then
-    local y="$1[@]"
-    y=(${!y+"${!y}"})
-    echo "${#y[@]}"
   else
-    local x="$1[@]"
-    x=(${!x+"${!x}"})
-    echo "${#x[@]}"
+    _array_length "${1}[@]"
   fi
+}
+
+function _array_length()
+{
+  local x=(${!1+"${!1}"})
+  echo "${#x[@]}"
 }
 
 #**
@@ -691,51 +760,91 @@ function array_length()
 #
 # Destination array becomes values of array 2 not in array 1 (1 - 2). The
 # destination array name can be the same as Array 1 or 2.
-#
-# .. rubric:: Bugs
-#
-# Don't use array names:
-#
-#   * __element_array_target_temp1
-#   * __element_array_target_temp2
-#
-# as an argument. It will cause name collision.
 #**
 function subtract_array()
 {
-  local __element_array_target_temp1=("" "$1[@]" "$2[@]" 0)
-  # __element_array_target_temp1 ends up being a multi-purpose variable in order
-  # to shrink the number of variables that can possibly collide with parent
-  # functions.
-  # - 0 - The loop first loop variable
-  # - 1 - The string $1[@] needed for variable indirection
-  # - 2 - The string $2[@] needed for variable indirection
-  # - 3 - Boolean that stores whether a particular element should be included
-  #       in the final subtracted array
-  local __element_array_target_temp2=("")
-  # - 0 - The loop first loop variable
-  # - 1... - A copy of the output
+  # Three indirect input variables, two possible collision variables, a bunch
+  # of way to prevent collision. Basically if 1 collides, try abc, if 2, def,
+  # if 3, ghi. This should allow all three to collide, without the solution
+  # then colliding
+  if [ "${1}" = "__i" -o "${1}" = "__j" -o "${1}" = "__output" ]; then
+    if [ "${2}" = "a" -o "${3}" = "a" ]; then
+      if [ "${2}" = "b" -o "${3}" = "b" ]; then
+        local c="${1}[@]"
+        c=(${!c+"${!c}"})
+        subtract_array c "${2}" "${3}"
+      else
+        local b="${1}[@]"
+        b=(${!b+"${!b}"})
+        subtract_array b "${2}" "${3}"
+      fi
+    else
+      local a="${1}[@]"
+      a=(${!a+"${!a}"})
+      subtract_array a "${2}" "${3}"
+    fi
+  elif [ "${2}" = "__i" -o "${2}" = "__j" -o "${2}" = "__output" ]; then
+    if [ "${1}" = "d" -o "${3}" = "d" ]; then
+      if [ "${1}" = "e" -o "${3}" = "e" ]; then
+        local f="${2}[@]"
+        f=(${!f+"${!f}"})
+        subtract_array "${1}" f "${3}"
+      else
+        local e="${2}[@]"
+        e=(${!e+"${!e}"})
+        subtract_array "${1}" e "${3}"
+      fi
+    else
+      local d="${2}[@]"
+      d=(${!d+"${!d}"})
+      subtract_array "${1}" d "${3}"
+    fi
+  elif [ "${3}" = "__i" -o "${3}" = "__j" -o "${3}" = "__output" ]; then
+    if [ "${1}" = "g" -o "${2}" = "g" ]; then
+      if [ "${1}" = "h" -o "${2}" = "h" ]; then
+        local i="${3}[@]"
+        i=(${!i+"${!i}"})
+        subtract_array "${1}" "${2}" i
+        dynamic_set_a "${3}" ${i[@]+"${i[@]}"}
+      else
+        local h="${3}[@]"
+        h=(${!h+"${!h}"})
+        subtract_array "${1}" "${2}" h
+        dynamic_set_a "${3}" ${h[@]+"${h[@]}"}
+      fi
+    else
+      local g="${3}[@]"
+      g=(${!g+"${!g}"})
+      subtract_array "${1}" "${2}" g
+      dynamic_set_a "${3}" ${g[@]+"${g[@]}"}
+    fi
+  else
+    _subtract_array "${1}[@]" "${2}[@]" "${3}"
+  fi
+}
 
-  for __element_array_target_temp1 in ${!__element_array_target_temp1[1]+"${!__element_array_target_temp1[1]}"}; do
-    for __element_array_target_temp2 in ${!__element_array_target_temp1[2]+"${!__element_array_target_temp1[2]}"}; do
-      if [ "${__element_array_target_temp1}" = "${__element_array_target_temp2}" ]; then
-        __element_array_target_temp1[3]=1
-        break
+function _subtract_array()
+{
+  local __i
+  local __j
+  local __output=()
+
+  # Loop through arrays
+  for __i in ${!1+"${!1}"}; do
+    for __j in ${!2+"${!2}"}; do
+      # If it is a match
+      if [ "${__i}" = "${__j}" ]; then
+        # Skip and go to the next __i
+        continue 2
       fi
     done
 
-    # If this element survives subtraction
-    if [ "${__element_array_target_temp1[3]}" = "0" ]; then
-      # Copy it to the output array. This is copied rather than going directly
-      # to the output array, incase the user sets the input and output array
-      # the same
-      __element_array_target_temp2+=("${__element_array_target_temp1[0]}")
-    fi
-    __element_array_target_temp1[3]=0
+    # If you get to this point in the outter loop, then the inner loop never
+    # found a match, meaning it's a keeper!
+    __output+=("${__i}")
   done
 
+  # Clear and copy the output to the targeted name
   clear_a "$3"
-  if [ "${#__element_array_target_temp2[@]}" -gt 1 ]; then
-    dynamic_set_a "$3" "${__element_array_target_temp2[@]:1}"
-  fi
+  dynamic_set_a "$3" ${__output[@]+"${__output[@]}"}
 }
