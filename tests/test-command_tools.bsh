@@ -1,0 +1,217 @@
+#!/usr/bin/env bash
+
+. "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
+. "$(dirname "${BASH_SOURCE[0]}")/test_utils.bsh"
+
+VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+. "${VSI_COMMON_DIR}/linux/command_tools.bsh"
+
+begin_test "Get array from environment"
+(
+  setup_test
+
+  # PREFIX_NAMES
+  A_BS=(11 22 33)
+  get_array_from_environment foo A B
+  check_a foo 11 22 33
+
+  A_BS=(1 2 3)
+  get_array_from_environment foo A B BAR
+  check_a foo 1 2 3
+
+  # Test hole
+  unset A_BS[0]
+  get_array_from_environment foo A B BAR
+  check_a foo 2 3
+
+  unset A_BS
+  # PREFIX_NAME_1...
+  A_B_1="11 22"
+  get_array_from_environment foo A B
+  check_a foo "11 22"
+
+  A_B_1="111 222"
+  get_array_from_environment foo A B BLAH
+  check_a foo "111 222"
+
+  A_B_1="aa"
+  A_B_2="b b"
+  A_B_3="c  c"
+  get_array_from_environment foo A B BLAH
+  check_a foo aa "b b" "c  c"
+
+  # PREFIX_INSTANCE_NAMES
+  B_C_DS=(abc "d e  f")
+  get_array_from_environment foo B D C
+  check_a foo abc "d e  f"
+
+  # PREFIX_INSTANCE_NAME_1...
+  PRE_INS_NAME_1="111 222"
+  get_array_from_environment foo PRE NAME INS
+  check_a foo "111 222"
+
+  PRE_INS_NAME_1="aa"
+  PRE_INS_NAME_2="b b"
+  PRE_INS_NAME_3="c  c"
+  get_array_from_environment foo PRE NAME INS
+  check_a foo aa "b b" "c  c"
+
+  # Test it all at once
+  FOO_STUFFS=(aa bb)
+  FOO_STUFF_1=cc
+  FOO_STUFF_2="c  c"
+  FOO_BAR_STUFFS=(dd ee)
+  FOO_BAR_STUFF_1=ff
+  FOO_BAR_STUFF_2="f f"
+
+  foo=()
+  get_array_from_environment foo FOO STUFF BAR
+  check_a foo aa bb cc "c  c" dd ee ff "f f"
+
+  # Special names
+  FOO_BARS=(a1)
+  FOO_BAR_1=b2
+  FOO_BAR_2=c
+  FOO_INSTANCE_BARS=(3)
+  FOO_INSTANCE_BAR_1=p
+  FOO_INSTANCE_BAR_2=O
+
+  get_array_from_environment list FOO BAR INSTANCE
+  get_array_from_environment var FOO BAR INSTANCE
+  get_array_from_environment i FOO BAR INSTANCE
+  check_a list a1 b2 c 3 p O
+  check_a var a1 b2 c 3 p O
+  check_a i a1 b2 c 3 p O
+)
+end_test
+
+begin_test "Generic command argument parse"
+(
+  setup_test
+
+  # Null case
+  parse-generic
+  check_a command_args
+  check_a subcommand_args
+  [ -z "${subcommand+set}" ]
+  unset command_args subcommand_args subcommand
+
+  # Just a command
+  parse-generic foobar
+  check_a command_args
+  check_a subcommand_args
+  [ "${subcommand}" = "foobar" ]
+  unset command_args subcommand_args subcommand
+
+  # Just command_args
+  parse-generic --foo
+  check_a command_args --foo
+  check_a subcommand_args
+  [ -z "${subcommand+set}" ]
+  unset command_args subcommand_args subcommand
+
+  parse-generic --foo -b
+  check_a command_args --foo -b
+  check_a subcommand_args
+  [ -z "${subcommand+set}" ]
+  unset command_args subcommand_args subcommand
+
+  # Command and command_args
+  parse-generic do -something else
+  check_a command_args
+  check_a subcommand_args -something else
+  [ "${subcommand}" = "do" ]
+  unset command_args subcommand_args subcommand
+
+  # A little of everything
+  parse-generic -try --to do -something else
+  check_a command_args -try --to
+  check_a subcommand_args -something else
+  [ "${subcommand}" = "do" ]
+  unset command_args subcommand_args subcommand
+
+)
+end_test
+
+begin_test "Compose command arguments"
+(
+  setup_test
+
+  # Null case
+  compose_arguments
+  declare -p cmd # check that cmd exists now
+  check_a cmd
+
+  # Just command as string
+  cmd=foobar
+  compose_arguments
+  check_a cmd foobar
+
+  # No cmd with args
+  unset cmd
+  subcommand=magic
+  compose_arguments
+  check_a cmd magic
+
+  # Command and subcommand
+  cmd=(foobar)
+  compose_arguments
+  check_a cmd foobar magic
+
+  # Just one arg
+  cmd=(foobar)
+  A=(-a -b)
+  compose_arguments A
+  check_a cmd foobar -a -b magic
+
+  cmd=(foobar)
+  command_args=(-1 -2)
+  compose_arguments A
+  check_a cmd foobar -1 -2 -a -b magic
+
+  # Everything
+  cmd=(echo foobar)
+  CMD_ARGS=(--quiet --config "/tmp/foo bar.xml")
+  MAGIC_ARGS=(-it --rm)
+  subcommand=magic
+  command_args=(--gpu)
+  subcommand_args=(--do=something)
+
+  compose_arguments CMD_ARGS MAGIC_ARGS
+  check_a cmd echo "foobar" "--gpu" "--quiet" "--config" "/tmp/foo bar.xml" "magic" "-it" "--rm" "--do=something"
+
+  # Extra args specified but not used
+  unset CMD_ARGS MAGIC_ARGS
+  cmd=(foobar)
+  compose_arguments CMD_ARGS MAGIC_ARGS
+  check_a cmd "foobar" "--gpu" "magic" "--do=something"
+
+  # All strings
+  unset cmd CMD_ARGS MAGIC_ARGS command_args subcommand_args
+  cmd="echo foobar"
+  CMD_ARGS="--quiet --config /tmp/foo bar.xml"
+  MAGIC_ARGS="-it --rm"
+  subcommand=magic
+  command_args="--gpu --tpu"
+  subcommand_args="--do=s ome  thing"
+
+  compose_arguments CMD_ARGS MAGIC_ARGS
+  check_a cmd "echo foobar" "--gpu --tpu" "--quiet --config /tmp/foo bar.xml" magic "-it --rm" "--do=s ome  thing"
+
+  # Special names
+  command_args=()
+  subcommand_args=()
+  subcommand=bar
+  indirect=(ok doe)
+  indirect2=(deer bear)
+  indirect3=(car tar)
+
+  cmd=()
+  compose_arguments indirect indirect2
+  check_a cmd ok doe bar deer bear
+
+  cmd=()
+  compose_arguments indirect3 indirect2
+  check_a cmd car tar bar deer bear
+)
+end_test
