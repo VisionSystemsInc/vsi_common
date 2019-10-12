@@ -121,9 +121,49 @@ function trim()
 #**
 function quote_escape()
 {
-  local foo=\'\\\'\' # Use variable for bash 3.2 compatibility. *shrugs*
-  echo "'${1//\'/${foo}}'"
+  # Gets around Bash <= 4.2 issue
+  # https://unix.stackexchange.com/a/411047/123413
+  local foo42=\'\\\'\'
+  echo "'${1//\'/${foo42}}'"
   # All other bash substitutions do not occur in '
+}
+
+#**
+# .. function:: quote_unescape
+#
+# :Arguments: * ``$1`` - Sring to unescape
+# :Output: *stdout* - Unescaped string
+#
+# Unquote a string quoted using bashes rules for quotes, without using eval.
+#
+# The ``trap -p`` command outputs string using the single quote notation and only escapes ``'``, while ``declare -p`` used the double quote notation and only has to escape ``\`$"``. Only these escape charaters are supported, all other escapes will be left in.
+#
+# .. warning::
+#
+#     This only works for specific single quoted strings, like that outputted from :func:`quote_escape`. Mixing a string with ``"`` or ``$'`` will result in error. The only concatination of two strings supported is ``'\''``.
+#**
+function quote_unescape()
+{
+  local x
+  if [ "${#1}" -ge 2 ]; then
+    if [ "${1:0:1}" = "'"  -a "${1: -1}" = "'" ]; then
+      x="${1:1:${#1}-2}" # Remove surrounding quotes
+      # Gets around Bash <= 4.2 issue
+      # https://unix.stackexchange.com/a/411047/123413
+      local foo42="'"
+      echo "${x//\'\\\'\'/${foo42}}"
+      return
+    elif [ "${1:0:1}" = '"'  -a "${1: -1}" = '"' ]; then
+      x="${1:1:${#1}-2}" # Remove surrounding quotes
+      x="${x//\\\$/\$}"
+      x="${x//\\\`/\`}"
+      x="${x//\\\"/\"}"
+      echo "${x//\\\\/\\}"
+      # printf '%b\n' "${x}" # supports //, but I think it's wrong to do \t \n, etc...
+      return
+    fi
+  fi
+  echo "${1}"
 }
 
 #**
@@ -269,7 +309,7 @@ function regex_escape_range()
 # .. function:: uppercase
 #
 # :Arguments: * ``$1`` - String to convert
-# :Output: *stdout* - Sring in uppercase
+# :Output: *stdout* - String in uppercase
 #
 # Converts a string to uppercase, using ``bash`` or ``tr``
 #**
@@ -289,7 +329,7 @@ fi
 # .. function:: lowercase
 #
 # :Arguments: * ``$1`` - String to convert
-# :Output: *stdout* - Sring in lowercase
+# :Output: *stdout* - String in lowercase
 #
 # Converts a string to lowercase, using ``bash`` or ``tr``
 #**

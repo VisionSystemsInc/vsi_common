@@ -1,0 +1,217 @@
+#!/usr/bin/env false
+
+if [[ $- != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
+: ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
+source "${VSI_COMMON_DIR}/linux/string_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/elements.bsh"
+
+#*# linux/command_tools
+
+#**
+# =============
+# Command Tools
+# =============
+#
+# .. default-domain:: bash
+#
+# .. file:: command_tools.bsh
+#
+# Set of functions to make using parsing and composing commands easier
+#**
+
+#**
+#
+# :Arguments: ``$1``... - The names of the files being searched for
+# :Return Value: file_matches - array containing matches
+#
+# Find files by searching up the parent tree
+#
+# Searches for files to use. It starts by checking the current directory, and goes up. Just like git searches for a .git directory
+#**
+
+#**
+# .. function:: get_array_from_environment
+#
+# :Arguments: * ``$1`` - Array variable name to store values in
+#             * ``$2`` - ``PREFIX`` used
+#             * ``$3`` - ``NAME`` used
+#             * ``[$4]`` - ``INSTANCE`` used. This argument is optional. If it is not specified, than the two patterns using ``INSTANCE`` are not checked.
+#
+# The purpose of this function is to gather environment values from various locations that is advantageous in many situations. Get values from array ``{PREFIX}_{NAME}S``, values ``{PREFIX}_{NAME}_1``..., array ``{PREFIX}_{INSTANCE}_{NAME}S``, and values ``{PREFIX}_{INSTANCE}_{NAME}_1``... and stores them in the variable specified by ``$1``.
+#
+# Since arrays cannot be exported, there are two different methods of getting environment variables.
+#**
+function get_array_from_environment()
+{
+  # In case the output variable is called var, list or i, don't define those as
+  # local. Since assignement to $1 happens at the end, there is no potential of
+  # variable name conflicts
+  if [ "${1}" != "var" ]; then
+    local var
+  fi
+  if [ "${1}" != "list" ]; then
+    local list
+  fi
+  if [ "${1}" != "i" ]; then
+    local i
+  fi
+
+  # Add PREFIX_NAMES if it exists
+  var="${2}_${3}S[@]"
+  list=(${!var+"${!var}"})
+
+  # Add PREFIX_NAME_1... if it exists
+  for (( i=1;; i++ )); do
+    var="${2}_${3}_${i}"
+    if [ -z "${!var+set}" ]; then
+      break
+    fi
+    list+=("${!var}")
+  done
+
+  if [ $# -gt 3 ]; then
+    # Add PREFIX_INSTANCE_NAMES if it exists
+    var="${2}_${4}_${3}S[@]"
+    list+=(${!var+"${!var}"})
+
+    # Add PREFIX_INSTANCE_NAME_1... if it exists
+    for (( i=1;; i++ )); do
+      var="${2}_${4}_${3}_${i}"
+      if [ -z "${!var+set}" ]; then
+        break
+      fi
+      list+=("${!var}")
+    done
+  fi
+
+  # The only potential name collision is list, in which case you do nothing
+  if [ "${1}" != "list" ]; then
+    clear_a "${1}"
+    dynamic_set_a "${1}" ${list[@]+"${list[@]}"}
+  fi
+}
+
+#**
+# .. function:: parse-generic
+#
+# :Arguments: ``$1``.. - Arguments to be sent to some command
+# :Output: * command_args - Arguments to some command, before the subcommand (run, build, do_something, etc...)
+#          * subcommand - The subcommand specified
+#          * subcommand_args - Arguments for the specified subcommand
+#
+# Parse a generic command's arguments and split up information (See OUTPUT). This supports a generic function that goes ``some command`` followed by arguments that start with ``-`` and take no additional arguments (``command_args``). Next an optional subcommand (``subcommand``) and those subcommand's arguments (``subcommand_args``).
+#
+# This will only work in the simpliest of cases (e.g. ``singularity``). Cases like ``docker`` and other commands that have more complicated ``command_args`` choices, a specific version of this function needs to be written to handle all the argument cases.
+#
+# Typically, in the calling function, you will define all the output variables as local, so that they are captured by the calling function only.
+#
+# Original command can be thought of as:
+#
+# .. code::
+#
+#     some_command "${command_args[@]}" "${subcommand}" "${subcommand_args[@]}"
+#**
+
+function parse-generic()
+{
+  command_args=()
+  subcommand_args=()
+
+  while (( $# )); do
+    case "$1" in
+      -*)
+      # Everything takes zero arguments, so no need to enumerate -d --debug -h --help --nocolor -q --quiet -s --silent -v --verbose --version
+        command_args+=("$1")
+        shift 1
+        ;;
+      *)
+        subcommand="$1"
+        shift 1
+        subcommand_args=(${@+"${@}"})
+        break
+        ;;
+    esac
+  done
+}
+
+
+#**
+# .. function:: compose_arguments
+#
+# :Arguments: * [``$1``] - Name of array that will be inserted between ``command_args`` and ``subcommand``.
+#             * [``$2``] - Name of array that will be inserted between the ``subcommand`` and  command args and.
+# :Parameters: * ``cmd`` - The starting array of command arguments, starting with ``0``
+#              * ``command_args`` - Arguments to some command, before the subcommand (run, build, do_something, etc...)
+#              * ``subcommand`` - The subcommand specified
+#              * ``subcommand_args`` - Arguments for the specified subcommand
+#
+# Appends arguemtns to the array ``cmd``. If ``cmd`` isn't defined at first, it is created an an empty array. If ``cmd`` is a string, it will be converted to a single element array, and then appended to.
+#
+# .. rubric:: Example
+#
+# .. code:: bash
+#
+#    cmd=(${DRYRUN} foobar)
+#    CMD_ARGS=(--quiet --config "/tmp/foo bar.xml")
+#    MAGIC_ARGS=(-it --rm)
+#    subcommand=magic
+#    command_args=(--gpu)
+#    subcommand_args=(--do=something)
+#
+#    compose_arguments CMD_ARGS MAGIC_ARGS
+#    declare -p cmd
+#
+#    declare -a cmd=([0]="foobar" [1]="--gpu" [2]="--quiet" [3]="--config"
+#                    [4]="/tmp/foo bar.xml" [5]="magic" [6]="-it" [7]="--rm"
+#                    [8]="--do=something")
+#
+# .. note::
+#
+#    Even if the arguments' variables are a non-array variables, this will work. However they will always appear to be a single argument.
+#**
+function compose_arguments()
+{
+  if [ "${1-}" != "indirect" -a "${2-}" != "indirect" ]; then
+    local indirect
+    indirect=${1+"${1}[@]"}
+    cmd+=(${command_args[@]+"${command_args[@]}"}
+          ${1+${!indirect+"${!indirect}"}}
+          # No quotes here, to handle the no subcommand case. Subcommands shouldn't have spaced anyways
+          ${subcommand-})
+    indirect=${2+"${2}[@]"}
+    cmd+=(${2+${!indirect+"${!indirect}"}}
+          ${subcommand_args[@]+"${subcommand_args[@]}"})
+  elif [ "${1-}" != "indirect2" -a "${2-}" != "indirect2" ]; then
+    local indirect2
+    indirect2=${1+"${1}[@]"}
+    cmd+=(${command_args[@]+"${command_args[@]}"}
+          ${1+${!indirect2+"${!indirect2}"}}
+          # No quotes here, to handle the no subcommand case. Subcommands shouldn't have spaced anyways
+          ${subcommand-})
+    indirect2=${2+"${2}[@]"}
+    cmd+=(${2+${!indirect2+"${!indirect2}"}}
+          ${subcommand_args[@]+"${subcommand_args[@]}"})
+  else
+    local indirect3
+    indirect3=${1+"${1}[@]"}
+    cmd+=(${command_args[@]+"${command_args[@]}"}
+          ${1+${!indirect3+"${!indirect3}"}}
+          # No quotes here, to handle the no subcommand case. Subcommands shouldn't have spaced anyways
+          ${subcommand-})
+    indirect3=${2+"${2}[@]"}
+    cmd+=(${2+${!indirect3+"${!indirect3}"}}
+          ${subcommand_args[@]+"${subcommand_args[@]}"})
+  fi
+
+  # Simplier version that needed far less code
+  # cmd+=(${command_args[@]+"${command_args[@]}"}
+  #     ${!1+"${!1}"} # <-- Handles no arg1 even
+  #     ${subcommand-}
+  #     ${!2+"${!2}"}
+  #     ${subcommand_args[@]+"${subcommand_args[@]}"})
+  # ONLY downside was you had to add [@] for both the first and second argument
+  # when you called compose_arguments
+}

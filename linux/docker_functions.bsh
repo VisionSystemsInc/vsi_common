@@ -518,16 +518,16 @@ function _Docker()
   fi
 
   # Indirectly append DOCKER_EXTRA_{COMMAND}_ARGS
-  extra_args_var=$(tr '[a-z]' '[A-Z]' <<< "${docker_command}")
+  extra_args_var="$(uppercase "${docker_command-none}")"
   extra_args_var="DOCKER_EXTRA_${extra_args_var}_ARGS[@]"
   docker_extra_command_args+=(${!extra_args_var+"${!extra_args_var}"})
 
   cmd=("${cmd[@]}"
-      ${docker_args+"${docker_args[@]}"}
-      ${DOCKER_EXTRA_ARGS+"${DOCKER_EXTRA_ARGS[@]}"}
-      ${docker_command}
-      ${docker_extra_command_args+"${docker_extra_command_args[@]}"}
-      ${docker_command_args+"${docker_command_args[@]}"})
+      ${docker_args[@]+"${docker_args[@]}"}
+      ${DOCKER_EXTRA_ARGS[@]+"${DOCKER_EXTRA_ARGS[@]}"}
+      ${docker_command-}
+      ${docker_extra_command_args[@]+"${docker_extra_command_args[@]}"}
+      ${docker_command_args[@]+"${docker_command_args[@]}"})
 
   if [ "${DOCKER_EXEC-}" == "" ] || [ "${DRYRUN}" != "" ]; then
     "${cmd[0]}" "${cmd[@]:1}"
@@ -831,8 +831,8 @@ function docker-compose-volumes()
 # :Arguments: ``$1``.. - Arguments to be sent to docker-compose command
 # :Parameters: [``JUST_DOCKER_COMPOSE_DIR``] - By default, the docker-compose files will initially be searched for in the ``JUSTFILE`` directory, and then up the parent dirs until / is hit. However, if you wish to the disable this behavior and start searching for a docker-compose file from the current directory where "just" is called, then set this var to an empty string. You can also set to a specific directory to start searching from within that directory.
 # :Output: * ``docker_compose_args`` - Arguments to docker-compose, before the docker-compose command (run, up, down, etc...)
-#          * ``docker_compose_command`` - Docker compose command specified
-#          * ``docker_compose_command_args`` - Arguments for the specified command
+#          * ``docker_compose_arguments`` - Docker compose command specified
+#          * ``docker_compose_arguments_args`` - Arguments for the specified command
 #          * ``docker_compose_files`` - Array of docker compose files that are used
 #          * ``docker_compose_project_name`` - Docker compose project name
 #
@@ -848,8 +848,8 @@ function docker-compose-volumes()
 #
 # .. code-block:: bash
 #
-#   docker-compose "${docker_compose_args[@]}" "${docker_compose_command}" \
-#                  "${docker_compose_command_args[@]}"
+#   docker-compose "${docker_compose_args[@]}" "${docker_compose_arguments}" \
+#                  "${docker_compose_arguments_args[@]}"
 #
 # .. rubric:: Example
 #
@@ -940,9 +940,9 @@ function parse-docker-compose()
         ;;
       # Anything else must be a docker compose command
       *)
-        docker_compose_command="$1"
+        docker_compose_arguments="$1"
         shift 1
-        docker_compose_command_args=(${@+"${@}"})
+        docker_compose_arguments_args=(${@+"${@}"})
         break
         ;;
     esac
@@ -1055,8 +1055,8 @@ function compose_path_separator()
 function Docker-compose()
 {
   local docker_compose_args
-  local docker_compose_command
-  local docker_compose_command_args
+  local docker_compose_arguments
+  local docker_compose_arguments_args
   local docker_compose_files
   local docker_compose_project_name
 
@@ -1071,21 +1071,21 @@ function _Docker-compose()
   local cmd=(${DRYRUN} ${DOCKER_COMPOSE})
   local extra_args_var
 
-  if [ "${docker_compose_command}" = "run" ] && [ "${DOCKER_COMPOSE_AUTOREMOVE-1}" == "1" ]; then
+  if [ "${docker_compose_arguments}" = "run" ] && [ "${DOCKER_COMPOSE_AUTOREMOVE-1}" == "1" ]; then
     docker_compose_extra_command_args+=(--rm)
   fi
 
   # Indirect: add DOCKER_COMPOSE_EXTRA_{COMMAND}_ARGS
-  extra_args_var=$(tr '[a-z]' '[A-Z]' <<< "${docker_compose_command}")
+  extra_args_var=$(tr '[a-z]' '[A-Z]' <<< "${docker_compose_arguments}")
   extra_args_var="DOCKER_COMPOSE_EXTRA_${extra_args_var}_ARGS[@]"
   docker_compose_extra_command_args+=(${!extra_args_var+"${!extra_args_var}"})
 
   "${cmd[@]}" \
       ${docker_compose_args+"${docker_compose_args[@]}"} \
       ${DOCKER_COMPOSE_EXTRA_ARGS+"${DOCKER_COMPOSE_EXTRA_ARGS[@]}"} \
-      ${docker_compose_command} \
+      ${docker_compose_arguments} \
       ${docker_compose_extra_command_args+"${docker_compose_extra_command_args[@]}"} \
-      ${docker_compose_command_args+"${docker_compose_command_args[@]}"}
+      ${docker_compose_arguments_args+"${docker_compose_arguments_args[@]}"}
   return $?
 }
 
@@ -1140,8 +1140,8 @@ function Just-docker-compose()
   fi
 
   local docker_compose_args
-  local docker_compose_command
-  local docker_compose_command_args
+  local docker_compose_arguments
+  local docker_compose_arguments_args
   local docker_compose_files
   local DOCKER_COMPOSE_FILES
   local docker_compose_project_name

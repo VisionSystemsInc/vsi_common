@@ -7,6 +7,7 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 
 source "${VSI_COMMON_DIR}/linux/just_container_override.bsh"
 source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/singularity_functions.bsh"
 
 function singular_defaultify()
 {
@@ -19,42 +20,187 @@ function singular_defaultify()
     # singularity_instance-start) # Start a singularity container in the background
     # singularity_test) # Run the singularity container's tests
     singularity_*)
-      extra_args=$#
-      local image_name="${1}"
-      shift 1
-      local i
-
       local cmd="${arg#*_}"
       if [ "${cmd}" = "instance-start" ]; then
         cmd="instance start"
       fi
+      # No quotes around cmd, to allow for spaces
+      Singularity ${cmd} ${@+"${@}"}
+      extra_args=$#
 
-      function _env_echo()
-      { # BUG! This doesn't handle " in values rignt now :(
-        echo export "${1}=\"${2}\"" >> "${env_file}"
-      }
-      make_temp_path env_file
+      # local image_name="${1}"
+      # shift 1
+      # local i
+      # local env_file
 
-      if [ -n "${SINGULARITY_ENV_VARS+set}" ]; then
-        for (( i=0; i+1<${#SINGULARITY_ENV_VARS[@]}; i+=2 )); do
-          _env_echo "${SINGULARITY_ENV_VARS[${i}]}" "${SINGULARITY_ENV_VARS[${i}+1]}"
-        done
+      # # Make a self deleting temp file
+      # make_temp_path env_file
+
+      # # Write out env patch file
+      # if [ -n "${SINGULARITY_ENV_VARS+set}" ]; then
+      #   for (( i=0; i+1<${#SINGULARITY_ENV_VARS[@]}; i+=2 )); do
+      #     singularity_env_echo "${SINGULARITY_ENV_VARS[${i}]}" "${SINGULARITY_ENV_VARS[${i}+1]}"
+      #   done
+      # fi
+
+      # # Generate binds
+      # local bind_args=()
+      # if [ -n "${SINGULARITY_VOLUMES+set}" ]; then
+      #   for (( i=0; i<${#SINGULARITY_VOLUMES[@]}; i++ )); do
+      #     bind_args+=(-B "${SINGULARITY_VOLUMES[${i}]}")
+      #   done
+      # fi
+
+      # function _env_echo(){ singularity_env_echo "${@}" }
+      # common_environment_override
+
+      # Singularity ${cmd} -e -c --nv \
+      #   ${bind_args+"${bind_args[@]}"} \
+      #   -B "${env_file}:/.singularity.d/env/91-just-env.sh:ro" \
+      #   -B "/tmp:/tmp:rw" \
+      #   ${image_name} ${@+"${@}"}
+      ;;
+
+    # singular-compose_run) # Run
+    singular-compose_*) # Simple pure bash version of singularity-compose
+      local subcommand="${arg#*_}"
+      if [ "${subcommand}" = "instance-start" ]; then
+        subcommand="instance start"
       fi
 
-      local bind_args=()
-      if [ -n "${SINGULARITY_VOLUMES+set}" ]; then
-        for (( i=0; i<${#SINGULARITY_VOLUMES[@]}; i++ )); do
-          bind_args+=(-B "${SINGULARITY_VOLUMES[${i}]}")
-        done
-      fi
+      case $subcommand in
+        run)
+          local instance="$1"
+          shift 1
+          extra_args=1
 
-      common_environment_override
+          local compose_file="${JUST_PROJECT_PREFIX}_SINGULAR_COMPOSE_FILE"
+          local instances
+          compose_file="${!compose_file}"
+          source "${compose_file}"
 
-      ${DRYRUN} singularity ${cmd} -e -c --nv \
-        ${bind_args+"${bind_args[@]}"} \
-        -B "${env_file}:/.singularity.d/env/91-just-env.sh:ro" \
-        -B "/tmp:/tmp:rw" \
-        ${image_name} ${@+"${@}"}
+          if ! isin "${instance}" "${instances[@]}"; then
+            echo "There is no instance \"${instance}\". Make sure it is in the 'instances' array" >&2
+            echo "in your ${JUST_PROJECT_PREFIX}_SINGULAR_COMPOSE_FILE (${compose_file})" >&2
+            exit 1
+          fi
+
+          local instance_upper="$(tr '[a-z][:punct:]' '[A-Z]_' <<< ${instance})"
+
+          ######################
+          ### Handle volumes ###
+          ######################
+
+          local volumes
+          get_array_from_environment volumes "${JUST_PROJECT_PREFIX}" VOLUME "${instance_upper}"
+          # Prepend volumes list from compose file
+          local indirect="${instance}_volumes[@]"
+          volumes=(${!indirect+"${!indirect}"} ${volumes[@]+"${volumes[@]}"})
+
+          ####################################
+          ### Handle environment variables ###
+          ####################################
+
+          local environment
+          get_array_from_environment environment "${JUST_PROJECT_PREFIX}" ENVIRONMENT "${instance_upper}"
+          indirect="${instance}_environment[@]"
+          # Prepent environment list with values from compose file.
+          local temp=(${!indirect+"${!indirect}"} ${environment[@]+"${environment[@]}"})
+          local -i i
+          local s
+          environment=()
+          # There are two possible syntaxes for environment variables. An array
+          # would have pairs of entried, that got key, value, key, value, etc.
+          # However a non-array variable can only have one value, so it goes
+          # "key[space]value". This means that an array can also be a list of
+          # "key[space]value"s, but this wasn't the original intent, but will
+          # work perfectly fine. In order to normalize these two syntaxes, the
+          # array needs to be scanned and all "key[space]value" entries need to
+          # be split into two entries
+          for (( i=0; i<${#temp[@]}; i++ )); do
+            if [[ ${temp[$i]} == *\ * ]]; then
+              # Split into two in environent array
+              environment+=("${temp[$i]%% *}" "${temp[$i]#* }")
+            else
+              # Already split, just copy
+              environment+=("${temp[$i]}" "${temp[$i+1]}")
+              i+=1
+            fi
+          done
+
+          ##########################
+          ### Handle other flags ###
+          ##########################
+
+          indirect="${instance}_singularity_flags[@]"
+          local flags=(${!indirect+"${!indirect}"})
+
+declare -p volumes
+declare -p environment
+declare -p flags
+
+          # Make a self deleting temp file
+          make_temp_path env_file
+
+          # Write out env patch file
+          if [ -n "${environment+set}" ]; then
+            for (( i=0; i+1<${#environment[@]}; i+=2 )); do
+              singularity_env_echo "${environment[${i}]}" "${environment[${i}+1]}"
+            done
+          fi
+
+          # Generate binds
+          local subcommand_args=()
+          if [ -n "${volumes+set}" ]; then
+            for (( i=0; i<${#volumes[@]}; i++ )); do
+              subcommand_args+=(-B "${volumes[${i}]}")
+            done
+          fi
+
+          # When -c is used, $HOME, /tmp, /proc, /sys, and /dev are not mounted
+          # in directly. The internal /tmp is very limited and quickly starts
+          # having problems. So it is best to just mount it in by default.
+          if [ "${SINGULARITY_ADD_TMP_DIR-1}" = "1" ]; then
+            subcommand_args+=(-B "/tmp:/tmp:rw")
+          fi
+
+          subcommand_args+=(-B "${env_file}:/.singularity.d/env/91-just-env.sh:ro")
+
+          _Singularity
+
+
+
+  # Singularity ${cmd} -e -c --nv \
+  #   ${bind_args+"${bind_args[@]}"} \
+  #   -B "${env_file}:/.singularity.d/env/91-just-env.sh:ro" \
+  #   -B "/tmp:/tmp:rw" \
+  #   ${image_name} ${@+"${@}"}
+
+
+#   # Parse enumerated_volumes_all
+#   volumes_name_all="${JUST_PROJECT_PREFIX}_VOLUME_$i"
+#   while declare -p "${volumes_name_all}" &> /dev/null; do
+#     enumerated_volumes_all+=("${!volumes_name_all}")
+#     i+=1
+#     volumes_name_all="${JUST_PROJECT_PREFIX}_VOLUME_$i"
+#   done
+# local services_upper=($(tr '[a-z][:punct:]' '[A-Z]_' <<< ${services_name[@]}))
+#     # Parse enumerate_volumes
+#     enumerated_volumes=()
+#     i=1
+#     volumes_name="${JUST_PROJECT_PREFIX}_${services_upper[$service_index]}_VOLUME_$i"
+#     while declare -p "${volumes_name}" &> /dev/null; do
+#       enumerated_volumes+=("${!volumes_name}")
+#       i+=1
+#       volumes_name="${JUST_PROJECT_PREFIX}_${services_upper[$service_index]}_VOLUME_$i"
+#     done
+
+          ;;
+        *)
+          echo "I don't understand: singular-compose $cmd" >&2
+          exit 1
+          ;;
+      esac
       ;;
     *)
       plugin_not_found=1

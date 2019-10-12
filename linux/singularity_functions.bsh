@@ -1,0 +1,83 @@
+#!/usr/bin/env false
+# Source this script for singularity specific helper functions for just or other
+
+if [[ $- != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
+: ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
+source "${VSI_COMMON_DIR}/linux/string_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/command_tools.bsh"
+
+#*# just/plugins/singularity/singularity_functions
+
+#**
+# =====================
+# Singularity Functions
+# =====================
+#
+# .. default-domain:: bash
+#
+# .. file:: singularity_functions.bsh
+#
+# Set of functions to make using singularitys easier
+#
+# .. envvar:: SINGULARITY
+#
+# Name/path of singularity executable
+#
+# Instead of hard-coding "singularity" everywhere, use the variable :envvar:`SINGULARITY` so that when the need comes, it is easier to switch which executable gets called.
+#**
+
+: ${SINGULARITY=singularity}
+
+#**
+# .. function:: Singularity
+#
+# :Arguments: ``$1``.. - Arguments to be sent to singularity command
+# :Parameters: * [``DRYRUN``] - Optional variable inserted at the beginning of all singularity commands. Useful for setting to "echo" or similar for dryrun mode
+#              * ``SINGULARITY_EXTRA_ARGS`` - Array of extra arguments inserted after singularity but before the singularity subcommand
+#              * ``SINGULARITY_EXTRA_{subcommand}_ARGS`` - Extra arguments inserted right after the singularity subcommand
+# :Output: Runs singularity command
+#
+# Helper function to execute the right singularity command, or just dryrun
+#
+# Instead of calling the singularity command directly, this Singularity function should
+# be called instead (for all dryrun-able activities. Simple commands like
+# inspect, ps, etc. don't make as much sense to dryrun, as the reset of the
+# script will never be executed, thus rendering dryrun useless.)
+#**
+
+function Singularity()
+{
+  local command_args
+  local subcommand
+  local subcommand_args
+
+  parse-generic ${@+"${@}"}
+
+  _Singularity
+  return $?
+}
+
+function _Singularity()
+{
+  local singularity_extra_command_args=()
+  local cmd=(${DRYRUN} ${SINGULARITY})
+  local extra_args_var
+
+  compose_arguments "SINGULARITY_EXTRA_ARGS[@]" "SINGULARITY_EXTRA_$(uppercase "${subcommand-none}")_ARGS[@]"
+
+  if [ "${SINGULARITY_EXEC-0}" != "1" ] || [ "${DRYRUN}" != "" ]; then
+    "${cmd[@]}"
+    return $?
+  else
+    exec "${cmd[@]}"
+  fi
+}
+
+
+function singularity_env_echo()
+{
+  echo export "${1}=$(quote_escape "${2}")" >> "${env_file}"
+}
