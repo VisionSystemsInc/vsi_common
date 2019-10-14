@@ -4,7 +4,7 @@
 . "$(dirname "${BASH_SOURCE[0]}")/test_utils.bsh"
 . "$(dirname "${BASH_SOURCE[0]}")/../linux/elements.bsh"
 
-begin_test "Dynamic Set Array"
+begin_test "Dynamic set array"
 (
   setup_test
 
@@ -17,12 +17,10 @@ begin_test "Dynamic Set Array"
   unset y[1] # Delete the 1
 
   # Run code
-  dynamic_set_a x "${y[@]}"
-
-  # Check values
-  check_a x 12 15 23 49
-  not check_a x
-  contiguous_a x
+  dynamic_set_a __i "${y[@]}"
+  check_a __i 12 15 23 49
+  not check_a __i
+  contiguous_a __i
   not contiguous_a y
 
   # Spaces
@@ -31,6 +29,83 @@ begin_test "Dynamic Set Array"
   dynamic_set_a y "${x[@]}"
   [ "${y[0]}" = " one " ]
   [ "${y[1]}" = " t w  o  " ]
+
+  # Verify the 33 is removed
+  z=(11 22 33)
+  dynamic_set_a z aa bb
+  check_a z aa bb
+  contiguous_a z
+)
+end_test
+
+begin_test "Dynamic set array with special characters"
+(
+  setup_test
+
+  # Special characters
+  dynamic_set_a foo " 1 " $' 3 \t 3 ' $'2 \n - \n 2 ' 'ok\3doe'
+  check_a foo " 1 " $' 3 \t 3 ' $'2 \n - \n 2 ' 'ok\3doe'
+  contiguous_a z
+)
+end_test
+
+begin_test "Dynamic set variable"
+(
+  setup_test
+
+  # Normal value
+  unset z
+  dynamic_set z
+  [ -n "${z+set}" ]
+  not compgen -e -X '!z' # not exported
+
+  # Set to a value
+  unset z
+  dynamic_set z $' f\\o\\\\o \n bar \t'
+  [ "${z}" = $' f\\o\\\\o \n bar \t' ]
+  not compgen -e -X '!z'
+
+  # export but not set test
+  export foobar1
+  dynamic_set foobar1 "ok"
+  [ "${foobar1}" = "ok" ]
+  compgen -e -X '!foobar1'
+
+  # normal exported variable
+  export foobar2=1
+  dynamic_set foobar2 "ok"
+  [ "${foobar2}" = "ok" ]
+  compgen -e -X '!foobar2'
+
+  # Local tests
+  function a()
+  {
+    local b
+    dynamic_set b 4
+
+    # shadow globa variables
+    local y
+    dynamic_set y 1
+    [ "${y}" = "1" ]
+
+    # A local exported variable
+    local x
+    export x
+    dynamic_set x 2
+    [ "${x}" = "2" ]
+    compgen -e -X '!x'
+
+    dynamic_set z 3
+  }
+
+  unset z b
+  x=0
+  y=0
+  a
+  [ "${x}" = "0" ]
+  [ "${y}" = "0" ]
+  [ "${z}" = "3" ]
+  not declare -p b
 )
 end_test
 
@@ -68,17 +143,16 @@ begin_test "Remove from Local Array"
   setup_test
   function foo()
   {
-    local x=(12 101 15 23 49)
+    local __x=(12 101 15 23 49)
 
-    remove_element_a x 15
-    check_a x 12 101 23 49
-    contiguous_a x
+    remove_element_a __x 15
+    check_a __x 12 101 23 49
+    contiguous_a __x
   }
 
   foo
 
-  not declare -p x
-
+  not declare -p __x
 )
 end_test
 
@@ -86,12 +160,23 @@ begin_test "Remove from Array"
 (
   setup_test
 
+  # Do nothing case
+  __i=(12 101 15 23 49)
+  remove_element_a __i 1234567890
+  check_a __i 12 101 15 23 49
+  contiguous_a __i
+
+  __x=(12a 101a 15a 23a 49a)
+  remove_element_a __x 1
+  check_a __x 12a 101a 15a 23a 49a
+  contiguous_a __x
+
+  x=(12b 101b 15b 23b 49b)
+  remove_element_a x 1
+  check_a x 12b 101b 15b 23b 49b
+  contiguous_a x
+
   x=(12 101 15 23 49)
-
-  # Nothing case
-  remove_element_a x 1234567890
-  check_a x 12 101 15 23 49
-
   remove_element_a x 15
   check_a x 12 101 23 49
   contiguous_a x
@@ -112,24 +197,77 @@ begin_test "Remove from Array"
   # Size 0 case
   remove_element_a x 23
   check_a x
-  contiguous_a x
+  remove_element_a x 2
+  check_a x
+
+  __i=(12)
+  remove_element_a __i 12
+  check_a __i
+  remove_element_a __i 11
+  check_a __i
+
+  __x=(12a)
+  remove_element_a __x 12a
+  check_a __x
+  remove_element_a __x 15
+  check_a __x
 
   # Remove from tails and middle cases
-  x=(666 101 15 666 23 49)
-  remove_element_a x 666
-  check_a x 101 15 23 49
-  contiguous_a x
+  y=(666 101 15 666 23 49)
+  remove_element_a y 666
+  check_a y 101 15 23 49
+  contiguous_a y
 
-  x=(101 15 666 23 49 666)
-  remove_element_a x 666
-  check_a x 101 15 23 49
-  contiguous_a x
+  i=(101 15 666 23 49 666)
+  remove_element_a i 666
+  check_a i 101 15 23 49
+  contiguous_a i
 
   # Everything at once!
-  x=(666 666 101 666 15 666 666 23 666 49 666 666)
-  remove_element_a x 666
-  check_a x 101 15 23 49
-  contiguous_a x
+  j=(666 666 101 666 15 666 666 23 666 49 666 666)
+  unset j[0]
+  remove_element_a j 666
+  check_a j 101 15 23 49
+  contiguous_a j
+)
+end_test
+
+begin_test "Blind append"
+(
+  setup_test
+
+  # Unset
+  unset __x
+  add_element_a __x 11
+  check_a __x 11
+  contiguous_a __x
+
+  unset y
+  add_element_a y 12
+  check_a y 12
+  contiguous_a y
+
+  # Empty case
+  __x=()
+  add_element_a __x 13
+  check_a __x 13
+  contiguous_a __x
+
+  y=()
+  add_element_a y 14
+  check_a y 14
+  contiguous_a y
+
+  # Normal case
+  __x=(11 22 33)
+  add_element_a __x $' 55\n'
+  check_a __x 11 22 33 $' 55\n'
+  contiguous_a __x
+
+  y=(12 23 34)
+  add_element_a y $' 54\n'
+  check_a y 12 23 34 $' 54\n'
+  contiguous_a y
 )
 end_test
 
@@ -138,31 +276,56 @@ begin_test "Append to beginning of array"
   setup_test
 
   # Empty case
-  x=()
-  add_element_pre_a x 11
-  check_a x 11
+  __x=()
+  add_element_pre_a __x 11
+  check_a __x 11
+  contiguous_a __x
+
+  y=()
+  add_element_pre_a y 11
+  check_a y 11
+  contiguous_a y
+
+  # Size 1
+  add_element_pre_a __x 11
+  check_a __x 11
+  contiguous_a __x
+
+  add_element_pre_a x 11a
+  check_a x 11a
   contiguous_a x
 
-  x=(11 22 33 44 11)
-  add_element_pre_a x 11
-  check_a x 11 22 33 44
+  # Hole
+  __x=(0 44 11 22 33 44)
+  unset __x[0]
+  add_element_pre_a __x 44
+  check_a __x 44 11 22 33
+  contiguous_a __x
+
+  x=(0 44a 11a 22a 33a 44a)
+  unset x[0]
+  add_element_pre_a x 44a
+  check_a x 44a 11a 22a 33a
   contiguous_a x
 
-  add_element_pre_a x 55
-  check_a x 55 11 22 33 44
+  # Already
+  __x=(11 22 33 11 44 11)
+  add_element_pre_a __x 11
+  check_a __x 11 22 33 44
+  contiguous_a __x
+
+  x=(11a 22a 11a 33a 44a 11a)
+  add_element_pre_a x 11a
+  check_a x 11a 22a 33a 44a
   contiguous_a x
 
-  add_element_pre_a x 22
-  check_a x 22 55 11 33 44
-  contiguous_a x
+  # New
+  add_element_pre_a __x 55
+  check_a __x 55 11 22 33 44
+  contiguous_a __x
 
-  x=()
-  add_element_pre_a x 11
-  check_a x 11
-  contiguous_a x
-
-  add_element_pre_a x 11
-  check_a x 11
+  add_element_pre_a x 55a
+  check_a x 55a 11a 22a 33a 44a
   contiguous_a x
 )
 end_test
@@ -172,31 +335,56 @@ begin_test "Append end of array"
   setup_test
 
   # Empty case
-  x=()
-  add_element_post_a x 11
-  check_a x 11
+  __x=()
+  add_element_post_a __x 11
+  check_a __x 11
+  contiguous_a __x
+
+  y=()
+  add_element_post_a y 11
+  check_a y 11
+  contiguous_a y
+
+  # Size 1
+  add_element_pre_a __x 11
+  check_a __x 11
+  contiguous_a __x
+
+  add_element_post_a y 11
+  check_a y 11
+  contiguous_a y
+
+  # Hole
+  __x=(0 44 11 22 33 44)
+  unset __x[0]
+  add_element_post_a __x 44
+  check_a __x 11 22 33 44
+  contiguous_a __x
+
+  x=(0 44a 11a 22a 33a 44a)
+  unset x[0]
+  add_element_post_a x 44a
+  check_a x 11a 22a 33a 44a
   contiguous_a x
 
-  x=(44 11 22 33 44)
-  add_element_post_a x 44
-  check_a x 11 22 33 44
+  # Already
+  __x=(44 11 44 22 33 44)
+  add_element_post_a __x 44
+  check_a __x 11 22 33 44
+  contiguous_a __x
+
+  x=(11a 22a 11a 33a 44a 11a)
+  add_element_post_a x 11a
+  check_a x 22a 33a 44a 11a
   contiguous_a x
 
-  add_element_post_a x 55
-  check_a x 11 22 33 44 55
-  contiguous_a x
+  # New
+  add_element_post_a __x 55
+  check_a __x 11 22 33 44 55
+  contiguous_a __x
 
-  add_element_post_a x 22
-  check_a x 11 33 44 55 22
-  contiguous_a x
-
-  x=()
-  add_element_post_a x 11
-  check_a x 11
-  contiguous_a x
-
-  add_element_post_a x 11
-  check_a x 11
+  add_element_post_a x 55a
+  check_a x 22a 33a 44a 11a 55a
   contiguous_a x
 )
 end_test
@@ -206,45 +394,105 @@ begin_test "Remove from string"
   setup_test
 
   # Unset case
-  declare x
-  remove_element x 15
+  unset __x
+  remove_element __x 15
+  [ "${__x}" = "" ]
+
+  unset x
+  remove_element x 1
   [ "${x}" = "" ]
 
   # Empty case
+  __x=''
+  remove_element __x 15
+  [ "${__x}" = "" ]
+
   x=''
-  remove_element x 15
+  remove_element x 5
   [ "${x}" = "" ]
 
   # "Just the one" case
+  __x='15'
+  remove_element __x 15
+  [ "${__x}" = "" ]
+
   x='15'
   remove_element x 15
   [ "${x}" = "" ]
 
-  x='12 101 15 23 49'
-  remove_element x 15
-  [ "${x}" = "12 101 23 49" ]
+  # Middle
+  __x='12 101 15 23 49'
+  remove_element __x 15
+  [ "${__x}" = "12 101 23 49" ]
 
-  remove_element x 12
-  [ "${x}" = "101 23 49" ]
+  x='12a 101a 15a 23a 49a'
+  remove_element x 15a
+  [ "${x}" = "12a 101a 23a 49a" ]
 
-  remove_element x 49
-  [ "${x}" = "101 23" ]
+  # Beginning
+  remove_element __x 12
+  [ "${__x}" = "101 23 49" ]
 
-  x="666 101 15 666 23 49"
-  remove_element x 666
-  [ "${x}" = "101 15 23 49" ]
+  remove_element x 12a
+  [ "${x}" = "101a 23a 49a" ]
 
-  x="101 15 666 23 49 666"
-  remove_element x 666
-  [ "${x}" = "101 15 23 49" ]
+  # Ending
+  remove_element __x 49
+  [ "${__x}" = "101 23" ]
 
-  x="666 666 101 666 15 666 666 23 666 49 666 666"
-  remove_element x 666
-  [ "${x}" = "101 15 23 49" ]
+  remove_element x 49a
+  [ "${x}" = "101a 23a" ]
 
-  x='12:101:15:23:49'
-  IFS=':' remove_element x 15
-  [ "${x}" = "12:101:23:49" ]
+  # Front and Middle
+  __x="666 101 15 666 23 49"
+  remove_element __x 666
+  [ "${__x}" = "101 15 23 49" ]
+
+  x="666a 101a 15a 666a 23a 49a"
+  remove_element x 666a
+  [ "${x}" = "101a 15a 23a 49a" ]
+
+  # Back and Middle
+  __x="101 15 666 23 49 666"
+  remove_element __x 666
+  [ "${__x}" = "101 15 23 49" ]
+
+  x="101a 15a 666a 23a 49a 666a"
+  remove_element x 666a
+  [ "${x}" = "101a 15a 23a 49a" ]
+
+  # Everywhere
+  __x="666 666 101 666 15 666 666 23 666 49 666 666"
+  remove_element __x 666
+  [ "${__x}" = "101 15 23 49" ]
+
+  x="666a 666a 101a 666a 15a 666a 666a 23a 666a 49a 666a 666a"
+  remove_element x 666a
+  [ "${x}" = "101a 15a 23a 49a" ]
+
+  # IFS
+  __x='12:101:15,23:49'
+  IFS=':,' remove_element __x 15
+  [ "${__x}" = "12:101:23:49" ]
+  # Verify export status
+  not compgen -e -X '!__x'
+
+  x='12a:101a:15a,23a:49a'
+  IFS=':,' remove_element x 15a
+  [ "${x}" = "12a:101a:23a:49a" ]
+  # Verify export status
+  not compgen -e -X '!x'
+
+  # Export
+  export __x='12 101 15 23 49'
+  remove_element __x 15
+  [ "${__x}" = "12 101 23 49" ]
+  compgen -e -X '!__x'
+
+  export x='12a 101a 15a 23a 49a'
+  remove_element x 15a
+  [ "${x}" = "12a 101a 23a 49a" ]
+  compgen -e -X '!x'
 )
 end_test
 
@@ -253,28 +501,60 @@ begin_test "Append to beginning of string"
   setup_test
 
   # Unset case
-  declare x
-  add_element_pre x 15
-  [ "${x}" = "15" ]
+  unset __x
+  add_element_pre __x 15
+  [ "${__x}" = "15" ]
+
+  unset x
+  add_element_pre x 15a
+  [ "${x}" = "15a" ]
 
   # Empty case
+  __x=''
+  add_element_pre __x 15
+  [ "${__x}" = "15" ]
+
   x=''
-  add_element_pre x 15
-  [ "${x}" = "15" ]
+  add_element_pre x 15a
+  [ "${x}" = "15a" ]
 
-  x="11 22 33 44 11"
-  add_element_pre x 11
-  [ "${x}" = "11 22 33 44" ]
+  # Already
+  __x="11 22 33 44 11"
+  add_element_pre __x 11
+  [ "${__x}" = "11 22 33 44" ]
 
-  add_element_pre x 55
-  [ "${x}" = "55 11 22 33 44" ]
+  x="11a 22a 33a 44a 11a"
+  add_element_pre x 11a
+  [ "${x}" = "11a 22a 33a 44a" ]
 
-  add_element_pre x 22
-  [ "${x}" = "22 55 11 33 44" ]
+  # New
+  add_element_pre __x 55
+  [ "${__x}" = "55 11 22 33 44" ]
 
-  x="11:22:33:44:11"
-  IFS=: add_element_pre x 11
-  [ "${x}" = "11:22:33:44" ]
+  add_element_pre x 55a
+  [ "${x}" = "55a 11a 22a 33a 44a" ]
+
+  # IFS
+  __x="11:22:33:44:11"
+  IFS=: add_element_pre __x 11
+  [ "${__x}" = "11:22:33:44" ]
+  not compgen -e -X '!__x'
+
+  x="11a:22a:33a:44a:11a"
+  IFS=: add_element_pre x 11a
+  [ "${x}" = "11a:22a:33a:44a" ]
+  not compgen -e -X '!x'
+
+  # Export
+  export __x='12 101 15 23 49'
+  add_element_pre __x 15
+  [ "${__x}" = "15 12 101 23 49" ]
+  compgen -e -X '!__x'
+
+  export x='12a 101a 15a 23a 49a'
+  add_element_pre x 15a
+  [ "${x}" = "15a 12a 101a 23a 49a" ]
+  compgen -e -X '!x'
 )
 end_test
 
@@ -283,46 +563,109 @@ begin_test "Append to end of string"
   setup_test
 
   # Unset case
+  declare __x
+  add_element_post __x 15
+  [ "${__x}" = "15" ]
+
   declare x
-  add_element_post x 15
-  [ "${x}" = "15" ]
+  add_element_post x 15a
+  [ "${x}" = "15a" ]
 
   # Empty case
+  __x=''
+  add_element_post __x 15
+  [ "${__x}" = "15" ]
+
   x=''
-  add_element_post x 15
-  [ "${x}" = "15" ]
+  add_element_post x 15a
+  [ "${x}" = "15a" ]
 
-  x="44 11 22 33 44"
-  add_element_post x 44
-  [ "${x}" = "11 22 33 44" ]
-  add_element_post x 55
-  [ "${x}" = "11 22 33 44 55" ]
-  add_element_post x 22
-  [ "${x}" = "11 33 44 55 22" ]
+  # Already
+  __x="44 11 22 33 44"
+  add_element_post __x 44
+  [ "${__x}" = "11 22 33 44" ]
 
-  x="44:11:22:33:44"
-  IFS=: add_element_post x 44
-  [ "${x}" = "11:22:33:44" ]
+  x="44a 11a 22a 33a 44a"
+  add_element_post x 44a
+  [ "${x}" = "11a 22a 33a 44a" ]
+
+  # New
+  add_element_post __x 55
+  [ "${__x}" = "11 22 33 44 55" ]
+
+  add_element_post x 55a
+  [ "${x}" = "11a 22a 33a 44a 55a" ]
+
+  # IFS
+  __x="44:11:22,33:44"
+  IFS=:, add_element_post __x 44
+  [ "${__x}" = "11:22:33:44" ]
+  not compgen -e -X '!__x'
+
+  x="44a:11a:22a,33a:44a"
+  IFS=:, add_element_post x 44a
+  [ "${x}" = "11a:22a:33a:44a" ]
+  not compgen -e -X '!x'
+
+  # Export
+  export __x='12 101 15 23 49'
+  add_element_post __x 15
+  [ "${__x}" = "12 101 23 49 15" ]
+  compgen -e -X '!__x'
+
+  export x='12a 101a 15a 23a 49a'
+  add_element_post x 15a
+  [ "${x}" = "12a 101a 23a 49a 15a" ]
+  compgen -e -X '!x'
 )
 end_test
 
 begin_test "Comparing arrays"
 (
   setup_test
-  a=(11 22 33)
-  b=(11 22 33)
-  c=(11 22 31)
-  d=(11 22 33 44)
-  z=()
+  __x=(11 22 33)
+  __y=(11 22 33)
+  i=(11 22 31)
+  j=(11 22 33 44)
+  k=()
 
-  cmp_elements_a a b
-  cmp_elements_a a a
-  cmp_elements_a z z
-  not cmp_elements_a a c
-  not cmp_elements_a a d
-  not cmp_elements_a d a
-  not cmp_elements_a z a
-  not cmp_elements_a a z
+  cmp_elements_a __x __y
+  cmp_elements_a __y __x
+  cmp_elements_a __x __x
+  cmp_elements_a __y __y
+  cmp_elements_a k k
+  not cmp_elements_a __x i
+  not cmp_elements_a __x j
+  not cmp_elements_a j __x
+  not cmp_elements_a k __x
+  not cmp_elements_a __x k
+
+  j=("${i[@]}")
+  declare -p i
+  declare -p j
+  cmp_elements_a i j
+  cmp_elements_a j i
+
+  # Compare with a hole
+  e=(11 22 33 44)
+  f=(11 22 33 55)
+  unset e[2]
+  unset f[2]
+  not cmp_elements_a e f
+
+  e=(11 22 0  44)
+  f=(11 0  22 44)
+  unset e[2]
+  unset f[1]
+  cmp_elements_a e f
+
+  __x=(0 11 22 33)
+  __y=(11 22 0 33)
+  unset __x[0]
+  unset __y[2]
+  cmp_elements_a __x __y
+  cmp_elements_a __y __x
+
 )
 end_test
 
@@ -330,21 +673,23 @@ begin_test "Comparing strings"
 (
   setup_test
 
-  a="11 22  33"
-  b="11 22 33"
+  __x="11 22  33"
+  __y="11 22 33"
   c="11 22 33 44"
   d="11 21 33"
   # declare z - I think this should fail. It's NOT set
   z=''
 
-  cmp_elements a b
-  cmp_elements a a
+  cmp_elements __x __y
+  cmp_elements __y __x
+  cmp_elements __x __x
+  cmp_elements __y __y
   cmp_elements z z
-  not cmp_elements a c
-  not cmp_elements a d
-  not cmp_elements d a
-  not cmp_elements z a
-  not cmp_elements a z
+  not cmp_elements __x c
+  not cmp_elements __x d
+  not cmp_elements d __x
+  not cmp_elements z __x
+  not cmp_elements __x z
 
   a="1:2:3"
   b="1: 2:3"
@@ -359,50 +704,85 @@ begin_test "Splitting strings"
   setup_test
 
   # Unset
+  unset __x
+  split_s __x
+  check_a __x
+
   unset data
   split_s data
   check_a data
 
   # Empty
+  unset __i
+  split_s __i ''
+  check_a __i ""
+
   unset data
   split_s data ''
   check_a data ""
 
   # Just one
+  unset __target
+  split_s __target 'foo'
+  check_a __target foo
+
   unset data
   split_s data 'foo'
   check_a data foo
 
   # Simple
-  unset data
-  split_s data 'foo//bar'
-  check_a data foo bar
+  unset __x
+  split_s __x 'foo//bar'
+  check_a __x foo bar
+
+  unset x
+  split_s x 'foo//bar'
+  check_a x foo bar
 
   # Path test
-  unset data
-  split_s data '/tmp/test.txt///opt/food///good'
-  check_a data /tmp/test.txt /opt/food /good
+  unset __x
+  split_s __x '/tmp/test.txt///opt/food///good'
+  check_a __x /tmp/test.txt /opt/food /good
+
+  unset y
+  split_s y '/tmp/test.txt///opt/food///good'
+  check_a y /tmp/test.txt /opt/food /good
 
   # Custom MIFS
-  unset data
-  MIFS='//://' split_s data '/tmp/test.txt///://opt/food//:///good'
-  check_a data /tmp/test.txt/ opt/food /good
+  unset __i
+  MIFS='//://' split_s __i '/tmp/test.txt///://opt/food//:///good'
+  check_a __i /tmp/test.txt/ opt/food /good
+
+  unset x
+  MIFS='//://' split_s x '/tmp/test.txt///://opt/food//:///good'
+  check_a x /tmp/test.txt/ opt/food /good
 
   # Single letter IFS
-  unset data
-  MIFS='/' split_s data '/tmp/test.txt///opt/food///good'
-  check_a data "" tmp test.txt "" "" opt food "" "" good
+  unset __x
+  MIFS='/' split_s __x '/tmp/test.txt///opt/food///good'
+  check_a __x "" tmp test.txt "" "" opt food "" "" good
+
+  unset j
+  MIFS='/' split_s j '/tmp/test.txt///opt/food///good'
+  check_a j "" tmp test.txt "" "" opt food "" "" good
 
   # Multiple strings
-  unset data
-  split_s data '/tmp/test.txt///opt/food' "good//bad" "" "hear//see//speak" ""
-  check_a data /tmp/test.txt /opt/food good bad "" hear see speak ""
+  unset __target
+  split_s __target '/tmp/test.txt///opt/food' "good//bad" "" "hear//see//speak" ""
+  check_a __target /tmp/test.txt /opt/food good bad "" hear see speak ""
+
+  unset x
+  split_s x '/tmp/test.txt///opt/food' "good//bad" "" "hear//see//speak" ""
+  check_a x /tmp/test.txt /opt/food good bad "" hear see speak ""
 
   # Spaces
-  unset data
-  split_s data ' /tmp/test.txt // /opt/fo od '
-  check_a data ' /tmp/test.txt ' ' /opt/fo od '
+  unset __target
+  split_s __target ' /tmp/test.txt // /opt/fo od '
+  check_a __target ' /tmp/test.txt ' ' /opt/fo od '
 
+  unset target
+  split_s target ' /tmp/test.txt // /opt/fo od '
+  check_a target ' /tmp/test.txt ' ' /opt/fo od '
 )
 end_test
 
@@ -410,26 +790,63 @@ begin_test "Joining arrays"
 (
   setup_test
 
-  join_a data
-  [ -z "${data+set}" ]
+  # No args
+  not join_a __target
+  [ "${__target}" = "" ]
 
-  join_a data ""
-  [ "${data}" = "" ]
+  not join_a x
+  [ "${__target}" = "" ]
 
-  join_a data "" ""
-  [ "${data}" = "//" ]
+  # Check array is cleared
+  __x="foo bar"
+  not join_a __x
+  [ "${__x}" = "" ]
 
-  join_a data 11 22 33
-  [ "${data}" = "11//22//33" ]
+  x="foo bar"
+  not join_a x
+  [ "${x}" = "" ]
 
-  MIFS='//://' join_a data foo bar code
-  [ "${data}" = "foo//://bar//://code" ]
+  # One empty arg
+  join_a __target ""
+  [ "${__target}" = "" ]
 
-  MIFS=":" join_a data hear see speak
-  [ "${data}" = "hear:see:speak" ]
+  join_a x ""
+  [ "${x}" = "" ]
 
-  join_a data red "" yellow green blue ""
-  [ "${data}" = "red////yellow//green//blue//" ]
+  # Two empty args
+  join_a __target "" ""
+  [ "${__target}" = "//" ]
+
+  join_a x "" ""
+  [ "${x}" = "//" ]
+
+  # Normal
+  join_a __x 11 22 33
+  [ "${__x}" = "11//22//33" ]
+
+  join_a x 11 22 33
+  [ "${x}" = "11//22//33" ]
+
+  # Custom MIFS
+  MIFS='//://' join_a __x foo bar code
+  [ "${__x}" = "foo//://bar//://code" ]
+
+  MIFS='//://' join_a y foo bar code
+  [ "${y}" = "foo//://bar//://code" ]
+
+  # Single char MIFS
+  MIFS=":" join_a __x hear see speak
+  [ "${__x}" = "hear:see:speak" ]
+
+  MIFS=":" join_a y_s hear see speak
+  [ "${y_s}" = "hear:see:speak" ]
+
+  # Blank in middle
+  join_a __target red "" yellow green blue ""
+  [ "${__target}" = "red////yellow//green//blue//" ]
+
+  join_a x red "" yellow green blue ""
+  [ "${x}" = "red////yellow//green//blue//" ]
 )
 end_test
 
@@ -464,48 +881,67 @@ begin_test "Is array"
   setup_test
 
   foo="ok"
-  bar=("ok")
+  var_name=("ok")
   declare -ra bar2=("doe")
   declare bar3=()
 
-  is_array bar
+  is_array var_name
   is_array bar2
   is_array bar3
   not is_array foo
-
-  if [ "${BASH_VERSINFO[0]}" -gt "4" ] || ( [ "${BASH_VERSINFO[0]}" = "4" ] && [ "${BASH_VERSINFO[1]}" -ge "2" ] ); then
-    declare -n bar4=bar3
-    declare -n bar5=bar4
-    declare -rau bar6=("doe")
-
-    is_array bar4
-    is_array bar5
-    is_array bar6
-  fi
 )
 end_test
+
+[ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "42" ] || skip_next_test
+begin_test "Is array with name reffing"
+(
+  setup_test
+
+  declare bar3=()
+  declare -n bar4=bar3
+  declare -n bar5=bar4
+  declare -rau bar6=("doe")
+
+  is_array bar4
+  is_array bar5
+  is_array bar6
+)
+end_test
+
 
 begin_test "To array"
 (
   setup_test
 
+  # Simple test
   x="this is a test"
-  ans=(this is a test)
   to_array x
-  check_a x "${ans[@]}"
+  check_a x this is a test
 
+  # Extra spaces
   unset x
   x="  yet another : test "
-  ans=(yet another : test)
   to_array x
-  check_a x "${ans[@]}"
+  check_a x yet another : test
 
+  # Extra spaces in middle
   unset x
   x="  yet another :   : test "
-  ans=(yet another : : test)
   to_array x
-  check_a x "${ans[@]}"
+  check_a x yet another : : test
 
+  # Quotes strings
+  unset x
+  x="11 '2 2' '3  3' ' 4  4  '"
+  to_array x
+  check_a x 11 "2 2" "3  3" " 4  4  "
+
+  unset x
+  x="11 \"2' 2\" '3  3' ' 4  4  '"
+  to_array x
+  check_a x 11 "2' 2" "3  3" " 4  4  "
+
+  # Already an array, do nothing
   unset x
   x=(11 22 "3 3")
   ans=(11 22 "3 3")
@@ -514,9 +950,23 @@ begin_test "To array"
 )
 end_test
 
+begin_expected_fail_test "Special characters to array"
+(
+  setup_test
+
+  # Special character strings
+  unset x
+  x=$'11 "2\n2" "3 \t 3 "'
+  # x="$(printf '%q' "${x}")"
+  to_array x
+  check_a x 11 $'2\n 2' $'3 \t 3 '
+)
+end_test
+
 begin_test "Subtract array"
 (
   setup_test
+
   a=(11 22 33 00)
   b=(44 33 22)
   c=(55 66 77 88 99 1010 1111)
@@ -545,5 +995,99 @@ begin_test "Subtract array"
   c=()
   subtract_array a b c
   check_a c
+
+  a=(0 11 22 33 00)
+  b=(0 44 33 22)
+  c=(0 55 66 77 88 99 1010 1111)
+  unset a[0]
+  unset b[0]
+  unset c[0]
+  unset c[1]
+  unset c[2]
+  unset c[3]
+  unset c[4]
+  subtract_array a b c
+  check_a c 11 00
+
+  subtract_array a b a
+  check_a a 11 00
+)
+end_test
+
+begin_test "Subtract array name collisions"
+(
+  setup_test
+
+  # Same name
+  x=(11 22 33)
+  subtract_array x x x
+  check_a x # x-x = 0
+
+  # Check collisions
+  names1=(__i __j __output normal)
+  names2=(a b c)
+  for n1 in "${names1[@]}"; do
+    for n2 in "${names2[@]}"; do
+      for n3 in "${names2[@]}"; do
+        declare -a "${n1}=(11 22 33 00)"
+        declare -a "${n2}=(44 33 22)"
+        subtract_array "${n1}" "${n2}" "${n3}"
+        check_a "${n3}" 11 00
+      done
+    done
+  done
+
+  names2=(d e f)
+  for n1 in "${names2[@]}"; do
+    for n2 in "${names1[@]}"; do
+      for n3 in "${names2[@]}"; do
+        declare -a "${n1}=(11 22 33 00)"
+        declare -a "${n2}=(44 33 22)"
+        subtract_array "${n1}" "${n2}" "${n3}"
+        check_a "${n3}" 11 00
+      done
+    done
+  done
+
+  names2=(g h i)
+  for n1 in "${names2[@]}"; do
+    for n2 in "${names2[@]}"; do
+      for n3 in "${names1[@]}"; do
+        declare -a "${n1}=(11 22 33 00)"
+        declare -a "${n2}=(44 33 22)"
+        subtract_array "${n1}" "${n2}" "${n3}"
+        if [ "${n1}" = "${n2}" ]; then
+          check_a "${n3}"
+        else
+          check_a "${n3}" 11 00
+        fi
+      done
+    done
+  done
+)
+end_test
+
+begin_test "Array length"
+(
+  setup_test
+
+  unset x
+  rv=0
+  [ "$(array_length x)" = "-1" ]
+
+  x=()
+  [ "$(array_length x)" = "0" ]
+
+  x=(11)
+  [ "$(array_length x)" = "1" ]
+
+  y=("" 11 22 "3 3")
+  [ "$(array_length y)" = "4" ]
+
+  unset y[0]
+  [ "$(array_length y)" = "3" ]
+
+  z="ok doe"
+  [ "$(array_length z)" = "1" ]
 )
 end_test
