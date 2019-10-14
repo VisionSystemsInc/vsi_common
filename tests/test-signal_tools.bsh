@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+
+. "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
+# . "$(dirname "${BASH_SOURCE[0]}")/test_utils.bsh"
+
+VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+
+. "${VSI_COMMON_DIR}/linux/signal_tools.bsh"
+
+function set_bashpid()
+{
+  if [ "${BASH_VERSINFO[0]}" -lt "4" ]; then
+    BASHPID=$(bash -c 'echo ${PPID}')
+  fi
+}
+
+begin_test "Trap chain"
+(
+  setup_test
+
+  # If this isn't true, this test needs to be re-written to handle that case,
+  # currently testlib doens't use this...
+  [ "$(trap -p ERR)" = "" ]
+
+  # Check ERR special case error
+  set +E # Should already be off, but just in case
+  not trap_chain : ERR
+  trap ERR
+
+  set -E
+  trap_chain : ERR
+  trap ERR
+
+  # I'm going to use USR1, so make sure nothing is set
+  trap USR1
+
+  [ "$(trap -p USR1)" = "" ]
+  trap_chain "foo bar" USR1
+
+  [ "$(trap -p USR1)" = "trap -- 'foo bar' SIGUSR1" ]
+  trap USR1
+
+  [ ! -e foo1 ]
+  (
+    # No idea why the trap -p shows the right answer, yet traps aren't really
+    # inherited by the subshell... Only works this way on linux, not mac
+    # eval "$(trap -p)"
+    trap_chain "touch '${TESTDIR}/foo1'" USR1
+    set_bashpid
+    kill -USR1 $BASHPID
+  )
+  [ -e foo1 ]
+  # Cleanup
+  trap USR1
+
+  [ ! -e foo2 ]
+  [ ! -e bar2 ]
+  [ ! -e car2 ]
+  (
+    trap_chain "touch '${TESTDIR}/foo2'" USR1
+    trap_chain "touch '${TESTDIR}/bar2'" SIGUSR1
+    trap_chain "touch '${TESTDIR}/car2'" USR1
+    set_bashpid
+    kill -USR1 $BASHPID
+  )
+  [ -e foo2 ]
+  [ -e bar2 ]
+  [ -e car2 ]
+  trap USR1
+
+  [ ! -e foo3 ]
+  [ ! -e bar3 ]
+  [ ! -e boo3 ]
+  [ ! -e far3 ]
+
+  (
+    trap_chain "touch '${TESTDIR}/foo3'" USR1
+    trap_chain "touch '${TESTDIR}/bar3'" USR1
+    trap_chain "touch '${TESTDIR}/boo3'" USR2
+    trap_chain "touch '${TESTDIR}/far3'" USR2
+    set_bashpid
+    kill -USR1 $BASHPID
+    [ -e foo3 ]
+    [ -e bar3 ]
+    [ ! -e boo3 ]
+    [ ! -e far3 ]
+
+    rm foo3 bar3
+    kill -USR2 $BASHPID
+    [ ! -e foo3 ]
+    [ ! -e bar3 ]
+    [ -e boo3 ]
+    [ -e far3 ]
+  )
+)
+end_test
