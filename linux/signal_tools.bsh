@@ -1,0 +1,82 @@
+#!/usr/bin/env false
+
+if [[ $- != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
+source "${VSI_COMMON_DIR}/linux/string_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/elements.bsh"
+
+#*# linux/signal_tools
+
+#**
+# ============
+# String Tools
+# ============
+#
+# .. default-domain:: bash
+#
+# .. file:: signal_tools.bsh
+#
+# Function to help handle signals and traps in bash
+#
+#**
+
+
+#**
+# .. function:: trap_chain
+#
+# :Arguments: * ``$1`` - Command to be read and executes when the shell received signal ``$2``
+#             * ``$2`` - Same sigspecs that the ``trap`` command accepts.
+#
+# Can be called multiple times to chain multiple signal handlers to one signal. Stores list of trap functions in ``_TRAP_CHAIN_{signal name
+#
+# .. note::
+#
+#    If you are using signal ERR, you must have ``set -E`` set, or else it will not inherit correctly
+#**
+function trap_chain()
+{
+  if [ "${2}" == "ERR" ] && [[ $- != *E* ]]; then
+    echo "You must have \"set -E\" set for this to work with signal ${2}" >&2
+    return 1
+  fi
+
+  local last_trap="$(trap -p ${2})"
+  if [ "${last_trap}" = "" ]; then
+    # If this is the first signal, no reason to "chain" yet, just do a normal
+    # trap
+    trap "${1}" "${2}"
+  else
+    # There are multiple ways to specify signals, like USR1=SIGUSR1=10
+    # The output of trap -p has normalized this, so this is what we will use
+    # for storing the chain variables
+    local signal_name="${last_trap##* }"
+    # Remove signal name from end. I know only this trap name is here
+    last_trap="${last_trap% ${signal_name}}"
+    # Remove word "trap"
+    last_trap="${last_trap#trap }"
+    # Remove -- which is sometimes there?
+    # (based on documentation, it's always there for me)
+    last_trap="${last_trap#-- }"
+    # Since the output of trap is quoted, I need to parse one level of quotes
+    # out.
+    last_trap="$(quote_unescape "${last_trap}")"
+
+    if [ "${last_trap}" != "_trap_unchained ${signal_name}" ]; then
+      add_element_a "_TRAP_CHAIN_${signal_name}" "${last_trap}"
+    fi
+    add_element_a "_TRAP_CHAIN_${signal_name}" "${1}"
+    trap "_trap_unchained ${signal_name}" "${2}"
+  fi
+}
+
+function _trap_unchained()
+{
+  local i
+  local chain_array="_TRAP_CHAIN_${1}[@]"
+  for i in ${!chain_array+"${!chain_array}"}; do
+    # This is SUPPOSED to be arbitrary code execution! So eval is ok
+    eval "${i}"
+  done
+}
