@@ -4,6 +4,8 @@ if [[ $- != *i* ]]; then
   source_once &> /dev/null && return 0
 fi
 
+source "${VSI_COMMON_DIR}/linux/signal_tools.bsh"
+
 #*# linux/dir_tools
 
 #**
@@ -99,7 +101,7 @@ _VSI_TEMP_PATHS=()
 #     touch "${temp_dir}"/file2
 #   ) # The temp_dir is deleted here
 #   cat "${temp_dir}"/file2 # Fails
-#   # As these will create and delete the temp dir within the subcommand
+#   # As these will create and delete the temp dir within the subcommand, by design
 #
 #   # This is good, as the temp files will be cleaned up sooner
 #   (
@@ -120,46 +122,12 @@ make_temp_path()
   export -n "${_local_variable_name}=$_vsi_temporary_directory"
 
   _VSI_TEMP_PATHS+=("${_vsi_temporary_directory}")
-  trap make_temp_path_cleanup_exit EXIT
-  trap make_temp_path_cleanup_int INT
-  trap make_temp_path_cleanup_term TERM
-
-  trap
+  trap_chain _make_temp_path_cleanup EXIT
+  trap_chain _make_temp_path_cleanup INT
+  trap_chain _make_temp_path_cleanup TERM
 }
 
-#**
-# .. Rubric:: make_temp_path_cleanup_*
-#
-# .. function:: make_temp_path_cleanup_exit
-#
-#   cleanup routine on atexit
-#
-# .. function:: make_temp_path_cleanup_int
-#
-#   cleanup routine on interrupt
-#
-# .. function:: make_temp_path_cleanup_term
-#
-#   cleanup routine on terminate
-#
-# Since :func:`make_temp_dir` sets the trap every time :func:`make_temp_dir` is called, these functions provide a way to override the behavior of the trap, allowing you to write your own make_temp_path_cleanup_* functions. Just don't forget to add :func:`__make_temp_path_cleanup` to your function, or else it will not cleanup properly.
-#
-# This is only needed for exit, int, and term. No other traps are set up.
-#**
-make_temp_path_cleanup_exit()
-{
-  __make_temp_path_cleanup
-}
-make_temp_path_cleanup_int()
-{
-  __make_temp_path_cleanup
-}
-make_temp_path_cleanup_term()
-{
-  __make_temp_path_cleanup
-}
-
-__make_temp_path_cleanup()
+_make_temp_path_cleanup()
 {
   local temp_path
   for temp_path in ${_VSI_TEMP_PATHS+"${_VSI_TEMP_PATHS[@]}"}; do
