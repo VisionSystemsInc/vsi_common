@@ -1,18 +1,30 @@
 #!/usr/bin/env bash
 
 . "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
-# . "$(dirname "${BASH_SOURCE[0]}")/test_utils.bsh"
+. "$(dirname "${BASH_SOURCE[0]}")/test_utils.bsh"
 
 VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 
 . "${VSI_COMMON_DIR}/linux/signal_tools.bsh"
 
-function set_bashpid()
-{
-  if [ "${BASH_VERSINFO[0]}" -lt "4" ]; then
-    BASHPID=$(bash -c 'echo ${PPID}')
-  fi
-}
+# Can only be tested on older bash, can't monkey patch BASH_VERSINFO
+if [ ${BASH_VERSINFO[0]} -lt 4 ]; then
+  set_bashpid
+  PARENT_BASHPID="${BASHPID}"
+  unset BASHPID
+else
+  skip_next_test
+fi
+begin_test "Set BASHPID for bash 3.2"
+(
+  setup_test
+  not declare -p BASHPID
+  set_bashpid
+  [[ $(ps -o pid=,ppid=,comm= ${BASHPID}) = ${BASHPID}*${PARENT_BASHPID}*bash ]]
+  # The parent bash should only have one child process, this subshell, so use
+  # ps to verify everything seems legit.
+)
+end_test
 
 begin_test "Trap chain"
 (
@@ -29,6 +41,28 @@ begin_test "Trap chain"
 
   set -E
   trap_chain : ERR
+
+  (
+    trap_chain "echo foo" ERR
+    trap_chain "echo bar" ERR
+    check_a _TRAP_CHAIN_ERR ':' 'echo foo' 'echo bar'
+  )
+
+  # Test warning messages about inheriting from parent for ERR
+  (
+    [[ $(trap_chain "blah" ERR 2>&1) == *"There is a potential of falsely inheriting"* ]]
+    [[ $(TRAP_CHAIN_QUIET=1 trap_chain "blah" ERR 2>&1) != *"There is a potential of falsely inheriting"* ]]
+  )
+  # Clear previous trap_chain call
+  unset _TRAP_CHAIN_ERR_LAST_PID
+  unset _TRAP_CHAIN_ERR
+  # Test warning messages about possible inheriting from parent when not using trap_chain
+  (
+    [[ $(trap_chain "blah" ERR 2>&1) == *"rather than the \"trap_chain\" command"* ]]
+    [[ $(TRAP_CHAIN_QUIET=1 trap_chain "blah" ERR 2>&1) != *"rather than the \"trap_chain\" command"* ]]
+  )
+  unset _TRAP_CHAIN_ERR_LAST_PID
+  unset _TRAP_CHAIN_ERR
   trap ERR
 
   # I'm going to use USR1, so make sure nothing is set
@@ -47,12 +81,13 @@ begin_test "Trap chain"
     # eval "$(trap -p)"
     trap_chain "touch '${TESTDIR}/foo1'" USR1
     set_bashpid
-    kill -USR1 $BASHPID
+    kill -USR1 "${BASHPID}"
   )
   [ -e foo1 ]
   # Cleanup
   trap USR1
 
+  # A proper chain
   [ ! -e foo2 ]
   [ ! -e bar2 ]
   [ ! -e car2 ]
@@ -61,7 +96,7 @@ begin_test "Trap chain"
     trap_chain "touch '${TESTDIR}/bar2'" SIGUSR1
     trap_chain "touch '${TESTDIR}/car2'" USR1
     set_bashpid
-    kill -USR1 $BASHPID
+    kill -USR1 "${BASHPID}"
   )
   [ -e foo2 ]
   [ -e bar2 ]
@@ -73,24 +108,102 @@ begin_test "Trap chain"
   [ ! -e boo3 ]
   [ ! -e far3 ]
 
+  # Chain of two different signals
   (
     trap_chain "touch '${TESTDIR}/foo3'" USR1
     trap_chain "touch '${TESTDIR}/bar3'" USR1
     trap_chain "touch '${TESTDIR}/boo3'" USR2
     trap_chain "touch '${TESTDIR}/far3'" USR2
     set_bashpid
-    kill -USR1 $BASHPID
+    kill -USR1 "${BASHPID}"
     [ -e foo3 ]
     [ -e bar3 ]
     [ ! -e boo3 ]
     [ ! -e far3 ]
 
     rm foo3 bar3
-    kill -USR2 $BASHPID
+    kill -USR2 "${BASHPID}"
     [ ! -e foo3 ]
     [ ! -e bar3 ]
     [ -e boo3 ]
     [ -e far3 ]
   )
+
+  # clear
+  trap USR1
+  unset _TRAP_CHAIN_ERR_LAST_PID
+  unset _TRAP_CHAIN_ERR
+
+  # Parent trap not inherited with one trap
+  trap_chain "touch '${TESTDIR}/foo4'" USR1
+  (
+    # Normal bash behavior
+    (
+      set_bashpid
+      kill -USR1 "${BASHPID}"
+    ) || rv=$?
+    [ "${rv}" != "0" ]
+    [ ! -e foo4 ]
+
+    set_bashpid
+    trap_chain "touch '${TESTDIR}/bar4'" USR1
+    kill -USR1 "${BASHPID}"
+    [ ! -e foo4 ]
+    [ -e bar4 ]
+  )
+  [ ! -e foo4 ]
+  kill -USR1 "${BASHPID}"
+  [ -e foo4 ]
+)
+end_test
+
+function test_chain()
+{
+  trap USR1
+  unset _TRAP_CHAIN_USR1_LAST_PID
+  unset _TRAP_CHAIN_USR1
+
+  local x
+  local rv=0
+  for (( x=0; x<$1; x++ )); do
+    trap_chain "touch '${TESTDIR}/foo${1}${x}'" USR1
+  done
+
+  (
+    (
+      # Normal bash behavior
+      set_bashpid
+      kill -USR1 "${BASHPID}"
+    ) || rv=$?
+    [ "${rv}" != "0" ]
+    for (( x=0; x<$1; x++ )); do
+      [ ! -e "foo${1}${x}" ]
+    done
+
+    # trap USR1
+    set_bashpid
+    for (( x=0; x<$2; x++ )); do
+      trap_chain "touch '${TESTDIR}/bar${2}${x}'" USR1
+    done
+    kill -USR1 "${BASHPID}"
+  ) || rv=$?
+  [ "${2}" = "0" -a "${rv}" != "0" ] || [ "${2}" != "0" -a "${rv}" = "0" ]
+  for (( x=0; x<$1; x++ )); do
+    [ ! -e "foo${1}${x}" ]
+  done
+  for (( x=0; x<$2; x++ )); do
+    [ -e "bar${2}${x}" ]
+  done
+}
+
+begin_test "Trap chain multiple"
+(
+  setup_test
+
+  for (( x=0; x<2; x++ )); do
+    for (( y=0; y<2; y++ )); do
+      test_chain ${x} ${y}
+    done
+  done
 )
 end_test

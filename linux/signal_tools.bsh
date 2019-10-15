@@ -22,61 +22,138 @@ source "${VSI_COMMON_DIR}/linux/elements.bsh"
 #
 #**
 
+#**
+# .. function:: set_bashpid
+#
+# Sets the ``BASHPID`` environment variable in bash versions older than 4, for compatibility in bash 3.2
+#**
+function set_bashpid()
+{
+  if [ "${BASH_VERSINFO[0]}" -lt "4" ]; then
+    BASHPID=$(bash -c 'echo ${PPID}')
+  fi
+}
 
 #**
 # .. function:: trap_chain
 #
 # :Arguments: * ``$1`` - Command to be read and executes when the shell received signal ``$2``
 #             * ``$2`` - Same sigspecs that the ``trap`` command accepts.
+# :Parameters: * ``TRAP_CHAIN_QUIET`` - Set to ``1`` to silence warnings, if you don't want them. Default: ``0``
+# :Outputs: ``_TRAP_CHAIN_{signal name}_LAST_PID`` - the PID last time :func:`trap_chain` was called
 #
-# Can be called multiple times to chain multiple signal handlers to one signal. Stores list of trap functions in ``_TRAP_CHAIN_{signal name
+# Can be called multiple times to chain multiple signal handlers to one signal. Stores list of trap functions in ``_TRAP_CHAIN_{signal name}``.
+#
+# Handlers are run in the opposite order they are assigned in (FILO).
+#
+# .. bug::
+#
+#    If :func:`trap_chain` is called inside a subshell on bash 4.2 or newer when the original trap was set using the ``trap`` command instead of :func:`trap_chain`, the traps of the parent are auto inherited in the subshell.  This is due to a change in how the ``trap`` command works, and there is no known automatic work around. If this happens, you'll need to clear the trap in or before the subshell to prevent this. A warning message will be printed out, unless disabled via ``TRAP_CHAIN_QUIET``.
 #
 # .. note::
 #
-#    If you are using signal ERR, you must have ``set -E`` set, or else it will not inherit correctly
+#    If you are using signal ``ERR``, you must have ``set -E`` set, or else it will not inherit correctly. The same goes for ``DEBUG`` and ``RETURN`` with ``set -T``. This is part of normal ``bash`` behavior, however the same bug mentioned above, can happend if you ``set +E`` or ``set +T`` before creating a subshell, and then reenabling the same flag before calling :func:`trap_chain`. A different warning is printed out, unless disabled via ``TRAP_CHAIN_QUIET``.
+#
 #**
 function trap_chain()
 {
-  if [ "${2}" == "ERR" ] && [[ $- != *E* ]]; then
+  if [ "${2}" = "ERR" ] && [[ $- != *E* ]]; then
     echo "You must have \"set -E\" set for this to work with signal ${2}" >&2
+    return 1
+  elif [ "${2}" = "DEBUG" -o "${2}" = "RETURN" ] && [[ $- != *T* ]]; then
+    echo "You must have \"set -T\" set for this to work with signal ${2}" >&2
     return 1
   fi
 
-  local last_trap="$(trap -p ${2})"
-  if [ "${last_trap}" = "" ]; then
+  local last_info="$(trap -p ${2})"
+  if [ "${last_info}" = "" ]; then
     # If this is the first signal, no reason to "chain" yet, just do a normal
     # trap
+
+    # Since there was no signal already assigned, the sanitize signal name is
+    # not in last_info, so we'll have to make it
+    last_info="$(trap '' "${2}"; trap -p "${2}" | { read x ; echo "${x##* }"; })"
+
+    clear_a "_TRAP_CHAIN_${last_info}"
+    last_info="_TRAP_CHAIN_${last_info}_LAST_PID"
+    set_bashpid
+
+    export -n "${last_info}=${BASHPID}"
+
     trap "${1}" "${2}"
   else
     # There are multiple ways to specify signals, like USR1=SIGUSR1=10
     # The output of trap -p has normalized this, so this is what we will use
     # for storing the chain variables
-    local signal_name="${last_trap##* }"
+    local signal_name="${last_info##* }"
     # Remove signal name from end. I know only this trap name is here
-    last_trap="${last_trap% ${signal_name}}"
+    last_info="${last_info% ${signal_name}}"
     # Remove word "trap"
-    last_trap="${last_trap#trap }"
+    last_info="${last_info#trap }"
     # Remove -- which is sometimes there?
     # (based on documentation, it's always there for me)
-    last_trap="${last_trap#-- }"
+    last_info="${last_info#-- }"
     # Since the output of trap is quoted, I need to parse one level of quotes
     # out.
-    last_trap="$(quote_unescape "${last_trap}")"
+    last_info="$(quote_unescape "${last_info}")"
 
-    if [ "${last_trap}" != "_trap_unchained ${signal_name}" ]; then
-      add_elements_a "_TRAP_CHAIN_${signal_name}" "${last_trap}"
+    local last_pid_name="_TRAP_CHAIN_${signal_name}_LAST_PID"
+    # Set to -1 for unset, so that we know the intial trap was set without using trap_chain
+    local last_pid="${!last_pid_name--1}"
+
+    set_bashpid
+
+    function chainable_signal()
+    {
+      if [[ ${signal_name} = ERR && $- = *E* ]] || \
+        ( [ "${signal_name}" = "DEBUG" -o "${signal_name}" = "RETURN" ] && [[ $- = *T* ]] ) || \
+          [ "${last_pid}" = "-1" ] || \
+          [ "${last_pid}" = "${BASHPID}" ]; then
+        return 0
+      fi
+      return 1
+    }
+
+    if [ "${last_pid}" != "${BASHPID}" ] && ! chainable_signal; then
+      clear_a "_TRAP_CHAIN_${signal_name}"
+      trap "_trap_unchained ${signal_name}" "${2}"
+    fi
+
+    if [ "${last_info}" != "_trap_unchained ${signal_name}" ]; then
+          # ERR signals get inherited.
+      if chainable_signal; then
+
+        if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge 42 -a "${TRAP_CHAIN_QUIET-0}" == "0" ]; then
+          if [ "${last_pid}" = "-1" ]; then
+            echo "Warning: Chaining a(n) \"${signal_name}\" trap that was setup using the" >&2
+            echo "\"trap\" command rather than the \"trap_chain\" command on signal \"${signal_name}\"" >&2
+          elif [ "${last_pid}" != "${BASHPID}" ]; then
+            # This can only happen on the ERR/RETURN/DEBUG signals...
+            echo "Warning: Chaining a(n) \"${signal_name}\" trap after starting a new subshell." >&2
+            echo "There is a potential of falsely inheriting a parent's trap too." >&2
+            echo "If you think this happened, clear it via \"trap ${signal_name}\" in the subshell" >&2
+          fi
+        fi
+        add_elements_a "_TRAP_CHAIN_${signal_name}" "${last_info}"
+      # elif [ "${last_pid}" != "${BASHPID}" ]; then
+      #   clear_a "_TRAP_CHAIN_${signal_name}"
+      fi
+
+      trap "_trap_unchained ${signal_name}" "${2}"
     fi
     add_elements_a "_TRAP_CHAIN_${signal_name}" "${1}"
-    trap "_trap_unchained ${signal_name}" "${2}"
+    export -n "${last_pid_name}=${BASHPID}"
   fi
 }
 
 function _trap_unchained()
 {
-  local i
   local chain_array="_TRAP_CHAIN_${1}[@]"
-  for i in ${!chain_array+"${!chain_array}"}; do
+  local i="$(array_length "_TRAP_CHAIN_${1}")"
+  local x
+  for (( i=${i}-1; i>=0; i-- )); do
     # This is SUPPOSED to be arbitrary code execution! So eval is ok
-    eval "${i}"
+    x="_TRAP_CHAIN_${1}[$i]"
+    eval "${!x}"
   done
 }
