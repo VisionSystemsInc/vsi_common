@@ -14,6 +14,28 @@ function singular_defaultify()
   arg=$1
   shift 1
   case $arg in
+    singularity_import) # Export docker image "$1" to singularity. The rest of the arguments are passed on to \
+                        # docker2singularity. Mount a custom script into /custom/tosingularity to be executed as \
+                        # step 8.5.
+      local custom_script
+      #**
+      # .. envvar:: SINGULARITY_CUSTOM_IMPORT_SCRIPT
+      #
+      # Specifies custom script to use run when calling ``just singularity import``. (step 8.5)
+      #**
+      if [ -n "${SINGULARITY_CUSTOM_IMPORT_SCRIPT+set}" ]; then
+        custom_script=(--mount source="${SINGULARITY_CUSTOM_IMPORT_SCRIPT}",destination=/custom/tosingularity,type=bind,readonly=true)
+      fi
+
+      Docker run -it --rm --privileged --entrypoint= \
+          --mount source=/var/run/docker.sock,destination=/var/run/docker.sock,type=bind \
+          --mount source="$(pwd)",destination=/output,type=bind \
+          ${custom_script[@]+"${custom_script[@]}"} \
+          quay.io/singularity/docker2singularity:${DOCKER2SINGULARITY_VERSION-v2.6} bash -c "
+            sed -i 's|echo \"(9/10)|echo \"(8.5/10) Custom script\"; [[ -r /custom/tosingularity ]] \\&\\& source /custom/tosingularity; &|' /docker2singularity.sh &&
+            /docker2singularity.sh \"\${@}\"" bash "${@}"
+      extra_args=$#
+      ;;
     # singularity_run) # Run a singularity container
     # singularity_exec) # Exec a command with a singularity container
     # singularity_shell) # Run a singularity container shell
@@ -62,6 +84,7 @@ function singular_defaultify()
       ;;
 
     # singular-compose_run) # Run
+    # singular-compose_shell) # Shell
     singular-compose_*) # Simple pure bash version of singularity-compose
       local subcommand="${arg#*_}"
       if [ "${subcommand}" = "instance-start" ]; then
@@ -128,13 +151,6 @@ function singular_defaultify()
             fi
           done
 
-          ##########################
-          ### Handle other flags ###
-          ##########################
-
-          indirect="${instance}_singularity_flags[@]"
-          local flags=(${!indirect+"${!indirect}"})
-
           # Make a self deleting temp file
           make_temp_path env_file
 
@@ -144,6 +160,17 @@ function singular_defaultify()
               singularity_env_echo "${environment[${i}]}" "${environment[${i}+1]}"
             done
           fi
+
+          ##########################
+          ### Handle other flags ###
+          ##########################
+
+          indirect="${instance}_singularity_flags[@]"
+          local flags=(${!indirect+"${!indirect}"})
+
+          ###############################
+          ### Setup _Singularity call ###
+          ###############################
 
           # Generate binds
           local subcommand_args=()
@@ -162,35 +189,12 @@ function singular_defaultify()
 
           subcommand_args+=(-B "${env_file}:/.singularity.d/env/91-just-env.sh:ro")
 
+          # Make Singularity call
+          indirect="${instance}_image"
+          subcommand_args+=(${flags[@]+"${flags[@]}"} "${!indirect}" ${@+"${@}"})
+          extra_args+=$#
+
           _Singularity
-
-
-
-  # Singularity ${cmd} -e -c --nv \
-  #   ${bind_args+"${bind_args[@]}"} \
-  #   -B "${env_file}:/.singularity.d/env/91-just-env.sh:ro" \
-  #   -B "/tmp:/tmp:rw" \
-  #   ${image_name} ${@+"${@}"}
-
-
-#   # Parse enumerated_volumes_all
-#   volumes_name_all="${JUST_PROJECT_PREFIX}_VOLUME_$i"
-#   while declare -p "${volumes_name_all}" &> /dev/null; do
-#     enumerated_volumes_all+=("${!volumes_name_all}")
-#     i+=1
-#     volumes_name_all="${JUST_PROJECT_PREFIX}_VOLUME_$i"
-#   done
-# local services_upper=($(tr '[a-z][:punct:]' '[A-Z]_' <<< ${services_name[@]}))
-#     # Parse enumerate_volumes
-#     enumerated_volumes=()
-#     i=1
-#     volumes_name="${JUST_PROJECT_PREFIX}_${services_upper[$service_index]}_VOLUME_$i"
-#     while declare -p "${volumes_name}" &> /dev/null; do
-#       enumerated_volumes+=("${!volumes_name}")
-#       i+=1
-#       volumes_name="${JUST_PROJECT_PREFIX}_${services_upper[$service_index]}_VOLUME_$i"
-#     done
-
           ;;
         *)
           echo "I don't understand: singular-compose $cmd" >&2
