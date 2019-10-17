@@ -113,7 +113,7 @@ case "${OSTYPE}" in
 esac
 
 #**
-# .. env:: VSI_MUSL
+# .. envvar:: VSI_MUSL
 #
 #   :Value: * ``0`` - Not a musl libc OS
 #           * ``1`` - Is a musl libc based OS

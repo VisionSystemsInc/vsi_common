@@ -72,7 +72,7 @@ class FileRedirect(object):
       of course it would be better to call __exit__ in that case.
   '''
   def __init__(self, outputs=[]):
-    
+
     self.outputs = outputs
     ''' Create a FileRedirect
 
@@ -112,7 +112,7 @@ class FileRedirect(object):
         Parameters
         ----------
         exc_type : str
-            The Execption Type
+            The Exception Type
         exc_value : float
             The Exception Value
         traceback : str
@@ -323,7 +323,7 @@ class Redirect(RedirectBase): #Version 2
         stderr_py_name : :class:`str`, optional
             Because of the nature of python, in order to replace and restore
             the python object, the module and name of attribute must be passed
-            through, where name is a string and module and the acutal module.
+            through, where name is a string and module and the actual module.
             The default is sys module and "stdout" or "stderr" (Including the
             quotes). Again, there should be no real reason to override these,
             unless you are doing some IPython/colorama redirecting, or any
@@ -429,13 +429,13 @@ class Redirect(RedirectBase): #Version 2
   def __exit__(self, exc_type=None, exc_value=None, traceback=None):
     ''' exit function for with statement.
 
-        Restores stdout and sterr, closes write pipe and joins with the
+        Restores stdout and stderr, closes write pipe and joins with the
         threads
 
         Parameters
         ----------
         exc_type : str
-            The Execption Type
+            The Exception Type
         exc_value : float
             The Exception Value
         traceback : str
@@ -537,7 +537,7 @@ class Capture(RedirectBase): #version 1
       >>> self.stderr_py - Standard error output for python
 
       When the streams are grouped, they both contain the same data.
-      In the group_out and group_err case, an addtion attribute is defined
+      In the group_out and group_err case, an addition attribute is defined
 
       >>> self.stdout - Standard out output
       >>> self.stderr - Standard error output
