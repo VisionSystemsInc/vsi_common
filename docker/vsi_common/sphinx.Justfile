@@ -125,7 +125,7 @@ function caseify()
       exec "${@}"
       ;;
     *) # Run command in pipenv
-      exec pipenv run "${@}"
+      exec pipenv run "${cmd}" "${@}"
       ;;
   esac
 }

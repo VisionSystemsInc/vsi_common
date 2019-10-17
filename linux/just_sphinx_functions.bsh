@@ -260,50 +260,31 @@ function docs_defaultify()
       fi
       justify build recipes gosu tini pipenv vsi
       _sphinx_docker_compose build sphinx
-      image_name=$(docker create vsiri/sphinxdocs:compile)
-      docker cp ${image_name}:/venv/sphinx.Pipfile.lock "${VSI_COMMON_DIR}/docker/vsi_common/sphinx.Pipfile.lock"
-      docker rm ${image_name}
       ;;
-    # sphinx_run)
-    #   # For debugging only
-    #   _sphinx_docker_compose run pipenv-update bash
-    #   ;;
-    # sphinx_pipenv-update) Update sphinx Pipenv file
-    #   local container="$(_sphinx_docker_compose ps -q)"
-
-    #   if [ "${container}" != "" ]; then
-    #     echo "Docs containers (${container}) are already running, please remove containers and try again"
-    #   fi
-
-    #   _sphinx_docker_compose up --no-start \
-    #     pipenv-update
-
-    #   container="$(_sphinx_docker_compose ps -q)"
-
-    #   image_name=$(Docker create vsiri/sphinxdocs:compile pipenv update)
-    #   Docker start -a "${container}"
-    #   Docker cp ${container}:/venv/sphinx.Pipfile.lock "${VSI_COMMON_DIR}/docker/vsi_common/sphinx.Pipfile.lock"
-    #   Docker rm ${container}
-    #   ;;
 
     sphinx_pipenv-update) # Update docs Pipenv file
-      local secs="$(date +%s)" #Get a random (enough) number
-
-      # Invalidate the lock file
-      # TODO: Make BSD compatible
-      sed -i 's|"sha256": ".*"|"sha256": "'"${secs}"'"|' "${VSI_COMMON_DIR}/docker/vsi_common/sphinx.Pipfile.lock"
-
-      justify docs build
-
-      # _sphinx_docker_compose run sphinx bash -c '
-      #   gosu root pipenv update
-      #   gosu root chown user:user "${PIPENV_PIPFILE}.lock"'
+      # Create a new volume
+      local volume="$(docker volume create)"
+      local rv=0
+      # Shadow /venv so it copies it. This makes chowning thousands of times faster... or something like that.
+      extra_sphinx_arguments=(-v "${volume}:/venv")
+      justify sphinx compile nopipenv bash -c "
+          echo 'Owning virtual env'
+          sudo chown -R user: /venv/*
+          pipenv lock" || rv=$?
+      docker volume rm "${volume}"
+      if [ "${rv}" != 0 ]; then return "${rv}"; fi
+      justify sphinx build
       ;;
 
     sphinx_setup) # Setup a new sphinx project
       mkdir -p "${docs_dir}"
       _sphinx_docker_compose run \
           sphinx bash -c "cd /docs; sphinx-quickstart"
+      ;;
+    sphinx_shell) # Enter the spinx container
+      echo "Run 'just docs' to build to docs"
+      justify sphinx compile bash
       ;;
     sphinx_compile) # Compile spinx documents
       local JUST_TEMP_ARRAY
@@ -334,6 +315,7 @@ function docs_defaultify()
           -e DOCS_AUTODOC_DIRS="$(_docs_serialize_dirs "${autodoc_dirs[@]}")" \
           -e DOCS_AUTODOC_OUTPUT_DIRS="$(_docs_serialize_dirs "${autodoc_output_dirs[@]}")" \
           -e DOCS_PRECOMPILE_SCRIPT=${precompile_script+"${precompile_script}"} \
+          ${extra_sphinx_arguments[@]+"${extra_sphinx_arguments[@]}"} \
           sphinx ${@+"${@}"}
       extra_args=$#
       ;;
