@@ -154,7 +154,7 @@ class RunningTrace():
 
         Returns
         -------
-        obj
+        object
             An instance of the debugger class with ``set_runnable_trace`` added
     '''
     new_cls = type(debugger_cls.__name__+"Runnable", (debugger_cls, cls), {})

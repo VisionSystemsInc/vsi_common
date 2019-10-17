@@ -384,15 +384,15 @@ def root_dir(directory):
           The Root Directory
 
 
-      On Windows
+      On Windows::
 
-      >>> C:\tmp\blah.txt -> C:\
-         D:\Program Files\calc.exe -> D:\
+          C:\\tmp\\blah.txt -> C:\\
+          D:\\Program Files\\calc.exe -> D:\\
 
 
-      On Linux/Darwin
+      On Linux/Darwin::
 
-      >>> /tmp/blah.txt -> /
+          /tmp/blah.txt -> /
   '''
   return os.path.splitdrive(directory)[0] + os.sep
 

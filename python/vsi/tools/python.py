@@ -68,7 +68,7 @@ def reloadModules(pattern='.*', skipPattern='^IPython'):
   skipPattern = re.compile(skipPattern)
 
   modules = sys.modules.keys()
-  #In case something is loaded in the background, it will craete a
+  #In case something is loaded in the background, it will create a
   #"dictionary changed size during iteration" error
 
   for m in modules:
@@ -604,9 +604,9 @@ def args_to_kwargs_easy(*args, **kwargs):
      ----------
      function : func
           Function being parsed
-     *args
+     *args : tuple
           Variable length argument list.
-     **kwargs
+     **kwargs : dict
           Arbitrary keyword arguments.
 
      Returns
@@ -620,9 +620,9 @@ def args_to_kwargs_unbound_easy(*args, **kwargs):
   '''
      Parameters
      ----------
-     *args : args
+     *args : tuple
           Variable length argument list.
-     **kwargs : args
+     **kwargs : dict
           Arbitrary keyword arguments.
 
      Returns
@@ -656,9 +656,9 @@ def nested_update(dict_, *args, **kwargs):
   ----------
   dict_ : dict
       The dict to be updated
-  *args : args
+  *args : tuple
       Same arguments as dict.update
-  **kwargs : args
+  **kwargs : dict
       Same arguments as dict.update
   '''
 
@@ -728,7 +728,7 @@ def nested_patch(obj, condition, patch, _spare_key = None):
 
   Parameters
   ----------
-  obj: Mapping or Iterable or object
+  obj: mapping or iterable or object
       The python object to be patched. Typically a dict, but can be a list,
       etc... or even a normal object, but that kind of defeats the purpose
   condition: func
@@ -745,7 +745,10 @@ def nested_patch(obj, condition, patch, _spare_key = None):
       a deep-copy of the original object, as unpatched values will still be the
       same python objects, not copies.
 
-  Example::
+  Example
+  -------
+
+  ::
 
       patterns = ['_file', '_dir', '_path',
             '_files', '_dirs', '_paths']
@@ -809,7 +812,7 @@ def nested_patch(obj, condition, patch, _spare_key = None):
     return obj
 
 def nested_patch_inplace(obj, condition, patch, _spare_key = None):
-  ''' Destructive inplace version of :func:vsi.tools.python.nested_patch`
+  ''' Destructive inplace version of :func:`vsi.tools.python.nested_patch`
   '''
   # Handle mapping
   if isinstance(obj, Mapping):
