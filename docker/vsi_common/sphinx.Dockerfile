@@ -19,8 +19,7 @@ RUN /tmp/pipenv/get-pipenv; rm -rf /tmp/pipenv || :
 
 ADD sphinx.Pipfile sphinx.Pipfile.lock sphinx.Justfile /vsi/docker/vsi_common/
 
-RUN pipenv install --keep-outdated; \
-    cp "${PIPENV_PIPFILE}.lock" /venv; \
+RUN pipenv sync; \
     # Hack for vsi_domain
     ln -s /vsi/docs/vsi_domains.py "$(pipenv --venv)/lib/python3.7/site-packages/"; \
     rm -rf "${PIPENV_PIPFILE}*" /tmp/pip*
