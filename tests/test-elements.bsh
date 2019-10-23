@@ -1102,3 +1102,94 @@ begin_test "Array length"
   [ "$(array_length z)" = "1" ]
 )
 end_test
+
+begin_test "Array to variables"
+(
+  setup_test
+
+  # Empty
+  stuff=()
+  array_to_variables stuff thing
+  [ -z "${thing_1+set}" ]
+
+  # Holes
+  BAR=(aa bb cc dd ee)
+  unset BAR[0]
+  unset BAR[2]
+  unset BAR[4]
+  array_to_variables BAR BAR
+  [ "${BAR_1}" = "bb" ]
+  [ "${BAR_2}" = "dd" ]
+  [ -z "${BAR_3+set}" ]
+
+  # Normal
+  FOOS=(11 "2 2" "3  3")
+  array_to_variables FOOS FOO
+  [ "${FOO_1}" = "11" ]
+  [ "${FOO_2}" = "2 2" ]
+  [ "${FOO_3}" = "3  3" ]
+
+  # Name collision
+  i=(a1 b2)
+  array_to_variables i i
+  [ "${i_1}" = "a1" ]
+  [ "${i_2}" = "b2" ]
+
+  indirect=(abc "d e f " $'  g \n h  ')
+  array_to_variables indirect counter
+  [ "${counter_1}" = "abc" ]
+  [ "${counter_2}" = "d e f " ]
+  [ "${counter_3}" = $'  g \n h  ' ]
+
+)
+end_test
+
+begin_test "Variables to array"
+(
+  setup_test
+
+  # Empty
+  variables_to_array thing things
+  check_a things
+
+  # Normal
+  FOO_1="11"
+  FOO_2="2 2"
+  FOO_3="3  3"
+  FOO_5="not used"
+  variables_to_array FOO FOOS
+  check_a FOOS 11 "2 2" "3  3"
+
+  # Name collision
+  counts_1=a1
+  counts_2=b2
+  variables_to_array counts counter
+  counter=(a1 b2)
+)
+end_test
+
+begin_test "All variables to array"
+(
+  setup_test
+
+  # Empty
+  thing_one=123
+  all_variables_to_array thing things
+  check_a things
+
+  # Normal
+  FOO_1="11"
+  FOO_2="2 2"
+  FOO_3="3  3"
+  FOO_5="is used"
+  FOO_BAR="not used"
+  all_variables_to_array FOO FOOS
+  check_a FOOS 11 "2 2" "3  3" "is used"
+
+  # Name collision
+  counts_1=a1
+  counts_2=b2
+  all_variables_to_array counts indirect
+  indirect=(a1 b2)
+)
+end_test
