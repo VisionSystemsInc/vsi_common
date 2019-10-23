@@ -7,6 +7,7 @@ fi
 : ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
 source "${VSI_COMMON_DIR}/linux/string_tools.bsh"
 source "${VSI_COMMON_DIR}/linux/elements.bsh"
+source "${VSI_COMMON_DIR}/linux/findin"
 
 #*# linux/command_tools
 
@@ -186,4 +187,119 @@ function _compose_arguments()
         ${subcommand-}
         ${2+${!2+"${!2}"}}
         ${subcommand_args[@]+"${subcommand_args[@]}"})
+}
+
+#**
+# .. function:: parse_args
+#
+# :Arguments: ``$1`` - Name of variable to store how many arguments were parsed
+#             ``$2`` - Option string, like ``-o`` or ``--output``
+#             ``$3`` - The name of the variable that will store the result of the arument if used. Can be prefixed with ``+`` for an array, and postfixed with a ``:`` for "has an argument
+#             [ ``$4...$N`` ] - Repeat ``$2`` and ``$3``
+#             ``$N+1`` - Must be ``--`` to deliniate the actual arguments are being passed in next
+#             [``$N+2...``] - The argument to parse
+# :Outputs: ``$!1`` - Store how many arguments are parsed after the ``--``, in the variable name specified in ``$1``
+#           ``$3,$5,...`` - Stores the values in the corresponding arrays
+#
+# A simple argument parser, supporting some of the options that getopts supports
+#
+# #. Only parses until an argument is encountered that does not match an argument. This is useful for subcommand parsing
+# #. Can support any arguments option, even if they do not start with ``-``, but that is ill advised
+# #. Does not support combining multiple one letter arguments into one argument
+# #. Supports the ``:`` postfix notation for "has an argument", add it to the storage name, not the option string
+# #. Does not support the ``::`` noatation for "maybe has an argument"
+# #. Supports a ``+`` prefix notation on the storage variable name meaning the storage is an array, and values are appended to it.
+# #. If options to not have an argument, then they are set to 0 if unset, and 1 if set
+#
+# .. note:
+#
+#    Variables are always overwritten, even if not used. A ``0`` for options without arguments, and an empty string for options that take arguments indicates the option was never used. However, arrays are always appeneded to.
+#
+# .. warning::
+#
+#    Don't use variable names that start with ``__parse_args``
+#**
+function parse_args()
+{
+  local __parse_args_options=()
+  local __parse_args_storage=()
+  local __parse_args_is_array=()
+  local __parse_args_arguments=()
+  local __parse_args_index
+  local __parse_args_store
+  local __parse_args_indirect
+  local __parse_args_used_arguments="${1}"
+  shift 1
+
+  while [ "${1}" != "--" ]; do
+    if [ "${2:0:1}" = "+" ]; then
+      __parse_args_store="${2:1}"
+      __parse_args_is_array+=(1)
+    else
+      __parse_args_store="${2}"
+      __parse_args_is_array+=(0)
+    fi
+
+    if [ "${2: -1}" = ":" ]; then
+      __parse_args_arguments+=(1)
+      __parse_args_store="${__parse_args_store::${#__parse_args_store}-1}"
+    else
+      __parse_args_arguments+=(0)
+    fi
+
+    __parse_args_options+=("${1}")
+    __parse_args_storage+=("${__parse_args_store}")
+    shift 2
+  done
+
+  shift 1 # For the --
+  dynamic_set "${__parse_args_used_arguments}" "${#}"
+
+  for __parse_args_index in "${!__parse_args_storage[@]}"; do
+    if [ "${__parse_args_is_array[$__parse_args_index]}" = "0" ]; then
+      if [ "${__parse_args_arguments[$__parse_args_index]}" = "0" ]; then
+        # It's a variable that with no arguments, set to 0
+        dynamic_set "${__parse_args_storage[$__parse_args_index]}" 0
+      else
+        # It's a variable that with an arguments, set to ""
+        dynamic_set "${__parse_args_storage[$__parse_args_index]}" ""
+      fi
+    else
+      # if unset
+      __parse_args_indirect="${__parse_args_storage[$__parse_args_index]}[@]"
+      if [ -z "${!__parse_args_indirect+set}" ]; then
+        # Set to empty array
+        dynamic_set_a "${__parse_args_storage[$__parse_args_index]}"
+      fi
+    fi
+  done
+
+  while (( $# )); do
+    __parse_args_index="$(findin "${1}" ${__parse_args_options[@]+"${__parse_args_options[@]}"})"
+    # If there is no match, then we are done parsing!
+    if [ "${__parse_args_index}" = "-1" ]; then
+      break
+    else
+      # Variable
+      if [ "${__parse_args_is_array[$__parse_args_index]}" = "0" ]; then
+        if [ "${__parse_args_arguments[$__parse_args_index]}" = "1" ]; then
+          dynamic_set "${__parse_args_storage[$__parse_args_index]}" "$2"
+          shift 1
+        else
+          __parse_args_indirect=${__parse_args_storage[$__parse_args_index]}
+          dynamic_set "${__parse_args_indirect}" $((${!__parse_args_indirect}+1))
+        fi
+      else # Array
+        if [ "${__parse_args_arguments[$__parse_args_index]}" = "1" ]; then
+          add_elements_a "${__parse_args_storage[$__parse_args_index]}" "${2}"
+          shift 1
+        else
+          add_elements_a "${__parse_args_storage[$__parse_args_index]}" 1
+        fi
+      fi
+    fi
+    shift 1
+  done
+
+  dynamic_set "${__parse_args_used_arguments}" $(( ${!__parse_args_used_arguments} - $# ))
 }
