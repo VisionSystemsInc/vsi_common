@@ -787,3 +787,113 @@ function _subtract_array()
   # Copy the output to the targeted name
   dynamic_set_a "$3" ${__output[@]+"${__output[@]}"}
 }
+
+#**
+# .. function:: array_to_variable
+#
+# :Arguments: * ``$1`` - Array name
+#             * ``$2`` - Variable name prefix
+#
+# Converts an array to a set of variables, starting with the prefix ``${2}_`` numbered from 1 to N in sequential order, even if there are holes in the array.
+#**
+if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "44" ]; then
+  function array_to_variables()
+  {
+    # Handle name collision
+    if [ "${1}" != "indirect" ]; then
+      if [ "${1}" = "i" -o "${1}" = "counter" ]; then
+        local -n indirect2="${1}"
+        local copy=(${indirect2[@]+"${indirect2[@]}"})
+        set -- copy "${2}"
+      fi
+      local -n indirect="${1}"
+    fi
+
+    local i
+    local -i counter=1
+
+    for i in ${indirect[@]+"${indirect[@]}"}; do
+      dynamic_set "${2}_${counter}" "${i}"
+      counter+=1
+    done
+  }
+else
+  function array_to_variables()
+  {
+    # Handle name collision
+    if [ "${1}" = "indirect" -o "${1}" = "i" -o "${1}" = "counter" ]; then
+      local indirect2="${1}[@]"
+      local copy=(${!indirect2+"${!indirect2}"})
+      set -- copy "${2}"
+    fi
+    local indirect="${1}[@]"
+    local i
+    local -i counter=1
+
+    for i in ${!indirect+"${!indirect}"}; do
+      dynamic_set "${2}_${counter}" "${i}"
+      counter+=1
+    done
+  }
+fi
+
+#**
+# .. function:: variables_to_array
+#
+# :Arguments: * ``$1`` - Variable name prefix
+#             * ``$2`` - Array name
+#
+# Converts a set of variables to an array, starting with the prefix ``${1}_`` numbered from 1 to N in sequential order, stops as soon as one does not exist.
+#
+# .. note::
+#
+#    Will not detect variables that are declared but unset, will work with variables set to null.
+#**
+function variables_to_array()
+{
+  if [ "${2}" = "indirect" -o "${2}" = "counter" ]; then
+    local copy
+    variables_to_array "${1}" copy || return $?
+    dynamic_set_a "${2}" ${copy[@]+"${copy[@]}"}
+    return 0
+  fi
+  local indirect
+  local -i counter=1
+
+  while :; do
+    indirect="${1}_${counter}"
+    if [ -z "${!indirect+set}" ]; then
+      break
+    fi
+    add_elements_a "${2}" "${!indirect}"
+    counter+=1
+  done
+}
+
+#**
+# .. function:: all_variables_to_array
+#
+# Same as :func:`variables_to_array`, but can skip indexing numbers
+#
+# .. seealso::
+#
+#    :func:`variables_to_array`
+#      Sequential only version of function
+#**
+function all_variables_to_array()
+{
+  if [ "${2}" = "indirect" ]; then
+    local copy
+    all_variables_to_array "${1}" copy || return $?
+    dynamic_set_a "${2}" ${copy[@]+"${copy[@]}"}
+    return 0
+  fi
+  local indirect
+
+  # Get the list of variables, and sort them
+  for indirect in $(compgen -A variable "${1}_" | awk -F _ '{print $NF,$0}' | sort -n | cut -f2- -d' '); do
+    if [[ ${indirect} =~ ^${1}_[0-9]+$ ]]; then
+      add_elements_a "${2}" "${!indirect}"
+    fi
+  done
+}
