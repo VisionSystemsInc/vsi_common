@@ -43,6 +43,14 @@ function singularity_load_env()
   # Prepend volumes list from compose file
   indirect="${1}_volumes[@]"
   volumes=(${!indirect+"${!indirect}"} ${volumes[@]+"${volumes[@]}"})
+  local volume
+  for volume in ${volumes[@]+"${volumes[@]}"}; do
+    volume="${volume%%:*}"
+    if [ ! -e "${volume}" ]; then
+      echo "Auto creating directory: ${volume}" >&2
+      mkdir -p "${volume}"
+    fi
+  done
 
   ####################################
   ### Handle environment variables ###
@@ -183,33 +191,13 @@ function singular_defaultify()
 
       case $subcommand in
         run)
-          # while [ "${1:0:1}" = "-" ]; do
-          #   # TODO: Parse args here
-          #   shift 1
-          # done
+          # TODO: parse_args here
           local instance="$1"
           shift 1
           extra_args+=1
 
           local volumes environment flags
           singularity_load_env "${instance}"
-
-          #############################
-          ### Make Environment file ###
-          #############################
-
-          # https://github.com/sylabs/singularity/issues/3686
-          # TODO: Use SINGULARITYENV_FOO=BAR instead!
-
-          # Make a self deleting temp file
-          make_temp_path env_file
-
-          # Write out env patch file
-          if [ -n "${environment+set}" ]; then
-            for (( i=0; i+1<${#environment[@]}; i+=2 )); do
-              singularity_env_echo "${environment[${i}]}" "${environment[${i}+1]}"
-            done
-          fi
 
           ###############################
           ### Setup _Singularity call ###
@@ -230,14 +218,32 @@ function singular_defaultify()
             subcommand_args+=(-B "/tmp:/tmp:rw")
           fi
 
-          subcommand_args+=(-B "${env_file}:/.singularity.d/env/91-just-env.sh:ro")
-
           # Make Singularity call
           indirect="${instance}_image"
           subcommand_args+=(${flags[@]+"${flags[@]}"} "${!indirect}" ${@+"${@}"})
           extra_args+=$#
 
-          _Singularity
+          # Check to see if the first element of environment is set, hence no [@]
+          if [ -n "${environment+set}" ]; then
+            (
+              ##########################
+              ### Export Environment ###
+              ##########################
+              for (( i=0; i+1<${#environment[@]}; i+=2 )); do
+                # https://github.com/sylabs/singularity/issues/3686
+                export "SINGULARITYENV_${environment[${i}]}"="${environment[${i}+1]}"
+              done
+              function _env_echo()
+              {
+                export "SINGULARITYENV_${1}"="${2}"
+              }
+              common_environment_override
+
+              _Singularity
+            ) # Do this in a subshell so that these variables don't polute the rest of just
+          else
+            _Singularity
+          fi
           ;;
         config)
           local instance="$1"
