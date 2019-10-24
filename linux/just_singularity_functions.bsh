@@ -189,8 +189,14 @@ function singular_defaultify()
       extra_args+=1
       shift 1
 
+      if [ "${subcommand}" = "instance" ] && (( $# )) && [ "${1}" = "start" ]; then
+        subcommand=instance_start
+        extra_args+=1
+        shift 1
+      fi
+
       case $subcommand in
-        run)
+        run|shell|exec|test|instance_start)
           # TODO: parse_args here
           local instance="$1"
           shift 1
@@ -222,6 +228,11 @@ function singular_defaultify()
           indirect="${instance}_image"
           subcommand_args+=(${flags[@]+"${flags[@]}"} "${!indirect}" ${@+"${@}"})
           extra_args+=$#
+
+          if [[ ${subcommand} == instance_start ]]; then
+            subcommand=instance
+            subcommand_args=(start ${subcommand_args[@]+"${subcommand_args[@]}"})
+          fi
 
           # Check to see if the first element of environment is set, hence no [@]
           if [ -n "${environment+set}" ]; then
@@ -267,6 +278,11 @@ function singular_defaultify()
           # 1) Split buy \0\0 (double null)
           # 2) Odds are "name"
           # 3) Evens are null separated entries
+          ;;
+
+        instance)
+          Singularity "${subcommand}" ${@+"${@}"}
+          extra_args+=$#
           ;;
         *)
           echo "I don't understand: singular-compose $subcommand" >&2
