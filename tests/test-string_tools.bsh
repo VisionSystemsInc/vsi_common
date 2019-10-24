@@ -204,21 +204,21 @@ begin_test "Null dump"
 (
   setup_test
 
-  N="00" # Just trying to make the test more readable, the "NULL"
-
+  H="005e" # Just trying to make the test more readable, the "NULL"
+  D="002e"
   a=()
   b=(1 22 333)
   i=(a bc def)
 
-  ans="41${N}${N}"
+  ans="41${H}"
   out=$(null_dump A a | xxd -ps -c 100)
   [ "${ans}" = "${out}" ]
 
-  ans+="${N}${N}${N}${N}31${N}3232${N}333333"
+  ans+="${H}${H}31${D}3232${D}333333"
   out=$(null_dump A a "" b | xxd -ps -c 100)
   [ "${ans}" = "${out}" ]
 
-  ans+="${N}${N}30${N}${N}61${N}6263${N}646566"
+  ans+="${H}30${H}61${D}6263${D}646566"
   out=$(null_dump A a "" b 0 i | xxd -ps -c 100)
   [ "${ans}" = "${out}" ]
 )
@@ -228,105 +228,68 @@ begin_test "_Null dump"
 (
   setup_test
 
-  N="00" # Just trying to make the test more readable, the "NULL"
+  H="005e" # Just trying to make the test more readable, the "NULL"
+  D="002e"
 
   # First line
   _null_dump_first_line=1
   data1=(11 22 33)
-  ans="303030${N}${N}" # 000
-  ans+="3131${N}"   # 11
-  ans+="3232${N}"   # 22
-  ans+="3333${N}"   # 33
+  ans="303030${H}" # 000
+  ans+="3131${D}"  # 11
+  ans+="3232${D}"  # 22
+  ans+="3333"      # 33
   out="$(_null_dump 000 data1 | xxd -ps -c 100)"
+  [ "${ans}" = "${out}" ]
+
+  # with empty datas
+  _null_dump_first_line=1
+  data1=(01 "" "")
+  ans="616263${H}" # abc
+  ans+="3031${D}"  # 01
+  ans+="${D}"      # empty
+  ans+=""          # empty
+  out="$(_null_dump abc data1 | xxd -ps -c 100)"
   [ "${ans}" = "${out}" ]
 
   # Test name collision
   _null_dump_first_line=1
   i=(ab cd ef)
-  ans="414141${N}${N}" # AAA
-  ans+="6162${N}"   # ab
-  ans+="6364${N}"   # cd
-  ans+="6566${N}"   # ef
+  ans="414141${H}" # AAA
+  ans+="6162${D}"  # ab
+  ans+="6364${D}"  # cd
+  ans+="6566"      # ef
   out="$(_null_dump AAA i | xxd -ps -c 100)"
   [ "${ans}" = "${out}" ]
 
   # Test empty data set
   _null_dump_first_line=1
   x=()
-  ans="30${N}${N}${N}"
+  ans="30${H}"
   out="$(_null_dump 0 x | xxd -ps -c 100)"
   [ "${ans}" = "${out}" ]
 
   # Middle line
   _null_dump_first_line=0
   data1=(11 22 33)
-  ans="${N}303030${N}${N}" # 000
-  ans+="3131${N}"   # 11
-  ans+="3232${N}"   # 22
-  ans+="3333${N}"   # 33
+  ans="${H}303030${H}" # 000
+  ans+="3131${D}"   # 11
+  ans+="3232${D}"   # 22
+  ans+="3333"   # 33
   out="$(_null_dump 000 data1 | xxd -ps -c 100)"
   [ "${ans}" = "${out}" ]
 
   _null_dump_first_line=0
   pattern=(ab cd ef)
-  ans="${N}414141${N}${N}" # AAA
-  ans+="6162${N}"   # ab
-  ans+="6364${N}"   # cd
-  ans+="6566${N}"   # ef
+  ans="${H}414141${H}" # AAA
+  ans+="6162${D}"   # ab
+  ans+="6364${D}"   # cd
+  ans+="6566"   # ef
   out="$(_null_dump AAA pattern | xxd -ps -c 100)"
   [ "${ans}" = "${out}" ]
 
   _null_dump_first_line=0
-  ans="${N}30${N}${N}${N}"
+  ans="${H}30${H}"
   out="$(_null_dump 0 x | xxd -ps -c 100)"
-  [ "${ans}" = "${out}" ]
-
-  # Last line
-  _null_dump_first_line=0
-  data1=(11 22 33)
-  ans="${N}303030${N}${N}" # 000
-  ans+="3131${N}"   # 11
-  ans+="3232${N}"   # 22
-  ans+="3333"   # 33
-  out="$(_null_dump 000 data1 1 | xxd -ps -c 100)"
-  [ "${ans}" = "${out}" ]
-
-  _null_dump_first_line=0
-  indirect=(ab cd ef)
-  ans="${N}414141${N}${N}" # AAA
-  ans+="6162${N}"   # ab
-  ans+="6364${N}"   # cd
-  ans+="6566"   # ef
-  out="$(_null_dump AAA indirect 1 | xxd -ps -c 100)"
-  [ "${ans}" = "${out}" ]
-
-  _null_dump_first_line=0
-  ans="${N}30${N}${N}"
-  out="$(_null_dump 0 x 1 | xxd -ps -c 100)"
-  [ "${ans}" = "${out}" ]
-
-  # Firt and last line
-  _null_dump_first_line=1
-  data1=(11 22 33)
-  ans="303030${N}${N}" # 000
-  ans+="3131${N}"   # 11
-  ans+="3232${N}"   # 22
-  ans+="3333"   # 33
-  out="$(_null_dump 000 data1 1 | xxd -ps -c 100)"
-  [ "${ans}" = "${out}" ]
-
-  _null_dump_first_line=1
-  at_least=(ab cd ef)
-  ans="414141${N}${N}" # AAA
-  ans+="6162${N}"   # ab
-  ans+="6364${N}"   # cd
-  ans+="6566"   # ef
-  out="$(_null_dump AAA at_least 1 | xxd -ps -c 100)"
-  [ "${ans}" = "${out}" ]
-
-  _null_dump_first_line=1
-  ans="30${N}${N}"
-  out="$(_null_dump 0 x 1 | xxd -ps -c 100)"
   [ "${ans}" = "${out}" ]
 )
 end_test

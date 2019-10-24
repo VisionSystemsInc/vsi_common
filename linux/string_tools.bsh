@@ -353,41 +353,40 @@ fi
 #             * [``$3``...] - Repeat ``$1`` and ``$2``
 # :Output: *stdout* - Null separated dump of data
 #
-# Prints out multiple arrays, null separated.
+# Prints out multiple arrays, using a null separated schema.
 #
-# Prints out the header, than two nulls, then each element of the array, separated by single nulls. Then a double null between the last element, and the next header, and repeat.
+# Uses of two two-byte control words, null+carat ``\0^`` between headers (array names), and null+period ``\0.`` between data elements. First prints out the header, than null+carat, then each element of the array, separated by null+period. Then a null+carat between the last element, and the next header, and repeats. Does not add extra control words to the end.
 #
 # .. rubric:: Examples
 #
 # .. code::
 #
 #    # An empty set, with the header foo
-#    foo\0\0
+#    foo\0^
 #    # Two empty sets, with the headers foo and bar
-#    foo\0\0\0\0bar\0\0
+#    foo\0^\0^bar\0^
 #    # Two set with the headers foo and bar
-#    foo\0\0boo\0shoe\0two\0\0bar\0\0car\sar
+#    foo\0^boo\0.shoe\0.two\0^bar\0^car\0.sar
+#    # One set whose last two elements are empty
+#    foo\0^bar\0.car\0.sar\0.\0.
 #
 # .. rubric:: Parsing scheme
 #
-# #. Split by ``\0\0``. Now you have a list going (header, data, header, data, ...)
-# #. Split data by ``\0`` and you have the array elements again.
+# #. Split by ``\0^``. Now you have a list alternating (header, data, header, data, ...)
+# #. Split data by ``\0.`` and you have the array elements again.
 #
-# .. note::
+# .. code:: python
 #
-#    Skips empty fields. If this is not done, then two nulls would end up next to each othere in the data section, breaking parking. If you need to preserve empty data, then another scheme should be used, either use a "None" value or similar, or another function
+#    data = data.split(b'\0^')
+#    data = dict(zip([header.decode() for header in data[::2]],
+#        [[chunk.decode() for chunk in group.split(b'\0.')] for group in data[1::2]]))
 #**
 function null_dump()
 {
-  # This isn't neccessary
-  # local _null_dump_first_line=1
+  local _null_dump_first_line=1
 
   while (( $# )); do
-    if [ "$#" -gt 2 ]; then
-      _null_dump "$1" "$2"
-    else
-      _null_dump "$1" "$2" 1
-    fi
+    _null_dump "$1" "$2"
     shift 2
   done
 }
@@ -399,7 +398,7 @@ function null_dump()
 #          * ``$2`` - Array name
 #          * [``$3``] - Last(1), default 0. Set to 1 if this is the last group
 # :Output: * *stdout* - Null separated dump of one group of data
-#          * ``_null_dump_first_line`` - Used to track if this is the first group or not, automatically set and unset for you, no need to set yourself.
+#          * ``_null_dump_first_line`` - Used to track if this is the first group or not, automatically set for you, but you will need to clear it before starting a new datadump.
 #
 # Internal function. Prints one group. Must be combined with all the calls to get the proper number of nulls between groups. (The two nulls between groups are split among calls to :func:`_null_dump`
 #
@@ -409,86 +408,44 @@ function _null_dump()
 {
   # Handle name collisions
   if [ "${2}" = "pattern" -o "${2}" = "indirect" -o \
-       "${2}" = "indirect_i" -o "${2}" = "at_least" -o \
-       "${2}" = "_null_dump_first_line" -o "${2}" = "_null_dump_last_line" ]; then
+       "${2}" = "indirect_i" -o "${2}" = "_null_dump_first_line" ]; then
     local array_copy="${2}[@]"
     array_copy=(${!array_copy+"${!array_copy}"})
     _null_dump "${1}" array_copy "${3-0}"|| return $?
     return 0
   fi
 
-  local _pattern=""
   local indirect="${2}[@]"
   local indirect_i
-  local at_least_1=0
+  local pattern
 
   # If _null_dump_first_line is unset, then this must be the first
   : ${_null_dump_first_line=1}
-  local _null_dump_last_line="${3-0}"
 
   # Create the pattern for writing the header
 
-  # The first group does not start with a null, but subsequent groups need to
-  # have a double null between them, this adds that second null
+  # The first group does not start with a \0^, but subsequent groups need to
+  # have a \0^ between them, this adds that separator
   if [ "${_null_dump_first_line}" = "0" ]; then
-    _pattern="\0"
-  fi
-  # Add the first of the two nulls that separate the header and the data. The
-  # second null is added either by the _pattern += below, or in the last line,
-  # the null is written first to avoid a trailing null at the end.
-  _pattern+="%s\0"
-  # This has to use %s, or else if $1 is a numver, it will combine with the
-  # previous \0 and be a bigger number
-
-  # If not the last
-  if [ "${_null_dump_last_line}" = "0" ]; then
-    # Add the second null of the double null between the header and data
-    _pattern+='\0'
-    printf "${_pattern}" "${1}"
-
-    # Now the data pattern is to write data and a null, to separate the data
-    # elements. This null will also be the first of the two nulls between the
-    # last data elemetns and the next header, since this is already know to be
-    # not the last group.
-    _pattern="%s\0"
-  else
-    printf "${_pattern}" "${1}"
-    # Print null first, since this is the last group, we don't want a trailing
-    # null. When printing the first element, the null becomes the second null
-    # in the double null between the header and the first data element, else
-    # it is the null between elements
-    _pattern="\0%s"
+    # The first group header doesn't need an addition separator
+    pattern="\0^"
   fi
 
-  # Loop over the array
+  # Add the \0^ that separate the header and the data.
+  pattern+="%s\0^"
+  printf "${pattern}" "${1}"
+
+
+  # The first data element doesn't need an addition separator
+  pattern="%s"
+  # Loop over the first element of the array
   for indirect_i in ${!indirect+"${!indirect}"}; do
-    # Don't print empty elements, that would create a double null
-    if [ "${indirect_i}" != "" ]; then
-      printf "${_pattern}" "${indirect_i}"
-      at_least_1=1
-    fi
+    printf "${pattern}" "${indirect_i}"
+    # Print data separator \0. in between subsequent elements, just not before
+    # the first one
+    pattern="\0.%s"
   done
 
-  if [ "${at_least_1}" = "0" ]; then
-    # If none were printed
-    # When not the last line:
-    #   We need to add an extra null to make 4 total (Two from the pattern, one
-    #   here, and one added from the next pattern that is not the first line)
-    # When the last line:
-    #   We need to add an extra null to make 2 total (One from the pattern that
-    #   was not the last line, and this one)
-    # Either way, we need the extra null when no elements were printed
-    printf '\0'
-  fi
-
-  # If last line
-  if [ "${_null_dump_last_line}" = "1" ]; then
-    # unset the first line variable. This helps when calling _null_dump manually
-    # So you don't have to unset this yourself, or in case you forget to make
-    # it local
-    unset _null_dump_first_line
-  else
-    # Else, mark the next line will not be the first line, so the logic works.
-    _null_dump_first_line=0
-  fi
+  # Mark the next line will not be the first line, so the logic works.
+  _null_dump_first_line=0
 }

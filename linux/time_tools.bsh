@@ -57,15 +57,43 @@ get_time_seconds()
 if [[ ${OSTYPE-} = darwin* ]]; then
   function timeout()
   {
-    perl -e '\
-      eval {
-        local $SIG{ALRM} = sub { die "alarm\n" }; # NB: \n required
-        alarm shift;
-        exec @ARGV;
-        alarm 0;
-      };
-      if ($@) {
-        die unless $@ eq "alarm\n";   # propagate unexpected errors
+    perl -e 'use warnings;
+
+      no warnings;
+      {
+        local *STDOUT;
+        eval "use Time::HiRes qw(ualarm)";
+      }
+
+      if ( $@ ) {
+        # No Time::HiRes, use alarm
+        my $delay = shift;
+
+        if ( ($delay > 0) && ($delay < 1) ) {
+          $delay = 1;
+        };
+
+        eval {
+          local $SIG{ALRM} = sub { die "alarm\n" }; # NB: \n required
+          alarm $delay;
+          exec @ARGV;
+          alarm 0;
+        };
+        if ($@) {
+          die unless $@ eq "alarm\n";   # propagate unexpected errors
+        };
+      } else {
+        # Time::HiRes
+
+        eval {
+          local $SIG{ALRM} = sub { die "alarm\n" }; # NB: \n required
+          ualarm(1_000_000 * shift);
+          exec @ARGV;
+          ualarm(0);
+        };
+        if ($@) {
+          die unless $@ eq "alarm\n";   # propagate unexpected errors
+        };
       };' "${@}"
   }
 fi
@@ -80,7 +108,8 @@ fi
 # https://perldoc.perl.org/functions/alarm.html
 #
 # .. seealso::
-#   https://www.cyberciti.biz/faq/shell-scripting-run-command-under-alarmclock/
+#
+#    https://www.cyberciti.biz/faq/shell-scripting-run-command-under-alarmclock/
 #**
 
 
