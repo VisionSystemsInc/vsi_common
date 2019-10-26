@@ -865,7 +865,7 @@ function defaultify()
     _null)
       ;;
     *)
-      unknownify "$arg" ${@+"${@}"}
+      plugin_not_found=1
       ;;
   esac
 }
@@ -957,7 +957,6 @@ declare -i extra_args
 #
 #   justify target2
 #**
-
 function justify()
 { # caseify needs to be written by the main script, and set the number
   # of extra arguments it consumes to extra_args
@@ -991,6 +990,38 @@ function justify()
 }
 
 function _justify()
+{
+  local index
+  local plugin_not_found
+  while (( $# > 0 )); do
+    extra_args=0
+
+    for (( index=$#; index>0; index-- )); do
+      plugin_not_found=0
+      caseify "${*:1:$index}"
+      if [ "${plugin_not_found}" = "1" ]; then
+        defaultify "${*:1:$index}"
+      else
+        break
+      fi
+    done
+
+    if [ "${plugin_not_found}" = "1" ]; then
+      unknownify "${1}"
+    fi
+
+    if (( $extra_args+$index > $# )); then
+      source "${VSI_COMMON_DIR}/linux/colors.bsh"
+      echo "${RED}JUST ERROR${NC}: Not enough arguments for \"${1-}\" target" >&2
+    fi
+
+    shift "${extra_args}"
+    shift "${index}"
+  done
+}
+
+
+function _justify1()
 {
   while (( $# > 0 )); do
     extra_args=0
