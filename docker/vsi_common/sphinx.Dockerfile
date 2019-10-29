@@ -12,7 +12,8 @@ ENV WORKON_HOME=/venv \
     PIPENV_CACHE_DIR=/venv/cache \
     PYENV_SHELL=/bin/bash \
     LC_ALL=C.UTF-8 \
-    LANG=C.UTF-8
+    LANG=C.UTF-8 \
+    JUSTFILE=/vsi/docker/vsi_common/sphinx.Justfile
 
 COPY --from=pipenv /tmp/pipenv /tmp/pipenv
 RUN /tmp/pipenv/get-pipenv; rm -rf /tmp/pipenv || :
