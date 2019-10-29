@@ -160,6 +160,24 @@ skipped=0
 #**
 
 #**
+# .. envvar:: TESTLIB_REDIRECT_OUTPUT
+#
+# Redirects stdout and stderr to temporary files
+#
+# By default, all tests are run with ``set -xv`` for debugging purposes when a tests fails. This output is store in a .out/.err file temporarily and only displayed if a tests fails. You can set this variable to ``0`` to disable this, and always stream the output
+#
+# :Default: ``1``
+#**
+
+#**
+# .. envvar:: TESTLIB_NO_PS4
+#
+# If set, will disable the custom PS4 output. Useful for some converage tools
+#
+# :Default: *unset*
+#**
+
+#**
 # .. function:: atexit
 #
 # Function that runs at process exit
@@ -221,11 +239,14 @@ atexit ()
 }
 trap_chain "atexit" EXIT
 
-if declare -p BASH_SOURCE &> /dev/null; then
-  PS4=$'+${BASH_SOURCE[0]##*/}:${LINENO})\t'
-else # Else sh probably
-  # Not as accurate, but better than nothing
-  PS4=$'+${0##*/}:${LINENO})\t'
+
+if [ -z "${TESTLIB_NO_PS4+set}" ]; then
+  if declare -p BASH_SOURCE &> /dev/null; then
+    PS4=$'+${BASH_SOURCE[0]##*/}:${LINENO})\t'
+  else # Else sh probably
+    # Not as accurate, but better than nothing
+    PS4=$'+${0##*/}:${LINENO})\t'
+  fi
 fi
 
 # Common code for begin tests
@@ -262,7 +283,7 @@ _begin_common_test ()
   test_file_name=${test_file_name#test-}
   test_description="$test_file_name - $1"
 
-  if [ "${tracking_touched_files}" = "1" ]; then
+  if [ "${tracking_touched_files-}" = "1" ]; then
     track_touched_file="$(mktemp -u)"
     ttouch "${track_touched_file}"
   fi
@@ -276,19 +297,21 @@ _begin_common_test ()
     skip_next_test
   fi
 
-  if [ "${BASH_VERSINFO[0]}" -gt "4" ] || [ "${BASH_VERSINFO[0]}" == "4" ] && [ "${BASH_VERSINFO[1]}" -ge "1" ]; then
-    exec {stdout}>&1
-    exec {stderr}>&2
-  else
-    find_open_fd stdout
-    find_open_fd stderr
-    eval "exec ${stdout}>&1"
-    eval "exec ${stderr}>&2"
-  fi
+  if [ "${TESTLIB_REDIRECT_OUTPUT-1}" != "0" ]; then
+    if [ "${BASH_VERSINFO[0]}" -gt "4" ] || [ "${BASH_VERSINFO[0]}" == "4" ] && [ "${BASH_VERSINFO[1]}" -ge "1" ]; then
+      exec {stdout}>&1
+      exec {stderr}>&2
+    else
+      find_open_fd stdout
+      find_open_fd stderr
+      eval "exec ${stdout}>&1"
+      eval "exec ${stderr}>&2"
+    fi
 
-  out="${TESTDIR}/out"
-  err="${TESTDIR}/err"
-  exec 1>"$out" 2>"$err"
+    out="${TESTDIR}/out"
+    err="${TESTDIR}/err"
+    exec 1>"$out" 2>"$err"
+  fi
 
   # Allow the subshell to exit non-zero without exiting this process
   set -x +e
@@ -407,7 +430,9 @@ end_test ()
   test_status="${1:-$?}" # This MUST be the first line of this function
   set +x -e
   # Tested, this apparently works on bash 3.2
-  exec 1>&${stdout} 2>&${stderr}
+  if [ "${TESTLIB_REDIRECT_OUTPUT-1}" != "0" ]; then
+    exec 1>&${stdout} 2>&${stderr}
+  fi
   popd &> /dev/null
 
   local time_e=''

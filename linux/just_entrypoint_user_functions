@@ -81,6 +81,9 @@ function docker_convert_paths()
   if [ "${JUST_HOST_WINDOWS-}" = "1" ]; then
     local var
     local value
+    local readonly_vars="$(readonly -p)"
+    local pattern='declare -[[:alpha:]]*r[[:alpha:]]* '
+
     for var in $(compgen -A export); do
       if ! [[ ${var} =~ ${JUST_NO_PATHCONV-nomatch^} ]]; then
         value="${!var}"
@@ -88,6 +91,21 @@ function docker_convert_paths()
         if [ "${value#//}" != "${value}" ]; then
           value="${value:1}"
         fi
+        # Handle incase you are trying to export a readonly variable. This
+        # happens in weird rare situations where a non-bash exports something
+        # like SHELLOPTS, and then forks off a bash, which will have an exported
+        # readonly variable SHELLOPTS.
+
+        # This can have some false positive
+        if [[ ${readonly_vars} =~ ${pattern}${var}= ]] && \
+           [[ $(declare -p "${var}") =~ ^${pattern}${var}= ]]; then
+           # So double check to remove false positives. This is not done in the
+           # first place, because `readonly -p` and `declare -p` are relatively
+           # expensive.
+          continue
+        fi
+
+        # || : doesn't work here. Bash fails before it gets to the ||
         # Replace for internal ://
         export "${var}=${value//:\/\//:/}"
       fi

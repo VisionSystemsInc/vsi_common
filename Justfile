@@ -67,6 +67,13 @@ function caseify()
       justify _post_build_docker
       ;;
 
+    bash_coverage) # Run bashcov on unit tests
+      if [ -e "${VSI_COMMON_DIR}/converage" ]; then
+        rm -r "${VSI_COMMON_DIR}/converage"
+      fi
+      TESTLIB_NO_PS4=1 TESTS_PARALLEL=1 bashcov ./tests/run_tests.bsh
+      ;;
+
     _post_build_docker)
       docker_cp_image "${VSI_COMMON_DOCKER_REPO}:python2_test" "/venv/Pipfile2.lock" "${VSI_COMMON_DIR}/docker/tests/Pipfile2.lock"
       docker_cp_image "${VSI_COMMON_DOCKER_REPO}:python3_test" "/venv/Pipfile3.lock" "${VSI_COMMON_DIR}/docker/tests/Pipfile3.lock"
