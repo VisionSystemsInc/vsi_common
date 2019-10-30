@@ -178,10 +178,13 @@ function remove_element_a()
     # We have to check ${1}[@] here, because there is a change the first
     # element of the array is not set, but the rest of the array is.
     local __x="${1}[@]"
-    # Do not use -n here, because "${blah[@]+set}" expands to ZERO arguments,
-    # not one empty one, thus making the final test "test -n -n" which is true
-    # So = "set" is the right way to do this when [@] is involved
-    if [ "${!__x+is_set}" = "is_set" ]; then
+    # The extra "" are important here. Do not remove them, because
+    # "${blah[@]+set}" expands to ZERO arguments, not one empty one, thus
+    # making the final test "test -n -n" which is true. The same is true
+    # if we did == "set", the first argument would be missing and result in
+    # an error, that technically works in our favor, but is messy. This way is
+    # the cleanest I can find.
+    if [ -n """${!__x+set}" ]; then
       __x=( ${!__x} )
     else # If it's empty/does not exist, there is nothing to remove
       return 0
@@ -653,10 +656,8 @@ function to_array()
 
     local -i __i=0
     while IFS='' read -r -d '' __y || [[ -n "${__y}" ]]; do
-      declare -p __y
       __y="${__y//^^n/$'\n'}"
       __y="${__y//\\^/^}"
-      declare -p __y
 
       # %s is important, so that printf doesn't try to replace special chracters
       IFS='' read -r -d "" "${1}[$__i]" < <(printf '%s' "${__y}") || :
