@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+
+. "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
+. "$(dirname "${BASH_SOURCE[0]}")/test_utils.bsh"
+. "${VSI_COMMON_DIR}/linux/singularity_functions.bsh"
+
+VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+
+function SiNgUlArItY()
+{
+  args=(${@+"${@}"})
+}
+# just_functions sets this up for all plugins, so I have to set it up manually here
+
+begin_test "Singularity wrapper"
+(
+  setup_test
+
+  [ "${SINGULARITY}" = "singularity" ]
+
+  export SINGULARITY=SiNgUlArItY
+
+  # Simple call
+  Singularity -q run -B /foo:/bar:ro test_image.simg
+  check_a args -q run -B /foo:/bar:ro test_image.simg
+
+  # Test SINGULARITY_EXTRA_ARGS
+  SINGULARITY_EXTRA_ARGS="-blah"
+  Singularity run -B /foo:/bar:ro test_image.simg
+  check_a args -blah run -B /foo:/bar:ro test_image.simg
+
+  SINGULARITY_EXTRA_ARGS=(-blah "fo o  BAR")
+  Singularity run -B /foo:/bar:ro test_image.simg
+  check_a args -blah "fo o  BAR" run -B /foo:/bar:ro test_image.simg
+
+  unset SINGULARITY_EXTRA_ARGS
+  # Test SINGULARITY_EXTRA_NOTRUN_ARGS
+  SINGULARITY_EXTRA_NOTRUN_ARGS="-ok"
+  Singularity -q run -B /foo:/bar:ro test_image.simg
+  check_a args -q run -B /foo:/bar:ro test_image.simg
+
+  # Test SINGULARITY_EXTRA_RUN_ARGS
+  SINGULARITY_EXTRA_RUN_ARGS="-ok"
+  Singularity -q run -B /foo:/bar:ro test_image.simg
+  check_a args -q run -ok -B /foo:/bar:ro test_image.simg
+
+  SINGULARITY_EXTRA_RUN_ARGS=(--label "key=v a  L UE")
+  Singularity -q run -B /foo:/bar:ro test_image.simg do "some  thing "
+  check_a args -q run --label "key=v a  L UE" -B /foo:/bar:ro test_image.simg do "some  thing "
+)
+end_test
+
+begin_test "Singularity environment pass"
+(
+  setup_test
+
+  # Empty
+  singularity_env_pass foo ""
+  [ "${SINGULARITYENV_foo}" = "" ]
+
+  singularity_env_pass BAR " s  tuf f "
+  [ "${SINGULARITYENV_BAR}" = " s  tuf f " ]
+
+)
+end_test
+
+begin_test "Singular compose load environment"
+(
+  setup_test
+
+  export JUSTFILE="${TESTDIR}/Justfile"
+  mkdir -p "${TESTDIR}/a/b/c"
+
+  echo "instances+=(foo1 foo2)" > singular-compose.env
+
+  echo "instances+=(foo3)
+        foo3_volumes=('${TESTDIR}/foo:/bar:ro')
+        foo3_environment=('FOO' 'BAR FAR  BOO ')
+        foo3_singularity_flags=(-c -e)" > ${TESTDIR}/a/singular-compose.env
+
+  echo "instances+=(foo4)
+        foo4_volumes=('${TESTDIR}/bar:/bar:ro')
+        foo4_environment=('OK' 'DOE')
+        foo4_singularity_flags=(-e -c)" > ${TESTDIR}/a/b/singular-compose.env
+
+  # simple case
+  not singularity_load_env foo3
+  singularity_load_env foo1
+  singularity_load_env foo2
+  check_a volumes
+  check_a flags
+  check_a environment
+
+  unset volumes flags environment
+  # Using ${JUST_PROJECT_PREFIX}_SINGULAR_COMPOSE_FILES
+  JUST_PROJECT_PREFIX=STUFF
+  STUFF_SINGULAR_COMPOSE_FILES="${TESTDIR}/a/singular-compose.env"
+  not singularity_load_env foo1 2>/dev/null
+  not singularity_load_env foo2 2>/dev/null
+  [ ! -d "${TESTDIR}/foo" ]
+  singularity_load_env foo3
+  check_a volumes "${TESTDIR}/foo:/bar:ro"
+  check_a flags -c -e
+  check_a environment 'FOO' 'BAR FAR  BOO '
+  [ -d "${TESTDIR}/foo" ]
+  not singularity_load_env foo4 2>/dev/null
+
+  # Multiple compose files
+  STUFF_SINGULAR_COMPOSE_FILES=("${TESTDIR}/a/singular-compose.env" "${TESTDIR}/a/b/singular-compose.env")
+  not singularity_load_env foo1 2>/dev/null
+  not singularity_load_env foo2 2>/dev/null
+  singularity_load_env foo3
+  [ ! -d "${TESTDIR}/bar" ]
+  singularity_load_env foo4
+  check_a volumes "${TESTDIR}/bar:/bar:ro"
+  check_a environment 'OK' 'DOE'
+  check_a flags -e -c
+  [ -d "${TESTDIR}/bar" ]
+
+  # Find based on Justfile
+  unset STUFF_SINGULAR_COMPOSE_FILES
+  export JUSTFILE="${TESTDIR}/a/b/c/Justfile"
+  not singularity_load_env foo1 2>/dev/null
+  not singularity_load_env foo2 2>/dev/null
+  not singularity_load_env foo3 2>/dev/null
+  singularity_load_env foo4
+)
+end_test

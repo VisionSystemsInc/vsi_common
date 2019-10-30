@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+
+. "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
+
+VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+
+begin_test "ask_question function"
+(
+  setup_test
+  . "${VSI_COMMON_DIR}/linux/ask_question"
+
+  [ "$(type -t ask_question)" = "function" ]
+
+  # Can only be tested with preset value, due to read only prompt on a terminal
+  [ "$(foo=y ask_question "abd123?" foo)" = "abd123? y" ]
+
+  # Simple case
+  unset foo
+  ask_question "Yes?" foo <<<"$(echo y)"
+  [ "${foo}" = "1" ]
+
+  unset foo
+  ask_question "Yes?" foo <<<"$(echo n)"
+  [ "${foo}" = "0" ]
+
+  # Multiple bad answers before good
+  unset bar
+  ask_question "Yes?" bar <<<"$(printf '\nwhat\nok\ny\n')"
+  [ "${bar}" = "1" ]
+
+  unset bar
+  ask_question "Yes?" bar <<<"$(printf '\nwhat\nok\nno\n')"
+  [ "${bar}" = "0" ]
+
+  # Prefilled answer
+  bar=yes
+  ask_question "Yes?" bar
+  [ "${bar}" = "1" ]
+
+  bar=n
+  ask_question "Yes?" bar
+  [ "${bar}" = "0" ]
+
+  # Default answer
+  unset bar
+  ask_question "Yes?" bar y <<<"$(printf '\nwhat\nok\n\n')"
+  [ "${bar}" = "1" ]
+
+  unset bar
+  ask_question "Yes?" bar n <<<"$(printf '\n')"
+  [ "${bar}" = "0" ]
+
+  # Going against the default
+  unset bar
+  ask_question "Yes?" bar y <<<"$(printf 'N\n')"
+  [ "${bar}" = "0" ]
+
+  unset bar
+  ask_question "Yes?" bar n <<<"$(printf 'Y\n')"
+  [ "${bar}" = "1" ]
+)
+end_test
+
+begin_test "ask_question CLI"
+(
+  setup_test
+
+  [ "$(type -t ask_question)" = "file" ]
+
+  # Can only be tested with preset value, due to read only prompt on a terminal
+  [ "$(ans=y ask_question "abd123?")" = "abd123? y" ]
+
+  # Simple case
+  ask_question "Yes?" <<<"$(echo y)"
+
+  not ask_question "Yes?" <<<"$(echo n)"
+
+  # Multiple bad answers before good
+  ask_question "Yes?" <<<"$(printf '\nwhat\nok\ny\n')"
+
+  not ask_question "Yes?" <<<"$(printf '\nwhat\nok\nno\n')"
+
+  # Prefilled answer
+  ans=y ask_question "Yes?"
+
+  ans=no not ask_question "Yes?"
+
+  # Default answer
+  ask_question "Yes?" y <<<"$(printf '\nwhat\nok\n\n')"
+
+  not ask_question "Yes?" n <<<"$(printf '\n')"
+
+  # Going against the default
+  not ask_question "Yes?" y <<<"$(printf 'N\n')"
+
+  ask_question "Yes?" n <<<"$(printf 'Y\n')"
+)
+end_test
