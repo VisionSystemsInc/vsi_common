@@ -12,6 +12,7 @@ source "${VSI_COMMON_DIR}/linux/just_env" "${VSI_COMMON_DIR}/vsi_common.env"
 
 source "${VSI_COMMON_DIR}/linux/just_docker_functions.bsh"
 source "${VSI_COMMON_DIR}/linux/just_sphinx_functions.bsh"
+source "${VSI_COMMON_DIR}/linux/ask_question"
 
 cd "${VSI_COMMON_DIR}"
 
@@ -68,10 +69,15 @@ function caseify()
       ;;
 
     bash_coverage) # Run bashcov on unit tests
-      if [ -e "${VSI_COMMON_DIR}/converage" ]; then
-        rm -r "${VSI_COMMON_DIR}/converage"
+      if [ -e "${VSI_COMMON_DIR}/coverage" ]; then
+        ask_question "Remove previous coverage results?" remove_coverage yes
+        if [ "${remove_coverage}" = "1" ]; then
+          rm -r "${VSI_COMMON_DIR}/coverage"
+        else
+          return
+        fi
       fi
-      TESTLIB_NO_PS4=1 TESTS_PARALLEL=1 bashcov ./tests/run_tests.bsh
+      TESTLIB_NO_PS4=1 TESTS_PARALLEL=1 TESTLIB_REDIRECT_OUTPUT=0 bashcov ./tests/run_tests.bsh
       ;;
 
     _post_build_docker)
