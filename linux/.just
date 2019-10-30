@@ -60,7 +60,7 @@ _just()
 
   # 2. Find Justfile, load it, and copy the JUST_HELP_FILES array
   local just_files="$(
-    _just_load_justfile "${JUSTFILE-Justfile}" >& /dev/null
+    _just_load_justfile "${JUSTFILE-Justfile}" &> /dev/null
     join_a just_files ${JUST_HELP_FILES+"${JUST_HELP_FILES[@]}"}
     echo "${just_files}"
   )"

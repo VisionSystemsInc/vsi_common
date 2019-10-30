@@ -164,15 +164,22 @@ skipped=0
 #
 # Redirects stdout and stderr to temporary files
 #
-# By default, all tests are run with ``set -xv`` for debugging purposes when a tests fails. This output is store in a .out/.err file temporarily and only displayed if a tests fails. You can set this variable to ``0`` to disable this, and always stream the output
+# By default, all tests are run with ``set -xv`` for debugging purposes when a tests fails. This output is stored in a out/err/xtrace file temporarily and only displayed if a tests fails. You can set this variable to control the streams to always output.
 #
-# :Default: ``1``
+# :Values: * ``3`` Redirect stdout, stderr, and xtrace
+#            ``2`` Redirect stderr, and xtrace, but let stdout through
+#            ``1`` Redirect xtrace, but let stdout and stderr through. On bash 4.0 and older, this will let xtrace through too
+#            ``0`` Let everything through
+#
+# :Default: ``3``
 #**
+
+: ${TESTLIB_REDIRECT_OUTPUT=3}
 
 #**
 # .. envvar:: TESTLIB_NO_PS4
 #
-# If set, will disable the custom PS4 output. Useful for some converage tools
+# If set, will disable the custom PS4 output. Useful for some coverage tools
 #
 # :Default: *unset*
 #**
@@ -266,7 +273,7 @@ _begin_common_test ()
   fi
   unset test_status
 
-  # Set flag defaults that could be overrideable in certain test types.
+  # Set flag defaults that could be overridable in certain test types.
   # This needs to be after end_test call above in order to keep end_test
   # optional
   expected_failure=${_expected_failure-0}
@@ -297,21 +304,43 @@ _begin_common_test ()
     skip_next_test
   fi
 
-  if [ "${TESTLIB_REDIRECT_OUTPUT-1}" != "0" ]; then
-    if [ "${BASH_VERSINFO[0]}" -gt "4" ] || [ "${BASH_VERSINFO[0]}" == "4" ] && [ "${BASH_VERSINFO[1]}" -ge "1" ]; then
-      exec {stdout}>&1
-      exec {stderr}>&2
-    else
+  if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "41" ]; then
+    case ${TESTLIB_REDIRECT_OUTPUT} in
+      3)
+        exec {stdout}>&1 {stderr}>&2
+        ;;
+      2)
+        exec {stderr}>&2
+        ;;
+    esac
+    xtrace="${TESTDIR}/xtrace"
+    if [ "${TESTLIB_REDIRECT_OUTPUT}" -ge "1" ]; then
+      exec {BASH_XTRACEFD}>"${xtrace}"
+    fi
+  else
+    if [ "${TESTLIB_REDIRECT_OUTPUT}" -ge "3" ]; then
       find_open_fd stdout
-      find_open_fd stderr
       eval "exec ${stdout}>&1"
+    fi
+    if [ "${TESTLIB_REDIRECT_OUTPUT}" -ge "2" ]; then
+      find_open_fd stderr
       eval "exec ${stderr}>&2"
     fi
-
-    out="${TESTDIR}/out"
-    err="${TESTDIR}/err"
-    exec 1>"$out" 2>"$err"
+    # Doesn't support BASH_XTRACEFD
+    xtrace="${TESTDIR}/err"
   fi
+
+  out="${TESTDIR}/out"
+  err="${TESTDIR}/err"
+
+  case "${TESTLIB_REDIRECT_OUTPUT}" in
+    3)
+      exec 1>"$out" 2>"$err"
+      ;;
+    2)
+      exec 2>"$err"
+      ;;
+  esac
 
   # Allow the subshell to exit non-zero without exiting this process
   set -x +e
@@ -429,9 +458,18 @@ end_test ()
 {
   test_status="${1:-$?}" # This MUST be the first line of this function
   set +x -e
-  # Tested, this apparently works on bash 3.2
-  if [ "${TESTLIB_REDIRECT_OUTPUT-1}" != "0" ]; then
-    exec 1>&${stdout} 2>&${stderr}
+  case "${TESTLIB_REDIRECT_OUTPUT}" in
+    3) # Tested, this apparently works on bash 3.2
+      exec 1>&${stdout} 2>&${stderr}
+      ;;
+    2)
+      exec 2>&${stderr}
+      ;;
+  esac
+  if [ "${TESTLIB_REDIRECT_OUTPUT}" -ge "1" -a "${xtrace}" != "${err}" ]; then
+    # if these are different files, close xtrace, should only be here in bash
+    # 4.1 or newer, so no need to waste time checking.
+    exec {BASH_XTRACEFD}>&-
   fi
   popd &> /dev/null
 
@@ -464,14 +502,29 @@ end_test ()
       printf "%-80s ${TEST_BAD_COLOR}FAILED${TEST_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
     fi
     (
-      echo "-- stdout --"
-      sed 's/^/    /' <"${TESTDIR}/out"
-      echo "-- stderr --"
-      grep -v -e $'^\+[^\t]*\tend_test' \
-              -e $'^\+[^\t]*\tset +x -e' <"${TESTDIR}/err" |
-        sed $'s|^[^+]| \t&|' |
-        column -c1 -s $'\t' -t |
-        sed 's/^/    /'
+      if [ "${TESTLIB_REDIRECT_OUTPUT}" -ge "1" ]; then
+
+        if [ "${err}" = "${xtrace}" ]; then
+          echo "-- stderr --"
+        else
+          echo "-- xtrace --"
+        fi
+        grep -v -e $'^\+[^\t]*\tend_test' \
+                -e $'^\+[^\t]*\tset +x -e' <"${xtrace}" |
+          sed $'s|^[^+]| \t&|' |
+          column -c1 -s $'\t' -t |
+          sed 's/^/    /'
+      fi
+      if [ "${TESTLIB_REDIRECT_OUTPUT}" -ge "2" ]; then
+        if [ "${err}" != "${xtrace}" ]; then
+          echo "-- stderr --"
+          sed 's/^/    /' <"${err}"
+        fi
+      fi
+      if [ "${TESTLIB_REDIRECT_OUTPUT}" -ge "3" ]; then
+        echo "-- stdout --"
+        sed 's/^/    /' <"${out}"
+      fi
       echo "-- EOF $test_description --"
     ) 1>&2
   fi

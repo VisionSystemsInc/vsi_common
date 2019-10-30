@@ -119,7 +119,7 @@ begin_test "docker_premkdir"
   [ -e "${TESTDIR}/premkfile" ]
 
   [ ! -d "${TESTDIR}/premkdir" ]
-  docker_premkdir "${TESTDIR}/premkdir"
+  docker_premkdir "${TESTDIR}/premkdir" 2>/dev/null
   [ -d "${TESTDIR}/premkdir" ]
 )
 end_test
@@ -185,10 +185,10 @@ begin_test "Sanitize Volumes"
   [ ! -e "${temp_dir}" ]
 
   if [ "${OS-notwindows}" = "Windows_NT" ]; then
-    [ "$(docker_sanitize_volume ${temp_dir})" = "$(cygpath -w "${temp_dir}"):/${temp_dir}" ]
+    [ "$(docker_sanitize_volume ${temp_dir} 2>/dev/null)" = "$(cygpath -w "${temp_dir}"):/${temp_dir}" ]
     [ "$(docker_sanitize_volume ${temp_dir} /foo)" = "$(cygpath -w "${temp_dir}")://foo" ]
   else
-    [ "$(docker_sanitize_volume ${temp_dir})" = "${temp_dir}:${temp_dir}" ]
+    [ "$(docker_sanitize_volume ${temp_dir} 2>/dev/null)" = "${temp_dir}:${temp_dir}" ]
     [ "$(docker_sanitize_volume ${temp_dir} /bar)" = "${temp_dir}:/bar" ]
   fi
 
@@ -262,7 +262,7 @@ begin_test "Test DOCKER_COMPOSE var"
   setup_test
   DRYRUN=echo
   DOCKER_COMPOSE="DoCkEr-CoMpOsE"
-  [ "$(Docker-compose run test)" = "DoCkEr-CoMpOsE run --rm test" ]
+  [ "$(JUSTFILE="${TESTDIR}/Justfile" Docker-compose run test)" = "DoCkEr-CoMpOsE run --rm test" ]
 )
 end_test
 
@@ -367,6 +367,8 @@ begin_test "Parse docker-compose args"
 (
   setup_test
 
+  export JUSTFILE="${TESTDIR}/Justfile"
+
   parse-docker-compose run test
 
   parse-docker-compose --no-ansi -H=blah.json --verbose run -v /foo:/bar debian bash
@@ -387,6 +389,11 @@ begin_test "Parse docker compose file args"
   unset COMPOSE_PROJECT_NAME
 
   touch docker-compose2.yml
+
+  # parse-docker-compose uses the location of the Justfile as the starting
+  # point for looking for docker-compose files to prevent "different results
+  # when running just from a different CWD"
+  export JUSTFILE="${TESTDIR}/Justfile"
 
   parse-docker-compose run alpine
   # No docker-compose
@@ -463,6 +470,8 @@ begin_test "Docker-compose command"
   setup_test
   export DRYRUN=print_command
 
+  export JUSTFILE="${TESTDIR}/Justfile"
+
   DOCKER_COMPOSE_AUTOREMOVE=0
   a=($DOCKER_COMPOSE run -v '/test  this/:blah' 'debian:9')
   r="$(Docker-compose run -v "/test  this/:blah" debian:9)"
@@ -475,6 +484,7 @@ begin_test "DOCKER_COMPOSE_AUTOREMOVE and DOCKER_COMPOSE_EXTRA_*_ARGS"
 (
   setup_test
   export DRYRUN=print_command
+  export JUSTFILE="${TESTDIR}/Justfile"
 
   a=("${DOCKER_COMPOSE}" run --rm -v '/test  this/:blah' 'debian')
   r="$(Docker-compose run -v "/test  this/:blah" debian)"
@@ -493,6 +503,7 @@ begin_test "DOCKER_COMPOSE_EXTRA_ARGS"
 (
   setup_test
   export DRYRUN=print_command
+  export JUSTFILE="${TESTDIR}/Justfile"
 
   DOCKER_COMPOSE_EXTRA_BUILD_ARGS=('aaa' 'bbb')
   DOCKER_COMPOSE_EXTRA_ARGS=(--config bl\ \ ah.json -l=debug -H 123)
@@ -561,7 +572,7 @@ begin_required_fail_test "Just docker compose required project prefix"
   unset JUST_PROJECT_PREFIX
   echo "${compose_file_hay}" > "${TESTDIR}/dc.yml"
   set -eu
-  Just-docker-compose -f "${TESTDIR}/dc.yml" run test_hay
+  Just-docker-compose -f "${TESTDIR}/dc.yml" run test_hay > /dev/null
 )
 end_test
 
