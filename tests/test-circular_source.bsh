@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+
+. "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
+
+VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+source "${VSI_COMMON_DIR}/linux/circular_source.bsh"
+source "${VSI_COMMON_DIR}/linux/time_tools.bsh"
+
+begin_test "Circular source"
+(
+  setup_test
+
+  echo "x+=.
+        source b
+        y+=." > a
+  echo "u+=.
+        source \"${VSI_COMMON_DIR}/linux/circular_source.bsh\"
+        circular_source a || return 0
+        v+=." > b
+
+  (
+    source a
+    [[ ${#x} == 2 ]] # a -> b -> a -> b -> stop
+    [[ ${#y} == 2 ]] # A doesn't have the circular once protection
+    [[ ${#u} == 2 ]]
+    [[ ${#v} == 1 ]] # b does
+  )
+  (
+    source b
+    [[ ${#x} == 1 ]] # b -> a -> a -> stop
+    [[ ${#y} == 1 ]] # Since b was the one sourced, a was only sourced once
+    [[ ${#u} == 2 ]] # a attempted to source b, but was stopped :D
+    [[ ${#v} == 1 ]]
+  )
+
+  echo "x+=.
+        source \"${VSI_COMMON_DIR}/linux/circular_source.bsh\"
+        circular_source b || return 0
+        y+=." > a
+
+  # Now both sides are protected
+  (
+    source a
+    [[ ${#x} == 2 ]] # a -> b -> a -> stop
+    [[ ${#y} == 1 ]]
+    [[ ${#u} == 1 ]]
+    [[ ${#v} == 1 ]]
+  )
+  (
+    source b
+    [[ ${#x} == 1 ]] # b -> a -> b -> stop
+    [[ ${#y} == 1 ]]
+    [[ ${#u} == 2 ]]
+    [[ ${#v} == 1 ]]
+  )
+)
+end_test
+
+begin_test "Circular_source with source_once"
+(
+  setup_test
+  # The interactive case is the same as above, so no need to test it.
+
+  echo "source \"${VSI_COMMON_DIR}/linux/source_once.bsh\"
+        source_once >& /dev/null && return 0
+        x+=.
+        source b
+        y+=." > a
+  echo "source \"${VSI_COMMON_DIR}/linux/source_once.bsh\"
+        source_once >& /dev/null && return 0
+        u+=.
+        source \"${VSI_COMMON_DIR}/linux/circular_source.bsh\"
+        circular_source a || return 0
+        v+=." > b
+
+  (
+    source a
+    [[ ${#x} == 1 ]] # a -> b -> stop
+    [[ ${#y} == 1 ]]
+    [[ ${#u} == 1 ]]
+    [[ ${#v} == 1 ]]
+  )
+  (
+    source b
+    [[ ${#x} == 1 ]] # b -> a -> stop
+    [[ ${#y} == 1 ]]
+    [[ ${#u} == 1 ]]
+    [[ ${#v} == 1 ]]
+  )
+)
+end_test
+
+begin_test "Looking for infinite source loops"
+(
+  setup_test
+  for x in "${VSI_COMMON_DIR}/linux/"*; do
+    case "${x}" in
+      # Only "library" files should be checked, all other programs and non-bash files should be added to this exception list
+      */example_just|*/just_diff|*/just_entrypoint.sh|*/just_env|*/new_just|*/Just_wrap|*.py|*.awk) ;;
+      *)
+        ( timeout 5 bash -c "source \"${x}\"" )
+        ;;
+    esac
+  done
+)
+end_test
