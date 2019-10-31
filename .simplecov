@@ -1,3 +1,4 @@
+#!/usr/bin/env false ruby
 require "simplecov"
 require "bashcov"
 
@@ -22,11 +23,11 @@ SimpleCov.start do
   end
 
   for version in ["3.2", "4.0", "4.1", "4.2", "4.3", "4.4", "5.0"]
-    if version > Bashcov::BASH_VERSION
+    if version < Bashcov::BASH_VERSION
       # No coverage flag for versions greater than current version
       nocov_token nocov_token + '\:|\:nocov_bash_'+version
     end
-    if version < Bashcov::BASH_VERSION
+    if version > Bashcov::BASH_VERSION
       # No coverage flag for versions less than current version
       nocov_token nocov_token + '\:|\:nocov_lt_bash_'+version
     end
