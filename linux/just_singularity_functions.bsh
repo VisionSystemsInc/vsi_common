@@ -9,28 +9,58 @@ source "${VSI_COMMON_DIR}/linux/just_container_override.bsh"
 source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
 source "${VSI_COMMON_DIR}/linux/singularity_functions.bsh"
 source "${VSI_COMMON_DIR}/linux/command_tools.bsh"
-source "${VSI_COMMON_DIR}/linux/isin"
+source "${VSI_COMMON_DIR}/linux/elements.bsh"
+
+#*# just/plugins/singularity/just_singularity_functions
+
+#**
+# ==============================
+# J.U.S.T. Singularity Functions
+# ==============================
+#
+# .. default-domain:: bash
+#
+# .. file:: just_singularity_functions.bsh
+#
+# .. function:: singular_defaultify
+#**
 
 function singular_defaultify()
 {
   arg=$1
   shift 1
   case $arg in
+    #**
+    # .. command:: singularity_import
+    #
+    # Converts a docker image to a singularity image, writing the image to the just directory.
+    #
+    # :Arguments: ... - Same as `docker2singularity <https://github.com/singularityhub/docker2singularity#usage>`_, mainly "docker image name"
+    # :Parameters: * ``SINGULARITY_CUSTOM_IMPORT_SCRIPT`` - Specifies custom script to use run (step 8.5). This is useful for customizing the image (like entrypoints) before it is converted to a file.
+    #              * ``SINGULARITY_DOCKER_SOCKET`` - An array to specify a custom docker socket to connect to docker. If SINGULARITY_DOCKER_SOCKET is not an array, it is converted to an array where whitespaces will be split. Default: ``(--mount source=/var/run/docker.sock,destination=/var/run/docker.sock,type=bind)``
+    #              * ``DOCKER2SINGULARITY_VERSION`` - Version of singularity to use docker2singularity. Default: 2.6 for increased compatibility.
+    #**
     singularity_import) # Export docker image "$1" to singularity. The rest of the arguments are passed on to \
                         # docker2singularity. Mount a custom script into /custom/tosingularity to be executed as \
                         # step 8.5.
       local custom_script
-      #**
-      # .. envvar:: SINGULARITY_CUSTOM_IMPORT_SCRIPT
-      #
-      # Specifies custom script to use run when calling ``just singularity import``. (step 8.5)
-      #**
+      local docker_socket
+      if declare -p SINGULARITY_DOCKER_SOCKET &> /dev/null; then
+        if is_array SINGULARITY_DOCKER_SOCKET; then
+          docker_socket=(${SINGULARITY_DOCKER_SOCKET[@]+"${SINGULARITY_DOCKER_SOCKET[@]}"})
+        else
+          docker_socket=(${SINGULARITY_DOCKER_SOCKET-})
+        fi
+      else
+        docker_socket=(--mount source=/var/run/docker.sock,destination=/var/run/docker.sock,type=bind)
+      fi
+
       if [ -n "${SINGULARITY_CUSTOM_IMPORT_SCRIPT+set}" ]; then
         custom_script=(--mount source="${SINGULARITY_CUSTOM_IMPORT_SCRIPT}",destination=/custom/tosingularity,type=bind,readonly=true)
       fi
 
       Docker run -it --rm --privileged --entrypoint= \
-          --mount source=/var/run/docker.sock,destination=/var/run/docker.sock,type=bind \
+          ${docker_socket[@]+"${docker_socket[@]}"} \
           --mount source="$(pwd)",destination=/output,type=bind \
           ${custom_script[@]+"${custom_script[@]}"} \
           quay.io/singularity/docker2singularity:${DOCKER2SINGULARITY_VERSION-v2.6} bash -c "
@@ -38,6 +68,15 @@ function singular_defaultify()
             /docker2singularity.sh \"\${@}\"" - "${@}"
       extra_args=$#
       ;;
+    #**
+    # .. command:: singularity_exec
+    # .. command:: singularity_instance-start
+    # .. command:: singularity_run
+    # .. command:: singularity_shell
+    # .. command:: singularity_test
+    #
+    # Starts a singularity container using :func:`Singularity`.
+    #**
     # singularity_run) # Run a singularity container
     # singularity_exec) # Exec a command with a singularity container
     # singularity_shell) # Run a singularity container shell
@@ -51,44 +90,65 @@ function singular_defaultify()
       # No quotes around cmd, to allow for spaces
       Singularity ${cmd} ${@+"${@}"}
       extra_args=$#
-
-      # local image_name="${1}"
-      # shift 1
-      # local i
-      # local env_file
-
-      # # Make a self deleting temp file
-      # make_temp_path env_file
-
-      # # Write out env patch file
-      # if [ -n "${SINGULARITY_ENV_VARS+set}" ]; then
-      #   for (( i=0; i+1<${#SINGULARITY_ENV_VARS[@]}; i+=2 )); do
-      #     singularity_env_echo "${SINGULARITY_ENV_VARS[${i}]}" "${SINGULARITY_ENV_VARS[${i}+1]}"
-      #   done
-      # fi
-
-      # # Generate binds
-      # local bind_args=()
-      # if [ -n "${SINGULARITY_VOLUMES+set}" ]; then
-      #   for (( i=0; i<${#SINGULARITY_VOLUMES[@]}; i++ )); do
-      #     bind_args+=(-B "${SINGULARITY_VOLUMES[${i}]}")
-      #   done
-      # fi
-
-      # function _env_echo(){ singularity_env_echo "${@}" }
-      # common_environment_override
-
-      # Singularity ${cmd} -e -c --nv \
-      #   ${bind_args+"${bind_args[@]}"} \
-      #   -B "${env_file}:/.singularity.d/env/91-just-env.sh:ro" \
-      #   -B "/tmp:/tmp:rw" \
-      #   ${image_name} ${@+"${@}"}
       ;;
-
-    ## singular-compose_run) # Run
-    ## singular-compose_config) # Prints configuration
-    ## singular-compose_config-null) # Prints configuration in null sepearated output
-    ## singular-compose_shell) # Shell
+    #**
+    # .. command:: singular-compose
+    #
+    # singular-compose take the equivalent place of ``docker-compose``, but for singularity. This does not use `singularity-compose <https://github.com/singularityhub/singularity-compose>`_, instead it is a much simpler and plainer bash version.
+    #
+    # :Arguments: [``-f {filename}``|``--file {filename}`` - Optionally specify one or more singular-compose files, and ignoring the default found ``singular-compose.env`` file.
+    #
+    # A singular-compose file (default ``singular-compose.env``) is written 100% in bash and gives you the freedom to do anything you need in it. It is designed to be sourced by :cmd:`singular-compose` and has few requirements.
+    #
+    # * ``instances`` - must be an array of names of instances. If an instance name is not included here, it will be ignored by :cmd:`singular-compose`. You should use the ``+=`` operator when setting instances, so that multiple files can work together
+    # * ``{instance_name}_image`` - The filename of the singularity image.
+    # * [``{instance_name}_volumes``] - An array of bind mounts that will have the ``-B`` flag added to them.
+    # * [``{instance_name}_environment``] - A paired array of key/value pairs of environment variables that will be set in the singularity container. Even indexes are keys, odd indexes are values (if contiguous).
+    # * [``{instance_name}_singular_flags``] - List of extra flags to be passed to the singularity subcommand.
+    #
+    # .. rubric:: Example ``singular-compose.env``
+    #
+    # .. code:: bash
+    #
+    #    instances+=(django mysql)
+    #
+    #    # I can even include other compose files
+    #    source "${DJANGO_SOURCE_DIR}/singular-compose2.env"
+    #
+    #    django_environment=(
+    #      TZ "${TZ}"
+    #      DISPLAY "${DISPLAY}"
+    #      JUSTFILE /src/docker/django.Justfile
+    #      JUST_SETTINGS /src/django.env
+    #    )
+    #    django_volumes=(
+    #      "${DJANGO_SOURCE_DIR}:${DJANGO_INSTALL_DIR_DOCKER}:ro"
+    #      "${VSI_COMMON_DIR}:/vsi:ro"
+    #    )
+    #    django_singular_flags=(-c -e --nv)
+    #    : ${django_image=${DJANGO_CWD}/django_${DJANGO_USERNAME}.simg}
+    #
+    #    # I can even just copy other arrays (like an anchor)
+    #    mysql_environment=("${django_environment[@]}")
+    #    # Add a data dir, but copy all but the first volume from django
+    #    mysql_volumes=(
+    #      "${DJANGO_SOURCE_DIR}/singular/data:/data:rw"
+    #      "${django_volumes[@]:1}"
+    #    )
+    #    mysql_singular_flags=("${django_singular_flags[@]}")
+    #    : ${mysql_image=${DJANGO_CWD}/mysql_${DJANGO_USERNAME}.simg}
+    #
+    # :cmd:`singular-compose` currently supports a few subcommands:
+    #
+    #  * ``run`` - ``singularity run`` your singular-compose instance using :func:`Singularity`.
+    #  * ``shell`` - ``singularity shell`` your singular-compose instance using :func:`Singularity`.
+    #  * ``exec`` - ``singularity exec`` your singular-compose instance using :func:`Singularity`.
+    #  * ``test`` - ``singularity test`` your singular-compose instance using :func:`Singularity`.
+    #  * ``instance start`` - ``singularity instance start`` your singular-compose instance using :func:`Singularity`.
+    #  * ``config`` - Prints out the configuration for a specific instance, using bash ``declare -p`` notation. This output can be sourced or eval'ed
+    #  * ``config-null`` - A binary version of ``config`` using :func:`null_dump`, more useful when sending the information to languages not bash.
+    #  * ``instance`` - Handles other ``singularity`` instance commands for instance management.
+    #**
     singular-compose) # Simple pure bash version of singularity-compose
       ########################################
       ### Parse singular-compose arguments ###
@@ -123,8 +183,8 @@ function singular_defaultify()
           shift 1
           extra_args+=1
 
-          local volumes environment flags
-          singularity_load_env "${instance}"
+          local singular_volumes singular_environment singular_flags
+          singular_load_env "${instance}"
 
           ###############################
           ### Setup _Singularity call ###
@@ -132,9 +192,9 @@ function singular_defaultify()
 
           # Generate binds
           local subcommand_args=()
-          if [ -n "${volumes+set}" ]; then
-            for (( i=0; i<${#volumes[@]}; i++ )); do
-              subcommand_args+=(-B "${volumes[${i}]}")
+          if [ -n "${singular_volumes+set}" ]; then
+            for (( i=0; i<${#singular_volumes[@]}; i++ )); do
+              subcommand_args+=(-B "${singular_volumes[${i}]}")
             done
           fi
 
@@ -146,8 +206,7 @@ function singular_defaultify()
           fi
 
           # Make Singularity call
-          indirect="${instance}_image"
-          subcommand_args+=(${flags[@]+"${flags[@]}"} "${!indirect}" ${@+"${@}"})
+          subcommand_args+=(${singular_flags[@]+"${singular_flags[@]}"} "${singular_image}" ${@+"${@}"})
           extra_args+=$#
 
           if [[ ${subcommand} == instance_start ]]; then
@@ -155,15 +214,15 @@ function singular_defaultify()
             subcommand_args=(start ${subcommand_args[@]+"${subcommand_args[@]}"})
           fi
 
-          # Check to see if the first element of environment is set, hence no [@]
-          if [ -n "${environment+set}" ]; then
+          # Check to see if the first element of singular_environment is set, hence no [@]
+          if [ -n "${singular_environment+set}" ]; then
             (
               ##########################
               ### Export Environment ###
               ##########################
-              for (( i=0; i+1<${#environment[@]}; i+=2 )); do
+              for (( i=0; i+1<${#singular_environment[@]}; i+=2 )); do
                 # https://github.com/sylabs/singularity/issues/3686
-                singularity_env_pass "${environment[${i}]}" "${environment[${i}+1]}"
+                singularity_env_pass "${singular_environment[${i}]}" "${singular_environment[${i}+1]}"
               done
               common_environment_override singularity_env_pass
 
@@ -178,27 +237,29 @@ function singular_defaultify()
           shift 1
           extra_args+=1
 
-          local volumes environment flags
-          singularity_load_env "${instance}"
+          local singular_volumes singular_environment singular_flags singular_image
+          singular_load_env "${instance}"
 
-          declare -p environment
-          declare -p volumes
-          declare -p flags
+          declare -p singular_environment
+          declare -p singular_volumes
+          declare -p singular_flags
+          declare -p singular_image
           ;;
         config-null)
           local instance="$1"
           shift 1
           extra_args+=1
 
-          local volumes environment flags
-          singularity_load_env "${instance}"
+          local singular_volumes singular_environment singular_flags
+          singular_load_env "${instance}"
 
 
-          null_dump environment environment volumes volumes flags flags
+          null_dump environment singular_environment volumes singular_volumes flags singular_flags image singular_image
           # Steps to parse
-          # 1) Split buy \0\0 (double null)
+          # 1) Split buy "\0^" (null+caret)
           # 2) Odds are "name"
-          # 3) Evens are null separated entries
+          # 3) Evens are "\0." (null+period) separated entries
+          # 4) Environmet are key(even entries starting at 0)/value(odd) pairs
           ;;
 
         instance)

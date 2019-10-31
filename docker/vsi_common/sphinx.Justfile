@@ -84,7 +84,7 @@ function caseify()
 
         sed -nE  ':block_start
                   # If the beginning pattern matched, start reading the block
-                  /^#\*\*/b read_block
+                  /^ *#\*\*/b read_block
                   # Else do not print, goes to next line
                   b noprint
                   :read_block

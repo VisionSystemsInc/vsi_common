@@ -21,7 +21,7 @@ source "${VSI_COMMON_DIR}/linux/elements.bsh"
 #
 # .. file:: singularity_functions.bsh
 #
-# Set of functions to make using singularitys easier
+# Set of functions to make using singularity easier
 #
 # .. envvar:: SINGULARITY
 #
@@ -77,20 +77,42 @@ function _Singularity()
   fi
 }
 
-
+#**
+# .. function:: singularity_env_pass
+#
+# Function that define the action needed to pass an environment variable to singularity. For singularity, exported environment variables that are prefixed with ``SINGULARITYENV_`` are passed to the singularity container, with the prefix stripped. This is more connivent than the first method of creating a temporary file, and mounting it into the singularity metadata ``env`` directory.
+#
+# :Arguments: ``$1`` - Name of environment variable (without prefix)
+#             ``$2`` - The desired value of the environment variable.
+#
+# .. seealso::
+#
+#    See :func:`common_environment_override`
+#        You can pass ``"singularity_env_pass"`` to :func:`common_environment_override` as an argument
+#**
 function singularity_env_pass()
 {
   export "SINGULARITYENV_${1}"="${2}"
 }
 
-# .. envvar: ${JUST_PROJECT_PREFIX}_SINGULAR_COMPOSE_FILES
-
-# :Inputs: ``$1`` - Instance name
-# :Parameters: [``JUST_SINGULAR_COMPOSE_DIR``] - By default, if ``${JUST_PROJECT_PREFIX}_SINGULAR_COMPOSE_FILES`` is unset, the singular-compose files will initially be searched for in the ``JUSTFILE`` directory, and then up the parent dirs until / is hit. However, if you wish to the disable this behavior and start searching for a singular-compose file from the current directory where "just" is called, then set this var to an empty string. You can also set to a specific directory to start searching from within that directory.
-# :Outputs: * volumes
-#           * flags
-#           * environment
-function singularity_load_env()
+#**
+# .. envvar:: ${JUST_PROJECT_PREFIX}_SINGULAR_COMPOSE_FILES
+#
+# An array storing the singular-compose files to be loaded by :func:`singular_load_env`, populated by :cmd:`singular-compose`
+#
+# .. function:: singular_load_env
+#
+# Loads the singular-compose variables into memory
+#
+# :Arguments: ``$1`` - Instance name
+# :Parameters: * [``${JUST_PROJECT_PREFIX}_SINGULAR_COMPOSE_FILES``] - Array storing the singular-compose files to be loaded. If empty, then see ``JUST_SINGULAR_COMPOSE_DIR``.
+#              * [``JUST_SINGULAR_COMPOSE_DIR``] - By default, if ``${JUST_PROJECT_PREFIX}_SINGULAR_COMPOSE_FILES`` is unset, the singular-compose files will initially be searched for in the ``JUSTFILE`` directory, and then up the parent dirs until / is hit. However, if you wish to the disable this behavior and start searching for a singular-compose file from the current directory where "just" is called, then set this var to an empty string. You can also set to a specific directory to start searching from within that directory.
+# :Outputs: * ``singular_volumes`` - The list of volumes to be bind mounted to the container
+#           * ``singular_flags`` - Extra flags that need to be passed to singularity to execute the container right
+#           * ``singular_environment`` - A key-value pair array of environment variables that need to be passed to the singularity container.
+#           * ``singular_image`` - The filename of the singularity image used.
+#**
+function singular_load_env()
 {
   local indirect="${JUST_PROJECT_PREFIX}_SINGULAR_COMPOSE_FILES"
 
@@ -125,12 +147,12 @@ function singularity_load_env()
   ### Handle volumes ###
   ######################
 
-  get_array_from_environment volumes "${JUST_PROJECT_PREFIX}" VOLUME "${instance_upper}"
+  get_array_from_environment singular_volumes "${JUST_PROJECT_PREFIX}" VOLUME "${instance_upper}"
   # Prepend volumes list from compose file
   indirect="${1}_volumes[@]"
-  volumes=(${!indirect+"${!indirect}"} ${volumes[@]+"${volumes[@]}"})
+  singular_volumes=(${!indirect+"${!indirect}"} ${singular_volumes[@]+"${singular_volumes[@]}"})
   local volume
-  for volume in ${volumes[@]+"${volumes[@]}"}; do
+  for volume in ${singular_volumes[@]+"${singular_volumes[@]}"}; do
     volume="${volume%%:*}"
     if [ ! -e "${volume}" ]; then
       echo "Auto creating directory: ${volume}" >&2
@@ -142,15 +164,15 @@ function singularity_load_env()
   ### Handle environment variables ###
   ####################################
 
-  get_array_from_environment environment "${JUST_PROJECT_PREFIX}" ENVIRONMENT "${instance_upper}"
+  get_array_from_environment singular_environment "${JUST_PROJECT_PREFIX}" ENVIRONMENT "${instance_upper}"
   indirect="${1}_environment[@]"
   # Prepent environment list with values from compose file.
-  local temp=(${!indirect+"${!indirect}"} ${environment[@]+"${environment[@]}"})
+  local temp=(${!indirect+"${!indirect}"} ${singular_environment[@]+"${singular_environment[@]}"})
   local -i i
   local s
-  environment=()
+  singular_environment=()
   # There are two possible syntaxes for environment variables. An array
-  # would have pairs of entried, that got key, value, key, value, etc.
+  # would have pairs of entries, that got key, value, key, value, etc.
   # However a non-array variable can only have one value, so it goes
   # "key[space]value". This means that an array can also be a list of
   # "key[space]value"s, but this wasn't the original intent, but will
@@ -160,10 +182,10 @@ function singularity_load_env()
   for (( i=0; i<${#temp[@]}; i++ )); do
     if [[ ${temp[$i]} == *\ * ]]; then
       # Split into two in environment array
-      environment+=("${temp[$i]%% *}" "${temp[$i]#* }")
+      singular_environment+=("${temp[$i]%% *}" "${temp[$i]#* }")
     else
       # Already split, just copy
-      environment+=("${temp[$i]}" "${temp[$i+1]}")
+      singular_environment+=("${temp[$i]}" "${temp[$i+1]}")
       i+=1
     fi
   done
@@ -173,5 +195,12 @@ function singularity_load_env()
   ##########################
 
   indirect="${1}_singularity_flags[@]"
-  flags=(${!indirect+"${!indirect}"})
+  singular_flags=(${!indirect+"${!indirect}"})
+
+  ####################
+  ### Handle image ###
+  ####################
+
+  indirect="${1}_image[@]"
+  singular_image=(${!indirect+"${!indirect}"})
 }
