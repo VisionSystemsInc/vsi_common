@@ -106,6 +106,17 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
 
       * This will only execute ``the_main_function_name`` when the script is being called, not sourced.
 
+  * **Circular imports**: While :func:`source_once` will prevent some circular source issues, this does not help in interactive mode. :func:`source_once` is disabled in interactive mode because is someone changes a file, and sources it again, they should expect to get those changes, not have it "sourced only once ever" (it is also disabled for cnf speed reasons). Circular dependencies are handled using the :func:`circular_source` function instead.
+
+    .. code:: bash
+
+       source something_normal.bsh
+       source "${VSI_COMMON_DIR}/linux/circular_source.bsh"
+       circular_source "${VSI_COMMON_DIR}/linux/docker_functions.bsh" || return 0
+
+    * ``|| return 0`` makes it so that the current file is sourced the first time in the infinite loop, and stops the loop the second go around. Otherwise it might actually get sourced a total of two times, which is not detrimental but may have undesired effects (especially for CLI's)
+
+
 Python
 ------
 

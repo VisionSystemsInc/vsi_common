@@ -104,7 +104,7 @@ function caseify()
                   # If a line starting with #
                   /^ *#/{
                     # Remove those extra spaced, #, and an optional space
-                    s/#+ ?//
+                    s/^ *#+ ?//
                     # print it
                     p
                   }
