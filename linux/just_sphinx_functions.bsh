@@ -5,6 +5,8 @@ fi
 JUST_DEFAULTIFY_FUNCTIONS+=(docs_defaultify)
 JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 
+source "${VSI_COMMON_DIR}/linux/command_tools.bsh"
+
 #*# just/plugins/just_sphinx_functions
 
 #**
@@ -218,15 +220,8 @@ function _sphinx_docker_compose()
 #
 # Compiles the sphinx documentation into html using ``sphinx-build`` via ``make``
 #
-
-# .. command:: --sphinx-nit
-#
-# Add ``-n`` to ``SPHINXOPTS`` for ``sphinx-build``. Must be before (not after) the :cmd:`sphinx_compile` target
-#
-
-# .. command:: --sphinx-all
-#
-# Adds ``-n`` and ``-E`` to ``SPHINXOPTS`` for ``sphinx-build``. This will force all files to be rebuilt. Must be before (not after) the :cmd:`sphinx_compile` target
+# :Arguments: * [``-n`` | ``--nit``] - Add ``-n`` to ``SPHINXOPTS`` for ``sphinx-build``
+#             * [``-E`` | ``--all``] - Adds ``-n`` and ``-E`` to ``SPHINXOPTS`` for ``sphinx-build``. This will force all files to be rebuilt
 #**
 function docs_defaultify()
 {
@@ -287,6 +282,18 @@ function docs_defaultify()
       justify sphinx compile bash
       ;;
     sphinx_compile) # Compile spinx documents
+      local nit_pick
+      local rebuild_all
+      parse_args extra_args -n nit_pick --nit nit_pick -E rebuild_all --all rebuild_all -- ${@+"${@}"}
+      shift "${extra_args}"
+
+      if [ "${nit_pick}" != "0" ]; then
+        export SPHINXOPTS="${SPHINXOPTS-} -n"
+      fi
+      if [ "${rebuild_all}" != "0" ]; then
+        export SPHINXOPTS="${SPHINXOPTS-} -E -a"
+      fi
+
       local JUST_TEMP_ARRAY
       set_array_default "${JUST_PROJECT_PREFIX}_SPHINX_EXCLUDE_DIRS" docs
       set_array_default "${JUST_PROJECT_PREFIX}_SPHINX_AUTODOC_EXCLUDE_DIRS" \*/tests
@@ -317,7 +324,7 @@ function docs_defaultify()
           -e DOCS_PRECOMPILE_SCRIPT=${precompile_script+"${precompile_script}"} \
           ${extra_sphinx_arguments[@]+"${extra_sphinx_arguments[@]}"} \
           sphinx ${@+"${@}"}
-      extra_args=$#
+      extra_args+=$#
       ;;
     sphinx_view) # Open a webbrowser to the sphinx docs. First argument must contain the docs build directory
       local html_file
@@ -343,13 +350,6 @@ function docs_defaultify()
           echo "${html_file}" >&2
         fi
       fi
-      ;;
-
-    --sphinx-nit) # Set nit picky when compiling sphinx docs
-      export SPHINXOPTS="${SPHINXOPTS-} -n"
-      ;;
-    --sphinx-all) # Set rebuild all when compiling sphinx docs
-      export SPHINXOPTS="${SPHINXOPTS-} -E -a"
       ;;
     *)
       plugin_not_found=1

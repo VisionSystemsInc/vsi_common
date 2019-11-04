@@ -15,6 +15,7 @@ VSI Common documentation
    windows/index
    tests/index
    python/modules
+   docker/recipes/index
    style.rst
 
 Indices and tables

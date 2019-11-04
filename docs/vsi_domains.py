@@ -230,11 +230,12 @@ def parse_bash(options, env, sig, signode, sigtype='unknown'):
   if sigtype in ['command', 'function', 'env', 'var'] and (functionname or filename):
 
     if sigtype in ['command']:
-      if functionname:
-        fullname = functionname + " " + fullname.replace('_', ' ')
-      # Filename is already prepended to funcitonname
-      elif filename:
-        fullname = filename + " " + fullname.replace('_', ' ')
+      # if functionname:
+      #   fullname = functionname + " " + fullname.replace('_', ' ')
+      # # Filename is already prepended to funcitonname
+      # elif filename:
+      #   fullname = filename + " " + fullname.replace('_', ' ')
+      fullname = "just " + fullname.replace('_', ' ')
       signode += addnodes.desc_addname(fullname , fullname)
     else:
       signode += addnodes.desc_name(fullname , fullname)
