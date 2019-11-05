@@ -34,5 +34,5 @@ SimpleCov.start do
   end
 end
 
-STDERR.puts SimpleCov.nocov_token
-STDERR.puts Bashcov::BASH_VERSION
+# STDERR.puts SimpleCov.nocov_token
+# STDERR.puts Bashcov::BASH_VERSION

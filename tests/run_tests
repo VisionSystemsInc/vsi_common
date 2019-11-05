@@ -1,0 +1,206 @@
+#!/usr/bin/env bash
+
+#*# tests/run_tests
+
+#**
+# =========
+# Run Tests
+# =========
+#
+# .. default-domain:: bash
+#
+# .. file:: run_tests
+#
+# :Arguments: [``$1``...] - Test scripts. Default: all test-\*\.bsh
+# :Output: *stdout* - List of tests as they pass. Stdout, stderr, and env of tests that fail.
+# :Author: Rick Olson
+# :Copyright: * Original version: (c) 2016 by GitHub <http://github.com>
+#             * License: MIT
+# :Modification History: Andy Neff - Simplified. Move to bsh file names
+#**
+
+set -eu
+
+: ${VSI_COMMON_DIR="$(\dirname "${BASH_SOURCE[0]}")/.."}
+source "${VSI_COMMON_DIR}/env.bsh"
+source "${VSI_COMMON_DIR}/linux/common_source.sh"
+source "${VSI_COMMON_DIR}/tests/test_colors.sh"
+source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/signal_tools.bsh"
+
+#**
+# .. envvar:: TESTLIB_VERBOSE_LOGS
+#
+# :Default: ``0``
+#
+# Adds additional verbose printouts
+#
+# Enables additional printouts when testing, such as:
+#   - Print environment if at least one test fails
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
+#   TESTLIB_VERBOSE_LOGS=1
+#**
+: ${TESTLIB_VERBOSE_LOGS=0}
+#**
+# .. envvar:: TESTLIB_PARALLEL
+#
+# :Default: ``$VSI_NUMBER_CORES``
+#
+# Number of test scripts to run in parallel
+#
+# While the tests inside of a script are all run serially, multiple test scripts are run in parallel.
+#
+# .. note::
+#   In certain complicated scenarios (either race conditions or just TMI), it is beneficial to set :envvar:`TESTLIB_PARALLEL` =1 just to simplify debugging
+#
+# .. note::
+#   Since ``darling`` is prone to panicking the kernel, if TESTLIB_PARALLEL is unset, it will be set to 4 by default.
+#**
+
+if [ "${VSI_DISTRO}" = "darling" ] && [ -z "${TESTLIB_PARALLEL+set}" ]; then
+  echo "${TESTLIB_WARN_COLOR}Warning${TESTLIB_RESET_COLOR}: TESTLIB_PARALLEL is unset on \"darling\"." \
+       "Setting to 4 to prevent kernel panic." >&2
+  TESTLIB_PARALLEL=4
+fi
+
+: ${TESTLIB_PARALLEL=${VSI_NUMBER_CORES}}
+
+#**
+# .. envvar:: TESTLIB_ARGS
+#
+# An array of test arguments that can be passed to every test call
+#
+# .. note::
+#   Currently not used by any test
+#**
+
+function run_all_tests_atexit()
+{
+  local rv=${1:-$?}
+
+  # Optional global teardown here
+
+  # Print any global logs here
+
+  if [ "$rv" != "0" ] && [ "$TESTLIB_VERBOSE_LOGS" == "1" ]; then
+    # Print any global verbose logs here
+
+    echo ""
+    echo "env:"
+    env
+  fi
+
+  local sum=(-1 -1 -1 -1 -1)
+  if ! is_dir_empty "${TESTLIB_SUMMARY_DIR}"; then
+    sum=($(awk '
+      {
+        for (i=1;i<=NF;i++) a[i]+=$i
+      }
+      END{
+      for (i=1;i<=NF;i++) printf a[i] " "
+      printf "\n"
+      }' "${TESTLIB_SUMMARY_DIR}"/*))
+  fi
+
+  # echo "       ____"
+  # echo "      / ___| _   _ _ __ ___  _ __ ___   __ _ _ __ _   _"
+  # echo "      \___ \| | | | '_ \` _ \| '_ \` _ \ / _\` | '__| | | |"
+  # echo "       ___) | |_| | | | | | | | | | | | (_| | |  | |_| |"
+  # echo "      |____/ \__,_|_| |_| |_|_| |_| |_|\__,_|_|   \__, |"
+  # echo "                                                  |___/"
+  echo
+
+  printf "${TESTLIB_GOOD_COLOR}Overall Summary${TESTLIB_RESET_COLOR}: %d tests, " ${sum[0]}
+
+  if [ "${sum[1]}" -eq 0 ]; then
+    echo -n "${TESTLIB_BOLD_COLOR}"
+  else
+    echo -n "${TESTLIB_BAD_COLOR}"
+  fi
+  printf "%d failures${TESTLIB_RESET_COLOR}, " ${sum[1]}
+  if [ "${sum[2]}" -ne 0 ]; then
+    echo -n "${TESTLIB_WARN_COLOR}"
+  else
+    echo -n "${TESTLIB_BOLD_COLOR}"
+  fi
+  printf "%d expected failures${TESTLIB_RESET_COLOR}, " ${sum[2]}
+
+  printf "%d required failures, and " ${sum[3]}
+  if [ "${sum[4]}" -eq 0 ]; then
+    echo -n "${TESTLIB_BOLD_COLOR}"
+  fi
+  printf "%d skipped${TESTLIB_RESET_COLOR}\n\n" ${sum[4]}
+
+  run_all_tests_cleanup
+
+  exit $rv
+}
+
+function run_all_tests_cleanup()
+{
+  rm -r "${TESTLIB_SUMMARY_DIR}"
+}
+
+function run_all_tests_setup_summary_dir()
+{
+  #**
+  # .. envvar:: TESTLIB_DISCOVERY_DIR
+  #
+  # :Default: Same directory as testlib.
+  #
+  # Directory where all the test-\*\.bsh files are stored.
+  #
+  # If relative path, it is relative to :file:`testlib.bsh`.
+  #**
+
+  export TESTLIB_SUMMARY_DIR="$(mktemp -d)"
+
+  trap_chain run_all_tests_atexit EXIT
+  trap_chain run_all_tests_cleanup INT
+  trap_chain run_all_tests_cleanup TERM
+  # Everything but kill -9 should cause a proper cleanup
+}
+
+function run_all_tests()
+{
+  run_all_tests_setup_summary_dir
+
+  cd "$(dirname "${BASH_SOURCE[0]}")"
+
+  # Optional global setup here?
+
+  # Test setup/initialization routine here
+  echo "Running at maxprocs=${TESTLIB_PARALLEL}"
+  echo
+
+  : ${TESTLIB_DISCOVERY_DIR=.}
+  # Get list of filenames
+  if [ $# -eq 0 ]; then
+    testfiles=("${TESTLIB_DISCOVERY_DIR}"/test-*.bsh)
+  else
+    for ((i=1; i<=$#; i++)); do
+      testfiles[i]="${TESTLIB_DISCOVERY_DIR}"/test-${!i}.bsh
+    done
+  fi
+
+  if [ "${TESTLIB_PARALLEL}" -lt 2 ]; then
+    for file in "${testfiles[@]}"; do
+      "${file}"
+    done
+  else
+    for file in "${testfiles[@]}"; do
+      # Time stats on each test file
+      # printf "time %s\0" "${file}"
+      printf "%s\0" "${file}"
+    done | sort -z | xargs -0 -I % -P $TESTLIB_PARALLEL -n 1 /usr/bin/env bash -c "%" -- ${TESTLIB_ARGS+"${TESTLIB_ARGS[@]}"}
+  fi
+}
+
+if [ "${BASH_SOURCE[0]}" = "${0}" ] || [ "$(basename "${BASH_SOURCE[0]}")" = "${0}" ]; then
+  run_all_tests "${@}"
+  exit $?
+fi

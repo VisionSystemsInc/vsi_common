@@ -6,6 +6,8 @@ JUST_DEFAULTIFY_FUNCTIONS+=(docs_defaultify)
 JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 
 source "${VSI_COMMON_DIR}/linux/command_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/elements.bsh"
+source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
 
 #*# just/plugins/just_sphinx_functions
 
@@ -89,9 +91,6 @@ source "${VSI_COMMON_DIR}/linux/command_tools.bsh"
 # In summary: This basic feature will allow you to embed rst with your source code to have code and documentation in one place.
 #**
 
-source "${VSI_COMMON_DIR}/linux/elements.bsh"
-source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
-
 function _docs_serialize_dirs()
 {
   local tmp="${1-}"
@@ -112,7 +111,7 @@ function _sphinx_docker_compose()
   DOCS_SOURCE_DIR="${src_dir}" \
       DOCS_DIR="${docs_dir}" \
       VSI_COMMON_UID="${uid}" \
-      VSI_COMMON_GID="${gid}" \
+      VSI_COMMON_GIDS="${gid}" \
       JUST_SETTINGS="${JUST_PATH_ESC}/src/$(basename "${JUST_SETTINGS}")" \
       Docker-compose \
          -f "${VSI_COMMON_DIR}/docker/vsi_common/docker-compose.yml" ${@+"${@}"}
@@ -221,7 +220,7 @@ function _sphinx_docker_compose()
 # Compiles the sphinx documentation into html using ``sphinx-build`` via ``make``
 #
 # :Arguments: * [``-n`` | ``--nit``] - Add ``-n`` to ``SPHINXOPTS`` for ``sphinx-build``
-#             * [``-E`` | ``--all``] - Adds ``-n`` and ``-E`` to ``SPHINXOPTS`` for ``sphinx-build``. This will force all files to be rebuilt
+#             * [``-E`` | ``--all``] - Adds ``-a`` and ``-E`` to ``SPHINXOPTS`` for ``sphinx-build``. This will force all files to be rebuilt
 #**
 function docs_defaultify()
 {
@@ -332,24 +331,7 @@ function docs_defaultify()
       if [ -z "${html_file-}" ]; then
         html_file=${docs_dir}
       fi
-      if [ "${OS-}" = "Windows_NT" ]; then
-        start "" "${html_file}"
-      else
-        local found=0
-        # "open" is for macos
-        browsers=(xdg-open google-chrome chromium-browser firefox open)
-        for browser in "${browsers[@]}"; do
-          if command -v "${browser}" &> /dev/null; then
-            "${browser}" "${html_file}"
-            found=1
-            break
-          fi
-        done
-        if [ "${found}" = "0" ]; then
-          echo "No webbrowser found. Open:" >&2
-          echo "${html_file}" >&2
-        fi
-      fi
+      open_web_browser "${html_file}"
       ;;
     *)
       plugin_not_found=1

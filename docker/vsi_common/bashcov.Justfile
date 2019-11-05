@@ -1,81 +1,55 @@
 #!/usr/bin/env false bash
 
 source "${VSI_COMMON_DIR}/linux/isin"
-
+source "${VSI_COMMON_DIR}/tests/run_tests"
 
 function caseify()
 {
   local cmd="${1}"
   shift 1
+
+  : ${TESTLIB_PARALLEL=$(nproc)}
+  export TESTLIB_NO_PS4=1
+  export TESTLIB_REDIRECT_OUTPUT=0
+
   case "${cmd}" in
     bashcov) # Run bashcov
+      run_all_tests_setup_summary_dir
       pushd /src &> /dev/null
-        TESTLIB_NO_PS4=1 TESTS_PARALLEL=1 TESTLIB_REDIRECT_OUTPUT=0 bashcov --root /src ${@+"${@}"}
+        bashcov --root /src ${@+"${@}"}
         extra_args=$#
       popd &> /dev/null
       ;;
     multiple) # Run multiple commands through bashcov
+      run_all_tests_setup_summary_dir
       pushd /src &> /dev/null
         extra_args=$#
         while (( $# )); do
-          TESTLIB_NO_PS4=1 TESTS_PARALLEL=1 TESTLIB_REDIRECT_OUTPUT=0 bashcov --root /src "${1}"
+          printf '%s\0' "${1}"
           shift 1
-        done
+        done | sort -z | xargs -0 -I % -P $TESTLIB_PARALLEL bashcov --root /src %
       popd &> /dev/null
       ;;
     resume) # Resume running bashcov multiple, skipping already run.
       local bash="$(which bash)"
-      local files
+      local files=()
 
       pushd /src &> /dev/null
-        IFS='' readarray -t -d $'\n' files < <(
-          jq -r 'keys | .[]' /src/coverage/.resultset.json | \
-          sed "s|${bash} ||")
-
-        # IFS='' readarray -d '' files < <(
-        #   jq -M keys /src/coverage/.resultset.json | \
-        #   sed -nE '
-        #     # Unlike the standard "load entire file into the pattern buffer", this
-        #     # will load the entire file into the hold buffer, except the first and last line
-        #     # Remove first line, it is just a [
-        #     1d
-        #     # Replace the hold buffer with line two (because it starts off containing a newline)
-        #     # and then delete the line from the pattern buffer, only because that ends execution
-        #     # and goes onto the next line.
-        #     2{h;d}
-
-        #     :combine
-        #     # If this is the last line, goto done. This means the last line is not added to the hold buffer
-        #     $bdone
-        #     # Else append the line to the hold buffer
-        #     H
-        #     # read the next line
-        #     n
-        #     # Continue iterating
-        #     bcombine
-        #     :done
-        #     x
-
-        #     # Remove the last " at the end of the last filename
-        #     s|"$||
-        #     # Remove the first "bash_patch{space}
-        #     s|^  "'"${bash}"' ||
-        #     #convert the rest of the ", "bash_path to null, resulting in null separated strings
-        #     s|",\n  "'"${bash}"' |\x00|g
-        #     p' | \
-        #     # https://stackoverflow.com/a/1654042/4166604
-        #     perl -pe 'chomp if eof')
+        if [ -r /src/coverage/.resultset.json ]; then
+          IFS='' readarray -t -d $'\n' files < <(
+            jq -r 'keys | .[]' /src/coverage/.resultset.json | \
+            sed "s|${bash} ||")
+        fi
 
         extra_args=$#
         while (( $# )); do
           if isin "${1}" ${files[@]+"${files[@]}"}; then
             echo "Skipping ${1}..." >&2
-            shift 1
-            continue
+          else
+            printf '%s\0' "${1}"
           fi
-          TESTLIB_NO_PS4=1 TESTS_PARALLEL=1 TESTLIB_REDIRECT_OUTPUT=0 bashcov --root /src "${1}"
           shift 1
-        done
+        done | sort -z | xargs -0 -I % -P $TESTLIB_PARALLEL bashcov --root /src %
       popd &> /dev/null
       ;;
     *) # Run command in pipenv
