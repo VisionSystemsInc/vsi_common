@@ -95,7 +95,7 @@ autodoc_mock_imports = ["pyopencl", "vtk", "numpy", "matplotlib",
                         "rpdb", "rpdb2", "PIL", "skimage", "mpl_toolkits",
                         "scipy", "IPython",
                         "brl_init", "boxm2_adaptor", "boxm2_scene_adaptor",
-                        "vpgl_adaptor_boxm2_batch"]
+                        "vpgl_adaptor_boxm2_batch", "yaml"]
 
 
 # Remove warnings due to a bug in the Python docs with nitpick_ignore

@@ -106,7 +106,7 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
 
       * This will only execute ``the_main_function_name`` when the script is being called, not sourced.
 
-  * **Circular imports**: While :func:`source_once` will prevent some circular source issues, this does not help in interactive mode. :func:`source_once` is disabled in interactive mode because is someone changes a file, and sources it again, they should expect to get those changes, not have it "sourced only once ever" (it is also disabled for cnf speed reasons). Circular dependencies are handled using the :func:`circular_source` function instead.
+  * **Circular imports**: While :bash:func:`source_once.bsh source_once` will prevent some circular source issues, this does not help in interactive mode. :bash:func:`source_once.bsh source_once` is disabled in interactive mode because is someone changes a file, and sources it again, they should expect to get those changes, not have it "sourced only once ever" (it is also disabled for cnf speed reasons). Circular dependencies are handled using the :bash:func:`circular_source.bsh circular_source` function instead.
 
     .. code:: bash
 
