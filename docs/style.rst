@@ -122,7 +122,7 @@ Python
 ------
 
 * We use pep8, except two spaces per indent
-* (Not yet implemented) Coverage: pycoverage is used to create a coverage report. A line or branch of code can be excluded by adding a comment that includes ``pragma: no cover``. An os specific pragma can be added, such as ``pragma: nt cover`` for only on Windows, or ``pragma: linux cover`` for only on mac and linux.
+* (Not yet implemented) Coverage: pycoverage is used to create a coverage report. A line or branch of code can be excluded by adding a comment that includes ``pragma: no cover``. An os specific pragma can be added, such as ``pragma: no linux cover`` for only on Windows, or ``pragma: no nt cover`` for only on mac and linux.
 
 J.U.S.T. Plugins
 ----------------
