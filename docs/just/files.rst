@@ -12,7 +12,13 @@ Justfile
 
 .. file:: Justfile
 
-Your :file:`Justfile` is the main file sourced by just that defines a just project. The primary purpose of the Justfile is to define the function ``caseify``. ``caseify`` should try to match the first argument (``$1``) and keep count of the number of additional arguments used and stored the tally in ``extra_args``.
+Your :file:`Justfile` is the main file sourced by just that defines a just project. The primary purpose of the Justfile is to define the function :func:`caseify`.
+
+.. function:: caseify
+
+:func:`caseify` is a user defined function that parses and handle one call (:ref:`just` will handle multiple calls by calling caseify multiple times for you, so you must not use a while loop and try to parse multiple calls). This should be done using a ``case`` statement, or else the :cmd:`just help` parsing will not identify targets correctly. If you choose not to use a ``case`` statement, comments in the form of ``# target) # Help text here`` can still be utilized to satisfy :cmd:`just help`'s parsing.
+
+:func:`caseify` should try to match the first argument (``$1``) and keep count of the number of additional arguments used and stored the tally in ``extra_args``.
 
 .. rubric:: Example
 
@@ -199,7 +205,7 @@ Chaining a multiple Justfiles
 Chaining a multiple Justfiles (usually using a submodule)
 
 
-The main function in just is :func:`caseify`, and there can only be one. The current solution to this is to make the main repo contain the :func:`caseify` function, and treat the submodule as a :ref:`just plugin <just-plugins>`.
+The main function in just is :func:`Justfile caseify`, and there can only be one. The current solution to this is to make the main repo contain the :func:`Justfile caseify` function, and treat the submodule as a :ref:`just plugin <just-plugins>`.
 
 .. code-block:: bash
    :caption: Submodule Justfile
@@ -241,6 +247,6 @@ The main function in just is :func:`caseify`, and there can only be one. The cur
      return 0
    }
 
-As you can see, the only thing that differentiates this from a plugin is a special if statement that will define :func:`caseify` when it's not already defined.
+As you can see, the only thing that differentiates this from a plugin is a special if statement that will define :func:`Justfile caseify` when it's not already defined.
 
 
