@@ -8,10 +8,11 @@ J.U.S.T. Useful Simple Tasking
    :caption: Contents:
 
    installation
+   quickstart_user
    quickstart
+   just.auto
    files
    just-tab.auto
-   just.auto
    just_common.auto
    just_env.auto
    just_functions.auto

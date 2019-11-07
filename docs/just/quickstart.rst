@@ -1,6 +1,6 @@
-#############################
-Getting started with ``just``
-#############################
+########################################
+Getting started developing with ``just``
+########################################
 
 To set up a project for ``just``, run the ``just`` wizard
 
