@@ -111,7 +111,7 @@ function get_array_from_environment()
 #
 # Original command can be thought of as:
 #
-# .. code::
+# .. code-block::
 #
 #     some_command "${command_args[@]}" "${subcommand}" "${subcommand_args[@]}"
 #**
@@ -153,7 +153,7 @@ function parse-generic()
 #
 # .. rubric:: Example
 #
-# .. code:: bash
+# .. code-block:: bash
 #
 #    cmd=(${DRYRUN} foobar)
 #    CMD_ARGS=(--quiet --config "/tmp/foo bar.xml")
@@ -175,7 +175,7 @@ function parse-generic()
 #**
 function compose_arguments()
 {
-  # Add the [@] here, which vastly simplifies the code without rish of name collisions
+  # Add the [@] here, which vastly simplifies the code without risk of name collisions
   _compose_arguments ${1+"${1}[@]"} ${2+"${2}[@]"}
 }
 
@@ -194,12 +194,12 @@ function _compose_arguments()
 #
 # :Arguments: * ``$1`` - Name of variable to store how many arguments were parsed
 #             * ``$2`` - Option string, like ``-o`` or ``--output``
-#             * ``$3`` - The name of the variable that will store the result of the arument if used. Can be prefixed with ``+`` for an array, and postfixed with a ``:`` for "has an argument
+#             * ``$3`` - The name of the variable that will store the result of the argument if used. Can be prefixed with ``+`` for an array, and postfixed with a ``:`` for "has an argument
 #             * [ ``$4...$N`` ] - Repeat ``$2`` and ``$3``
-#             * ``$N+1`` - Must be ``--`` to deliniate the actual arguments are being passed in next
+#             * ``$N+1`` - Must be ``--`` to delineate the actual arguments are being passed in next
 #             * [``$N+2...``] - The argument to parse
 # :Outputs: * ``$!1`` - Store how many arguments are parsed after the ``--``, in the variable name specified in ``$1``
-#           * ``$3,$5,...`` - Stores the values in the corresponding arrays
+#           * ``$3,$5,...`` - Stores the values in the corresponding variables/arrays
 #
 # A simple argument parser, supporting some of the options that getopts supports
 #
@@ -207,9 +207,37 @@ function _compose_arguments()
 # #. Can support any arguments option, even if they do not start with ``-``, but that is ill advised
 # #. Does not support combining multiple one letter arguments into one argument
 # #. Supports the ``:`` postfix notation for "has an argument", add it to the storage name, not the option string
-# #. Does not support the ``::`` noatation for "maybe has an argument"
+# #. Does not support the ``::`` notation for "maybe has an argument"
 # #. Supports a ``+`` prefix notation on the storage variable name meaning the storage is an array, and values are appended to it.
-# #. If options to not have an argument, then they are set to 0 if unset, and 1 if set
+# #. If options do not have an argument, then they are set to 0 if unset, and +1 for each time it is set
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#    :caption: Here are two examples of using parse_args
+#
+#    local nit_pick
+#    local rebuild_all
+#    parse_args extra_args -n nit_pick --nit nit_pick -E rebuild_all --all rebuild_all -- ${@+"${@}"}
+#    shift "${extra_args}"
+#    if [ "${nit_pick}" != "0" ]; then
+#      export SPHINXOPTS="${SPHINXOPTS-} -n"
+#    fi
+#    if [ "${rebuild_all}" != "0" ]; then
+#      export SPHINXOPTS="${SPHINXOPTS-} -E -a"
+#    fi
+#
+#    # Sometimes you just need to add to extra_args because you already used it
+#    local compose_files=()
+#    local args_parsed
+#    parse_args args_parsed -f +compose_files: --file +compose_files: -- ${@+"${@}"}
+#    extra_args+="${args_parsed}"
+#    shift "${args_parsed}"
+#    ### Handle parsed arguments ###
+#    if [ "${#compose_files[@]}" != "0" ]; then
+#      local "${JUST_PROJECT_PREFIX}_SINGULAR_COMPOSE_FILES"
+#      dynamic_set_a "${JUST_PROJECT_PREFIX}_SINGULAR_COMPOSE_FILES" "${compose_files[@]}"
+#    fi
 #
 # .. note:
 #
@@ -302,4 +330,35 @@ function parse_args()
   done
 
   dynamic_set "${__parse_args_used_arguments}" $(( ${!__parse_args_used_arguments} - $# ))
+}
+
+#**
+# .. function:: open_web_browser
+#
+# Opens a file/link with a web browser
+#
+# :Arguments: ``$1`` - The filename/link to be opened
+#
+# On windows, uses the associated web browser. First tried the associated Linux web browser, ``google-chrome``, ``chromium-browser``, ``firefox``, then the associated macos web browser.
+#**
+function open_web_browser()
+{
+  if [ "${OS-}" = "Windows_NT" ]; then
+    start "" "${1}"
+  else
+    local found=0
+    # "open" is for macos
+    browsers=(xdg-open google-chrome chromium-browser firefox open)
+    for browser in "${browsers[@]}"; do
+      if command -v "${browser}" &> /dev/null; then
+        "${browser}" "${1}"
+        found=1
+        break
+      fi
+    done
+    if [ "${found}" = "0" ]; then
+      echo "No webbrowser found. Open:" >&2
+      echo "${1}" >&2
+    fi
+  fi
 }

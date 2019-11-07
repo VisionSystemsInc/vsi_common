@@ -62,17 +62,34 @@ function real_path_manual()
   fi
 }
 
-if [ "${BASH_SOURCE[0]}" = "${0}" ] || [ "$(basename "${BASH_SOURCE[0]}")" = "${0}" ]; then
-  if ! cmd=$(command -v realpath); then
-    cmd="readlink -f"
-    if ! ${cmd} / > /dev/null 2>&1; then
-      # Probably Darwin. Thanks Darwin! > : (
-      for x in "${@}"; do
-        real_path_manual "${x}"
-      done
-      exit 0
-    fi
-  fi
+#**
+# .. function:: real_path
+#
+# Helper function to either call ``realpath``, ``readlink -f`` or ``real_path_manual`` depending on what is available.
+#**
+# :nocov: No real point in cov reporting this
+#         although testing to the best of ability is still ok
+if command -v realpath > /dev/null 2>&1; then
+  function real_path()
+  {
+    realpath ${@+"${@}"}
+  }
+elif readlink -f / > /dev/null 2>&1; then
+  function real_path()
+  {
+    readlink -f ${@+"${@}"}
+  }
+else
+  function real_path()
+  {
+    # Probably Darwin. Thanks Darwin! > : (
+    for x in "${@}"; do
+      real_path_manual "${x}"
+    done
+  }
+fi
+# :nocov:
 
-  exec $cmd "${@}"
+if [ "${BASH_SOURCE[0]}" = "${0}" ] || [ "$(basename "${BASH_SOURCE[0]}")" = "${0}" ]; then
+  real_path "${@}"
 fi

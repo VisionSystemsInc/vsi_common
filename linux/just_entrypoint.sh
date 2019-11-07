@@ -47,7 +47,7 @@ set -eu
 #
 # If you have your own entrypoint point you want to daisy-chain with the just entrypoint, changing the ``ENTRYPOINT`` field in the docker file will allow this
 #
-# .. code:: dockerfile
+# .. code-block:: dockerfile
 #
 #    ENTRYPOINT ["/usr/local/bin/tini", "--", "/usr/bin/env",
 #                "bash", "/vsi/linux/just_entrypoint.sh",

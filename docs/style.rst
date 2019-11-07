@@ -106,10 +106,23 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
 
       * This will only execute ``the_main_function_name`` when the script is being called, not sourced.
 
+  * **Circular imports**: While :bash:func:`source_once.bsh source_once` will prevent some circular source issues, this does not help in interactive mode. :bash:func:`source_once.bsh source_once` is disabled in interactive mode because is someone changes a file, and sources it again, they should expect to get those changes, not have it "sourced only once ever" (it is also disabled for cnf speed reasons). Circular dependencies are handled using the :bash:func:`circular_source.bsh circular_source` function instead.
+
+    .. code:: bash
+
+       source something_normal.bsh
+       source "${VSI_COMMON_DIR}/linux/circular_source.bsh"
+       circular_source "${VSI_COMMON_DIR}/linux/docker_functions.bsh" || return 0
+
+    * ``|| return 0`` makes it so that the current file is sourced the first time in the infinite loop, and stops the loop the second go around. Otherwise it might actually get sourced a total of two times, which is not detrimental but may have undesired effects (especially for CLI's)
+
+* Coverage: bashcov can be used to create a coverage report. In order to designation a section of code as "no coverage", use ``# :nocov:`` before and after the code you want to not be reported on. There are additional flags for that can be excluded on macos (``:nocov_mac:``), Linux (``:nocov_linux:``), and Windows (``:nocov_nt:``). You can also designate an area to not be covered based on the version of bash: ``:nocov_bash_4.1:`` for no coverage on bash 4.1 and newer, or ``:nocov_lt_bash_4.4`` for no coverage on bash 4.4 and older. Multiple flags may be combined, where ``:nocov_nt: :nocov_bash_4.0:`` means no coverage on windows OR bash 4.0 or newer.
+
 Python
 ------
 
 * We use pep8, except two spaces per indent
+* (Not yet implemented) Coverage: pycoverage is used to create a coverage report. A line or branch of code can be excluded by adding a comment that includes ``pragma: no cover``. An os specific pragma can be added, such as ``pragma: nt cover`` for only on Windows, or ``pragma: linux cover`` for only on mac and linux.
 
 J.U.S.T. Plugins
 ----------------

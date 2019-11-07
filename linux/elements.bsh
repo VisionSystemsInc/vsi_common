@@ -104,7 +104,7 @@ if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "44" ]; then
 else
   function dynamic_set()
   {
-    # backwards compat fairly slow method, but faster than using declare -p (20.0!)
+    # backwards compatibility fairly slow method, but faster than using declare -p (20.0!)
     # compgen (0.779) and will auto handle export vs no export, so just use read
     IFS='' read -r -d '' "${1}" < <(printf '%s' "${2-}") || : #0.739
   }
@@ -178,10 +178,16 @@ function remove_element_a()
     # We have to check ${1}[@] here, because there is a change the first
     # element of the array is not set, but the rest of the array is.
     local __x="${1}[@]"
-    # Do not use -n here, because "${blah[@]+set}" expands to ZERO arguments,
-    # not one empty one, thus making the final test "test -n -n" which is true
-    # So = "set" is the right way to do this when [@] is involved
-    if [ "${!__x+is_set}" = "is_set" ]; then
+    # The extra "" are important here. Do not remove them, because
+    # "${blah[@]+set}" expands to ZERO arguments, not one empty one, thus
+    # making the final test "test -n -n" which is true. The same is true
+    # if we did == "set", the first argument would be missing and result in
+    # an error, that technically works in our favor, but is messy. This way is
+    # the cleanest I can find.
+    # Update: Apparently on bash 3.2 """${!__x+set}" results in NOTHING when
+    # not expanded, ignoring the initial quotes?! So I have to so " " and do a
+    # == test, instead of the normal -n test
+    if [ " ""${!__x+set}" = " set" ]; then
       __x=( ${!__x} )
     else # If it's empty/does not exist, there is nothing to remove
       return 0
@@ -206,7 +212,7 @@ function remove_element_a()
 #
 # :Arguments: * ``$1`` - Name of string to be set
 #             * ``$2`` - String to be removed
-# :Paramters: [``IFS``] - IFS Separator used
+# :Parameters: [``IFS``] - IFS Separator used
 #
 # String version of remove_element_a
 #**
@@ -219,7 +225,7 @@ function remove_element()
     __x=${y+"${y[*]}"}
   else
     local __x=(${!1-})
-    # Use already existing funtion
+    # Use already existing function
     remove_element_a __x "${2}"
     dynamic_set "${1}" ${__x+"${__x[*]}"}
   fi
@@ -364,7 +370,7 @@ function add_element_pre ()
 #**
 function cmp_elements_a()
 {
-  # # Handle the trivial case. This isn't neccessary since as it happens using
+  # # Handle the trivial case. This isn't necessary since as it happens using
   # # "__x __x" or "__y __y" yields the correct answer, this just bypasses that
   # if [ "${1}" = "${2}" ]; then
   #   return 0
@@ -414,7 +420,7 @@ function _cmp_elements_a()
 #**
 function cmp_elements()
 {
-  # Handle the trivial case. This is neccessary unlike the array version,
+  # Handle the trivial case. This is necessary unlike the array version,
   # because x/y are strings, not arrays, and the logic breaks down
   if [ "${1}" = "${2}" ]; then
     return 0
@@ -624,7 +630,7 @@ fi
 #
 # .. rubric:: Bugs
 #
-# .. code:: bash
+# .. code-block:: bash
 #
 #    $ x='"f\o\\o" f\o\\o '\''f\o\\o'\'
 #    $ eval "y=(${x})"
@@ -653,12 +659,10 @@ function to_array()
 
     local -i __i=0
     while IFS='' read -r -d '' __y || [[ -n "${__y}" ]]; do
-      declare -p __y
       __y="${__y//^^n/$'\n'}"
       __y="${__y//\\^/^}"
-      declare -p __y
 
-      # %s is important, so that printf doesn't try to replace special chracters
+      # %s is important, so that printf doesn't try to replace special characters
       IFS='' read -r -d "" "${1}[$__i]" < <(printf '%s' "${__y}") || :
       __i+=1
     done < <(xargs -n 1 printf '%s\0' <<< "${__x}")
@@ -674,7 +678,7 @@ function to_array()
 # Echoes out the length of the array. If the variable is not defined, echos -1.
 #
 # .. note::
-#   Does not differentiate between an array of legnth 1 and a non-array variable. Use :func:`is_array` for that
+#   Does not differentiate between an array of length 1 and a non-array variable. Use :func:`is_array` for that
 #**
 function array_length()
 {
@@ -779,7 +783,7 @@ function _subtract_array()
       fi
     done
 
-    # If you get to this point in the outter loop, then the inner loop never
+    # If you get to this point in the outer loop, then the inner loop never
     # found a match, meaning it's a keeper!
     __output+=("${__i}")
   done

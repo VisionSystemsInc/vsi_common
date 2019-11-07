@@ -12,12 +12,15 @@ ENV WORKON_HOME=/venv \
     PIPENV_CACHE_DIR=/venv/cache \
     PYENV_SHELL=/bin/bash \
     LC_ALL=C.UTF-8 \
-    LANG=C.UTF-8
+    LANG=C.UTF-8 \
+    JUSTFILE=/vsi/docker/vsi_common/sphinx.Justfile
 
 COPY --from=pipenv /tmp/pipenv /tmp/pipenv
 RUN /tmp/pipenv/get-pipenv; rm -rf /tmp/pipenv || :
 
-ADD sphinx.Pipfile sphinx.Pipfile.lock sphinx.Justfile /vsi/docker/vsi_common/
+# I need these Pipfiles before the rest of VSI below. This way the cache is only
+# invalidated by the Pipfiles, not the rest of vsi_common
+ADD sphinx.Pipfile sphinx.Pipfile.lock /vsi/docker/vsi_common/
 
 RUN pipenv sync; \
     # Hack for vsi_domain
