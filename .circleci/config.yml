@@ -1,18 +1,34 @@
-version: 2
-jobs:
-  build:
+version: 2.1
+
+# -----
+# generic yaml anchors (reusable by multiple projects)
+# -----
+x-stuff:
+  # container configuration & update
+  container_config: &container_config
+    working_directory: ~/repo
+    shell: /bin/bash -eu
     docker:
       - image: vsiri/circleci:bash-compose-lfs
-    working_directory: ~/repo
 
+commands:
+  submodule_checkout:
+    description: Checks out submodules
     steps:
-      - checkout
       - run:
           name: Checkout submodules
           command: |
             git submodule sync
             git submodule update --recursive --init
 
+
+jobs:
+  run_tests:
+    <<: *container_config
+
+    steps:
+      - checkout
+      - submodule_checkout
       - setup_remote_docker
 
       - run:
@@ -38,3 +54,60 @@ jobs:
           command: |
             . setup.env
             just test int
+
+  compile_docs:
+    <<: *container_config
+    steps:
+      - checkout
+      - submodule_checkout
+      - setup_remote_docker
+      - run:
+          name: Generate docs
+          command: |
+            . setup.env
+            tar c . | docker run -i --rm -v /root/repo:/src -w /src alpine:3.8 tar x
+            just sphinx build compile
+            docker run --rm -v /root/repo:/src -w /src alpine:3.8 tar c ./docs/_build/html | tar x
+
+      - persist_to_workspace:
+          root: docs/_build
+          paths: html
+
+
+  deploy_docs:
+    <<: *container_config
+    steps:
+      - checkout
+      - attach_workspace:
+          at: /docs
+      - run:
+          name: Checkout gh-pages and update
+          command: |
+            git checkout gh-pages || git checkout --orphan gh-pages
+            find . -maxdepth 1 -path ./.git -prune -o -name . -o  -exec rm -rf {} +
+            mv /docs/html/* ./
+            touch .nojekyll
+
+            git add --all
+            git config --global user.email "circleci@cirleci.com" > /dev/null 2>&1
+            git config --global user.name "CircleCI" > /dev/null 2>&1
+            git commit -m "Autobuild documentation [ci skip]"
+            git remote set-url origin "https://${GH_NAME}:${GH_TOKEN}@github.com/${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}.git"
+            git push origin gh-pages
+
+
+# -----
+# CircleCI workflows
+# -----
+workflows:
+  vsi_common:
+    jobs:
+      - run_tests
+      - compile_docs
+      - deploy_docs:
+          requires:
+            - compile_docs
+          filters:
+            branches:
+              only:
+                - master
