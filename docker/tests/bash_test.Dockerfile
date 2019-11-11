@@ -22,7 +22,8 @@ RUN apk add --no-cache \
       # for better realpath, and id that supports -z
       coreutils \
       # For tests like time-tools/timeout
-      perl
+      perl; \
+    command -v xxd || apk add --no-cache vim
 
 ENV JUSTFILE=/vsi/docker/tests/bash_test.Justfile \
     JUST_SETTINGS=/vsi/vsi_common.env

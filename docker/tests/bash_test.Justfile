@@ -13,8 +13,11 @@ function caseify()
       TESTLIB_DISCOVERY_DIR=int "${VSI_COMMON_DIR}/tests/run_tests" ${@+"${@}"}
       extra_args=$#
       ;;
-    *) # Run command in pipenv
-      exec "${cmd}" "${@}"
+    help)
+      # defaultify help
+      ;;
+    *)
+      exec "${cmd}" ${@+"${@}"}
       ;;
   esac
 }
