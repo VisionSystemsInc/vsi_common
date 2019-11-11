@@ -43,8 +43,11 @@ test_lwhich()
   fi
 }
 
-if ! command -v "${LDCONFIG-ldconfig}" >/dev/null 2>&1 || \
-   [ "$(${LDCONFIG-ldconfig} -p | grep 'x86-64')" = "" ]; then
+if [ -e /etc/ld.so.cache ]; then
+  if ${LDCONFIG-ldconfig} -p | grep x86-64 &> /dev/null; then
+    skip_next_test
+  fi
+elif [ "$(uname -m)" != "x86_64" ]; then
   skip_next_test
 fi
 begin_test "lwhich 64"
@@ -55,8 +58,11 @@ begin_test "lwhich 64"
 )
 end_test
 
-if ! command -v "${LDCONFIG-ldconfig}" >/dev/null 2>&1 || \
-   [ "$(${LDCONFIG-ldconfig} -p | grep -v 'x86-64' | wc -l)" -lt "2" ]; then
+if [ -e /etc/ld.so.cache ]; then
+  if [ "$(${LDCONFIG-ldconfig} -p | grep -v 'x86-64' | wc -l)" -lt "2" ]; then
+    skip_next_test
+  fi
+elif ! [[ $(uname -m) =~ i[3-6]86 ]]; then
   skip_next_test
 fi
 begin_test "lwhich 32"
@@ -67,16 +73,18 @@ begin_test "lwhich 32"
 )
 end_test
 
-if ! command -v "${LDCONFIG-ldconfig}" >/dev/null 2>&1; then
-  skip_next_test
-fi
 begin_test "lwhich LD_LIBRARY_PATH"
 (
   setup_test
 
   source "${VSI_COMMON_DIR}/linux/bin_utils.bsh"
 
-  filename="$(${LDCONFIG-ldconfig} -p | tail -n 1 | awk -F ' => ' '{print $2}')"
+  if [ -e /etc/ld.so.cache ]; then
+    filename="$(${LDCONFIG-ldconfig} -p | tail -n 1 | awk -F ' => ' '{print $2}')"
+  else
+    filename="$(find /lib /usr/local/lib /usr/lib -maxdepth 1 -name \*.so -print -quit)"
+  fi
+
   answer="${TESTDIR}/libqwertyuiop.so"
   bits=$(object_bits "${filename}")
 

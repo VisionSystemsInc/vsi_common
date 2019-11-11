@@ -1,0 +1,37 @@
+ARG BASH_VERSION=5.0
+FROM vsiri/recipe:gosu as gosu
+FROM vsiri/recipe:tini-musl as tini
+FROM vsiri/recipe:jq as jq
+FROM vsiri/recipe:vsi as vsi
+FROM vsiri/recipe:docker as docker
+FROM vsiri/recipe:docker-compose as docker-compose
+
+FROM bash:${BASH_VERSION}
+
+RUN apk add --no-cache \
+      # Better awk
+      gawk \
+      # Better sed, that supports \x00 notation
+      sed \
+      # column
+      util-linux \
+      # Better xargs command
+      findutils \
+      # nm
+      binutils \
+      # for better realpath, and id that supports -z
+      coreutils \
+      # For tests like time-tools/timeout
+      perl
+
+ENV JUSTFILE=/vsi/docker/tests/bash_test.Justfile \
+    JUST_SETTINGS=/vsi/vsi_common.env
+COPY --from=tini /usr/local/bin/tini /usr/local/bin/tini
+COPY --from=gosu /usr/local/bin/gosu /usr/local/bin/gosu
+COPY --from=jq /usr/local/bin/jq /usr/local/bin/jq
+COPY --from=docker /usr/local/bin /usr/local/bin
+COPY --from=docker-compose /usr/local/bin/docker-compose /usr/local/bin/docker-compose
+COPY --from=vsi /vsi /vsi
+
+ENTRYPOINT ["/usr/local/bin/tini", "--", "/usr/bin/env", "bash", "/vsi/linux/just_entrypoint.sh"]
+CMD ["test"]

@@ -8,35 +8,52 @@ services:
     image: ${VSI_COMMON_DOCKER_REPO}:wine_test
     cap_add:
       - SYS_PTRACE
-    working_dir: /vsi_common
+    working_dir: /vsi
     environment: &wine_environment
       USER_ID: "${VSI_COMMON_UID-1000}"
       JUST_IS_TTY: "1"
       WINEDEBUG: "fixme-all,err-winediag,err-menubuilder"
     volumes:
-      - &wine_volume1
+      - &wine_home_volume
         type: volume
         source: wine_home
         target: /home/.user_wine
-      - &wine_volume2
+      - &vsi_common_volume
         type: bind
         source: .
-        target: /vsi_common
+        target: /vsi
         read_only: true
-    command: -c "cd /z/vsi_common; bash -l"
+    command: -c "cd /z/vsi; bash -l"
   wine_gui:
     <<: *wine
     environment:
       <<: *wine_environment
       DISPLAY:
     volumes:
-      - *wine_volume1
-      - *wine_volume2
+      - *wine_home_volume
+      - *vsi_common_volume
       - type: bind
         read_only: true
         target: /tmp/.X11-unix
         source: /tmp/.X11-unix
     command: []
+
+  bash_test:
+    build:
+      context: docker/tests
+      dockerfile: bash_test.Dockerfile
+      args:
+        BASH_VERSION: ${VSI_COMMON_BASH_TEST_VERSION}
+    image: ${VSI_COMMON_DOCKER_REPO}:${VSI_COMMON_BASH_TEST_VERSION}
+    environment:
+      DOCKER_UID: ${VSI_COMMON_UID-1000}
+      DOCKER_GIDS: ${VSI_COMMON_GIDS-1000}
+      DOCKER_GROUP_NAMES: ${VSI_COMMON_GROUP_NAMES-user}
+      DOCKER_USERNAME: user
+      TESTLIB_PARALLEL:
+      DOCKER_HOST:
+    volumes:
+      - <<: *vsi_common_volume
 
   python2: &python-anchor
     build:

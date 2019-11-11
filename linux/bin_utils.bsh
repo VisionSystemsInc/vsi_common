@@ -110,12 +110,18 @@ function lwhich()
     case_insensitive='-i'
   fi
 
-  if [ -n "${LD_LIBRARY_PATH+${LD_LIBRARY_PATH}}" ]; then
+  if [ -n "${LD_LIBRARY_PATH:+set}" ] || [ ! -e /etc/ld.so.cache ]; then
+    local LIBRARY_PATHS=()
     #set -f
     #IFS_OLD="${IFS}"
     IFS=:
-    LIBRARY_PATHS=("$LD_LIBRARY_PATH")
+    LIBRARY_PATHS+=(${LD_LIBRARY_PATH:+"${LD_LIBRARY_PATH}"})
     IFS=$'\n' # I don't want splitting arrays on space or tab... JUST in case?
+
+    # if musl (no /etc/ld.so.conf), then search '/lib' '/usr/local/lib' '/usr/lib'
+    if [ ! -e /etc/ld.so.cache ]; then
+      LIBRARY_PATHS+=(/lib /usr/local/lib /usr/lib)
+    fi
 
     for d in "${LIBRARY_PATHS[@]}"; do
       files=("$d"/*)
@@ -137,13 +143,18 @@ function lwhich()
     done
   fi
 
-  # TODO: if musl (no /etc/ld.so.conf), then search '/lib' '/usr/local/lib' '/usr/lib'
+  # Check to see if /etc/ld.so.cache exists. If it doesn't, then this is probably musl, not glibc.
+  # musl doesn't have ld.so.conf, or cache, or ldconfig -p, so do it manually. The only way this
+  # test could have a false positive is in a container situation where ldconfig cache hasn't been
+  # built, in which case ldconfig -p would fail anyways.
+  if [ -e /etc/ld.so.cache ]; then
+    # This only complicated the wildcard idea, and I don't CARE about this case
+    for match in $(${LDCONFIG-ldconfig} -p | grep ${case_insensitive} -E $'^\t'"$1" | awk '{print $(NF)}'); do
+      if isxbit ${bits} "${match}" && ! isin "$(basename "$match")" ${filenames+"${filenames[@]}"}; then
+        matches+=("${match}")
+        filenames+=("$(basename "$match")")
+      fi
+    done
+  fi
 
-  # This only complicated the wildcard idea, and I don't CARE about this case
-  for match in $(${LDCONFIG-ldconfig} -p | grep ${case_insensitive} -E $'^\t'"$1" | awk '{print $(NF)}'); do
-    if isxbit ${bits} "${match}" && ! isin "$(basename "$match")" ${filenames+"${filenames[@]}"}; then
-      matches+=("${match}")
-      filenames+=("$(basename "$match")")
-    fi
-  done
 }
