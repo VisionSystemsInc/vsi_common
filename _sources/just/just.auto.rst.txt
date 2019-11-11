@@ -1,0 +1,198 @@
+.. default-domain:: bash
+
+.. _just:
+
+========
+J.U.S.T.
+========
+
+.. file:: just
+
+When working on a project, it often becomes necessary to run many long commands. Similar to how a makefile connects `targets` with a string of commands, `just` gives an easy way to create a set of targets to execute easily. Unlike a makefile, it has two key distinctions
+
+* It's not a makefile, but uses a :file:`Justfile` in bash instead. Bash is easier than make for simple tasks
+* It works on Windows (when bash is installed via Git for Windows or similar), macOS (which uses bash 3.2) and Linux with no additional dependencies.
+
+.. rubric:: Features
+
+* Tab completion (:file:`.just`)
+* Comment generated help
+* Subcommands (e.g. ``just program run``, run can be a subcommand of the program target)
+* Executing multiple targets in one call
+
+.. seealso::
+
+  :file:`Justfile`
+    Blah justfile
+
+  :file:`.just`
+    Tab completion for bash
+
+.. command:: help
+
+Print out basic help based on the comments it the :file:`Justfile`. In order to achieve this, case statements and comments need to be structured in a specific way for the parser to pick up. The same mechanism is used by tab completion in ``bash``
+
+.. note::
+
+    Currently this does not work for all ``bash`` cases. A few bash patterns are matched to make this behavior working, since bash does not have source reflection.
+
+.. rubric:: Basic example:
+
+In the simplest case, a regular case pattern followed by ``)#`` (with optional spaces) will be picked up by :cmd:`help`
+
+.. code-block:: bash
+
+    foo) # Runs the foo routine
+
+.. rubric:: Long comment lines
+
+A long comment can be split up into many lines by ending a line with ``\`` (that means no space after ``\``), and the comment on the next line continue.
+
+.. code-block:: bash
+
+    command) # To write a long help message, end the line in a backslash (\) \
+             # and start the next line with a # to continue the comment. \
+             # Can be as long as you want.
+
+.. rubric:: Multiple targets at once:
+
+The pattern ``pattern1|pattern2...)#`` will also be parsed as a single help entry
+
+.. code-block:: bash
+
+    cat|dog) # Routine for cats and dogs
+
+.. rubric:: Multiple targets:
+
+You can actually add any of the other patterns as a comment for the sole purpose of populating the help and tab completion
+
+.. code-block:: bash
+
+    # cat) # Comment just for cat
+    # dog) # Comment just for dog
+    cat|\
+    dog) # A comment here would be for both cat and dog, but not needed
+
+.. rubric:: Subcommand example:
+
+.. code-block:: bash
+
+    foo_cat) # Runs the foo routine for cat
+    foo_dog) # Runs the foo routine for dog
+
+.. rubric:: Commenting extra help subcommand:
+
+.. code-block:: bash
+
+    # foo_a) # Runs the foo routine for a
+    # foo_b) # Runs the foo routine for b
+    foo_*)
+    ## foo_c) # Runs the foo routine for c, but don't tell anyone
+
+The foo_a and foo_b are added to tab complete and help, but using more than one `#` will disable that line all together. So foo_c is ignored and does not show up in help or tab complete.
+
+.. rubric:: Advanced Expansion subcommand array:
+
+When you have a list of subcommands for a command in an array, then that can use that array to generate help/tab completion entries
+
+.. code-block:: bash
+
+    # Example array
+    MY_ARRAY=(cat dog)
+
+    ...
+
+    # catch_{MY_ARRAY}) #Catch animal
+    catch_*)
+
+Help, tab complete, etc. will automatically be expanded to cat and dog. Very useful for *DRY* and for programmatically determined subtargets. The subtarget name is appended to the end of the comment. So this example will read
+
+::
+
+    catch
+        cat - Catch animal cat
+        dog - Catch animal dog
+
+.. note::
+
+    Help and tab completion use the exact same mechanism. Everything that adds an entry to the help is adding an entry to tab completion.
+
+.. envvar:: JUST_PRELOAD
+
+Preloads a special source file before anything else loads.
+
+In rare case that the project environment file is too late in the just loading, use this file. It is suggested to set the value in the :envvar:`JUST_SETUP_SCRIPT`, which defaults to setup.env.
+
+.. note::
+
+    This is left around for debug purposes really, probably never needed.
+
+.. note::
+
+  Must **not** be set in the :ref:`project environment files <just-project-env-files>` i.e. cannot be set in ``local.env``, project env file or ``local_post.env``. It will **not** have the desired effect, as this is too late in the load chain. Instead, it can either be exported before calling :file:`just` (not recommended unless in a container or VM) or exported in the :ref:`setup file <just-setup-file>`.
+
+.. envvar:: JUST_VERBOSE
+
+:Values: * **1** - Prints any dryrun-able commands as they are executed
+         * **2** - Basic bash verbose. Uses ``set -v``
+         * **3** - Fully verbose. ``set -xv`` plus a useful ``PS4``
+
+:envvar:`JUST_VERBOSE` sets verbosity level of just execution. Useful to debug problems, especially in the just executable.
+
+.. note::
+
+  Must **not** be set in the :ref:`project environment files <just-project-env-files>` i.e. cannot be set in ``local.env``, project env file or ``local_post.env``. It will **not** have the desired effect, as this is too late in the load chain. Instead, it can either be exported before calling :file:`just` (not recommended unless in a container or VM) or exported in the :ref:`setup file <just-setup-file>`.
+
+.. envvar:: JUST_IN_SCRIPT
+
+:envvar:`JUST_IN_SCRIPT` is an unexported variable set by :file:`just`. Useful in other scripts for determining if they are being sourced by :file:`just` or not.
+
+Currently one use of this is dual purposing a file, so that it behaves differently when sourced by just or by a user on the prompts
+
+.. envvar:: JUSTFILE
+
+An optional variable for the location of :file:`Justfile`. The default :file:`Justfile` that :func:`just_common.bsh _just_load_justfile` searches for is called ``Justfile``. In order to change this default behavior, this environment variable needs to be set so that :file:`just` knows what file name to look for, usually not recommended
+
+.. seealso::
+
+  :func:`just_common.bsh _just_load_justfile`
+    Function responsible for loading :file:`Justfile`
+
+  :func:`dir_tools.bsh parent_find_files`
+    Function responsible for finding :file:`Justfile`
+
+  :envvar:`JUSTFILE`
+    Changes the name of the default :file:`Justfile` to a different filename when creating a new project
+
+.. note::
+
+   Must **not** be set in the :ref:`project environment files <just-project-env-files>` i.e. cannot be set in ``local.env``, project env file or ``local_post.env``. It will **not** have the desired effect, as this is too late in the load chain. Instead, it can either be exported before calling :file:`just` (not recommended unless in a container or VM) or exported in the :ref:`setup file <just-setup-file>`.
+
+Error handling
+--------------
+
+An error in a :file:`Justfile` can be extremely hard to debug. Especially when the bug manifests itself deep inside :file:`just`. For this reason, it is customary to turn ``set -eu`` on, so that if a bash command returns false, the script stops. (``-u`` says that if a variable is used without being defined, to throw and error too).
+
+The ``ERR`` signal is also trapped by :file:`just`. When any error occurs, a complete bash stack trace is printed to stdout upon exit.
+
+::
+
+    Call stack
+    ----------
+    993  _Docker-compose  /opt/projects/just/vsi_common/linux/docker_functions.bsh
+    974  Docker-compose   /opt/projects/just/vsi_common/linux/docker_functions.bsh
+    120  caseify          /opt/projects/just/vsi_common/Justfile
+    795  justify          /opt/projects/just/vsi_common/linux/just_functions.bsh
+    281  main             /opt/projects/just/vsi_common/linux/just
+
+    /opt/projects/just/vsi_common/linux/docker_functions.bsh: line 993: Returned 2
+
+    Call stack
+    ----------
+    21   caseify  /opt/projects/just/vsi_common/Justfile
+    795  justify  /opt/projects/just/vsi_common/linux/just_functions.bsh
+    281  main     /opt/projects/just/vsi_common/linux/just
+
+    /opt/projects/just/vsi_common/Justfile: line 21: Returned 2
+
+Sometimes there are multiple stacks due to the way `bash` works. However the first one is usually the stack of interest. This stack printout says an error occurred in ``_Docker-compose`` line 993, and can be tracked down to ``Justfile`` line 120. In this case, a ``docker-compose`` command returned non-zero

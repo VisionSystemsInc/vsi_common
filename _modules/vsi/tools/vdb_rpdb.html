@@ -1,0 +1,327 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>vsi.tools.vdb_rpdb &mdash; VSI Common 0.0.7 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+  <script type="text/javascript" src="../../../_static/js/modernizr.min.js"></script>
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+        <script type="text/javascript" src="../../../_static/jquery.js"></script>
+        <script type="text/javascript" src="../../../_static/underscore.js"></script>
+        <script type="text/javascript" src="../../../_static/doctools.js"></script>
+        <script type="text/javascript" src="../../../_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="../../../_static/js/theme.js"></script>
+
+    
+
+  
+  <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../../../index.html" class="icon icon-home"> VSI Common
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../just/index.html">J.U.S.T. Useful Simple Tasking</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../linux/index.html">Linux Utilities</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../windows/index.html">Windows Utilities</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tests/index.html">Unit Tests</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../python/modules.html">vsi</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../docker/recipes/get-pipenv.auto.html">Get Pipenv</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../docker/recipes/index.html">Docker recipes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../style.html">Contributing Style Guide</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">VSI Common</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="../../index.html">Module code</a> &raquo;</li>
+        
+      <li>vsi.tools.vdb_rpdb</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for vsi.tools.vdb_rpdb</h1><div class="highlight"><pre>
+<span></span>
+<span class="kn">import</span> <span class="nn">rpdb</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">vsi.tools.vdb</span> <span class="k">as</span> <span class="nn">vdb</span>
+<span class="kn">from</span> <span class="nn">functools</span> <span class="k">import</span> <span class="n">partial</span>
+<span class="kn">import</span> <span class="nn">traceback</span>
+
+<span class="n">DEFAULT_IP</span> <span class="o">=</span> <span class="s1">&#39;127.0.0.1&#39;</span>
+<span class="n">DEFAULT_PORT</span> <span class="o">=</span> <span class="mi">4444</span>
+
+<div class="viewcode-block" id="RpdbPostMortemHook"><a class="viewcode-back" href="../../../python/vsi.tools.html#vsi.tools.vdb_rpdb.RpdbPostMortemHook">[docs]</a><span class="k">class</span> <span class="nc">RpdbPostMortemHook</span><span class="p">(</span><span class="n">vdb</span><span class="o">.</span><span class="n">PostMortemHook</span><span class="p">):</span>
+<div class="viewcode-block" id="RpdbPostMortemHook.set_post_mortem"><a class="viewcode-back" href="../../../python/vsi.tools.html#vsi.tools.vdb_rpdb.RpdbPostMortemHook.set_post_mortem">[docs]</a>  <span class="nd">@staticmethod</span>
+  <span class="k">def</span> <span class="nf">set_post_mortem</span><span class="p">(</span><span class="n">interactive</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">ip</span><span class="o">=</span><span class="n">DEFAULT_IP</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="n">DEFAULT_PORT</span><span class="p">):</span>
+    <span class="n">sys</span><span class="o">.</span><span class="n">excepthook</span> <span class="o">=</span> <span class="n">partial</span><span class="p">(</span><span class="n">vdb</span><span class="o">.</span><span class="n">dbstop_exception_hook</span><span class="p">,</span>
+                             <span class="n">interactive</span><span class="o">=</span><span class="n">interactive</span><span class="p">,</span>
+                             <span class="n">post_mortem</span><span class="o">=</span><span class="n">partial</span><span class="p">(</span><span class="n">post_mortem</span><span class="p">,</span>
+                                                 <span class="n">ip</span><span class="o">=</span><span class="n">ip</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="n">port</span><span class="p">))</span></div></div>
+
+<div class="viewcode-block" id="dbclear_if_error"><a class="viewcode-back" href="../../../python/vsi.tools.html#vsi.tools.vdb_rpdb.dbclear_if_error">[docs]</a><span class="k">def</span> <span class="nf">dbclear_if_error</span><span class="p">():</span>
+  <span class="n">RpdbPostMortemHook</span><span class="o">.</span><span class="n">dbclear_if_error</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="dbstop_if_error"><a class="viewcode-back" href="../../../python/vsi.tools.html#vsi.tools.vdb_rpdb.dbstop_if_error">[docs]</a><span class="k">def</span> <span class="nf">dbstop_if_error</span><span class="p">(</span><span class="n">interactive</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">ip</span><span class="o">=</span><span class="n">DEFAULT_IP</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="n">DEFAULT_PORT</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39; Run this to auto start the debugger on an exception.</span>
+
+<span class="sd">      Optional arguments</span>
+
+<span class="sd">      Parameters</span>
+<span class="sd">      ----------</span>
+<span class="sd">      interactive : bool</span>
+<span class="sd">          see vsi.tools.vdb.dbstop_if_error</span>
+<span class="sd">      ip : str</span>
+<span class="sd">          Default 127.0.0.1 - Ip to bind to for remote debugger</span>
+<span class="sd">      port : int</span>
+<span class="sd">        Default 4444 - Port to bind to for remote debugger</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+
+  <span class="n">RpdbPostMortemHook</span><span class="o">.</span><span class="n">dbstop_if_error</span><span class="p">(</span><span class="n">interactive</span><span class="o">=</span><span class="n">interactive</span><span class="p">,</span>
+                                     <span class="n">ip</span><span class="o">=</span><span class="n">ip</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="n">port</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="post_mortem"><a class="viewcode-back" href="../../../python/vsi.tools.html#vsi.tools.vdb_rpdb.post_mortem">[docs]</a><span class="k">def</span> <span class="nf">post_mortem</span><span class="p">(</span><span class="n">tb</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">ip</span><span class="o">=</span><span class="n">DEFAULT_IP</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="n">DEFAULT_PORT</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39; Parameters</span>
+<span class="sd">      ---------</span>
+<span class="sd">      tb : str</span>
+<span class="sd">          The Traceback</span>
+<span class="sd">      ip : str</span>
+<span class="sd">          The IP Address</span>
+<span class="sd">      port : int</span>
+<span class="sd">          The Port</span>
+
+<span class="sd">      Raises</span>
+<span class="sd">      ------</span>
+<span class="sd">      ValueError</span>
+<span class="sd">          Passes a valied traceback</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+  <span class="k">if</span> <span class="n">tb</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="c1"># sys.exc_info() returns (type, value, traceback) if an exception is</span>
+    <span class="c1"># being handled, otherwise it returns None</span>
+    <span class="n">tb</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">exc_info</span><span class="p">()[</span><span class="mi">2</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">tb</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+      <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;A valid traceback must be passed if no &quot;</span>
+                       <span class="s2">&quot;exception is being handled&quot;</span><span class="p">)</span>
+  <span class="n">r</span> <span class="o">=</span> <span class="n">rpdb</span><span class="o">.</span><span class="n">Rpdb</span><span class="p">(</span><span class="n">addr</span><span class="o">=</span><span class="n">ip</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="n">port</span><span class="p">)</span>
+  <span class="n">r</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
+  <span class="n">r</span><span class="o">.</span><span class="n">interaction</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="n">tb</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="DbStopIfError"><a class="viewcode-back" href="../../../python/vsi.tools.html#vsi.tools.vdb_rpdb.DbStopIfError">[docs]</a><span class="k">class</span> <span class="nc">DbStopIfError</span><span class="p">(</span><span class="n">vdb</span><span class="o">.</span><span class="n">DbStopIfErrorGeneric</span><span class="p">):</span>
+<div class="viewcode-block" id="DbStopIfError.get_post_mortem"><a class="viewcode-back" href="../../../python/vsi.tools.html#vsi.tools.vdb_rpdb.DbStopIfError.get_post_mortem">[docs]</a>  <span class="k">def</span> <span class="nf">get_post_mortem</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">post_mortem</span></div>
+<div class="viewcode-block" id="DbStopIfError.get_post_mortem_class"><a class="viewcode-back" href="../../../python/vsi.tools.html#vsi.tools.vdb_rpdb.DbStopIfError.get_post_mortem_class">[docs]</a>  <span class="k">def</span> <span class="nf">get_post_mortem_class</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">RpdbPostMortemHook</span></div></div>
+
+
+<div class="viewcode-block" id="set_trace"><a class="viewcode-back" href="../../../python/vsi.tools.html#vsi.tools.vdb_rpdb.set_trace">[docs]</a><span class="k">def</span> <span class="nf">set_trace</span><span class="p">(</span><span class="n">frame</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">depth</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">ip</span><span class="o">=</span><span class="n">DEFAULT_IP</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="n">DEFAULT_PORT</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39; Wrapper function to keep the same import x; x.set_trace() interface.</span>
+
+<span class="sd">      We catch all the possible exceptions from pdb and cleanup.</span>
+
+<span class="sd">      Parameters</span>
+<span class="sd">      ----------</span>
+<span class="sd">      frame : str</span>
+<span class="sd">          The Frame</span>
+<span class="sd">      depth : int</span>
+<span class="sd">          The Depth</span>
+<span class="sd">      ip : str</span>
+<span class="sd">          The IP Address</span>
+<span class="sd">      port : int</span>
+<span class="sd">          The Port</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+  <span class="n">frame</span> <span class="o">=</span> <span class="n">vdb</span><span class="o">.</span><span class="n">find_frame</span><span class="p">(</span><span class="n">frame</span><span class="p">,</span> <span class="n">depth</span> <span class="k">if</span> <span class="n">depth</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="mi">2</span> <span class="k">if</span> <span class="n">frame</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="mi">0</span><span class="p">)</span>
+
+  <span class="k">try</span><span class="p">:</span>
+    <span class="n">debugger</span> <span class="o">=</span> <span class="n">rpdb</span><span class="o">.</span><span class="n">Rpdb</span><span class="p">(</span><span class="n">addr</span><span class="o">=</span><span class="n">ip</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="n">port</span><span class="p">)</span>
+  <span class="k">except</span> <span class="n">socket</span><span class="o">.</span><span class="n">error</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">rpdb</span><span class="o">.</span><span class="n">OCCUPIED</span><span class="o">.</span><span class="n">is_claimed</span><span class="p">(</span><span class="n">port</span><span class="p">,</span> <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="p">):</span>
+      <span class="c1"># rpdb is already on this port - good enough, let it go on:</span>
+      <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;(Recurrent rpdb invocation ignored)</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+      <span class="k">return</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="c1"># Port occupied by something else.</span>
+      <span class="k">raise</span>
+  <span class="k">try</span><span class="p">:</span>
+    <span class="n">debugger</span><span class="o">.</span><span class="n">set_trace</span><span class="p">(</span><span class="n">frame</span><span class="p">)</span>
+  <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+    <span class="kn">import</span> <span class="nn">traceback</span>
+    <span class="n">traceback</span><span class="o">.</span><span class="n">print_exc</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="attach"><a class="viewcode-back" href="../../../python/vsi.tools.html#vsi.tools.vdb_rpdb.attach">[docs]</a><span class="k">def</span> <span class="nf">attach</span><span class="p">(</span><span class="n">pid</span><span class="p">,</span> <span class="n">ip</span><span class="o">=</span><span class="n">DEFAULT_IP</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="n">DEFAULT_PORT</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39; NOT IMPLEMENTED! Needs a telnet client</span>
+
+<span class="sd">      Parameters</span>
+<span class="sd">      ----------</span>
+<span class="sd">      pid : str</span>
+<span class="sd">          The Process ID</span>
+<span class="sd">      ip : str</span>
+<span class="sd">          The IP Address</span>
+<span class="sd">      port : str</span>
+<span class="sd">          The Port</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+  <span class="n">vdb</span><span class="o">.</span><span class="n">attach</span><span class="p">(</span><span class="n">pid</span><span class="p">)</span>
+  <span class="k">assert</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="set_attach"><a class="viewcode-back" href="../../../python/vsi.tools.html#vsi.tools.vdb_rpdb.set_attach">[docs]</a><span class="k">def</span> <span class="nf">set_attach</span><span class="p">(</span><span class="n">ip</span><span class="o">=</span><span class="n">DEFAULT_IP</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="n">DEFAULT_PORT</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39; Parameters</span>
+<span class="sd">      ----------</span>
+<span class="sd">      ip : str</span>
+<span class="sd">          The IP Address</span>
+<span class="sd">      port : str</span>
+<span class="sd">          The Port</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+  <span class="n">vdb</span><span class="o">.</span><span class="n">set_attach</span><span class="p">(</span><span class="n">db_cmd</span><span class="o">=</span><span class="n">partial</span><span class="p">(</span><span class="n">set_trace</span><span class="p">,</span> <span class="n">ip</span><span class="o">=</span><span class="n">ip</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="n">port</span><span class="p">))</span></div>
+</pre></div>
+
+           </div>
+           
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2018, Vision Systems, Inc
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

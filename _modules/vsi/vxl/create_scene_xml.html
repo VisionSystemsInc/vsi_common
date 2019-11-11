@@ -1,0 +1,530 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>vsi.vxl.create_scene_xml &mdash; VSI Common 0.0.7 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+  <script type="text/javascript" src="../../../_static/js/modernizr.min.js"></script>
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+        <script type="text/javascript" src="../../../_static/jquery.js"></script>
+        <script type="text/javascript" src="../../../_static/underscore.js"></script>
+        <script type="text/javascript" src="../../../_static/doctools.js"></script>
+        <script type="text/javascript" src="../../../_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="../../../_static/js/theme.js"></script>
+
+    
+
+  
+  <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../../../index.html" class="icon icon-home"> VSI Common
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../just/index.html">J.U.S.T. Useful Simple Tasking</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../linux/index.html">Linux Utilities</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../windows/index.html">Windows Utilities</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tests/index.html">Unit Tests</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../python/modules.html">vsi</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../docker/recipes/get-pipenv.auto.html">Get Pipenv</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../docker/recipes/index.html">Docker recipes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../style.html">Contributing Style Guide</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">VSI Common</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="../../index.html">Module code</a> &raquo;</li>
+        
+      <li>vsi.vxl.create_scene_xml</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for vsi.vxl.create_scene_xml</h1><div class="highlight"><pre>
+<span></span><span class="kn">from</span> <span class="nn">__future__</span> <span class="k">import</span> <span class="n">print_function</span>
+
+<span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">@created: Nov, 2014</span>
+<span class="sd">@author: srichardson</span>
+<span class="sd">Script to generate a scene file given corner coordinates (lat, lon, height),</span>
+<span class="sd">GSD, and number of refinements. This will generate a scene with blocks that</span>
+<span class="sd">will, in the wrost case, fit within the identified GPU&#39;s memory.</span>
+
+<span class="sd">terminology:</span>
+<span class="sd">a world is composed of blocks</span>
+<span class="sd">blocks are used to cope with limited GPU memory</span>
+<span class="sd">blocks are composed of sub-blocks</span>
+<span class="sd">a sub-block has an octree</span>
+<span class="sd">an octree can be refined three times</span>
+<span class="sd">the leaf cells of a sub-block are voxels</span>
+
+<span class="sd">Due to a windows stdout redirect bug, if calling from CLI, you must redirect</span>
+<span class="sd">stdout. python ... &gt; nil will do</span>
+<span class="sd">&#39;&#39;&#39;</span>
+
+<span class="kn">import</span> <span class="nn">sys</span><span class="o">,</span><span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">from</span> <span class="nn">subprocess</span> <span class="k">import</span> <span class="n">Popen</span><span class="p">,</span> <span class="n">PIPE</span>
+<span class="kn">import</span> <span class="nn">math</span>
+
+<span class="kn">from</span> <span class="nn">.generate_scene_xml</span> <span class="k">import</span> <span class="n">generate_scene_xml</span>
+
+<span class="kn">import</span> <span class="nn">brl_init</span>
+<span class="kn">import</span> <span class="nn">vpgl_adaptor_boxm2_batch</span> <span class="k">as</span> <span class="nn">vpgl_adaptor</span>
+<span class="kn">from</span> <span class="nn">boxm2_adaptor</span> <span class="k">import</span> <span class="n">create_scene_and_blocks</span><span class="p">,</span> <span class="n">ocl_info</span>
+
+<span class="k">try</span><span class="p">:</span>
+  <span class="kn">from</span> <span class="nn">StringIO</span> <span class="k">import</span> <span class="n">StringIO</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+  <span class="kn">from</span> <span class="nn">io</span> <span class="k">import</span> <span class="n">StringIO</span>
+
+
+<span class="kn">import</span> <span class="nn">argparse</span>
+
+<span class="kn">from</span> <span class="nn">vsi.tools.redirect</span> <span class="k">import</span> <span class="n">PopenRedirect</span><span class="p">,</span> <span class="n">Redirect</span>
+
+
+<div class="viewcode-block" id="main"><a class="viewcode-back" href="../../../python/vsi.vxl.html#vsi.vxl.create_scene_xml.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
+  <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">()</span>
+  <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;output_file&#39;</span><span class="p">,</span> <span class="n">nargs</span><span class="o">=</span><span class="s1">&#39;?&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="n">argparse</span><span class="o">.</span><span class="n">FileType</span><span class="p">(</span><span class="s1">&#39;w&#39;</span><span class="p">),</span>
+      <span class="n">default</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="p">,</span>
+      <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Filename to write scene.xml to. Default is stdout&quot;</span><span class="p">)</span>
+  <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;-a&#39;</span><span class="p">,</span> <span class="s1">&#39;--appearance&#39;</span><span class="p">,</span> <span class="n">nargs</span><span class="o">=</span><span class="s1">&#39;+&#39;</span><span class="p">,</span>
+      <span class="n">default</span><span class="o">=</span><span class="p">(</span><span class="s1">&#39;boxm2_mog3_grey&#39;</span><span class="p">,</span><span class="s1">&#39;boxm2_num_obs&#39;</span><span class="p">),</span>
+      <span class="n">help</span><span class="o">=</span><span class="s2">&quot;&quot;&quot;List of appearance models to use. Default is boxm2_mog3_grey and</span>
+<span class="s2">              boxm2_num_obs&quot;&quot;&quot;</span><span class="p">)</span>
+  <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;-b&#39;</span><span class="p">,</span> <span class="s1">&#39;--bins&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
+     <span class="n">help</span><span class="o">=</span><span class="s1">&#39;Number of illumination bins&#39;</span><span class="p">)</span>
+  <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;-m&#39;</span><span class="p">,</span> <span class="s1">&#39;--modeldir&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s1">&#39;.&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s1">&#39;Model directory&#39;</span><span class="p">)</span>
+  <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;-d&#39;</span><span class="p">,</span> <span class="s1">&#39;--device&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s1">&#39;gpu0&#39;</span><span class="p">,</span>
+      <span class="n">help</span><span class="o">=</span><span class="s1">&#39;OpenCL Device to process on&#39;</span><span class="p">)</span>
+  <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;--mem&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+      <span class="n">help</span><span class="o">=</span><span class="s2">&quot;&quot;&quot;Override the block size (in GB) instead of querying the GPU</span>
+<span class="s2">              device. Probably most useful for CPU OpenCL&quot;&quot;&quot;</span><span class="p">)</span>
+  <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;-r&#39;</span><span class="p">,</span> <span class="s1">&#39;--refine&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">choices</span><span class="o">=</span><span class="nb">range</span><span class="p">(</span><span class="mi">4</span><span class="p">),</span> <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
+      <span class="n">help</span><span class="o">=</span><span class="s2">&quot;&quot;&quot;Promise: a scene will be refined at most [0,3] times is fully</span>
+<span class="s2">              refined after three subdivisions, although, because a cell must</span>
+<span class="s2">              pass a certain threshold to be eligible for subdivision,</span>
+<span class="s2">              additional passes may continue to refine the scene &quot;&quot;&quot;</span><span class="p">)</span>
+  <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;-s&#39;</span><span class="p">,</span> <span class="s1">&#39;--gsd&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span>
+      <span class="n">help</span><span class="o">=</span><span class="s2">&quot;&quot;&quot;GSD in meters of a voxel (leaf cell in the octree) in a fully</span>
+<span class="s2">              refined world&quot;&quot;&quot;</span><span class="p">)</span>
+  <span class="n">group</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">add_mutually_exclusive_group</span><span class="p">(</span><span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+  <span class="n">group</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;--lla1&#39;</span><span class="p">,</span> <span class="n">nargs</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+      <span class="n">help</span><span class="o">=</span><span class="s2">&quot;&quot;&quot;Longitude, Latitude, and Altitude in degrees and meters of the</span>
+<span class="s2">              west,south,floor corner of the world. Note: NOT Latitude,</span>
+<span class="s2">              Longitude order&quot;&quot;&quot;</span><span class="p">)</span>
+  <span class="n">group</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;--lvcs1&#39;</span><span class="p">,</span> <span class="n">nargs</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+      <span class="n">help</span><span class="o">=</span><span class="s2">&quot;&quot;&quot;X Y Z in arbitrary units of the west,south,floor corner of the</span>
+<span class="s2">              world&quot;&quot;&quot;</span><span class="p">)</span>
+  <span class="n">group</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">add_mutually_exclusive_group</span><span class="p">(</span><span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+  <span class="n">group</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;--lla2&#39;</span><span class="p">,</span> <span class="n">nargs</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+      <span class="n">help</span><span class="o">=</span><span class="s2">&quot;&quot;&quot;Longitude, Latitude, and Altitude in degrees and meters of the</span>
+<span class="s2">              east,north,ceiling corner of the world. Note: NOT Latitude,</span>
+<span class="s2">              Longitude order&quot;&quot;&quot;</span><span class="p">)</span>
+  <span class="n">group</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;--lvcs2&#39;</span><span class="p">,</span> <span class="n">nargs</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+      <span class="n">help</span><span class="o">=</span><span class="s2">&quot;&quot;&quot;X Y Z in arbitrary units of the east,north,ceiling corner of the</span>
+<span class="s2">              world&quot;&quot;&quot;</span><span class="p">)</span>
+  <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;-o&#39;</span><span class="p">,</span> <span class="s1">&#39;--origin&#39;</span><span class="p">,</span> <span class="n">nargs</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+      <span class="n">help</span><span class="o">=</span><span class="s2">&quot;&quot;&quot;Optional origin for scene file, default is to use lla Longitude,</span>
+<span class="s2">              Latitude, and Altitude in degrees and meters  of the</span>
+<span class="s2">              east,north,ceiling corner of the world. Note: NOT Latitude,</span>
+<span class="s2">              Longitude order&quot;&quot;&quot;</span><span class="p">)</span>
+  <span class="n">args</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+
+  <span class="c1">#Force all output to stderr so that if the output_file is stdout, it&#39;s clean</span>
+  <span class="k">with</span> <span class="n">Redirect</span><span class="p">(</span><span class="nb">all</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">):</span>
+    <span class="n">create_scene_xml</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">device</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">refine</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">gsd</span><span class="p">,</span> <span class="n">lla1</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">lla1</span><span class="p">,</span>
+                     <span class="n">lla2</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">lla2</span><span class="p">,</span> <span class="n">lvcs1</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">lvcs1</span><span class="p">,</span> <span class="n">lvcs2</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">lvcs2</span><span class="p">,</span>
+                     <span class="n">origin</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">origin</span><span class="p">,</span> <span class="n">output_file</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">output_file</span><span class="p">,</span>
+                     <span class="n">model_dir</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">modeldir</span><span class="p">,</span>
+                     <span class="n">appearance_models</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">appearance</span><span class="p">,</span> <span class="n">number_bins</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">bins</span><span class="p">,</span>
+                     <span class="n">block_size</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">mem</span><span class="p">)</span></div>
+
+<span class="c1"># INTERNAL ---------</span>
+<div class="viewcode-block" id="gpu_memory"><a class="viewcode-back" href="../../../python/vsi.vxl.html#vsi.vxl.create_scene_xml.gpu_memory">[docs]</a><span class="k">def</span> <span class="nf">gpu_memory</span><span class="p">(</span><span class="n">gpu_device</span><span class="p">):</span>
+  <span class="n">stdout</span> <span class="o">=</span> <span class="n">StringIO</span><span class="p">()</span>
+
+  <span class="k">with</span> <span class="n">PopenRedirect</span><span class="p">(</span><span class="n">stdout</span><span class="p">)</span> <span class="k">as</span> <span class="n">redirect</span><span class="p">:</span>
+    <span class="n">pid</span> <span class="o">=</span> <span class="n">Popen</span><span class="p">([</span><span class="n">sys</span><span class="o">.</span><span class="n">executable</span><span class="p">,</span> <span class="s1">&#39;-c&#39;</span><span class="p">,</span> <span class="s1">&#39;import boxm2_adaptor as b; b.ocl_info()&#39;</span><span class="p">],</span>
+          <span class="n">stdout</span><span class="o">=</span><span class="n">redirect</span><span class="o">.</span><span class="n">stdout</span><span class="p">)</span>
+    <span class="n">pid</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>
+
+  <span class="n">stdout</span><span class="o">.</span><span class="n">seek</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span>
+  <span class="n">stdout</span> <span class="o">=</span> <span class="n">stdout</span><span class="o">.</span><span class="n">read</span><span class="p">()</span>
+
+  <span class="c1"># cpu devices are possible, but don&#39;t look for them</span>
+  <span class="n">gpu_id_re</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s1">&#39;[cg]pu(\d\d?)&#39;</span><span class="p">)</span>
+  <span class="c1"># cpu devices are possible, but don&#39;t look for them</span>
+  <span class="n">device_id_re</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s1">&#39;[cg]pu(\d\d?),  Device Description:&#39;</span><span class="p">)</span>
+  <span class="n">device_name_re</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s1">&#39; Device Name : (.+)&#39;</span><span class="p">)</span>
+  <span class="n">global_memory_re</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="s1">&#39;\s*Total global memory: (\S+) ([GM]Bytes)&#39;</span><span class="p">)</span>
+
+  <span class="n">match</span> <span class="o">=</span> <span class="n">gpu_id_re</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">gpu_device</span><span class="p">)</span>
+  <span class="k">if</span> <span class="n">match</span><span class="p">:</span>
+    <span class="n">gpu_id</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+  <span class="k">else</span><span class="p">:</span>
+    <span class="k">assert</span> <span class="kc">False</span><span class="p">,</span> <span class="s1">&#39;unrecognized gpu_device: </span><span class="si">%s</span><span class="s1">&#39;</span><span class="o">%</span><span class="nb">str</span><span class="p">(</span><span class="n">gpu_device</span><span class="p">)</span>
+
+  <span class="n">it</span> <span class="o">=</span> <span class="nb">iter</span><span class="p">(</span><span class="n">stdout</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">))</span>
+  <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">it</span><span class="p">:</span>
+    <span class="n">match</span> <span class="o">=</span> <span class="n">device_id_re</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">match</span><span class="p">:</span>
+      <span class="n">device_id</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+      <span class="k">if</span> <span class="n">device_id</span> <span class="o">==</span> <span class="n">gpu_id</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">it</span><span class="p">:</span>
+          <span class="n">match</span> <span class="o">=</span> <span class="n">device_name_re</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+          <span class="k">if</span> <span class="n">match</span><span class="p">:</span>
+            <span class="n">device_name</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+          <span class="n">match</span> <span class="o">=</span> <span class="n">global_memory_re</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+          <span class="k">if</span> <span class="n">match</span><span class="p">:</span>
+            <span class="n">gpu_mem</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">gpu_mem_units</span> <span class="o">=</span> <span class="n">match</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">gpu_mem_units</span> <span class="o">==</span> <span class="s1">&#39;GBytes&#39;</span><span class="p">:</span> <span class="n">n_bytes_gpu</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">gpu_mem</span><span class="p">)</span><span class="o">*</span><span class="mi">1024</span><span class="o">**</span><span class="mi">3</span>
+            <span class="k">if</span> <span class="n">gpu_mem_units</span> <span class="o">==</span> <span class="s1">&#39;MBytes&#39;</span><span class="p">:</span> <span class="n">n_bytes_gpu</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">gpu_mem</span><span class="p">)</span><span class="o">*</span><span class="mi">1024</span><span class="o">**</span><span class="mi">2</span>
+            <span class="k">break</span>
+        <span class="k">break</span>
+  <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;GPU Device ID: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">device_id</span><span class="p">),</span> <span class="n">file</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">)</span>
+  <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;GPU Name: </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">device_name</span><span class="p">),</span> <span class="n">file</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">)</span>
+  <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;GPU Memory (bytes): </span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">n_bytes_gpu</span><span class="p">),</span> <span class="n">file</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">)</span>
+
+  <span class="k">return</span> <span class="n">n_bytes_gpu</span></div>
+
+
+<div class="viewcode-block" id="create_scene_xml"><a class="viewcode-back" href="../../../python/vsi.vxl.html#vsi.vxl.create_scene_xml.create_scene_xml">[docs]</a><span class="k">def</span> <span class="nf">create_scene_xml</span><span class="p">(</span><span class="n">gpu_device</span><span class="p">,</span> <span class="n">refinements</span><span class="p">,</span> <span class="n">gsd</span><span class="p">,</span>
+                     <span class="n">lla1</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">lla2</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">lvcs1</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">lvcs2</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                     <span class="n">origin</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">output_file</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="p">,</span> <span class="n">model_dir</span> <span class="o">=</span> <span class="s2">&quot;.&quot;</span><span class="p">,</span>
+                     <span class="n">appearance_models</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">number_bins</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                     <span class="n">n_bytes_gpu</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39; Create a scene xml file based off of input parameters</span>
+
+<span class="sd">      Required arguments:</span>
+<span class="sd">      gpu_device - The GPU device used for the block size calculation. The</span>
+<span class="sd">      scene will be made to fit specifically on that gpu device</span>
+<span class="sd">      refinements - Number of refinement passes. Max should be 3, even if you</span>
+<span class="sd">      refine more times than 3 times. gsd - The desired voxel size. This is in</span>
+<span class="sd">      meters when using lla notation</span>
+
+<span class="sd">      Mutually exclusive arguments:</span>
+<span class="sd">      lla1,lla2 - The min and max (in order) longitude, latitude, altitude</span>
+<span class="sd">      coordinates for bounding box of the scene. Will be expanded to the next</span>
+<span class="sd">      sublock</span>
+<span class="sd">      lvcs1, lvcs2 - The min and max (in order) x, y, z coordinates for</span>
+<span class="sd">      bounding box of the scene. Will be expanded to the next sublock</span>
+
+<span class="sd">      Optional arguments:</span>
+<span class="sd">      origin - Origin of scene. Default: lla1 or (0,0,0) if lvcs1 is used</span>
+<span class="sd">      output_file - Output file object. Must support .write.</span>
+<span class="sd">      Default: sys.stdout</span>
+<span class="sd">      model_dir - The model dir used. is_model_local=&quot;true&quot; is always used</span>
+<span class="sd">      Default: &quot;.&quot;</span>
+<span class="sd">      appearance_models - Tuple of appearance models to be used.</span>
+<span class="sd">      Default: (&#39;boxm2_mog3_grey&#39;,&#39;boxm2_num_obs&#39;)</span>
+<span class="sd">      number_bins - Sets the num_illumination_bins. Default: 1</span>
+<span class="sd">      n_bytes_gpu - Optional override gpu_device memory size. Useful for CPU</span>
+<span class="sd">      OpenCL</span>
+<span class="sd">      &#39;&#39;&#39;</span>
+
+  <span class="c1">#impose mutually exclusive constraint</span>
+  <span class="k">assert</span><span class="p">(</span><span class="n">lla1</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">lvcs1</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">)</span>
+  <span class="k">assert</span><span class="p">(</span><span class="n">lla2</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">lvcs2</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">)</span>
+
+  <span class="k">if</span> <span class="n">origin</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">lla1</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+      <span class="n">origin</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="n">origin</span> <span class="o">=</span> <span class="n">lla1</span>
+
+
+  <span class="k">if</span> <span class="n">lvcs1</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">lvcs2</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">lvcs</span> <span class="o">=</span> <span class="n">vpgl_adaptor</span><span class="o">.</span><span class="n">create_lvcs</span><span class="p">(</span><span class="n">lat</span><span class="o">=</span><span class="n">origin</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">lon</span><span class="o">=</span><span class="n">origin</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">el</span><span class="o">=</span><span class="n">origin</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span>
+                                    <span class="n">csname</span><span class="o">=</span><span class="s2">&quot;wgs84&quot;</span><span class="p">)</span>
+
+  <span class="c1"># transform the coordinate system from lat/lon/height to a lvcs (meters) with</span>
+  <span class="c1"># the origin at one corner of the scene</span>
+  <span class="k">if</span> <span class="n">lvcs1</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">lvcs1</span> <span class="o">=</span> <span class="n">vpgl_adaptor</span><span class="o">.</span><span class="n">convert_to_local_coordinates2</span><span class="p">(</span><span class="n">lvcs</span><span class="p">,</span>
+        <span class="n">lla1</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">lla1</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">lla1</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+
+  <span class="k">if</span> <span class="n">lvcs2</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">lvcs2</span> <span class="o">=</span> <span class="n">vpgl_adaptor</span><span class="o">.</span><span class="n">convert_to_local_coordinates2</span><span class="p">(</span><span class="n">lvcs</span><span class="p">,</span>
+        <span class="n">lla2</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">lla2</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">lla2</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+
+  <span class="n">lvcs_size</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">:</span><span class="n">y</span><span class="o">-</span><span class="n">x</span><span class="p">,</span> <span class="n">lvcs1</span><span class="p">,</span> <span class="n">lvcs2</span><span class="p">)</span>
+
+  <span class="k">if</span> <span class="n">n_bytes_gpu</span><span class="o">==</span><span class="kc">None</span><span class="p">:</span>
+    <span class="n">n_bytes_gpu</span> <span class="o">=</span> <span class="n">gpu_memory</span><span class="p">(</span><span class="n">gpu_device</span><span class="p">)</span>
+
+  <span class="p">(</span><span class="n">n_blocks</span><span class="p">,</span> <span class="n">n_subblocks</span><span class="p">,</span> <span class="n">subblock_len</span><span class="p">)</span> <span class="o">=</span> <span class="n">calculate_block_parameters</span><span class="p">(</span>
+      <span class="n">n_bytes_gpu</span><span class="p">,</span> <span class="n">refinements</span><span class="p">,</span> <span class="n">gsd</span><span class="p">,</span> <span class="n">lvcs_size</span><span class="p">)</span>
+
+  <span class="n">generate_scene_xml</span><span class="p">(</span><span class="n">output_file</span><span class="p">,</span> <span class="n">model_dir</span><span class="p">,</span>
+      <span class="n">num_blocks</span><span class="o">=</span><span class="n">n_blocks</span><span class="p">,</span> <span class="n">num_subblocks</span><span class="o">=</span><span class="n">n_subblocks</span><span class="p">,</span>
+      <span class="n">subblock_size</span><span class="o">=</span><span class="n">subblock_len</span><span class="p">,</span> <span class="n">appearance_models</span><span class="o">=</span><span class="n">appearance_models</span><span class="p">,</span>
+      <span class="n">num_bins</span><span class="o">=</span><span class="n">number_bins</span><span class="p">,</span> <span class="n">max_level</span><span class="o">=</span><span class="n">refinements</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="n">lvcs_og</span><span class="o">=</span><span class="n">origin</span><span class="p">,</span>
+      <span class="n">local_og</span><span class="o">=</span><span class="n">lvcs1</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="bytes_per_subblock"><a class="viewcode-back" href="../../../python/vsi.vxl.html#vsi.vxl.create_scene_xml.bytes_per_subblock">[docs]</a><span class="k">def</span> <span class="nf">bytes_per_subblock</span><span class="p">(</span><span class="n">n_refinement_passes</span><span class="p">):</span>
+  <span class="c1"># storage requirement for the sub-block&#39;s octree</span>
+
+  <span class="c1"># number of cells in the sub-blocks&#39;s octree</span>
+  <span class="n">n_cells_per_subblock</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">([</span><span class="mi">8</span><span class="o">**</span><span class="n">n</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="n">n_refinement_passes</span><span class="o">+</span><span class="mi">1</span><span class="p">)])</span>
+  <span class="c1"># alpha:4, mog3/gauss:8, num_obs:8, aux:16</span>
+  <span class="n">n_bytes_per_subblock</span> <span class="o">=</span> <span class="mi">36</span><span class="o">*</span><span class="n">n_cells_per_subblock</span>
+
+  <span class="k">return</span> <span class="n">n_bytes_per_subblock</span></div>
+
+
+<div class="viewcode-block" id="subblocks_per_block"><a class="viewcode-back" href="../../../python/vsi.vxl.html#vsi.vxl.create_scene_xml.subblocks_per_block">[docs]</a><span class="k">def</span> <span class="nf">subblocks_per_block</span><span class="p">(</span><span class="n">n_refinement_passes</span><span class="p">,</span> <span class="n">n_bytes_gpu</span><span class="p">):</span>
+  <span class="n">n_bytes_subb</span> <span class="o">=</span> <span class="n">bytes_per_subblock</span><span class="p">(</span><span class="n">n_refinement_passes</span><span class="p">)</span>
+  <span class="n">max_bytes_block</span> <span class="o">=</span> <span class="n">n_bytes_gpu</span><span class="o">/</span><span class="mf">2.0</span> <span class="c1"># leave room for other operations</span>
+  <span class="c1"># max sub-blocks per block</span>
+  <span class="n">total_subblocks_per_block</span> <span class="o">=</span> <span class="n">max_bytes_block</span> <span class="o">/</span> <span class="n">n_bytes_subb</span>
+
+  <span class="c1"># number of sub-blocks per dimension in a block (grid pattern); depends on</span>
+  <span class="c1"># the amount of GPU memory</span>
+  <span class="n">max_n_subblocks_xyz</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="n">total_subblocks_per_block</span><span class="o">**</span><span class="p">(</span><span class="mf">1.0</span><span class="o">/</span><span class="mf">3.0</span><span class="p">))</span>
+
+  <span class="k">return</span> <span class="n">max_n_subblocks_xyz</span><span class="p">,</span> <span class="n">max_bytes_block</span></div>
+
+
+<div class="viewcode-block" id="calculate_block_parameters"><a class="viewcode-back" href="../../../python/vsi.vxl.html#vsi.vxl.create_scene_xml.calculate_block_parameters">[docs]</a><span class="k">def</span> <span class="nf">calculate_block_parameters</span><span class="p">(</span><span class="n">n_bytes_gpu</span><span class="p">,</span> <span class="n">n_refinement_passes</span><span class="p">,</span> <span class="n">gsd</span><span class="p">,</span>
+                               <span class="n">scene_length</span><span class="p">):</span>
+  <span class="p">(</span><span class="n">lx</span><span class="p">,</span><span class="n">ly</span><span class="p">,</span><span class="n">lz</span><span class="p">)</span> <span class="o">=</span> <span class="n">scene_length</span>
+
+  <span class="n">max_n_subblocks_xyz</span><span class="p">,</span> <span class="n">max_bytes_block</span> <span class="o">=</span> <span class="n">subblocks_per_block</span><span class="p">(</span>
+      <span class="n">n_refinement_passes</span><span class="p">,</span> <span class="n">n_bytes_gpu</span><span class="p">)</span>
+
+  <span class="c1"># resolution of a leaf cell</span>
+  <span class="n">voxel_length</span> <span class="o">=</span> <span class="n">gsd</span>
+  <span class="c1"># change to resolution of a sub-block (e.g., the root node of the sub-block&#39;s</span>
+  <span class="c1"># octree is 16 m on a side)</span>
+  <span class="n">subblock_len</span> <span class="o">=</span> <span class="n">voxel_length</span> <span class="o">*</span> <span class="mf">2.0</span><span class="o">**</span><span class="n">n_refinement_passes</span>
+
+  <span class="c1"># block length in meters; assume it is a cube</span>
+  <span class="n">max_block_len</span> <span class="o">=</span> <span class="n">max_n_subblocks_xyz</span><span class="o">*</span><span class="n">subblock_len</span>
+
+  <span class="n">n_blocks_x</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">lx</span> <span class="o">/</span> <span class="n">max_block_len</span><span class="p">))</span>
+  <span class="n">n_blocks_y</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">ly</span> <span class="o">/</span> <span class="n">max_block_len</span><span class="p">))</span>
+  <span class="n">n_blocks_z</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">lz</span> <span class="o">/</span> <span class="n">max_block_len</span><span class="p">))</span>
+
+  <span class="c1"># clip the z height of the scene; compute the minimum number of sub-blocks</span>
+  <span class="c1"># (which will be distributed evenly among the z blocks) needed to cover the</span>
+  <span class="c1"># scene</span>
+  <span class="c1"># n_subblocks_z cannot get larger</span>
+  <span class="n">n_subblocks_z</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">lz</span> <span class="o">/</span> <span class="p">(</span><span class="n">n_blocks_z</span><span class="o">*</span><span class="n">subblock_len</span><span class="p">)))</span>
+
+
+  <span class="c1"># re-estimate max_n_subblocks_xy; if n_subblocks_z was clipped,</span>
+  <span class="c1"># then we can have more sub-blocks in xy</span>
+  <span class="n">n_bytes_subb</span> <span class="o">=</span> <span class="n">bytes_per_subblock</span><span class="p">(</span><span class="n">n_refinement_passes</span><span class="p">)</span>
+  <span class="n">max_n_subblocks_xy</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">max_bytes_block</span> <span class="o">/</span> \
+                                               <span class="p">(</span><span class="n">n_subblocks_z</span><span class="o">*</span><span class="n">n_bytes_subb</span><span class="p">))))</span>
+
+  <span class="c1"># re-compute n_subblocks_{x,y}; should either have enough sub-blocks to cover</span>
+  <span class="c1"># the scene or as possible</span>
+  <span class="n">n_subblocks_x</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">lx</span> <span class="o">/</span> <span class="p">(</span><span class="n">n_blocks_x</span><span class="o">*</span><span class="n">subblock_len</span><span class="p">)))</span>
+  <span class="n">n_subblocks_y</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">ly</span> <span class="o">/</span> <span class="p">(</span><span class="n">n_blocks_y</span><span class="o">*</span><span class="n">subblock_len</span><span class="p">)))</span>
+  <span class="n">n_subblocks_x</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">n_subblocks_x</span><span class="p">,</span> <span class="n">max_n_subblocks_xy</span><span class="p">)</span>
+  <span class="n">n_subblocks_y</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">n_subblocks_y</span><span class="p">,</span> <span class="n">max_n_subblocks_xy</span><span class="p">)</span>
+
+  <span class="c1"># re-compute the number of blocks needed to cover the scene</span>
+  <span class="n">n_blocks_x</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">lx</span> <span class="o">/</span> <span class="p">(</span><span class="n">n_subblocks_x</span><span class="o">*</span><span class="n">subblock_len</span><span class="p">)))</span>
+  <span class="n">n_blocks_y</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">ly</span> <span class="o">/</span> <span class="p">(</span><span class="n">n_subblocks_y</span><span class="o">*</span><span class="n">subblock_len</span><span class="p">)))</span>
+  <span class="c1"># cannot change...</span>
+  <span class="c1">#n_blocks_z = int(math.ceil(lz / (n_subblocks_z*subblock_len)))</span>
+  <span class="n">block_len_x</span> <span class="o">=</span> <span class="n">n_subblocks_x</span><span class="o">*</span><span class="n">subblock_len</span>
+  <span class="n">block_len_y</span> <span class="o">=</span> <span class="n">n_subblocks_y</span><span class="o">*</span><span class="n">subblock_len</span>
+  <span class="n">block_len_z</span> <span class="o">=</span> <span class="n">n_subblocks_z</span> <span class="o">*</span><span class="n">subblock_len</span>
+
+
+  <span class="c1"># print summary of the scene.xml file</span>
+  <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;nblocks_x:&quot;</span><span class="p">,</span> <span class="n">n_blocks_x</span><span class="p">,</span> <span class="s2">&quot; y:&quot;</span><span class="p">,</span> <span class="n">n_blocks_y</span><span class="p">,</span> \
+        <span class="s2">&quot; z:&quot;</span><span class="p">,</span> <span class="n">n_blocks_z</span><span class="p">,</span> <span class="n">file</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">)</span>
+  <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;block_len_x (m):&quot;</span><span class="p">,</span> <span class="n">block_len_x</span><span class="p">,</span> \
+        <span class="s2">&quot; n_subblocks_x:&quot;</span><span class="p">,</span> <span class="n">n_subblocks_x</span><span class="p">,</span> <span class="n">file</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">)</span>
+  <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;block_len_y (m):&quot;</span><span class="p">,</span> <span class="n">block_len_y</span><span class="p">,</span> \
+        <span class="s2">&quot; n_subblocks_y:&quot;</span><span class="p">,</span> <span class="n">n_subblocks_y</span><span class="p">,</span> <span class="n">file</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">)</span>
+  <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;block_len z (m):&quot;</span><span class="p">,</span> <span class="n">block_len_z</span><span class="p">,</span> \
+        <span class="s2">&quot; n_subblocks_z:&quot;</span><span class="p">,</span> <span class="n">n_subblocks_z</span><span class="p">,</span> <span class="n">file</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">)</span>
+  <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;subblock_len (m):&quot;</span><span class="p">,</span> <span class="n">subblock_len</span><span class="p">,</span> \
+        <span class="s2">&quot; n_refinement_passes:&quot;</span><span class="p">,</span> <span class="n">n_refinement_passes</span><span class="p">,</span> <span class="n">file</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">)</span>
+  <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;input scene length (m) x:&quot;</span><span class="p">,</span> <span class="n">lx</span><span class="p">,</span> <span class="s2">&quot; blocked x:&quot;</span><span class="p">,</span> \
+        <span class="n">n_blocks_x</span><span class="o">*</span><span class="n">n_subblocks_x</span><span class="o">*</span><span class="n">subblock_len</span><span class="p">,</span> <span class="n">file</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">)</span>
+  <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;input scene length (m) y:&quot;</span><span class="p">,</span> <span class="n">ly</span><span class="p">,</span> <span class="s2">&quot; blocked y:&quot;</span><span class="p">,</span> \
+        <span class="n">n_blocks_y</span><span class="o">*</span><span class="n">n_subblocks_y</span><span class="o">*</span><span class="n">subblock_len</span><span class="p">,</span> <span class="n">file</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">)</span>
+  <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;input scene length (m) z:&quot;</span><span class="p">,</span> <span class="n">lz</span><span class="p">,</span> <span class="s2">&quot; blocked z:&quot;</span><span class="p">,</span> \
+        <span class="n">n_blocks_z</span><span class="o">*</span><span class="n">n_subblocks_z</span><span class="o">*</span><span class="n">subblock_len</span><span class="p">,</span> <span class="n">file</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">)</span>
+
+  <span class="n">n_subb</span> <span class="o">=</span> <span class="n">n_subblocks_x</span><span class="o">*</span><span class="n">n_subblocks_y</span><span class="o">*</span><span class="n">n_subblocks_z</span>
+  <span class="c1">#n_cells_subb = 1+8+64+512</span>
+  <span class="c1">#n_bytes_subb = 36*n_cells_subb  # alpha:4, mog3/gauss:8, num_obs:8, aux:16</span>
+  <span class="n">n_bytes_block</span> <span class="o">=</span> <span class="n">n_subb</span><span class="o">*</span><span class="n">n_bytes_subb</span>
+  <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Memory requirements for a block at finest resolution:&quot;</span><span class="p">,</span>\
+        <span class="n">n_bytes_block</span><span class="o">/</span><span class="mf">1e6</span><span class="p">,</span> <span class="s2">&quot;MB per block&quot;</span><span class="p">,</span> <span class="n">file</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">)</span>
+  <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  including bit tree:&quot;</span><span class="p">,</span>
+        <span class="p">(</span><span class="n">n_bytes_block</span> <span class="o">+</span> <span class="n">n_subb</span><span class="o">*</span><span class="mi">16</span><span class="p">)</span><span class="o">/</span><span class="mf">1e6</span><span class="p">,</span> <span class="s2">&quot;MB&quot;</span><span class="p">,</span> <span class="n">file</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">)</span>
+  <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  entire world (worst case):&quot;</span><span class="p">,</span>
+        <span class="p">(</span><span class="n">n_bytes_block</span> <span class="o">+</span> <span class="n">n_subb</span><span class="o">*</span><span class="mi">16</span><span class="p">)</span><span class="o">*</span><span class="n">n_blocks_x</span><span class="o">*</span><span class="n">n_blocks_y</span><span class="o">*</span><span class="n">n_blocks_z</span><span class="o">/</span><span class="mf">1e6</span><span class="p">,</span> <span class="s2">&quot;MB&quot;</span><span class="p">,</span>
+        <span class="n">file</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">)</span>
+
+  <span class="k">return</span> <span class="p">(</span><span class="n">n_blocks_x</span><span class="p">,</span> <span class="n">n_blocks_y</span><span class="p">,</span> <span class="n">n_blocks_z</span><span class="p">),</span> \
+         <span class="p">(</span><span class="n">n_subblocks_x</span><span class="p">,</span> <span class="n">n_subblocks_y</span><span class="p">,</span> <span class="n">n_subblocks_z</span><span class="p">),</span> <span class="n">subblock_len</span></div>
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s1">&#39;__main__&#39;</span><span class="p">:</span>
+  <span class="n">main</span><span class="p">()</span>
+</pre></div>
+
+           </div>
+           
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2018, Vision Systems, Inc
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

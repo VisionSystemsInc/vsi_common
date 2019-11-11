@@ -1,0 +1,133 @@
+=======================
+Docker Compose Override
+=======================
+
+.. default-domain:: bash
+
+.. file:: docker_compose_override
+
+Generates a supplementary ``docker-compose.yml`` file, utilized for some of the more advanced ``just`` features.
+
+:Arguments: See :func:`docker_compose_override generate_docker_compose_override`
+
+.. note::
+  :file:`docker_compose_override` can be sourced so that individual functions can be called
+
+.. seealso::
+
+  :func:`docker_compose_override generate_docker_compose_override`
+    The main docker compose override function
+
+.. function:: _docker_compose_override_var_sub string
+
+:Arguments: * **1** - String of variable name, such as ``'${var}'``
+:Output: *stdout* - Variable name
+:Internal Use: Yes
+
+Unwraps a bash style basic variables name in a string. Assumes the string is a variable expression, so the first letter is assumed to be a $, and is not checked
+
+.. rubric:: Example
+
+.. code-block:: bash
+
+    indirect=$(_docker_compose_override_var_sub '${foo}')
+    # indirect=var
+    indirect=$(_docker_compose_override_var_sub '$bar')
+    # indirect=bar
+
+.. deprecated:: 0.0.4
+
+.. function:: _env_echo
+
+:Arguments: * [**1 ...**] - arguments to echo
+:Output: *stdout* - Yaml excerpt
+         * ``new_environment`` - Value is **"1"** if :func:`_env_echo` has been called already
+
+Simple helper function for echoing environment variables in the ``docker-compose`` yaml file
+
+In docker-compose, the ``environment:`` section can only be added once, and can only be added if there is at least one environment variable set. In case there are none, nothing should be added. This helper only echoes ``environment:`` the first time it is called.
+
+.. function:: generate_docker_compose_override
+
+:Arguments: * **1** - Prefix used in many of the just features, such as ``${1}_.*_DOCKER/HOST`` variables, etc...
+            * [**2 ...**] - List of services to process (see docker_compose_service_names)
+:Output: *stdout* - The docker-compose override yaml file
+
+Create a docker override yaml file and extend the current docker-compose configuration with:
+
+* Volume features:
+
+  * Volumes can be added to the services listed in ``$2``...
+
+    * Volumes listed in ``${1}_VOLUMES`` are added to every service
+    * Volumes in ``${1}_VOLUME_1``, ``${1}_VOLUME_2``, ... are added to every service
+    * Volumes listed in ``${1}_<upper(service_name)>_VOLUMES`` are added just to that service.
+    * Volumes listed in ``${1}_<upper(service_name)>_VOLUME_1``, ``${1}_<upper(service_name)>_VOLUME_2``, ... are added just to that service.
+    * **Note**: If the yaml file uses anchors, this will not be reflected in this auto generated file. You will have to set the value of ``${1}_<upper(other_service_name)>_VOLUMES`` as well
+
+* Environment features:
+
+  * For volumes that couldn't be mounted in their expected locations (mostly due to nfs limitations), the variable ``JUST_DOCKER_ENTRYPOINT_LINKS`` is set to a colon delimited string (used by docker_entrypoints.bsh/docker_link_mounts).
+  * Keep a ``//`` separated list of docker data volumes in ``JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES``.
+  * Environment variables ``${1}_.*_HOST`` are added to the docker environment exactly as is.
+  * Transparently swap environment variables as they are added to the docker environment (default):
+
+    * For every environment variable, ``${1}_.*_DOCKER``, and optionally its corresponding un-suffix'ed version ``${1}_.*``
+
+      * ``${1}_.*`` variable is copied as ``${1}_.*_HOST``
+      * ``${1}_.*_DOCKER`` variable is copied as ``${1}_.*``
+      * ``VIP_FOO=/opt/foo`` is copied to ``VIP_FOO_HOST=/opt/foo`` and ``VIP_FOO_DOCKER=/foo`` is copied to ``VIP_FOO=/foo``
+
+    * This is a transparency feature. Only ``_DOCKER`` variables should use the ``_DOCKER`` suffix.
+
+  * The transparency swap feature can be disabled by setting :var:`JUST_DISABLE_ENVIRONMENT_SWAP=1 <JUST_DISABLE_ENVIRONMENT_SWAP>`. In which case:
+
+    * For every environment variable ``${1}_.*_DOCKER``
+
+      * ``${1}_.*_DOCKER`` is copied exactly as is
+      * ``${1}_.*`` is copied exactly as is if it exists
+
+.. var:: COMPOSE_VERSION
+
+  :Default: ``3.2``
+  :Optional: True
+
+  Docker compose version used.
+
+.. var:: JUST_DISABLE_ENVIRONMENT_SWAP
+
+  :Default: ``0``
+  :Optional: True
+
+  Disables the transparent variable swap feature.
+
+.. var:: EXPORT_DOCKER
+
+  :Default: ``0``
+  :Optional: True
+
+Also, adds the ``${1}_.*_DOCKER`` version of the variable (as is) when using the transparent environment variable swap feature.
+
+.. var:: MOUNT_PREFIX
+
+  :Default: ``/host_mnt``
+  :Optional: True
+
+Some mounted file systems will not allow subdirectories to be mounted by root, such as nfs with squash root turned on. In this case, generate_docker_compose_override will mount the base mount point in a side location, and symlink the subdirectory in where it was supposed to be mounted. This may be slightly less than ideal, but this is the best that can be done with these file systems. The :var:`MOUNT_PREFIX` is the location where these mount points are mounted. These mount points are not intended to be used by the apps running in the container.
+
+.. var:: DOCKER_COMPOSE_FILES
+
+  :Default: ``()``
+  :Optional: True
+
+Array of docker-compose yaml files to parse for volumes
+
+.. note::
+
+  There is no way to use the ``_VOLUMES`` features from the CLI, as arrays cannot be exported. However the ``_VOLUME_1`` feature will work
+
+.. seealso::
+
+  :func:`just_entrypoint_functions docker_link_mounts`
+    Uses ``JUST_DOCKER_ENTRYPOINT_LINKS``
+

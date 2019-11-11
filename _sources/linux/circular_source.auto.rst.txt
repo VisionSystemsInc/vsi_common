@@ -1,0 +1,39 @@
+.. default-domain:: bash
+
+===============
+Circular source
+===============
+
+.. file:: circular_source.bsh
+
+.. function:: circular_source
+
+Similar to :func:`source_once.bsh source_once`, gives an easy way to have two scripts source each other without an infinite loop.
+
+:Arguments: ``$1`` - The file to be sourced if this is the first time.
+:Output: Returns ``0`` if this is the first time, else ``1`` for already sourced
+:Internal Use: * ``_VSI_CIRCULAR_SOURCE`` - State array used on ``bash`` 4 or newer
+               * ``_VSI_CIRCULAR_SOURCE_*`` - State variables used for ``bash`` 3.2
+
+In the file that you want to break the infinite loop in, simply:
+
+.. rubric:: Example
+
+.. code-block:: bash
+
+   #!/usr/bin/env bash
+   source "${VSI_COMMON_DIR}/linux/circular_source.bsh"
+   circular_source "some_file.bsh" || return 0
+
+In interactive mode, :func:`circular_source` will still re-source the file, but nominally only once. The ``return 0`` is important so that the rest of the file is not sourced multiple times (usually 2 or 3 times otherwise).
+
+Checks to see if the calling file is used multiple times to perform the current source command. If it is, returns 1 to break the chain.
+
+.. note::
+
+   This doesn't prevent a script from being sourced more than once ever, only being sourced more than once from within a particular source command.
+
+.. warning::
+
+   :func:`circular_source` should not be over used because it does execute ``realpath``. While on linux this is a trivial fork, in windows it is a ``CreateProcess`` operation which may only takes 33ms, but it only takes 30 calls to equal a second.
+

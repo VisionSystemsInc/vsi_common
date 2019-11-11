@@ -1,0 +1,285 @@
+==================
+Array Manipulation
+==================
+
+.. default-domain:: bash
+
+.. file:: elements.bsh
+
+Set of -euE safe functions to make ``bash`` array manipulation easy
+
+Set of functions for deleting, prepending and appending without repetition. Versions using actual ``Bash`` arrays are suffixed with an _a, else it works on delimiter (IFS) separated string
+
+These functions use variable indirection when possible to make using them friendlier.
+
+.. note::
+  Not intended for POSIX sh, works on bash and others like ksh
+
+.. function:: dynamic_set_a
+
+:Arguments: * ``$1`` - Name of array to be set
+            * [``$2...``] - Values to set
+
+Dynamically set an array to values from arguments
+
+.. rubric:: Example
+
+.. code-block:: bash
+
+  dynamic_set_a my_array_name 11 "2 2" 33
+  # Is like executing
+  # my_array_name=(11 "2 2" 33)
+
+.. function:: dynamic_set
+
+:Arguments: * ``$1`` - Name of variable to be set
+            * ``$2`` - Value to set
+
+Dynamically set a variable to a value. There are a number of properties that need to be preserved when setting a variable, export, local, global, etc... This method will allow you to indirectly set a variable while preserving these properties.
+
+.. rubric:: Example
+
+.. code-block:: bash
+
+   dynamic_set my_name '11 "2 2" 33'
+   # Is like executing
+   # my_array_name='11 "2 2" 33'
+
+.. function:: clear_a
+
+:Arguments: ``$1`` - Name of array to be cleared
+:Output: Returns ``1`` on invalid variable name
+
+Slightly safer indirect clear array
+
+.. note::
+  Still uses eval on older versions of bash, but makes sure the variable name appears valid
+
+.. function:: remove_element_a
+
+:Arguments: * ``$1`` - Name of array to be set
+            * ``$2`` - Value to be removed
+
+Removes all instances of a value from an array
+
+.. rubric:: Example
+
+.. code-block:: bash
+
+  x=(11 22 33 22 44)
+  remove_element_a x 22
+  # declare -a x='([0]="11" [1]="33" [2]="44")'
+
+.. note::
+  The resulting array is sequentially indexed, which is not typical in ``bash`` when removing elements from an array
+
+.. function:: remove_element
+
+:Arguments: * ``$1`` - Name of string to be set
+            * ``$2`` - String to be removed
+:Parameters: [``IFS``] - IFS Separator used
+
+String version of remove_element_a
+
+.. function:: add_elements_a
+
+:Arguments: * ``$1`` - Name of array to be set
+            * ``$2``... - Values to be appended
+
+Just appends to array, allows repeats. ``${1}+=("${@}")``
+
+.. function:: add_element_post_a
+
+:Arguments: * ``$1`` - Name of array to be set
+            * ``$2`` - Value to be appended
+
+Add a value to the end of an array
+
+Removes all copies of the value from the array first, and then appends to the end of the array
+
+.. rubric:: Example
+
+.. code-block:: bash
+
+  x=(22 11 22 33)
+  add_element_post_a x 22
+  declare -p x
+  # declare -a x='([0]="11" [1]="33" [2]="22")'
+
+.. note::
+  The resulting array is sequentially indexed
+
+.. function:: add_element_post
+
+:Arguments: * ``$1`` - Name of string to be set
+            * ``$2`` - String to be appended
+:Parameters: [``IFS``] - IFS Separator used
+
+String version of :func:`add_element_post_a`
+
+.. function:: add_element_pre_a
+
+:Arguments: * ``$1`` - Name of array to be set
+            * ``$2`` - Value to be prepended
+
+Add a value to the beginning of an array
+
+Removes all copies of the value from the array first, and then prepends to the beginning of the array
+
+.. rubric:: Example
+
+.. code-block:: bash
+
+  x=(11 22 33 22)
+  add_element_pre_a x 22
+  declare -p x
+  # declare -a x='([0]="22" [1]="11" [2]="33")'
+
+.. note::
+  The resulting array is sequentially indexed
+
+.. function:: add_element_pre
+
+:Arguments: * ``$1`` - Name of string to be set
+            * ``$2`` - String to be appended
+:Parameters: [``IFS``] - IFS Separator used
+
+String version of :func:`add_element_post_a`
+
+.. function:: cmp_elements_a
+
+:Arguments: * ``$1`` - First array name
+            * ``$2`` - Second array name
+:Output: Return Value: ``0`` - Identical, ``1`` - Not identical
+
+Checks if two arrays are the same
+
+.. function:: cmp_elements
+
+:Arguments: * ``$1`` - First string name
+            * ``$2`` - Second string name
+:Output: Return Value: ``0`` - Identical, ``1`` - Not identical
+
+String version of :func:`cmp_elements_a`
+
+.. function:: split_s
+
+:Arguments: * ``$1`` - Target array name
+            * ``$2``... - Strings
+:Parameters: * [``MIFS``] - A Multichararater Internal Field Separator.
+             * Default: //
+
+Splits an string into an array, using an ``MIFS``
+
+.. rubric:: Author
+
+https://stackoverflow.com/a/47633817/4166604
+
+.. function:: join_a
+
+:Arguments: * ``$1`` - Target string name
+            * ``$2``... - Array elements
+:Parameters: * [``MIFS``] - A Multichararater Internal Field Separator.
+             * Default: //
+:Returns: Returns ``0`` on success. If no elements were passed in, returns 1. This is done to create a distinction between ``join_a x`` and ``join_a x ""``.
+
+Joins an array into a string, using an ``MIFS``
+
+.. note::
+
+   When ``1`` is returned, this is the only time the output is not compatible with :func:`split_s`.
+
+.. function:: join_a_out
+
+:Arguments: * ``$1`` - Hex code for IFS
+            * ``$2``... - Strings
+:Parameters: * [``MIFS``] - A Multichararater Internal Field Separator, using awk escape format. (Except for null, which is a double backslash \\x00).
+             * Default: //
+             * Note: If you are using "" or $'' notation, you will need "\\\\x00"
+
+Instead of storing the value to a variable, this outputs to stdout. Unlike :func:`join_a`, :func:`join_a_out` can handle special characters, like null. Because macOS awk is so difficult, instead of '\x00' for null, use '\\x00'. No other form of null will work on macOS. All other sed escape character should work.
+
+.. rubric:: Author
+
+https://superuser.com/a/720157/352118
+
+.. function:: is_array
+
+:Arguments: * ``$1`` - variable name
+
+:Output: Returns ``0`` if variable is an array, else ``1``
+
+Determines if ``$1`` is an array or not. If it is not defined, still returns ``1``
+
+.. function:: to_array
+
+:Arguments: * ``$1`` - variable name
+
+Convert an string to an array, honoring quotes and newlines
+
+.. code-block:: bash
+
+  $ x=$'11 "2\n2" "3 \t 3 " ""'
+  $ to_array x
+  $ declare -p x
+  declare -a x=([0]="11" [1]=$'2\n2' [2]=$'3 \t 3' [3]="")
+
+.. rubric:: Bugs
+
+.. code-block:: bash
+
+   $ x='"f\o\\o" f\o\\o '\''f\o\\o'\'
+   $ eval "y=(${x})"
+   $ to_array x
+   $ declare -p x
+   $ declare -p y
+   declare -a x=([0]="f\\o\\\\o" [1]="fo\\o" [2]="f\\o\\\\o")
+   declare -a y=([0]="f\\o\\o" [1]="fo\\o" [2]="f\\o\\\\o")
+   # Only the double backslash in double quotes comes out wrong, due to a bug in xargs? To get around this bug, use ``eval`` instead
+
+.. function:: array_length
+
+:Arguments: * ``$1`` - Array name
+:Output: *stdout* - number of elements in the array. -1 for variable not defined.
+
+Echoes out the length of the array. If the variable is not defined, echos -1.
+
+.. note::
+  Does not differentiate between an array of length 1 and a non-array variable. Use :func:`is_array` for that
+
+.. function:: subtract_array
+
+:Arguments: * ``$1`` - Array 1
+            * ``$2`` - Array 2
+            * ``$3`` - Destination Array
+
+Destination array becomes values of array 2 not in array 1 (1 - 2). The
+destination array name can be the same as Array 1 or 2.
+
+.. function:: array_to_variable
+
+:Arguments: * ``$1`` - Array name
+            * ``$2`` - Variable name prefix
+
+Converts an array to a set of variables, starting with the prefix ``${2}_`` numbered from 1 to N in sequential order, even if there are holes in the array.
+
+.. function:: variables_to_array
+
+:Arguments: * ``$1`` - Variable name prefix
+            * ``$2`` - Array name
+
+Converts a set of variables to an array, starting with the prefix ``${1}_`` numbered from 1 to N in sequential order, stops as soon as one does not exist.
+
+.. note::
+
+   Will not detect variables that are declared but unset, will work with variables set to null.
+
+.. function:: all_variables_to_array
+
+Same as :func:`variables_to_array`, but can skip indexing numbers
+
+.. seealso::
+
+   :func:`variables_to_array`
+     Sequential only version of function
+

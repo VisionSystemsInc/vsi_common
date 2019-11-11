@@ -1,0 +1,348 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>vsi.windows.named_pipes &mdash; VSI Common 0.0.7 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+  <script type="text/javascript" src="../../../_static/js/modernizr.min.js"></script>
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+        <script type="text/javascript" src="../../../_static/jquery.js"></script>
+        <script type="text/javascript" src="../../../_static/underscore.js"></script>
+        <script type="text/javascript" src="../../../_static/doctools.js"></script>
+        <script type="text/javascript" src="../../../_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="../../../_static/js/theme.js"></script>
+
+    
+
+  
+  <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../../../index.html" class="icon icon-home"> VSI Common
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../just/index.html">J.U.S.T. Useful Simple Tasking</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../linux/index.html">Linux Utilities</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../windows/index.html">Windows Utilities</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tests/index.html">Unit Tests</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../python/modules.html">vsi</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../docker/recipes/get-pipenv.auto.html">Get Pipenv</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../docker/recipes/index.html">Docker recipes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../style.html">Contributing Style Guide</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">VSI Common</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="../../index.html">Module code</a> &raquo;</li>
+        
+      <li>vsi.windows.named_pipes</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for vsi.windows.named_pipes</h1><div class="highlight"><pre>
+<span></span><span class="c1">#Can this be replaced with multiprocessing.connections.PipeListener, and PipeClient?!</span>
+
+<span class="c1">#based off of http://code.activestate.com/lists/python-list/446422/</span>
+
+<span class="kn">from</span> <span class="nn">ctypes</span> <span class="k">import</span> <span class="o">*</span>
+
+<span class="n">PIPE_ACCESS_DUPLEX</span> <span class="o">=</span> <span class="mh">0x3</span>
+<span class="n">PIPE_TYPE_MESSAGE</span> <span class="o">=</span> <span class="mh">0x4</span>
+<span class="n">PIPE_READMODE_MESSAGE</span> <span class="o">=</span> <span class="mh">0x2</span>
+<span class="n">PIPE_WAIT</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="n">PIPE_UNLIMITED_INSTANCES</span> <span class="o">=</span> <span class="mi">255</span>
+<span class="n">BUFSIZE</span> <span class="o">=</span> <span class="mi">4096</span>
+<span class="n">NMPWAIT_USE_DEFAULT_WAIT</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="n">INVALID_HANDLE_VALUE</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
+<span class="n">ERROR_PIPE_CONNECTED</span> <span class="o">=</span> <span class="mi">535</span>
+
+<span class="n">GENERIC_READ</span> <span class="o">=</span> <span class="mh">0x80000000</span>
+<span class="n">GENERIC_WRITE</span> <span class="o">=</span> <span class="mh">0x40000000</span>
+<span class="n">OPEN_EXISTING</span> <span class="o">=</span> <span class="mh">0x3</span>
+<span class="n">PIPE_READMODE_MESSAGE</span> <span class="o">=</span> <span class="mh">0x2</span>
+<span class="n">ERROR_PIPE_BUSY</span> <span class="o">=</span> <span class="mi">231</span>
+<span class="n">ERROR_MORE_DATA</span> <span class="o">=</span> <span class="mi">234</span>
+
+<span class="n">PIPE_PREFIX</span><span class="o">=</span><span class="sa">r</span><span class="s1">&#39;</span><span class="se">\\</span><span class="s1">.\pipe&#39;</span><span class="o">+</span><span class="s1">&#39;</span><span class="se">\\</span><span class="s1">&#39;</span>
+
+<div class="viewcode-block" id="PipeException"><a class="viewcode-back" href="../../../python/vsi.windows.html#vsi.windows.named_pipes.PipeException">[docs]</a><span class="k">class</span> <span class="nc">PipeException</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
+  <span class="k">pass</span></div>
+
+<div class="viewcode-block" id="open"><a class="viewcode-back" href="../../../python/vsi.windows.html#vsi.windows.named_pipes.open">[docs]</a><span class="k">def</span> <span class="nf">open</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">server</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39; Helper open function</span>
+
+<span class="sd">  Parameters</span>
+<span class="sd">  ----------</span>
+<span class="sd">  name : str</span>
+
+<span class="sd">  Returns</span>
+<span class="sd">  -------</span>
+<span class="sd">  array_like</span>
+<span class="sd">      The pipe</span>
+
+
+<span class="sd">  Give it the look and feel of python&#39;s open command</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+  <span class="n">pipe</span> <span class="o">=</span> <span class="n">Pipe</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">server</span><span class="p">)</span>
+  <span class="k">return</span> <span class="n">pipe</span></div>
+
+<div class="viewcode-block" id="Pipe"><a class="viewcode-back" href="../../../python/vsi.windows.html#vsi.windows.named_pipes.Pipe">[docs]</a><span class="k">class</span> <span class="nc">Pipe</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39; Windows Named Pipe class similar to File objects &#39;&#39;&#39;</span>
+  <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">server</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">server</span> <span class="o">=</span> <span class="n">server</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">PIPE_PREFIX</span><span class="o">+</span><span class="n">name</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">open</span><span class="p">()</span>
+
+<div class="viewcode-block" id="Pipe.open"><a class="viewcode-back" href="../../../python/vsi.windows.html#vsi.windows.named_pipes.Pipe.open">[docs]</a>  <span class="k">def</span> <span class="nf">open</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Raises</span>
+<span class="sd">    ------</span>
+<span class="sd">    PipeException</span>
+<span class="sd">        For an invalid handle value</span>
+<span class="sd">    PipeException</span>
+<span class="sd">        Could not connect to the named pipe</span>
+<span class="sd">    PipeException</span>
+<span class="sd">        Error pipe busy</span>
+<span class="sd">    PipeException</span>
+<span class="sd">        SetNamedPipeHandleState failed</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">server</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">hPipe</span> <span class="o">=</span> <span class="n">windll</span><span class="o">.</span><span class="n">kernel32</span><span class="o">.</span><span class="n">CreateNamedPipeA</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                    <span class="n">PIPE_ACCESS_DUPLEX</span><span class="p">,</span>
+                    <span class="n">PIPE_TYPE_MESSAGE</span> <span class="o">|</span> <span class="n">PIPE_READMODE_MESSAGE</span> <span class="o">|</span> <span class="n">PIPE_WAIT</span><span class="p">,</span>
+                    <span class="n">PIPE_UNLIMITED_INSTANCES</span><span class="p">,</span> <span class="n">BUFSIZE</span><span class="p">,</span> <span class="n">BUFSIZE</span><span class="p">,</span>
+                    <span class="n">NMPWAIT_USE_DEFAULT_WAIT</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+
+      <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hPipe</span> <span class="o">==</span> <span class="n">INVALID_HANDLE_VALUE</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="n">PipeException</span><span class="p">(</span><span class="s1">&#39;Invalid Handle Value&#39;</span><span class="p">)</span>
+
+      <span class="n">fConnected</span> <span class="o">=</span> <span class="n">windll</span><span class="o">.</span><span class="n">kernel32</span><span class="o">.</span><span class="n">ConnectNamedPipe</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hPipe</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+      <span class="k">if</span> <span class="p">((</span><span class="n">fConnected</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">windll</span><span class="o">.</span><span class="n">kernel32</span><span class="o">.</span><span class="n">GetLastError</span><span class="p">()</span> <span class="o">==</span> <span class="n">ERROR_PIPE_CONNECTED</span><span class="p">)):</span>
+        <span class="n">fConnected</span> <span class="o">=</span> <span class="mi">1</span>
+
+      <span class="k">if</span> <span class="n">fConnected</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="k">raise</span> <span class="n">PipeException</span><span class="p">(</span><span class="s2">&quot;Could not connect to the Named Pipe&quot;</span><span class="p">)</span>
+
+    <span class="k">else</span><span class="p">:</span>
+      <span class="bp">self</span><span class="o">.</span><span class="n">hPipe</span> <span class="o">=</span> <span class="n">windll</span><span class="o">.</span><span class="n">kernel32</span><span class="o">.</span><span class="n">CreateFileA</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">GENERIC_READ</span> <span class="o">|</span> <span class="n">GENERIC_WRITE</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">OPEN_EXISTING</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+
+      <span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hPipe</span> <span class="o">==</span> <span class="n">INVALID_HANDLE_VALUE</span><span class="p">):</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">windll</span><span class="o">.</span><span class="n">kernel32</span><span class="o">.</span><span class="n">GetLastError</span><span class="p">()</span> <span class="o">!=</span> <span class="n">ERROR_PIPE_BUSY</span><span class="p">):</span>
+          <span class="k">raise</span> <span class="n">PipeException</span><span class="p">(</span><span class="s1">&#39;Error Pipe Busy&#39;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+          <span class="k">raise</span> <span class="n">PipeException</span><span class="p">(</span><span class="s1">&#39;Invalid Handle Value&#39;</span><span class="p">)</span>
+
+
+      <span class="n">dwMode</span> <span class="o">=</span> <span class="n">c_ulong</span><span class="p">(</span><span class="n">PIPE_READMODE_MESSAGE</span><span class="p">)</span>
+      <span class="n">fSuccess</span> <span class="o">=</span> <span class="n">windll</span><span class="o">.</span><span class="n">kernel32</span><span class="o">.</span><span class="n">SetNamedPipeHandleState</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hPipe</span><span class="p">,</span> <span class="n">byref</span><span class="p">(</span><span class="n">dwMode</span><span class="p">),</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+      <span class="k">if</span> <span class="p">(</span><span class="ow">not</span> <span class="n">fSuccess</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="n">PipeException</span><span class="p">(</span><span class="s1">&#39;SetNamedPipeHandleState failed&#39;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Pipe.read"><a class="viewcode-back" href="../../../python/vsi.windows.html#vsi.windows.named_pipes.Pipe.read">[docs]</a>  <span class="k">def</span> <span class="nf">read</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">bufferSize</span><span class="o">=</span><span class="mi">4096</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39; Read up to bufferSize bytes &#39;&#39;&#39;</span>
+
+    <span class="n">chBuf</span> <span class="o">=</span> <span class="n">create_string_buffer</span><span class="p">(</span><span class="n">bufferSize</span><span class="p">)</span>
+    <span class="n">cbRead</span> <span class="o">=</span> <span class="n">c_ulong</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+
+    <span class="n">fSuccess</span> <span class="o">=</span> <span class="n">windll</span><span class="o">.</span><span class="n">kernel32</span><span class="o">.</span><span class="n">ReadFile</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hPipe</span><span class="p">,</span> <span class="n">chBuf</span><span class="p">,</span> <span class="n">bufferSize</span><span class="p">,</span>
+                                        <span class="n">byref</span><span class="p">(</span><span class="n">cbRead</span><span class="p">),</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">fSuccess</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">or</span> <span class="n">windll</span><span class="o">.</span><span class="n">kernel32</span><span class="o">.</span><span class="n">GetLastError</span><span class="p">()</span> <span class="o">==</span> <span class="n">ERROR_MORE_DATA</span><span class="p">:</span>
+    <span class="c1">#ERROR_MORE_DATA is only important in message mode, currently only using</span>
+    <span class="c1">#byte mode</span>
+      <span class="k">return</span> <span class="n">chBuf</span><span class="o">.</span><span class="n">value</span></div>
+
+<div class="viewcode-block" id="Pipe.wait_for"><a class="viewcode-back" href="../../../python/vsi.windows.html#vsi.windows.named_pipes.Pipe.wait_for">[docs]</a>  <span class="nd">@staticmethod</span>
+  <span class="k">def</span> <span class="nf">wait_for</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">timeout__ms</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    name : str</span>
+<span class="sd">    timeout__ms : int</span>
+<span class="sd">        The timeout in milliseconcds</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    array_like</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">windll</span><span class="o">.</span><span class="n">kernel32</span><span class="o">.</span><span class="n">WaitNamedPipeA</span><span class="p">(</span><span class="n">PIPE_PREFIX</span><span class="o">+</span><span class="n">name</span><span class="p">,</span> <span class="n">timeout__ms</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Pipe.disconnect"><a class="viewcode-back" href="../../../python/vsi.windows.html#vsi.windows.named_pipes.Pipe.disconnect">[docs]</a>  <span class="k">def</span> <span class="nf">disconnect</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39; Send disconnect to client, forcing them to disconnect from the pipe &#39;&#39;&#39;</span>
+    <span class="n">windll</span><span class="o">.</span><span class="n">kernel32</span><span class="o">.</span><span class="n">DisconnectNamedPipe</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hPipe</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="Pipe.write"><a class="viewcode-back" href="../../../python/vsi.windows.html#vsi.windows.named_pipes.Pipe.write">[docs]</a>  <span class="k">def</span> <span class="nf">write</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    message : str</span>
+<span class="sd">        The message</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">cbWritten</span> <span class="o">=</span> <span class="n">c_ulong</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">fSuccess</span> <span class="o">=</span> <span class="n">windll</span><span class="o">.</span><span class="n">kernel32</span><span class="o">.</span><span class="n">WriteFile</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hPipe</span><span class="p">,</span> <span class="n">c_char_p</span><span class="p">(</span><span class="n">message</span><span class="p">),</span>
+                                         <span class="nb">len</span><span class="p">(</span><span class="n">message</span><span class="p">),</span> <span class="n">byref</span><span class="p">(</span><span class="n">cbWritten</span><span class="p">),</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">fSuccess</span><span class="p">:</span>
+      <span class="k">return</span> <span class="kc">None</span>
+<span class="c1">#    if len(message) != cbWritten.value:</span>
+<span class="c1">#      raise PipeException(&#39;Number of byte written does not match string length&#39;)</span>
+    <span class="k">return</span> <span class="n">cbWritten</span><span class="o">.</span><span class="n">value</span></div>
+
+
+<div class="viewcode-block" id="Pipe.close"><a class="viewcode-back" href="../../../python/vsi.windows.html#vsi.windows.named_pipes.Pipe.close">[docs]</a>  <span class="k">def</span> <span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="n">windll</span><span class="o">.</span><span class="n">kernel32</span><span class="o">.</span><span class="n">CloseHandle</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">hPipe</span><span class="p">)</span></div></div>
+</pre></div>
+
+           </div>
+           
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2018, Vision Systems, Inc
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

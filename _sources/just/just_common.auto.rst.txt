@@ -1,0 +1,168 @@
+.. default-domain:: bash
+
+=====================
+Just Common Functions
+=====================
+
+.. file:: just_common.bsh
+
+.. envvar:: JUST_VERSION
+
+Provides the version number of just. If the version number from the last time the just setup script was sourced and just do not match, a warning message will appear. Current version should be set in :envvar:`JUST_SETTINGS` file
+
+.. seealso::
+  :envvar:`JUST_SETUP_SCRIPT`
+
+.. envvar:: JUST_HELP_SEPARATOR
+
+Separator used internally for processing help comments
+
+When processing the help comments, the :envvar:`JUST_HELP_SEPARATOR` is used to
+separate the strings. As long as no help string contains this, everything
+will work out. Default: @#@
+
+.. rubric:: Bugs
+
+* If a comment contains " ${:envvar:`JUST_HELP_SEPARATOR`} ", then it will be truncated
+  at the first instance
+* If :envvar:`JUST_HELP_SEPARATOR` is not regex safe, it will not work either.
+
+.. seealso::
+
+  :func:`just_functions.bsh safe_load`
+
+.. envvar:: JUST_SETUP_SCRIPT
+
+When writing a setup script (typically called setup.env), :envvar:`JUST_SETUP_SCRIPT`
+can optionally be set to the name of the just setup script that will be used in
+messages such as the version check.
+
+.. rubric:: Example
+
+Usually developers will source a simple script to setup just. This primarily
+includes adding just to the path and setting up tab complete:
+
+.. code-block:: bash
+
+    export JUST_SETUP_SCRIPT="$(basename "${BASH_SOURCE[0]}")"
+    source "$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)/external/vsi_common/env.bsh"
+
+This might also include adding plugins for tab-complete.
+
+.. code-block:: bash
+
+    JUST_HELP_FILES=("${VSI_COMMON_DIR}"/linux/just_git_functions.bsh)
+
+This is also a convenient place to slip in git hooks.
+
+.. code-block:: bash
+
+    #Create post-checkout hook
+    _just_temp_filename="$(dirname "${BASH_SOURCE[0]}")/.git/hooks/post-checkout"
+    if [ ! -e "${_just_temp_filename}" ]; then
+      cat <<-EOF > "${_just_temp_filename}"
+        #!/usr/bin/env bash
+
+        if [ "\$1" != "\$2" ]; then
+          echo
+          echo "Don't forget to update your environment with the command: just sync"
+        fi
+        EOF
+      chmod 755 "${_just_temp_filename}"
+    fi
+
+    #Create post-merge hook
+    _just_temp_filename="$(dirname "${BASH_SOURCE[0]}")/.git/hooks/post-merge"
+    if [ ! -e "${_just_temp_filename}" ]; then
+      cat <<-EOF > "${_just_temp_filename}"
+        #!/usr/bin/env bash
+
+        echo
+        echo "Don't forget to update your environment with the command: just sync"
+        EOF
+      chmod 755 "${_just_temp_filename}"
+    fi
+    unset _just_temp_filename
+
+.. function:: _just_commands_from_file
+
+:Arguments: ``$1``... - Filename(s) of Justfile to be parsed
+
+Parses Justfile for help comments on targets. It looks for all case statements with a comment at the end. It will also parse
+commented case statements that exist for the purpose of populating the help
+
+.. seealso::
+
+  :envvar:`JUST_HELP_SEPARATOR` Used to combine lines.
+
+  :cmd:`just help` Prints out basic help based on comments in the Justfile.
+
+.. function:: _just_subcommands_from_array
+
+:Arguments: *stdin* - see Usage
+
+:Output: *stdout* - prints newline separated list of commands
+
+Returns a non-unique list of commands that have subcommands from an array.
+This is not intended to line up with the input array
+
+.. rubric:: Usage
+
+.. code-block:: bash
+
+  IFS=$'\n'
+  parsed_help_a=($(_just_commands_from_file "${JUSTFILE}"))
+  _just_subcommands_from_array <<< "${parsed_help_a[*]}"
+
+.. function:: _just_subtargets_from_array
+
+:Arguments: ``$1`` - subcommand name
+
+         ``$2..N`` - help_lines
+
+:Return Value: just_subtargets - Adds to array
+
+.. rubric:: Usage
+
+.. code-block:: bash
+
+  IFS=$'\n'
+  parsed_help_a=($(_just_commands_from_file "${JUSTFILE}"))
+
+  _just_subtargets_from_array ${TARGET} "${parsed_help_a[@]}"
+
+.. function:: _just_parse_helps
+
+:Arguments: ``$1...`` - List of Just files, including plugins
+
+:Output: parsed_help_a - Array of help lines: ``target ${JUST_HELP_SEPARATOR} message``
+
+Parse help information out of Just files
+
+.. function:: _just_load_justfile
+
+:Arguments: ``$1`` - The Justfile filename
+:Parameters: ``JUST_DRYRUN_SOURCE`` - For internal use, can replace the source command (with say :) to disable sourcing the Justfile
+:Return Value: 0 for successful load, else 1 for no Justfile found
+
+Convenience function for finding and loading the Justfile if it exists
+
+.. function:: _just_get_plugins
+
+:Arguments: [``$1``] - Default directory to look for :envvar:`JUST_PLUGIN_FILE` in
+
+:Parameters: [:envvar:`JUST_PLUGIN_FILE`] - Override the name of the just plugins file.
+
+:Default: :file:`.justplugins`
+
+:Output: ``JUST_PLUGINS`` - (Possibly empty) array of plugins filenames
+
+.. note::
+  :func:`_just_get_plugins` adds to ``JUST_PLUGINS`` if it already exists. If you want to
+  replace ``JUST_PLUGINS``, unset ``JUST_PLUGINS`` before calling :func:`_just_get_plugins`.
+
+.. seealso::
+  The plug in system for just
+
+  :file:`.justplugins` Plugin file
+

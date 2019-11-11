@@ -1,0 +1,85 @@
+==============================
+J.U.S.T. Singularity Functions
+==============================
+
+.. default-domain:: bash
+
+.. file:: just_singularity_functions.bsh
+
+.. function:: singular_defaultify
+
+.. command:: singularity_import
+
+Converts a docker image to a singularity image, writing the image to the just directory.
+
+:Arguments: ... - Same as `docker2singularity <https://github.com/singularityhub/docker2singularity#usage>`_, mainly "docker image name"
+:Parameters: * ``SINGULARITY_CUSTOM_IMPORT_SCRIPT`` - Specifies custom script to use run (step 8.5). This is useful for customizing the image (like entrypoints) before it is converted to a file.
+             * ``SINGULARITY_DOCKER_SOCKET`` - An array to specify a custom docker socket to connect to docker. If SINGULARITY_DOCKER_SOCKET is not an array, it is converted to an array where whitespaces will be split. Default: ``(--mount source=/var/run/docker.sock,destination=/var/run/docker.sock,type=bind)``
+             * ``DOCKER2SINGULARITY_VERSION`` - Version of singularity to use docker2singularity. Default: 2.6 for increased compatibility.
+
+.. command:: singularity_exec
+.. command:: singularity_instance-start
+.. command:: singularity_run
+.. command:: singularity_shell
+.. command:: singularity_test
+
+Starts a singularity container using :func:`singularity_functions.bsh Singularity`.
+
+.. command:: singular-compose
+
+singular-compose take the equivalent place of ``docker-compose``, but for singularity. This does not use `singularity-compose <https://github.com/singularityhub/singularity-compose>`_, instead it is a much simpler and plainer bash version.
+
+:Arguments: [``-f {filename}`` | ``--file {filename}``] - Optionally specify one or more singular-compose files, and ignoring the default found ``singular-compose.env`` file.
+
+A singular-compose file (default ``singular-compose.env``) is written 100% in bash and gives you the freedom to do anything you need in it. It is designed to be sourced by :cmd:`singular-compose` and has few requirements.
+
+* ``instances`` - must be an array of names of instances. If an instance name is not included here, it will be ignored by :cmd:`singular-compose`. You should use the ``+=`` operator when setting instances, so that multiple files can work together
+* ``{instance_name}_image`` - The filename of the singularity image.
+* [``{instance_name}_volumes``] - An array of bind mounts that will have the ``-B`` flag added to them.
+* [``{instance_name}_environment``] - A paired array of key/value pairs of environment variables that will be set in the singularity container. Even indexes are keys, odd indexes are values (if contiguous).
+* [``{instance_name}_singular_flags``] - List of extra flags to be passed to the singularity subcommand.
+
+.. rubric:: Example ``singular-compose.env``
+
+.. code-block:: bash
+   :caption: singular-compose.env
+
+   instances+=(django mysql)
+
+   # I can even include other compose files
+   source "${DJANGO_SOURCE_DIR}/singular-compose2.env"
+
+   django_environment=(
+     TZ "${TZ}"
+     DISPLAY "${DISPLAY}"
+     JUSTFILE /src/docker/django.Justfile
+     JUST_SETTINGS /src/django.env
+   )
+   django_volumes=(
+     "${DJANGO_SOURCE_DIR}:${DJANGO_INSTALL_DIR_DOCKER}:ro"
+     "${VSI_COMMON_DIR}:/vsi:ro"
+   )
+   django_singular_flags=(-c -e --nv)
+   : ${django_image=${DJANGO_CWD}/django_${DJANGO_USERNAME}.simg}
+
+   # I can even just copy other arrays (like an anchor)
+   mysql_environment=("${django_environment[@]}")
+   # Add a data dir, but copy all but the first volume from django
+   mysql_volumes=(
+     "${DJANGO_SOURCE_DIR}/singular/data:/data:rw"
+     "${django_volumes[@]:1}"
+   )
+   mysql_singular_flags=("${django_singular_flags[@]}")
+   : ${mysql_image=${DJANGO_CWD}/mysql_${DJANGO_USERNAME}.simg}
+
+:cmd:`singular-compose` currently supports a few subcommands:
+
+ * ``run`` - ``singularity run`` your singular-compose instance using :func:`singularity_functions.bsh Singularity`.
+ * ``shell`` - ``singularity shell`` your singular-compose instance using :func:`singularity_functions.bsh Singularity`.
+ * ``exec`` - ``singularity exec`` your singular-compose instance using :func:`singularity_functions.bsh Singularity`.
+ * ``test`` - ``singularity test`` your singular-compose instance using :func:`singularity_functions.bsh Singularity`.
+ * ``instance start`` - ``singularity instance start`` your singular-compose instance using :func:`singularity_functions.bsh Singularity`.
+ * ``config`` - Prints out the configuration for a specific instance, using bash ``declare -p`` notation. This output can be sourced or eval'ed
+ * ``config-null`` - A binary version of ``config`` using :func:`string_tools.bsh null_dump`, more useful when sending the information to languages not bash.
+ * ``instance`` - Handles other ``singularity`` instance commands for instance management.
+

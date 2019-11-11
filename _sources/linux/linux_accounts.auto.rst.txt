@@ -1,0 +1,159 @@
+================
+Linux Accounts
+================
+
+.. default-domain:: bash
+
+.. file:: linux_accounts.bsh
+
+Functions for manipulating linux user/groups
+
+.. note::
+  Works on tested (all?) versions CentOS, Ubuntu, Debian, Fedora, Alpine, BusyBox, CirrOS, Amazon Linux, and Clear Linux
+
+.. rubric:: Bugs
+
+On operating systems like Clear Linux, (and other more complicated setups like LDAP/NIS/etc...) where the user/group lists come from multiple places, the non-duplication code may not work as expected. This could be worked around by setting the passwd/etc... arrays yourself before calling add_user/add_group, but this too may not be the desired outcome.
+
+  - Arrays with the first element unset may have unpredictable behavior
+  - If the passwd file exists and the shadow does not, it will not be detected
+  - If the group file exists and the ghshdow does not, it will not be detected
+
+.. var:: LINUX_ACCOUNTS_*_FILE
+
+| LINUX_ACCOUNTS_PASSWD_FILE - Location of passwd file
+| LINUX_ACCOUNTS_SHADOW_FILE - Location of shadow file
+| LINUX_ACCOUNTS_GROUP_FILE - Location of group file
+| LINUX_ACCOUNTS_GSHADOW_FILE - Location of gshadow file
+
+Allows you to change the location to something other than their /etc location
+
+.. function:: read_file
+
+:Arguments: * ``$1`` - Filename
+            * ``$2`` - array_name
+
+:Output: ``${!2[@]}`` - Array of contents of the file; one line per element
+
+Read contents of /etc/passwd or similar files into an array
+
+.. note::
+  This is designed to work on newline separated files like /etc/passwd, /etc/group, etc...
+
+.. function:: write_file
+
+:Arguments: * ``$1`` - Filename
+            * ``$2``... - Lines to write
+
+Write contents /etc/passwd or similar from an array
+
+.. note::
+  This is designed to work on newline separated files like /etc/passwd, /etc/group, etc...
+
+.. function:: add_user
+
+:Arguments: * ``$1`` - User name
+            * [``$2``] - UID. Default: 1000
+            * [``$3``] - GID. Default: 1000
+            * [``$4``] - User home (defaults to /home/$1)
+:Parameters: * [passwd] - List of passwd lines. Auto loaded if not defined
+             * [shadow] - List of shadow lines. Auto loaded if not defined and it exists
+             * [``LINUX_ACCOUNTS_AUTOSAVE``] - Auto writes out passwd/shadow file. Default: ``1``
+
+Adds a new user to the OS
+
+.. note::
+  Will write a new passwd to /etc/passwd. If it is determined that the OS uses /etc/shadow too, then that will be written to also.
+
+.. function:: add_to_passwd
+
+:Arguments: * ``$1`` - User name
+            * [``$2``] - Encrypted password (x for none). Default: x
+            * [``$3``] - UID. Default: 1000
+            * [``$4``] - GID. Default: 1000
+            * [``$5``] - User home: Default: /home/$1
+            * [``$6``] - Default shell. Default: bash or sh
+:Parameters: passwd - List of passwd lines
+
+Adds entry to passwd array
+
+.. note::
+  If the username already exists, it is replaced.
+
+.. rubric:: Bugs
+
+I imagine bad things would happen if you "add_to_passwd root"
+
+.. function:: add_to_shadow
+
+:Arguments: * ``$1`` - User name
+            * ``$2`` - Encrypted password (* for none)
+
+Adds entry to shadow array
+
+.. function:: read_user_data
+
+:Output: * passwd - Array of passwd entries
+         * shadow - Array of shadow entries. Undefined if shadow does not exist
+
+Helper function to read passwd/shadow
+
+.. function:: write_user_data
+
+:Parameters: * passwd - Array of passwd entries
+             * [shadow] - Array of shadow entries. If undefined, shadow is not written
+
+Helper function to write passwd/shadow
+
+.. function:: add_group
+
+:Arguments: * ``$1`` - Group name
+            * ``$2`` - GID
+:Parameters: * groups - List of group lines
+             * [users] - List of users to add to the group
+             * [``LINUX_ACCOUNTS_AUTOSAVE``] - Auto writes out group/gshadow file. Default: ``1``
+             * [suffix] - Suffix to add to group_name if there is a name clash. For internal use
+
+Adds a new group to the OS
+
+.. note::
+  Will write a new group to /etc/group. If it is determined that the OS uses /etc/gshadow too, then that will be written to also.
+
+.. function:: read_group_data
+
+:Output: * group - Array of groups
+         * gshadow - Array of gshadow entries. Undefined if gshadow does not exist
+
+Helper function to read group/gshadow
+
+.. function:: write_group_data
+
+:Parameters: * group - Array of groups
+             * gshadow - Array of gshadow entries. If undefined, gshadow is not written
+
+Helper function to write group/gshadow
+
+.. function:: add_to_group
+
+:Arguments: * ``$1`` - Group name
+            * ``$2`` - GID
+            * [``$3``] - Encrypted password. Defaults to "x" (disabled)
+:Parameters: * group - List of group lines
+             * [users] - List of users to add to the group
+             * [suffix] - Suffix to add to group_name if there is a name clash. For internal use
+:Output: group_name - caches the group name used
+
+Adds entry to group array
+
+.. note::
+  Works on Debian, Centos, Alpine, etc... Only odd Linuxes with more than 4 columns in /etc/group will fail.
+
+.. function:: add_to_gshadow
+
+:Arguments: * ``$1`` - Group name
+            * [``$2``] - Encrypted password (! or * for none). Default: ``!``
+:Parameters: * [admins] - List of admins to add to the entry
+             * [users] - List of users to add to the entry
+
+Adds entry to gshadow array
+

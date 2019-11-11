@@ -1,0 +1,222 @@
+============
+String Tools
+============
+
+.. default-domain:: bash
+
+.. file:: string_tools.bsh
+
+
+.. function:: ltrim
+
+:Arguments: * ``$1`` - String to trim
+            * [``$2``] - Characters to trim. Default: [``:space:``]
+:Output: *stdout* - The trimmed string
+
+Left trim a string
+
+.. seealso::
+  :func:`trim` Trim from both ends in one call
+
+.. function:: rtrim
+
+:Arguments: * ``$1`` - String to trim
+            * [``$2``] - Characters to trim. Default: [``:space:``]
+:Output: *stdout* - The trimmed string
+
+Right trim a string
+
+.. seealso::
+  :func:`trim` Trim from both ends in one call
+
+.. function:: trim
+
+:Arguments: * ``$1`` - String to trim
+            * [``$2``] - Characters to trim. Default: [``:space:``]. Can be another character or character classes, such as: alnum alpha ascii blank cntrl digit graph lower print punct space upper word xdigit. For multiple characters/classes, use standard pattern matching syntax, minus the []
+:Output: *stdout* - The trimmed string
+
+Trim a string
+
+.. rubric:: Example
+
+.. code-block:: bash
+
+  trim ' abcAcba ' # Trim the spaces
+  Result: 'abcAbca'
+
+  trim 'abcAcba' a # Trims the letter a off
+  Result: 'bcAcb'
+
+  trim 'abcAcba' [:lower:] # Trims lowercase letters
+  Result: 'A'
+
+  trim 'abcdAdcba' a-c # Trims range a-c
+  Result: 'dAd'
+
+  trim 'aebcAcbea' aeiou # Trims vowels
+  Result: 'bcAcb'
+
+  See Bash man on "Pattern Matching" for more possibilities. $2 is essentially
+  placed inside a set of []
+
+.. seealso::
+  :func:`ltrim` Trim only from the left
+  :func:`rtrim` Trim only from the right
+
+.. function:: quote_escape
+
+:Arguments: * ``$1`` - String to escape
+:Output: *stdout* - The string with ' escaped properly
+
+Properly escape string for bash, adds ' for you, does not need extra quotes added to string. Useful for printing out instructions that are meant to be copy and pasted, no matter what characters are in the string. Also useful for ``eval``
+
+``printf '%q' "$foo"`` does not always work exactly as intended with ``eval`` on bash 3.2. Either the ``\`` is not expanded when double quotes are uses, or ``~`` is expanded without double quotes. With this function, no bash expansion ever occurs.
+
+Quotes do not need to be added to any expression, as ``'`` are added for you.
+
+.. rubric:: Example
+
+.. code-block:: bash
+
+  eval "x=$(quote_escape "Hi \"  'ya \"")" # <-- Never add quotes after the =
+  [ "${x}" = "Hi \"  'ya \"" ]
+
+.. seealso::
+  :func:`quote_substitute_escape` for use in ``${x-something}``
+
+.. function:: quote_unescape
+
+:Arguments: * ``$1`` - Sring to unescape
+:Output: *stdout* - Unescaped string
+
+Unquote a string quoted using bashes rules for quotes, without using eval.
+
+The ``trap -p`` command outputs string using the single quote notation and only escapes ``'``, while ``declare -p`` used the double quote notation and only has to escape ``\`$"``. Only these escape charaters are supported, all other escapes will be left in.
+
+.. warning::
+
+    This only works for specific single quoted strings, like that outputted from :func:`quote_escape`. Mixing a string with ``"`` or ``$'`` will result in error. The only concatination of two strings supported is ``'\''``.
+
+.. function:: quote_substitute_escape
+
+:Arguments: * ``$1`` - String to escape
+:Output: *stdout* - The string escaped properly
+
+Similar to :func:`quote_escape`, but can be used in the same use cases as :func:`quote_escape` and for variable substitution, e.g. the ``bar`` in ``${foo-bar}``.
+
+Unlike :func:`quote_escape`, quotes do need to be added to any expression. This is because quotes can be added outside the evaluation point of :func:`quote_substitute_escape`.
+
+.. rubric:: Example
+
+.. code-block:: bash
+
+  unset y
+  eval "x=\"${y-$(quote_substitute_escape "Hi \"  'ya \"")}\"" # <-- Need the \"
+  # Always add the \" after the =
+  [ "${x}" = 'Hi "  '\''ya "' ]
+
+  #also
+
+  eval "x=\"$(quote_substitute_escape "Hi \"  'ya \"")\"" # <-- Need the \"
+  [ "${x}" = 'Hi "  '\''ya "' ]
+
+.. seealso::
+  :func:`quote_escape` for the more generic case not in ``${}``
+
+.. function:: regex_escape
+
+:Arguments: * ``$1`` - String to escape
+:Output: *stdout* - The escaped string
+
+Adds '\' to the string, so it can be used as a literal string in a regex expression, assuming / is the search command separator
+
+.. var:: regex_escape_threshold
+
+The length threshold between using the pure bash version and sed version to. Set to 600 on Windows, else 50
+
+.. rubric:: Example
+
+.. code-block:: bash
+
+  $ regex_escape '***TEST***'
+  \*\*\*TEST\*\*\*
+
+.. Note::
+  An extra newline always shows up at the end, just like `echo` (without `-n`) would.
+  Only works for Basic Regex Expressions (BRE). A different function/flag would be needed for extended, as the rules are incompatible with each other (for example ``()``)
+
+.. function:: regex_escape_range
+
+:Arguments: * ``$1`` - String to escape
+:Output: *stdout* - The escaped string range, including []
+
+Adds '\' to the string, so it can be used as a literal string in a regex expression as a character range. Basically this handles the special cases for ``^``, ``-``, and ``]``
+
+.. rubric:: Example
+
+.. code-block:: bash
+
+  $ regex_escape_range '^hk]'
+  []hk^]
+
+.. function:: uppercase
+
+:Arguments: * ``$1`` - String to convert
+:Output: *stdout* - String in uppercase
+
+Converts a string to uppercase, using ``bash`` or ``tr``
+
+.. function:: lowercase
+
+:Arguments: * ``$1`` - String to convert
+:Output: *stdout* - String in lowercase
+
+Converts a string to lowercase, using ``bash`` or ``tr``
+
+.. function:: null_dump
+
+:Arguments: * ``$1`` - Header string
+            * ``$2`` - Name of array to be dumped
+            * [``$3``...] - Repeat ``$1`` and ``$2``
+:Output: *stdout* - Null separated dump of data
+
+Prints out multiple arrays, using a null separated schema.
+
+Uses of two two-byte control words, null+carat ``\0^`` between headers (array names), and null+period ``\0.`` between data elements. First prints out the header, than null+carat, then each element of the array, separated by null+period. Then a null+carat between the last element, and the next header, and repeats. Does not add extra control words to the end.
+
+.. rubric:: Examples
+
+.. code-block::
+
+   # An empty set, with the header foo
+   foo\0^
+   # Two empty sets, with the headers foo and bar
+   foo\0^\0^bar\0^
+   # Two set with the headers foo and bar
+   foo\0^boo\0.shoe\0.two\0^bar\0^car\0.sar
+   # One set whose last two elements are empty
+   foo\0^bar\0.car\0.sar\0.\0.
+
+.. rubric:: Parsing scheme
+
+#. Split by ``\0^``. Now you have a list alternating (header, data, header, data, ...)
+#. Split data by ``\0.`` and you have the array elements again.
+
+.. code-block:: python
+
+   data = data.split(b'\0^')
+   data = dict(zip([header.decode() for header in data[::2]],
+       [[chunk.decode() for chunk in group.split(b'\0.')] for group in data[1::2]]))
+
+.. function:: _null_dump
+
+:Arguments: * ``$1`` - Header string
+            * ``$2`` - Array name
+            * [``$3``] - Last(1), default 0. Set to 1 if this is the last group
+:Output: * *stdout* - Null separated dump of one group of data
+         * ``_null_dump_first_line`` - Used to track if this is the first group or not, automatically set for you, but you will need to clear it before starting a new datadump.
+
+Internal function. Prints one group. Must be combined with all the calls to get the proper number of nulls between groups. (The two nulls between groups are split among calls to :func:`_null_dump`
+
+*Can* be called manually.
+

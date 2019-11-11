@@ -1,0 +1,59 @@
+=====================
+Singularity Functions
+=====================
+
+.. default-domain:: bash
+
+.. file:: singularity_functions.bsh
+
+Set of functions to make using singularity easier
+
+.. envvar:: SINGULARITY
+
+Name/path of singularity executable
+
+Instead of hard-coding "singularity" everywhere, use the variable :envvar:`SINGULARITY` so that when the need comes, it is easier to switch which executable gets called.
+
+.. function:: Singularity
+
+:Arguments: ``$1``.. - Arguments to be sent to singularity command
+:Parameters: * [``DRYRUN``] - Optional variable inserted at the beginning of all singularity commands. Useful for setting to "echo" or similar for dryrun mode
+             * ``SINGULARITY_EXTRA_ARGS`` - Array of extra arguments inserted after singularity but before the singularity subcommand
+             * ``SINGULARITY_EXTRA_{subcommand}_ARGS`` - Extra arguments inserted right after the singularity subcommand
+:Output: Runs singularity command
+
+Helper function to execute the right singularity command, or just dryrun
+
+Instead of calling the singularity command directly, this Singularity function should
+be called instead (for all dryrun-able activities. Simple commands like
+inspect, ps, etc. don't make as much sense to dryrun, as the reset of the
+script will never be executed, thus rendering dryrun useless.)
+
+.. function:: singularity_env_pass
+
+Function that define the action needed to pass an environment variable to singularity. For singularity, exported environment variables that are prefixed with ``SINGULARITYENV_`` are passed to the singularity container, with the prefix stripped. This is more connivent than the first method of creating a temporary file, and mounting it into the singularity metadata ``env`` directory.
+
+:Arguments: ``$1`` - Name of environment variable (without prefix)
+            ``$2`` - The desired value of the environment variable.
+
+.. seealso::
+
+   See :func:`container_functions.bsh container_environment_override`
+       You can pass ``"singularity_env_pass"`` to :func:`container_functions.bsh container_environment_override` as an argument
+
+.. envvar:: ${JUST_PROJECT_PREFIX}_SINGULAR_COMPOSE_FILES
+
+An array storing the singular-compose files to be loaded by :func:`singular_load_env`, populated by :cmd:`just_singularity_functions.bsh singular_defaultify singular-compose`
+
+.. function:: singular_load_env
+
+Loads the singular-compose variables into memory
+
+:Arguments: ``$1`` - Instance name
+:Parameters: * [``${JUST_PROJECT_PREFIX}_SINGULAR_COMPOSE_FILES``] - Array storing the singular-compose files to be loaded. If empty, then see ``JUST_SINGULAR_COMPOSE_DIR``.
+             * [``JUST_SINGULAR_COMPOSE_DIR``] - By default, if ``${JUST_PROJECT_PREFIX}_SINGULAR_COMPOSE_FILES`` is unset, the singular-compose files will initially be searched for in the ``JUSTFILE`` directory, and then up the parent dirs until / is hit. However, if you wish to the disable this behavior and start searching for a singular-compose file from the current directory where "just" is called, then set this var to an empty string. You can also set to a specific directory to start searching from within that directory.
+:Outputs: * ``singular_volumes`` - The list of volumes to be bind mounted to the container
+          * ``singular_flags`` - Extra flags that need to be passed to singularity to execute the container right
+          * ``singular_environment`` - A key-value pair array of environment variables that need to be passed to the singularity container.
+          * ``singular_image`` - The filename of the singularity image used.
+

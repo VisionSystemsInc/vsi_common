@@ -1,0 +1,62 @@
+=========================
+J.U.S.T. Docker Functions
+=========================
+
+.. default-domain:: bash
+
+.. file:: just_docker_functions.bsh
+
+.. function:: docker_defaultify
+
+.. command:: build_recipes
+
+:Arguments: [``$1``]... - Recipe names to run
+
+Runs ``docker-compose build`` for the docker recipes. Useful command to call before ``docker build`` on your own project that uses recipes in vsi_common, to keep them synced with your build.
+
+.. command:: build_recipes-auto
+
+:Arguments: ``$1``... - Dockerfiles to parse
+
+Scans dockerfiles for ``vsiri/recipe:`` images, and calls :cmd:`build_recipes` on the recipes discovered. Accepts multiple files and ``-`` for stdin
+
+.. command:: log
+
+:Arguments: [``$1``]... - Service names
+
+Show logs from all service containers. Optionally specify service names to only log specific containers.
+
+.. warning::
+
+  Does not pick up containers that didn't exist when starting ``just`` log
+
+Override the log target in your ``Justfile`` and call ``__docker-compose-log`` if you need to set other parameter.
+
+.. command:: docker_clean
+
+:Arguments: ``$1`` - Volume to be removed
+
+Runs ``docker volume rm`` on the specified volume. If the volume is in use, there are four strategies to handle this:
+
+1. ``ask`` - (default) Interactively asks you if you want to use the stop, delete, or error strategy.
+2. ``stop`` - Attempts to stop the containers with a 30 second timeout and then forcefully remove the current containers mounting the volume, without prompting
+3. ``delete`` - Mounts the volume and deletes all of the files. May not work when a container is running a database, or the volumes modified by the entrypoint, i.e. adding user permissions.
+4. ``error`` - Errors out instead of cleaning the volume
+
+The action for a specific volume is specified by setting the label ``com.vsi.just.clean_action``.
+
+For example, in a ``docker-compose.yaml`` file:
+
+.. code-block:: yaml
+
+  volumes:
+    venv:
+      labels:
+        com.vsi.just.clean_action: ask
+
+delete
+------
+
+In the case of ``delete`` strategy, an optional labels ``com.vsi.just.clean_setup`` can be specified to designate what just target to run to repopulate a volume. Typically this just target should run ``sh -c ":"`` or similar. This allows the entrypoint or another command to properply setup the volume, and set permissions, etc...
+
+

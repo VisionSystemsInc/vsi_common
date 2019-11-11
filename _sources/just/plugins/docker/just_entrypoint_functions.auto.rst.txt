@@ -1,0 +1,89 @@
+=============================
+J.U.S.T. Entrypoint Functions
+=============================
+
+.. default-domain:: bash
+
+.. file:: just_entrypoint_functions
+
+Functions to help write docker entrypoints
+
+:Arguments: See inputs for other SEE ALSO
+
+.. rubric:: Example
+
+:file:`just_entrypoint_functions`
+
+.. rubric:: Usage
+
+Can also be sourced to call individual functions. By default, calling
+:file:`just_entrypoint_functions` runs
+- :func:`docker_setup_user`
+
+.. Seealso::
+  :func:`docker_setup_user`
+
+.. function:: docker_setup_user
+
+Create user/group
+
+:Parameters:
+  * [``DOCKER_ACCOUNTS_CREATE_USER``] - Enables the adding of a new user. If the particular username already exist, it is replaced. Default: 1
+  * [``DOCKER_ACCOUNTS_CREATE_GROUPS``] - Enables the adding of new groups. The first group is set as the user's primary group. Each subsequent group is set as an additional group, and the user is added as a member of each of these groups. If a group name already exists, an increasing number is appended until the name does not exist. if the GID already exists, it is just used again. Default: 1
+  * [``DOCKER_ACCOUNTS_POSIX_GROUPS``] - Enables filtering group names removing non-posix characters. This is important for operating systems like CentOS, etc... that actually follow the posix rules, unlike Debian. If 100% of the characters are non-posix, the name becomes simply "group". Default: 1
+  * [``DOCKER_USERNAME``] - The username used to create the new user. Default: user
+  * [``DOCKER_UID``] - The UID used when creating the new user. Default: 1000
+  * [``DOCKER_GROUP_NAMES``] - The group name(s) used when creating the groups for the new user. IFS delimited string (default: space, tab, newline). Default: user (only the primary group)
+  * [``DOCKER_GIDS``] - The GIDs used when creating the new groups. IFS delimited string. Default: 1000
+  * [``DOCKER_HOME``] - The home directory used when creating a new user. When the new directory is created, it is owned (non-recursively) by the UID/GID. Default: /home/${``DOCKER_USERNAME``}
+
+.. function:: retry_as_user
+
+If the command fails, retry it as ``DOCKER_USERNAME``
+
+.. rubric:: Usage
+
+Try to run a command as the current user (root); if that fails, run the
+command as ``DOCKER_USERNAME``.
+
+:Arguments: ``$1`` - The command to execute
+
+:Parameters: [``DOCKER_USERNAME``] - The username used to create the new user. Default: user
+
+.. function:: docker_link_mounts
+
+Create symlinks based on ``JUST_DOCKER_ENTRYPOINT_LINKS``
+
+When :func:`docker_compose_override generate_docker_compose_override` processes mounts, the desired mount will not be possible in some cases such as nfs with squash root. Instead the base mount point is mounted into the container and a symlink is created to link the desired locations. This function creates these symlinks based on the // separated string ``JUST_DOCKER_ENTRYPOINT_LINKS``. e.g., "source//destination//source//destination".
+
+.. rubric:: Usage
+
+Automatically called when :file:`just_entrypoint_functions` is called. If :file:`just_entrypoint_functions` is sourced, then :func:`docker_link_mounts` would need to be called separately.
+
+:Parameters: * [``JUST_DOCKER_ENTRYPOINT_LINKS``] - // delimited string of symlinks to create, e.g., "source//destination//source//destination"
+  * [``DOCKER_LINK_MOUNTS_FORCE``] - Adds a -f to ln commands. Disabled by default. Set this flag to enable.
+  * [``DOCKER_LINK_MOUNTS_NOT_IN_MOUNTS``] - Prevents making symlinks in mounted subdirectories. This is not the default docker behavior, so this feature is disabled by default. Set this flag to enable.
+  * [``DOCKER_USERNAME``] - The username used to create the new user. Default: user
+
+.. function:: docker_setup_data_volumes
+
+Change permissions of data volumes to 777
+
+When :func:`docker_compose_override generate_docker_compose_override` processes
+mounts, it determines the list of internal data volumes, and passes them
+to the container in ``JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS``. This function
+uses that variable to set all the directories' permissions to 777. This is
+useful for when a data volume is just created and it only had root
+permissions
+
+.. rubric:: Usage
+
+Automatically called when just_entrypoint_functions is called. If
+:file:`just_entrypoint_functions` is sourced, then :func:`docker_setup_data_volumes` would need
+to be called separately.
+
+:Parameters:
+  * [``JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS``] - // delimited string of folders corresponding to data volumes e.g., "/tmp/test1///dev/shm/2"
+  * [``JUST_DOCKER_ENTRYPOINT_CHOWN_DIRS``] - // delimited string of folders corresponding to folders in volumes that should be owned by ```DOCKER_UID`` and ``DOCKER_GIDS[0]``
+  * [``DOCKER_USERNAME``] - The username used to reown ``JUST_DOCKER_ENTRYPOINT_CHOWN_DIRS``. Default: user
+

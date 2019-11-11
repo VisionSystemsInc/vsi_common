@@ -1,0 +1,377 @@
+============
+Test Library
+============
+
+.. default-domain:: bash
+
+.. file:: testlib.bsh
+
+Simple shell command language test library
+
+.. rubric:: Usage
+
+. testlib.bsh
+
+.. rubric:: Example
+
+.. code-block:: bash
+
+  Tests must follow the basic form:
+
+  source testlib.bsh
+
+  begin_test "the thing"
+  (
+       set -e
+       echo "hello"
+       false
+  )
+  end_test
+
+  When a test fails its stdout and stderr are shown.
+
+.. note::
+  Tests must 'set -e' within the subshell block or failed assertions will not cause the test to fail and the result may be misreported. While this is not required, most tests will have this on.
+
+.. rubric:: Bugs
+
+On darling: when debugging a unit test error, sometimes the printout is cut off, making it difficult to do "printf debugging." While the cause and scope of this is unknown, a work around that sometimes works is
+
+.. code-block:: bash
+
+    runtests 2>&1 | less -R
+
+:Copyright: Original version: (c) 2011-13 by Ryan Tomayko <http://tomayko.com>
+
+            License: MIT
+:Author: Ryan Tomayko
+:Modification History: Andy Neff
+
+             * Added :func:`begin_expected_fail_test`
+             * Added optional :func:`setup`/:func:`teardown` functions
+             * Removed PATH
+             * Added robodoc documentation
+             * Use pushd/popd for each test instead of cd
+             * Auto prepend filename to description
+             * Added custom PS4
+
+.. function:: setup
+
+Function run before the first test
+
+.. note::
+  A directory :envvar:`TRASHDIR` is created for setup, right before running :func:`setup` ().
+
+  Setup is not run if no tests are ever run
+
+.. envvar:: TRASHDIR
+
+Temporary directory where everything for the test file is stored
+
+Automatically generated and removed (unless :envvar:`TESTLIB_KEEP_TEMP_DIRS` is changed)
+
+.. seealso::
+  :envvar:`TESTDIR`
+
+:Author: Ryan Tomayko
+
+.. envvar:: TESTDIR
+
+Unique temporary directory for a single test (in :envvar:`TRASHDIR`)
+
+Automatically generated and removed (unless :envvar:`TESTLIB_KEEP_TEMP_DIRS` is changed)
+
+.. seealso::
+  :envvar:`TRASHDIR`
+
+:Author: Ryan Tomayko
+
+.. function:: teardown
+
+Function run after the last test
+
+.. note::
+  Teardown is not run if no tests are ever run
+
+.. envvar:: TESTLIB_KEEP_TEMP_DIRS
+
+Keep the trashdir/setup dir
+
+Debug flag to keep the temporary directories generated when testing. Set to ``1`` to keep directories.
+
+:Default: ``0``
+
+.. envvar:: TESTLIB_SHOW_TIMING
+
+Display test time after each test
+
+Debug flag to display time elapsed for each test. Set to ``1`` to enable.
+
+:Default: ``0``
+
+.. envvar:: TESTLIB_RUN_SINGLE_TEST
+
+Run a single test
+
+Instead of running all the tests in a test file, only the tests with a description exactly matching the value of :envvar:`TESTLIB_RUN_SINGLE_TEST` will be run. Useful for debugging a specific test/piece of code
+
+:Default: *unset*
+
+.. envvar:: TESTLIB_REDIRECT_OUTPUT
+
+Redirects stdout and stderr to temporary files
+
+By default, all tests are run with ``set -xv`` for debugging purposes when a tests fails. This output is stored in a out/err/xtrace file temporarily and only displayed if a tests fails. You can set this variable to control the streams to always output.
+
+:Values: * ``3`` Redirect stdout, stderr, and xtrace
+         * ``2`` Redirect stderr, and xtrace, but let stdout through
+         * ``1`` Redirect xtrace, but let stdout and stderr through. On bash 4.0 and older, this will let xtrace through too
+         * ``0`` Let everything through
+
+:Default: ``3``
+
+.. envvar:: TESTLIB_NO_PS4
+
+If set, will disable the custom PS4 output. Useful for some coverage tools
+
+:Default: *unset*
+
+.. function:: atexit
+
+Function that runs at process exit
+
+.. rubric:: Usage
+
+Automatically called on exit by trap.
+
+Checks to see if teardown is defined, and calls it. teardown is typically a function, alias, or something that makes sense to call.
+
+:Author: Ryan Tomaydo
+:Modification History: Andy Neff
+
+            * Added :func:`setup` cleanup
+            * Added :func:`teardown`
+            * Added :envvar:`TESTLIB_KEEP_TEMP_DIRS` flags
+
+.. function:: begin_test
+
+Beginning of test demarcation
+
+.. rubric:: Usage
+
+Mark the beginning of a test. A subshell should immediately follow this statement.
+
+.. seealso::
+  :func:`end_test`
+
+:Author: Ryan Tomayko
+
+.. function:: begin_expected_fail_test
+
+Beginning of expected fail test demarcation
+
+.. rubric:: Usage
+
+Define the beginning of a test that is expected to fail
+
+.. function:: begin_required_fail_test
+
+Beginning of required fail test demarcation
+
+.. rubric:: Usage
+
+Define the beginning of a test that is required to fail
+
+.. function:: setup_test
+
+Sets up the test
+
+Once inside the () subshell, typically set -eu needs to be run, then other things such as checking to see if a test should be skipped, etc. need to be done. This is all encapsulated into :func:`setup_test`. This is required; without it, :func:`end_test` will know you forgot to call this and fail.
+
+This is also the second part of creating a skippable test.
+
+You are free to change "set -eu" after :func:`setup_test`, should you wish.
+
+.. rubric:: Usage
+
+Place at the beginning of a test
+
+.. rubric:: Example
+
+.. code-block:: bash
+
+  skip_next_test
+  begin_test "Skipping test"
+  (
+    setup_test
+    #test code here
+  )
+
+.. seealso::
+  :func:`skip_next_test`
+
+.. function:: end_test
+
+End of a test demarcation
+
+.. rubric:: Usage
+
+Mark the end of a test. Must be the first command after the test group, or else the return value will not be captured successfully.
+
+.. seealso::
+  :func:`begin_test`
+
+:Author: Ryan Tomayko
+
+.. function:: skip_next_test
+
+Function to indicate the next test should be skipped
+
+This is the first part of creating a skippable test, used in conjunction with :func:`setup_test`
+
+.. rubric:: Example
+
+.. code-block:: bash
+
+  For example, skip if docker command not found
+
+    command -v docker &> /dev/null && skip_next_test
+    begin_test "My test"
+    (
+      setup_test
+      [ "$(docker run -it --rm ubuntu:14.04 echo hi)" = "hi" ]
+    )
+
+.. seealso::
+  :func:`setup_test`
+
+.. note::
+  This must be done outside of the test, or else the skip variable will not be set and detected by :func:`end_test`
+
+.. function:: not
+
+:Arguments: ``$1``... - Command and arguments
+:Output: Return value
+
+    * ``0`` - On non-zero return code evaluation
+    * ``1`` - On zero return code
+
+Returns true only when the command fails
+
+Since ``!`` is ignored by "set -e", use :func:`not` instead. This is just a helper to make unittests look nice and not need extra ifs everywhere
+
+.. rubric:: Example
+
+.. code-block:: bash
+
+  # No good, always passes, even if ! true
+  ! false
+
+  # good
+  not false
+  # equivalent to
+  if ! false; then
+    true
+  else
+    false
+  fi
+
+.. rubric:: Bugs
+
+Complex statements do not work, e.g. [, [[ and ((, etc...
+  For example, you should use
+
+.. code-block:: bash
+
+    [ ! -e /test ]
+
+|  instead of
+
+.. code-block:: bash
+
+    not [ -e /test ]
+
+|  In cases where this is not easily worked around, you can use
+
+.. code-block:: bash
+
+    not_s '[ -e /test ]'
+
+.. seealso::
+  :func:`not_s`
+
+.. function:: not_s
+
+:Arguments: ``$1`` - Command/statement in a single string
+:Output: Return Value:
+
+            * ``0`` - On non-zero return code evaluation
+            * ``1`` - On zero return code
+
+Returns true only when the string version of command fails
+
+Since ``!`` is ignored by "set -e", use :func:`not` instead. This is just a helper to make unittests look nice and not need extra ifs everywhere.
+
+.. rubric:: Example
+
+.. code-block:: bash
+
+  x=test
+  y=t.st
+  not2 '[[ $x =~ $y ]]' # <-- notice single quotes.
+
+While the single quotes aren't necessary, they handle the more complicated situations more easily.
+
+.. note::
+  Uses eval
+
+.. seealso::
+  :func:`not`
+
+
+.. function:: track_touched_files
+
+Start tracking touched files
+
+After running :func:`track_touched_files`, any call to touch will cause that file to be added to the internal list (touched_files). Just prior to the teardown phase, all of these files will be automatically removed for your convenience.
+
+.. rubric:: Example
+
+.. code-block:: bash
+
+  setup()
+  {
+    track_touched_files
+  }
+  begin_test Testing
+  (
+    touch /tmp/hiya
+  )
+  end_test
+
+.. rubric:: Usage
+
+Should be called before the :func:`begin_test` block, not inside. Inside a () subshell block will not work. Setup is the logical place to put it.
+
+.. rubric:: Bugs
+
+Does not work in sh, only ``bash``. Uses array, and I didn't want to make this use a string instead.
+
+Not thread safe. Use a different file for each thread
+
+.. seealso::
+  :func:`cleanup_touched_files`
+
+.. function:: ttouch
+
+Touch function that should behave like the original touch command
+
+.. seealso::
+  :func:`track_touched_files`
+
+.. function:: cleanup_touched_files
+
+Delete all the touched files
+
+At the end of the last test, delete all the files in the array
+

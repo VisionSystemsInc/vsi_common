@@ -1,0 +1,100 @@
+===============
+Directory Tools
+===============
+
+.. default-domain:: bash
+
+.. file:: dir_tools.bsh
+
+Tools that deal with directories and paths, including making temporary file paths.
+
+.. function:: parent_find_files
+
+:Arguments: ``$1``... - The names of the files being searched for
+:Return Value: file_matches - array containing matches
+
+Find files by searching up the parent tree
+
+Searches for files to use. It starts by checking the current directory, and goes up. Just like git searches for a .git directory
+
+.. var:: _VSI_TEMP_PATHS
+
+.. note::
+  Do **NOT** mess with this variable. It is used to force recursive remove directories, and any mishaps could result in serious injury to computer, and you, depending on how upset you get by losing your computer.
+
+.. function:: make_temp_path
+
+:Arguments: ``$1`` - Name of variable where temporary path will be stored
+            [``$2``...] - Optionally add additional arguments to mktemp call. The most useful thing to add would be ``-t``, as this is in all the OSes. ``-d`` is often used to make a directory
+:Output: ``$1`` - Name of temporary path
+
+Create self cleaning temp directories
+
+.. rubric:: Usage
+
+Use this to create a self deleting temp file/directory. If you do not want to have it self delete, just use ``mktemp`` instead.
+
+Can be called multiple times
+
+.. rubric:: Example
+
+.. code-block:: bash
+
+  make_temp_path temp_dir -d
+  touch "${temp_dir}"/file1
+
+  # Do NOT
+  t="$(make_temp_path temp_dir -d; echo "${temp_dir}")"
+  # or
+  (
+    make_temp_path temp_dir -d
+    touch "${temp_dir}"/file2
+  ) # The temp_dir is deleted here
+  cat "${temp_dir}"/file2 # Fails
+  # As these will create and delete the temp dir within the subcommand, by design
+
+  # This is good, as the temp files will be cleaned up sooner
+  (
+    make_temp_path temp_dir -d
+    touch "${temp_dir}"/file2
+    cat "${temp_dir}"/file2 # Success!
+  ) # The temp_dir is deleted here
+.. note::
+  This uses the EXIT, INT, and TERM traps. If you use these too, your traps will be automatically chained using :func:`signal_tools.bsh trap_chain`.
+
+.. function:: normpath
+
+:Argumetns: * ``$1`` - path
+
+:Output: *stdout* - Normalized path
+
+Prints out a normalized version of the path. With .., //, and ./ simplified out, and removes trailing /
+
+Unlike :file:`real_path`, this works on non-existing path, but is not as reliable as :file:`real_path`
+
+.. function:: basenames
+
+:Arguments: * ``$1`` - Number of levels to keep
+            * ``$2`` - path
+:Output: *stdout* - base name up to ``$1`` levels deep
+
+Multiple level version of basename
+
+.. note::
+  ``basenames 2 test`` will result in ``./test`` as the implied dirname is ``.``
+
+.. function:: is_dir_empty
+
+Checks to see if there is any files or directories in a given directory, other than ``.`` and ``..``.
+
+:Arguments: ``$1`` - The directory to search, must have permissions, or else it may give false results
+:Returns: 0 for empty, 1 for not empty
+
+Uses ``find`` to search a directory, and stops as soon as something is found. You can write your own version of this to modify the conditions the ``find`` use. Other versions include ``find "${1}" -type f -printf '1\n' -quit`` which requires that a file specifically (not a directory) be in the tree somewhere. Add ``-maxdepth 1`` for saying a file must be in the initial directory, not the entire tree.
+
+.. function:: get_mktemp_dir
+
+Get the default temp dir that mktemp uses
+
+:Output: **stdout** - The temp dir, may need :func:`real_path real_path` run on it to dereference symlinks
+

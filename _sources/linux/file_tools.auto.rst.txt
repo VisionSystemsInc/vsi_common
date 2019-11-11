@@ -1,0 +1,112 @@
+==========
+File Tools
+==========
+
+.. default-domain:: bash
+
+.. file:: file_tools.bsh
+
+.. function:: find_open_fd
+
+:Arguments: * [``name``] - Variable name to return available file descriptor. Default: ``fd`` Variable's name should not be _fd or _fd_var
+            * {``START_FD``} - The first fd to start checking. Default: ``3``
+:Output: {``name``} - Value of next unused file descriptor
+
+Find the first open file descriptor
+
+.. rubric:: Usage
+
+This is for backwards compatibility. In ``bash`` 4.1 or newer, this isn't necessary, as:
+
+.. code-block:: bash
+
+    exec {fd}<>${some_buffer}
+    echo "hi" >&${fd}
+    read -u${fd} some_var
+    exec {fd}>&-
+
+is better.
+
+.. rubric:: Example
+
+.. code-block:: bash
+
+  mkfifo /tmp/test
+  find_open_fd
+  eval "exec ${fd}<>"/tmp/test"
+  echo hi >&${fd}
+  read -u ${fd} -t 1 line
+  eval "exec ${fd}>&-"
+
+.. rubric:: Bugs
+
+Probably not thread safe
+
+.. seealso::
+  :func:`open_fd`, :func:`close_fd`
+
+.. function:: open_fd
+
+:Arguments: * All options are optional
+            * ``-p`` - Pipe mode (use mkfifo)
+            * ``-f`` - File mode (use touch)
+            * ``-n`` {name} - Name of buffer used
+            * ``-s`` - Use the same fd for read and write
+            * ``-r`` {#} - Use this specific fd for reading
+            * ``-w`` {#} - Use this specific fd for writing
+            * ``-R`` {name} - Name of variable to store read fd in. Default: ``fd_r``
+            * ``-W`` {name} - Name of variable to store write fd in. Default: ``fd_w``
+            *  Variables names starting with _ should be avoided as they may clash with variables used in this function
+:Output: * Read and write variables will contain the corresponding file descriptors
+         * filename - Name of file/pipe that was opened.
+
+Find available file descriptor and open a file/pipe for you
+
+.. rubric:: Example
+
+.. code-block:: bash
+
+  # Make a pipe
+  pipe="$(mktemp -u)"
+
+  # Open the pipe
+  open_fd -p -s -n -W fd "${pipe}"
+
+  # Write to the pipe - does not block as long as buffer not filled
+  echo "hi" >&${fd}
+
+  # Blocking read from pipe. Use timeout command to add a timeout
+  timeout 1 cat - <&${fd}
+
+  # Read from the pipe and save to a variable without a subshell
+  IFS='' read -u "${fd}" -t 0.1 -r my_variable
+
+  # Close and cleanup
+  close_fd "${fd}"
+  rm "${pipe}"
+
+  Do NOT
+    output=$(open_fd)
+  Because open_fd will be executed in a subshell, and thus the opened fd will
+  be useless. This is the design decision behind storing the file descriptor
+  in the fd variable.
+
+.. note::
+  Opening a pipe without the same fd for read and write doesn't work very
+  well. It hangs on most tested systems. Workarounds are unpredictable at
+  best. So just don't do that.
+
+.. seealso::
+  :func:`close_fd` :func:`time_tools.bsh timeout`
+
+.. function:: close_fd
+
+:Arguments: * ``1`` - fd number
+            * [``2``] - fd number
+
+Closes open ``bash`` fds
+
+.. rubric:: Usage
+
+Uses eval for you, so you don't have to feel uncomfortable eval'ing
+
