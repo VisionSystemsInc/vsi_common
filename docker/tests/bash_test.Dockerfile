@@ -4,7 +4,7 @@ FROM vsiri/recipe:tini-musl as tini
 FROM vsiri/recipe:jq as jq
 FROM vsiri/recipe:vsi as vsi
 FROM vsiri/recipe:docker as docker
-FROM vsiri/recipe:docker-compose as docker-compose
+FROM vsiri/recipe:docker-compose-musl as docker-compose
 
 FROM bash:${BASH_VERSION}
 
@@ -24,7 +24,9 @@ RUN apk add --no-cache \
       # for better realpath, and id that supports -z
       coreutils \
       # For tests like time-tools/timeout
-      perl; \
+      perl \
+      # For docker-compose
+      python3; \
     command -v xxd &> /dev/null || apk add --no-cache vim
 
 ENV JUSTFILE=/vsi/docker/tests/bash_test.Justfile \
@@ -33,7 +35,8 @@ COPY --from=tini /usr/local/bin/tini /usr/local/bin/tini
 COPY --from=gosu /usr/local/bin/gosu /usr/local/bin/gosu
 COPY --from=jq /usr/local/bin/jq /usr/local/bin/jq
 COPY --from=docker /usr/local/bin /usr/local/bin
-COPY --from=docker-compose /usr/local/bin/docker-compose /usr/local/bin/docker-compose
+COPY --from=docker-compose /usr/local/docker-compose /usr/local/docker-compose
+RUN ln -s /usr/local/docker-compose/bin/docker-compose /usr/local/bin/docker-compose
 COPY --from=vsi /vsi /vsi
 
 ENTRYPOINT ["/usr/local/bin/tini", "--", "/usr/bin/env", "bash", "/vsi/linux/just_entrypoint.sh"]
