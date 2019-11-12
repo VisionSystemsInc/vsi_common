@@ -8,6 +8,8 @@ FROM vsiri/recipe:docker-compose as docker-compose
 
 FROM bash:${BASH_VERSION}
 
+SHELL ["/usr/bin/env", "bash", "-euxvc"]
+
 RUN apk add --no-cache \
       # Better awk
       gawk \
@@ -23,7 +25,7 @@ RUN apk add --no-cache \
       coreutils \
       # For tests like time-tools/timeout
       perl; \
-    command -v xxd || apk add --no-cache vim
+    command -v xxd &> /dev/null || apk add --no-cache vim
 
 ENV JUSTFILE=/vsi/docker/tests/bash_test.Justfile \
     JUST_SETTINGS=/vsi/vsi_common.env

@@ -49,11 +49,17 @@ source "${VSI_COMMON_DIR}/linux/real_path"
 #
 #    :func:`circular_source` should not be over used because it does execute ``realpath``. While on linux this is a trivial fork, in windows it is a ``CreateProcess`` operation which may only takes 33ms, but it only takes 30 calls to equal a second.
 #**
-function circular_source()
-{
-  if [ "${BASH_VERSINFO[0]}" -ge 4 ]; then
-    # :nocov_lt_bash_4.0:
-    declare -Ag _VSI_CIRCULAR_SOURCE
+if [ "${BASH_VERSINFO[0]}" -ge 4 ]; then
+  # :nocov_lt_bash_4.0:
+
+  if [ " ""${_VSI_CIRCULAR_SOURCE[@]+set}" = " " ]; then
+    declare -A _VSI_CIRCULAR_SOURCE=()
+  fi
+
+  function circular_source()
+  {
+    # This style of declaring as global is needed for bash 4.0/4.1 compliance
+
     local file_var="$(real_path "${BASH_SOURCE[1]}" )"
     file_var="_${file_var//[^a-zA-Z0-9_]/_}"
     # If there is no entry, it's never been sourced
@@ -63,8 +69,13 @@ function circular_source()
       unset _VSI_CIRCULAR_SOURCE[${file_var}]
       return 0
     fi
+    # We want only the first one to success
+    return 1
     # :nocov_lt_bash_4.0:
-  else
+  }
+else
+  function circular_source()
+  {
     # :nocov_bash_4.0:
     # Create an indirect variable using the calling file's name
     local file_var="$(real_path "${BASH_SOURCE[1]}")"
@@ -79,8 +90,8 @@ function circular_source()
       unset "${file_var}"
       return 0
     fi
+    # We want only the first one to success
+    return 1
     # :nocov_bash_4.0:
-  fi
-  # We want only the first one to success
-  return 1
-}
+  }
+fi
