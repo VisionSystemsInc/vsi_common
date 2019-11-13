@@ -44,7 +44,7 @@ source "${VSI_COMMON_DIR}/linux/isin"
 #
 #    On macos, it is common to have both 32 and 64 printed out. I.e. ``32 64``
 #**
-if [[ ${OSTYPE} = darwin* ]]; then
+if [[ ${OSTYPE-} = darwin* ]]; then
   function object_bits()
   {
     local output="$(lipo -info "${1}")"
@@ -55,6 +55,22 @@ if [[ ${OSTYPE} = darwin* ]]; then
       bits+=(32)
     fi
     if [[ ${output} =~ x86_64 ]]; then
+      bits+=(64)
+    fi
+    echo "${bits[*]}"
+  }
+elif [ "${OS-}" = "Windows_NT" ]; then
+  function object_bits()
+  {
+    # https://superuser.com/a/889267/352118
+    # Read offset (BOF) 0x3c two bytes (little endian). This is the offset of the next two bytes
+    # Read offset (BOF) those two bytes + 4 (PE\0\0) (little endian) 0x8664 = 64 bit, 0x014c = 32 bit
+    # Or.....
+    local output="$(file "${1}")"
+    if [[ ${output} =~ :[^:]*80386[^:]*$ ]]; then
+      bits+=(32)
+    fi
+    if [[ ${output} =~ :[^:]*x86-64[^:]*$ ]]; then
       bits+=(64)
     fi
     echo "${bits[*]}"
