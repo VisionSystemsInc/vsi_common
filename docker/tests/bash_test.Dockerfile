@@ -26,8 +26,8 @@ RUN apk add --no-cache \
       coreutils \
       # For tests like time-tools/timeout
       perl \
-      # For docker-compose
-      python3; \
+      # git for git... pretty self explanitory
+      git; \
     command -v xxd &> /dev/null || apk add --no-cache vim
 
 ENV JUSTFILE=/vsi/docker/tests/bash_test.Justfile \

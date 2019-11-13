@@ -17,13 +17,44 @@ source "${VSI_COMMON_DIR}/linux/elements.bsh"
 
 cd "${VSI_COMMON_DIR}"
 
+# Unit and integration tests do not inherit the parent process' environment,
+# this continuously caused too many issues. So instead we wipe it, and only
+# copy variables needed here. There shouldn't be much need to add more, but if
+# there is, this is where it is done
+function vsi_test_env()
+{
+  local test_env=("VSI_COMMON_DIR=${VSI_COMMON_DIR}"
+                  "HOME=${HOME}"
+                  "TERM=${TERM}"
+                  "PATH=${PATH}")
+  local envvar
+  # Copy all TESTLIB_* vars
+  for envvar in $(compgen -A export TESTLIB_ || :); do
+    test_env+=("${envvar}=${!envvar}")
+  done
+
+  # DBUS_SESSION_BUS_ADDRESS can affect a lot of applications in bad ways if it is missing
+  for envvar in VSI_COMMON_DIR HOME TERM PATH \
+                DBUS_SESSION_BUS_ADDRESS \
+                NUMBER_OF_PROCESSORS OS; do
+                # For windows, this shouldn't be removed, I'd call it a bug
+    if [ -n "${!envvar+set}" ]; then
+      test_env+=("${envvar}=${!envvar}")
+    fi
+  done
+
+  env -i "${test_env[@]}" "${@}"
+  # "${@}"
+}
+
 function caseify()
 {
   local just_arg=$1
   shift 1
+
   case ${just_arg} in
     test) # Run unit tests
-      env -i VSI_COMMON_DIR="${VSI_COMMON_DIR}" PATH="${PATH}" "${VSI_COMMON_DIR}/tests/run_tests" ${@+"${@}"}
+      vsi_test_env "${VSI_COMMON_DIR}/tests/run_tests" ${@+"${@}"}
       extra_args=$#
       ;;
     --test) # Run only this test
@@ -31,7 +62,7 @@ function caseify()
       extra_args=1
       ;;
     test_int) # Run integration tests
-      TESTLIB_DISCOVERY_DIR=int "${VSI_COMMON_DIR}/tests/run_tests" ${@+"${@}"}
+      TESTLIB_DISCOVERY_DIR=int vsi_test_env "${VSI_COMMON_DIR}/tests/run_tests" ${@+"${@}"}
       extra_args=$#
       ;;
     test_docker) # Run tests in docker image. Useful for setting VSI_COMMON_BASH_VERSION to test specific versions of bash
@@ -54,13 +85,13 @@ function caseify()
       )
       ;;
     test_recipe) # Run docker recipe tests
-      TESTLIB_DISCOVERY_DIR="${VSI_COMMON_DIR}/docker/recipes/tests" "${VSI_COMMON_DIR}/tests/run_tests" ${@+"${@}"}
+      TESTLIB_DISCOVERY_DIR="${VSI_COMMON_DIR}/docker/recipes/tests" vsi_test_env "${VSI_COMMON_DIR}/tests/run_tests" ${@+"${@}"}
       extra_args=$#
       ;;
     test_darling) # Run unit tests using darling
       (
         cd "${VSI_COMMON_DIR}"
-        env -i HOME="${HOME}" darling shell env TESTLIB_PARALLEL=8 ./tests/run_tests ${@+"${@}"}
+        TESTLIB_PARALLEL=8 vsi_test_env darling shell ./tests/run_tests ${@+"${@}"}
       )
       extra_args=$#
       ;;
@@ -96,7 +127,7 @@ function caseify()
       ;;
     test_wine) # Run unit tests using wine
       justify run wine -c "
-        cd /z/vsi_common
+        cd /z/vsi
         source setup.env
         just test ${*}"'
         rv=$?
