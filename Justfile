@@ -23,7 +23,7 @@ function caseify()
   shift 1
   case ${just_arg} in
     test) # Run unit tests
-      "${VSI_COMMON_DIR}/tests/run_tests" ${@+"${@}"}
+      env -i VSI_COMMON_DIR="${VSI_COMMON_DIR}" PATH="${PATH}" "${VSI_COMMON_DIR}/tests/run_tests" ${@+"${@}"}
       extra_args=$#
       ;;
     --test) # Run only this test
