@@ -77,12 +77,13 @@ jobs:
             apk add --no-cache curl ca-certificates
             curl -fLSs https://circle.ci/cli | bash
             versions="3.2 4.0 4.1 4.2 4.3 4.4 5.0"
-            echo "${versions}" | circleci tests split
-            echo "${versions}" | circleci tests split | \
-              xargs -n1 -I % env VSI_COMMON_BASH_TEST_VERSION="%" \
-                                 TESTLIB_SKIP_TESTS="Distribution name for" \
-                                 just test docker test -- \
-                                      test docker test int
+            versions=($(echo "${versions}" | tr ' ' '\n' | circleci tests split))
+            for version in "${versions[@]}"; do \
+              export VSI_COMMON_BASH_TEST_VERSION="${version}"
+              export TESTLIB_SKIP_TESTS="Distribution name for"
+              just test docker test
+              just test docker test int
+            done
 
   deploy_docs:
     <<: *container_config
