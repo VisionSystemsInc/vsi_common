@@ -5,6 +5,10 @@ function caseify()
   local cmd="${1}"
   shift 1
   case "${cmd}" in
+    all_tests) # Run tests and integration tests
+      justify test
+      justify test int
+      ;;
     test) # Run unit tests
       "${VSI_COMMON_DIR}/tests/run_tests" ${@+"${@}"}
       extra_args=$#
