@@ -101,15 +101,19 @@ function isxbit()
 #
 # .. code-block:: bash
 #
-#   lwhich 64 libSDL
-#   lwhich 32 'libc\.so'
-#   lwhich 64 '(libSDL|libOpenGL)'
+#    lwhich 64 libSDL
+#    lwhich 32 'libc\.so'
+#    lwhich 64 '(libSDL|libOpenGL)'
 #
 # :Uses: ``nm`` - Most OSes have this installed already. Sometimes a binutils package needs to be installed to get this
 #
 # which for shared libraries
 #
 # Searches for a library using the same ld resolution method as the OS. First ``LD_LIBRARY_PATH`` is searched, then ldconfig -p for a match to a filename.
+#
+# .. rubric:: Bugs
+#
+#    Since macos integrity checker blocks the ability to export ``LD_LIBRARY_PATH`` and ``DYLD_LIBRARY_PATH``, ``MACLD_LIBRARY_PATH`` can be used instead.
 #
 # .. rubric:: Bugs
 #
@@ -126,7 +130,6 @@ function isxbit()
 #     lwhich 32 '$|linux[^/]*\.so'
 #
 # (This will find common libraries such as ld-linux.so and libselinux.so)
-#
 #**
 function lwhich()
 {
@@ -141,20 +144,18 @@ function lwhich()
     case_insensitive='-i'
   fi
 
-  if [ -n "${LD_LIBRARY_PATH:+set}" ] || [ ! -e /etc/ld.so.cache ]; then
+  if [ -n "${LD_LIBRARY_PATH:+set}" ] || [ -n "${MACLD_LIBRARY_PATH:+set}" ] || [ ! -e /etc/ld.so.cache ]; then
     local LIBRARY_PATHS=()
     #set -f
     #IFS_OLD="${IFS}"
     IFS=:
-    LIBRARY_PATHS+=(${LD_LIBRARY_PATH:+"${LD_LIBRARY_PATH}"})
+    LIBRARY_PATHS+=(${LD_LIBRARY_PATH:+"${LD_LIBRARY_PATH}"} ${MACLD_LIBRARY_PATH:+"${MACLD_LIBRARY_PATH}"})
     IFS=$'\n' # I don't want splitting arrays on space or tab... JUST in case?
 
     # if musl (no /etc/ld.so.conf), then search '/lib' '/usr/local/lib' '/usr/lib'
     if [ ! -e /etc/ld.so.cache ]; then
       LIBRARY_PATHS+=(/lib /usr/local/lib /usr/lib)
     fi
-
-    declare -p LIBRARY_PATHS >&2 || :
 
     for d in "${LIBRARY_PATHS[@]}"; do
       files=("$d"/*)
