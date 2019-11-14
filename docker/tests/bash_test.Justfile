@@ -1,21 +1,29 @@
 #!/usr/bin/env false bash
 
+# Unit and integration tests do not inherit the parent process' environment,
+# this continuously caused too many issues. So instead we wipe it, and only
+# copy variables needed here. There shouldn't be much need to add more, but if
+# there is, this is where it is done
 function vsi_test_env()
 {
-  local test_env=("VSI_COMMON_DIR=${VSI_COMMON_DIR}"
-                  "HOME=${HOME}"
-                  "TERM=${TERM}"
-                  "PATH=${PATH}")
+  local test_env=()
   local envvar
   # Copy all TESTLIB_* vars
   for envvar in $(compgen -A export TESTLIB_ || :); do
     test_env+=("${envvar}=${!envvar}")
   done
 
-  # This can affect a lot of applications in bad ways if it is missing
-  if [ -n "${DBUS_SESSION_BUS_ADDRESS+set}" ]; then
-    test_env+=("DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS}")
-  fi
+  for envvar in VSI_COMMON_DIR HOME TERM PATH DOCKER_HOST \
+                DBUS_SESSION_BUS_ADDRESS \
+                NUMBER_OF_PROCESSORS OS; do
+  # DBUS_SESSION_BUS_ADDRESS - can affect a lot of applications in bad ways if it is missing
+  # DOCKER_HOST - for remote docker functionality
+  # NUMBER_OF_PROCESSORS OS - For windows, this shouldn't be removed, I'd call it a bug
+  # VSI_COMMON_DIR HOME TERM PATH - Just normal things
+    if [ -n "${!envvar+set}" ]; then
+      test_env+=("${envvar}=${!envvar}")
+    fi
+  done
 
   env -i "${test_env[@]}" "${@}"
 }
