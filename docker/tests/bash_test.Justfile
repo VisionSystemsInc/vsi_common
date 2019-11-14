@@ -15,9 +15,11 @@ function vsi_test_env()
 
   for envvar in VSI_COMMON_DIR HOME TERM PATH \
                 DBUS_SESSION_BUS_ADDRESS \
+                DOCKER_HOST\
                 NUMBER_OF_PROCESSORS OS; do
   # DBUS_SESSION_BUS_ADDRESS - can affect a lot of applications in bad ways if it is missing
-  # DOCKER_HOST - for remote docker functionality
+  # DOCKER_HOST - for remote docker functionality when running the int tests. When running
+  # the docker tests, DOCKER_HOST will not be passed along, os it'll be unset, and still
   # NUMBER_OF_PROCESSORS OS - For windows, this shouldn't be removed, I'd call it a bug
   # VSI_COMMON_DIR HOME TERM PATH - Just normal things
     if [ -n "${!envvar+set}" ]; then
