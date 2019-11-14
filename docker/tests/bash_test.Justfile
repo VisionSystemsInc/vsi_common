@@ -13,7 +13,7 @@ function vsi_test_env()
     test_env+=("${envvar}=${!envvar}")
   done
 
-  for envvar in VSI_COMMON_DIR HOME TERM PATH DOCKER_HOST \
+  for envvar in VSI_COMMON_DIR HOME TERM PATH \
                 DBUS_SESSION_BUS_ADDRESS \
                 NUMBER_OF_PROCESSORS OS; do
   # DBUS_SESSION_BUS_ADDRESS - can affect a lot of applications in bad ways if it is missing
