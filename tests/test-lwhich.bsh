@@ -43,8 +43,11 @@ test_lwhich()
   fi
 }
 
-if ! command -v "${LDCONFIG-ldconfig}" >/dev/null 2>&1 || \
-   [ "$(${LDCONFIG-ldconfig} -p | grep 'x86-64')" = "" ]; then
+if [ -e /etc/ld.so.cache ]; then
+  if ${LDCONFIG-ldconfig} -p | grep x86-64 &> /dev/null; then
+    skip_next_test
+  fi
+elif [ "$(uname -m)" != "x86_64" ]; then
   skip_next_test
 fi
 begin_test "lwhich 64"
@@ -55,8 +58,11 @@ begin_test "lwhich 64"
 )
 end_test
 
-if ! command -v "${LDCONFIG-ldconfig}" >/dev/null 2>&1 || \
-   [ "$(${LDCONFIG-ldconfig} -p | grep -v 'x86-64' | wc -l)" -lt "2" ]; then
+if [ -e /etc/ld.so.cache ]; then
+  if [ "$(${LDCONFIG-ldconfig} -p | grep -v 'x86-64' | wc -l)" -lt "2" ]; then
+    skip_next_test
+  fi
+elif ! [[ $(uname -m) =~ i[3-6]86 ]]; then
   skip_next_test
 fi
 begin_test "lwhich 32"
@@ -67,18 +73,22 @@ begin_test "lwhich 32"
 )
 end_test
 
-if ! command -v "${LDCONFIG-ldconfig}" >/dev/null 2>&1; then
-  skip_next_test
-fi
 begin_test "lwhich LD_LIBRARY_PATH"
 (
   setup_test
 
   source "${VSI_COMMON_DIR}/linux/bin_utils.bsh"
 
-  filename="$(${LDCONFIG-ldconfig} -p | tail -n 1 | awk -F ' => ' '{print $2}')"
+  if [ -e /etc/ld.so.cache ]; then
+    filename="$(${LDCONFIG-ldconfig} -p | tail -n 1 | awk -F ' => ' '{print $2}')"
+  else
+    filename="$(find /lib /usr/local/lib /usr/lib /usr/bin -maxdepth 1 \( -name \*.so -o -name \*.dylib -o -name \*.dll \) -print -quit 2>/dev/null || :)"
+  fi
+
   answer="${TESTDIR}/libqwertyuiop.so"
-  bits=$(object_bits "${filename}")
+  bits=($(object_bits "${filename}"))
+  # Just pick the last in case of multiple arches
+  bits=("${bits[${#bits[@]}-1]}")
 
   cp "${filename}" "${answer}"
   filename="${answer##*/}"
@@ -91,10 +101,15 @@ begin_test "lwhich LD_LIBRARY_PATH"
   not "${VSI_COMMON_DIR}"/linux/isin "${answer}" ${possibilities+"${possibilities[@]}"}
 
   # Success case
-  export LD_LIBRARY_PATH="${TESTDIR}"
+  if [[ ${OSTYPE-} = darwin* ]]; then
+    export MACLD_LIBRARY_PATH="${TESTDIR}"
+  else
+    export LD_LIBRARY_PATH="${TESTDIR}"
+  fi
   IFS=$'\n'
-  possibilities=($("${VSI_COMMON_DIR}"/linux/lwhich --${bits} "${filename%%.*}"))
+  possibilities=($(bash -xv "${VSI_COMMON_DIR}"/linux/lwhich --${bits} "${filename%%.*}"))
   IFS="${OLD_IFS}"
+  echo foo
   "${VSI_COMMON_DIR}"/linux/isin "${answer}" ${possibilities+"${possibilities[@]}"}
 )
 end_test

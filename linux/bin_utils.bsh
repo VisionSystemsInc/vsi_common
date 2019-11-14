@@ -18,6 +18,7 @@ fi
 
 : ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
 source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
+source "${VSI_COMMON_DIR}/linux/isin"
 
 #**
 # :Functions: - object_bits - Print out the number of bits in an object file (requires nm)
@@ -34,29 +35,59 @@ source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
 #
 # :Parameters: ``$1`` - Filename (.o, .a, .so, executable, etc...)
 # :Output: *stdout* - Prints the number of bits
-# :Uses: ``nm`` - Most OSes have this installed already. Sometimes a binutils package needs to be installed to get this
+# :Uses: * ``nm`` - Most OSes have this installed already. Sometimes a binutils package needs to be installed to get this.
+#        * ``lipo`` - On macos os, uses ``lipo`` instead of ``nm``.
 #
 # Prints out the number of bits (typically 32 or 64) in a file
+#
+# .. note:
+#
+#    On macos, it is common to have both 32 and 64 printed out. I.e. ``32 64``
 #**
-function object_bits()
-{
-  nm -D "${1}" | sed -En '/^[0-9A-Fa-f]{8,}/ {p; q}' | awk '{print length($1)*4}'
-}
-
-if [ "${BASH_SOURCE[0]}" = "${0}" ] || [ "$(basename "${BASH_SOURCE[0]}")" = "${0}" ]; then
-  arg=$1
-  shift 1
-
-  case $arg in
-    --bits)
-      object_bits "${@}"
-      ;;
-    *)
-      echo "Unknown argument $arg"
-      exit 1
-      ;;
-  esac
+if [[ ${OSTYPE-} = darwin* ]]; then
+  function object_bits()
+  {
+    local output="$(lipo -info "${1}")"
+    output="${output##*:}" # Remove everything before the colon, could give false positives
+    local bits=()
+    # I know mac uses i386, I'm not sure they use i686 or similar, so just cover them all
+    if [[ ${output} =~ i[3-6]86 ]]; then
+      bits+=(32)
+    fi
+    if [[ ${output} =~ x86_64 ]]; then
+      bits+=(64)
+    fi
+    echo "${bits[*]}"
+  }
+elif [ "${OS-}" = "Windows_NT" ]; then
+  function object_bits()
+  {
+    # https://superuser.com/a/889267/352118
+    # Read offset (BOF) 0x3c two bytes (little endian). This is the offset of the next two bytes
+    # Read offset (BOF) those two bytes + 4 (PE\0\0) (little endian) 0x8664 = 64 bit, 0x014c = 32 bit
+    # Or.....
+    local output="$(file "${1}")"
+    if [[ ${output} =~ :[^:]*80386[^:]*$ ]]; then
+      bits+=(32)
+    fi
+    if [[ ${output} =~ :[^:]*x86-64[^:]*$ ]]; then
+      bits+=(64)
+    fi
+    echo "${bits[*]}"
+  }
+else
+  function object_bits()
+  {
+    nm -D "${1}" | sed -En '/^[0-9A-Fa-f]{8,}/ {p; q}' | awk '{print length($1)*4}'
+  }
 fi
+
+function isxbit()
+{
+  local bits=($(object_bits "${2}"))
+  isin "${1}" ${bits[@]+"${bits[@]}"}
+  return $?
+}
 
 #**
 # .. function:: lwhich
@@ -70,15 +101,19 @@ fi
 #
 # .. code-block:: bash
 #
-#   lwhich 64 libSDL
-#   lwhich 32 'libc\.so'
-#   lwhich 64 '(libSDL|libOpenGL)'
+#    lwhich 64 libSDL
+#    lwhich 32 'libc\.so'
+#    lwhich 64 '(libSDL|libOpenGL)'
 #
 # :Uses: ``nm`` - Most OSes have this installed already. Sometimes a binutils package needs to be installed to get this
 #
 # which for shared libraries
 #
 # Searches for a library using the same ld resolution method as the OS. First ``LD_LIBRARY_PATH`` is searched, then ldconfig -p for a match to a filename.
+#
+# .. rubric:: Bugs
+#
+# Since macos integrity checker blocks the ability to export ``LD_LIBRARY_PATH`` and ``DYLD_LIBRARY_PATH``, ``MACLD_LIBRARY_PATH`` can be used instead.
 #
 # .. rubric:: Bugs
 #
@@ -95,7 +130,6 @@ fi
 #     lwhich 32 '$|linux[^/]*\.so'
 #
 # (This will find common libraries such as ld-linux.so and libselinux.so)
-#
 #**
 function lwhich()
 {
@@ -110,12 +144,18 @@ function lwhich()
     case_insensitive='-i'
   fi
 
-  if [ -n "${LD_LIBRARY_PATH+${LD_LIBRARY_PATH}}" ]; then
+  if [ -n "${LD_LIBRARY_PATH:+set}" ] || [ -n "${MACLD_LIBRARY_PATH:+set}" ] || [ ! -e /etc/ld.so.cache ]; then
+    local LIBRARY_PATHS=()
     #set -f
     #IFS_OLD="${IFS}"
     IFS=:
-    LIBRARY_PATHS=("$LD_LIBRARY_PATH")
+    LIBRARY_PATHS+=(${LD_LIBRARY_PATH:+"${LD_LIBRARY_PATH}"} ${MACLD_LIBRARY_PATH:+"${MACLD_LIBRARY_PATH}"})
     IFS=$'\n' # I don't want splitting arrays on space or tab... JUST in case?
+
+    # if musl (no /etc/ld.so.conf), then search '/lib' '/usr/local/lib' '/usr/lib'
+    if [ ! -e /etc/ld.so.cache ]; then
+      LIBRARY_PATHS+=(/lib /usr/local/lib /usr/lib)
+    fi
 
     for d in "${LIBRARY_PATHS[@]}"; do
       files=("$d"/*)
@@ -137,13 +177,33 @@ function lwhich()
     done
   fi
 
-  # TODO: if musl (no /etc/ld.so.conf), then search '/lib' '/usr/local/lib' '/usr/lib'
+  # Check to see if /etc/ld.so.cache exists. If it doesn't, then this is probably musl, not glibc.
+  # musl doesn't have ld.so.conf, or cache, or ldconfig -p, so do it manually. The only way this
+  # test could have a false positive is in a container situation where ldconfig cache hasn't been
+  # built, in which case ldconfig -p would fail anyways.
+  if [ -e /etc/ld.so.cache ]; then
+    # This only complicated the wildcard idea, and I don't CARE about this case
+    for match in $(${LDCONFIG-ldconfig} -p | grep ${case_insensitive} -E $'^\t'"$1" | awk '{print $(NF)}'); do
+      if isxbit ${bits} "${match}" && ! isin "$(basename "$match")" ${filenames+"${filenames[@]}"}; then
+        matches+=("${match}")
+        filenames+=("$(basename "$match")")
+      fi
+    done
+  fi
 
-  # This only complicated the wildcard idea, and I don't CARE about this case
-  for match in $(${LDCONFIG-ldconfig} -p | grep ${case_insensitive} -E $'^\t'"$1" | awk '{print $(NF)}'); do
-    if isxbit ${bits} "${match}" && ! isin "$(basename "$match")" ${filenames+"${filenames[@]}"}; then
-      matches+=("${match}")
-      filenames+=("$(basename "$match")")
-    fi
-  done
 }
+
+if [ "${BASH_SOURCE[0]}" = "${0}" ] || [ "$(basename "${BASH_SOURCE[0]}")" = "${0}" ]; then
+  arg=$1
+  shift 1
+
+  case $arg in
+    --bits)
+      object_bits "${@}"
+      ;;
+    *)
+      echo "Unknown argument $arg"
+      exit 1
+      ;;
+  esac
+fi

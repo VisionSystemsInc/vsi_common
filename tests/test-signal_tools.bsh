@@ -20,7 +20,7 @@ begin_test "Set BASHPID for bash 3.2"
   setup_test
   not declare -p BASHPID
   set_bashpid
-  [[ $(ps -o pid=,ppid=,comm= ${BASHPID}) = ${BASHPID}*${PARENT_BASHPID}*bash ]]
+  [[ $(ps -o pid= -o ppid= -o comm= | grep "^ *${BASHPID} ") =~ ^\ *${BASHPID}\ *${PARENT_BASHPID}\ *bash ]] || false
   # The parent bash should only have one child process, this subshell, so use
   # ps to verify everything seems legit.
 )
@@ -49,18 +49,23 @@ begin_test "Trap chain"
   )
 
   # Test warning messages about inheriting from parent for ERR
-  (
-    [[ $(trap_chain "blah" ERR 2>&1) == *"There is a potential of falsely inheriting"* ]]
-    [[ $(TRAP_CHAIN_QUIET=1 trap_chain "blah" ERR 2>&1) != *"There is a potential of falsely inheriting"* ]]
-  )
+  if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge 42 ]; then
+    (
+      [[ $(trap_chain "blah" ERR 2>&1) == *"There is a potential of falsely inheriting"* ]] || false
+      [[ $(TRAP_CHAIN_QUIET=1 trap_chain "blah" ERR 2>&1) != *"There is a potential of falsely inheriting"* ]] || false
+    )
+
+    # Clear previous trap_chain call
+    unset _TRAP_CHAIN_ERR_LAST_PID
+    unset _TRAP_CHAIN_ERR
+    # Test warning messages about possible inheriting from parent when not using trap_chain
+    (
+      [[ $(trap_chain "blah" ERR 2>&1) == *"rather than the \"trap_chain\" command"* ]] || false
+      [[ $(TRAP_CHAIN_QUIET=1 trap_chain "blah" ERR 2>&1) != *"rather than the \"trap_chain\" command"* ]] || false
+    )
+  fi
+
   # Clear previous trap_chain call
-  unset _TRAP_CHAIN_ERR_LAST_PID
-  unset _TRAP_CHAIN_ERR
-  # Test warning messages about possible inheriting from parent when not using trap_chain
-  (
-    [[ $(trap_chain "blah" ERR 2>&1) == *"rather than the \"trap_chain\" command"* ]]
-    [[ $(TRAP_CHAIN_QUIET=1 trap_chain "blah" ERR 2>&1) != *"rather than the \"trap_chain\" command"* ]]
-  )
   unset _TRAP_CHAIN_ERR_LAST_PID
   unset _TRAP_CHAIN_ERR
   trap ERR

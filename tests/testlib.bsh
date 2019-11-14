@@ -20,8 +20,7 @@
 # .. rubric:: Example
 #
 # .. code-block:: bash
-#
-#   Tests must follow the basic form:
+#   :caption: Tests must follow the basic form:
 #
 #   source testlib.bsh
 #
@@ -29,6 +28,11 @@
 #   (
 #        set -e
 #        echo "hello"
+#        [ 1 == 1 ] # this is ok
+#        # However, the following needs "|| false" because on bash 3.2 and 4.0
+#        # there is a bug where [[ ]] will fail, and bash knows it fails ($?),
+#        # but "set -e" does not count this as an error. This is fixed in bash 4.1
+#        [[ 1 == 1 ]] || false
 #        false
 #   )
 #   end_test
@@ -157,6 +161,21 @@ skipped=0
 # Instead of running all the tests in a test file, only the tests with a description exactly matching the value of :envvar:`TESTLIB_RUN_SINGLE_TEST` will be run. Useful for debugging a specific test/piece of code
 #
 # :Default: *unset*
+#**
+
+#**
+# .. envvar:: TESTLIB_SKIP_TESTS
+#
+# A bash regex expressions that designates tests to be skipped.
+#
+# :Default: *unset*
+#
+# .. rubric:: Examples
+#
+# .. code:: bash
+#
+#    TESTLIB_SKIP_TESTS='^New Just$|foo'
+#    # Skip "New Just" and anything with "foo" it is, e.g. "food"
 #**
 
 #**
@@ -341,6 +360,10 @@ _begin_common_test ()
       exec 2>"$err"
       ;;
   esac
+
+  if [ -n "${TESTLIB_SKIP_TESTS+set}" ] && [[ ${1} =~ ${TESTLIB_SKIP_TESTS} ]]; then
+    __testlib_skip_test=1
+  fi
 
   # Allow the subshell to exit non-zero without exiting this process
   set -x +e

@@ -20,17 +20,9 @@ commands:
           command: |
             git submodule sync
             git submodule update --recursive --init
-
-
-jobs:
-  run_tests:
-    <<: *container_config
-
+  dependencies_and_smuggle:
+    description: Install dependencies and copies the source dir to the remote docker host
     steps:
-      - checkout
-      - submodule_checkout
-      - setup_remote_docker
-
       - run:
           name: Install test dependencies and smuggle vsi to host
           command: |
@@ -41,26 +33,22 @@ jobs:
             just build recipes
             tar c . | docker run -i --rm -v /root/repo:/src -w /src alpine:3.8 tar x
 
-      - run:
-          name: Run unit tests
-          environment:
-            LDCONFIG: /usr/glibc-compat/sbin/ldconfig
-          command: |
-            . setup.env
-            just test
-
-      - run:
-          name: Run integration tests
-          command: |
-            . setup.env
-            just test int
-
-  compile_docs:
+jobs:
+  compile_docs_and_common_source:
     <<: *container_config
+
     steps:
       - checkout
       - submodule_checkout
       - setup_remote_docker
+      - dependencies_and_smuggle
+
+      - run:
+          name: Run integration tests common_source
+          command: |
+            . setup.env
+            just test int common_source
+
       - run:
           name: Generate docs
           command: |
@@ -73,6 +61,28 @@ jobs:
           root: docs/_build
           paths: html
 
+  run_bash_tests:
+    <<: *container_config
+    parallelism: 2
+    steps:
+      - checkout
+      - submodule_checkout
+      - setup_remote_docker
+      - dependencies_and_smuggle
+      - run:
+          name: Run test on Bash Versions
+          command: |
+            # install the circleci cli
+            source setup.env
+            apk add --no-cache curl ca-certificates
+            curl -fLSs https://circle.ci/cli | bash
+            versions="3.2 4.0 4.1 4.2 4.3 4.4 5.0"
+            versions=($(echo "${versions}" | tr ' ' '\n' | circleci tests split))
+            for version in "${versions[@]}"; do \
+              export VSI_COMMON_BASH_TEST_VERSION="${version}"
+              export TESTLIB_SKIP_TESTS="Distribution name for"
+              just test docker all tests
+            done
 
   deploy_docs:
     <<: *container_config
@@ -102,11 +112,11 @@ jobs:
 workflows:
   vsi_common:
     jobs:
-      - run_tests
-      - compile_docs
+      - run_bash_tests
+      - compile_docs_and_common_source
       - deploy_docs:
           requires:
-            - compile_docs
+            - compile_docs_and_common_source
           filters:
             branches:
               only:

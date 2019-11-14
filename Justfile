@@ -13,6 +13,8 @@ source "${VSI_COMMON_DIR}/linux/just_env" "${VSI_COMMON_DIR}/vsi_common.env"
 source "${VSI_COMMON_DIR}/linux/just_docker_functions.bsh"
 source "${VSI_COMMON_DIR}/linux/just_sphinx_functions.bsh"
 source "${VSI_COMMON_DIR}/linux/just_bashcov_functions.bsh"
+# Load vsi_test_env
+source "${VSI_COMMON_DIR}/docker/tests/bash_test.Justfile"
 source "${VSI_COMMON_DIR}/linux/elements.bsh"
 
 cd "${VSI_COMMON_DIR}"
@@ -21,9 +23,10 @@ function caseify()
 {
   local just_arg=$1
   shift 1
+
   case ${just_arg} in
     test) # Run unit tests
-      "${VSI_COMMON_DIR}/tests/run_tests" ${@+"${@}"}
+      vsi_test_env "${VSI_COMMON_DIR}/tests/run_tests" ${@+"${@}"}
       extra_args=$#
       ;;
     --test) # Run only this test
@@ -31,7 +34,13 @@ function caseify()
       extra_args=1
       ;;
     test_int) # Run integration tests
-      TESTLIB_DISCOVERY_DIR=int "${VSI_COMMON_DIR}/tests/run_tests" ${@+"${@}"}
+      TESTLIB_DISCOVERY_DIR=int vsi_test_env "${VSI_COMMON_DIR}/tests/run_tests" ${@+"${@}"}
+      extra_args=$#
+      ;;
+    test_docker) # Run tests in docker image. Useful for setting VSI_COMMON_BASH_VERSION to test specific versions of bash
+      justify build recipes-auto "${VSI_COMMON_DIR}/docker/tests/bash_test.Dockerfile"
+      Just-docker-compose build bash_test
+      Just-docker-compose run bash_test ${@+"${@}"}
       extra_args=$#
       ;;
     test_int_appveyor) # Run integration tests for windows appveyor
@@ -48,13 +57,13 @@ function caseify()
       )
       ;;
     test_recipe) # Run docker recipe tests
-      TESTLIB_DISCOVERY_DIR="${VSI_COMMON_DIR}/docker/recipes/tests" "${VSI_COMMON_DIR}/tests/run_tests" ${@+"${@}"}
+      TESTLIB_DISCOVERY_DIR="${VSI_COMMON_DIR}/docker/recipes/tests" vsi_test_env "${VSI_COMMON_DIR}/tests/run_tests" ${@+"${@}"}
       extra_args=$#
       ;;
     test_darling) # Run unit tests using darling
       (
         cd "${VSI_COMMON_DIR}"
-        env -i HOME="${HOME}" darling shell env TESTLIB_PARALLEL=8 ./tests/run_tests ${@+"${@}"}
+        TESTLIB_PARALLEL=8 vsi_test_env darling shell ./tests/run_tests ${@+"${@}"}
       )
       extra_args=$#
       ;;
@@ -90,7 +99,7 @@ function caseify()
       ;;
     test_wine) # Run unit tests using wine
       justify run wine -c "
-        cd /z/vsi_common
+        cd /z/vsi
         source setup.env
         just test ${*}"'
         rv=$?

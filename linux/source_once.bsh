@@ -55,20 +55,29 @@ if [[ $- != *i* ]]; then
 fi
 
 
-function source_once()
-{
-  # Don't put [[ $- != *i* ]] check here, see command_not_found_handle comment above
-  if [ "${BASH_VERSINFO[0]}" -ge 4 ]; then
-    # :nocov_lt_bash_4.0:
-    declare -Ag _VSI_ALREADY_SOURCED
+# Don't put [[ $- != *i* ]] check here, see command_not_found_handle comment above
+if [ "${BASH_VERSINFO[0]}" -ge 4 ]; then
+  # :nocov_lt_bash_4.0:
+
+  # https://stackoverflow.com/q/10806357/4166604
+  if [ " ""${_VSI_ALREADY_SOURCED[@]+set}" = " " ]; then
+    declare -A _VSI_ALREADY_SOURCED=()
+  fi
+
+  function source_once()
+  {
     local file_var="_${BASH_SOURCE[1]//[^a-zA-Z0-9_]/_}"
     # If there is no entry, it's never been sourced
     if [ -z "${_VSI_ALREADY_SOURCED[${file_var}]+set}" ]; then
       _VSI_ALREADY_SOURCED[${file_var}]=1
       return 1
     fi
+    return 0
     # :nocov_lt_bash_4.0:
-  else
+  }
+else
+  function source_once()
+  {
     # :nocov_bash_4.0:
     # Create an indirect variable using the calling file's name
     local SOURCE_VAR="_VSI_ALREADY_SOURCED_${BASH_SOURCE[1]//[^a-zA-Z0-9_]/_}"
@@ -80,9 +89,9 @@ function source_once()
       return 1
     fi
     # :nocov_bash_4.0:
-  fi
-  return 0
-}
+    return 0
+  }
+fi
 
 # Only the source_once file itself needs to call this at the end. Set's up
 # the already sourced variable for this file
