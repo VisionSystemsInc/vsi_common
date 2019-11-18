@@ -62,11 +62,13 @@ set -eu
 #
 # :Parameters: * :envvar:`JUST_SETTINGS` - Location of project env settings file.
 #              * :envvar:`VSI_COMMON_DIR` - Optional, location of VSI dir, defaults to /vsi
+#              * ``DOCKER_USERNAME`` - Optional, username for new user, defaults to user
 # :Internal Use: * ``ALREADY_RUN_ONCE`` - Tracks if entrypoint has already sudoed to user.
 #                * ``JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES`` - Passed from :func:`docker_functions.bsh Just-docker-compose`
 #**
 
 : ${VSI_COMMON_DIR=/vsi}
+: ${DOCKER_USERNAME=user}
 
 if [ -n "${SINGULARITY_NAME+set}" ]; then
   # Disable the special docker magic in singularity
