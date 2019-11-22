@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
 
 set -eu
 
@@ -89,17 +89,28 @@ if [ "${ALREADY_RUN_ONCE+set}" != "set" ]; then
     /usr/bin/env bash "${VSI_COMMON_DIR}/linux/just_entrypoint_functions"
   )
 
-
   if [ -n "${BASH_SOURCE+set}" ]; then
     file="${BASH_SOURCE[0]}"
+    shell=bash
   else
     file="${0}" #sh compatibility
+    shell=sh
   fi
+
+  # Sorted: https://serverfault.com/a/122743/321910
+  for patch in /usr/local/share/just/root_run_patch/*; do
+    if [ -x "${patch}" ]; then
+      "${patch}"
+           # https://www.endpoint.com/blog/2016/12/12/bash-loop-wildcards-nullglob-failglob
+           # check -e incase glob doesn't expand
+    elif [ -e "${patch}" ]; then
+      ${shell} "${patch}"
+    fi
+  done
 
   # Rerun entrypoint as user now, (skipping the root part via ALREADY_RUN_ONCE)
   ALREADY_RUN_ONCE=1 exec gosu ${DOCKER_USERNAME} /usr/bin/env bash "${file}" ${@+"${@}"}
 fi
-
 
 function sudo()
 {
@@ -122,6 +133,16 @@ if [ -n "${JUST_PROJECT_PREFIX+set}" ]; then
   filter_docker_variables
 fi
 docker_convert_paths
+
+for patch in /usr/local/share/just/user_run_patch/*; do
+  if [ -x "${patch}" ]; then
+    "${patch}"
+          # https://www.endpoint.com/blog/2016/12/12/bash-loop-wildcards-nullglob-failglob
+          # check -e incase glob doesn't expand
+  elif [ -e "${patch}" ]; then
+    ${shell} "${patch}"
+  fi
+done
 
 if [ "${run_just}" = "1" ]; then
   exec /vsi/linux/just "${@}"
