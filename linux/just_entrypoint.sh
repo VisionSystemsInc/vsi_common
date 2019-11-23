@@ -76,18 +76,6 @@ if [ -n "${SINGULARITY_NAME+set}" ]; then
 fi
 
 if [ "${ALREADY_RUN_ONCE+set}" != "set" ]; then
-  # create the user and associated groups and handle nfs symlinks
-
-  (
-    # TODO: This will not source local.env if the src directory were on an nfs
-    # Not sure ADDing the local files in the Dockerfile is the "right" solution
-    source "${VSI_COMMON_DIR}/linux/just_env" "${JUST_SETTINGS-/dev/null}"
-    # Setup the container to be more friendly to non-root users and
-    # add other advanced J.U.S.T. features
-    JUST_DOCKER_ENTRYPOINT_CHOWN_DIRS="${JUST_DOCKER_ENTRYPOINT_CHOWN_DIRS-${JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES-}}" \
-    JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS="${JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS-${JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES-}}" \
-    /usr/bin/env bash "${VSI_COMMON_DIR}/linux/just_entrypoint_functions"
-  )
 
   if [ -n "${BASH_SOURCE+set}" ]; then
     file="${BASH_SOURCE[0]}"
@@ -97,17 +85,29 @@ if [ "${ALREADY_RUN_ONCE+set}" != "set" ]; then
     shell=sh
   fi
 
-  # Sorted: https://serverfault.com/a/122743/321910
-  for patch in /usr/local/share/just/root_run_patch/*; do
-    if [ -x "${patch}" ]; then
-      "${patch}"
-           # https://www.endpoint.com/blog/2016/12/12/bash-loop-wildcards-nullglob-failglob
-           # check -e incase glob doesn't expand
-    elif [ -e "${patch}" ]; then
-      ${shell} "${patch}"
-    fi
-  done
+  (
+    # TODO: This will not source local.env if the src directory were on an nfs
+    # Not sure ADDing the local files in the Dockerfile is the "right" solution
+    source "${VSI_COMMON_DIR}/linux/just_env" "${JUST_SETTINGS-/dev/null}"
 
+    # Sorted: https://serverfault.com/a/122743/321910
+    for patch in /usr/local/share/just/root_run_patch/*; do
+      if [ -x "${patch}" ]; then
+        "${patch}"
+            # https://www.endpoint.com/blog/2016/12/12/bash-loop-wildcards-nullglob-failglob
+            # check -e incase glob doesn't expand
+      elif [ -e "${patch}" ]; then
+        ${shell} "${patch}"
+      fi
+    done
+
+    # create the user and associated groups and handle nfs symlinks
+    # Setup the container to be more friendly to non-root users and
+    # add other advanced J.U.S.T. features
+    JUST_DOCKER_ENTRYPOINT_CHOWN_DIRS="${JUST_DOCKER_ENTRYPOINT_CHOWN_DIRS-${JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES-}}" \
+    JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS="${JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS-${JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES-}}" \
+    /usr/bin/env bash "${VSI_COMMON_DIR}/linux/just_entrypoint_functions"
+  )
   # Rerun entrypoint as user now, (skipping the root part via ALREADY_RUN_ONCE)
   ALREADY_RUN_ONCE=1 exec gosu ${DOCKER_USERNAME} /usr/bin/env bash "${file}" ${@+"${@}"}
 fi
