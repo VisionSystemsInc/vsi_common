@@ -85,6 +85,8 @@ if [ "${ALREADY_RUN_ONCE+set}" != "set" ]; then
     shell=sh
   fi
 
+  export shell
+
   (
     # TODO: This will not source local.env if the src directory were on an nfs
     # Not sure ADDing the local files in the Dockerfile is the "right" solution
@@ -143,6 +145,9 @@ for patch in /usr/local/share/just/user_run_patch/*; do
     ${shell} "${patch}"
   fi
 done
+
+# Unexport it
+unset shell
 
 if [ "${run_just}" = "1" ]; then
   exec /vsi/linux/just "${@}"

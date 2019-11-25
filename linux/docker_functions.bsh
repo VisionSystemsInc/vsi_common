@@ -54,7 +54,7 @@ fi
 #
 # Regex pattern for matching docker volume short form
 #
-# .. Note::
+# .. note::
 #   Works on:
 #     C:\*, c:/* .* /* - '^(([a-zA-Z]:[/\])?[^:]*)'
 #
@@ -196,7 +196,7 @@ function is_readonly_docker_compose_long_volume()
 #
 # Get a label value from a docker container
 #
-# .. Note::
+# .. note::
 #   Requires perl be installed
 # .. rubric:: Bugs
 #
@@ -229,7 +229,7 @@ function container_get_label()
 # has a label or not when the label is blank. The go template filter does not
 # differentiate. This will verify that a blank label is set or unset.
 #
-# .. Note::
+# .. note::
 #   Requires jq be installed
 #**
 
@@ -256,7 +256,7 @@ function container_has_label()
 # When the argument is a docker volume, nothing should happen. Docker auto
 # creates those just fine.
 #
-# .. Note::
+# .. note::
 #   Always creates the directory with 777 permission. This is to maximize the
 #   chances that it works. If you don't want this, the easiest solution is to
 #   create the directory yourself. This is more of a last resort. For this
@@ -325,7 +325,7 @@ function docker_host_dir()
 # or ``POSIX`` operating systems, have different rules, etc... This function will
 # universally split the string up.
 #
-# .. Note::
+# .. note::
 #   Based off of docker 17.12 syntax. If new flags are added, the regex must be
 #   updated.
 #
@@ -591,7 +591,7 @@ function _Docker()
 #
 # Currently only works on volume short format
 #
-# .. Note::
+# .. note::
 #   Useful for working around docker/compose#4728
 #**
 
@@ -679,12 +679,12 @@ function docker-compose-volumes-old()
 #                                     [2]="lsource: /home/user/src"
 #                                     [3]="ltarget: /src" [4]="Stest:/opt")'
 #
-# .. Note::
+# .. note::
 #   Useful for working around docker/compose#4728
 #
 #   Supports both short and long format
 #
-# .. Seealso::
+# .. seealso::
 #   docker-compose-volumes
 #**
 
@@ -743,6 +743,64 @@ function parse-docker-compose-volumes()
                x
                # Print out that pretty pattern!
                p'))
+}
+
+#**
+# .. function:: docker-compose-list-internal-volumes
+#
+# :Input: **stdin** - Docker-compose yaml file
+# :Output: ``DOCKER_INTERNAL_VOLUMES`` - Array of the docker volumes
+#
+# Parses the output from ``docker-compose config`` to get the list of all internal volumes
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
+#  docker-compose.yml
+#    version: "3.2"
+#    services:
+#      nb:
+#        image : some_image
+#        volumes:
+#        - test:/opt
+#    volumes:
+#      test:
+#      stuff:
+#
+#  docker-compose-list-internal-volumes < <(docker-compose config)
+#  # Or
+#  # docker-compose-list-internal-volumes <<< "$(docker-compose config)"
+#
+#  declare -p DOCKER_INTERNAL_VOLUMES
+#  > declare -a DOCKER_INTERNAL_VOLUMES='([0]="test" [1]="stuff")'
+#
+# .. note::
+#
+#    Both ``test`` and ``stuff`` will be returned, even though stuff is not used.
+#**
+function docker-compose-list-internal-volumes()
+{
+  local IFS=$'\n'
+  DOCKER_INTERNAL_VOLUMES=(\
+    $(sed -nE '/^volumes:/b volumes
+               # Delete lines until I find the "^volumes:" line
+               d
+               :volumes
+               # read the next line, immediate after volumes: it should be a volume name
+               n
+               # Search for the volume entry, two space, name (starting with not a space) then colon
+               /^  [^ ].*:/b found
+               # If I found another unindented line, then I am done parsing, quit
+               /^[^ #]/q
+               # keep scanning for the next volume
+               b volumes
+               :found
+               # clean up the volume name, so only the name is left
+               s/^ *//
+               s/:.*$//
+               p
+               b volumes'))
 }
 
 #**
@@ -869,7 +927,7 @@ function docker-compose-volumes()
 #
 #   : ${JUST_DOCKER_COMPOSE_DIR="${PROJECT_CWD}/docker_dir"}
 #
-# .. Note::
+# .. note::
 #   Because the -f argument overrides all other forms of choosing the compose
 #   file, the ``docker_compose_args`` are updated to use this notation instead of
 #   other methods that may be used. This will not change the behavior of the
