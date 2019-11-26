@@ -27,7 +27,7 @@ RUN pipenv sync; \
     ln -s /vsi/docs/vsi_domains.py "$(pipenv --venv)/lib/python3.7/site-packages/"; \
     rm -rf "${PIPENV_PIPFILE}*" /tmp/pip*
 
-COPY --from=tini /usr/local/bin/tini /usr/local/bin/tini
+COPY --from=tini /usr/local /usr/local
 COPY --from=gosu /usr/local/bin/gosu /usr/local/bin/gosu
 # Allow non-privileged to run gosu (remove this to take root away from user)
 RUN chmod u+s /usr/local/bin/gosu

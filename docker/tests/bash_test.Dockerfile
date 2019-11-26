@@ -32,7 +32,7 @@ RUN apk add --no-cache \
 
 ENV JUSTFILE=/vsi/docker/tests/bash_test.Justfile \
     JUST_SETTINGS=/vsi/vsi_common.env
-COPY --from=tini /usr/local/bin/tini /usr/local/bin/tini
+COPY --from=tini /usr/local /usr/local
 COPY --from=gosu /usr/local/bin/gosu /usr/local/bin/gosu
 COPY --from=jq /usr/local/bin/jq /usr/local/bin/jq
 COPY --from=docker /usr/local/bin /usr/local/bin

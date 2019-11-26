@@ -18,7 +18,7 @@ RUN apt-get update; \
     rm -r /var/lib/apt/lists/*
 
 ENV JUSTFILE=/vsi/docker/vsi_common/bashcov.Justfile
-COPY --from=tini /usr/local/bin/tini /usr/local/bin/tini
+COPY --from=tini /usr/local /usr/local
 COPY --from=gosu /usr/local/bin/gosu /usr/local/bin/gosu
 COPY --from=jq /usr/local/bin/jq /usr/local/bin/jq
 COPY --from=docker /usr/local/bin /usr/local/bin
