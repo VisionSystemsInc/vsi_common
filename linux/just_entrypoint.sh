@@ -70,7 +70,7 @@ set -eu
 : ${VSI_COMMON_DIR=/vsi}
 : ${DOCKER_USERNAME=user}
 
-if [ -n "${SINGULARITY_NAME+set}" ]; then
+if [ -d "/.singularity.d" ]; then
   # Disable the special docker magic in singularity
   export ALREADY_RUN_ONCE=1
 fi
