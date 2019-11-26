@@ -149,9 +149,19 @@ function docker_defaultify()
       extra_args=1
       ;;
     docker-compose_clean) # Delete a docker-compose volume. The next container \
-                          # to use this volume will automatically copy any
-                          # content from the image.
-      justify docker_clean "${COMPOSE_PROJECT_NAME}_${1}"
+                          # to use this volume will automatically copy any \
+                          # content from the image. Use --all to clean all \
+                          # volumes listed in the docker-compose.yml file
+      if [ "${1}" = "--all" ]; then
+        local DOCKER_INTERNAL_VOLUMES
+        local volume
+        docker-compose-list-internal-volumes < <(Just-docker-compose config)
+        for volume in ${DOCKER_INTERNAL_VOLUMES[@]+"${DOCKER_INTERNAL_VOLUMES[@]}"}; do
+          justify docker_clean "${COMPOSE_PROJECT_NAME}_${volume}"
+        done
+      else
+        justify docker_clean "${COMPOSE_PROJECT_NAME}_${1}"
+      fi
       extra_args=1
       ;;
     docker-compose_enter) # Enter a running container, running an interactive

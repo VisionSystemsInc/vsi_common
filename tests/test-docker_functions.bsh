@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 . "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
+. "$(dirname "${BASH_SOURCE[0]}")/test_utils.bsh"
 
 VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 . "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
@@ -621,5 +622,43 @@ mock_docker: rm mock_container_name_my_image:foo" ]
   [ "$(docker_cp_image -L -a my_image:foo /bar/test.txt ${TESTDIR}/dst.txt)" = \
     "mock_docker: cp -L -a mock_container_name_my_image:foo:/bar/test.txt ${TESTDIR}/dst.txt
 mock_docker: rm mock_container_name_my_image:foo" ]
+)
+end_test
+
+begin_test "docker-compose list internal volumes"
+(
+  setup_test
+  docker-compose-list-internal-volumes <<< "${compose_file}"
+  check_a DOCKER_INTERNAL_VOLUMES test
+
+  unset DOCKER_INTERNAL_VOLUMES
+  docker-compose-list-internal-volumes <<< "${compose_file_long}"
+  check_a DOCKER_INTERNAL_VOLUMES test
+
+  # None case
+  unset DOCKER_INTERNAL_VOLUMES
+  docker-compose-list-internal-volumes <<< ""
+  check_a DOCKER_INTERNAL_VOLUMES
+
+  # Multiple case
+
+  file_test="volumes:
+  test1:
+  test2:
+    stuff:
+  test3:"
+
+  unset DOCKER_INTERNAL_VOLUMES
+  docker-compose-list-internal-volumes <<< "${file_test}"
+  declare -p DOCKER_INTERNAL_VOLUMES
+  check_a DOCKER_INTERNAL_VOLUMES test1 test2 test3
+
+  file_test+="
+notvolumes:
+  test4:"
+  unset DOCKER_INTERNAL_VOLUMES
+  docker-compose-list-internal-volumes <<< "${file_test}"
+  declare -p DOCKER_INTERNAL_VOLUMES
+  check_a DOCKER_INTERNAL_VOLUMES test1 test2 test3
 )
 end_test
