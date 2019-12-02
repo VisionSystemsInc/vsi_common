@@ -300,7 +300,7 @@ def quaternion_to_matrix(q):
       Parameters
       ----------
       q : float
-        The Quaternion
+        The Quaternion (x y z w)
 
       Returns
       -------
