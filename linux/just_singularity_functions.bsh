@@ -62,6 +62,7 @@ function singular_defaultify()
       Docker run -it --rm --privileged \
           ${docker_socket[@]+"${docker_socket[@]}"} \
           --mount source="$(pwd)",destination=/output,type=bind \
+          -e DOCKER_UID="${DOCKER_UID-$(id -u)}" -e DOCKER_GID="${DOCKER_GID-$(id -g)}" \
           ${custom_script[@]+"${custom_script[@]}"} \
           vsiri/docker2singularity:${DOCKER2SINGULARITY_VERSION-v3.5.0} "${@}"
       extra_args=$#
@@ -266,6 +267,7 @@ function singular_defaultify()
           Singularity "${subcommand}" ${@+"${@}"}
           extra_args+=$#
           ;;
+        #singular-compose_import) Create a singularity image ($1) from docker image ($2) using local docker
         import)
           local instance="$1"
           local mount_point_args=()
@@ -277,11 +279,12 @@ function singular_defaultify()
             mount_point_args+=(--mount "${mount_point}")
           done
 
-          justify singular import "${instance}" \
-              --name "$(basename "${singular_image}")" \
-              ${mount_point_args[@]+"${mount_point_args[@]}"}
+          justify singularity import \
+            --name "$(basename "${singular_image}")" \
+            ${mount_point_args[@]+"${mount_point_args[@]}"} \
+            "${2}"
 
-          extra_args=1
+          extra_args+=2
           ;;
         *)
           echo "I don't understand: singular-compose $subcommand" >&2
