@@ -101,15 +101,30 @@ function _checkout_git_submodule()
 {
   popd > /dev/null
 
-  if git -c submodule.${1}.update='!git merge --ff-only' submodule update "${2}"; then
-    if [ -f "${2}/.gitmodules" ]; then
-      pushd "${2}" &> /dev/null
-      show_summary_message=0 safe_git_submodule_update
-      popd &> /dev/null
+  if ! git -c foo=bar version &> /dev/null; then
+    # This is older than 1.8, so it doesn't support -c OR submodule.${1}.update
+    echo "${YELLOW}Warning:${NC} your version of git is too old. Doing normal submodule update" >&2
+    if git submodule update "${2}"; then
+      if [ -f "${2}/.gitmodules" ]; then
+        pushd "${2}" &> /dev/null
+        show_summary_message=0 safe_git_submodule_update
+        popd &> /dev/null
+      fi
+    else
+      read -n1 -r -p "${3} Any key to continue." presskey
+      echo
     fi
   else
-    read -n1 -r -p "${3} Any key to continue." presskey
-    echo
+    if git -c submodule.${1}.update='!git merge --ff-only' submodule update "${2}"; then
+      if [ -f "${2}/.gitmodules" ]; then
+        pushd "${2}" &> /dev/null
+        show_summary_message=0 safe_git_submodule_update
+        popd &> /dev/null
+      fi
+    else
+      read -n1 -r -p "${3} Any key to continue." presskey
+      echo
+    fi
   fi
 }
 
@@ -259,7 +274,10 @@ function git_defaultify()
                           # remove commits by accident. Only updates submodules \
                           # by going forward in history.
       echo "Syncing submodules"
-      git submodule sync --recursive --quiet
+      git submodule sync --recursive --quiet || (
+        # sync has no --recursive flag in versions old than 2.0.2
+        git submodule foreach --recursive git submodule sync --quiet
+      )
       safe_git_submodule_update ${@+"${@}"}
       extra_args=$#
       ;;
