@@ -130,7 +130,7 @@ function sudo()
 }
 export -f sudo
 
-if [ -n "${JUSTFILE+set}" ]; then
+if [ -n "${JUSTFILE:+set}" ]; then
   run_just=1
 else
   run_just=0
