@@ -217,21 +217,26 @@ function singular_defaultify()
             subcommand_args=(start ${subcommand_args[@]+"${subcommand_args[@]}"})
           fi
 
-          # Check to see if the first element of singular_environment is set, hence no [@]
-          if [ -n "${singular_environment+set}" ]; then
-            (
-              ##########################
-              ### Export Environment ###
-              ##########################
-              for (( i=0; i+1<${#singular_environment[@]}; i+=2 )); do
-                # https://github.com/sylabs/singularity/issues/3686
-                singularity_env_pass "${singular_environment[${i}]}" "${singular_environment[${i}+1]}"
-              done
-              container_environment_override singularity_env_pass
+          function load_singularity_env()
+          {
+            ##########################
+            ### Export Environment ###
+            ##########################
+            for (( i=0; i+1<${#singular_environment[@]}; i+=2 )); do
+              # https://github.com/sylabs/singularity/issues/3686
+              singularity_env_pass "${singular_environment[${i}]}" "${singular_environment[${i}+1]}"
+            done
+            container_environment_override singularity_env_pass
+          }
 
+          # Check to see if the first element of singular_environment is set, hence no [@]
+          if [ "${SINGULARITY_EXEC-0}" = "0" ]; then
+            (
+              load_singularity_env
               _Singularity
             ) # Do this in a subshell so that these variables don't pollute the rest of just
           else
+            load_singularity_env
             _Singularity
           fi
           ;;
