@@ -24,6 +24,18 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 source "${VSI_COMMON_DIR}/linux/ask_question"
 source "${VSI_COMMON_DIR}/linux/colors.bsh"
 
+
+# .. envvar:: GIT
+#
+# Name/path of git executable
+#
+# Instead of hard-coding "git" everywhere, use the variable :envvar:`GIT` so that when the need comes, it is easier to switch which executable gets called. Set to empty string to have any calls to git skipped.
+#
+# All :func:`git_defaultify` targets will be skipped if the value of:envvar:`GIT` is not found or empty.
+#**
+
+: ${GIT=git}
+
 #**
 # .. function:: submodule-helper-list
 #
@@ -274,13 +286,19 @@ function git_defaultify()
     git_submodule-update) # Safe git submodule update which is careful to not \
                           # remove commits by accident. Only updates submodules \
                           # by going forward in history.
+      extra_args=$#
+
+      if ! command -v "${GIT}" >& /dev/null; then
+        echo "Git not found, skipping submodule sync" >&2
+        return 0
+      fi
+
       echo "Syncing submodules"
       git submodule sync --recursive --quiet || (
         # sync has no --recursive flag in versions old than 2.0.2
         git submodule foreach --recursive git submodule sync --quiet
       )
       safe_git_submodule_update ${@+"${@}"}
-      extra_args=$#
       ;;
     git_make-submodules-relative) # Reset the paths in git submodules to be \
                                   # relative paths rather than absolute paths. \
@@ -291,6 +309,11 @@ function git_defaultify()
                                   # so you should be in the main repo's base \
                                   # directory. Requires: realpath with \
                                   # --relative-to, python or perl.
+      if ! command -v "${GIT}" >& /dev/null; then
+        echo "Git not found, skipping submodule conversion" >&2
+        return 0
+      fi
+
       if realpath --relative-to=/ /tmp &> /dev/null; then
         code='realpath --relative-to=. ${submodule_path}'
       elif command -v python &> /dev/null; then
@@ -302,7 +325,7 @@ function git_defaultify()
         exit 1
       fi
 
-      git submodule foreach --recursive bash -c '
+      "${GIT}" submodule foreach --recursive bash -c '
       if [ -f .git ]; then
         submodule_path=$(cut -d" " -f2- .git)
         echo "gitdir: $('"${code}"')" > .git
