@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+
+. "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
+
+VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+. "${VSI_COMMON_DIR}/linux/requirements.bsh"
+
+
+begin_test "meet_requirements"
+(
+  setup_test
+
+  # bogus test
+  meet_requirements 1 ~1 || rv=$?
+  [ "${rv}" = "2" ]
+
+  # =
+  meet_requirements 1 =1
+  not meet_requirements 1 =1.1
+  # !=
+  not meet_requirements 1 !=1
+  meet_requirements 1 !=1.1
+
+  # <
+  meet_requirements 1 '<1.1'
+  not meet_requirements 1 '<1'
+  not meet_requirements 1.1 '<1'
+  # <=
+  meet_requirements 1 '<=1.1'
+  meet_requirements 1 '<=1'
+  not meet_requirements 1.1 '<=1'
+
+  # >
+  not meet_requirements 1 '>1.1'
+  not meet_requirements 1 '>1'
+  meet_requirements 1.1 '>1'
+  # >=
+  not meet_requirements 1 '>=1.1'
+  meet_requirements 1 '>=1'
+  meet_requirements 1.1 '>=1'
+
+  # = and !=
+  not meet_requirements 1.0.0 =1.0.0 !=1.0.0
+  meet_requirements 1.0.0 =1.0.0 !=1.0.1
+
+  meet_requirements 1.0.0 '>0.9.0' '<1.0.1'
+  not meet_requirements 1.0.0 '>0.9.0' '<1.0.0'
+)
+end_test
+
+begin_test "version ="
+(
+  setup_test
+
+  version_eq 1.0.0 1.0.0
+  version_eq 1.0.0a 1.0.0a
+  version_eq 1.0.0 1.0
+  version_eq 1.0.0 1
+  version_eq 1.0.0a 1a
+  not version_eq 1.0.1 1.0.0
+  not version_eq 1.0.0 1.0.1
+  not version_eq 1.0.0a 1.0.0b
+  not version_eq 1.0.0b 1a
+)
+end_test
+
+begin_test "version <"
+(
+  setup_test
+
+  version_lt 1.0.0 1.0.0.1
+  version_lt 1.0.0 1.0.1
+  version_lt 1.0.0 1.1.0
+  version_lt 1.0.0 1.1
+  version_lt 1.0.0 2.0.0
+  version_lt 1.0.0 2.0
+  version_lt 1.0.0 2
+  not version_lt 1.0.0 1.0.0
+  not version_lt 1.0.0 0.100.0
+  not version_lt 1.0.0 0.100.100
+
+  not version_lt 1.2.3rc1 1.2.3rc1
+  version_lt 1.2.3a 1.2.3b
+  not version_lt 1.2.3b 1.2.3a
+)
+end_test
+
+begin_test "version >"
+(
+  setup_test
+
+  version_gt 1.0.0.1 1
+  version_gt 1.0.1 1
+  version_gt 1.1.0 1
+  version_gt 1.1 1
+  version_gt 2.0.0 1.0.0
+  version_gt 2.0 1.0.0
+  version_gt 2 1.0.0
+  not version_gt 1.0.0 1.0.0
+  not version_gt 0.100.0 1.0.0
+  not version_gt 0.100.100 1.0.0
+
+  not version_gt 1.2.3rc1 1.2.3rc1
+  not version_gt 1.2.3a 1.2.3b
+  version_gt 1.2.3b 1.2.3a
+)
+end_test

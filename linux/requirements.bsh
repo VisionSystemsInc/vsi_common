@@ -1,0 +1,261 @@
+#!/usr/bin/env false bash
+
+if [[ $- != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
+#*# linux/requirements
+
+: ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
+source "${VSI_COMMON_DIR}/linux/findin"
+
+#**
+# .. default-domain:: bash
+#
+# ============
+# Requirements
+# ============
+#
+# .. file:: requirements.bsh
+#
+# A set of functions for determining the versions of specific programs, and if you meet the required versions
+# .. function:: meet_requirements
+#
+# :Arguments: ``$1`` - Version you are checking
+#             [``$2``...] - Version rules
+#
+# * Supports versions of any length, ``1``, ``1.0``, ``1.0.0.0.0.0``, etc...
+# * Supports an alpha version after the last number, ``1.0.2rc5``
+# * Supported version rules:
+#   * ``=`` - Does version equal this version. ``1`` is the same as ``1.0.0``, but not ``1.0.0p1``
+#   * ``!=`` - Does the version not equal this version
+#   * ``<`` - Is this version less than this version
+#   * ``<=`` - Is this version less than or equal to this version
+#   * ``>`` - Is this version greater than this version
+#   * ``>=`` - Is this version greater than or equal to this version
+#   * ``or`` - All rules are ``and``ed together, unless separated by an ``or`, in which case a new group of ``and``ed rules are started. Only one group has to be true for the result to be true. There is currently no support for rules more complex than this.
+#
+# .. rubric:: Example
+#
+# .. code:: bash
+#
+#    meet_requirements 1.0.0 <2.0.0 >0.5.0
+#    meet_requirements 1.0.0 =1
+#    meet_requirements 1.0.0 <2.0.0 >0.5.0 or >3.0.0
+#    meet_requirements 3.1.0 <2.0.0 >0.5.0 or >3.0.0
+#**
+function meet_requirements()
+{
+  local version="${1}"
+  shift 1
+
+  local rv
+  local index
+  while (( $# > 0 )); do
+    index=$(findin "or" "${@}")
+    if [ "${index}" == "-1" ]; then
+      rv=0
+      _meet_requirements "${version}" "${@}" || rv="$?"
+      if [ "${rv}" = "2" ]; then
+        return 2
+      fi
+      if [ "${rv}" = "0" ]; then
+        return 0
+      fi
+      break
+    else
+      rv=0
+      _meet_requirements "${version}" "${@:1:$index}" || rv="$?"
+      if [ "${rv}" = "2" ]; then
+        return 2
+      fi
+      if [ "${rv}" = "0" ]; then
+        return 0
+      fi
+      shift $((index+1))
+    fi
+  done
+
+  return 1
+}
+
+function _meet_requirements()
+{
+  local version="${1}"
+  shift 1
+
+  while (( $# )); do
+    case "${1}" in
+      =*)
+        if not version_eq "${version}" "${1:1}"; then
+          return 1
+        fi
+        ;;
+      !=*)
+        if version_eq "${version}" "${1:2}"; then
+          return 1
+        fi
+        ;;
+      \>=*)
+        if version_lt "${version}" "${1:2}"; then
+          return 1
+        fi
+        ;;
+      \>*)
+        if version_eq "${version}" "${1:1}" || version_lt "${version}" "${1:1}"; then
+          return 1
+        fi
+        ;;
+      \<=*)
+        if version_gt "${version}" "${1:2}"; then
+          return 1
+        fi
+        ;;
+      \<*)
+        if version_eq "${version}" "${1:1}" || version_gt "${version}" "${1:1}"; then
+          return 1
+        fi
+        ;;
+      *)
+        echo "Error, I do not understand ${1}" >&2
+        return 2
+        ;;
+    esac
+    shift 1
+  done
+}
+
+#**
+# .. function:: version_eq
+#
+# Checks to see if version ``${1}`` equals ``${2}``. Slightly more complex than a simple ``=``. For example: ``1.0p1`` is the same as ``1.0.0.0p1``
+#
+# :Arguments: ``$1`` - LHS version
+#             ``$2`` - RHS version
+#**
+function version_eq()
+{
+  local IFS='.'
+  [[ ${1} =~ ([0-9.]*)(.*) ]]
+  local lhs=(${BASH_REMATCH[1]})
+  local lhs_remainder="${BASH_REMATCH[2]}"
+  [[ ${2} =~ ([0-9.]*)(.*) ]]
+  local rhs=(${BASH_REMATCH[1]})
+  local rhs_remainder="${BASH_REMATCH[2]}"
+
+  # Equalize the lengths
+  local i
+  if [ "${#rhs[@]}" -gt "${#lhs[@]}" ]; then
+    for (( i=${#lhs[@]}; i<${#rhs[@]}; i++ )); do
+      lhs[$i]=0
+    done
+  elif [ "${#lhs[@]}" -gt "${#rhs[@]}" ]; then
+    for (( i=${#rhs[@]}; i<${#lhs[@]}; i++ )); do
+      rhs[$i]=0
+    done
+  fi
+
+  if [ "${lhs[*]}" = "${rhs[*]}" -a "${lhs_remainder}" = "${rhs_remainder}" ]; then
+    return 0
+  fi
+  return 1
+}
+
+#**
+# .. function:: version_lt
+#
+# Checks to see if version ``${1}`` is less than ``${2}``.
+#
+# :Arguments: ``$1`` - LHS version
+#             ``$2`` - RHS version
+#**
+function version_lt()
+{
+  local IFS='.'
+  [[ ${1} =~ ([0-9.]*)(.*) ]]
+  local lhs=(${BASH_REMATCH[1]})
+  local lhs_remainder="${BASH_REMATCH[2]}"
+  [[ ${2} =~ ([0-9.]*)(.*) ]]
+  local rhs=(${BASH_REMATCH[1]})
+  local rhs_remainder="${BASH_REMATCH[2]}"
+
+  # Equalize the lengths
+  local i
+  if [ "${#rhs[@]}" -gt "${#lhs[@]}" ]; then
+    for (( i=${#lhs[@]}; i<${#rhs[@]}; i++ )); do
+      lhs[$i]=0
+    done
+  elif [ "${#lhs[@]}" -gt "${#rhs[@]}" ]; then
+    for (( i=${#rhs[@]}; i<${#lhs[@]}; i++ )); do
+      rhs[$i]=0
+    done
+  fi
+
+  # Run the check
+  for (( i=0; i<${#lhs[@]}; i++ )); do
+    if [ "${lhs[$i]}" -lt "${rhs[$i]}" ]; then
+      return 0
+    elif [ "${lhs[$i]}" -gt "${rhs[$i]}" ]; then
+      return 1
+    fi
+  done
+
+  # You only get here if it's been equal so far
+  if [ "${lhs_remainder}" = "${rhs_remainder}" ]; then
+    return 1
+  elif [[ "${lhs_remainder}" < "${rhs_remainder}" ]]; then
+    return 0
+  fi
+
+  return 1
+}
+
+#**
+# .. function:: version_gt
+#
+# Checks to see if version ``${1}`` is greater than ``${2}``.
+#
+# :Arguments: ``$1`` - LHS version
+#             ``$2`` - RHS version
+#**
+function version_gt()
+{
+  local IFS='.'
+  [[ ${1} =~ ([0-9.]*)(.*) ]]
+  local lhs=(${BASH_REMATCH[1]})
+  local lhs_remainder="${BASH_REMATCH[2]}"
+  [[ ${2} =~ ([0-9.]*)(.*) ]]
+  local rhs=(${BASH_REMATCH[1]})
+  local rhs_remainder="${BASH_REMATCH[2]}"
+
+  # Equalize the lengths
+  local i
+  if [ "${#rhs[@]}" -gt "${#lhs[@]}" ]; then
+    for (( i=${#lhs[@]}; i<${#rhs[@]}; i++ )); do
+      lhs[$i]=0
+    done
+  elif [ "${#lhs[@]}" -gt "${#rhs[@]}" ]; then
+    for (( i=${#rhs[@]}; i<${#lhs[@]}; i++ )); do
+      rhs[$i]=0
+    done
+  fi
+
+  # Run the check
+  for (( i=0; i<${#lhs[@]}; i++ )); do
+    if [ "${lhs[$i]}" -gt "${rhs[$i]}" ]; then
+      return 0
+    elif [ "${lhs[$i]}" -lt "${rhs[$i]}" ]; then
+      return 1
+    fi
+  done
+
+  # You only get here if it's been equal so far
+  if [ "${lhs_remainder}" = "${rhs_remainder}" ]; then
+    return 1
+  elif [[ "${lhs_remainder}" > "${rhs_remainder}" ]]; then
+    return 0
+  fi
+
+  return 1
+}
+
