@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 
 # Usage:
-#   curl -LO https://raw.githubusercontent.com/VisionSystemsInc/vsi_common/master/linux/new_just
-#   bash ./new_just
+#   bash <(curl -L https://raw.githubusercontent.com/VisionSystemsInc/vsi_common/master/linux/new_just)
 
 set -eu
 
@@ -45,11 +44,6 @@ set -eu
 #   :env:`REPO_NAME`, :env:`JUSTFILE`, :env:`SETUPFILE`
 #   :env:`VSI_DIR`
 #**
-
-# Redirect stderr to stdout, and stdout to 3; now the only way to write to
-# stdout or stderr is to write to 3
-exec 3>&1 # Copy stdout to 3
-exec 1>&2 # Copy stderr to 1
 
 : ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
 if [ -f "${VSI_COMMON_DIR}/linux/ask_question" ]; then
@@ -164,1147 +158,1160 @@ else
   }
 fi
 
-# Default values set for you
-if [ "${JUST_FROZEN-}" = "1" ]; then
-  : ${USE_VSI_COMMON=n}
-else
-  : ${USE_VSI_COMMON=y}
-fi
+function new_just()
+{
 
-: ${SETUPFILE=setup.env}
-: ${JUSTFILE=Justfile}
-
-
-while (($#)); do
-  arg="$1"
-  shift 1
-  case $arg in
-    --help)
-      echo "New Just Wizard usage"
-      echo "====================="
-      echo "  --help - prints this help"
-      echo "  --project-dir DIR - Use dir as the project directory"
-      echo "  --project-name NAME - Affects project env filename and defaults"
-      echo "  --prefix PREFIX - Set variable prefix to use"
-      echo "  --justfile FILE - Set Justfile name"
-      echo "  --setupfile FILE - Set setup.env filename"
-      echo "  --vsi-dir DIR - VSI common submodule dir"
-      echo "  --[no-]use-vsi - Enable/[disable] using the vsi submodule"
-      echo "  --[no-]use-docker - Enable/[disable] setting up docker"
-      echo "  --[no-]use-pipenv - Enable/[disable] using pipenv in docker"
-      echo "  --app APP - Application name for docker-compose service"
-      echo "  --repo REPO - Docker repo name for compiled images"
-      echo "  --defaults - Use all defaults without prompting"
-      echo "  --continue - Set to auto continue summary without prompting"
-      echo "  --[no-]setup-git - Run the neccessary git command to init repo"
-      echo
-      exit 0
-      ;;
-    --defaults)
-      USE_DEFAULTS=1
-      : ${USE_DOCKER=y}
-      : ${USE_PIPENV=y}
-      : ${SETUP_GIT=n}
-      ;;
-    --project-dir)
-      PROJECT_DIR="$1"
-      shift 1
-      ;;
-    --project-name)
-      PROJECT_NAME="$1"
-      shift 1
-      ;;
-    --prefix)
-      PROJECT_PREFIX="$1"
-      shift 1
-      ;;
-    --justfile)
-      JUSTFILE="$1"
-      shift 1
-      ;;
-    --setupfile)
-      SETUPFILE="$1"
-      shift 1
-      ;;
-    --vsi-dir)
-      VSI_DIR="$1"
-      shift 1
-      ;;
-    --use-vsi)
-      USE_VSI_COMMON=y
-      ;;
-    --no-use-vsi)
-      USE_VSI_COMMON=n
-      ;;
-    --use-docker)
-      USE_DOCKER=y
-      ;;
-    --no-use-docker)
-      USE_DOCKER=n
-      ;;
-    --use-pipenv)
-      USE_PIPENV=y
-      ;;
-    --no-use-pipenv)
-      USE_PIPENV=n
-      ;;
-    --app)
-      APP_NAME="$1"
-      shift 1
-      ;;
-    --repo)
-      REPO_NAME="$1"
-      shift 1
-      ;;
-    --continue)
-      CONTINUE=y
-      ;;
-    --setup-git)
-      SETUP_GIT=y
-      ;;
-    --no-setup-git)
-      SETUP_GIT=n
-      ;;
-    *)
-      echo "Unknown argument: $arg"
-      exit 1
-      ;;
-  esac
-done
-
-echo "Setting up a new project to use J.U.S.T."
-echo
-
-#**
-# .. env:: PROJECT_DIR
-#
-# The project directory is typically the root directory of the main git
-# repository. This is where all the just files will be stored by default.
-#
-# The value can be customized when prompted by :file:`new_just`. The default value
-# is the current working directory. The question can be skipped by setting
-# the environment variable :env:`PROJECT_DIR` to the desired value.
-#**
-
-default="${PWD}"
-if [ "${USE_DEFAULTS-}" == "1" ]; then
-  : ${PROJECT_DIR="${default}"}
-fi
-
-: ${PROJECT_DIR="$(read -r -p "Project directory (${default}) " x; echo "$x")"}
-if [ "${PROJECT_DIR}" == "" ]; then
-  PROJECT_DIR="${default}"
-else
-  mkdir -p "${PROJECT_DIR}"
-  PROJECT_DIR="$(cd "${PROJECT_DIR}"; pwd)"
-fi
-
-#**
-# .. env:: PROJECT_NAME
-#
-# The :env:`PROJECT_NAME` is used to set the project environment file name used by
-# :func:`just_functions.bsh source_environment_files`. Specifically: ``${PROJECT_DIR}/${PROJECT_NAME}.env``
-# :env:`PROJECT_NAME` is also used for for determining other default values.
-#
-# The value can be customized when prompted by :file:`new_just`. The default value
-# is basename of the :env:`PROJECT_DIR`. The question can be skipped by setting the
-# environment variable :env:`PROJECT_NAME` to the desired value.
-#
-# .. seealso::
-#   :func:`just_functions.bsh source_environment_files`
-#**
-
-default="$(basename "${PROJECT_DIR}")"
-if [ "${USE_DEFAULTS-}" == "1" ]; then
-  : ${PROJECT_NAME="${default}"}
-fi
-
-: ${PROJECT_NAME="$(read -r -p "Project name ($(basename "${PROJECT_DIR}")) " x; echo "$x")"}
-if [ "${PROJECT_NAME}" == "" ]; then
-  PROJECT_NAME="${default}"
-fi
-
-#**
-# .. env:: PROJECT_PREFIX
-#
-# The prefix of environment variables for this project
-#
-# Used to set the value of :envvar:`JUST_PROJECT_PREFIX`. Must contain only valid bash
-# variable-name characters: ``[A-Z0-9_]+``
-#
-# Does not need the trailing _ included, this will always be added when it is
-# used.
-#
-# The value can be customized when prompted by new_just. The default value is
-# uppercase of the :env:`PROJECT_NAME`. The question can be skipped by setting the
-# environment variable :env:`PROJECT_PREFIX` to the desired value.
-#
-# .. seealso::
-#
-#   :envvar:`JUST_PROJECT_PREFIX`
-#**
-
-default=$(echo "${PROJECT_NAME-}" | tr '[a-z]' '[A-Z]' | sed -E 's|[^A-Z0-9_]+||g')
-if [ "${USE_DEFAULTS-}" == "1" ]; then
-  : ${PROJECT_PREFIX="${default}"}
-fi
-
-: ${PROJECT_PREFIX="$(read -r -p "Project variable prefix (${default}) " x; echo $x)"}
-if [ "${PROJECT_PREFIX}" == "" ]; then
-  PROJECT_PREFIX=${default}
-else
-  PROJECT_PREFIX=$(echo "${PROJECT_PREFIX-}" | tr '[a-z]' '[A-Z]' | sed -E 's|[^A-Z0-9_]+||g')
-fi
-
-#**
-# .. env:: JUSTFILE
-#
-# Name of the justfile used
-#
-# The default just file in just is "Justfile". If this is changed, the only
-# way to inform just of this is by setting it in the :env:`SETUPFILE`. This will be
-# added to the :env:`SETUPFILE` by :file:`new_just` if anything other than the default is
-# used.
-#
-# The value can be customized when prompted by :file:`new_just`. The default value
-# is ``Justfile``. The question can be skipped by setting the environment variable
-# :env:`JUSTFILE` to the desired value.
-#
-# .. seealso::
-#
-#   :env:`SETUPFILE`, just/Justfile
-#**
-
-default=Justfile
-if [ "${USE_DEFAULTS-}" == "1" ]; then
-  : ${JUSTFILE="${default}"}
-fi
-
-: ${JUSTFILE="$(read -r -p "Just file name (Justfile) " x; echo "$x")"}
-if [ "${JUSTFILE}" == "" ]; then
-  JUSTFILE="${default}"
-else
-  JUSTFILE="$(basename "${JUSTFILE}")"
-fi
-
-#**
-# .. env:: USE_VSI_COMMON
-#
-# Flag to include vsi_common
-#
-# vsi_common can either be included as a submodule, in which case setup.env
-# is needed, or the just executable needs to be installed and vsi_common is
-# not needed.
-#**
-
-echo "If you do not include vsi_common, then all users will have to have"
-echo "the juste executable installed and on their path to use this project."
-echo "(It also makes updating vsi_common features/bugs harder.)"
-ask_question "Do you want to include the vsi_common submodule?" USE_VSI_COMMON n
-
-#**
-# .. env:: SETUPFILE
-#
-# Name of the setup file sourced to setup just environment
-#
-# The setup file is used to make the minimal necessary changes to the
-# environment so that just works. This includes adding paths and setting a
-# few environment variables. This is meant to be as unobtrusive as possible.
-#
-# This file needs to be sourced every time a new terminal session is opened.
-# The only time the setup script is not needed is when using :command:`juste`.
-#
-# The value can be customized when prompted by :file:`new_just`. The default value is
-# ``setup.env``. The question can be skipped by setting the environment variable
-# :env:`SETUPFILE` to the desired value.
-#
-# .. seealso::
-#
-#   :command:`juste`
-#**
-
-if [ "${USE_VSI_COMMON}" = "1" ]; then
-  default=setup.env
-  if [ "${USE_DEFAULTS-}" == "1" ]; then
-    : ${SETUPFILE="${default}"}
-  fi
-
-  : ${SETUPFILE="$(read -r -p "Environment setup script file name (setup.env) " x; echo "$x")"}
-  if [ "${SETUPFILE}" == "" ]; then
-    SETUPFILE="${default}"
+  # Default values set for you
+  if [ "${JUST_FROZEN-}" = "1" ]; then
+    : ${USE_VSI_COMMON=n}
   else
-    SETUPFILE="$(basename "${SETUPFILE}")"
+    : ${USE_VSI_COMMON=y}
   fi
-fi
 
-#**
-# .. env:: VSI_DIR
-#
-# Location of the vsi_common submodule
-#
-# The vsi_common repository is necessary for virtually all of the just
-# capabilities. The correct way to deal with this is to add vsi_common as a
-# submodule for your main project. This tells just were this submodule is
-# located.
-#
-# The value can be customized when prompted by :file:`new_just`. The default value is
-# external/vsi_common. The question can be skipped by setting the environment
-# variable :env:`VSI_DIR` to the desired value.
-#**
+  : ${SETUPFILE=setup.env}
+  : ${JUSTFILE=Justfile}
 
-if [ "${USE_VSI_COMMON}" = "1" ]; then
-  default="${PROJECT_DIR}/external/vsi_common"
+
+  while (($#)); do
+    arg="$1"
+    shift 1
+    case $arg in
+      --help)
+        echo "New Just Wizard usage"
+        echo "====================="
+        echo "  --help - prints this help"
+        echo "  --project-dir DIR - Use dir as the project directory"
+        echo "  --project-name NAME - Affects project env filename and defaults"
+        echo "  --prefix PREFIX - Set variable prefix to use"
+        echo "  --justfile FILE - Set Justfile name"
+        echo "  --setupfile FILE - Set setup.env filename"
+        echo "  --vsi-dir DIR - VSI common submodule dir"
+        echo "  --[no-]use-vsi - Enable/[disable] using the vsi submodule"
+        echo "  --[no-]use-docker - Enable/[disable] setting up docker"
+        echo "  --[no-]use-pipenv - Enable/[disable] using pipenv in docker"
+        echo "  --app APP - Application name for docker-compose service"
+        echo "  --repo REPO - Docker repo name for compiled images"
+        echo "  --defaults - Use all defaults without prompting"
+        echo "  --continue - Set to auto continue summary without prompting"
+        echo "  --[no-]setup-git - Run the neccessary git command to init repo"
+        echo
+        exit 0
+        ;;
+      --defaults)
+        USE_DEFAULTS=1
+        : ${USE_DOCKER=y}
+        : ${USE_PIPENV=y}
+        : ${SETUP_GIT=n}
+        ;;
+      --project-dir)
+        PROJECT_DIR="$1"
+        shift 1
+        ;;
+      --project-name)
+        PROJECT_NAME="$1"
+        shift 1
+        ;;
+      --prefix)
+        PROJECT_PREFIX="$1"
+        shift 1
+        ;;
+      --justfile)
+        JUSTFILE="$1"
+        shift 1
+        ;;
+      --setupfile)
+        SETUPFILE="$1"
+        shift 1
+        ;;
+      --vsi-dir)
+        VSI_DIR="$1"
+        shift 1
+        ;;
+      --use-vsi)
+        USE_VSI_COMMON=y
+        ;;
+      --no-use-vsi)
+        USE_VSI_COMMON=n
+        ;;
+      --use-docker)
+        USE_DOCKER=y
+        ;;
+      --no-use-docker)
+        USE_DOCKER=n
+        ;;
+      --use-pipenv)
+        USE_PIPENV=y
+        ;;
+      --no-use-pipenv)
+        USE_PIPENV=n
+        ;;
+      --app)
+        APP_NAME="$1"
+        shift 1
+        ;;
+      --repo)
+        REPO_NAME="$1"
+        shift 1
+        ;;
+      --continue)
+        CONTINUE=y
+        ;;
+      --setup-git)
+        SETUP_GIT=y
+        ;;
+      --no-setup-git)
+        SETUP_GIT=n
+        ;;
+      *)
+        echo "Unknown argument: $arg"
+        exit 1
+        ;;
+    esac
+  done
+
+  echo "Setting up a new project to use J.U.S.T."
+  echo
+
+  #**
+  # .. env:: PROJECT_DIR
+  #
+  # The project directory is typically the root directory of the main git
+  # repository. This is where all the just files will be stored by default.
+  #
+  # The value can be customized when prompted by :file:`new_just`. The default value
+  # is the current working directory. The question can be skipped by setting
+  # the environment variable :env:`PROJECT_DIR` to the desired value.
+  #**
+
+  default="${PWD}"
   if [ "${USE_DEFAULTS-}" == "1" ]; then
-    : ${VSI_DIR="${default}"}
+    : ${PROJECT_DIR="${default}"}
   fi
 
-  : ${VSI_DIR="$(read -r -p "VSI common module path (./external/vsi_common) " x; echo "$x")"}
-  if [ "${VSI_DIR}" == "" ]; then
-    VSI_DIR="${default}"
+  : ${PROJECT_DIR="$(read -r -p "Project directory (${default}) " x; echo "$x")"}
+  if [ "${PROJECT_DIR}" == "" ]; then
+    PROJECT_DIR="${default}"
   else
-    # Guarentee the path is clean, no .. or . or // in the name
-    VSI_DIR="$(cd "${PROJECT_DIR}";
-               if [ -e "${VSI_DIR}" ]; then
-                 cd "${VSI_DIR}";
-                 pwd;
-               else
-                 mkdir -p "${VSI_DIR}";
-                 cd "${VSI_DIR}";
-                 pwd;
-                 cd "${PROJECT_DIR}";
-                 rmdir "${VSI_DIR}";
-               fi )"  # <- the space after the fi fixes a VSCode highlighter bug
+    mkdir -p "${PROJECT_DIR}"
+    PROJECT_DIR="$(cd "${PROJECT_DIR}"; pwd)"
   fi
-fi
 
-#**
-# .. rubric:: Docker Stuff
-#
-# .. env:: USE_DOCKER
-#
-# Flag to turn on all the docker features
-#**
+  #**
+  # .. env:: PROJECT_NAME
+  #
+  # The :env:`PROJECT_NAME` is used to set the project environment file name used by
+  # :func:`just_functions.bsh source_environment_files`. Specifically: ``${PROJECT_DIR}/${PROJECT_NAME}.env``
+  # :env:`PROJECT_NAME` is also used for for determining other default values.
+  #
+  # The value can be customized when prompted by :file:`new_just`. The default value
+  # is basename of the :env:`PROJECT_DIR`. The question can be skipped by setting the
+  # environment variable :env:`PROJECT_NAME` to the desired value.
+  #
+  # .. seealso::
+  #   :func:`just_functions.bsh source_environment_files`
+  #**
 
-ask_question "Use docker?" USE_DOCKER y
-
-#**
-# .. env:: USE_PIPENV
-#
-# Flag to turn on setting up pipenv
-#**
-
-ask_question "Use pipenv?" USE_PIPENV y
-if [ "${USE_DOCKER}" = "1" ]; then
-
-#**
-# .. env:: APP_NAME
-#
-# The name of the test app generated. Used for the name of the first service populated for you.
-#**
-
-  default=$(echo "${APP_NAME-example}" | tr '[A-Z]' '[a-z]' | sed -E 's|[^a-z0-9_.-]+||g')
+  default="$(basename "${PROJECT_DIR}")"
   if [ "${USE_DEFAULTS-}" == "1" ]; then
-    : ${APP_NAME="${default}"}
-  fi
-  : ${APP_NAME="$(read -r -p "Name of the example docker-compose app (${default}) " x; echo $x)"}
-  if [ "${APP_NAME}" == "" ]; then
-    APP_NAME=${default}
-  else
-    APP_NAME=$(echo "${APP_NAME-example}" | tr '[A-Z]' '[a-z]' | sed -E 's|[^a-z0-9_.-]+||g')
+    : ${PROJECT_NAME="${default}"}
   fi
 
-  APP_NAME_UPPER=$(echo "${APP_NAME}" | tr '[a-z]' '[A-Z]')
+  : ${PROJECT_NAME="$(read -r -p "Project name ($(basename "${PROJECT_DIR}")) " x; echo "$x")"}
+  if [ "${PROJECT_NAME}" == "" ]; then
+    PROJECT_NAME="${default}"
+  fi
 
-#**
-# .. env:: REPO_NAME
-#
-# When docker images are built, they need to be named, or else the only way to
-# access them is inconveniently though sha256 checksums.
-#
-# The :env:`REPO_NAME` should be an untagged docker repository name. Tag names will
-# be added for each service. Docker image names must match the regex
-# ``[a-zA-Z0-9][a-zA-Z0-9_.-]*`` or else docker will error
-#
-# The value can be customized when prompted by :file:`new_just`. The default value is
-# lowercase of the :env:`PROJECT_NAME`. The question can be skipped by setting the
-# environment variable :env:`REPO_NAME` to the desired value.
-#**
+  #**
+  # .. env:: PROJECT_PREFIX
+  #
+  # The prefix of environment variables for this project
+  #
+  # Used to set the value of :envvar:`JUST_PROJECT_PREFIX`. Must contain only valid bash
+  # variable-name characters: ``[A-Z0-9_]+``
+  #
+  # Does not need the trailing _ included, this will always be added when it is
+  # used.
+  #
+  # The value can be customized when prompted by new_just. The default value is
+  # uppercase of the :env:`PROJECT_NAME`. The question can be skipped by setting the
+  # environment variable :env:`PROJECT_PREFIX` to the desired value.
+  #
+  # .. seealso::
+  #
+  #   :envvar:`JUST_PROJECT_PREFIX`
+  #**
 
-  default=$(echo "${PROJECT_NAME-}" | tr '[A-Z]' '[a-z]' | sed -E 's|[^a-z0-9_./-]+||g')
+  default=$(echo "${PROJECT_NAME-}" | tr '[a-z]' '[A-Z]' | sed -E 's|[^A-Z0-9_]+||g')
   if [ "${USE_DEFAULTS-}" == "1" ]; then
-    : ${REPO_NAME="${default}"}
+    : ${PROJECT_PREFIX="${default}"}
   fi
-  : ${REPO_NAME="$(read -r -p "Docker Repo for images (${default}) " x; echo $x)"}
-  if [ "${REPO_NAME}" == "" ]; then
-    REPO_NAME=${default}
+
+  : ${PROJECT_PREFIX="$(read -r -p "Project variable prefix (${default}) " x; echo $x)"}
+  if [ "${PROJECT_PREFIX}" == "" ]; then
+    PROJECT_PREFIX=${default}
   else
-    REPO_NAME=$(echo "${REPO_NAME-}" | tr '[A-Z]' '[a-z]' | sed -E 's|[^a-z0-9_./-]+||g')
+    PROJECT_PREFIX=$(echo "${PROJECT_PREFIX-}" | tr '[a-z]' '[A-Z]' | sed -E 's|[^A-Z0-9_]+||g')
   fi
-fi
 
-echo "Summary"
-echo "======="
-printf "%-40s | %-40s\n" "Project Name" "${PROJECT_NAME}"
-printf "%-40s | %-40s\n" "Project Directory" "${PROJECT_DIR}"
-printf "%-40s | %-40s\n" "Project prefix" "${PROJECT_PREFIX}"
-printf "%-40s | %-40s\n" "Just file" "${JUSTFILE}"
-if [ "${USE_VSI_COMMON}" = "1" ]; then
-  printf "%-40s | %-40s\n" "Environment setup script" "${SETUPFILE}"
-fi
+  #**
+  # .. env:: JUSTFILE
+  #
+  # Name of the justfile used
+  #
+  # The default just file in just is "Justfile". If this is changed, the only
+  # way to inform just of this is by setting it in the :env:`SETUPFILE`. This will be
+  # added to the :env:`SETUPFILE` by :file:`new_just` if anything other than the default is
+  # used.
+  #
+  # The value can be customized when prompted by :file:`new_just`. The default value
+  # is ``Justfile``. The question can be skipped by setting the environment variable
+  # :env:`JUSTFILE` to the desired value.
+  #
+  # .. seealso::
+  #
+  #   :env:`SETUPFILE`, just/Justfile
+  #**
 
-printf "%-40s | %-40s\n" "Use docker" "${USE_DOCKER}"
-printf "%-40s | %-40s\n" "Use pipenv" "${USE_PIPENV}"
-printf "%-40s | %-40s\n" "Include vsi_common" "${USE_VSI_COMMON}"
-if [ "${USE_DOCKER}" = "1" ]; then
+  default=Justfile
+  if [ "${USE_DEFAULTS-}" == "1" ]; then
+    : ${JUSTFILE="${default}"}
+  fi
 
-  printf "%-40s | %-40s\n" "App Name" "${APP_NAME}"
-  printf "%-40s | %-40s\n" "Docker Repo" "${REPO_NAME}"
+  : ${JUSTFILE="$(read -r -p "Just file name (Justfile) " x; echo "$x")"}
+  if [ "${JUSTFILE}" == "" ]; then
+    JUSTFILE="${default}"
+  else
+    JUSTFILE="$(basename "${JUSTFILE}")"
+  fi
+
+  #**
+  # .. env:: USE_VSI_COMMON
+  #
+  # Flag to include vsi_common
+  #
+  # vsi_common can either be included as a submodule, in which case setup.env
+  # is needed, or the just executable needs to be installed and vsi_common is
+  # not needed.
+  #**
+
+  echo "If you do not include vsi_common, then all users will have to have"
+  echo "the juste executable installed and on their path to use this project."
+  echo "(It also makes updating vsi_common features/bugs harder.)"
+  ask_question "Do you want to include the vsi_common submodule?" USE_VSI_COMMON n
+
+  #**
+  # .. env:: SETUPFILE
+  #
+  # Name of the setup file sourced to setup just environment
+  #
+  # The setup file is used to make the minimal necessary changes to the
+  # environment so that just works. This includes adding paths and setting a
+  # few environment variables. This is meant to be as unobtrusive as possible.
+  #
+  # This file needs to be sourced every time a new terminal session is opened.
+  # The only time the setup script is not needed is when using :command:`juste`.
+  #
+  # The value can be customized when prompted by :file:`new_just`. The default value is
+  # ``setup.env``. The question can be skipped by setting the environment variable
+  # :env:`SETUPFILE` to the desired value.
+  #
+  # .. seealso::
+  #
+  #   :command:`juste`
+  #**
+
   if [ "${USE_VSI_COMMON}" = "1" ]; then
-    printf "%-40s | %-40s\n" "VSI Common Directory" "${VSI_DIR}"
-  fi
-fi
-echo
-# Ask y/n question
-ask_question "Continue?" CONTINUE y
+    default=setup.env
+    if [ "${USE_DEFAULTS-}" == "1" ]; then
+      : ${SETUPFILE="${default}"}
+    fi
 
-if [ "${CONTINUE}" != "1" ]; then
-  exit 1
-fi
-
-# Setup done, start making the new environment
-
-if [ "${USE_VSI_COMMON}" = "1" ]; then
-  # RELATIVE_PATH="$(python -c "import os; print(os.path.relpath('${VSI_DIR}', '${PROJECT_DIR}'))")"
-  # RELATIVE_PATH="$(perl -e "use File::Spec; print File::Spec->abs2rel('${VSI_DIR}','${PROJECT_DIR}');")"
-  RELATIVE_PATH="$(relpath "${VSI_DIR}" "${PROJECT_DIR}")"
-fi
-
-# Make project dir
-mkdir -p "${PROJECT_DIR}"
-cd "${PROJECT_DIR}"
-
-if [ "${USE_VSI_COMMON}" = "1" ]; then
-  just_cmd="just"
-else
-  just_cmd="juste"
-fi
-
-if [ "${USE_VSI_COMMON}" = "1" ]; then
-  #################
-  ### setup.env ###
-  #################
-
-  if [ ! -e "${SETUPFILE}" ]; then
-    uwecho 'export JUST_SETUP_SCRIPT="$(basename "${BASH_SOURCE[0]}")"
-            source "$(dirname "${BASH_SOURCE[0]}")/"'"$(quote_escape "${RELATIVE_PATH}/env.bsh")" > "${SETUPFILE}"
-    if [ "${JUSTFILE}" != "Justfile" ]; then
-      echo "export JUSTFILE=$(quote_escape "${JUSTFILE}")" >> "${SETUPFILE}"
+    : ${SETUPFILE="$(read -r -p "Environment setup script file name (setup.env) " x; echo "$x")"}
+    if [ "${SETUPFILE}" == "" ]; then
+      SETUPFILE="${default}"
     else
-      echo "unset JUSTFILE" >> "${SETUPFILE}"
+      SETUPFILE="$(basename "${SETUPFILE}")"
+    fi
+  fi
+
+  #**
+  # .. env:: VSI_DIR
+  #
+  # Location of the vsi_common submodule
+  #
+  # The vsi_common repository is necessary for virtually all of the just
+  # capabilities. The correct way to deal with this is to add vsi_common as a
+  # submodule for your main project. This tells just were this submodule is
+  # located.
+  #
+  # The value can be customized when prompted by :file:`new_just`. The default value is
+  # external/vsi_common. The question can be skipped by setting the environment
+  # variable :env:`VSI_DIR` to the desired value.
+  #**
+
+  if [ "${USE_VSI_COMMON}" = "1" ]; then
+    default="${PROJECT_DIR}/external/vsi_common"
+    if [ "${USE_DEFAULTS-}" == "1" ]; then
+      : ${VSI_DIR="${default}"}
+    fi
+
+    : ${VSI_DIR="$(read -r -p "VSI common module path (./external/vsi_common) " x; echo "$x")"}
+    if [ "${VSI_DIR}" == "" ]; then
+      VSI_DIR="${default}"
+    else
+      # Guarentee the path is clean, no .. or . or // in the name
+      VSI_DIR="$(cd "${PROJECT_DIR}";
+                if [ -e "${VSI_DIR}" ]; then
+                  cd "${VSI_DIR}";
+                  pwd;
+                else
+                  mkdir -p "${VSI_DIR}";
+                  cd "${VSI_DIR}";
+                  pwd;
+                  cd "${PROJECT_DIR}";
+                  rmdir "${VSI_DIR}";
+                fi )"  # <- the space after the fi fixes a VSCode highlighter bug
+    fi
+  fi
+
+  #**
+  # .. rubric:: Docker Stuff
+  #
+  # .. env:: USE_DOCKER
+  #
+  # Flag to turn on all the docker features
+  #**
+
+  ask_question "Use docker?" USE_DOCKER y
+
+  #**
+  # .. env:: USE_PIPENV
+  #
+  # Flag to turn on setting up pipenv
+  #**
+
+  ask_question "Use pipenv?" USE_PIPENV y
+  if [ "${USE_DOCKER}" = "1" ]; then
+
+  #**
+  # .. env:: APP_NAME
+  #
+  # The name of the test app generated. Used for the name of the first service populated for you.
+  #**
+
+    default=$(echo "${APP_NAME-example}" | tr '[A-Z]' '[a-z]' | sed -E 's|[^a-z0-9_.-]+||g')
+    if [ "${USE_DEFAULTS-}" == "1" ]; then
+      : ${APP_NAME="${default}"}
+    fi
+    : ${APP_NAME="$(read -r -p "Name of the example docker-compose app (${default}) " x; echo $x)"}
+    if [ "${APP_NAME}" == "" ]; then
+      APP_NAME=${default}
+    else
+      APP_NAME=$(echo "${APP_NAME-example}" | tr '[A-Z]' '[a-z]' | sed -E 's|[^a-z0-9_.-]+||g')
+    fi
+
+    APP_NAME_UPPER=$(echo "${APP_NAME}" | tr '[a-z]' '[A-Z]')
+
+  #**
+  # .. env:: REPO_NAME
+  #
+  # When docker images are built, they need to be named, or else the only way to
+  # access them is inconveniently though sha256 checksums.
+  #
+  # The :env:`REPO_NAME` should be an untagged docker repository name. Tag names will
+  # be added for each service. Docker image names must match the regex
+  # ``[a-zA-Z0-9][a-zA-Z0-9_.-]*`` or else docker will error
+  #
+  # The value can be customized when prompted by :file:`new_just`. The default value is
+  # lowercase of the :env:`PROJECT_NAME`. The question can be skipped by setting the
+  # environment variable :env:`REPO_NAME` to the desired value.
+  #**
+
+    default=$(echo "${PROJECT_NAME-}" | tr '[A-Z]' '[a-z]' | sed -E 's|[^a-z0-9_./-]+||g')
+    if [ "${USE_DEFAULTS-}" == "1" ]; then
+      : ${REPO_NAME="${default}"}
+    fi
+    : ${REPO_NAME="$(read -r -p "Docker Repo for images (${default}) " x; echo $x)"}
+    if [ "${REPO_NAME}" == "" ]; then
+      REPO_NAME=${default}
+    else
+      REPO_NAME=$(echo "${REPO_NAME-}" | tr '[A-Z]' '[a-z]' | sed -E 's|[^a-z0-9_./-]+||g')
+    fi
+  fi
+
+  echo "Summary"
+  echo "======="
+  printf "%-40s | %-40s\n" "Project Name" "${PROJECT_NAME}"
+  printf "%-40s | %-40s\n" "Project Directory" "${PROJECT_DIR}"
+  printf "%-40s | %-40s\n" "Project prefix" "${PROJECT_PREFIX}"
+  printf "%-40s | %-40s\n" "Just file" "${JUSTFILE}"
+  if [ "${USE_VSI_COMMON}" = "1" ]; then
+    printf "%-40s | %-40s\n" "Environment setup script" "${SETUPFILE}"
+  fi
+
+  printf "%-40s | %-40s\n" "Use docker" "${USE_DOCKER}"
+  printf "%-40s | %-40s\n" "Use pipenv" "${USE_PIPENV}"
+  printf "%-40s | %-40s\n" "Include vsi_common" "${USE_VSI_COMMON}"
+  if [ "${USE_DOCKER}" = "1" ]; then
+
+    printf "%-40s | %-40s\n" "App Name" "${APP_NAME}"
+    printf "%-40s | %-40s\n" "Docker Repo" "${REPO_NAME}"
+    if [ "${USE_VSI_COMMON}" = "1" ]; then
+      printf "%-40s | %-40s\n" "VSI Common Directory" "${VSI_DIR}"
+    fi
+  fi
+  echo
+  # Ask y/n question
+  ask_question "Continue?" CONTINUE y
+
+  if [ "${CONTINUE}" != "1" ]; then
+    exit 1
+  fi
+
+  # Setup done, start making the new environment
+
+  if [ "${USE_VSI_COMMON}" = "1" ]; then
+    # RELATIVE_PATH="$(python -c "import os; print(os.path.relpath('${VSI_DIR}', '${PROJECT_DIR}'))")"
+    # RELATIVE_PATH="$(perl -e "use File::Spec; print File::Spec->abs2rel('${VSI_DIR}','${PROJECT_DIR}');")"
+    RELATIVE_PATH="$(relpath "${VSI_DIR}" "${PROJECT_DIR}")"
+  fi
+
+  # Make project dir
+  mkdir -p "${PROJECT_DIR}"
+  cd "${PROJECT_DIR}"
+
+  if [ "${USE_VSI_COMMON}" = "1" ]; then
+    just_cmd="just"
+  else
+    just_cmd="juste"
+  fi
+
+  if [ "${USE_VSI_COMMON}" = "1" ]; then
+    #################
+    ### setup.env ###
+    #################
+
+    if [ ! -e "${SETUPFILE}" ]; then
+      uwecho 'export JUST_SETUP_SCRIPT="$(basename "${BASH_SOURCE[0]}")"
+              source "$(dirname "${BASH_SOURCE[0]}")/"'"$(quote_escape "${RELATIVE_PATH}/env.bsh")" > "${SETUPFILE}"
+      if [ "${JUSTFILE}" != "Justfile" ]; then
+        echo "export JUSTFILE=$(quote_escape "${JUSTFILE}")" >> "${SETUPFILE}"
+      else
+        echo "unset JUSTFILE" >> "${SETUPFILE}"
+      fi
+    else
+      echo "${SETUPFILE} exists, skipping..."
+    fi
+  fi
+
+  ###################
+  ### project.env ###
+  ###################
+
+  if [ ! -e "${PROJECT_NAME}.env" ]; then
+
+    uwecho   'JUST_PROJECT_PREFIX='"${PROJECT_PREFIX}"'
+              JUST_VERSION="'"${JUST_VERSION-new_just}"'"
+              if [ -z "${'"${PROJECT_PREFIX}"'_CWD+set}" ]; then
+                '"${PROJECT_PREFIX}"'_CWD="$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)"
+              fi
+              '  > "${PROJECT_NAME}.env"
+
+    if [ "${USE_DOCKER}" = "1" ]; then
+      uwecho ': ${'"${PROJECT_PREFIX}"'_AUTO_ESCAPE='"${PROJECT_PREFIX}"'_.*_DIR_DOCKER}
+
+              : ${'"${PROJECT_PREFIX}"'_DOCKER_REPO='"${REPO_NAME}"'}
+
+              : ${'"${PROJECT_PREFIX}"'_HOME=/home/user}
+              : ${'"${PROJECT_PREFIX}"'_USERNAME=$(id -u -n)}
+              : ${'"${PROJECT_PREFIX}"'_UID=$(id -u)}
+              : ${'"${PROJECT_PREFIX}"'_GIDS=$(id -G)}
+              : ${'"${PROJECT_PREFIX}"'_GID=${'"${PROJECT_PREFIX}"'_GIDS%% *}}
+              : ${'"${PROJECT_PREFIX}"'_GROUP_NAMES=$(group_names)}
+
+              # This directory is added to the container using the docker-compose file. This mechanism
+              # should only be used when the directory is guaranteed to exist
+              : ${'"${PROJECT_PREFIX}"'_SOURCE_DIR=${'"${PROJECT_PREFIX}"'_CWD}}
+              : ${'"${PROJECT_PREFIX}"'_SOURCE_DIR_DOCKER=/src}
+              : ${'"${PROJECT_PREFIX}"'_SOURCE_DIR_TYPE=bind}
+
+              if [ -d /tmp/.X11-unix ]; then
+                '"${PROJECT_PREFIX}"'_VOLUMES=("/tmp/.X11-unix:/tmp/.X11-unix:ro"
+                    ${'"${PROJECT_PREFIX}"'_VOLUMES+"${'"${PROJECT_PREFIX}"'_VOLUMES[@]}"})
+              fi
+
+              # Example of a Dynamic Volume, that is created programatically instead
+              # always there. This directory is added to the container using '"${PROJECT_PREFIX}"'_'"${APP_NAME_UPPER}"'_VOLUMES.
+              # This mechanism is better when the directory doesn'"'"'t exist, as the directory
+              # will be created and owned properly, unlike docker'"'"'s default behavior
+              # : ${'"${PROJECT_PREFIX}"'_DATA_DIR=${'"${PROJECT_PREFIX}"'_SOURCE_DIR}/new-data}
+              # : ${'"${PROJECT_PREFIX}"'_DATA_DIR_DOCKER=/data}
+              # '"${PROJECT_PREFIX}"'_'"${APP_NAME_UPPER}"'_VOLUMES=(
+              #     "${'"${PROJECT_PREFIX}"'_DATA_DIR}:${'"${PROJECT_PREFIX}"'_DATA_DIR_DOCKER}"
+              #     ${'"${PROJECT_PREFIX}"'_'"${APP_NAME_UPPER}"'_VOLUMES+"${'"${PROJECT_PREFIX}"'_'"${APP_NAME_UPPER}"'_VOLUMES[@]}"})
+
+              ###############################################################################
+              # Non-'"${PROJECT_PREFIX}"' Settings
+              ###############################################################################
+
+              # Put variables that do not begin with '"${PROJECT_PREFIX}"' here.
+
+              : ${TZ=/usr/share/zoneinfo/UTC}
+
+              # Use this to add the user name to the docker-compose project name. This is
+              # important when multiple users are using this docker-compose project on a
+              # single host. This way all of the docker resources are prefixed with a unique
+              # name and do not collide
+              source "${VSI_COMMON_DIR}/linux/docker_functions.bsh" # define docker_compose_sanitize_project_name
+              : ${COMPOSE_PROJECT_NAME=$(docker_compose_sanitize_project_name "${'"${PROJECT_PREFIX}"'_CWD}" "${'"${PROJECT_PREFIX}"'_USERNAME}")}
+              ' >> "${PROJECT_NAME}.env"
+    fi
+
+  else
+    echo "${PROJECT_NAME}.env exists, skipping..."
+  fi
+
+  #################
+  ### README.md ###
+  #################
+
+  if [ ! -e "README.md" ]; then
+    uwecho   '## Getting started
+
+              ``` ' > README.md
+
+    if [ "${USE_VSI_COMMON}" = "1" ]; then
+      echo   "source $(quote_escape "${SETUPFILE}")" >> README.md
+    fi
+
+    if [ "${USE_DOCKER}" = "1" ]; then
+      uwecho "${just_cmd} sync
+              ${just_cmd} run ${APP_NAME}" >> README.md
+    else
+      uwecho "${just_cmd} compile
+              ${just_cmd} run" >> README.md
+    fi
+    uwecho   '```
+
+              ## Just usage:
+
+              ```' >> README.md
+
+    if [ "${USE_VSI_COMMON}" = "1" ]; then
+      echo   "source $(quote_escape "${SETUPFILE}")" >> README.md
+    fi
+
+    uwecho   '${just_cmd} help
+              ```
+              ' >> README.md
+  else
+    echo     "README.md exists, skipping..."
+  fi
+
+  ################
+  ### Justfile ###
+  ################
+
+  if [ ! -e "${JUSTFILE}" ]; then
+    uwecho     '#!/usr/bin/env bash
+
+                source "${VSI_COMMON_DIR}/linux/just_env" "$(dirname "${BASH_SOURCE[0]}")"/'"$(quote_escape "${PROJECT_NAME}.env")"'
+                ' > "${JUSTFILE}"
+
+    if [ "${USE_DOCKER}" = "1" ]; then
+      uwecho   '# Plugins
+                source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
+                source "${VSI_COMMON_DIR}/linux/just_docker_functions.bsh"
+                source "${VSI_COMMON_DIR}/linux/just_git_functions.bsh"
+
+                cd "${'"${PROJECT_PREFIX}"'_CWD}"
+
+                # Main function
+                function caseify()
+                {
+                  local just_arg=$1
+                  shift 1
+                  case ${just_arg} in
+                    build) # Build Docker image
+                      if [ "$#" -gt "0" ]; then
+                        Docker-compose "${just_arg}" ${@+"${@}"}
+                        extra_args=$#
+                      else
+                        justify build recipes-auto "${'"${PROJECT_PREFIX}"'_CWD}/docker"/*.Dockerfile
+                        Docker-compose build
+                ' >> "${JUSTFILE}"
+      if [ "${USE_PIPENV}" = "1" ]; then
+        uwecho '        justify docker-compose clean venv' >> "${JUSTFILE}"
+      fi
+      uwecho   '      fi
+                      ;;' >> "${JUSTFILE}" >> "${JUSTFILE}"
+      uwecho   '    run_'"${APP_NAME}"') # Run '"${APP_NAME}"' 1
+                      Just-docker-compose run --service-ports '"${APP_NAME}"' ${@+"${@}"}
+                      extra_args=$#
+                      ;;
+
+                    sync) # Synchronize the many aspects of the project when new code changes \
+                          # are applied e.g. after "git checkout"
+                      if [ ! -e "${'"${PROJECT_PREFIX}"'_CWD}/.just_synced" ]; then
+                        # Add any commands here, like initializing a database, etc... that need
+                        # to be run the first time sync is run.
+                        touch "${'"${PROJECT_PREFIX}"'_CWD}/.just_synced"
+                      fi
+                      # Add any extra steps run when syncing everytime
+                      Docker-compose down
+                      justify git_submodule-update # For those users who don'"'"'t remember!
+                      justify build
+                      ;;
+                ' >> "${JUSTFILE}"
+      if [ "${USE_PIPENV}" = "1" ]; then
+        uwecho '    pipenv) # Run pipenv commands in pipenv conatainer. Useful for \
+                            # installing/updating pipenv packages
+                      Just-docker-compose run example_pipenv pipenv ${@+"${@}"}
+                      extra_args=$#
+                      ;;
+                    clean_all) # Delete all local volumes
+                      ask_question "Are you sure? This will remove packages not in Pipfile!" n
+                      justify docker-compose clean venv
+                      ;;
+                ' >> "${JUSTFILE}"
+      fi
+      uwecho   '    *)
+                      defaultify "${just_arg}" ${@+"${@}"}
+                      ;;
+                  esac
+                }
+
+                if ! command -v justify &> /dev/null; then caseify ${@+"${@}"};fi' >> "${JUSTFILE}"
+    else
+      uwecho   'cd "${'"${PROJECT_PREFIX}"'_CWD}"
+
+                function caseify()
+                {
+                  local just_arg=$1
+                  shift 1
+                  case ${just_arg} in
+                    compile) # Build program
+                      g++ hi.cpp -o hi
+                      ;;
+
+                    run) # Run program
+                      ./hi ${@+"${@}"}
+                      extra_args=$#
+                      ;;
+
+                    *)
+                      defaultify "${just_arg}" ${@+"${@}"}
+                      ;;
+                  esac
+                }
+
+                if ! command -v justify &> /dev/null; then caseify ${@+"${@}"};fi' >> "${JUSTFILE}"
     fi
   else
-    echo "${SETUPFILE} exists, skipping..."
+    echo "${JUSTFILE} exists, skipping..."
   fi
-fi
 
-###################
-### project.env ###
-###################
+  ###############
+  ### Pipfile ###
+  ###############
 
-if [ ! -e "${PROJECT_NAME}.env" ]; then
+  if [ "${USE_PIPENV}" = "1" ]; then
+    if [ ! -e "Pipfile" ]; then
+      uwecho '[[source]]
+              url = "https://pypi.org/simple"
+              verify_ssl = true
+              name = "pypi"
 
-  uwecho   'JUST_PROJECT_PREFIX='"${PROJECT_PREFIX}"'
-            JUST_VERSION="'"${JUST_VERSION-new_just}"'"
-            if [ -z "${'"${PROJECT_PREFIX}"'_CWD+set}" ]; then
-              '"${PROJECT_PREFIX}"'_CWD="$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)"
-            fi
-            '  > "${PROJECT_NAME}.env"
+              [requires]
+              # python_version = "*"
+
+              [dev-packages]
+
+              [packages]
+              ' > Pipfile
+    fi
+
+    ####################
+    ### Pipfile.lock ###
+    ####################
+
+    if [ ! -e "Pipfile.lock" ]; then
+      uwecho '{
+                  "_meta": {
+                      "hash": {
+                          "sha256": "415dfdcb118dd9bdfef17671cb7dcd78dbd69b6ae7d4f39e8b44e71d60ca72e7"
+                      },
+                      "pipfile-spec": 6,
+                      "requires": {},
+                      "sources": [
+                          {
+                              "name": "pypi",
+                              "url": "https://pypi.org/simple",
+                              "verify_ssl": true
+                          }
+                      ]
+                  },
+                  "default": {},
+                  "develop": {}
+              }' > Pipfile.lock
+    fi
+  fi
 
   if [ "${USE_DOCKER}" = "1" ]; then
-    uwecho ': ${'"${PROJECT_PREFIX}"'_AUTO_ESCAPE='"${PROJECT_PREFIX}"'_.*_DIR_DOCKER}
+    mkdir -p docker
 
-            : ${'"${PROJECT_PREFIX}"'_DOCKER_REPO='"${REPO_NAME}"'}
+    ##################
+    ### Dockerfile ###
+    ##################
 
-            : ${'"${PROJECT_PREFIX}"'_HOME=/home/user}
-            : ${'"${PROJECT_PREFIX}"'_USERNAME=$(id -u -n)}
-            : ${'"${PROJECT_PREFIX}"'_UID=$(id -u)}
-            : ${'"${PROJECT_PREFIX}"'_GIDS=$(id -G)}
-            : ${'"${PROJECT_PREFIX}"'_GID=${'"${PROJECT_PREFIX}"'_GIDS%% *}}
-            : ${'"${PROJECT_PREFIX}"'_GROUP_NAMES=$(group_names)}
+    if [ ! -e "docker/${APP_NAME}.Dockerfile" ]; then
+      uwecho   'FROM vsiri/recipe:gosu as gosu
+                FROM vsiri/recipe:tini as tini
+                FROM vsiri/recipe:vsi as vsi' > docker/${APP_NAME}.Dockerfile
 
-            # This directory is added to the container using the docker-compose file. This mechanism
-            # should only be used when the directory is guaranteed to exist
-            : ${'"${PROJECT_PREFIX}"'_SOURCE_DIR=${'"${PROJECT_PREFIX}"'_CWD}}
-            : ${'"${PROJECT_PREFIX}"'_SOURCE_DIR_DOCKER=/src}
-            : ${'"${PROJECT_PREFIX}"'_SOURCE_DIR_TYPE=bind}
+      if [ "${USE_PIPENV}" = "1" ]; then
+        uwecho 'FROM vsiri/recipe:pipenv as pipenv
 
-            if [ -d /tmp/.X11-unix ]; then
-              '"${PROJECT_PREFIX}"'_VOLUMES=("/tmp/.X11-unix:/tmp/.X11-unix:ro"
-                  ${'"${PROJECT_PREFIX}"'_VOLUMES+"${'"${PROJECT_PREFIX}"'_VOLUMES[@]}"})
-            fi
+                ###############################################################################
 
-            # Example of a Dynamic Volume, that is created programatically instead
-            # always there. This directory is added to the container using '"${PROJECT_PREFIX}"'_'"${APP_NAME_UPPER}"'_VOLUMES.
-            # This mechanism is better when the directory doesn'"'"'t exist, as the directory
-            # will be created and owned properly, unlike docker'"'"'s default behavior
-            # : ${'"${PROJECT_PREFIX}"'_DATA_DIR=${'"${PROJECT_PREFIX}"'_SOURCE_DIR}/new-data}
-            # : ${'"${PROJECT_PREFIX}"'_DATA_DIR_DOCKER=/data}
-            # '"${PROJECT_PREFIX}"'_'"${APP_NAME_UPPER}"'_VOLUMES=(
-            #     "${'"${PROJECT_PREFIX}"'_DATA_DIR}:${'"${PROJECT_PREFIX}"'_DATA_DIR_DOCKER}"
-            #     ${'"${PROJECT_PREFIX}"'_'"${APP_NAME_UPPER}"'_VOLUMES+"${'"${PROJECT_PREFIX}"'_'"${APP_NAME_UPPER}"'_VOLUMES[@]}"})
+                FROM debian:stretch as dep_stage
+                SHELL ["/usr/bin/env", "bash", "-euxvc"]
 
-            ###############################################################################
-            # Non-'"${PROJECT_PREFIX}"' Settings
-            ###############################################################################
+                # Install any runtime dependencies
+                RUN apt-get update; \
+                    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                      # # Uncomment for GDAL
+                      # gdal-bin \
+                      python3 tzdata ca-certificates; \
+                    rm -r /var/lib/apt/lists/*
 
-            # Put variables that do not begin with '"${PROJECT_PREFIX}"' here.
+                ENV \
+                    # Move all virtualenvs to /venv
+                    WORKON_HOME=/venv \
+                    PIPENV_PIPFILE=/src/Pipfile \
+                    # The pipenv cache is how we avoid recompiling packages at runtime
+                    # when the build dependencies are no longer available
+                    PIPENV_CACHE_DIR=/venv/cache \
+                    # Needed for pipenv shell
+                    PYENV_SHELL=/bin/bash \
+                    # pipenv recommends that these env variables be set to en_US.UTF-8.
+                    # On debian, C.UTF-8 exists by default instead, and seems to work.
+                    # More detail: https://stackoverflow.com/a/38553499/1771778
+                    # Note: en_US.UTF-8 exists by default in Centos/Fedora base images
+                    LC_ALL=C.UTF-8 \
+                    LANG=C.UTF-8
 
-            : ${TZ=/usr/share/zoneinfo/UTC}
+                COPY --from=pipenv /tmp/pipenv /tmp/pipenv
+                RUN /tmp/pipenv/get-pipenv; rm -rf /tmp/pipenv || :
 
-            # Use this to add the user name to the docker-compose project name. This is
-            # important when multiple users are using this docker-compose project on a
-            # single host. This way all of the docker resources are prefixed with a unique
-            # name and do not collide
-            source "${VSI_COMMON_DIR}/linux/docker_functions.bsh" # define docker_compose_sanitize_project_name
-            : ${COMPOSE_PROJECT_NAME=$(docker_compose_sanitize_project_name "${'"${PROJECT_PREFIX}"'_CWD}" "${'"${PROJECT_PREFIX}"'_USERNAME}")}
-            ' >> "${PROJECT_NAME}.env"
+                ###############################################################################
+
+                FROM dep_stage as pipenv_cache
+
+                # # Uncomment for GDAL
+                # # Install any build dependencies
+                # RUN apt-get update; \
+                #     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                #       libgdal-dev python3-dev g++ ; \
+                #     rm -r /var/lib/apt/lists/*
+                #
+                #     # GDAL specific hacks
+                # ENV CPLUS_INCLUDE_PATH=/usr/include/gdal \
+                #     C_INCLUDE_PATH=/usr/include/gdal
+
+                ADD Pipfile Pipfile.lock /src/
+                # Simple packages can be added as dependencies to your project by:
+                # - Running the container and installing them with pipenv; e.g.,
+                #     just pipenv install --keep-outdated scipy
+                #     # install scipy without updating other packages
+                # Packages can also be added by
+                # - Editing the Pipfile and adding lines to the [packages] section
+                #     scipy = "*"
+                # - Rebuiling the image
+                #     just build
+
+                # GDAL, for example, is a more complicated example
+                # - GDAL has extra build dependencies. The apt-get pattern above will install
+                #   these dependencies.
+                # - GDAL'"'"'s build script needs some customization. The ENV exports
+                #   above accomplish this
+                # - GDAL needs numpy installed before it is built, otherwise, numpy
+                #   integration will not be compiled
+                #
+                # To test this out:
+                # 1) Uncomment all the "Uncomment for GDAL" sections
+                # 2) just sync
+                # 3) Remove the old pipenv install section below
+                # 4) Edit your Pipfile and add the following lines (or similar)
+                #        gdal = "==2.1.0"
+                #        numpy = "*"
+                #    This will add the latest version of numpy and the version of
+                #    gdal compatible with debian:stretch to your pipenv environment.
+                #    Note: the version of the pypi package should match (as closely as
+                #    possible) to the version of the GDAL-binary dependency (gdal-bin)
+                # 5) just pipenv install
+                # 6) just sync (optionally update docker image)
+                #
+                # Steps 4 and 5 can also be done by:
+                # - just pipenv install numpy gdal==2.1.0
+                # - These can be combined because numpy is already installed at
+                #   just sync time, so numpy was already installed before gdal
+                # - All other pipenv install arguments can be passed in, such as
+                #   --keep-outdated, --pre, etc...
+
+                # # Uncomment for GDAL
+                # RUN \
+                #     # Get the version marker of numpy specified in the lock file, else blank
+                #     numpy_version="$(python -c "import json; print(json.load(open('"'"'${PIPENV_PIPFILE}.lock'"'"', '"'"'r'"'"'))['"'"'default'"'"']['"'"'numpy'"'"']['"'"'version'"'"'])" 2>/dev/null)" || :; \
+                #     # Install numpy first, so that the gdal install works.
+                #     pipenv run pip install numpy${numpy_version}; \
+                #     # Now install all the packages.
+                #     pipenv sync; \
+                #     rm -rf /src/* /tmp/pip*
+
+                RUN \
+                    # Install all packages into the image
+                    pipenv sync; \
+                    # Cleanup and make way for the real /src that will be mounted at runtime
+                    rm -rf /src/* /tmp/pip*
+
+                ###############################################################################
+
+                FROM pipenv_cache as pipenv_run
+
+                COPY --from=gosu /usr/local/bin/gosu /usr/local/bin/gosu
+                COPY --from=vsi /vsi /vsi
+
+                ENTRYPOINT ["/usr/bin/env", "bash", "/vsi/linux/just_entrypoint.sh"]
+
+                CMD ["bash"]
+
+                ###############################################################################
+
+                FROM dep_stage' >> docker/${APP_NAME}.Dockerfile
+      else
+        uwecho '
+                ###############################################################################
+
+                FROM debian:stretch
+                SHELL ["/usr/bin/env", "bash", "-euxvc"]
+
+                # Install any runtime dependencies
+                RUN apt-get update; \
+                    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                      tzdata; \
+                    rm -r /var/lib/apt/lists/*' >> docker/${APP_NAME}.Dockerfile
+      fi
+
+      uwecho   '
+                # Install any additional packages
+                RUN apt-get update; \
+                    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                      # Example of a package
+                      qbs-examples; \
+                    rm -rf /var/lib/apt/lists/*
+
+                # Another typical example of installing a package
+                # RUN build_deps="wget ca-certificates"; \
+                #     apt-get update; \
+                #     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ${build_deps}; \
+                #     wget -q https://www.vsi-ri.com/bin/deviceQuery; \
+                #     DEBIAN_FRONTEND=noninteractive apt-get purge -y --autoremove ${build_deps}; \
+                #     rm -rf /var/lib/apt/lists/*
+
+                COPY --from=tini /usr/local /usr/local
+
+                COPY --from=gosu /usr/local/bin/gosu /usr/local/bin/gosu
+                # Allow non-privileged to run gosu (remove this to take root away from user)
+                RUN chmod u+s /usr/local/bin/gosu
+                ' >> docker/${APP_NAME}.Dockerfile
+
+      if [ "${USE_PIPENV}" = "1" ]; then
+        uwecho 'COPY --from=pipenv_cache /venv /venv' >> docker/${APP_NAME}.Dockerfile
+      fi
+
+      uwecho   '
+                COPY --from=vsi /vsi /vsi
+                ADD ["'"$(docker_quote_escape "${PROJECT_NAME}.env")"'", "/src/"]
+                ADD docker/'"${APP_NAME}"'.Justfile /src/docker/
+
+                ENTRYPOINT ["/usr/local/bin/tini", "--", "/usr/bin/env", "bash", "/vsi/linux/just_entrypoint.sh"]
+                # Does not require execute permissions, unlike:
+                # ENTRYPOINT ["/usr/local/bin/tini", "--", "/vsi/linux/just_entrypoint.sh"]
+
+                CMD ["'"${APP_NAME}"'-cmd"]' >> docker/${APP_NAME}.Dockerfile
+    else
+      echo     "docker/${APP_NAME}.Dockerfile exists, skipping..."
+    fi
+
+    ####################
+    ### app.Justfile ###
+    ####################
+
+    if [ ! -e "docker/${APP_NAME}.Justfile" ]; then
+      uwecho   '#!/usr/bin/env false bash
+
+                function caseify()
+                {
+                  local cmd="${1}"
+                  shift 1
+                  case "${cmd}" in
+                ' > "docker/${APP_NAME}.Justfile"
+
+      if [ "${USE_PIPENV}" = "1" ]; then
+        uwecho '    '"${APP_NAME}"') # Run example shell
+                      pipenv shell
+                      ;;
+
+                    nopipenv) # Run command without pipenv
+                      exec "${@}"
+                      ;;
+
+                    pipenv) # Run pipenv command
+                      exec "${cmd}" ${@+"${@}"}
+                      ;;
+
+                    *) # Default: Run command in pipenv
+                      exec pipenv run "${cmd}" ${@+"${@}"}
+                      ;;
+                  esac
+                }' >> "docker/${APP_NAME}.Justfile"
+      else
+        uwecho '# default CMD
+                    '"${APP_NAME}"'-cmd) # Run example
+                      echo "Run '"${APP_NAME}"' here: ${cmd} ${@+${@}}"
+                      extra_args=$#
+                      ;;
+
+                    *) # Default: Run command
+                      exec "${cmd}" ${@+"${@}"}
+                      ;;
+                  esac
+                }' >> "docker/${APP_NAME}.Justfile"
+      fi
+    else
+      echo     "docker/${APP_NAME}.Justfile exists, skipping..."
+    fi
+
+    ##########################
+    ### docker-compose.yml ###
+    ##########################
+
+    if [ ! -e "docker-compose.yml" ]; then
+      uwecho   'version: "2.4"
+
+                services:' > "docker-compose.yml"
+
+      if [ "${USE_PIPENV}" = "1" ]; then
+        uwecho '  '"${APP_NAME}"': &'"${APP_NAME}"'
+                    build: &'"${APP_NAME}"'_build' >> "docker-compose.yml"
+      else
+        uwecho '  '"${APP_NAME}"':
+                    build:' >> "docker-compose.yml"
+      fi
+      uwecho   '      context: .
+                      dockerfile: docker/'"${APP_NAME}"'.Dockerfile
+                    # prevent different users from clobbering each others images
+                    image: ${'"${PROJECT_PREFIX}"'_DOCKER_REPO}:'"${APP_NAME}"'_${'"${PROJECT_PREFIX}"'_USERNAME}
+                    environment:
+                      # Variables for just_entrypoint_functions
+                      - DOCKER_UID=${'"${PROJECT_PREFIX}"'_UID}
+                      - DOCKER_GIDS=${'"${PROJECT_PREFIX}"'_GIDS}
+                      - DOCKER_GROUP_NAMES=${'"${PROJECT_PREFIX}"'_GROUP_NAMES}
+                      - DOCKER_USERNAME=user
+
+                #       - DOCKER_HOME=${'"${PROJECT_PREFIX}"'_HOME}
+
+                      - DISPLAY
+                      - JUSTFILE=/src/docker/'"${APP_NAME}"'.Justfile
+                      - JUST_SETTINGS=/src/'"${PROJECT_NAME}"'.env
+                      - TZ
+                #     runtime: nvidia  # Uncomment for nvidia gpu support
+                #     cap_add:
+                #       - SYS_PTRACE # Useful for gdb
+                    volumes:
+                      - type: ${'"${PROJECT_PREFIX}"'_SOURCE_DIR_TYPE}
+                        source: ${'"${PROJECT_PREFIX}"'_SOURCE_DIR}
+                        target: ${'"${PROJECT_PREFIX}"'_SOURCE_DIR_DOCKER}' >> "docker-compose.yml"
+      if [ "${USE_PIPENV}" = "1" ]; then
+        uwecho '      - type: volume
+                        source: venv
+                        target: /venv' >> "docker-compose.yml"
+      fi
+      uwecho   '#       - type: volume
+                #         source: home-volume
+                #         target: ${'"${PROJECT_PREFIX}"'_HOME} # home-volume should be overridable' >> "docker-compose.yml"
+      if [ "${USE_PIPENV}" = "1" ]; then
+        uwecho '  '"${APP_NAME}"'_pipenv:
+                    <<: *'"${APP_NAME}"'
+                    build:
+                      <<: *'"${APP_NAME}"'_build
+                      target: pipenv_run
+                    image: ${'"${PROJECT_PREFIX}"'_DOCKER_REPO}:'"${APP_NAME}"'_pipenv_${'"${PROJECT_PREFIX}"'_USERNAME}
+                volumes:
+                  venv:
+                    labels:
+                      com.vsi.just.clean_action: ask' >> "docker-compose.yml"
+      else
+        echo   '# volumes:' >> "docker-compose.yml"
+      fi
+      echo     '#   home-volume:' >> "docker-compose.yml"
+    else
+      echo "docker-compose.yml exists, skipping..."
+    fi
+
+    #####################
+    ### .dockerignore ###
+    #####################
+
+    if [ ! -e .dockerignore ]; then
+      echo '*' > .dockerignore
+      echo '!docker' >> .dockerignore
+      if [ "${USE_VSI_COMMON}" = "1" ]; then
+        echo '!'"${RELATIVE_PATH}" >> .dockerignore
+      fi
+      if [ "${USE_DOCKER}" = "1" ]; then
+        echo '!'"${PROJECT_NAME}.env" >> .dockerignore
+      fi
+
+      if [ "${USE_PIPENV}" = "1" ]; then
+        echo '!Pipfile' >> .dockerignore
+        echo '!Pipfile.lock' >> .dockerignore
+      fi
+    fi
+
+    ######################
+    ### .gitattributes ###
+    ######################
+
+    if [ ! -e ".gitattributes" ]; then
+      uwecho '# These file types are being explicitly set to linux line endings for windows.
+              # This is to allow windows user to edit and run these files inside a linux docker
+              # this list may need additions as time goes on
+              *.sh eol=lf
+              *.bsh eol=lf
+              *.py eol=lf
+              *.env eol=lf
+              .justplugins eol=lf
+              Justfile eol=lf
+              *.Justfilue eol=lf' > .gitattributes
+    fi
+  else
+    ##############
+    ### hi.cpp ###
+    ##############
+
+    uwecho '#include <iostream>
+            int main()
+            {
+              std::cout << "hello world!" << std::endl;
+              return 0;
+            }' > hi.cpp
   fi
 
-else
-  echo "${PROJECT_NAME}.env exists, skipping..."
-fi
+  ###
+  # Some final bookkeeping...
+  ###
 
-#################
-### README.md ###
-#################
+  # Add executable permissions
+  chmod 755 "${JUSTFILE}"
 
-if [ ! -e "README.md" ]; then
-  uwecho   '## Getting started
+  ##################
+  ### .gitignore ###
+  ##################
 
-            ``` ' > README.md
+  if ! grep -q local.env .gitignore 2>/dev/null; then
+    echo local.env >> .gitignore
+  fi
+  if ! grep -q local_post.env .gitignore 2>/dev/null; then
+    echo local_post.env >> .gitignore
+  fi
+  if [ "${USE_DOCKER}" = "1" ]; then
+    if ! grep -q .just_synced .gitignore 2>/dev/null; then
+      echo .just_synced >> .gitignore
+    fi
+  fi
+
+  # ****************************************************************************
+  # ****DONE****DONE****DONE****DONE****DONE****DONE****DONE****DONE****DONE****
+  # ****************************************************************************
+
+  cmds=()
+
+  uwecho "Done!
+
+
+          To complete your git initialization, the following commands must be run:
+          ------------------------------------------------------------------------"
+  cmds+=("cd $(quote_escape "${PROJECT_DIR}")")
+  if [ ! -e .git ]; then
+    cmds+=("git init .")
+  fi
 
   if [ "${USE_VSI_COMMON}" = "1" ]; then
-    echo   "source $(quote_escape "${SETUPFILE}")" >> README.md
+    cmds+=("git submodule add https://github.com/visionsystemsinc/vsi_common.git $(quote_escape "${RELATIVE_PATH}")"
+          "git submodule update --init --recursive"
+          "pushd $(quote_escape "${RELATIVE_PATH}")"
+          "git remote set-url origin --push git@github.com:visionsystemsinc/vsi_common.git"
+          "popd"
+          "git add $(quote_escape "${SETUPFILE}") .gitmodules")
   fi
+
+  cmds+=("git add .gitignore README.md $(quote_escape "${JUSTFILE}") $(quote_escape "${PROJECT_NAME}").env")
+
+  if [ "${USE_DOCKER}" = "1" ]; then
+    cmds+=("git add .gitattributes .dockerignore docker-compose.yml docker/${APP_NAME}.Dockerfile docker/${APP_NAME}.Justfile")
+  else
+    cmds+=("git add hi.cpp")
+  fi
+  if [ "${USE_PIPENV}" = "1" ]; then
+    cmds+=("git add Pipfile Pipfile.lock")
+  fi
+
+  cmds+=("git commit -m 'Initial commit'")
+
+  for cmd in "${cmds[@]}"; do
+    echo "${cmd}" >&3
+  done
+
+  echo ""
+  ask_question "Do you want these git commands to be executed for you now?" SETUP_GIT n
+
+  if [ "${SETUP_GIT}" = "1" ]; then
+    for cmd in "${cmds[@]}"; do
+      eval "${cmd}"
+    done
+  fi
+
+  uwecho "
+
+
+          To use your new just:
+
+          cd $(quote_escape "${PROJECT_DIR}")"
+
+  if [ "${USE_VSI_COMMON}" = "1" ]; then
+    echo "source $(quote_escape "${SETUPFILE}")"
+  fi
+
+  uwecho "${just_cmd} help
+
+          Get started with:"
 
   if [ "${USE_DOCKER}" = "1" ]; then
     uwecho "${just_cmd} sync
-            ${just_cmd} run ${APP_NAME}" >> README.md
+            ${just_cmd} run ${APP_NAME} bash"
   else
     uwecho "${just_cmd} compile
-            ${just_cmd} run" >> README.md
+            ${just_cmd} run"
   fi
-  uwecho   '```
-
-            ## Just usage:
-
-            ```' >> README.md
-
-  if [ "${USE_VSI_COMMON}" = "1" ]; then
-    echo   "source $(quote_escape "${SETUPFILE}")" >> README.md
-  fi
-
-  uwecho   '${just_cmd} help
-            ```
-            ' >> README.md
-else
-  echo     "README.md exists, skipping..."
-fi
-
-################
-### Justfile ###
-################
-
-if [ ! -e "${JUSTFILE}" ]; then
-  uwecho     '#!/usr/bin/env bash
-
-              source "${VSI_COMMON_DIR}/linux/just_env" "$(dirname "${BASH_SOURCE[0]}")"/'"$(quote_escape "${PROJECT_NAME}.env")"'
-              ' > "${JUSTFILE}"
-
-  if [ "${USE_DOCKER}" = "1" ]; then
-    uwecho   '# Plugins
-              source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
-              source "${VSI_COMMON_DIR}/linux/just_docker_functions.bsh"
-              source "${VSI_COMMON_DIR}/linux/just_git_functions.bsh"
-
-              cd "${'"${PROJECT_PREFIX}"'_CWD}"
-
-              # Main function
-              function caseify()
-              {
-                local just_arg=$1
-                shift 1
-                case ${just_arg} in
-                  build) # Build Docker image
-                    if [ "$#" -gt "0" ]; then
-                      Docker-compose "${just_arg}" ${@+"${@}"}
-                      extra_args=$#
-                    else
-                      justify build recipes-auto "${'"${PROJECT_PREFIX}"'_CWD}/docker"/*.Dockerfile
-                      Docker-compose build
-              ' >> "${JUSTFILE}"
-    if [ "${USE_PIPENV}" = "1" ]; then
-      uwecho '        justify docker-compose clean venv' >> "${JUSTFILE}"
-    fi
-    uwecho   '      fi
-                    ;;' >> "${JUSTFILE}" >> "${JUSTFILE}"
-    uwecho   '    run_'"${APP_NAME}"') # Run '"${APP_NAME}"' 1
-                    Just-docker-compose run --service-ports '"${APP_NAME}"' ${@+"${@}"}
-                    extra_args=$#
-                    ;;
-
-                  sync) # Synchronize the many aspects of the project when new code changes \
-                        # are applied e.g. after "git checkout"
-                    if [ ! -e "${'"${PROJECT_PREFIX}"'_CWD}/.just_synced" ]; then
-                      # Add any commands here, like initializing a database, etc... that need
-                      # to be run the first time sync is run.
-                      touch "${'"${PROJECT_PREFIX}"'_CWD}/.just_synced"
-                    fi
-                    # Add any extra steps run when syncing everytime
-                    Docker-compose down
-                    justify git_submodule-update # For those users who don'"'"'t remember!
-                    justify build
-                    ;;
-              ' >> "${JUSTFILE}"
-    if [ "${USE_PIPENV}" = "1" ]; then
-      uwecho '    pipenv) # Run pipenv commands in pipenv conatainer. Useful for \
-                          # installing/updating pipenv packages
-                    Just-docker-compose run example_pipenv pipenv ${@+"${@}"}
-                    extra_args=$#
-                    ;;
-                  clean_all) # Delete all local volumes
-                    ask_question "Are you sure? This will remove packages not in Pipfile!" n
-                    justify docker-compose clean venv
-                    ;;
-              ' >> "${JUSTFILE}"
-    fi
-    uwecho   '    *)
-                    defaultify "${just_arg}" ${@+"${@}"}
-                    ;;
-                esac
-              }
-
-              if ! command -v justify &> /dev/null; then caseify ${@+"${@}"};fi' >> "${JUSTFILE}"
-  else
-    uwecho   'cd "${'"${PROJECT_PREFIX}"'_CWD}"
-
-              function caseify()
-              {
-                local just_arg=$1
-                shift 1
-                case ${just_arg} in
-                  compile) # Build program
-                    g++ hi.cpp -o hi
-                    ;;
-
-                  run) # Run program
-                    ./hi ${@+"${@}"}
-                    extra_args=$#
-                    ;;
-
-                  *)
-                    defaultify "${just_arg}" ${@+"${@}"}
-                    ;;
-                esac
-              }
-
-              if ! command -v justify &> /dev/null; then caseify ${@+"${@}"};fi' >> "${JUSTFILE}"
-  fi
-else
-  echo "${JUSTFILE} exists, skipping..."
-fi
-
-###############
-### Pipfile ###
-###############
-
-if [ "${USE_PIPENV}" = "1" ]; then
-  if [ ! -e "Pipfile" ]; then
-    uwecho '[[source]]
-            url = "https://pypi.org/simple"
-            verify_ssl = true
-            name = "pypi"
-
-            [requires]
-            # python_version = "*"
-
-            [dev-packages]
-
-            [packages]
-            ' > Pipfile
-  fi
-
-  ####################
-  ### Pipfile.lock ###
-  ####################
-
-  if [ ! -e "Pipfile.lock" ]; then
-    uwecho '{
-                "_meta": {
-                    "hash": {
-                        "sha256": "415dfdcb118dd9bdfef17671cb7dcd78dbd69b6ae7d4f39e8b44e71d60ca72e7"
-                    },
-                    "pipfile-spec": 6,
-                    "requires": {},
-                    "sources": [
-                        {
-                            "name": "pypi",
-                            "url": "https://pypi.org/simple",
-                            "verify_ssl": true
-                        }
-                    ]
-                },
-                "default": {},
-                "develop": {}
-            }' > Pipfile.lock
-  fi
-fi
-
-if [ "${USE_DOCKER}" = "1" ]; then
-  mkdir -p docker
-
-  ##################
-  ### Dockerfile ###
-  ##################
-
-  if [ ! -e "docker/${APP_NAME}.Dockerfile" ]; then
-    uwecho   'FROM vsiri/recipe:gosu as gosu
-              FROM vsiri/recipe:tini as tini
-              FROM vsiri/recipe:vsi as vsi' > docker/${APP_NAME}.Dockerfile
-
-    if [ "${USE_PIPENV}" = "1" ]; then
-      uwecho 'FROM vsiri/recipe:pipenv as pipenv
-
-              ###############################################################################
-
-              FROM debian:stretch as dep_stage
-              SHELL ["/usr/bin/env", "bash", "-euxvc"]
-
-              # Install any runtime dependencies
-              RUN apt-get update; \
-                  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-                    # # Uncomment for GDAL
-                    # gdal-bin \
-                    python3 tzdata ca-certificates; \
-                  rm -r /var/lib/apt/lists/*
-
-              ENV \
-                  # Move all virtualenvs to /venv
-                  WORKON_HOME=/venv \
-                  PIPENV_PIPFILE=/src/Pipfile \
-                  # The pipenv cache is how we avoid recompiling packages at runtime
-                  # when the build dependencies are no longer available
-                  PIPENV_CACHE_DIR=/venv/cache \
-                  # Needed for pipenv shell
-                  PYENV_SHELL=/bin/bash \
-                  # pipenv recommends that these env variables be set to en_US.UTF-8.
-                  # On debian, C.UTF-8 exists by default instead, and seems to work.
-                  # More detail: https://stackoverflow.com/a/38553499/1771778
-                  # Note: en_US.UTF-8 exists by default in Centos/Fedora base images
-                  LC_ALL=C.UTF-8 \
-                  LANG=C.UTF-8
-
-              COPY --from=pipenv /tmp/pipenv /tmp/pipenv
-              RUN /tmp/pipenv/get-pipenv; rm -rf /tmp/pipenv || :
-
-              ###############################################################################
-
-              FROM dep_stage as pipenv_cache
-
-              # # Uncomment for GDAL
-              # # Install any build dependencies
-              # RUN apt-get update; \
-              #     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-              #       libgdal-dev python3-dev g++ ; \
-              #     rm -r /var/lib/apt/lists/*
-              #
-              #     # GDAL specific hacks
-              # ENV CPLUS_INCLUDE_PATH=/usr/include/gdal \
-              #     C_INCLUDE_PATH=/usr/include/gdal
-
-              ADD Pipfile Pipfile.lock /src/
-              # Simple packages can be added as dependencies to your project by:
-              # - Running the container and installing them with pipenv; e.g.,
-              #     just pipenv install --keep-outdated scipy
-              #     # install scipy without updating other packages
-              # Packages can also be added by
-              # - Editing the Pipfile and adding lines to the [packages] section
-              #     scipy = "*"
-              # - Rebuiling the image
-              #     just build
-
-              # GDAL, for example, is a more complicated example
-              # - GDAL has extra build dependencies. The apt-get pattern above will install
-              #   these dependencies.
-              # - GDAL'"'"'s build script needs some customization. The ENV exports
-              #   above accomplish this
-              # - GDAL needs numpy installed before it is built, otherwise, numpy
-              #   integration will not be compiled
-              #
-              # To test this out:
-              # 1) Uncomment all the "Uncomment for GDAL" sections
-              # 2) just sync
-              # 3) Remove the old pipenv install section below
-              # 4) Edit your Pipfile and add the following lines (or similar)
-              #        gdal = "==2.1.0"
-              #        numpy = "*"
-              #    This will add the latest version of numpy and the version of
-              #    gdal compatible with debian:stretch to your pipenv environment.
-              #    Note: the version of the pypi package should match (as closely as
-              #    possible) to the version of the GDAL-binary dependency (gdal-bin)
-              # 5) just pipenv install
-              # 6) just sync (optionally update docker image)
-              #
-              # Steps 4 and 5 can also be done by:
-              # - just pipenv install numpy gdal==2.1.0
-              # - These can be combined because numpy is already installed at
-              #   just sync time, so numpy was already installed before gdal
-              # - All other pipenv install arguments can be passed in, such as
-              #   --keep-outdated, --pre, etc...
-
-              # # Uncomment for GDAL
-              # RUN \
-              #     # Get the version marker of numpy specified in the lock file, else blank
-              #     numpy_version="$(python -c "import json; print(json.load(open('"'"'${PIPENV_PIPFILE}.lock'"'"', '"'"'r'"'"'))['"'"'default'"'"']['"'"'numpy'"'"']['"'"'version'"'"'])" 2>/dev/null)" || :; \
-              #     # Install numpy first, so that the gdal install works.
-              #     pipenv run pip install numpy${numpy_version}; \
-              #     # Now install all the packages.
-              #     pipenv sync; \
-              #     rm -rf /src/* /tmp/pip*
-
-              RUN \
-                  # Install all packages into the image
-                  pipenv sync; \
-                  # Cleanup and make way for the real /src that will be mounted at runtime
-                  rm -rf /src/* /tmp/pip*
-
-              ###############################################################################
-
-              FROM pipenv_cache as pipenv_run
-
-              COPY --from=gosu /usr/local/bin/gosu /usr/local/bin/gosu
-              COPY --from=vsi /vsi /vsi
-
-              ENTRYPOINT ["/usr/bin/env", "bash", "/vsi/linux/just_entrypoint.sh"]
-
-              CMD ["bash"]
-
-              ###############################################################################
-
-              FROM dep_stage' >> docker/${APP_NAME}.Dockerfile
-    else
-      uwecho '
-              ###############################################################################
-
-              FROM debian:stretch
-              SHELL ["/usr/bin/env", "bash", "-euxvc"]
-
-              # Install any runtime dependencies
-              RUN apt-get update; \
-                  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-                    tzdata; \
-                  rm -r /var/lib/apt/lists/*' >> docker/${APP_NAME}.Dockerfile
-    fi
-
-    uwecho   '
-              # Install any additional packages
-              RUN apt-get update; \
-                  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-                    # Example of a package
-                    qbs-examples; \
-                  rm -rf /var/lib/apt/lists/*
-
-              # Another typical example of installing a package
-              # RUN build_deps="wget ca-certificates"; \
-              #     apt-get update; \
-              #     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ${build_deps}; \
-              #     wget -q https://www.vsi-ri.com/bin/deviceQuery; \
-              #     DEBIAN_FRONTEND=noninteractive apt-get purge -y --autoremove ${build_deps}; \
-              #     rm -rf /var/lib/apt/lists/*
-
-              COPY --from=tini /usr/local /usr/local
-
-              COPY --from=gosu /usr/local/bin/gosu /usr/local/bin/gosu
-              # Allow non-privileged to run gosu (remove this to take root away from user)
-              RUN chmod u+s /usr/local/bin/gosu
-              ' >> docker/${APP_NAME}.Dockerfile
-
-    if [ "${USE_PIPENV}" = "1" ]; then
-      uwecho 'COPY --from=pipenv_cache /venv /venv' >> docker/${APP_NAME}.Dockerfile
-    fi
-
-    uwecho   '
-              COPY --from=vsi /vsi /vsi
-              ADD ["'"$(docker_quote_escape "${PROJECT_NAME}.env")"'", "/src/"]
-              ADD docker/'"${APP_NAME}"'.Justfile /src/docker/
-
-              ENTRYPOINT ["/usr/local/bin/tini", "--", "/usr/bin/env", "bash", "/vsi/linux/just_entrypoint.sh"]
-              # Does not require execute permissions, unlike:
-              # ENTRYPOINT ["/usr/local/bin/tini", "--", "/vsi/linux/just_entrypoint.sh"]
-
-              CMD ["'"${APP_NAME}"'-cmd"]' >> docker/${APP_NAME}.Dockerfile
-  else
-    echo     "docker/${APP_NAME}.Dockerfile exists, skipping..."
-  fi
-
-  ####################
-  ### app.Justfile ###
-  ####################
-
-  if [ ! -e "docker/${APP_NAME}.Justfile" ]; then
-    uwecho   '#!/usr/bin/env false bash
-
-              function caseify()
-              {
-                local cmd="${1}"
-                shift 1
-                case "${cmd}" in
-              ' > "docker/${APP_NAME}.Justfile"
-
-    if [ "${USE_PIPENV}" = "1" ]; then
-      uwecho '    '"${APP_NAME}"') # Run example shell
-                    pipenv shell
-                    ;;
-
-                  nopipenv) # Run command without pipenv
-                    exec "${@}"
-                    ;;
-
-                  pipenv) # Run pipenv command
-                    exec "${cmd}" ${@+"${@}"}
-                    ;;
-
-                  *) # Default: Run command in pipenv
-                    exec pipenv run "${cmd}" ${@+"${@}"}
-                    ;;
-                esac
-              }' >> "docker/${APP_NAME}.Justfile"
-    else
-      uwecho '# default CMD
-                  '"${APP_NAME}"'-cmd) # Run example
-                    echo "Run '"${APP_NAME}"' here: ${cmd} ${@+${@}}"
-                    extra_args=$#
-                    ;;
-
-                  *) # Default: Run command
-                    exec "${cmd}" ${@+"${@}"}
-                    ;;
-                esac
-              }' >> "docker/${APP_NAME}.Justfile"
-    fi
-  else
-    echo     "docker/${APP_NAME}.Justfile exists, skipping..."
-  fi
-
-  ##########################
-  ### docker-compose.yml ###
-  ##########################
-
-  if [ ! -e "docker-compose.yml" ]; then
-    uwecho   'version: "2.4"
-
-              services:' > "docker-compose.yml"
-
-    if [ "${USE_PIPENV}" = "1" ]; then
-      uwecho '  '"${APP_NAME}"': &'"${APP_NAME}"'
-                  build: &'"${APP_NAME}"'_build' >> "docker-compose.yml"
-    else
-      uwecho '  '"${APP_NAME}"':
-                  build:' >> "docker-compose.yml"
-    fi
-    uwecho   '      context: .
-                    dockerfile: docker/'"${APP_NAME}"'.Dockerfile
-                  # prevent different users from clobbering each others images
-                  image: ${'"${PROJECT_PREFIX}"'_DOCKER_REPO}:'"${APP_NAME}"'_${'"${PROJECT_PREFIX}"'_USERNAME}
-                  environment:
-                    # Variables for just_entrypoint_functions
-                    - DOCKER_UID=${'"${PROJECT_PREFIX}"'_UID}
-                    - DOCKER_GIDS=${'"${PROJECT_PREFIX}"'_GIDS}
-                    - DOCKER_GROUP_NAMES=${'"${PROJECT_PREFIX}"'_GROUP_NAMES}
-                    - DOCKER_USERNAME=user
-
-              #       - DOCKER_HOME=${'"${PROJECT_PREFIX}"'_HOME}
-
-                    - DISPLAY
-                    - JUSTFILE=/src/docker/'"${APP_NAME}"'.Justfile
-                    - JUST_SETTINGS=/src/'"${PROJECT_NAME}"'.env
-                    - TZ
-              #     runtime: nvidia  # Uncomment for nvidia gpu support
-              #     cap_add:
-              #       - SYS_PTRACE # Useful for gdb
-                  volumes:
-                    - type: ${'"${PROJECT_PREFIX}"'_SOURCE_DIR_TYPE}
-                      source: ${'"${PROJECT_PREFIX}"'_SOURCE_DIR}
-                      target: ${'"${PROJECT_PREFIX}"'_SOURCE_DIR_DOCKER}' >> "docker-compose.yml"
-    if [ "${USE_PIPENV}" = "1" ]; then
-      uwecho '      - type: volume
-                      source: venv
-                      target: /venv' >> "docker-compose.yml"
-    fi
-    uwecho   '#       - type: volume
-              #         source: home-volume
-              #         target: ${'"${PROJECT_PREFIX}"'_HOME} # home-volume should be overridable' >> "docker-compose.yml"
-    if [ "${USE_PIPENV}" = "1" ]; then
-      uwecho '  '"${APP_NAME}"'_pipenv:
-                  <<: *'"${APP_NAME}"'
-                  build:
-                    <<: *'"${APP_NAME}"'_build
-                    target: pipenv_run
-                  image: ${'"${PROJECT_PREFIX}"'_DOCKER_REPO}:'"${APP_NAME}"'_pipenv_${'"${PROJECT_PREFIX}"'_USERNAME}
-              volumes:
-                venv:
-                  labels:
-                    com.vsi.just.clean_action: ask' >> "docker-compose.yml"
-    else
-      echo   '# volumes:' >> "docker-compose.yml"
-    fi
-    echo     '#   home-volume:' >> "docker-compose.yml"
-  else
-    echo "docker-compose.yml exists, skipping..."
-  fi
-
-  #####################
-  ### .dockerignore ###
-  #####################
-
-  if [ ! -e .dockerignore ]; then
-    echo '*' > .dockerignore
-    echo '!docker' >> .dockerignore
-    if [ "${USE_VSI_COMMON}" = "1" ]; then
-      echo '!'"${RELATIVE_PATH}" >> .dockerignore
-    fi
-    if [ "${USE_DOCKER}" = "1" ]; then
-      echo '!'"${PROJECT_NAME}.env" >> .dockerignore
-    fi
-
-    if [ "${USE_PIPENV}" = "1" ]; then
-      echo '!Pipfile' >> .dockerignore
-      echo '!Pipfile.lock' >> .dockerignore
-    fi
-  fi
-
-  ######################
-  ### .gitattributes ###
-  ######################
-
-  if [ ! -e ".gitattributes" ]; then
-    uwecho '# These file types are being explicitly set to linux line endings for windows.
-            # This is to allow windows user to edit and run these files inside a linux docker
-            # this list may need additions as time goes on
-            *.sh eol=lf
-            *.bsh eol=lf
-            *.py eol=lf
-            *.env eol=lf
-            .justplugins eol=lf
-            Justfile eol=lf
-            *.Justfilue eol=lf' > .gitattributes
-  fi
-else
-  ##############
-  ### hi.cpp ###
-  ##############
-
-  uwecho '#include <iostream>
-          int main()
-          {
-            std::cout << "hello world!" << std::endl;
-            return 0;
-          }' > hi.cpp
-fi
-
-###
-# Some final bookkeeping...
-###
-
-# Add executable permissions
-chmod 755 "${JUSTFILE}"
-
-##################
-### .gitignore ###
-##################
-
-if ! grep -q local.env .gitignore 2>/dev/null; then
-  echo local.env >> .gitignore
-fi
-if ! grep -q local_post.env .gitignore 2>/dev/null; then
-  echo local_post.env >> .gitignore
-fi
-if [ "${USE_DOCKER}" = "1" ]; then
-  if ! grep -q .just_synced .gitignore 2>/dev/null; then
-    echo .just_synced >> .gitignore
-  fi
-fi
-
-# ****************************************************************************
-# ****DONE****DONE****DONE****DONE****DONE****DONE****DONE****DONE****DONE****
-# ****************************************************************************
-
-cmds=()
-
-uwecho "Done!
-
-
-        To complete your git initialization, the following commands must be run:
-        ------------------------------------------------------------------------"
-cmds+=("cd $(quote_escape "${PROJECT_DIR}")")
-if [ ! -e .git ]; then
-  cmds+=("git init .")
-fi
-
-if [ "${USE_VSI_COMMON}" = "1" ]; then
-  cmds+=("git submodule add https://github.com/visionsystemsinc/vsi_common.git $(quote_escape "${RELATIVE_PATH}")"
-         "git submodule update --init --recursive"
-         "pushd $(quote_escape "${RELATIVE_PATH}")"
-         "git remote set-url origin --push git@github.com:visionsystemsinc/vsi_common.git"
-         "popd"
-         "git add $(quote_escape "${SETUPFILE}") .gitmodules")
-fi
-
-cmds+=("git add .gitignore README.md $(quote_escape "${JUSTFILE}") $(quote_escape "${PROJECT_NAME}").env")
-
-if [ "${USE_DOCKER}" = "1" ]; then
-  cmds+=("git add .gitattributes .dockerignore docker-compose.yml docker/${APP_NAME}.Dockerfile docker/${APP_NAME}.Justfile")
-else
-  cmds+=("git add hi.cpp")
-fi
-if [ "${USE_PIPENV}" = "1" ]; then
-  cmds+=("git add Pipfile Pipfile.lock")
-fi
-
-cmds+=("git commit -m 'Initial commit'")
-
-for cmd in "${cmds[@]}"; do
-  echo "${cmd}" >&3
-done
-
-echo ""
-ask_question "Do you want these git commands to be executed for you now?" SETUP_GIT n
-
-if [ "${SETUP_GIT}" = "1" ]; then
-  for cmd in "${cmds[@]}"; do
-    eval "${cmd}"
-  done
-fi
-
-uwecho "
-
-
-        To use your new just:
-
-        cd $(quote_escape "${PROJECT_DIR}")"
-
-if [ "${USE_VSI_COMMON}" = "1" ]; then
-  echo "source $(quote_escape "${SETUPFILE}")"
-fi
-
-uwecho "${just_cmd} help
-
-        Get started with:"
-
-if [ "${USE_DOCKER}" = "1" ]; then
-  uwecho "${just_cmd} sync
-          ${just_cmd} run ${APP_NAME} bash"
-else
-  uwecho "${just_cmd} compile
-          ${just_cmd} run"
+}
+
+
+if [ "${BASH_SOURCE[0]}" = "${0}" ] || [ "$(basename "${BASH_SOURCE[0]}")" = "${0}" ]; then
+  # Redirect stderr to stdout, and stdout to 3; now the only way to write to
+  # stdout or stderr is to write to 3
+  exec 3>&1 # Copy stdout to 3
+  exec 1>&2 # Copy stderr to 1
+  new_just ${@+"${@}"}
 fi
