@@ -3,7 +3,7 @@ import numpy as np
 import re
 
 
-#for testing validity of axis order arguments
+# for testing validity of axis order arguments
 axis_order_re = re.compile('[XYZ][XYZ][XYZ]')
 
 
