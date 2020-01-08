@@ -1,176 +1,126 @@
 """ Utility functions related to mesh processing """
 import numpy as np
-import vsi.utils.io_utils as io_utils
-import vtk
-import glob
-import os.path
 
 
-def write_grid_vtk(image_stack_glob, output_filename, origin=(0,0,0), vox_len=1.0):
-  """ write out an image stack to a VTK "Structured Points" format
+def save_point_cloud_ply(output_fname, pts, colors=None):
+    """ Save a 3D point cloud in PLY acii format
 
-  Parameters
-  ----------
-  image_stack_glob : str
-      The path name
-  output_filename : str
-      The output file name
-  origin : array_like, optional
-      The origin. Default: (0,0,0)
-  vox_len : float, optional
+    Parameters
+    ----------
+    output_fname : str
+        Filename to save to
+    pts : array_like
+        The 3D points. Shape = Nx3
+    colors : array_like
+        RGB colors of points.  Shape = Nx3 (optional)
 
-  Raises
-  -------
-  Exception
-      When there are no matching images
-  """
-  image_fnames = glob.glob(image_stack_glob)
-  image_fnames.sort()
-  nk = len(image_fnames)
-  if nk == 0:
-    raise Exception('No images matching ' + image_stack_glob)
+    """
+    num_pts = len(pts)
 
-  # read first image to get x,y dimensions
-  img0 = io_utils.imread(image_fnames[0])
+    with open(output_fname, 'w') as fd:
+        fd.write('ply\n')
+        fd.write('format ascii 1.0\n')
+        fd.write('element vertex %d\n' % num_pts)
+        fd.write('property float x\n')
+        fd.write('property float y\n')
+        fd.write('property float z\n')
+        if colors is not None:
+            fd.write('property uint8 red\n')
+            fd.write('property uint8 green\n')
+            fd.write('property uint8 blue\n')
+        fd.write('end_header\n')
 
-  ni = img0.shape[1]
-  nj = img0.shape[0]
-
-  fd = open(output_filename, 'w')
-  fd.write('# vtk DataFile Version 3.1\n')
-  fd.write('a voxel grid\n')
-  fd.write('ASCII\n')
-  fd.write('DATASET STRUCTURED_POINTS\n')
-  fd.write('DIMENSIONS %d %d %d\n' % (ni,nj,nk))
-  fd.write('ORIGIN %f %f %f\n' % (origin[0], origin[1], origin[2]))
-  fd.write('SPACING %f %f %f\n' % (vox_len, vox_len, vox_len))
-  fd.write('POINT_DATA %d\n' % (ni*nj*nk))
-  fd.write('SCALARS values float 1\n')
-  fd.write('LOOKUP_TABLE default\n')
-  for k in range(nk):
-    img = io_utils.imread(image_fnames[k])
-    for j in range(nj):
-      for i in range(ni):
-        fd.write('%f\n' % (float(img[j,i]) / 255.0))
-  fd.write('\n')
-  fd.close()
+        if colors is None:
+            for pt in pts:
+                fd.write(f'{pt[0]} {pt[1]} {pt[2]}\n')
+        else:
+            for pt,c in zip(pts,colors):
+                fd.write(f'{pt[0]} {pt[1]} {pt[2]} {c[0]} {c[1]} {c[2]}\n')
 
 
-def marching_cubes(grid_fname_vtk, mesh_filename_ply, value=0.5):
-  """ read in a grid in vtk format, run marching cubes, save the result as ply
-  mesh
+def save_mesh_ply(output_fname, verts, faces, vert_colors=None):
+    """ Save a polygonal mesh in ascii PLY format
 
-  Parameters
-  ----------
-  grid_fname_vtk : str
-      The file name of the grid in vtk format
-  mesh_filename_ply : str
-      The file name to save the ply mesh results
-  value : float, optional
-      The value
-  """
-  reader = vtk.vtkStructuredPointsReader()
-  reader.SetFileName(grid_fname_vtk)
-  reader.Update()
-  points = reader.GetOutput()
+    Parameters
+    ----------
+    output_fname : str
+        filename to write to
+    verts : array_like
+        Vertices of the mesh. Shape = Nx3
+    faces : array_like
+        Faces of the mesh.
+        Shape = NxV, where V is the number of vertices per face.
+    vert_colors : array_like
+        Per-vertex RGB colors.
+        Shape = Nx3
+    """
+    num_verts = len(verts)
+    num_faces = len(faces)
 
-  mcubes = vtk.vtkMarchingCubes()
-  mcubes.SetInput(points)
-  mcubes.SetValue(0, value)
-  mcubes.Update()
-  mesh = mcubes.GetOutput()
+    with open(output_fname, 'w') as fd:
+        fd.write('ply\n')
+        fd.write('format ascii 1.0\n')
+        fd.write(f'element vertex {num_verts}\n')
+        fd.write('property float x\n')
+        fd.write('property float y\n')
+        fd.write('property float z\n')
+        if vert_colors is not None:
+            fd.write('property uint8 red\n')
+            fd.write('property uint8 green\n')
+            fd.write('property uint8 blue\n')
+        fd.write(f'element face {num_faces}\n')
+        fd.write('property list uchar int vertex_index\n')
+        fd.write('end_header\n')
 
-  writer = vtk.vtkPLYWriter()
-  writer.SetInput(mesh)
-  writer.SetFileName(mesh_filename_ply)
-  writer.Update()
-  writer.Write()
+        if vert_colors is None:
+            for vert in verts:
+                fd.write(f'{vert[0]} {vert[1]} {vert[2]}\n')
+        else:
+            assert len(vert_colors) == num_verts, "different number of vertices and colors"
+            for vert,c in zip(verts, vert_colors):
+                fd.write(f'{vert[0]} {vert[1]} {vert[2]} {c[0]} {c[1]} {c[2]}\n')
 
-
-def colorize_verts_ply(ply_in_filename, ply_out_filename, image, camera):
-  """ add per-vertex color information based on projections into images
-
-  Parameters
-  ----------
-  ply_in_filename : str
-  ply_out_filename : str
-  image : array_like
-      The image
-  camera : 
-  """
-  # read in PLY file
-  reader = vtk.vtkPLYReader()
-  reader.SetFileName(ply_in_filename)
-  reader.Update()
-  data = reader.GetOutput()
-
-  # create Color data
-  colors = vtk.vtkUnsignedCharArray()
-  colors.SetNumberOfComponents(3)
-  colors.SetName("Colors")
-
-  num_pts = data.GetNumberOfPoints()
-  for n in range(num_pts):
-    pt3d = data.GetPoint(n)
-    pt2d = camera.project_point(pt3d).astype(np.int)
-    img_size = np.array((image.shape[1], image.shape[0]))
-    if np.any(pt2d < 0) or np.any(pt2d >= img_size):
-      color = (128, 128, 128)
-    else:
-      color = image[pt2d[1], pt2d[0], :]
-    # convert gray to RGB
-    if len(color) == 1:
-      color = (color, color, color)
-    colors.InsertNextTuple3(color[0], color[1], color[2])
-
-  data.GetPointData().SetScalars(colors)
-  data.Update()
-
-  # write new PLY
-  writer = vtk.vtkPLYWriter()
-  writer.SetFileName(ply_out_filename)
-  writer.SetInput(data)
-  writer.SetArrayName("Colors")
-  writer.Update()
-  writer.Write()
+        for face in faces:
+            fd.write(f'{len(face)} {face[0]} {face[1]} {face[2]}\n')
 
 
-def get_mesh_vertices(mesh_filename):
-  """ read a ply file, return vertices in form of 3xN numpy array
+def save_cameras_ply(filename, cam_Ks, cam_Rs, cam_Ts, img_sizes, scale=1.0):
+    """ Save perspective cameras as meshes in ascii PLY format for visualization
+    Note that all input lists should have equal length
 
-  Parameters
-  ----------
-  mesh_filename : str
-      The mesh file name
+    Parameters
+    ----------
+    filename : str
+        filename to write
+    cam_Ks : list
+        list of camera intrinisic matrices. Each should be array_like with shape 3x3
+    cam_Rs : list
+        list of camera rotation matrices.  Each should be array_like with shape 3x3
+    cam_Ts : list
+        list of camera translation vectors.  Each should be array_like with length 3
+    img_sizes : list
+        list of image dimensions.  Each should be array_like with form (width, height)
+    scale : float
+        size of visualized camera.  Specifically, the distance from the image plane to the camera center.
+    """
+    camera_verts = []
+    camera_faces = []
+    vert_offset = 0
+    for cam_K, cam_R, cam_T, img_size in zip(cam_Ks, cam_Rs, cam_Ts, img_sizes):
+        camera_center = np.dot(-cam_R.transpose(), cam_T)
+        cam_z = cam_R[2,:]
+        cam_x = cam_R[0,:]
+        cam_y = cam_R[1,:]
+        x_len = (scale / cam_K[0,0]) * img_size[0]
+        y_len = (scale / cam_K[1,1]) * img_size[1]
+        verts = [camera_center,]
+        verts.append(camera_center + scale*cam_z - x_len*cam_x - y_len*cam_y)
+        verts.append(camera_center + scale*cam_z + x_len*cam_x - y_len*cam_y)
+        verts.append(camera_center + scale*cam_z + x_len*cam_x + y_len*cam_y)
+        verts.append(camera_center + scale*cam_z - x_len*cam_x + y_len*cam_y)
+        faces = [(f[0]+vert_offset, f[1]+vert_offset, f[2]+vert_offset) for f in [(0,1,2), (0,2,3), (0,3,4), (0,4,1)]]
+        vert_offset += len(verts)
+        camera_verts.extend(verts)
+        camera_faces.extend(faces)
 
-  Returns
-  -------
-  numpy.array
-      The vertices in the form of a 3xN numpy array
-
-  Raises
-  ------
-  Exception
-      When there is an unsupported filename extension
-  """
-  # read in PLY file
-  mesh_ext = os.path.splitext(mesh_filename)[1].lower()
-  if mesh_ext == '.ply':
-    reader = vtk.vtkPLYReader()
-  elif mesh_ext == '.obj':
-    reader = vtk.vtkOBJReader()
-  else:
-    raise Exception('Unsupported filename extension ' + mesh_ext)
-  reader.SetFileName(mesh_filename)
-  reader.Update()
-  data = reader.GetOutput()
-
-  num_pts = data.GetNumberOfPoints()
-  vert_matrix = np.zeros((3,num_pts))
-  for n in range(num_pts):
-    pt3d = data.GetPoint(n)
-    vert_matrix[:,n] = pt3d
-
-  return vert_matrix
-
-
+    save_mesh_ply(filename, camera_verts, camera_faces)
