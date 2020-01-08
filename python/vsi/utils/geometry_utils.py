@@ -168,13 +168,13 @@ def axis_angle_to_quaternion(axis, theta):
       Returns
       -------
       array_like
-        The quaternion
+        The Quaternion (w, x, y, z)
   """
   # make sure axis has unit length
   axis_u = axis / np.linalg.norm(axis)
   sin_half = np.sin(theta/2.0)
   cos_half = np.cos(theta/2.0)
-  q = np.array((sin_half, sin_half, sin_half, cos_half)) * np.append(axis_u,1.0)
+  q = np.array((cos_half, sin_half, sin_half, sin_half)) * np.append(1.0, axis_u)
   return q
 
 
@@ -223,7 +223,7 @@ def Euler_angles_to_quaternion(theta1, theta2, theta3, order='XYZ'):
       Returns
       -------
       array_like
-        The Quaternions
+        The Quaternion: (w, x, y, z)
 
       Raises
       ------
@@ -237,9 +237,9 @@ def Euler_angles_to_quaternion(theta1, theta2, theta3, order='XYZ'):
   e2 = axis_from_string(order[1])
   e3 = axis_from_string(order[2])
 
-  q1 = np.append(e1 * np.sin(theta1/2.0), np.cos(theta1/2.0))
-  q2 = np.append(e2 * np.sin(theta2/2.0), np.cos(theta2/2.0))
-  q3 = np.append(e3 * np.sin(theta3/2.0), np.cos(theta3/2.0))
+  q1 = np.append(np.cos(theta1/2.0), e1 * np.sin(theta1/2.0))
+  q2 = np.append(np.cos(theta2/2.0), e2 * np.sin(theta2/2.0))
+  q3 = np.append(np.cos(theta3/2.0), e3 * np.sin(theta3/2.0))
 
   return compose_quaternions((q1,q2,q3))
 
@@ -250,7 +250,7 @@ def quaternion_to_Euler_angles(q, order='XYZ'):
       Parameters
       ----------
       q : array_like
-        The Quaternion
+        The Quaternion (w, x, y, z)
       order : str
         The Order of the Axes
 
@@ -264,22 +264,22 @@ def quaternion_to_Euler_angles(q, order='XYZ'):
   """
   if not axis_order_is_valid(order):
     raise Exception('Invalid order string: ' + str(order))
-  p0 = q[3]  # real component
-  p1 = q[0]
+  p0 = q[0]  # real component
+  p1 = q[1]
   if order[0] == 'Y':
-    p1 = q[1]
-  elif order[0] == 'Z':
     p1 = q[2]
-  p2 = q[1]
+  elif order[0] == 'Z':
+    p1 = q[3]
+  p2 = q[2]
   if order[1] == 'X':
-    p2 = q[0]
+    p2 = q[1]
   elif order[1] == 'Z':
-    p2 = q[2]
-  p3 = q[2]
+    p2 = q[3]
+  p3 = q[3]
   if order[2] == 'X':
-    p3 = q[0]
-  elif order[2] == 'Y':
     p3 = q[1]
+  elif order[2] == 'Y':
+    p3 = q[2]
 
   e1 = axis_from_string(order[0])
   e2 = axis_from_string(order[1])
@@ -300,7 +300,7 @@ def quaternion_to_matrix(q):
       Parameters
       ----------
       q : float
-        The Quaternion
+        The Quaternion: (w, x, y, z)
 
       Returns
       -------
@@ -314,10 +314,10 @@ def quaternion_to_matrix(q):
   R = np.zeros((3, 3))
 
   # save as a,b,c,d for easier reading of conversion math
-  x = q[0]
-  y = q[1]
-  z = q[2]
-  w = q[3]
+  w = q[0]
+  x = q[1]
+  y = q[2]
+  z = q[3]
 
   R[0,0] = 1 - 2*y*y - 2*z*z
   R[0,1] = 2*x*y - 2*z*w
@@ -477,7 +477,7 @@ def matrix_to_quaternion(rot):
       Returns
       -------
       array_like
-        The Quaternions
+        The Quaternion: (w, x, y, z)
 
       Adapted from vnl_quaternion.txx in vxl
   """
@@ -527,7 +527,7 @@ def matrix_to_quaternion(rot):
     q_im[1] = (rot[2,1] + rot[1,2]) * iz4
     q_re = (rot[1,0] - rot[0,1]) * iz4
 
-  return np.array((q_im[0], q_im[1], q_im[2], q_re))
+  return np.array((q_re, q_im[0], q_im[1], q_im[2]))
 
 
 def compose_quaternions(quaternion_list):
@@ -536,20 +536,20 @@ def compose_quaternions(quaternion_list):
       Parameters
       ----------
       quaternion_list : array_like
-        The List of Quaternions
+        The List of Quaternions (w, x, y, z)
 
       Returns
       -------
       array_like
         The Composition of a list of quaternions.
   """
-  qtotal = np.array((0,0,0,1))
+  qtotal = np.array((1,0,0,0))
   for q in quaternion_list:
     q1 = qtotal
     q2 = q
-    re = q1[3]*q2[3] - np.dot(q1[0:3],q2[0:3])
-    imag = np.cross(q1[0:3],q2[0:3]) + q2[0:3]*q1[3] + q1[0:3]*q2[3]
-    qtotal = np.array((imag[0], imag[1], imag[2], re))
+    re = q1[0]*q2[0] - np.dot(q1[1:4],q2[1:4])
+    imag = np.cross(q1[1:4],q2[1:4]) + q2[1:4]*q1[0] + q1[1:4]*q2[0]
+    qtotal = np.array((re, imag[0], imag[1], imag[2]))
   return qtotal
 
 
