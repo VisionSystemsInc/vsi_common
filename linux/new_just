@@ -93,14 +93,23 @@ else
   }
 fi
 
-function docker_quote_escape()
+function docker_add_quote_escape()
 {
   # Escape [ => \\[
   local foo="${1//[/\\\\[}"
   # Escape ' => \\'
   foo="${foo//\'/\\\\\'}"
-  # Escape " => \\\'
+  # Escape " => \\\"
   foo="${foo//\"/\\\\\\\"}"
+  echo "${foo}"
+}
+
+function docker_env_quote_escape()
+{
+  # Escape \ => \\. While not exactly required, protects certain corner cases
+  local foo="${1//\\/\\\\}"
+  # Escape " => \"
+  echo "${foo//\"/\\\"}"
 }
 
 # Use unwrapping echo so that this file is easier to read
@@ -117,6 +126,7 @@ else
     local source_line="$(sed -n "${line_number}p" "${file_name}")"
 
     local spaces="$(echo -n "${source_line}" | sed -E 's|^( *uwecho +['"'"'"]?).*|\1|' | tr -d '\n' | wc -c)"
+    spaces="${spaces#${spaces%%[![:space:]]*}}"
     local args=()
     while (( $# )); do
       args+=("$(sed '2,$s|^ \{'"${spaces}"'\}||' <<< "$1")")
@@ -1045,8 +1055,11 @@ function new_just()
 
       uwecho   '
                 COPY --from=vsi /vsi /vsi
-                ADD ["'"$(docker_quote_escape "${PROJECT_NAME}.env")"'", "/src/"]
-                ADD docker/'"${APP_NAME}"'.Justfile /src/docker/
+                ADD ["'"$(docker_add_quote_escape "${PROJECT_NAME}.env")"'", "/src/"]
+                ADD ["'"$(docker_add_quote_escape docker/"${APP_NAME}.Justfile")"'", "/src/"]
+
+                ENV JUSTFILE="/src/'"$(docker_env_quote_escape "${APP_NAME}.Justfile")"'" \
+                    JUST_SETTINGS="/src/'"$(docker_env_quote_escape "${PROJECT_NAME}.env")"'"
 
                 ENTRYPOINT ["/usr/local/bin/tini", "--", "/usr/bin/env", "bash", "/vsi/linux/just_entrypoint.sh"]
                 # Does not require execute permissions, unlike:
