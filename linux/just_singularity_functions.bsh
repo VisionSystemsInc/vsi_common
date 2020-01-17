@@ -193,19 +193,26 @@ function singular_defaultify()
           ### Setup _Singularity call ###
           ###############################
 
-          # Generate binds
           local subcommand_args=()
-          if [ -n "${singular_volumes+set}" ]; then
-            for (( i=0; i<${#singular_volumes[@]}; i++ )); do
-              subcommand_args+=(-B "${singular_volumes[${i}]}")
-            done
-          fi
 
           # When -c is used, $HOME, /tmp, /proc, /sys, and /dev are not mounted
           # in directly. The internal /tmp is very limited and quickly starts
           # having problems. So it is best to just mount it in by default.
           if [ "${SINGULARITY_ADD_TMP_DIR-1}" = "1" ]; then
             subcommand_args+=(-B "$(get_mktemp_dir):/tmp:rw")
+          fi
+          # /tmp needs to be mounted in BEFORE singular_volumes, incase
+          # something tries to mount inside of tmp, like /tmp/.X11-unix. This
+          # does not make sense, that you can't mount into the tmpfs /tmp, but
+          # for some reason it creates a fatal error, and this works around it.
+          # It has nothing to do with "The dir exising before being mounted to"
+
+
+          # Generate binds
+          if [ -n "${singular_volumes+set}" ]; then
+            for (( i=0; i<${#singular_volumes[@]}; i++ )); do
+              subcommand_args+=(-B "${singular_volumes[${i}]}")
+            done
           fi
 
           # Make Singularity call
@@ -277,6 +284,7 @@ function singular_defaultify()
           local instance="$1"
           local mount_point_args=()
           local mount_point
+          local image_dir
 
           singular_load_env "${instance}"
 
@@ -284,11 +292,14 @@ function singular_defaultify()
             mount_point_args+=(--mount "${mount_point}")
           done
 
-          justify singularity import \
-            --name "$(basename "${singular_image}")" \
-            ${mount_point_args[@]+"${mount_point_args[@]}"} \
-            "${2}"
-
+          image_dir="$(dirname "${singular_image}")"
+          mkdir -p "${image_dir}"
+          pushd "${image_dir}" &> /dev/null
+            justify singularity import \
+              --name "$(basename "${singular_image}")" \
+              ${mount_point_args[@]+"${mount_point_args[@]}"} \
+              "${2}"
+          popd &> /dev/null
           extra_args+=2
           ;;
         *)
