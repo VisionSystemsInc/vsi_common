@@ -27,7 +27,9 @@ RUN apk add --no-cache \
       # For tests like time-tools/timeout
       perl \
       # git for git... pretty self explanitory
-      git; \
+      git \
+      # Make typeing in the docker easier (for debugging)
+      readline; \
     command -v xxd &> /dev/null || apk add --no-cache vim
 
 ENV JUSTFILE=/vsi/docker/tests/bash_test.Justfile \

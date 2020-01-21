@@ -78,6 +78,13 @@ function caseify()
       justify _post_build_docker
       ;;
 
+    build_bashes) # Build images for all bash versions
+      local version
+      for version in 3.2 4.0 4.1 4.2 4.3 4.4 5.0; do
+        VSI_COMMON_BASH_TEST_VERSION="${version}" Just-docker-compose build bash_test
+      done
+      ;;
+
     bashcov_vsi) # Run bashcov on vsi_common
       local int_tests=(./tests/int/test-*.bsh)
       remove_element_a int_tests ./tests/int/test-common_source.bsh
