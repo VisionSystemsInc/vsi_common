@@ -16,6 +16,7 @@ J.U.S.T. Useful Simple Tasking
    just_common.auto
    just_env.auto
    just_functions.auto
+   just_version.auto
    just_wrap.auto
    new_just.auto
    just_diff.auto
