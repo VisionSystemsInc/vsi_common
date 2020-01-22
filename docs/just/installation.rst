@@ -26,7 +26,8 @@ The ``just`` `wizard <https://raw.githubusercontent.com/VisionSystemsInc/vsi_com
 
 .. code-block:: bash
 
-    bash <(curl -Ls https://raw.githubusercontent.com/VisionSystemsInc/vsi_common/master/linux/new_just)
+    curl -LO https://raw.githubusercontent.com/VisionSystemsInc/vsi_common/master/linux/new_just
+    bash ./new_just
 
 .. _just-install-exe:
 
