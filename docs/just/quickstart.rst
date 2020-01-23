@@ -6,9 +6,7 @@ To set up a project for ``just``, run the ``just`` wizard
 
 * Either call the latest ``new_just`` by downloading::
 
-    curl -LO https://raw.githubusercontent.com/VisionSystemsInc/vsi_common/master/linux/new_just
-    bash ./new_just
-
+    bash <(curl -Ls https://raw.githubusercontent.com/VisionSystemsInc/vsi_common/master/linux/new_just)
 
 * or use the ``just`` executable::
 
