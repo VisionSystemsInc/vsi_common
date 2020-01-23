@@ -5,7 +5,9 @@ if [[ $- != *i* ]]; then
   source_once &> /dev/null && return 0
 fi
 
-: ${VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."}
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
 
 #*# just/just_functions
 
@@ -27,6 +29,27 @@ source "${VSI_COMMON_DIR}/linux/isin"
 source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
 source "${VSI_COMMON_DIR}/linux/elements.bsh"
 source "${VSI_COMMON_DIR}/linux/findin"
+
+
+function check_just_version()
+{
+  local last_just_version=${JUST_VERSION-pre0.2.0}
+  source "${VSI_COMMON_DIR}/linux/just_version.bsh"
+  export JUST_VERSION
+
+  # If last just version was set and different
+  if [ -n "${last_just_version:+set}" ] && \
+     [ "${last_just_version}" != "${JUST_VERSION}" ]; then
+    echo "WARNING: The version of just (${JUST_VERSION}) appears to have changed" >&2
+    echo "since it was last updated (${last_just_version})" >&2
+    # echo "You may want to source ${JUST_SETUP_SCRIPT-your setup script} again" >&2
+    echo "You may want to run 'just_diff -- --' and see what's changed in just." >&2
+    if [ -n "${JUST_VERSION+set}" ]; then
+      echo "When you are done, update 'JUST_VERSION=${JUST_VERSION}' in '$(basename ${JUST_SETTINGS})'" >&2
+    fi
+    echo >&2
+  fi
+}
 
 # _get_owner_id {path} -> owner user id
 function _get_owner_id()
@@ -123,11 +146,11 @@ function _get_owner_id()
 ##     JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 ##     function just_example_defaultify()
 ##     {
-##       arg=$1
+##       arg="${1}"
 ##       shift 1
-##       case $arg in
+##       case "${arg}" in
 ##         foo|bar) #Foobar test
-##           echo "Foo or bar: $1"
+##           echo "Foo or bar: ${1}"
 ##           extra_args=1
 ##           ;;
 ##         *)
@@ -310,6 +333,8 @@ function source_environment_files()
       export -fn $x
     fi
   done < <(declare -Fx)
+
+  check_just_version
 }
 
 #**
@@ -353,7 +378,7 @@ function auto_path_escape()
 #
 # :Arguments: ``$1`` - Name of array to check if it is already set
 #
-#              ``$2...`` - Default values of the array
+#             ``$2...`` - Default values of the array
 #
 # :Output: ``JUST_TEMP_ARRAY`` - Destination for all the values set
 #
@@ -385,7 +410,7 @@ function auto_path_escape()
 function set_temp_array()
 {
   echo "set_temp_array is deprecated: use set_array_default" >&2
-  local default="$1"
+  local default="${1}"
   shift
   if declare -p $default &> /dev/null; then
     default="${default}[@]"
@@ -400,7 +425,7 @@ function set_temp_array()
 #
 # :Arguments: ``$1`` - Name of array to check if it is already set
 #
-#              ``$2...`` - Default values of the array
+#             ``$2...`` - Default values of the array
 #
 # :Output: ``JUST_TEMP_ARRAY`` - Destination for all the values set
 #
@@ -427,7 +452,7 @@ function set_temp_array()
 
 function set_array_default()
 {
-  local default="$1"
+  local default="${1}"
   shift 1
 
   if ! declare -p $default &> /dev/null; then
@@ -768,9 +793,9 @@ function defaultify()
     fi
   done
 
-  arg=$1
+  arg="${1}"
   shift 1
-  case $arg in
+  case "${arg}" in
     --dryrun|-n) #Dryrun flag. Used to echo instead of run commands
       export DRYRUN="print_command just --wrap"
       ;;
@@ -778,7 +803,7 @@ function defaultify()
                  # arguments use the -- separator to start and end the extra \
                  # arguments. If -- is needed for other things, specify a custom \
                  # separator
-      JUST_SEPARATOR=$1
+      JUST_SEPARATOR="${1}"
       extra_args=1
       ;;
     --version) # Print version
@@ -845,9 +870,9 @@ function defaultify()
         echo 'complete -F _juste juste'
       else
         source "${VSI_COMMON_DIR}/linux/.just"
-        local one="$1"
-        local two="$2"
-        local three="$3"
+        local one="${1}"
+        local two="${2}"
+        local three="${3}"
         local COMP_WORDS
 
         shift 3
@@ -866,7 +891,7 @@ function defaultify()
     _null)
       ;;
     *)
-      unknownify "$arg" ${@+"${@}"}
+      unknownify "${arg}" ${@+"${@}"}
       ;;
   esac
 }
@@ -893,7 +918,7 @@ function unknownify()
     echo >&2
     exit 1
   else
-    echo "I don't understand: $1" >&2
+    echo "I don't understand: ${1}" >&2
     exit 1
   fi
 }
@@ -1075,7 +1100,7 @@ function _justify()
 function callify()
 {
   local cmd
-  cmd=$1
+  cmd="${1}"
   shift 1
   get_args ${@+"${@}"}
   $cmd ${args+"${args[@]}"}
@@ -1208,7 +1233,7 @@ function safe_load() # Loads a very simple safe config file, and sets environmen
     IFS="${JUST_SAFE_LOAD_DELIMITER}" read -r safe_load_tmp_key safe_load_tmp_value <<< "$line"
     IFS="${JUST_SAFE_LOAD_DELIMITER}" read -r safe_load_tmp_key "$safe_load_tmp_key" <<< "$line"
     export "$safe_load_tmp_key"
-  done < "$1"
+  done < "${1}"
 }
 
 #**

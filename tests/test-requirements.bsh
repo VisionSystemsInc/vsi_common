@@ -1,0 +1,166 @@
+#!/usr/bin/env bash
+
+. "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
+
+VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+. "${VSI_COMMON_DIR}/linux/requirements.bsh"
+
+
+begin_test "meet_requirements"
+(
+  setup_test
+
+  # bogus test
+  meet_requirements 1 ~1 || rv=$?
+  [ "${rv}" = "2" ]
+
+  # =
+  meet_requirements 1 =1
+  not meet_requirements 1 =1.1
+  # !=
+  not meet_requirements 1 !=1
+  meet_requirements 1 !=1.1
+
+  # <
+  meet_requirements 1 '<1.1'
+  not meet_requirements 1 '<1'
+  not meet_requirements 1.1 '<1'
+  # <=
+  meet_requirements 1 '<=1.1'
+  meet_requirements 1 '<=1'
+  not meet_requirements 1.1 '<=1'
+
+  # >
+  not meet_requirements 1 '>1.1'
+  not meet_requirements 1 '>1'
+  meet_requirements 1.1 '>1'
+  # >=
+  not meet_requirements 1 '>=1.1'
+  meet_requirements 1 '>=1'
+  meet_requirements 1.1 '>=1'
+
+  # = and !=
+  not meet_requirements 1.0.0 =1.0.0 !=1.0.0
+  meet_requirements 1.0.0 =1.0.0 !=1.0.1
+
+  meet_requirements 1.0.0 '>0.9.0' '<1.0.1'
+  not meet_requirements 1.0.0 '>0.9.0' '<1.0.0'
+
+  # complex rules
+  not meet_requirements 1 '>0.5' '<1.0'
+  meet_requirements 1 '>0.5' '<1.5'
+  meet_requirements 1 '>0.5' '<1.5' or ">2.5" "<3.5"
+  not meet_requirements 2 '>0.5' '<1.5' or ">2.5" "<3.5"
+  meet_requirements 3 '>0.5' '<1.5' or ">2.5" "<3.5"
+  not meet_requirements 4 '>0.5' '<1.5' or ">2.5" "<3.5"
+)
+end_test
+
+begin_test "version ="
+(
+  setup_test
+
+  version_eq 1.0.0 1.0.0
+  version_eq 1.0.0a 1.0.0a
+  version_eq 1.0.0 1.0
+  version_eq 1.0.0 1
+  version_eq 1.0.0a 1a
+  not version_eq 1.0.1 1.0.0
+  not version_eq 1.0.0 1.0.1
+  not version_eq 1.0.0a 1.0.0b
+  not version_eq 1.0.0b 1a
+
+  not version_eq 1.2.3 1.2.3a
+)
+end_test
+
+begin_test "version <"
+(
+  setup_test
+
+  version_lt 1.0.0 1.0.0.1
+  version_lt 1.0.0 1.0.1
+  version_lt 1.0.0 1.1.0
+  version_lt 1.0.0 1.1
+  version_lt 1.0.0 2.0.0
+  version_lt 1.0.0 2.0
+  version_lt 1.0.0 2
+  not version_lt 1.0.0 1.0.0
+  not version_lt 1.0.0 0.100.0
+  not version_lt 1.0.0 0.100.100
+
+  not version_lt 1.2.3rc1 1.2.3rc1
+  version_lt 1.2.3a 1.2.3b
+  not version_lt 1.2.3b 1.2.3a
+
+  not version_lt 1.2.3 1.2.3a
+  version_lt 1.2.3a 1.2.3
+)
+end_test
+
+begin_test "version >"
+(
+  setup_test
+
+  version_gt 1.0.0.1 1
+  version_gt 1.0.1 1
+  version_gt 1.1.0 1
+  version_gt 1.1 1
+  version_gt 2.0.0 1.0.0
+  version_gt 2.0 1.0.0
+  version_gt 2 1.0.0
+  not version_gt 1.0.0 1.0.0
+  not version_gt 0.100.0 1.0.0
+  not version_gt 0.100.100 1.0.0
+
+  not version_gt 1.2.3rc1 1.2.3rc1
+  not version_gt 1.2.3a 1.2.3b
+  version_gt 1.2.3b 1.2.3a
+
+  not version_gt 1.2.3a 1.2.3
+  version_gt 1.2.3 1.2.3a
+)
+end_test
+
+begin_test "program versions"
+(
+  setup_test
+
+  function docker()
+  {
+    if [ "${1}" = "--version" ]; then
+      echo "Docker version 19.03.5, build 633a0ea838"
+    fi
+  }
+
+  function docker_compose()
+  {
+    if [ "${1}" = "--version" ]; then
+      echo "docker-compose version 1.24.0, build 0aa59064"
+    fi
+  }
+
+  function git()
+  {
+    if [ "${1}" = "--version" ]; then
+      echo "git version 2.24.1"
+    fi
+  }
+  function bash_mock()
+  {
+    if [ "${1}" = "--version" ]; then
+      echo "GNU bash, version 5.0.10(1)-release (x86_64-redhat-linux-gnu)"
+      echo "Copyright (C) 2019 Free Software Foundation, Inc."
+      echo "License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>"
+      echo
+      echo "This is free software; you are free to change and redistribute it."
+      echo "There is NO WARRANTY, to the extent permitted by law."
+    fi
+  }
+
+  [ "$(BASH=bash_mock bash_version)" = "5.0.10r1" ]
+  [ "$(git_version)" = "2.24.1" ]
+  [ "$(docker_version)" = "19.03.5" ]
+  [ "$(DOCKER_COMPOSE=docker_compose docker_compose_version)" = "1.24.0" ]
+)
+end_test

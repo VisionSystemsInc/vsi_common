@@ -28,7 +28,14 @@ function vsi_test_env()
     fi
   done
 
-  env -i "${test_env[@]}" "${@}"
+  # if [[ ${OSTYPE} = darwin* ]] && [ "$(sw_vers -buildVersion)" = "Darling" ]; then
+  #   # If darling, deal with darlinghq/darling#640
+  #   env -i "${test_env[@]}" "${@}" 2>&1 | perl -e 'print && select undef,undef,undef,0.00001 while <>;'
+  #   # Does not work in darling unless usleep for 1001 and larger. TOO slow
+  #   # perl -e 'use Time::HiRes; print && Time::HiRes::usleep(1) while <>;'
+  # else
+    env -i "${test_env[@]}" "${@}"
+  # fi
 }
 
 function caseify()

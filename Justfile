@@ -37,6 +37,7 @@ function caseify()
       TESTLIB_DISCOVERY_DIR=int vsi_test_env "${VSI_COMMON_DIR}/tests/run_tests" ${@+"${@}"}
       extra_args=$#
       ;;
+
     test_docker) # Run tests in docker image. Useful for setting VSI_COMMON_BASH_VERSION to test specific versions of bash
       justify build recipes-auto "${VSI_COMMON_DIR}/docker/tests/bash_test.Dockerfile"
       Just-docker-compose build bash_test
@@ -76,6 +77,19 @@ function caseify()
       Docker-compose build
       justify docker-compose clean venv2 docker-compose clean venv3
       justify _post_build_docker
+      ;;
+
+    build_bashes) # Build images for all bash versions
+      local version
+      for version in 3.2 4.0 4.1 4.2 4.3 4.4 5.0; do
+        VSI_COMMON_BASH_TEST_VERSION="${version}" Just-docker-compose build bash_test
+      done
+      ;;
+    test_bash) # Run command (like bash) in the contain for a specific version of bash ($1)
+      local bash_version="${1}"
+      extra_args=$#
+      shift 1
+      VSI_COMMON_BASH_TEST_VERSION="${bash_version}" Just-docker-compose run bash_test ${@+"${@}"}
       ;;
 
     bashcov_vsi) # Run bashcov on vsi_common

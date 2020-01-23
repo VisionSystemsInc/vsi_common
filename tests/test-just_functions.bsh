@@ -24,6 +24,20 @@ setup()
   export JUST_IS_TTY=1
 }
 
+begin_test "JUST_VERSION check"
+(
+  setup_test
+  . ${VSI_COMMON_DIR}/linux/just_version.bsh
+  JUST_SETTINGS=/dev/null
+
+  message="$(set +xv; JUST_VERSION="${JUST_VERSION}" check_just_version 2>&1 1>/dev/null)"
+  [ "${message}" = "" ]
+
+  message="$(set +xv; JUST_VERSION="${JUST_VERSION}.1" check_just_version 2>&1 1>/dev/null)"
+  [[ "${message}" = WARNING:* ]] || false
+)
+end_test
+
 begin_test "source_environment_files"
 (
   setup_test
@@ -647,6 +661,10 @@ begin_test "justify with .justplugins"
   # Create min Justfile
   echo 'source_environment_files blah.env' > Justfile # This is needed, or else plugins don't work
   echo 'caseify(){ defaultify ${@+"${@}"}; }' >> Justfile
+
+  # Silence version check
+  source "${VSI_COMMON_DIR}/linux/just_version.bsh"
+  export JUST_VERSION
 
   [ "$(just apple 2>&1)" = "tree" ]
   [ "$(just notapple 2>&1 || :)" = "$(set +xv; unknownify notapple 2>&1 || :)" ]
