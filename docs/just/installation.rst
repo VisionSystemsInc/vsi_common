@@ -22,11 +22,11 @@ From source
 
 In order to use ``just`` from source, you need to add the submodule to your project repository
 
-The ``just`` `wizard <https://raw.githubusercontent.com/VisionSystemsInc/vsi_common/master/linux/new_just>`_ will walk you threw this setup:
+The ``just`` `wizard <https://visionsystemsinc.github.io/vsi_common/new_just>`_ will walk you threw this setup:
 
 .. code-block:: bash
 
-    bash <(curl -Ls https://raw.githubusercontent.com/VisionSystemsInc/vsi_common/master/linux/new_just)
+    bash <(curl -Ls https://visionsystemsinc.github.io/vsi_common/new_just)
 
 .. _just-install-exe:
 

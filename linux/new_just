@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 
 # Usage:
-#   bash <(curl -L https://raw.githubusercontent.com/VisionSystemsInc/vsi_common/master/linux/new_just)
+#   bash <(curl -L https://visionsystemsinc.github.io/vsi_common/new_just)
 
-set -eu
+temp_file="$(mktemp)"
+
+# Use a command like true, so that when I comment, it still works
+# COMMENT NEXT LINE when developing, uncomment before commiting.
+cat - << 'true' > "${temp_file}"
 
 #*# just/new_just
 
@@ -88,8 +92,8 @@ if [ -f "${VSI_COMMON_DIR}/linux/string_tools.bsh" ]; then
 else
   function quote_escape()
   {
-    local foo=\'\"\'\"\'
-    echo "'${1//\'/${foo}}'"
+    local foo42=\'\\\'\'
+    echo "'${1//\'/${foo42}}'"
   }
 fi
 
@@ -105,15 +109,16 @@ else
     local lines="$(echo -n ${@+"${@}"} | wc -l)"
     line_number=$((line_number-lines))
     local source_line="$(sed -n "${line_number}p" "${file_name}")"
-
     local spaces="$(echo -n "${source_line}" | sed -E 's|^( *uwecho +['"'"'"]?).*|\1|' | tr -d '\n' | wc -c)"
     spaces="${spaces#${spaces%%[![:space:]]*}}"
     local args=()
+    local arg
     while (( $# )); do
-      args+=("$(sed '2,$s|^ \{'"${spaces}"'\}||' <<< "$1")")
+      IFS= read -rd '' arg < <(sed '2,$s|^ \{'"${spaces}"'\}||' <<< "$1") || :
+      args+=("${arg}")
       shift 1
     done
-    echo ${args+"${args[@]}"}
+    echo -n ${args+"${args[@]}"}
   }
 fi
 
@@ -333,7 +338,7 @@ function write_readme_md()
 
   uwecho   '## Getting started
 
-            ``` ' >> "${1}"
+            ```' >> "${1}"
 
   if [ "${USE_VSI_COMMON}" = "1" ]; then
     echo   "source $(quote_escape "${SETUPFILE}")" >> "${1}"
@@ -1359,7 +1364,11 @@ function new_just()
     done
 
     . "${VSI_DIR}/linux/just_version.bsh"
-    sed -i='' 's|^JUST_VERSION="new_just"$|JUST_VERSION="'"${JUST_VERSION}"'"|' "${PROJECT_NAME}.env"
+    if [[ ${OSTYPE} == darwin* ]]; then
+      sed -i '' 's|^JUST_VERSION="new_just"$|JUST_VERSION="'"${JUST_VERSION}"'"|' "${PROJECT_NAME}.env"
+    else
+      sed -i 's|^JUST_VERSION="new_just"$|JUST_VERSION="'"${JUST_VERSION}"'"|' "${PROJECT_NAME}.env"
+    fi
   fi
 
   uwecho "
@@ -1386,10 +1395,35 @@ function new_just()
   fi
 }
 
+true
+
+# If statement incase mktemp is commented out for development purposes
+if [ -e "${temp_file-}" ]; then
+  source "${temp_file}"
+fi
+
+function new_just_cleanup()
+{
+  # We want to delete the temp file when we are done executing, so that uwecho
+  # can use the file, the entire point of making the file
+  if [ -e "${temp_file-}" ]; then
+    rm "${temp_file}"
+  fi
+}
+
 if [ "${BASH_SOURCE[0]}" = "${0}" ] || [ "$(basename "${BASH_SOURCE[0]}")" = "${0}" ]; then
+  set -eu
+
+  # Cleanup
+  trap "new_just_cleanup" EXIT
+  trap "new_just_cleanup" INT
+  trap "new_just_cleanup" TERM
+
   # Redirect stderr to stdout, and stdout to 3; now the only way to write to
   # stdout or stderr is to write to 3
   exec 3>&1 # Copy stdout to 3
   exec 1>&2 # Copy stderr to 1
   just_stdout=3 new_just ${@+"${@}"}
 fi
+
+new_just_cleanup
