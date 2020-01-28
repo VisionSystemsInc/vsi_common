@@ -10,6 +10,7 @@ function setup_just_test()
 {
   echo 'TEST_LOCAL=2' > local.env
   echo 'JUST_PROJECT_PREFIX=TEST
+        JUST_VERSION='"$(source "${VSI_COMMON_DIR}/linux/just_version.bsh"; echo "${JUST_VERSION}")"'
         : ${TEST_VAR1=1}
         : ${TEST_LOCAL=0}
         : ${TEST_LOCAL2=0}
@@ -18,6 +19,8 @@ function setup_just_test()
   echo 'TEST_LOCAL2=${TEST_LOCAL}:3' > local_post.env
   touch mywrap
   chmod 755 mywrap
+
+  echo 'source "${VSI_COMMON_DIR}/linux/just_env" "$(dirname "${BASH_SOURCE[0]}")"/project1.env' > Justfile
 
   mkdir -p other_dir
 }
@@ -37,10 +40,10 @@ function check_values()
 function test_wrap_call()
 (
   echo "#!/usr/bin/env bash
-        . '${VSI_COMMON_DIR}/linux/Just_wrap' "'"'"$1"'" ${@+"${@}"}' > "$2"
+        . '${VSI_COMMON_DIR}/linux/Just_wrap'"' ${@+"${@}"}' > "$1"
 
   # Call and copy the variables
-  eval "$("$2" declare -p TEST_VAR1 TEST_VAR2 TEST_LOCAL TEST_LOCAL2 TEST_LOCAL3)"
+  eval "$("$1" declare -p TEST_VAR1 TEST_VAR2 TEST_LOCAL TEST_LOCAL2 TEST_LOCAL3)"
   # Test values
   check_values
 )
@@ -49,7 +52,7 @@ function test_wrap_call()
 function test_unwrap_call()
 (
   # Call and copy the variables
-  eval "$("${VSI_COMMON_DIR}/linux/Just_wrap" "$1" declare -p TEST_VAR1 TEST_VAR2 TEST_LOCAL TEST_LOCAL2 TEST_LOCAL3)"
+  eval "$("${VSI_COMMON_DIR}/linux/Just_wrap" declare -p TEST_VAR1 TEST_VAR2 TEST_LOCAL TEST_LOCAL2 TEST_LOCAL3)"
   # Test values
   check_values
 )
@@ -64,15 +67,15 @@ begin_test "Test call and new shell modes"
   # Test both relative and absolute name
   for project_file in "./project1.env" "${TESTDIR}/project1.env"; do
     # Test relative mywrap call
-    test_wrap_call "${project_file}" ./mywrap
+    test_wrap_call ./mywrap
     # Test absolute mywrap call
-    test_wrap_call "${project_file}" "${TESTDIR}/mywrap"
+    test_wrap_call "${TESTDIR}/mywrap"
     # Test the same call, unwrapped mode
-    test_unwrap_call "${project_file}"
+    test_unwrap_call
 
     # Test a specific command being called because the above only tests declare,
     # which is a built in command and operates differently. Making sure it has
-    # mywrap in it is one way to know ls worked
+    # mywrap in it is one way to know ls worked. Tests one arg, GREAT!
     ./mywrap ls | grep mywrap > /dev/null
     # Same, but absolute path
     "${TESTDIR}/mywrap" ls | grep mywrap > /dev/null
@@ -80,12 +83,12 @@ begin_test "Test call and new shell modes"
     ./mywrap <<< ls | grep mywrap > /dev/null
     "${TESTDIR}/mywrap" <<< ls | grep mywrap > /dev/null
     # Same two tests, unwrapped version
-    "${VSI_COMMON_DIR}/linux/Just_wrap" "${project_file}" ls | grep mywrap > /dev/null
-    "${VSI_COMMON_DIR}/linux/Just_wrap" "${project_file}" <<< ls | grep mywrap > /dev/null
+    "${VSI_COMMON_DIR}/linux/Just_wrap" ls | grep mywrap > /dev/null
+    "${VSI_COMMON_DIR}/linux/Just_wrap" <<< ls | grep mywrap > /dev/null
   done
 
   # Test all in path
-  PATH="$PATH:$(pwd)" test_wrap_call project1.env mywrap
+  PATH="$PATH:$(pwd)" test_wrap_call mywrap
   # Same test but using a new shell on stdin
   PATH="$PATH:$(pwd)" mywrap <<< ls | grep mywrap > /dev/null
 
@@ -94,19 +97,19 @@ begin_test "Test call and new shell modes"
 
   # Same group of tests, in another directory
   cd other_dir
-  for x in "../project1.env" "${TESTDIR}/project1.env"; do
-    test_wrap_call "${x}" ../mywrap
-    test_wrap_call "${x}" ${TESTDIR}/mywrap
 
-    ../mywrap ls .. | grep mywrap > /dev/null
-    "${TESTDIR}/mywrap" ls "${TESTDIR}"| grep mywrap > /dev/null
-    ../mywrap <<< 'ls ..' | grep mywrap > /dev/null
-    "${TESTDIR}/mywrap" <<< 'ls ..' | grep mywrap > /dev/null
+  test_wrap_call ../mywrap
+  test_wrap_call ${TESTDIR}/mywrap
 
-    "${VSI_COMMON_DIR}/linux/Just_wrap" "${project_file}" ls .. | grep mywrap > /dev/null
-    "${VSI_COMMON_DIR}/linux/Just_wrap" "${project_file}" <<< "ls .." | grep mywrap > /dev/null
-  done
-  PATH="$PATH:$(cd ..; pwd)" test_wrap_call project1.env mywrap
+  ../mywrap ls .. | grep mywrap > /dev/null
+  "${TESTDIR}/mywrap" ls "${TESTDIR}"| grep mywrap > /dev/null
+  ../mywrap <<< 'ls ..' | grep mywrap > /dev/null
+  "${TESTDIR}/mywrap" <<< 'ls ..' | grep mywrap > /dev/null
+
+  "${VSI_COMMON_DIR}/linux/Just_wrap" ls .. | grep mywrap > /dev/null
+  "${VSI_COMMON_DIR}/linux/Just_wrap" <<< "ls .." | grep mywrap > /dev/null
+
+  PATH="$PATH:$(cd ..; pwd)" test_wrap_call mywrap
   PATH="$PATH:$(cd ..; pwd)" mywrap <<< 'ls ..' | grep mywrap > /dev/null
 )
 end_test
@@ -118,7 +121,7 @@ begin_test "Wrap test exec mode"
 
   # Setup
   echo "#!/usr/bin/env bash
-        . '${VSI_COMMON_DIR}/linux/Just_wrap' "'/dev/null ${@+"${@}"}' > mywrap
+        . '${VSI_COMMON_DIR}/linux/Just_wrap' "'${@+"${@}"}' > mywrap
   chmod 755 mywrap
 
   # Run both echo and wrap in the same subshell, and store in array
@@ -137,7 +140,7 @@ begin_test "Unwrapped test exec mode"
   setup_test
 
   #y=($(echo $BASHPID; "${VSI_COMMON_DIR}/linux/Just_wrap" /dev/null bash -c 'echo $PPID'))
-  y=($(bash -c 'echo $PPID'; "${VSI_COMMON_DIR}/linux/Just_wrap" /dev/null bash -c 'echo $PPID'))
+  y=($(bash -c 'echo $PPID'; "${VSI_COMMON_DIR}/linux/Just_wrap" bash -c 'echo $PPID'))
   [ "${y[0]}" == "${y[1]}" ]
 )
 end_test
@@ -150,7 +153,7 @@ begin_test "Wrap test source"
   # Setup
   setup_just_test
   echo "#!/usr/bin/env bash
-        . '${VSI_COMMON_DIR}/linux/Just_wrap' '${TESTDIR}/project1.env' "'${@+"${@}"}' > mywrap
+        . '${VSI_COMMON_DIR}/linux/Just_wrap' "'${@+"${@}"}' > mywrap
 
   # Normal source
   (
@@ -188,12 +191,12 @@ begin_test "Unwrapped test source"
   # fi
   # and add x to euc
 
-  bash -euc ". '${VSI_COMMON_DIR}/linux/Just_wrap' '${TESTDIR}/project1.env'
+  bash -euc ". '${VSI_COMMON_DIR}/linux/Just_wrap'
              check_values"
 
   (
     cd other_dir
-    bash -euc ". '${VSI_COMMON_DIR}/linux/Just_wrap' '../project1.env'
+    bash -euc ". '${VSI_COMMON_DIR}/linux/Just_wrap'
                check_values"
   )
 )
@@ -207,6 +210,46 @@ begin_test "Unwrapped test run"
 
   # Need to export some functions so that the bash full shell can finish
   export -f check_values check_a
-  bash -eu "${VSI_COMMON_DIR}/linux/Just_wrap" "${TESTDIR}/project1.env" check_values
+  bash -eu "${VSI_COMMON_DIR}/linux/Just_wrap" check_values
 )
 end_test
+
+command -v screen >& /dev/null || skip_next_test
+begin_test "Interactive just_wrap"
+(
+  setup_test
+
+  setup_just_test
+
+  echo "#!/usr/bin/env bash
+        . '${VSI_COMMON_DIR}/linux/Just_wrap' "'${@+"${@}"}' > mywrap
+  chmod 755 mywrap
+
+  session="${TRASHDIR////}"
+
+  screen -dmS "${session}" -L -Logfile "${TESTDIR}/screen.txt" # -s /usr/bin/bash
+  screen -S "${session}" -X stuff "Just_wrap\ndeclare -p TEST_VAR2 > \"${TESTDIR}/output\"\ntouch \"${TESTDIR}/sync\"\n"
+
+  # Wait for five second for file to be created
+  declare -i count=0
+  while (( count < 50 )); do
+    if [ -e "${TESTDIR}/sync" ]; then
+      break
+    fi
+    count+=1
+    sleep 0.1
+  done
+  screen -S "${session}" -X quit
+
+  # eval "$(grep "^declare -a" "${TESTDIR}/screen.txt")"
+  source "${TESTDIR}/output"
+  check_a TEST_VAR2 11 22 33
+)
+end_test
+
+function teardown()
+{
+  # cleanup in case test fails
+  :
+  # command -v screen >& /dev/null && screen -S "${TRASHDIR////}" -X quit >& /dev/null || :
+}

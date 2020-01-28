@@ -26,8 +26,6 @@
 # - Run a new bash shell session and have your project environment in the new
 #   session. For example: "./wrap" with no arguments.
 #
-# :Arguments: ``$1`` - The project environment filename. Argument to :func:`just_functions.bsh source_environment_files`
-#
 # :Parameters: [``JUST_WRAP_NO_PS1``] - When running a new ``bash`` shell, ``PS1`` is exported to have
 #                                       (just) in it to let you know you are in the shell. To
 #                                       disable this behavior, set ``JUST_WRAP_NO_PS1`` to ``1``.
@@ -59,21 +57,32 @@
 #   :file:`just_env`
 #**
 
-if [ -x "${JUSTFILE-Justfile}" ]; then
-  source "$(dirname "${BASH_SOURCE[0]}")/just_common.bsh"
-  _just_load_justfile "${JUSTFILE-Justfile}"
-fi
+source "$(dirname "${BASH_SOURCE[0]}")/just"
 
    # Make sure set -eu doesn't fail      if Just_wrap is wrapped and not being sourced
 if ( ( [ ${#BASH_SOURCE[@]} -gt 1 ] && [ "${BASH_SOURCE[1]}" == "${0}" ] ) || \
    # Or not being wrapped              and Just_wrap is not being sourced
      ( [ ${#BASH_SOURCE[@]} == 1 ] && [ "${BASH_SOURCE[0]}" == "${0}" ] ) ) && \
    # With no extra argument (other than the environment variable)
-   [ "$#" -le "1" ]; then
+   [ "$#" -lt "1" ]; then
 
   if [ "${JUST_WRAP_NO_PS1-}" != "1" ]; then
+    # PS1 and PROMPT_COMMAND don't have closure, so I can't just read my real
+    # bashrc file, and retrieve those values. PS1 could refer to other variables
+    # defined only in my bashrc, and PROMPT_COMMAND could use functions from
+    # my bashrc, so short of importing my entire bashrc (which I don't want to
+    # risk breaking just because someone does something funky in their bashrc)
+    # I am writing off the possibility of getting the REAL PS1/PROMPT_COMMAND
+    # Now if the user exports it, that will work
+
+    # if [ -n "${PROMPT_COMMAND:+set}" ]; then
+    #   unset PS1
+    #   export PROMPT_COMMAND="${PROMPT_COMMAND'};PS1=\"(just)\${PS1//$'\n'/$'\n(just)}\""
+    #   export PROMPT_COMMAND="PS1=\"(just): \""
+    # else
     export PS1="(just)[\u@\h \W]\$ "
     unset PROMPT_COMMAND
+    # fi
   fi
 
   # If Just_wrap was called directly
@@ -90,20 +99,32 @@ if ( ( [ ${#BASH_SOURCE[@]} -gt 1 ] && [ "${BASH_SOURCE[1]}" == "${0}" ] ) || \
     rc_file_line="source '${0//\'/\'\"\'\"\'}'"
   fi
 
+  # Make using interactive more tolerable for a normal user
+  rc_file_line="${rc_file_line}; set +e; trap -- ERR"
+
+  # These are not login shells, so ENV/BASH_ENV works, except for interactive on bash 3.2
+  # https://medium.com/@rajsek/zsh-bash-startup-files-loading-order-bashrc-zshrc-etc-e30045652f2e
+
   # Thanks bash for making this hard! https://unix.stackexchange.com/q/187369
   if [[ ${OSTYPE} == darwin* ]]; then
+    if [ -t 0 ]; then
+      echo "This does not work properly on bash 3.2 interactive mode" >&2
+    fi
+    # Does not work in Darling, but neither will the other option
     exec bash --rcfile <(echo "${rc_file_line}")
   else
-    ENV=<(echo "set +o posix; ${rc_file_line}") exec bash --posix
+    if [ -t 0 ]; then
+      # If interactive
+      ENV=<(echo "set +o posix; ${rc_file_line}") exec bash --posix
+    else
+      # If not interactive
+      if [ "${BASH_VERSINFO[0]}" -lt "4" ]; then
+        echo "This does not work properly on bash 3.2 interactive mode" >&2
+      fi
+      BASH_ENV=<(echo "${rc_file_line}") exec bash
+    fi
   fi
 fi
-
-# Source the environment
-if [ -z ${VSI_COMMON_DIR+set} ]; then
-  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
-fi
-source "${VSI_COMMON_DIR}/linux/just_env" "${1}"
-shift 1 # Toss that argument away, you're done with it
 
 # This works as long as you don't name this script 'bash'... SO DON'T CALL YOUR SCRIPT BASH!!!
 # If main wrapper script was not source
@@ -111,7 +132,7 @@ if ( [ ${#BASH_SOURCE[@]} -gt 1 ] && [ "${BASH_SOURCE[1]}" == "${0}" ] ) || \
   # Or if there is no main wrapper script, and this script was not source
    ( [ "${#BASH_SOURCE[@]}" == "1" ] && [ "${BASH_SOURCE[0]}" == "${0}" ] ); then
   #Then execute the arguments!
-  if [ "$(type -t "$1")" == "file" ] || [ "$(type -t "$1")" == "alias" ]; then
+  if [ "$(type -t "${1}")" == "file" ] || [ "$(type -t "${1}")" == "alias" ]; then
     exec "${@}"
   fi
   "${@}"

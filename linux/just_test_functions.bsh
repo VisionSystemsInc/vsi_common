@@ -1,0 +1,105 @@
+#!/usr/bin/env false bash
+
+if [[ $- != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
+# JUST_DEFAULTIFY_FUNCTIONS+=(tests_defaultify)
+# JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
+
+source "${VSI_COMMON_DIR}/linux/command_tools.bsh"
+
+#*# just/just_test_functions
+
+#**
+# .. default-domain:: bash
+#
+# =======================
+# J.U.S.T. Test Functions
+# =======================
+#
+# .. file:: just_test_functions.bsh
+#
+# Support plugin for running unit tests using :file:`testlib.bsh`
+#
+# .. function:: parse_testlib_args
+#
+# Function to be included by a just target that will parse arguments and customize testlib calls by exporting environment variables.
+#
+# To use: add ``parse_testlib_args ${@+"${@}"}`` at the beginning of your test target. Additional arguments can be added by setting the ``additional arguments`` array
+#
+# .. rubric:: Example
+#
+# .. code-block:: Dockerfile
+#
+#    test)
+#      (
+#        local custom_arg
+#        local additional_arguments=(-x custom_arg: --x-ray custom_arg:)
+#        parse_testlib_args ${@+"${@}"}
+#        shift "${extra_args}"
+#        if [ -n "${custom_arg+set}" ]; then
+#          export SOME_VAR="${custom_arg}"
+#        fi
+#        "${VSI_COMMON_DIR}/tests/run_tests" ${@+"${@}"}
+#      )
+function parse_testlib_args()
+{
+  local single_test
+  local test_dir
+  local max_procs
+  local keep_temp_dir
+  local print_help
+  local show_timing
+
+  parse_args extra_args --test single_test: \
+                        --dir test_dir: \
+                        -P max_procs: --max-proc max_procs: \
+                        --keep keep_temp_dir \
+                        --help print_help \
+                        --time show_timing \
+                        ${additional_arguments[@]+"${additional_arguments[@]}"} \
+                        -- ${@+"${@}"}
+
+  if [ -n "${single_test+set}" ]; then
+    export TESTLIB_RUN_SINGLE_TEST="${single_test}"
+  fi
+  if [ -n "${test_dir+set}" ]; then
+    export TESTLIB_DISCOVERY_DIR="${test_dir}"
+  fi
+  if [ -n "${max_procs+set}" ]; then
+    export TESTLIB_PARALLEL="${max_procs}"
+  fi
+  if [ "${keep_temp_dir}" != "0" ]; then
+    export TESTLIB_KEEP_TEMP_DIRS="1"
+  fi
+  if [ "${show_timing}" != "0" ]; then
+    export TESTLIB_SHOW_TIMING="1"
+  fi
+
+  if [ "${print_help}" != "0" ]; then
+    echo "Test help:" >&2
+    echo "--dir {dir}         Set the test discovery directory" >&2
+    echo "--keep              Keep the temporary test directories (for debugging)" >&2
+    echo "--help              Print this help message" >&2
+    echo "-P, --max_procs {#} Set max number of parallel tests to run" >&2
+    echo "--test {name}       Runs a single test" >&2
+
+    # It's not fully possible to disable recursive error traps, but it's a good
+    # partial solution
+    trap -- ERR
+    return 2
+  fi
+}
+
+# function tests_defaultify()
+# {
+#   arg=$1
+#   shift 1
+#   case $arg in
+#     *)
+#       plugin_not_found=1
+#       ;;
+#   esac
+#   return 0
+# }

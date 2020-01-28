@@ -13,6 +13,7 @@ source "${VSI_COMMON_DIR}/linux/just_env" "${VSI_COMMON_DIR}/vsi_common.env"
 source "${VSI_COMMON_DIR}/linux/just_docker_functions.bsh"
 source "${VSI_COMMON_DIR}/linux/just_sphinx_functions.bsh"
 source "${VSI_COMMON_DIR}/linux/just_bashcov_functions.bsh"
+source "${VSI_COMMON_DIR}/linux/just_test_functions.bsh"
 # Load vsi_test_env
 source "${VSI_COMMON_DIR}/docker/tests/bash_test.Justfile"
 source "${VSI_COMMON_DIR}/linux/elements.bsh"
@@ -26,15 +27,19 @@ function caseify()
 
   case ${just_arg} in
     test) # Run unit tests
-      vsi_test_env "${VSI_COMMON_DIR}/tests/run_tests" ${@+"${@}"}
-      extra_args=$#
+      (
+        parse_testlib_args ${@+"${@}"}
+        shift "${extra_args}"
+        vsi_test_env "${VSI_COMMON_DIR}/tests/run_tests" ${@+"${@}"}
+        extra_args=$#
+      )
       ;;
-    --test) # Run only this test
-      export TESTLIB_RUN_SINGLE_TEST="${1}"
-      extra_args=1
-      ;;
+    # --test) # Run only this test
+    #   export TESTLIB_RUN_SINGLE_TEST="${1}"
+    #   extra_args=1
+    #   ;;
     test_int) # Run integration tests
-      TESTLIB_DISCOVERY_DIR=int vsi_test_env "${VSI_COMMON_DIR}/tests/run_tests" ${@+"${@}"}
+      justify test --dir int ${@+"${@}"}
       extra_args=$#
       ;;
 
