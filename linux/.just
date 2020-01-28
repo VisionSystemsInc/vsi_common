@@ -97,15 +97,25 @@ _just()
   # Declare here so I can use it in .just plugin
   local just_subtargets=()
 
-  # Call local .just if it exists
-  if [ -f "${just_dir}/.just" ]; then
-    source "${just_dir}/.just"
-    if [ -n "${JUST_RETURN+set}" ]; then
-      local just_return="${JUST_RETURN}"
-      unset JUST_RETURN
-      return ${JUST_RETURN}
+  # Call local .just if it exists. Starts with checking the local justfile, and
+  # then all plugin directories
+  local sourced_dotjusts=()
+  for i in ${JUST_HELP_FILES+"${JUST_HELP_FILES[@]}"}; do
+    i="$(dirname "${i}")"
+    if [ -f "${i}/.just" ]; then
+      # Skip duplicates
+      if isin "${i}/.just" ${sourced_dotjusts[@]+"${sourced_dotjusts[@]}"}; then
+        continue
+      fi
+      sourced_dotjusts+=("${i}/.just")
+      source "${i}/.just"
+      if [ -n "${JUST_RETURN+set}" ]; then
+        local just_return="${JUST_RETURN}"
+        unset JUST_RETURN
+        return ${just_return}
+      fi
     fi
-  fi
+  done
 
   # If the last word completed is a subcommand, only match subtargets
   if isin "$3" ${just_subcommands+"${just_subcommands[@]}"} ]; then
