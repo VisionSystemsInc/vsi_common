@@ -11,8 +11,8 @@ SHELL ["/usr/bin/env", "bash", "-euxvc"]
 #       libnotify4 libsm6 libgstreamer1.0-0; \
 #     rm -r /var/lib/apt/lists/*
 
-COPY --from=pipenv /tmp/pipenv /tmp/pipenv
-RUN /tmp/pipenv/get-pipenv; rm -rf /tmp/pipenv || :
+COPY --from=pipenv /usr/local /usr/local
+RUN for patch in /usr/local/share/just/container_build_patch/*; do "${patch}"; done
 
 ENV WORKON_HOME=/venv \
     PIPENV_PIPFILE=/vsi/docker/tests/Pipfile3 \
