@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+
+. "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
+# VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+
+begin_test "git safe update"
+(
+  setup_test
+
+  function git()
+  {
+    shas=(474aa3a04b59a5834a332d2e6757504be81959dd
+          e5500843f835a51ec4e40951e9b6b055466cf256
+          f251276e3689b85ef608391d831deb8ce43592bf
+          e5500843f835a51ec4e40951e9b6b055466cf256
+          0a2153b6a5028d40a2d8177464373304cf5f6566)
+    names=(foo1 foo2 foo3 foo4 foo5)
+    case "${1}" in
+      fetch)
+        echo "f ${2} ${3}"
+        ;;
+      checkout)
+        echo "co ${2}"
+        ;;
+      merge)
+        [ "${2}" = "--ff-only" ]
+        echo "m ${3}"
+        return "${merge_rv}"
+        ;;
+      show-ref)
+        for x in $(seq 0 4); do
+          echo "${shas[$x]} refs/heads/${names[$x]}"
+        done
+        ;;
+      rev-parse)
+        echo "${abbrev_rev_parse}"
+        ;;
+    esac
+
+  }
+  # export function
+  declare -fx git
+
+  export merge_rv=0
+  export abbrev_rev_parse="current_branch"
+  # foo1
+  ans="f just_upstream 474aa3a04b59a5834a332d2e6757504be81959dd
+co HEAD
+m FETCH_HEAD"
+
+  [ "${ans}" = "$(bash "${VSI_COMMON_DIR}/linux/git_safe_update" 474aa3a04b59a5834a332d2e6757504be81959dd || echo failed)" ]
+
+
+  # foo2
+  ans="f just_upstream e5500843f835a51ec4e40951e9b6b055466cf256
+co HEAD
+m FETCH_HEAD"
+  [ "${ans}" = "$(bash "${VSI_COMMON_DIR}/linux/git_safe_update" e5500843f835a51ec4e40951e9b6b055466cf256 || echo failed)" ]
+
+  # fail ff-only
+  export merge_rv=1
+  ans="f just_upstream f251276e3689b85ef608391d831deb8ce43592bf
+co HEAD
+m FETCH_HEAD
+co current_branch
+failed"
+  [ "${ans}" = "$(bash "${VSI_COMMON_DIR}/linux/git_safe_update" f251276e3689b85ef608391d831deb8ce43592bf || echo failed)" ]
+)
+end_test
