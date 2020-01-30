@@ -108,7 +108,7 @@ Your default settings go in your project settings env file. Unlike the :file:`Ju
    # Required field
    JUST_PROJECT_PREFIX=CYCLOPS
    # Highly recommended field. Just uses this to detect changes in just version.
-   JUST_VERSION="0.2.1"
+   JUST_VERSION="0.2.2"
    # Recommended field
    if [ -z "${CYCLOPS_CWD+set}" ]; then
      CYCLOPS_CWD="$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)"
