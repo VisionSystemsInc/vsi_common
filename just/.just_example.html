@@ -224,15 +224,25 @@ _just<span class="o">()</span>
   <span class="c1"># Declare here so I can use it in .just plugin</span>
   <span class="nb">local</span> <span class="nv">just_subtargets</span><span class="o">=()</span>
 
-  <span class="c1"># Call local .just if it exists</span>
-  <span class="k">if</span> <span class="o">[</span> -f <span class="s2">&quot;</span><span class="si">${</span><span class="nv">just_dir</span><span class="si">}</span><span class="s2">/.just&quot;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
-    <span class="nb">source</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">just_dir</span><span class="si">}</span><span class="s2">/.just&quot;</span>
-    <span class="k">if</span> <span class="o">[</span> -n <span class="s2">&quot;</span><span class="si">${</span><span class="nv">JUST_RETURN</span><span class="p">+set</span><span class="si">}</span><span class="s2">&quot;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
-      <span class="nb">local</span> <span class="nv">just_return</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">JUST_RETURN</span><span class="si">}</span><span class="s2">&quot;</span>
-      <span class="nb">unset</span> JUST_RETURN
-      <span class="k">return</span> <span class="si">${</span><span class="nv">JUST_RETURN</span><span class="si">}</span>
+  <span class="c1"># Call local .just if it exists. Starts with checking the local justfile, and</span>
+  <span class="c1"># then all plugin directories</span>
+  <span class="nb">local</span> <span class="nv">sourced_dotjusts</span><span class="o">=()</span>
+  <span class="k">for</span> i in <span class="si">${</span><span class="nv">JUST_HELP_FILES</span><span class="p">+</span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">JUST_HELP_FILES</span><span class="p">[@]</span><span class="si">}</span><span class="s2">&quot;</span><span class="si">}</span><span class="p">;</span> <span class="k">do</span>
+    <span class="nv">i</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>dirname <span class="s2">&quot;</span><span class="si">${</span><span class="nv">i</span><span class="si">}</span><span class="s2">&quot;</span><span class="k">)</span><span class="s2">&quot;</span>
+    <span class="k">if</span> <span class="o">[</span> -f <span class="s2">&quot;</span><span class="si">${</span><span class="nv">i</span><span class="si">}</span><span class="s2">/.just&quot;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+      <span class="c1"># Skip duplicates</span>
+      <span class="k">if</span> isin <span class="s2">&quot;</span><span class="si">${</span><span class="nv">i</span><span class="si">}</span><span class="s2">/.just&quot;</span> <span class="si">${</span><span class="nv">sourced_dotjusts</span><span class="p">[@]+</span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">sourced_dotjusts</span><span class="p">[@]</span><span class="si">}</span><span class="s2">&quot;</span><span class="si">}</span><span class="p">;</span> <span class="k">then</span>
+        <span class="k">continue</span>
+      <span class="k">fi</span>
+      <span class="nv">sourced_dotjusts</span><span class="o">+=(</span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">i</span><span class="si">}</span><span class="s2">/.just&quot;</span><span class="o">)</span>
+      <span class="nb">source</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">i</span><span class="si">}</span><span class="s2">/.just&quot;</span>
+      <span class="k">if</span> <span class="o">[</span> -n <span class="s2">&quot;</span><span class="si">${</span><span class="nv">JUST_RETURN</span><span class="p">+set</span><span class="si">}</span><span class="s2">&quot;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+        <span class="nb">local</span> <span class="nv">just_return</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">JUST_RETURN</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="nb">unset</span> JUST_RETURN
+        <span class="k">return</span> <span class="si">${</span><span class="nv">just_return</span><span class="si">}</span>
+      <span class="k">fi</span>
     <span class="k">fi</span>
-  <span class="k">fi</span>
+  <span class="k">done</span>
 
   <span class="c1"># If the last word completed is a subcommand, only match subtargets</span>
   <span class="k">if</span> isin <span class="s2">&quot;</span><span class="nv">$3</span><span class="s2">&quot;</span> <span class="si">${</span><span class="nv">just_subcommands</span><span class="p">+</span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">just_subcommands</span><span class="p">[@]</span><span class="si">}</span><span class="s2">&quot;</span><span class="si">}</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>

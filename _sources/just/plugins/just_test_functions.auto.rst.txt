@@ -1,0 +1,47 @@
+.. default-domain:: bash
+
+=======================
+J.U.S.T. Test Functions
+=======================
+
+.. file:: just_test_functions.bsh
+
+Support plugin for running unit tests using :file:`testlib.bsh`
+
+.. function:: parse_testlib_args
+
+Function to be included by a just target that will parse arguments and customize testlib calls by exporting environment variables.
+
+To use: add ``parse_testlib_args ${@+"${@}"}`` at the beginning of your test target. Additional arguments can be added by setting the ``additional arguments`` array
+
+.. rubric:: Example
+
+.. code-block:: Dockerfile
+
+   test)
+     (
+       local custom_arg
+       local additional_arguments=(-x custom_arg: --x-ray custom_arg:)
+       parse_testlib_args ${@+"${@}"}
+       shift "${extra_args}"
+       if [ -n "${custom_arg+set}" ]; then
+         export SOME_VAR="${custom_arg}"
+       fi
+       "${VSI_COMMON_DIR}/tests/run_tests" ${@+"${@}"}
+     )
+     extra_args=$#
+     ;;
+
+   # If extra_args is not all of the arguments for some reason, we will have
+   # to retrieve the extra_args from within the subprocess
+
+   find_open_fd fid
+   extra_args=$(
+     (
+       local custom_arg
+       local additional_arguments=(-x custom_arg: --x-ray custom_arg:)
+       parse_testlib_args ${@+"${@}"}
+       echo "${extra_args}" >&${fid}
+       shift "${extra_args}"
+     ) ${fid}>&1 1>&2 )
+
