@@ -31,8 +31,8 @@ function caseify()
         parse_testlib_args ${@+"${@}"}
         shift "${extra_args}"
         vsi_test_env "${VSI_COMMON_DIR}/tests/run_tests" ${@+"${@}"}
-        extra_args=$#
       )
+      extra_args=$#
       ;;
     # --test) # Run only this test
     #   export TESTLIB_RUN_SINGLE_TEST="${1}"
