@@ -3,8 +3,8 @@ FROM vsiri/recipe:pipenv as pipenv
 FROM python:2 as dep_stage
 SHELL ["/usr/bin/env", "bash", "-euxvc"]
 
-COPY --from=pipenv /tmp/pipenv /tmp/pipenv
-RUN /tmp/pipenv/get-pipenv; rm -rf /tmp/pipenv || :
+COPY --from=pipenv /usr/local /usr/local
+RUN for patch in /usr/local/share/just/container_build_patch/*; do "${patch}"; done
 
 ENV WORKON_HOME=/venv \
     PIPENV_PIPFILE=/vsi/docker/tests/Pipfile2 \

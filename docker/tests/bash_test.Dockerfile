@@ -28,6 +28,8 @@ RUN apk add --no-cache \
       perl \
       # git for git... pretty self explanitory
       git \
+      # unit test interactive shells
+      screen \
       # Make typeing in the docker easier (for debugging)
       readline; \
     command -v xxd &> /dev/null || apk add --no-cache vim

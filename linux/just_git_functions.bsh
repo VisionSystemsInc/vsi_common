@@ -128,7 +128,7 @@ function _checkout_git_submodule()
       echo
     fi
   else
-    if git -c submodule.${1}.update='!git merge --ff-only' submodule update "${2}"; then
+    if PATH="${VSI_COMMON_DIR}/linux:${PATH}" git -c submodule.${1}.update='!bash git_safe_update' submodule update "${2}"; then
       if [ -f "${2}/.gitmodules" ]; then
         pushd "${2}" &> /dev/null
         show_summary_message=0 safe_git_submodule_update
@@ -177,6 +177,7 @@ function safe_git_submodule_update()
   pushd "$(pwd)" > /dev/null
     local submodule_names
     local submodule_paths
+    local submodule_url
     # Call "close enough" bash equivalent to git submodule--helper list/name
     submodule-helper-list ${@+"${@}"}
     for ((i=0; i<${#submodule_paths[@]}; i++)); do
@@ -197,12 +198,8 @@ function safe_git_submodule_update()
           continue
         fi
       fi
-      if test -z "$(git config submodule."$name".url)" ||
-      {
-         ! test -d "$sm_path"/.git &&
-         ! test -f "$sm_path"/.git
-      }
-      then
+      submodule_url="$(git config submodule."$name".url)"
+      if [ -z "${submodule_url}" ] || ( [ ! -d "$sm_path"/.git ] && [ ! -f "$sm_path"/.git ] ); then
         if ! [ "$(git config -f .gitmodules submodule.${name}.update)" == "none" ]; then
           echo "Submodule $name is not checked out! Initializing and updating..."
           git submodule update --init "${sm_path}"
@@ -210,6 +207,11 @@ function safe_git_submodule_update()
         continue
       fi
       pushd "${sm_path}" > /dev/null
+        # This is my equivalent to "git submodule sync". It uses a specific remote,
+        # that it not of the defaults, to handle issue #186
+        git remote add "${JUST_GIT_UPSTREAM-just_upstream}" "${submodule_url}" &> /dev/null || \
+          git remote set-url "${JUST_GIT_UPSTREAM-just_upstream}" "${submodule_url}"
+
         if ! git diff --no-ext-diff --quiet; then
           echo "Uncommited tracked files in ${sm_path}"
           _checkout_git_submodule ${name} "${sm_path}" \
@@ -274,6 +276,27 @@ function safe_git_submodule_update()
 }
 
 #**
+# .. function:: git_reattach_heads
+#
+# Reattach detached heads in submodules.
+#
+# Search for all submodules recursively in the current working directory for repos with detached heads. Looks through the branch heads for a name (in the form of refs/heads/branch_name). If a match is found, only the first one is used. If no match found, empty string, then branch is left detached.
+#**
+git_reattach_heads()
+{
+
+  # if detached, get sha, and first branch name, and then reattach
+  git submodule foreach --recursive '
+  if [ "$(git rev-parse --abbrev-ref --symbolic-full-name HEAD)" = "HEAD" ]; then
+    current_sha="$(git rev-parse HEAD)"
+    branch_name="$(git show-ref --heads | sed -En "/^${current_sha} .*/{ s|.*/(.*)|\1|; p; q}")"
+    if [ "${branch_name}" != "" ]; then
+      git checkout "${branch_name}"
+    fi
+  fi'
+}
+
+#**
 # .. function:: git_defaultify
 #
 # Git plugin for just
@@ -286,7 +309,12 @@ function git_defaultify()
   case $arg in
     git_submodule-update) # Safe git submodule update which is careful to not \
                           # remove commits by accident. Only updates submodules \
-                          # by going forward in history.
+                          # by going forward in history. Unlike normal git \
+                          # submodule update, uses a specific remote \
+                          # ${JUST_UPSTREAM-just_upstream}, and only syncs that \
+                          # that one remote. In addition, after sync and update, \
+                          # detached heads are reattached if they happen to land \
+                          # on a local tracking branch.
       extra_args=$#
 
       if ! command -v "${GIT}" >& /dev/null; then
@@ -295,11 +323,9 @@ function git_defaultify()
       fi
 
       echo "Syncing submodules"
-      git submodule sync --recursive --quiet || (
-        # sync has no --recursive flag in versions old than 2.0.2
-        git submodule foreach --recursive git submodule sync --quiet
-      )
+      # Run a safe git submodule sync and git submodule update
       safe_git_submodule_update ${@+"${@}"}
+      git_reattach_heads
       ;;
     git_make-submodules-relative) # Reset the paths in git submodules to be \
                                   # relative paths rather than absolute paths. \
@@ -320,9 +346,10 @@ function git_defaultify()
       elif command -v python &> /dev/null; then
         code='python -c "import os.path;print(os.path.relpath('"'"'${submodule_path}'"'"', '"'"'.'"'"'))"'
       elif command -v perl &> /dev/null; then
+        # Perl is a requirement of git, so this should always work
         code='perl -e "use File::Spec; print File::Spec->abs2rel ('"'"'${submodule_path}'"'"', '"'"'.'"'"');"'
       else
-        echo "You must have realpath with --relative-to, python or perl for this to work on your OS"
+        echo "You must have realpath with --relative-to, python or perl for this to work on your OS" >&2
         exit 1
       fi
 
