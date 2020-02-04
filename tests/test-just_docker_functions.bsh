@@ -21,3 +21,115 @@ begin_test "build recipes"
   [ "$(DRYRUN=echo just build recipes)" = "docker-compose -f ${VSI_COMMON_DIR}/docker/recipes/docker-compose.yml build" ]
 )
 end_test
+
+source "${VSI_COMMON_DIR}/linux/just_docker_functions.bsh"
+
+begin_test "docker compose tag all stages"
+(
+  setup_test
+
+  # Mockit
+  function Docker()
+  {
+    echo D "${@}"
+  }
+
+  function Docker-compose()
+  {
+    echo DC "${@}"
+    if [ "${3}" = "build" ]; then
+      echo "Successfully tagged org/image:tagname"
+    fi
+  }
+
+  function mktemp()
+  {
+    echo "${TESTDIR}/tmp.file"
+  }
+
+  function rm()
+  {
+    :
+  }
+
+  # Normal case
+  cat - << EOF > docker-compose-other.yml
+version: "3.4"
+services:
+  project1:
+    build:
+      dockerfile: Something.Dockerfile
+EOF
+  cat - << EOF > Something.Dockerfile
+FROM image1 as foo
+FROM image2 as bar
+FROM foo
+EOF
+
+  ans="DC -f docker-compose-other.yml build project1
+Successfully tagged org/image:tagname
+D tag org/image:tagname vsiri/ci_cache:final_project1
+DC -f docker-compose-other.yml -f ${TESTDIR}/tmp.file build project1
+DC -f docker-compose-other.yml -f ${TESTDIR}/tmp.file build project1
+foo bar"
+
+  [ "$(docker-compose_tag_all_stages docker-compose-other.yml project1; echo "${stage_names[@]}")" = "${ans}" ]
+
+  # Verify the last temp file is right
+  ans="version: '3.4'
+services:
+  project1:
+    build:
+      target: bar
+    image: vsiri/ci_cache:project1_bar"
+
+  [ "$(cat "${TESTDIR}/tmp.file")" = "${ans}" ]
+
+  # Auto determine dockerfile when not specified
+  cat - << EOF > docker-compose-other.yml
+version: "3.4"
+services:
+  project1:
+    build:
+EOF
+
+  # No multiple stages should still work
+  cat - << EOF > SomeOther.Dockerfile
+FROM foo
+EOF
+
+  ans="DC -f docker-compose-other.yml build project1
+Successfully tagged org/image:tagname
+D tag org/image:tagname vsiri/ci_cache:final_project1"
+
+  [ "$(docker-compose_tag_all_stages docker-compose-other.yml project1; echo "${stage_names[@]}")" = "${ans}" ]
+
+)
+end_test
+
+begin_test "get docker recipes"
+(
+  setup_test
+    cat - << EOF > Something.Dockerfile
+FROM vsiri/recipe:gosu as foo
+RUN stuff
+from vsiri/recipe:tini as bar
+FROM alpine
+EOF
+
+  [ "$(get_docker_recipes Something.Dockerfile)" = $'gosu\ntini' ]
+
+    cat - << EOF > Something.Dockerfile
+FROM not_recipe:gosu as foo
+RUN stuff
+from not_recipe:tini as bar
+FROM alpine
+EOF
+
+  [ "$(get_docker_recipes Something.Dockerfile)" = "" ]
+
+  [ "$(JUST_RECIPE_REPO=not_recipe get_docker_recipes Something.Dockerfile)" = $'gosu\ntini' ]
+
+
+)
+end_test

@@ -17,7 +17,145 @@ source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
 # .. default-domain:: bash
 #
 # .. file:: just_docker_functions.bsh
+#**
+
+#**
+# .. function:: docker-compose_tag_all_stages
 #
+# :Arguments: - ``$1`` - docker-compose yaml file to use to build service
+#             - ``$2`` - Service name to build. This should be the final and unnamed stage
+# :Outputs: ``stage_names`` - An array containing the names of the stages taged
+# :Parameters: ``JUST_DOCKER_COMPOSE_CACHE_REPO`` - Default value: ``vsiri/ci_cache``
+#
+# Builds a docker-compose service and tags every named stage found in the Dockerfile, using the names ``${JUST_DOCKER_COMPOSE_CACHE_REPO}:${service_name}_${stage_name}`` with the final stage being tagged ``${JUST_DOCKER_COMPOSE_CACHE_REPO}:final_${stage_name}``
+#**
+function docker-compose_tag_all_stages()
+{
+  # Determine dockerfile name from compose file
+  local dockerfile="$(yarp < "${1}" | sed -n 's|^services.'"${2}"'.build.dockerfile = ||p')"
+  # If blank, it wasn't in the compose file. Use default
+  if [ "${dockerfile}" = "" ]; then
+    dockerfile=Dockerfile
+  fi
+
+  local JUST_DOCKER_COMPOSE_CACHE_REPO
+  : ${JUST_DOCKER_COMPOSE_CACHE_REPO=vsiri/ci_cache}
+
+  local number_stages="$(grep -ci ^from "${dockerfile}")"
+  local docker_compose_version="$(get_docker_compose_version "${1}")"
+  stage_names=($(get_docker_stage_names "${dockerfile}"))
+  local stage
+
+  if (( ${#stage_names[@]}+1 != number_stages )); then
+    source "${VSI_COMMON_DIR}/linux/colors.bsh"
+    echo "${YELLOW}Not all stages are named, they will not all be cached." >&2
+    echo "Make sure you name all the stages to cache them all${NC}" >&2
+  fi
+
+  local temp_file="$(mktemp)"
+
+  # Build what should be the final image
+  Docker-compose -f "${1}" build "${2}" | tee "${temp_file}"
+  local final_tag="$(sed -n 's|^Successfully tagged ||p' "${temp_file}")"
+  Docker tag "${final_tag}" ${JUST_DOCKER_COMPOSE_CACHE_REPO}:final_${2}
+
+  for stage in ${stage_names[@]+"${stage_names[@]}"}; do
+    echo "version: '${docker_compose_version}'" > "${temp_file}"
+    echo "services:" >> "${temp_file}"
+    echo "  ${2}:" >> "${temp_file}"
+    echo "    build:" >> "${temp_file}"
+    echo "      target: ${stage}" >> "${temp_file}"
+    echo "    image: ${JUST_DOCKER_COMPOSE_CACHE_REPO}:${2}_${stage}" >> "${temp_file}"
+
+    # By adding an override file, any special build flags will be included,
+    # such as build args, etc...
+    Docker-compose -f "${1}" -f "${temp_file}" build "${2}"
+  done
+
+  ${DRYRUN-} rm "${temp_file}"
+}
+
+#**
+# .. function:: docker-compose_restore_from_cache
+#
+# :Arguments: - ``$1`` - Docker-compose filename
+#             - ``$2`` - Main service name to restore and rebuild
+#             - ``[$3...]`` - Addition services based on same dockerfile to restore and rebuild
+#
+# Restores image from cached images downloaded from the registry.
+#**
+function docker-compose_restore_from_cache()
+{
+  local compose_file="${1}"
+  shift 1
+  # Determine dockerfile name from compose file
+  local dockerfile="$(yarp < "${compose_file}" | sed -n 's|^services.'"${1}"'.build.dockerfile = ||p')"
+  # If blank, it wasn't in the compose file. Use default
+  if [ "${dockerfile}" = "" ]; then
+    dockerfile=Dockerfile
+  fi
+
+  local JUST_DOCKER_COMPOSE_CACHE_REPO="${JUST_DOCKER_COMPOSE_CACHE_REPO:-vsiri/ci_cache}"
+
+  local stage
+
+  local stage_names=($(get_docker_stage_names "${dockerfile}"))
+  Docker pull ${JUST_DOCKER_COMPOSE_CACHE_REPO}:final_${1}
+  for stage in ${stage_names[@]+"${stage_names[@]}"}; do
+    Docker pull "${JUST_DOCKER_COMPOSE_CACHE_REPO}:${1}_${stage}"
+  done
+
+  local temp_file="$(mktemp)"
+
+  local main_service="${1}"
+
+  local docker_compose_version="$(get_docker_compose_version "${compose_file}")"
+  while (( $# )); do
+    echo   "version: '${docker_compose_version}'" > "${temp_file}"
+    echo   "services:" >> "${temp_file}"
+    echo   "  ${1}:" >> "${temp_file}"
+    echo   "    build:" >> "${temp_file}"
+    echo   "      cache_from:" >> "${temp_file}"
+    echo   "        - ${JUST_DOCKER_COMPOSE_CACHE_REPO}:final_${main_service}" >> "${temp_file}"
+    for stage in ${stage_names[@]+"${stage_names[@]}"}; do
+      echo "        - ${JUST_DOCKER_COMPOSE_CACHE_REPO}:${main_service}_${stage}" >> "${temp_file}"
+    done
+
+    # By adding an override file, any special build flags will be included,
+    # such as build args, etc...
+    Docker-compose -f "${compose_file}" -f "${temp_file}" build "${1}"
+    shift 1
+  done
+
+  ${DRYRUN-} rm "${temp_file}"
+}
+
+#**
+# .. function:: get_docker_recipes
+#
+# :Arguments: ``$1...`` - Dockerfiles to search for recipes
+# :Parameters: ``JUST_RECIPE_REPO`` - Name of recipe image to look for. Default: ``vsiri/recipe``
+# :Output: **stdout** - Newline separated list of the tags of the recipes
+#
+# Looks for recipes that are used in the dockerfiles.
+#**
+function get_docker_recipes()
+{
+  local JUST_RECIPE_REPO="${JUST_RECIPE_REPO-vsiri/recipe}"
+  # / and . are the only valid character in an image name that needs regex escaping
+  JUST_RECIPE_REPO="${JUST_RECIPE_REPO//./\\.}"
+  # Need to escpae / for the first search
+  JUST_RECIPE_REPO="${JUST_RECIPE_REPO////\\/}"
+  sed -nE '/^ *[fF][rR][oO][mM] *'"${JUST_RECIPE_REPO}"':/{
+            s/^ *[fF][rR][oO][mM]  *'"${JUST_RECIPE_REPO}"':([^ ]+).*/\1/
+            # Skip (miss) lines with a $ in it, they have variable names that I
+            # will not be able to match
+            /\$/d
+            p
+          }' ${@+"${@}"} | sort -u
+}
+
+#**
 # .. function:: docker_defaultify
 #
 # .. command:: build_recipes
@@ -93,15 +231,13 @@ function docker_defaultify()
 
       source "${VSI_COMMON_DIR}/linux/elements.bsh"
 
+      # Set up cache (global) array of recipes already built, so we don't build
+      # the same recipe multiple times.
       if ! is_array JUST_DOCKER_RECIPES; then
         JUST_DOCKER_RECIPES=()
       fi
 
-      local recipes=($(sed -nE '/^ *[fF][rR][oO][mM] vsiri\/recipe:/{
-                                  s|.*vsiri/recipe:([^ ]+).*|\1|
-                                  /\$/d
-                                  p
-                                }' ${@+"${@}"} | sort -u))
+      local recipes=($(get_docker_recipes ${@+"${@}"}))
 
       local tmp=()
       subtract_array recipes JUST_DOCKER_RECIPES tmp
@@ -246,6 +382,17 @@ function docker_defaultify()
       Just-docker-compose ${@+"${@}"}
       extra_args=$#
       ;;
+
+    docker-compose_tag-all-stages) # Build and tag all stages of an image. $1 - compose filename, $2 - docker-compose service to build (for final stage)
+      docker-compose_tag_all_stages "${1}" "${2}"
+      extra_args=2
+      ;;
+
+    docker-compose_restore-from-cache) # Build all stages of an image from a pulled cache. $1 - compose filename, $2 - docker-compose service to build (for final stage), [$3...] - additional service names that might point to other stage targets in the same dockerfile.
+      docker-compose_restore_from_cache "${@}"
+      extra_args=$#
+      ;;
+
     *)
       plugin_not_found=1
       ;;
