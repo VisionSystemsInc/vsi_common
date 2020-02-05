@@ -24,7 +24,6 @@ source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
 #
 # :Arguments: - ``$1`` - docker-compose yaml file to use to build service
 #             - ``$2`` - Service name to build. This should be the final and unnamed stage
-# :Outputs: ``stage_names`` - An array containing the names of the stages taged
 # :Parameters: - ``JUST_DOCKER_COMPOSE_CACHE_REPO`` - Default value: ``vsiri/ci_cache``
 #              - ``JUST_DOCKER_COMPOSE_PUSH`` - Pushes images when done. Default: 1 (true).
 #
@@ -53,7 +52,7 @@ function docker-compose_tag_all_stages()
 
   # Get stage info
   local number_stages="$(grep -ci ^from "${dockerfile}")"
-  stage_names=($(get_docker_stage_names "${dockerfile}"))
+  local stage_names=($(get_docker_stage_names "${dockerfile}"))
 
   if (( ${#stage_names[@]}+1 != number_stages )); then
     source "${VSI_COMMON_DIR}/linux/colors.bsh"
@@ -72,14 +71,12 @@ function docker-compose_tag_all_stages()
   # anchor the main stage
   sed "s|  ${main_service}:|& \&main_stage|" <<< "${compose_rendered}" > "${temp_file}"
 
-
   # A rendered docker-compose file is always in alphabetical order, The only top
   # level keys are x-*, version, services, secrets, and networks. So I can always
   # add a new services before "^version:". Start by getting the line number of
   # the version line-1
   i="$(sed -n '/^version:/=' ${temp_file})"
   i=$((i-1))
-
 
   echo "version: '${docker_compose_version}'" > "${temp_override}"
   echo "services:" >> "${temp_override}"
@@ -139,6 +136,8 @@ function docker-compose_tag_all_stages()
 # :Arguments: - ``$1`` - Docker-compose filename
 #             - ``$2`` - Main service name to restore and rebuild
 #             - ``[$3...]`` - Addition services based on same dockerfile to restore and rebuild
+# :Parameters: - ``JUST_DOCKER_COMPOSE_CACHE_REPO`` - Default value: ``vsiri/ci_cache``
+#              - ``JUST_DOCKER_COMPOSE_PULL`` - Pulls images to use. Default: 1 (true).
 #
 # Restores image from cached images downloaded from the registry.
 #**
@@ -146,8 +145,13 @@ function docker-compose_restore_from_cache()
 {
   local compose_file="${1}"
   shift 1
+
+  # Render compose file
+  local compose_rendered="$(Docker-compose -f "${compose_file}" config)"
+  local compose_yarp="$(yarp <<< "${compose_rendered}")"
+  local docker_compose_version="$(sed -nE "s|^version = '(.*)'$|\1|p" <<< "${compose_yarp}")"
   # Determine dockerfile name from compose file
-  local dockerfile="$(yarp < "${compose_file}" | sed -n 's|^services.'"${1}"'.build.dockerfile = ||p')"
+  local dockerfile="$(sed -n 's|^services.'"${1}"'.build.dockerfile = ||p' <<< "${compose_yarp}")"
   # If blank, it wasn't in the compose file. Use default
   if [ "${dockerfile}" = "" ]; then
     dockerfile=Dockerfile
@@ -155,19 +159,54 @@ function docker-compose_restore_from_cache()
 
   local JUST_DOCKER_COMPOSE_CACHE_REPO="${JUST_DOCKER_COMPOSE_CACHE_REPO:-vsiri/ci_cache}"
 
-  local stage
+  local i
 
   local stage_names=($(get_docker_stage_names "${dockerfile}"))
-  Docker pull ${JUST_DOCKER_COMPOSE_CACHE_REPO}:final_${1}
-  for stage in ${stage_names[@]+"${stage_names[@]}"}; do
-    Docker pull "${JUST_DOCKER_COMPOSE_CACHE_REPO}:${1}_${stage}"
-  done
+  local recipes=($(get_docker_recipes "${dockerfile}"))
 
   local temp_file="$(mktemp)"
 
-  local main_service="${1}"
+  if [ "${JUST_DOCKER_COMPOSE_PULL-1}" = "1" ]; then
+    echo   "version: '3.5'" > "${temp_file}"
+    echo   "services:" >> "${temp_file}"
+    echo   "  final_${1}:" >> "${temp_file}"
+    echo   "    image: ${JUST_DOCKER_COMPOSE_CACHE_REPO}:final_${1}" >> "${temp_file}"
+    # Docker pull ${JUST_DOCKER_COMPOSE_CACHE_REPO}:final_${1}
 
-  local docker_compose_version="$(get_docker_compose_version "${compose_file}")"
+    for i in ${stage_names[@]+"${stage_names[@]}"}; do
+      echo "  stage_${i}:" >> "${temp_file}"
+      echo "    image: ${JUST_DOCKER_COMPOSE_CACHE_REPO}:${1}_${i}" >> "${temp_file}"
+      # Docker pull "${JUST_DOCKER_COMPOSE_CACHE_REPO}:${1}_${i}"
+    done
+    for i in ${recipes[@]+"${recipes[@]}"}; do
+      echo "  recipe_${i}:" >> "${temp_file}"
+      echo "    image: ${JUST_DOCKER_COMPOSE_CACHE_REPO}:recipe_${1}_${i}" >> "${temp_file}"
+      # Docker pull "${JUST_DOCKER_COMPOSE_CACHE_REPO}:recipe_${1}_${i}"
+    done
+
+    Docker-compose -f "${temp_file}" pull
+    # # retag recipes
+    # for i in ${recipes[@]+"${recipes[@]}"}; do
+    #   Docker tag "${JUST_DOCKER_COMPOSE_CACHE_REPO}:recipe_${1}_${i}" "vsiri/recipe:${i}"
+    # done
+  fi
+
+  # Restore recipes from cache
+  local recipes_compose_file="${VSI_COMMON_DIR}/docker/recipes/docker-compose.yml"
+  local recipe_compose_version="$(yarp < "${recipes_compose_file}" | sed -nE "s|^version = '(.*)'$|\1|p")"
+  echo   "version: '${recipe_compose_version}'" > "${temp_file}"
+  echo   "services:" >> "${temp_file}"
+  for i in ${recipes[@]+"${recipes[@]}"}; do
+    echo "  ${i}:" >> "${temp_file}"
+    echo "    build:" >> "${temp_file}"
+    echo "      cache_from:" >> "${temp_file}"
+    echo "        - ${JUST_DOCKER_COMPOSE_CACHE_REPO}:recipe_${1}_${i}" >> "${temp_file}"
+  done
+  # exit
+  Docker-compose -f "${recipes_compose_file}" -f "${temp_file}" build ${recipes[@]+"${recipes[@]}"}
+
+  local main_service="${1}"
+  # Restore services from cache
   while (( $# )); do
     echo   "version: '${docker_compose_version}'" > "${temp_file}"
     echo   "services:" >> "${temp_file}"
@@ -175,8 +214,11 @@ function docker-compose_restore_from_cache()
     echo   "    build:" >> "${temp_file}"
     echo   "      cache_from:" >> "${temp_file}"
     echo   "        - ${JUST_DOCKER_COMPOSE_CACHE_REPO}:final_${main_service}" >> "${temp_file}"
-    for stage in ${stage_names[@]+"${stage_names[@]}"}; do
-      echo "        - ${JUST_DOCKER_COMPOSE_CACHE_REPO}:${main_service}_${stage}" >> "${temp_file}"
+    for i in ${stage_names[@]+"${stage_names[@]}"}; do
+      echo "        - ${JUST_DOCKER_COMPOSE_CACHE_REPO}:${main_service}_${i}" >> "${temp_file}"
+    done
+    for i in ${recipes[@]+"${recipes[@]}"}; do
+      echo "        - ${JUST_DOCKER_COMPOSE_CACHE_REPO}:recipe_${main_service}_${i}" >> "${temp_file}"
     done
 
     # By adding an override file, any special build flags will be included,
@@ -184,6 +226,20 @@ function docker-compose_restore_from_cache()
     Docker-compose -f "${compose_file}" -f "${temp_file}" build "${1}"
     shift 1
   done
+
+  # Retag all the images, now that everything has been rebuilt so that they can
+  # be pushed again
+
+  # # Recipes
+  # for i in ${recipes[@]+"${recipes[@]}"}; do
+  #   # Tag recipes for cache
+  #   Docker tag "vsiri/recipe:${i}" "vsiri/ci_cache:recipe_terra_${i}"
+  #   if [ "${JUST_DOCKER_COMPOSE_PUSH-1}" = "1" ]; then
+  #     Docker push "vsiri/ci_cache:recipe_terra_${i}"
+  #   fi
+  # done
+  # # Stages
+  # "${JUST_DOCKER_COMPOSE_CACHE_REPO}:${main_service}_${stage_name}"
 
   ${DRYRUN-} rm "${temp_file}"
 }
@@ -442,44 +498,11 @@ function docker_defaultify()
       ;;
 
     docker-compose_ci-save) # Build and tag all stages of an image. $1 - compose filename, $2 - docker-compose service to build (for final stage)
-      # docker-compose_tag_all_stages "${1}" "${2}"
-      extra_args=2
-      # ;;
-
-      local stage stage_names
-      # justify build recipes-auto "${TERRA_CWD}/docker/terra.Dockerfile"
       docker-compose_tag_all_stages "${1}" "${2}"
-
-      # # Dynamically generate a docker-compose file for pushing.
-      # local temp_file="$(mktemp)"
-      # echo "version: '3.5'" > "${temp_file}"
-      # echo "services:" >> "${temp_file}"
-
-      # function _add_dc_service()
-      # {
-      #   echo "  ${1}:" >> "${temp_file}"
-      #   echo "    build: ." >> "${temp_file}"
-      #   echo "    image: vsiri/ci_cache:${1}" >> "${temp_file}"
-      # }
-
-      # local recipe
-      # local recipes=($(get_docker_recipes "${dockerfile}"))
-      # for recipe in ${recipes[@]+"${recipes[@]}"}; do
-      #   Docker tag "vsiri/recipe:${recipe}" "vsiri/ci_cache:recipe_terra_${recipe}"
-      #   _add_dc_service "recipe_terra_${recipe}"
-      # done
-      # _add_dc_service "recipe_terra_${recipe}" final_terra
-      # for stage in ${stage_names[@]+"${stage_names[@]}"}; do
-      #   _add_dc_service "terra_${stage}"
-      # done
-
-      # Docker-compose -f "${temp_file}" push
-
-      # ${DRYRUN-} rm "${temp_file}"
-
+      extra_args=2
       ;;
 
-    docker-compose_restore-from-cache) # Build all stages of an image from a pulled cache. $1 - compose filename, $2 - docker-compose service to build (for final stage), [$3...] - additional service names that might point to other stage targets in the same dockerfile.
+    docker-compose_ci-load) # Build all stages of an image from a pulled cache. $1 - compose filename, $2 - docker-compose service to build (for final stage), [$3...] - additional service names that might point to other stage targets in the same dockerfile.
       docker-compose_restore_from_cache "${@}"
       extra_args=$#
       ;;
