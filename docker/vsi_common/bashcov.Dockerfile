@@ -3,7 +3,7 @@ FROM vsiri/recipe:tini as tini
 FROM vsiri/recipe:jq as jq
 FROM vsiri/recipe:vsi as vsi
 FROM vsiri/recipe:docker as docker
-FROM vsiri/recipe:docker-compose as docker-compose
+FROM docker/compose:alpine-1.25.4 as docker-compose
 
 FROM ruby:2.6.5-buster
 
