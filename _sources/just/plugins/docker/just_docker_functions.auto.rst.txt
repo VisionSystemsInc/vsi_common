@@ -6,6 +6,38 @@ J.U.S.T. Docker Functions
 
 .. file:: just_docker_functions.bsh
 
+.. function:: docker-compose_restore_from_cache
+
+:Arguments: - ``$1`` - Docker-compose filename
+            - ``$2`` - Main service name to restore and rebuild. This needs to be the last (unnamed) stage
+            - ``[$3...]`` - Addition services based on same dockerfile to restore and rebuild
+:Parameters: - ``JUST_DOCKER_COMPOSE_CACHE_REPO`` - Default value: ``vsiri/ci_cache``
+             - ``JUST_DOCKER_COMPOSE_PULL`` - Pulls images to use. Default: 1 (true).
+             - ``JUST_DOCKER_COMPOSE_BUILD`` - Builds images after pulling cache. Default: 1 (true).
+             - ``JUST_DOCKER_COMPOSE_PUSH`` - Pushes images when done. Default: 1 (true).
+
+Restores image from cached images downloaded from the registry.
+
+This is done in three steps:
+
+1. First, the images are pull from ``JUST_DOCKER_COMPOSE_CACHE_REPO``, if available.
+2. Next, the images are built against the dockerfiles using the downloaded cache.
+3. Lastly, the images are pushed back to ``JUST_DOCKER_COMPOSE_CACHE_REPO`` to keep them up to date.
+
+- Every stage is backed up, as long as they are given a name. They must have a name, or they cannot be targeted using the ``docker`` cli or ``docker-compose``. These stages are named: ``${JUST_DOCKER_COMPOSE_CACHE_REPO}:${main_service_name}_${stage_name}``
+- The final stage is tagged as: ``${JUST_DOCKER_COMPOSE_CACHE_REPO}:final_${main_service_name}``
+- Any VSI recipes used are also identified, and tagged: ``${JUST_DOCKER_COMPOSE_CACHE_REPO}:recipe_${main_service_name}_${recipe_name}``. The recipes contain "ONBUILD" commands that are different images than the ``${JUST_DOCKER_COMPOSE_CACHE_REPO}:${main_service_name}_${stage_name}`` version of them.
+
+Even though all the stages are restored, only the services specified (``$2`` ...) are retagged so that they can be used. If you need more than one service images restored, you will need to specify them all. If multiple services use the same image tag, they do not need to be specified. E.g. service ``foo`` uses image ``stuff:foo``, service ``bar`` uses image ``stuff:bar``, and service ``car`` uses image ``stuff:bar`, only ``foo`` and ``bar`` need to be passed in.
+
+.. function:: get_docker_recipes
+
+:Arguments: ``$1...`` - Dockerfiles to search for recipes
+:Parameters: ``JUST_RECIPE_REPO`` - Name of recipe image to look for. Default: ``vsiri/recipe``
+:Output: **stdout** - Newline separated list of the tags of the recipes
+
+Looks for recipes that are used in the dockerfiles.
+
 .. function:: docker_defaultify
 
 .. command:: build_recipes
