@@ -662,3 +662,92 @@ notvolumes:
   check_a DOCKER_INTERNAL_VOLUMES test1 test2 test3
 )
 end_test
+
+begin_test "get docker-compose version"
+(
+  setup_test
+
+  echo "version: '2.3'" > file1
+  echo "noversion:" > file2
+  echo "version: \"3.5\"" > file3
+
+  [ "$(get_docker_compose_version file1)" = "2.3" ]
+  [ "$(get_docker_compose_version file2)" = "" ]
+  [ "$(get_docker_compose_version file3)" = "3.5" ]
+
+  [ "$(get_docker_compose_version file2 file1)" = "2.3" ]
+  [ "$(get_docker_compose_version file3 file1)" = "3.5" ]
+)
+end_test
+
+begin_test "get docker stage names"
+(
+  setup_test
+
+  cat - << EOF > Dockerfile
+FROM foo
+EOF
+  stage_names=($(get_docker_stage_names Dockerfile))
+  [ "${stage_names[*]-}" = "" ]
+
+  cat - << EOF > Dockerfile
+FROM image1 as foo
+FROM foo
+EOF
+  stage_names=($(get_docker_stage_names Dockerfile))
+  [ "${stage_names[*]}" = "foo" ]
+
+  cat - << EOF > Dockerfile
+FROM image1 as foo
+FROM image2 as bar
+FROM foo
+EOF
+  stage_names=($(get_docker_stage_names Dockerfile))
+  [ "${stage_names[*]}" = "foo bar" ]
+
+  # Comments and spaces
+  cat - << EOF > Dockerfile
+FROM image1 as foo
+# FROM image2 as bar
+ # FROM image3 as car
+ FROM foo
+EOF
+  stage_names=($(get_docker_stage_names Dockerfile))
+  [ "${stage_names[*]}" = "foo" ]
+)
+end_test
+
+begin_test "Get dockerfile name from compose file"
+(
+  setup_test
+
+    cat - << EOF > compose.yml
+version: '2.2'
+services:
+  foo:
+    build: boo
+EOF
+  [ "$(get_dockerfile_from_compose /some/dir/file.yml foo "$(yarp < compose.yml)")" = "/some/dir/boo/Dockerfile" ]
+
+    cat - << EOF > compose.yml
+version: '2.2'
+services:
+  foo:
+    build:
+      context: /bar
+EOF
+  [ "$(get_dockerfile_from_compose "${TESTDIR}/compose.yml" foo)" = "/bar/Dockerfile" ]
+
+    cat - << EOF > compose.yml
+version: '2.2'
+services:
+  foo:
+    build:
+      dockerfile: some.Dockerfile
+      contest: .
+EOF
+
+  [ "$(get_dockerfile_from_compose compose.yml foo)" = "./some.Dockerfile" ]
+  [ "$(get_dockerfile_from_compose "${TESTDIR}/compose.yml" foo)" = "${TESTDIR}/some.Dockerfile" ]
+)
+end_test

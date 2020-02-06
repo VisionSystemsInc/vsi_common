@@ -30,8 +30,7 @@ commands:
             git config --global user.email "you@example.com"
             git config --global user.name "Your Name"
             . setup.env
-            just build recipes
-            tar c . | docker run -i --rm -v /root/repo:/src -w /src alpine:3.8 tar x
+            tar c . | docker run -i --rm -v /root/repo:/src -w /src alpine:3.11 tar x
 
 jobs:
   compile_docs_and_common_source:
@@ -53,9 +52,9 @@ jobs:
           name: Generate docs
           command: |
             . setup.env
-            tar c . | docker run -i --rm -v /root/repo:/src -w /src alpine:3.8 tar x
+            tar c . | docker run -i --rm -v /root/repo:/src -w /src alpine:3.11 tar x
             SPHINXOPTS='-W' just sphinx build compile -n --all
-            docker run --rm -v /root/repo:/src -w /src alpine:3.8 tar c ./docs/_build/html | tar x
+            docker run --rm -v /root/repo:/src -w /src alpine:3.11 tar c ./docs/_build/html | tar x
 
       - persist_to_workspace:
           root: docs/_build
@@ -74,14 +73,16 @@ jobs:
           command: |
             # install the circleci cli
             source setup.env
-            apk add --no-cache curl ca-certificates
-            curl -fLSs https://circle.ci/cli | bash
+            docker login -u "${DOCKER_USER}" -p "${DOCKER_PASS}"
             versions="3.2 4.0 4.1 4.2 4.3 4.4 5.0"
             versions=($(echo "${versions}" | tr ' ' '\n' | circleci tests split))
+            export TESTLIB_SKIP_TESTS="Distribution name for"
+            if [ "${CIRCLE_BRANCH}" != "master" ]; then
+              export JUST_DOCKER_COMPOSE_PUSH=0
+            fi
             for version in "${versions[@]}"; do \
-              export VSI_COMMON_BASH_TEST_VERSION="${version}"
-              export TESTLIB_SKIP_TESTS="Distribution name for"
-              just test docker all tests
+              just ci load "${version}"
+              just test docker "${version}" all tests
             done
 
   deploy_docs:

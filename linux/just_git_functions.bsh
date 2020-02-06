@@ -307,6 +307,13 @@ function git_defaultify()
   arg=$1
   shift 1
   case $arg in
+    #**
+    # .. command:: git submodule-update
+    #
+    # Recursively updates all submodules, in a ff-only manner. Also reattaches heads if possible.
+    #
+    # Sets ``JUST_GIT_SUBMODULE_SYNCED`` to ``1`` on the first run, so that subsequent calls are skipped. If you have reason to call it multiple times, you can reset ``JUST_GIT_SUBMODULE_SYNCED``.
+    #**
     git_submodule-update) # Safe git submodule update which is careful to not \
                           # remove commits by accident. Only updates submodules \
                           # by going forward in history. Unlike normal git \
@@ -322,10 +329,15 @@ function git_defaultify()
         return 0
       fi
 
-      echo "Syncing submodules"
-      # Run a safe git submodule sync and git submodule update
-      safe_git_submodule_update ${@+"${@}"}
-      git_reattach_heads
+      if [[ ${JUST_GIT_SUBMODULE_SYNCED-} = 1 ]]; then
+        echo "Syncing submodules"
+        # Run a safe git submodule sync and git submodule update
+        safe_git_submodule_update ${@+"${@}"}
+        git_reattach_heads
+        JUST_GIT_SUBMODULE_SYNCED=1
+      else
+        echo "Already synced submodules earlier... (JUST_GIT_SUBMODULE_SYNCED=${JUST_GIT_SUBMODULE_SYNCED})" >&2
+      fi
       ;;
     git_make-submodules-relative) # Reset the paths in git submodules to be \
                                   # relative paths rather than absolute paths. \

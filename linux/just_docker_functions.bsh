@@ -17,7 +17,252 @@ source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
 # .. default-domain:: bash
 #
 # .. file:: just_docker_functions.bsh
+#**
+
+#**
+# .. function:: docker-compose_restore_from_cache
 #
+# :Arguments: - ``$1`` - Docker-compose filename
+#             - ``$2`` - Main service name to restore and rebuild. This needs to be the last (unnamed) stage
+#             - ``[$3...]`` - Addition services based on same dockerfile to restore and rebuild
+# :Parameters: - ``JUST_DOCKER_COMPOSE_CACHE_REPO`` - Default value: ``vsiri/ci_cache``
+#              - ``JUST_DOCKER_COMPOSE_PULL`` - Pulls images to use. Default: 1 (true).
+#              - ``JUST_DOCKER_COMPOSE_BUILD`` - Builds images after pulling cache. Default: 1 (true).
+#              - ``JUST_DOCKER_COMPOSE_PUSH`` - Pushes images when done. Default: 1 (true).
+#
+# Restores image from cached images downloaded from the registry.
+#
+# This is done in three steps:
+#
+# 1. First, the images are pull from ``JUST_DOCKER_COMPOSE_CACHE_REPO``, if available.
+# 2. Next, the images are built against the dockerfiles using the downloaded cache.
+# 3. Lastly, the images are pushed back to ``JUST_DOCKER_COMPOSE_CACHE_REPO`` to keep them up to date.
+#
+# - Every stage is backed up, as long as they are given a name. They must have a name, or they cannot be targeted using the ``docker`` cli or ``docker-compose``. These stages are named: ``${JUST_DOCKER_COMPOSE_CACHE_REPO}:${main_service_name}_${stage_name}``
+# - The final stage is tagged as: ``${JUST_DOCKER_COMPOSE_CACHE_REPO}:final_${main_service_name}``
+# - Any VSI recipes used are also identified, and tagged: ``${JUST_DOCKER_COMPOSE_CACHE_REPO}:recipe_${main_service_name}_${recipe_name}``. The recipes contain "ONBUILD" commands that are different images than the ``${JUST_DOCKER_COMPOSE_CACHE_REPO}:${main_service_name}_${stage_name}`` version of them.
+#
+# Even though all the stages are restored, only the services specified (``$2`` ...) are retagged so that they can be used. If you need more than one service images restored, you will need to specify them all. If multiple services use the same image tag, they do not need to be specified. E.g. service ``foo`` uses image ``stuff:foo``, service ``bar`` uses image ``stuff:bar``, and service ``car`` uses image ``stuff:bar`, only ``foo`` and ``bar`` need to be passed in.
+#**
+function docker-compose_restore_from_cache()
+{
+  local compose_file="${1}"
+  shift 1
+
+  # Render compose file
+  local compose_rendered="$(docker-compose -f "${compose_file}" config)"
+  local compose_yarp="$(yarp <<< "${compose_rendered}")"
+  local docker_compose_version="$(sed -nE "s|^version = '(.*)'$|\1|p" <<< "${compose_yarp}")"
+  local dockerfile="$(get_dockerfile_from_compose "${compose_file}" "${1}" "${compose_yarp}")"
+
+  local JUST_DOCKER_COMPOSE_CACHE_REPO="${JUST_DOCKER_COMPOSE_CACHE_REPO:-vsiri/ci_cache}"
+
+  local i
+
+  local stage_names=($(get_docker_stage_names "${dockerfile}"))
+  local recipes=($(get_docker_recipes "${dockerfile}"))
+
+  local temp_file="$(mktemp)"
+  local temp_override="$(mktemp)"
+  local temp_push_pull="$(mktemp)"
+
+  #######################
+  # Pull all the images #
+  #######################
+  if [ "${JUST_DOCKER_COMPOSE_PULL-1}" = "1" ] || [ "${JUST_DOCKER_COMPOSE_PUSH-1}" = "1" ]; then
+    _dynamic_docker-compose_push_pull "${1}" > "${temp_push_pull}"
+  fi
+
+  if [ "${JUST_DOCKER_COMPOSE_PULL-1}" = "1" ]; then
+    # Let it fail, since the first time the images won't exist
+    Docker-compose -f "${temp_push_pull}" pull || :
+  fi
+
+  ##############################
+  # Restore recipes from cache #
+  ##############################
+  local recipes_compose_file="${VSI_COMMON_DIR}/docker/recipes/docker-compose.yml"
+  local recipe_compose_version="$(yarp < "${recipes_compose_file}" | sed -nE "s|^version = '(.*)'$|\1|p")"
+  _dynamic_docker-compose_restore_recipes "${1}" > "${temp_override}"
+
+  if [ "${JUST_DOCKER_COMPOSE_BUILD-1}" = "1" ]; then
+    Docker-compose -f "${recipes_compose_file}" -f "${temp_override}" build ${recipes[@]+"${recipes[@]}"}
+    # retag recipes for push
+    for i in ${recipes[@]+"${recipes[@]}"}; do
+      Docker tag "vsiri/recipe:${i}" "${JUST_DOCKER_COMPOSE_CACHE_REPO}:recipe_${1}_${i}"
+    done
+  fi
+
+  local main_service="${1}"
+
+  ############################################################
+  # Restore services from cache and setup stages for pushing #
+  ############################################################
+  _dynamic_docker-compose_add_cache_from "${@}" <<< "${compose_rendered}" > "${temp_file}" 3>"${temp_override}"
+
+  # The above function's for loop is in a different subshell actually, in order
+  # to update the services array, this has to be done separately
+  local services=(${@+"${@}"})
+  for stage_name in ${stage_names[@]+"${stage_names[@]}"}; do
+    # Update list docker-compose commands
+    services+=("${main_service}_auto_gen_${stage_name}")
+  done
+
+  # Build images
+  if [ "${JUST_DOCKER_COMPOSE_BUILD-1}" = "1" ]; then
+    Docker-compose -f "${temp_file}" -f "${temp_override}" --project-directory "$(dirname "${compose_file}")" build "${services[@]}"
+  fi
+
+  if [ "${JUST_DOCKER_COMPOSE_PUSH-1}" = "1" ]; then
+    Docker-compose -f "${temp_push_pull}" push
+  fi
+
+  # Cleanup
+  ${DRYRUN-} rm "${temp_file}" "${temp_override}" "${temp_push_pull}"
+}
+
+# docker-compose_restore_from_cache helper function
+function _dynamic_docker-compose_push_pull()
+{
+  local i
+  echo   "version: '3.5'"
+  echo   "services:"
+  echo   "  final_${1}:"
+  echo   "    build: ."
+  echo   "    image: ${JUST_DOCKER_COMPOSE_CACHE_REPO}:final_${1}"
+
+  for i in ${stage_names[@]+"${stage_names[@]}"}; do
+    echo "  stage_${i}:"
+    echo "    build: ."
+    echo "    image: ${JUST_DOCKER_COMPOSE_CACHE_REPO}:${1}_${i}"
+  done
+  for i in ${recipes[@]+"${recipes[@]}"}; do
+    echo "  recipe_${i}:"
+    echo "    build: ."
+    echo "    image: ${JUST_DOCKER_COMPOSE_CACHE_REPO}:recipe_${1}_${i}"
+  done
+}
+
+# docker-compose_restore_from_cache helper function
+function _dynamic_docker-compose_restore_recipes()
+{
+  local i
+  echo   "version: '${recipe_compose_version}'"
+  echo   "services:"
+  for i in ${recipes[@]+"${recipes[@]}"}; do
+    echo "  ${i}:"
+    echo "    build:"
+    echo "      cache_from:"
+    echo "        - ${JUST_DOCKER_COMPOSE_CACHE_REPO}:recipe_${1}_${i}"
+  done
+}
+
+# docker-compose_restore_from_cache helper function
+# stdin - docker-compose file
+# stdout - patched docker-compose file
+# fid 3 out - docker-compose override file
+# arguments - Services to use cache
+function _dynamic_docker-compose_add_cache_from()
+{
+  # local file="${1}"
+  # local override="${2}"
+  # shift 2
+  local main_service="${1}"
+  local i
+
+  # anchor the main stage
+  local compose_content="$(sed "s|  ${1}:|& \&main_stage|")"
+
+  # A rendered docker-compose file is always in alphabetical order, The only top
+  # level keys are x-*, version, services, secrets, and networks. So I can always
+  # add a new services before "^version:". Start by getting the line number of
+  # the version line-1
+  i="$(sed -n '/^version:/=' <<< "${compose_content}")"
+  i=$((i-1))
+
+  # ----------------
+  # | setup stages |
+  # ----------------
+  # This loop will both patch the docker-compose ${file} and generate
+  # a compose override file ${override} that will combine in two different
+  # ways to make our final configuration.
+  # - Anchors can't work across, so we need the ${file} method
+  # - We can't override target without redefining/anchoring all of build, so
+  #   we need file_override to just add to it
+  echo     "version: '${docker_compose_version}'" >&3
+  echo     "services:" >&3
+  for stage_name in ${stage_names[@]+"${stage_names[@]}"}; do
+    # Service patch for 2
+    echo  "  ${1}_auto_gen_${stage_name}:"
+    echo  "    <<: *main_stage"
+    echo  "    image: ${JUST_DOCKER_COMPOSE_CACHE_REPO}:${1}_${stage_name}"
+
+    # Service addition for 3
+    echo  "  ${1}_auto_gen_${stage_name}:" >&3
+    echo  "    build:" >&3
+    echo  "      target: ${stage_name}" >&3
+    echo   "      cache_from:" >&3
+    echo   "        - ${JUST_DOCKER_COMPOSE_CACHE_REPO}:final_${1}" >&3
+    for i in ${stage_names[@]+"${stage_names[@]}"}; do
+      echo "        - ${JUST_DOCKER_COMPOSE_CACHE_REPO}:${1}_${i}" >&3
+    done
+    for i in ${recipes[@]+"${recipes[@]}"}; do
+      echo "        - ${JUST_DOCKER_COMPOSE_CACHE_REPO}:recipe_${1}_${i}" >&3
+    done
+         # https://stackoverflow.com/a/26141656/4166604
+  done | sed "${i}"'r/dev/stdin' <(echo "${compose_content}")
+
+    # ------------------
+  # | setup services |
+  # ------------------
+  # Build services using cache
+  while (( $# )); do
+    # By adding an override file, any special build flags will be included,
+    # such as build args, etc...
+    echo   "  ${1}:" >&3
+    if [ "${1}" = "${main_service}" ]; then
+      echo "    image: ${JUST_DOCKER_COMPOSE_CACHE_REPO}:final_${main_service}" >&3
+    fi
+    echo   "    build:" >&3
+    echo   "      cache_from:" >&3
+    echo   "        - ${JUST_DOCKER_COMPOSE_CACHE_REPO}:final_${main_service}" >&3
+    for i in ${stage_names[@]+"${stage_names[@]}"}; do
+      echo "        - ${JUST_DOCKER_COMPOSE_CACHE_REPO}:${main_service}_${i}" >&3
+    done
+    for i in ${recipes[@]+"${recipes[@]}"}; do
+      echo "        - ${JUST_DOCKER_COMPOSE_CACHE_REPO}:recipe_${main_service}_${i}" >&3
+    done
+
+    shift 1
+  done
+}
+
+#**
+# .. function:: get_docker_recipes
+#
+# :Arguments: ``$1...`` - Dockerfiles to search for recipes
+# :Parameters: ``JUST_RECIPE_REPO`` - Name of recipe image to look for. Default: ``vsiri/recipe``
+# :Output: **stdout** - Newline separated list of the tags of the recipes
+#
+# Looks for recipes that are used in the dockerfiles.
+#**
+function get_docker_recipes()
+{
+  local JUST_RECIPE_REPO="${JUST_RECIPE_REPO-vsiri/recipe}"
+  # / and . are the only valid character in an image name that needs regex escaping
+  JUST_RECIPE_REPO="${JUST_RECIPE_REPO//./\\.}"
+  # Need to escpae / for the first search
+  JUST_RECIPE_REPO="${JUST_RECIPE_REPO////\\/}"
+  sed -nE '/^ *[fF][rR][oO][mM] *'"${JUST_RECIPE_REPO}"':/{
+            s/^ *[fF][rR][oO][mM]  *'"${JUST_RECIPE_REPO}"':([^ ]+).*/\1/
+            # Skip (miss) lines with a $ in it, they have variable names that I
+            # will not be able to match
+            /\$/d
+            p
+          }' ${@+"${@}"} | sort -u
+}
+
+#**
 # .. function:: docker_defaultify
 #
 # .. command:: build_recipes
@@ -93,15 +338,13 @@ function docker_defaultify()
 
       source "${VSI_COMMON_DIR}/linux/elements.bsh"
 
+      # Set up cache (global) array of recipes already built, so we don't build
+      # the same recipe multiple times.
       if ! is_array JUST_DOCKER_RECIPES; then
         JUST_DOCKER_RECIPES=()
       fi
 
-      local recipes=($(sed -nE '/^ *[fF][rR][oO][mM] vsiri\/recipe:/{
-                                  s|.*vsiri/recipe:([^ ]+).*|\1|
-                                  /\$/d
-                                  p
-                                }' ${@+"${@}"} | sort -u))
+      local recipes=($(get_docker_recipes ${@+"${@}"}))
 
       local tmp=()
       subtract_array recipes JUST_DOCKER_RECIPES tmp
@@ -246,6 +489,17 @@ function docker_defaultify()
       Just-docker-compose ${@+"${@}"}
       extra_args=$#
       ;;
+
+    docker-compose_ci-save) # Build and tag all stages of an image. $1 - compose filename, $2 - docker-compose service to build (for final stage)
+      docker-compose_tag_all_stages "${1}" "${2}"
+      extra_args=2
+      ;;
+
+    docker-compose_ci-load) # Build all stages of an image from a pulled cache. $1 - compose filename, $2 - docker-compose service to build (for final stage), [$3...] - additional service names that might point to other stage targets in the same dockerfile.
+      docker-compose_restore_from_cache "${@}"
+      extra_args=$#
+      ;;
+
     *)
       plugin_not_found=1
       ;;

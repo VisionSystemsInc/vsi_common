@@ -17,12 +17,14 @@ function vsi_test_env()
                 DBUS_SESSION_BUS_ADDRESS \
                 DOCKER_HOST DOCKER_TLS_VERIFY DOCKER_CERT_PATH \
                 NUMBER_OF_PROCESSORS OS; do
+                # VSI_COMMON_DIR_HOST \
   # DBUS_SESSION_BUS_ADDRESS - can affect a lot of applications in bad ways if it is missing
   # DOCKER_HOST - for remote docker functionality when running the int tests. When running
   # DOCKER_TLS_VERIFY DOCKER_CERT_PATH - For TLS stuff
   # the docker tests, DOCKER_HOST will not be passed along, os it'll be unset, and still
   # NUMBER_OF_PROCESSORS OS - For windows, this shouldn't be removed, I'd call it a bug
   # VSI_COMMON_DIR HOME TERM PATH - Just normal things
+  # VSI_COMMON_DIR_HOST - This would let the common_source integration test mount properly
     if [ -n "${!envvar+set}" ]; then
       test_env+=("${envvar}=${!envvar}")
     fi
