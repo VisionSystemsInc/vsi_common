@@ -43,11 +43,16 @@ function caseify()
       extra_args=$#
       ;;
 
-    test_docker) # Run tests in docker image. Useful for setting VSI_COMMON_BASH_VERSION to test specific versions of bash
-      justify build recipes-auto "${VSI_COMMON_DIR}/docker/tests/bash_test.Dockerfile"
-      Just-docker-compose build bash_test
-      Just-docker-compose run bash_test ${@+"${@}"}
-      extra_args=$#
+    test_docker) # Run tests in docker image. Useful for running in specific bash version ($1)
+      local version="${1-5.0}"
+      shift 1
+      extra_args=1
+      Just-docker-compose run "bash_test_${version}" ${@+"${@}"}
+      extra_args+=$#
+      ;;
+    ci_load) # Load ci
+      justify docker-compose_ci-load "${VSI_COMMON_DIR}/docker-compose.yml" "bash_test_${1}"
+      extra_args=1
       ;;
     test_int_appveyor) # Run integration tests for windows appveyor
       (

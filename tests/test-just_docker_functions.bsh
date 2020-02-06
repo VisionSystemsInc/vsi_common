@@ -120,6 +120,29 @@ DC -f ${TESTDIR}/tmp3 push"
   cmd="$(docker-compose_restore_from_cache compose.yml foos)"
   [ "${cmd}" = "${ans}" ]
 
+  # Test with dockerfile in different context directory
+
+  config="services:
+  bars:
+    build:
+      context: bar
+      dockerfile: bar.Dockerfile
+version: '2.5'"
+
+  mkdir bar
+  echo "FROM alpine:3 as stuff
+RUN something
+FROM stuff
+RUN more things
+" > bar/bar.Dockerfile
+
+  ans="DC -f ${TESTDIR}/tmp3 pull
+DC -f ${VSI_COMMON_DIR}/docker/recipes/docker-compose.yml -f ${TESTDIR}/tmp2 build
+DC -f ${TESTDIR}/tmp1 -f ${TESTDIR}/tmp2 --project-directory . build bars bars_auto_gen_stuff
+DC -f ${TESTDIR}/tmp3 push"
+  echo 1 > "${TESTDIR}/tmpcount"
+  cmd="$(docker-compose_restore_from_cache compose.yml bars)"
+  [ "${cmd}" = "${ans}" ]
 )
 end_test
 
@@ -188,6 +211,9 @@ begin_test "auto gen add cache from"
     echo     "services:"
     for i in ${args1[@]+"${args1[@]}"}; do
       echo   "  ${i}:"
+      if [ "${i#*auto_gen_}" = "${i}" ]; then
+        echo "    image: ${args2[0]}"
+      fi
       echo   "    build:"
       if [ "${i#*auto_gen_}" != "${i}" ]; then
         echo "      target: ${i#*auto_gen_}"
@@ -244,94 +270,12 @@ ${configv}"
 )
 end_test
 
-# begin_test "docker compose tag all stages"
-# (
-#   setup_test
-
-#   # Mockit
-#   function Docker()
-#   {
-#     echo D "${@}"
-#   }
-
-#   function Docker-compose()
-#   {
-#     echo DC "${@}"
-#     if [ "${3}" = "build" ]; then
-#       echo "Successfully tagged org/image:tagname"
-#     fi
-#   }
-
-#   function mktemp()
-#   {
-#     echo "${TESTDIR}/tmp.file"
-#   }
-
-#   function rm()
-#   {
-#     :
-#   }
-
-#   # Normal case
-#   cat - << EOF > docker-compose-other.yml
-# version: "3.4"
-# services:
-#   project1:
-#     build:
-#       dockerfile: Something.Dockerfile
-# EOF
-#   cat - << EOF > Something.Dockerfile
-# FROM image1 as foo
-# FROM image2 as bar
-# FROM foo
-# EOF
-
-#   ans="DC -f docker-compose-other.yml build project1
-# Successfully tagged org/image:tagname
-# D tag org/image:tagname vsiri/ci_cache:final_project1
-# DC -f docker-compose-other.yml -f ${TESTDIR}/tmp.file build project1
-# DC -f docker-compose-other.yml -f ${TESTDIR}/tmp.file build project1
-# foo bar"
-
-#   [ "$(docker-compose_tag_all_stages docker-compose-other.yml project1; echo "${stage_names[@]}")" = "${ans}" ]
-
-#   # Verify the last temp file is right
-#   ans="version: '3.4'
-# services:
-#   project1:
-#     build:
-#       target: bar
-#     image: vsiri/ci_cache:project1_bar"
-
-#   [ "$(cat "${TESTDIR}/tmp.file")" = "${ans}" ]
-
-#   # Auto determine dockerfile when not specified
-#   cat - << EOF > docker-compose-other.yml
-# version: "3.4"
-# services:
-#   project1:
-#     build:
-# EOF
-
-#   # No multiple stages should still work
-#   cat - << EOF > SomeOther.Dockerfile
-# FROM foo
-# EOF
-
-#   ans="DC -f docker-compose-other.yml build project1
-# Successfully tagged org/image:tagname
-# D tag org/image:tagname vsiri/ci_cache:final_project1"
-
-#   [ "$(docker-compose_tag_all_stages docker-compose-other.yml project1; echo "${stage_names[@]}")" = "${ans}" ]
-
-# )
-# end_test
-
 begin_test "get docker recipes"
 (
   setup_test
     cat - << EOF > Something.Dockerfile
 FROM vsiri/recipe:gosu as foo
+# FROM vsiri/recipe:commented as out
 RUN stuff
 from vsiri/recipe:tini as bar
 FROM alpine

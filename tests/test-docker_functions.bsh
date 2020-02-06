@@ -705,5 +705,49 @@ EOF
   stage_names=($(get_docker_stage_names Dockerfile))
   [ "${stage_names[*]}" = "foo bar" ]
 
+  # Comments and spaces
+  cat - << EOF > Dockerfile
+FROM image1 as foo
+# FROM image2 as bar
+ # FROM image3 as car
+ FROM foo
+EOF
+  stage_names=($(get_docker_stage_names Dockerfile))
+  [ "${stage_names[*]}" = "foo" ]
+)
+end_test
+
+begin_test "Get dockerfile name from compose file"
+(
+  setup_test
+
+    cat - << EOF > compose.yml
+version: '2.2'
+services:
+  foo:
+    build: boo
+EOF
+  [ "$(get_dockerfile_from_compose /some/dir/file.yml foo "$(yarp < compose.yml)")" = "/some/dir/boo/Dockerfile" ]
+
+    cat - << EOF > compose.yml
+version: '2.2'
+services:
+  foo:
+    build:
+      context: /bar
+EOF
+  [ "$(get_dockerfile_from_compose "${TESTDIR}/compose.yml" foo)" = "/bar/Dockerfile" ]
+
+    cat - << EOF > compose.yml
+version: '2.2'
+services:
+  foo:
+    build:
+      dockerfile: some.Dockerfile
+      contest: .
+EOF
+
+  [ "$(get_dockerfile_from_compose compose.yml foo)" = "./some.Dockerfile" ]
+  [ "$(get_dockerfile_from_compose "${TESTDIR}/compose.yml" foo)" = "${TESTDIR}/some.Dockerfile" ]
 )
 end_test

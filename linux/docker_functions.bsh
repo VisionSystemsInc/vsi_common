@@ -1184,7 +1184,46 @@ function get_docker_compose_version()
 #**
 function get_docker_stage_names()
 {
-  sed -n 's|[fF][rR][oO][mM] [a-zA-Z0-9:\./_-]* [aA][sS] ||p' "${1}"
+  sed -n 's|^ *[fF][rR][oO][mM] [a-zA-Z0-9:\./_-]* [aA][sS] ||p' "${1}"
+}
+
+#**
+# .. function:: get_dockerfile_from_compose
+#
+# :Arguments: - ``$1`` - docker-compose file
+#             - ``$2`` - Service name
+#             - [``$3``] - :file:`yarp` of compose file
+# :Output: *stdout* - The dockerfile. Not guaranteed to be a full path
+#
+# Determine dockerfile filename from the compose file
+#
+# To specify a custom "project directory", feed in the :file:`yarp` of the compose file into the third argument, and use the project directory in the first argument, e.g.: ``/some/dir/blah.yml``.
+#**
+function get_dockerfile_from_compose()
+{
+  local compose_yarp
+  if [ $# -lt 3 ]; then
+    compose_yarp="$(yarp < "${1}")"
+  else
+    compose_yarp="${3}"
+  fi
+
+  local context="$(sed -n 's|^services.'"${2}"'.build.context = ||p' <<< "${compose_yarp}")"
+  if [ "${context}" = "" ]; then
+    context="$(sed -n 's|^services.'"${2}"'.build = ||p' <<< "${compose_yarp}")"
+  fi
+  # If it is a relative path
+  if [ "${context:0:1}" != "/" ]; then
+    context="$(dirname "${1}")/${context}"
+  fi
+
+  local dockerfile="$(sed -n 's|^services.'"${2}"'.build.dockerfile = ||p' <<< "${compose_yarp}")"
+  # If blank, it wasn't in the compose file. Use default
+  if [ "${dockerfile}" = "" ]; then
+    dockerfile=Dockerfile
+  fi
+
+  echo "$(normpath "${context}/${dockerfile}")"
 }
 
 #**
