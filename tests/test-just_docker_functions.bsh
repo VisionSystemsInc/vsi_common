@@ -56,79 +56,6 @@ begin_test "docker-compose restore from cache"
     echo $((tmp_count+1)) > "${TESTDIR}/tmpcount"
   }
 
-  function tmp1()
-  {
-    echo "services:"
-    while (( $# )); do
-      if [ "${1}" = "- -" ]; then
-        shift 1
-        break
-      fi
-      echo "  ${1}"
-      echo "    build:"
-      echo "      context: ."
-      echo "      dockerfile: foo.Dockerfile"
-      shift 1
-    done
-    while (( $# )); do
-      echo "  ${1}_auto_gen_${2}:"
-      echo "    <<: *main_stage"
-      echo "    image: vsiri/ci_cache:${1}_${2}"
-      shift 2
-    done
-    echo "version: '2.5'"
-  }
-
-  function tmp2()
-  {
-    local args1=()
-    while (( $# )); do
-      if [ "${1}" = "- -" ]; then
-        shift 1
-        break
-      fi
-      args+=("${1}")
-      shift 1
-    done
-    local args2=(${@+"${@}"})
-
-    local i j
-    echo     "services:"
-    for i in ${args1[@]+"${args1[@]}"}; do
-      echo   "  ${i}:"
-      echo   "    build:"
-      if [ "${i#*auto_gen_}" != "${i}" ]; then
-        echo "      target: ${i#*auto_gen_}"
-      fi
-      echo   "      cache_from:"
-      for j in ${args2[@]+"${args2[@]}"}; do
-        echo "        - ${j}"
-      done
-    done
-  }
-
-  function tmp3()
-  {
-    echo   "version: '3.5'"
-    echo   "services:"
-    echo   "  final_${1}:"
-    echo   "    build: ."
-    echo   "    image: ${repo-vsiri/circleci}:final_${1}"
-    local main="${1}"
-    shift 1
-    while (( $# )); do
-      if [ "${1}" = "- -" ]; then
-        shift 1
-        break
-      fi
-      echo "  stage_${1}:"
-      echo "    build: ."
-      echo "    image: ${repo-vsiri/circleci}:${main}_${1}"
-      shift 1
-    done
-
-  }
-
   # This should be in alphabetical order, like docker-compose config does
   config="services:
   bars:
@@ -156,18 +83,10 @@ RUN more things
 DC -f ${VSI_COMMON_DIR}/docker/recipes/docker-compose.yml -f ${TESTDIR}/tmp2 build boo foo
 D tag vsiri/recipe:boo vsiri/ci_cache:recipe_foos_boo
 D tag vsiri/recipe:foo vsiri/ci_cache:recipe_foos_foo
-DC -f ${TESTDIR}/tmp1 -f ${TESTDIR}/tmp2 --project-directory . build foos_auto_gen_bar foos_auto_gen_far foos_auto_gen_stuff foos
+DC -f ${TESTDIR}/tmp1 -f ${TESTDIR}/tmp2 --project-directory . build foos foos_auto_gen_bar foos_auto_gen_far foos_auto_gen_stuff
 DC -f ${TESTDIR}/tmp3 push"
   cmd="$(docker-compose_restore_from_cache compose.yml foos)"
   [ "${cmd}" = "${ans}" ]
-# Test tmp1, tmp2, tmp3
-  tmp1="$(tmp1 "bars:" "foos: &main_stage" "- -" foos bar foos far foos stuff)"
-  [ "${tmp1}" = "$(cat "${TESTDIR}/tmp1")" ]
-  tmp2="$(tmp2 foos_auto_gen_bar foos_auto_gen_far foos_auto_gen_stuff foos "- -" vsiri/ci_cache:final_foos vsiri/ci_cache:foos_bar vsiri/ci_cache:foos_far vsiri/ci_cache:foos_stuff vsiri/ci_cache:recipe_foos_boo vsiri/ci_cache:recipe_foos_foo)"
-  # cat tmp1
-  # cat tmp2
-  cat tmp3
-  false
 
   # Test JUST_DOCKER_COMPOSE_CACHE_REPO
   echo 1 > "${TESTDIR}/tmpcount"
@@ -183,7 +102,7 @@ RUN more things
 " > foo.Dockerfile
   ans="DC -f ${TESTDIR}/tmp3 pull
 DC -f ${VSI_COMMON_DIR}/docker/recipes/docker-compose.yml -f ${TESTDIR}/tmp2 build
-DC -f ${TESTDIR}/tmp1 -f ${TESTDIR}/tmp2 --project-directory . build foos_auto_gen_stuff foos
+DC -f ${TESTDIR}/tmp1 -f ${TESTDIR}/tmp2 --project-directory . build foos foos_auto_gen_stuff
 DC -f ${TESTDIR}/tmp3 push"
   echo 1 > "${TESTDIR}/tmpcount"
   cmd="$(docker-compose_restore_from_cache compose.yml foos)"
@@ -201,6 +120,127 @@ DC -f ${TESTDIR}/tmp3 push"
   cmd="$(docker-compose_restore_from_cache compose.yml foos)"
   [ "${cmd}" = "${ans}" ]
 
+)
+end_test
+
+begin_test "auto gen push pull file"
+(
+  setup_test
+  stages=()
+  recipes=()
+
+  JUST_DOCKER_COMPOSE_CACHE_REPO=a/cache
+  pushpull="$(_dynamic_docker-compose_push_pull foobar)"
+  [ "$(grep -c "^  [^ ]" <<< "${pushpull}")" = 1 ]
+  grep -q "^    image: a/cache:final_foobar$" <<< "${pushpull}"
+
+  stage_names=(foo bar)
+  pushpull="$(_dynamic_docker-compose_push_pull foobar)"
+  [ "$(grep -c "^  [^ ]" <<< "${pushpull}")" = 3 ]
+  grep -q "^  stage_foo:$" <<< "${pushpull}"
+  grep -q "^    image: a/cache:foobar_foo$" <<< "${pushpull}"
+
+  recipes=(boo far)
+  pushpull="$(_dynamic_docker-compose_push_pull foobar)"
+  [ "$(grep -c "^  [^ ]" <<< "${pushpull}")" = 5 ]
+  grep -q "^  recipe_boo:$" <<< "${pushpull}"
+  grep -q "^    image: a/cache:recipe_foobar_boo$" <<< "${pushpull}"
+)
+end_test
+
+begin_test "auto gen recipe from cache file"
+(
+  setup_test
+  recipes=()
+  recipe_compose_version=2.2
+
+  JUST_DOCKER_COMPOSE_CACHE_REPO=some/ci_cache
+  [ "$(_dynamic_docker-compose_restore_recipes foobar)" = "version: '2.2'
+services:" ]
+
+  recipes=(boo far)
+  pushpull="$(_dynamic_docker-compose_restore_recipes foobar)"
+  [ "$(grep -c "^      cache_from:" <<< "${pushpull}")" = 2 ]
+  grep -q "^  boo:$" <<< "${pushpull}"
+  grep -q "^        - some/ci_cache:recipe_foobar_boo$" <<< "${pushpull}"
+)
+end_test
+
+begin_test "auto gen add cache from"
+(
+  setup_test
+
+  function mktmp2()
+  {
+    local args1=()
+    while (( $# )); do
+      if [ "${1}" = "- -" ]; then
+        shift 1
+        break
+      fi
+      args1+=("${1}")
+      shift 1
+    done
+    local args2=(${@+"${@}"})
+
+    local i j
+    echo     "version: '2.5'"
+    echo     "services:"
+    for i in ${args1[@]+"${args1[@]}"}; do
+      echo   "  ${i}:"
+      echo   "    build:"
+      if [ "${i#*auto_gen_}" != "${i}" ]; then
+        echo "      target: ${i#*auto_gen_}"
+      fi
+      echo   "      cache_from:"
+      for j in ${args2[@]+"${args2[@]}"}; do
+        echo "        - ${j}"
+      done
+    done
+  }
+
+  config0="services:
+  bars:
+    build:
+      context: .
+      dockerfile: foo.Dockerfile
+  foos:
+    build:
+      context: .
+      dockerfile: foo.Dockerfile"
+  configv="version: '2.5'"
+  config="${config0}
+${configv}"
+
+  docker_compose_version=2.5
+  stage_names=()
+  recipes=()
+  JUST_DOCKER_COMPOSE_CACHE_REPO="the/cache"
+
+  _dynamic_docker-compose_add_cache_from "${TESTDIR}/tmp1" "${TESTDIR}/tmp2" foobar <<< "${config}"
+  [ "$(cat tmp1)" = "${config}" ]
+  ans2="$(mktmp2 foobar "- -" the/cache:final_foobar)"
+  [ "$(cat tmp2)" = "${ans2}" ]
+
+  stage_names=(foo bar)
+  _dynamic_docker-compose_add_cache_from "${TESTDIR}/tmp1" "${TESTDIR}/tmp2" foobar <<< "${config}"
+  ans1="${config0}
+  foobar_auto_gen_foo:
+    <<: *main_stage
+    image: the/cache:foobar_foo
+  foobar_auto_gen_bar:
+    <<: *main_stage
+    image: the/cache:foobar_bar
+${configv}"
+  [ "$(cat tmp1)" = "${ans1}" ]
+  ans2="$(mktmp2 foobar_auto_gen_foo foobar_auto_gen_bar foobar "- -" the/cache:final_foobar the/cache:foobar_foo the/cache:foobar_bar)"
+  [ "$(cat tmp2)" = "${ans2}" ]
+
+  recipes=(boo far)
+  _dynamic_docker-compose_add_cache_from "${TESTDIR}/tmp1" "${TESTDIR}/tmp2" foobar <<< "${config}"
+  [ "$(cat tmp1)" = "${ans1}" ]
+  ans2="$(mktmp2 foobar_auto_gen_foo foobar_auto_gen_bar foobar "- -" the/cache:final_foobar the/cache:foobar_foo the/cache:foobar_bar the/cache:recipe_foobar_boo the/cache:recipe_foobar_far)"
+  [ "$(cat tmp2)" = "${ans2}" ]
 )
 end_test
 
