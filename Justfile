@@ -89,17 +89,23 @@ function caseify()
       justify _post_build_docker
       ;;
 
-    build_bashes) # Build images for all bash versions
+    build_bash) # Build images for all bash versions or a specific version ($1)
       local version
-      for version in 3.2 4.0 4.1 4.2 4.3 4.4 5.0; do
-        VSI_COMMON_BASH_TEST_VERSION="${version}" Just-docker-compose build bash_test
-      done
+
+      if [ $# -gt 0 ]; then
+        Just-docker-compose build "bash_test_${1}"
+        extra_args=1
+      else
+        for version in 3.2 4.0 4.1 4.2 4.3 4.4 5.0; do
+          Just-docker-compose build "bash_test_${version}"
+        done
+      fi
       ;;
     test_bash) # Run command (like bash) in the contain for a specific version of bash ($1)
       local bash_version="${1}"
       extra_args=$#
       shift 1
-      VSI_COMMON_BASH_TEST_VERSION="${bash_version}" Just-docker-compose run bash_test ${@+"${@}"}
+      Just-docker-compose run "bash_test_${bash_version}" ${@+"${@}"}
       ;;
 
     bashcov_vsi) # Run bashcov on vsi_common
