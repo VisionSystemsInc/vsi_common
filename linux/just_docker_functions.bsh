@@ -103,7 +103,7 @@ function docker-compose_restore_from_cache()
   ############################################################
   # Restore services from cache and setup stages for pushing #
   ############################################################
-  _dynamic_docker-compose_add_cache_from "${temp_file}" "${temp_override}" "${@}" <<< "${compose_rendered}"
+  _dynamic_docker-compose_add_cache_from "${@}" <<< "${compose_rendered}" > "${temp_file}" 3>"${temp_override}"
 
   # The above function's for loop is in a different subshell actually, in order
   # to update the services array, this has to be done separately
@@ -112,30 +112,6 @@ function docker-compose_restore_from_cache()
     # Update list docker-compose commands
     services+=("${main_service}_auto_gen_${stage_name}")
   done
-
-  # ------------------
-  # | setup services |
-  # ------------------
-  # Build services using cache
-  # while (( $# )); do
-  #   # By adding an override file, any special build flags will be included,
-  #   # such as build args, etc...
-  #   echo   "  ${1}:" >> "${temp_override}"
-  #   echo   "    build:" >> "${temp_override}"
-  #   echo   "      cache_from:" >> "${temp_override}"
-  #   echo   "        - ${JUST_DOCKER_COMPOSE_CACHE_REPO}:final_${main_service}" >> "${temp_override}"
-  #   for i in ${stage_names[@]+"${stage_names[@]}"}; do
-  #     echo "        - ${JUST_DOCKER_COMPOSE_CACHE_REPO}:${main_service}_${i}" >> "${temp_override}"
-  #   done
-  #   for i in ${recipes[@]+"${recipes[@]}"}; do
-  #     echo "        - ${JUST_DOCKER_COMPOSE_CACHE_REPO}:recipe_${main_service}_${i}" >> "${temp_override}"
-  #   done
-
-  #   services+=("${1}")
-
-  #   shift 1
-  # done
-
 
   # Build images
   if [ "${JUST_DOCKER_COMPOSE_BUILD-1}" = "1" ]; then
@@ -150,6 +126,7 @@ function docker-compose_restore_from_cache()
   ${DRYRUN-} rm "${temp_file}" "${temp_override}" "${temp_push_pull}"
 }
 
+# docker-compose_restore_from_cache helper function
 function _dynamic_docker-compose_push_pull()
 {
   local i
@@ -171,6 +148,7 @@ function _dynamic_docker-compose_push_pull()
   done
 }
 
+# docker-compose_restore_from_cache helper function
 function _dynamic_docker-compose_restore_recipes()
 {
   local i
@@ -184,28 +162,28 @@ function _dynamic_docker-compose_restore_recipes()
   done
 }
 
+# docker-compose_restore_from_cache helper function
+# stdin - docker-compose file
+# stdout - patched docker-compose file
+# fid 3 out - docker-compose override file
+# arguments - Services to use cache
 function _dynamic_docker-compose_add_cache_from()
 {
-  local file="${1}"
-  local override="${2}"
-  shift 2
+  # local file="${1}"
+  # local override="${2}"
+  # shift 2
   local main_service="${1}"
   local i
 
   # anchor the main stage
-  sed "s|  ${1}:|& \&main_stage|" > "${file}"
+  local compose_content="$(sed "s|  ${1}:|& \&main_stage|")"
 
   # A rendered docker-compose file is always in alphabetical order, The only top
   # level keys are x-*, version, services, secrets, and networks. So I can always
   # add a new services before "^version:". Start by getting the line number of
   # the version line-1
-  i="$(sed -n '/^version:/=' ${file})"
+  i="$(sed -n '/^version:/=' <<< "${compose_content}")"
   i=$((i-1))
-
-  local sed_inplace=(sed -i)
-  if [[ ${OSTYPE} == darwin* ]]; then
-    sed_inplace+=('')
-  fi
 
   # ----------------
   # | setup stages |
@@ -216,8 +194,8 @@ function _dynamic_docker-compose_add_cache_from()
   # - Anchors can't work across, so we need the ${file} method
   # - We can't override target without redefining/anchoring all of build, so
   #   we need file_override to just add to it
-  echo     "version: '${docker_compose_version}'" > "${override}"
-  echo     "services:" >> "${override}"
+  echo     "version: '${docker_compose_version}'" >&3
+  echo     "services:" >&3
   for stage_name in ${stage_names[@]+"${stage_names[@]}"}; do
     # Service patch for 2
     echo  "  ${1}_auto_gen_${stage_name}:"
@@ -225,19 +203,19 @@ function _dynamic_docker-compose_add_cache_from()
     echo  "    image: ${JUST_DOCKER_COMPOSE_CACHE_REPO}:${1}_${stage_name}"
 
     # Service addition for 3
-    echo  "  ${1}_auto_gen_${stage_name}:" >> "${override}"
-    echo  "    build:" >> "${override}"
-    echo  "      target: ${stage_name}" >> "${override}"
-    echo   "      cache_from:" >> "${override}"
-    echo   "        - ${JUST_DOCKER_COMPOSE_CACHE_REPO}:final_${1}" >> "${override}"
+    echo  "  ${1}_auto_gen_${stage_name}:" >&3
+    echo  "    build:" >&3
+    echo  "      target: ${stage_name}" >&3
+    echo   "      cache_from:" >&3
+    echo   "        - ${JUST_DOCKER_COMPOSE_CACHE_REPO}:final_${1}" >&3
     for i in ${stage_names[@]+"${stage_names[@]}"}; do
-      echo "        - ${JUST_DOCKER_COMPOSE_CACHE_REPO}:${1}_${i}" >> "${override}"
+      echo "        - ${JUST_DOCKER_COMPOSE_CACHE_REPO}:${1}_${i}" >&3
     done
     for i in ${recipes[@]+"${recipes[@]}"}; do
-      echo "        - ${JUST_DOCKER_COMPOSE_CACHE_REPO}:recipe_${1}_${i}" >> "${override}"
+      echo "        - ${JUST_DOCKER_COMPOSE_CACHE_REPO}:recipe_${1}_${i}" >&3
     done
          # https://stackoverflow.com/a/26141656/4166604
-  done | "${sed_inplace[@]}" "${i}"'r/dev/stdin' "${file}"
+  done | sed "${i}"'r/dev/stdin' <(echo "${compose_content}")
 
     # ------------------
   # | setup services |
@@ -246,15 +224,15 @@ function _dynamic_docker-compose_add_cache_from()
   while (( $# )); do
     # By adding an override file, any special build flags will be included,
     # such as build args, etc...
-    echo   "  ${1}:" >> "${override}"
-    echo   "    build:" >> "${override}"
-    echo   "      cache_from:" >> "${override}"
-    echo   "        - ${JUST_DOCKER_COMPOSE_CACHE_REPO}:final_${main_service}" >> "${override}"
+    echo   "  ${1}:" >&3
+    echo   "    build:" >&3
+    echo   "      cache_from:" >&3
+    echo   "        - ${JUST_DOCKER_COMPOSE_CACHE_REPO}:final_${main_service}" >&3
     for i in ${stage_names[@]+"${stage_names[@]}"}; do
-      echo "        - ${JUST_DOCKER_COMPOSE_CACHE_REPO}:${main_service}_${i}" >> "${override}"
+      echo "        - ${JUST_DOCKER_COMPOSE_CACHE_REPO}:${main_service}_${i}" >&3
     done
     for i in ${recipes[@]+"${recipes[@]}"}; do
-      echo "        - ${JUST_DOCKER_COMPOSE_CACHE_REPO}:recipe_${main_service}_${i}" >> "${override}"
+      echo "        - ${JUST_DOCKER_COMPOSE_CACHE_REPO}:recipe_${main_service}_${i}" >&3
     done
 
     shift 1
