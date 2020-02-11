@@ -33,7 +33,11 @@ begin_test "git safe update"
         done
         ;;
       rev-parse)
-        echo "${abbrev_rev_parse}"
+        if [ "${2}" == "--abbrev-ref" ]; then
+          echo "${abbrev_rev_parse}"
+        else
+          echo 123456
+        fi
         ;;
     esac
 
@@ -45,7 +49,7 @@ begin_test "git safe update"
   export abbrev_rev_parse="current_branch"
   # foo1
   ans="f just_upstream 474aa3a04b59a5834a332d2e6757504be81959dd
-co HEAD
+co 123456
 m FETCH_HEAD"
 
   [ "${ans}" = "$(bash "${VSI_COMMON_DIR}/linux/git_safe_update" 474aa3a04b59a5834a332d2e6757504be81959dd || echo failed)" ]
@@ -53,17 +57,30 @@ m FETCH_HEAD"
 
   # foo2
   ans="f just_upstream e5500843f835a51ec4e40951e9b6b055466cf256
-co HEAD
+co 123456
 m FETCH_HEAD"
   [ "${ans}" = "$(bash "${VSI_COMMON_DIR}/linux/git_safe_update" e5500843f835a51ec4e40951e9b6b055466cf256 || echo failed)" ]
 
   # fail ff-only
   export merge_rv=1
   ans="f just_upstream f251276e3689b85ef608391d831deb8ce43592bf
-co HEAD
+co 123456
 m FETCH_HEAD
 co current_branch
 failed"
   [ "${ans}" = "$(bash "${VSI_COMMON_DIR}/linux/git_safe_update" f251276e3689b85ef608391d831deb8ce43592bf || echo failed)" ]
+
+  export merge_rv=0
+  export JUST_GIT_UPSTREAM=foo_upstream
+  ans="f foo_upstream e5500843f835a51ec4e40951e9b6b055466cf256
+co 123456
+m FETCH_HEAD"
+  [ "${ans}" = "$(bash "${VSI_COMMON_DIR}/linux/git_safe_update" e5500843f835a51ec4e40951e9b6b055466cf256 || echo failed)" ]
+
+  export JUST_GIT_USE_REMOTE=bar_upstream
+  ans="f bar_upstream e5500843f835a51ec4e40951e9b6b055466cf256
+co 123456
+m FETCH_HEAD"
+  [ "${ans}" = "$(bash "${VSI_COMMON_DIR}/linux/git_safe_update" e5500843f835a51ec4e40951e9b6b055466cf256 || echo failed)" ]
 )
 end_test
