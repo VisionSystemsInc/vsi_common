@@ -6,18 +6,23 @@ fi
 
 source "$(dirname "${BASH_SOURCE[0]}")/findin"
 
+CSI=$'\x1b['
 _debug_prompt='$ '
-
 _debug_history=()
+
+# :Arguments: ``[$1]`` - By default outputs to 2, but if you redirects stderr,
+#                        you can specify a different fd to output to
 function set_trace()
 {
   set +xv
-  echo -n $'\x1b[0m'
+  echo -n "${CSI}0m"
   local -i _debug_stack_level=1
   local _debug_stdout
   local _debug_input=''
   local -i _debug_history_index=0
   local _debug_history_found
+
+  local -i _debug_prompt_offset=${#_debug_prompt}+1
 
   # Copy stdout
   if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "41" ]; then
@@ -26,7 +31,9 @@ function set_trace()
     find_open_fd _debug_stdout
     eval "exec ${_debug_stdout}>&1"
   fi
-  exec 1>&2
+  # Make stdout messages go to stderr. This way if you are debugging in a "$(blah)"
+  # then the output from debugging won't break the main script
+  exec 1>&${1-2}
 
   # REPL loop
   while _trace_repl ; do
@@ -39,7 +46,7 @@ function set_trace()
       else
         _debug_history+=("${_debug_input}")
       fi
-      _debug_history_index=0
+      _debug_history_index=${#_debug_history[@]}
     fi
   done
 
@@ -70,6 +77,7 @@ function _trace_read()
   local key=''
   local -i index=0
   local tmp
+  local -i x
   LOCALE=C
   LC_ALL=C
   echo -n "${_debug_prompt}"
@@ -110,44 +118,42 @@ function _trace_read()
             done
             case "${key}" in  # Final byte"
               $'\x41') # Up
-declare -p _debug_history_index
-                line="${_debug_history[${#_debug_history[@]}-_debug_history_index-1]}"
-                if [[ ${#_debug_history[@]} -gt ${_debug_history_index}+1 ]]; then
-                  _debug_history_index+=1
+                if [[ ${_debug_history_index} -gt 0 ]]; then
+                  _debug_history_index=_debug_history_index-1
+                  line="${_debug_history[_debug_history_index]}"
+                  echo -n "${CSI}2K${CSI}0E${_debug_prompt}${line}"
+                  index="${#line}"
                 fi
-                echo -n $'\x1b[2K\x1b[0E'"${_debug_prompt}${line}"
-                index="${#line}"
                 ;;
-              $'\x42')
-declare -p _debug_history_index
-                if [[ ${_debug_history_index} -le 0 ]]; then
+              $'\x42') # Down
+                if [[ ${_debug_history_index} -ge ${#_debug_history[@]} ]]; then
                   line=""
                 else
-                  _debug_history_index=_debug_history_index-1
-                  line="${_debug_history[${#_debug_history[@]}-_debug_history_index-1]}"
+                  _debug_history_index+=1
+                  line="${_debug_history[_debug_history_index]}"
                 fi
+                echo -n "${CSI}2K${CSI}0E${_debug_prompt}${line}"
                 index="${#line}"
-                echo -n $'\x1b[2K\x1b[0E'"${_debug_prompt}${line}"
                 ;;
               $'\x43') # Right
                 if [[ ${index} -lt ${#line} ]]; then
-                  echo -n $'\x1b[1C'
+                  echo -n "${CSI}1C"
                   index+=1
                 fi
                 ;;
               $'\x44') # Left
                 if [[ ${index} -gt 0 ]]; then
-                  echo -n $'\x1b[1D'
+                  echo -n "${CSI}1D"
                   index=${index}-1
                 fi
                 ;;
               $'\x48') # Home
+                echo -n "${CSI}${_debug_prompt_offset}G"
                 index=0
-                echo -n $'\x1b[3G'
                 ;;
               $'\x46') # End
+                echo -n "${CSI}$((_debug_prompt_offset+index))G"
                 index="${#line}"
-                echo -n $'\x1b['"$((3+index))G"
                 ;;
             esac
             ;;
@@ -167,7 +173,7 @@ declare -p _debug_history_index
         # 1b5b43 Right
         # 1b5b313b3643 Ctrl+Shift+Right
         # 1b5b44 Left
-        # 1b5b45 *Num Pad center
+        # 1b5b45 *Num Pad center  1b5b47
         # 1b5b327e Insert
         # 1b5b337e Delete
         # 1b5b48 Home
@@ -176,9 +182,10 @@ declare -p _debug_history_index
         # 1b5b357e Page Up
         # 1b5b367e Page Up
 
-        # 1b4f50 F1
-        # 1b4f51 F2
-        # 1b4f52 F3
+        # F1-F5 are weird in Mingw
+        # 1b4f50 F1     1b5b5b41
+        # 1b4f51 F2     1b5b5b42
+        # 1b4f52 F3     1b5b5b43
         # 1b5b313b3252 Shift+F3
         # 1b5b313b3352 Alt+F3
         # 1b5b313b3452 Alt+Shift+F3
@@ -186,8 +193,8 @@ declare -p _debug_history_index
         # 1b5b313b3652 Ctrl+Shift+F3
         # ? Ctrl+Alt 37!
         # 1b5b313b3852 Shift+Ctrl+Alt+F3
-        # 1b4f53 F4
-        # 1b5b31357e F5
+        # 1b4f53 F4     1b5b5b44
+        # 1b5b31357e F5 1b5b5b45
         # 1b5b31377e F6
         # 1b5b31387e F7
         # 1b5b31397e F8
@@ -232,9 +239,9 @@ declare -p _debug_history_index
             echo -n $'\x1b[1D \x1b[1D'
             line="${line::${#line}-1}"
           else
-            tmp=$((${#line} - ${index}))
+            x=${#line}-${index}
             line="${line::index-1}${line:index}"
-            echo -n $'\x1b[1D\x1b[0K'"${line:index-1}"$'\x1b['"${tmp}D"
+            echo -n $'\x1b[1D\x1b[0K'"${line:index-1}"$'\x1b['"${x}D"
           fi
           index=${index}-1
         fi
