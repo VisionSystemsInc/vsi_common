@@ -1,0 +1,197 @@
+#!/usr/bin/env false bash
+
+function set_trace()
+{
+  set +xv
+  echo -n $'\x1b[0m'
+  local -i stack_level=1
+  while _trace_repl >&2; do
+    :
+  done
+}
+
+function _set_trace_next()
+{
+  trap -- DEBUG
+  # set_trace
+  # This needs to be smarter, it needs to say "If not in debug, at the same stack, then set_trace
+  # I can do the same for step in
+}
+
+function _trace_read()
+{
+  # History, null separated file in Home dir
+
+  # simple way
+  # read -rp "$ " _repl_input
+  local line=''
+  local key=''
+  echo -n '$ '
+  while :; do
+    IFS= read -d '' -rsn1 key
+    case "${key}" in
+      $'\x1b') # Esc or beginning of arrow sequences
+        # F1-F4 are special
+        # 1b + 5b + 30-3f * x + 20-2f * x + 40-7f
+
+        # 1b5b5a Shift+Tab
+
+        # 1b5b41 Up
+        # 1b5b313b3241 Shift+Up
+        # 1b5b313b3341 Alt+Up
+        # 1b5b313b3441 Alt+Shift+Up
+        # 1b5b313b3541 Ctrl+Up
+        # 1b5b42 Down
+        # 1b5b43 Right
+        # 1b5b313b3643 Ctrl+Shift+Right
+        # 1b5b44 Left
+        # 1b5b45 *Num Pad center
+        # 1b5b327e Insert
+        # 1b5b337e Delete
+        # 1b5b48 Home
+        # 1b5b313b3748 Alt+Ctrl+Home
+        # 1b5b46 End
+        # 1b5b357e Page Up
+        # 1b5b367e Page Up
+
+        # 1b4f50 F1
+        # 1b4f51 F2
+        # 1b4f52 F3
+        # 1b5b313b3252 Shift+F3
+        # 1b5b313b3352 Alt+F3
+        # 1b5b313b3452 Alt+Shift+F3
+        # 1b5b313b3552 Ctrl+F3
+        # 1b5b313b3652 Ctrl+Shift+F3
+        ? Ctrl+Alt
+        # 1b5b313b3852 Shift+Ctrl+Alt+F3
+        # 1b4f53 F4
+        # 1b5b31357e F5
+        # 1b5b31377e F6
+        # 1b5b31387e F7
+        # 1b5b31397e F8
+        # 1b5b32307e F9
+        # 1b5b32347e F12
+
+        # Doesn't matter, this is more getting down in the weeds than anything
+        # that can be used. Using these will actually accomplish the same as
+        # above, so it's not something you should actually parse!
+        # Alt+[ is 1b5b
+
+        ;;
+      $'\x01') # Ctrl+A
+        ;;
+      $'\x02') # Ctrl+B
+        ;;
+      $'\x04') # Ctrl+D
+        ;;
+      $'\x05') # Ctrl+E
+        ;;
+      $'\x06') # Ctrl+F
+        ;;
+      $'\x07') # Ctrl+G
+        ;;
+      $'\x08') # Ctrl+H
+        ;;
+      $'\x09') # Tab doesn't work
+        ;;
+      $'\x0b') # Ctrl+K
+        ;;
+      $'\x12') # Ctrl+R
+        # First I need history
+        ;;
+      $'\n')
+        _repl_input="${line}"
+        echo
+        return
+        ;;
+      $'\x7f') # Back space
+        if [ "${#line}" -gt 0 ]; then
+          echo -n $'\x1b[1D \x1b[1D'
+          line="${line::${#line}-1}"
+        fi
+        ;;
+      *)
+        echo -n "${key}"
+        line+="${key}"
+        ;;
+    esac
+  done
+}
+
+function _trace_repl()
+{
+  local _repl_input
+  local _repl_rv=0
+  _trace_read
+  case "${_repl_input}" in
+    c)
+      return 1
+      ;;
+    q)
+      exit 2
+      ;;
+    d)
+      stack_level="${stack_level}"-1
+      if [[ ${stack_level} -le 0 ]]; then
+        stack_level=1
+      fi
+      echo "(${stack_level}): $(caller ${stack_level})"
+      ;;
+    u)
+      if caller $((stack_level + 1)) &> /dev/null; then
+        stack_level+=1
+      fi
+      echo "(${stack_level}): $(caller ${stack_level})"
+      ;;
+    # n)
+    #   trap _set_trace_next DEBUG
+    #   return 3
+    #   ;;
+    l)
+      local file="$(caller ${stack_level})"
+      local line_number="${file%% *}"
+      file="${file#* }"
+      # line_number="$((line_number - 5))"
+      local func="${file%% *}"
+      file="${file#* }"
+
+      if [[ ${line_number} -lt 0 ]]; then
+        line_number=0
+      fi
+
+      echo "function ${func}()"
+      echo "..."
+      # sed -n "${line_number},$((line_number+10))p" "${file}"
+      awk 'NR>='"${line_number}"'-5 && NR <= '"${line_number}"'+5 { if (NR=='"${line_number}"') {print "> " $0;} else { print "  " $0 } }' "${file}"
+      ;;
+    cs)
+      echo 'Call stack'
+      echo '----------'
+
+      # Start at one, as to not include set_trace itself
+      local -i i=1
+      local stack=''
+      local line
+      while line=("$(caller $i)"); do
+        stack+="$(sed $'s| |\t|2' <<< "${line}")"$'\n'
+        ((++i))
+      done
+
+      if command -v column &> /dev/null; then
+        column -c1 -s $'\t' -t >&2 <<< "${stack}"
+      else
+        echo "${stack}" >&2
+      fi
+      ;;
+    '?')
+      echo "Help, coming soon, to a theater near you..."
+      ;;
+    *)
+      (eval "set -xv; ${_repl_input}"; set +xv) >&2 | _repl_rv=$?
+      echo "Return: ${_repl_rv}"
+      ;;
+  esac
+  return 0
+}
+
+# Use trace FD to get rid of unwanted stuff, like set +xv
