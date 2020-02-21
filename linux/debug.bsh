@@ -1,13 +1,55 @@
 #!/usr/bin/env false bash
 
+if [[ $- != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
+source "$(dirname "${BASH_SOURCE[0]}")/findin"
+
+_debug_prompt='$ '
+
+_debug_history=()
 function set_trace()
 {
   set +xv
   echo -n $'\x1b[0m'
-  local -i stack_level=1
-  while _trace_repl >&2; do
-    :
+  local -i _debug_stack_level=1
+  local _debug_stdout
+  local _debug_input=''
+  local -i _debug_history_index=0
+  local _debug_history_found
+
+  # Copy stdout
+  if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "41" ]; then
+    exec {_debug_stdout}>&1
+  else
+    find_open_fd _debug_stdout
+    eval "exec ${_debug_stdout}>&1"
+  fi
+  exec 1>&2
+
+  # REPL loop
+  while _trace_repl ; do
+    if [[ -n ${_debug_input} ]]; then
+      _debug_history_found="$(findin "${_debug_input}" "${_debug_history[@]}")"
+      if [[ ${_debug_history_found} != -1 ]]; then
+        _debug_history=("${_debug_history[@]::_debug_history_found}"
+                        "${_debug_history[@]:_debug_history_found+1}"
+                        "${_debug_input}")
+      else
+        _debug_history+=("${_debug_input}")
+      fi
+      _debug_history_index=0
+    fi
   done
+
+  # Restore stdout, and close copy
+  exec 1>&${_debug_stdout}
+  if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "41" ]; then
+    exec {_debug_stdout}>&-
+  else
+    eval "${_debug_stdout}>&-"
+  fi
 }
 
 function _set_trace_next()
@@ -23,14 +65,94 @@ function _trace_read()
   # History, null separated file in Home dir
 
   # simple way
-  # read -rp "$ " _repl_input
+  # read -rp "${_debug_prompt}" _debug_input
   local line=''
   local key=''
-  echo -n '$ '
+  local -i index=0
+  local tmp
+  LOCALE=C
+  LC_ALL=C
+  echo -n "${_debug_prompt}"
   while :; do
     IFS= read -d '' -rsn1 key
     case "${key}" in
       $'\x1b') # Esc or beginning of arrow sequences
+        IFS= read -d '' -rsn1 key
+        case "${key}" in
+          O) # F1-F4
+            IFS= read -d '' -rsn1 key
+            ;;
+          '[') # ANSI CSI
+            local parameter=''
+            local intermediate=''
+            # local ansi_stage=2 #0=1b, 1=5b, 2=30-3f, 3=20-2f, 4=40-7f # Don't care
+            while :; do
+              IFS= read -d '' -rsn1 key
+              case "${key}" in
+                [$'\x30'-$'\x3f'])
+                  # if [[ ${ansi_stage} -le 2 ]; then # Don't care
+                    parameter+="${key}"
+                  # else # Don't care
+                  #   break # Don't care
+                  # fi # Don't care
+                  ;;
+                [$'\x20'-$'\x2f'])
+                  ansi_stage=3
+                  intermediate+="${key}"
+                  ;;
+                [$'\x40'-$'\x7f'])
+                  break
+                  ;;
+                *)
+                  continue 2
+                  ;;
+              esac
+            done
+            case "${key}" in  # Final byte"
+              $'\x41') # Up
+declare -p _debug_history_index
+                line="${_debug_history[${#_debug_history[@]}-_debug_history_index-1]}"
+                if [[ ${#_debug_history[@]} -gt ${_debug_history_index}+1 ]]; then
+                  _debug_history_index+=1
+                fi
+                echo -n $'\x1b[2K\x1b[0E'"${_debug_prompt}${line}"
+                index="${#line}"
+                ;;
+              $'\x42')
+declare -p _debug_history_index
+                if [[ ${_debug_history_index} -le 0 ]]; then
+                  line=""
+                else
+                  _debug_history_index=_debug_history_index-1
+                  line="${_debug_history[${#_debug_history[@]}-_debug_history_index-1]}"
+                fi
+                index="${#line}"
+                echo -n $'\x1b[2K\x1b[0E'"${_debug_prompt}${line}"
+                ;;
+              $'\x43') # Right
+                if [[ ${index} -lt ${#line} ]]; then
+                  echo -n $'\x1b[1C'
+                  index+=1
+                fi
+                ;;
+              $'\x44') # Left
+                if [[ ${index} -gt 0 ]]; then
+                  echo -n $'\x1b[1D'
+                  index=${index}-1
+                fi
+                ;;
+              $'\x48') # Home
+                index=0
+                echo -n $'\x1b[3G'
+                ;;
+              $'\x46') # End
+                index="${#line}"
+                echo -n $'\x1b['"$((3+index))G"
+                ;;
+            esac
+            ;;
+        esac
+
         # F1-F4 are special
         # 1b + 5b + 30-3f * x + 20-2f * x + 40-7f
 
@@ -62,7 +184,7 @@ function _trace_read()
         # 1b5b313b3452 Alt+Shift+F3
         # 1b5b313b3552 Ctrl+F3
         # 1b5b313b3652 Ctrl+Shift+F3
-        ? Ctrl+Alt
+        # ? Ctrl+Alt 37!
         # 1b5b313b3852 Shift+Ctrl+Alt+F3
         # 1b4f53 F4
         # 1b5b31357e F5
@@ -100,19 +222,33 @@ function _trace_read()
         # First I need history
         ;;
       $'\n')
-        _repl_input="${line}"
+        _debug_input="${line}"
         echo
         return
         ;;
       $'\x7f') # Back space
         if [ "${#line}" -gt 0 ]; then
-          echo -n $'\x1b[1D \x1b[1D'
-          line="${line::${#line}-1}"
+          if [[ ${index} = ${#line} ]]; then
+            echo -n $'\x1b[1D \x1b[1D'
+            line="${line::${#line}-1}"
+          else
+            tmp=$((${#line} - ${index}))
+            line="${line::index-1}${line:index}"
+            echo -n $'\x1b[1D\x1b[0K'"${line:index-1}"$'\x1b['"${tmp}D"
+          fi
+          index=${index}-1
         fi
         ;;
       *)
-        echo -n "${key}"
-        line+="${key}"
+        if [[ ${index} = ${#line} ]]; then
+          echo -n "${key}"
+          line+="${key}"
+        else
+          tmp=$((${#line} - ${index}))
+          line="${line::index}${key}${line:index}"
+          echo -n $'\x1b[0K'"${line:index}"$'\x1b['"${tmp}D"
+        fi
+        index+=1
         ;;
     esac
   done
@@ -120,10 +256,9 @@ function _trace_read()
 
 function _trace_repl()
 {
-  local _repl_input
-  local _repl_rv=0
+  local _debug_rv=0
   _trace_read
-  case "${_repl_input}" in
+  case "${_debug_input}" in
     c)
       return 1
       ;;
@@ -131,24 +266,24 @@ function _trace_repl()
       exit 2
       ;;
     d)
-      stack_level="${stack_level}"-1
-      if [[ ${stack_level} -le 0 ]]; then
-        stack_level=1
+      _debug_stack_level=${_debug_stack_level}-1
+      if [[ ${_debug_stack_level} -le 0 ]]; then
+        _debug_stack_level=1
       fi
-      echo "(${stack_level}): $(caller ${stack_level})"
+      echo "(${_debug_stack_level}): $(caller ${_debug_stack_level})"
       ;;
     u)
-      if caller $((stack_level + 1)) &> /dev/null; then
-        stack_level+=1
+      if caller $((_debug_stack_level + 1)) &> /dev/null; then
+        _debug_stack_level+=1
       fi
-      echo "(${stack_level}): $(caller ${stack_level})"
+      echo "(${_debug_stack_level}): $(caller ${_debug_stack_level})"
       ;;
     # n)
     #   trap _set_trace_next DEBUG
     #   return 3
     #   ;;
     l)
-      local file="$(caller ${stack_level})"
+      local file="$(caller ${_debug_stack_level})"
       local line_number="${file%% *}"
       file="${file#* }"
       # line_number="$((line_number - 5))"
@@ -164,9 +299,9 @@ function _trace_repl()
       # sed -n "${line_number},$((line_number+10))p" "${file}"
       awk 'NR>='"${line_number}"'-5 && NR <= '"${line_number}"'+5 { if (NR=='"${line_number}"') {print "> " $0;} else { print "  " $0 } }' "${file}"
       ;;
-    cs)
-      echo 'Call stack'
-      echo '----------'
+    t)
+      echo 'Traceback'
+      echo '---------'
 
       # Start at one, as to not include set_trace itself
       local -i i=1
@@ -178,17 +313,21 @@ function _trace_repl()
       done
 
       if command -v column &> /dev/null; then
-        column -c1 -s $'\t' -t >&2 <<< "${stack}"
+        column -c1 -s $'\t' -t <<< "${stack}"
       else
-        echo "${stack}" >&2
+        echo "${stack}"
       fi
       ;;
     '?')
       echo "Help, coming soon, to a theater near you..."
       ;;
     *)
-      (eval "set -xv; ${_repl_input}"; set +xv) >&2 | _repl_rv=$?
-      echo "Return: ${_repl_rv}"
+      if [[ -z ${_debug_input} ]]; then
+        return 0
+      fi
+      # I have NO idea why I have to do "exec 1>&2;" But I do
+      eval "exec 1>&2; set -xv; ${_debug_input}; set +xv" | _debug_rv=$?
+      echo "Return: ${_debug_rv}"
       ;;
   esac
   return 0
