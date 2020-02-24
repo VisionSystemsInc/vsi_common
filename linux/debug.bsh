@@ -5,24 +5,39 @@ if [[ $- != *i* ]]; then
 fi
 
 source "$(dirname "${BASH_SOURCE[0]}")/findin"
+source "$(dirname "${BASH_SOURCE[0]}")/colors.bsh"
 
 CSI=$'\x1b['
-_debug_prompt='$ '
-_debug_history=()
+: ${_debug_prompt='$ '}
+: ${_debug_L_file_color="$(FG_24 86 156 214)"}
+: ${_debug_L_function_color="$(FG_24 220 220 170)"}
+: ${_debug_L_line="$(FG_24 156 220 254)"}
+: ${_debug_L_current_line="${LIGHT_GREEN}"}
 
 # :Arguments: ``[$1]`` - By default outputs to 2, but if you redirects stderr,
 #                        you can specify a different fd to output to
 function set_trace()
 {
   set +xv
-  echo -n "${CSI}0m"
+  echo -n "${NC}"
   local -i _debug_stack_level=1
   local _debug_stdout
-  local _debug_input=''
-  local -i _debug_history_index=0
+  local _debug_input
+  local -i _debug_history_index
   local _debug_history_found
-
+  local _debug_history=()
   local -i _debug_prompt_offset=${#_debug_prompt}+1
+
+  # Load History
+  : ${JUST_DEBUG_HISTORY=~/.local/share/just/debug_history}
+  : ${JUST_DEBUG_HISTORY_LENGTH=1000}
+  if [[ -e ${JUST_DEBUG_HISTORY} ]]; then
+     while IFS= read -rd '' _debug_input || [ -n "${_debug_input}" ]; do
+       _debug_history+=("$_debug_input")
+     done < "${JUST_DEBUG_HISTORY}"
+  fi
+  _debug_history_index="${#_debug_history[@]}"
+  _debug_input=''
 
   # Copy stdout
   if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "41" ]; then
@@ -37,6 +52,7 @@ function set_trace()
 
   # REPL loop
   while _trace_repl ; do
+    # Add new line to the history buffer
     if [[ -n ${_debug_input} ]]; then
       _debug_history_found="$(findin "${_debug_input}" "${_debug_history[@]}")"
       if [[ ${_debug_history_found} != -1 ]]; then
@@ -57,6 +73,9 @@ function set_trace()
   else
     eval "${_debug_stdout}>&-"
   fi
+
+  # Save history
+  _trace_save_history
 }
 
 function _set_trace_next()
@@ -67,6 +86,23 @@ function _set_trace_next()
   # I can do the same for step in
 }
 
+function _trace_save_history()
+{
+  local -i index=${#_debug_history[@]}-${JUST_DEBUG_HISTORY_LENGTH}
+  if [[ ${index} -lt 0 ]]; then
+    index=0
+  fi
+  set -xv
+  _debug_history=(${_debug_history[@]+"${_debug_history[@]:index}"})
+
+  if [[ ${#_debug_history[@]} -ge 1 ]]; then
+    mkdir -p "$(dirname "${JUST_DEBUG_HISTORY}")"
+    echo -n "${_debug_history[0]}" > "${JUST_DEBUG_HISTORY}"
+    if [[ ${#_debug_history[@]} -gt 1 ]]; then
+      printf '\0%s' "${_debug_history[@]:1}" >> "${JUST_DEBUG_HISTORY}"
+    fi
+  fi
+}
 function _trace_read()
 {
   # History, null separated file in Home dir
@@ -270,6 +306,7 @@ function _trace_repl()
       return 1
       ;;
     q)
+      _trace_save_history
       exit 2
       ;;
     d)
@@ -301,10 +338,26 @@ function _trace_repl()
         line_number=0
       fi
 
-      echo "function ${func}()"
-      echo "..."
-      # sed -n "${line_number},$((line_number+10))p" "${file}"
-      awk 'NR>='"${line_number}"'-5 && NR <= '"${line_number}"'+5 { if (NR=='"${line_number}"') {print "> " $0;} else { print "  " $0 } }' "${file}"
+      echo "${_debug_L_file_color}${file}: ${_debug_L_function_color}${func}()${NC}"
+      echo
+      awk -v "line_number=${line_number}" \
+          'BEGIN { line0 = line_number - 3;
+                   line1 = line_number + 3;
+                   pad = int(log(line1)/log(10))+1
+                   pad = sprintf("%%-%dd%%s %%s\n", pad) }
+           NR >= line0 && NR <= line1 {
+             if (NR == line_number) {
+               printf("'"${_debug_L_current_line}"'")
+               printf(pad, NR, ">", $0);
+             } else {
+               printf("'"${_debug_L_line}"'")
+               printf(pad, NR, ":", $0);
+             }
+             if (NR == line1) { exit }
+           }
+           END {
+             printf("\x1b[0m")
+            }' "${file}"
       ;;
     t)
       echo 'Traceback'
