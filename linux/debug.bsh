@@ -6,6 +6,8 @@ fi
 
 source "$(dirname "${BASH_SOURCE[0]}")/findin"
 source "$(dirname "${BASH_SOURCE[0]}")/colors.bsh"
+source "$(dirname "${BASH_SOURCE[0]}")/set_flags.bsh"
+source "$(dirname "${BASH_SOURCE[0]}")/real_path"
 
 CSI=$'\x1b['
 : ${_debug_prompt='$ '}
@@ -18,7 +20,7 @@ CSI=$'\x1b['
 #                        you can specify a different fd to output to
 function set_trace()
 {
-  set +xv
+  unset_flags x v
   echo -n "${NC}"
   local -i _debug_stack_level=1
   local _debug_stdout
@@ -29,7 +31,7 @@ function set_trace()
   local -i _debug_prompt_offset=${#_debug_prompt}+1
 
   # Load History
-  : ${JUST_DEBUG_HISTORY=~/.local/share/just/debug_history}
+  : ${JUST_DEBUG_HISTORY=~/.debug_bash_history}
   : ${JUST_DEBUG_HISTORY_LENGTH=1000}
   if [[ -e ${JUST_DEBUG_HISTORY} ]]; then
      while IFS= read -rd '' _debug_input || [ -n "${_debug_input}" ]; do
@@ -76,14 +78,20 @@ function set_trace()
 
   # Save history
   _trace_save_history
+  reset_flags x v
 }
 
 function _set_trace_next()
 {
-  trap -- DEBUG
+  : trap -- DEBUG
   # set_trace
   # This needs to be smarter, it needs to say "If not in debug, at the same stack, then set_trace
   # I can do the same for step in
+}
+
+function _trace_enable_debug_trap()
+{
+  trap _set_trace_next DEBUG
 }
 
 function _trace_save_history()
@@ -103,6 +111,20 @@ function _trace_save_history()
     fi
   fi
 }
+
+# I tried using coproc and "tput -S >in_pipe <out_pipe &" with
+# 'exec 3> "${in_data}" 4< "${out_data}"', but that buffers TOO!?
+# Only universal solution left is to wrap a simple wrapper in python/perl, that
+# will continuously open a close stdin/stdout, so I can "echo cols > in_data",
+# without using the fd and exec trick. However forcing unbuffered there too
+# proved too difficult. "python -u" does not work, "stdbuf -o0" does, but it
+# only exists on Linux
+
+function _trace_get_cols()
+{
+  echo "$(tput cols)"
+}
+
 function _trace_read()
 {
   # History, null separated file in Home dir
@@ -110,13 +132,20 @@ function _trace_read()
   # simple way
   # read -rp "${_debug_prompt}" _debug_input
   local line=''
+  local lines=()
   local key=''
   local -i index=0
   local tmp
-  local -i x
+  local -i calc1
   LOCALE=C
   LC_ALL=C
   echo -n "${_debug_prompt}"
+
+  local breakpoint_lines=()
+  local breakpoint_files=()
+  local breakpoint_conditions=()
+
+  local window_width="$(tput cols)"
   while :; do
     IFS= read -d '' -rsn1 key
     case "${key}" in
@@ -125,6 +154,14 @@ function _trace_read()
         case "${key}" in
           O) # F1-F4
             IFS= read -d '' -rsn1 key
+            ;;
+          $'\n') # Alt+Enter
+            line="${line%\\}"$'\n'
+            lines+=("${line}")
+            line=''
+            index=0
+            echo
+            printf "%$((_debug_prompt_offset-1))s" ''
             ;;
           '[') # ANSI CSI
             local parameter=''
@@ -184,12 +221,22 @@ function _trace_read()
                 fi
                 ;;
               $'\x48') # Home
+                echo home > /tmp/tmp
                 echo -n "${CSI}${_debug_prompt_offset}G"
                 index=0
                 ;;
               $'\x46') # End
+                echo end $((_debug_prompt_offset+index)) >> /tmp/tmp
                 echo -n "${CSI}$((_debug_prompt_offset+index))G"
                 index="${#line}"
+                ;;
+              $'\x7e') # Delete
+                if [[ ${#line} -gt 0 && ${index} -lt ${#line} ]]; then
+                  calc1=${#line}-${index}-1
+                  line="${line::index}${line:index+1}"
+                  echo -n $'\x1b[0K'"${line:index}"$'\x1b['"${calc1}D"
+                  index=${index}
+                fi
                 ;;
             esac
             ;;
@@ -265,9 +312,19 @@ function _trace_read()
         # First I need history
         ;;
       $'\n')
-        _debug_input="${line}"
-        echo
-        return
+        if [[ ${#line} -gt 0 && ${line:${#line}-1} != '\' ]]; then
+          local IFS=$'\n'
+          _debug_input="${lines[@]+${lines[*]}}${line}"
+          echo
+          return
+        else
+          line="${line%\\}"$'\n'
+          lines+=("${line}")
+          line=''
+          index=0
+          echo
+          printf "%$((_debug_prompt_offset-1))s" ''
+        fi
         ;;
       $'\x7f') # Back space
         if [ "${#line}" -gt 0 ]; then
@@ -275,9 +332,9 @@ function _trace_read()
             echo -n $'\x1b[1D \x1b[1D'
             line="${line::${#line}-1}"
           else
-            x=${#line}-${index}
+            calc1=${#line}-${index}
             line="${line::index-1}${line:index}"
-            echo -n $'\x1b[1D\x1b[0K'"${line:index-1}"$'\x1b['"${x}D"
+            echo -n $'\x1b[1D\x1b[0K'"${line:index-1}"$'\x1b['"${calc1}D"
           fi
           index=${index}-1
         fi
@@ -287,9 +344,9 @@ function _trace_read()
           echo -n "${key}"
           line+="${key}"
         else
-          tmp=$((${#line} - ${index}))
+          calc1=${#line}-${index}
           line="${line::index}${key}${line:index}"
-          echo -n $'\x1b[0K'"${line:index}"$'\x1b['"${tmp}D"
+          echo -n $'\x1b[0K'"${line:index}"$'\x1b['"${calc1}D"
         fi
         index+=1
         ;;
@@ -378,19 +435,101 @@ function _trace_repl()
         echo "${stack}"
       fi
       ;;
-    '?')
-      echo "Help, coming soon, to a theater near you..."
+    p|'p '*)
+      local variables=(${_debug_input:2})
+      local variable
+      # declare -p ${variables[@]+"${variables[@]}"}
+      if [[ ${#variables[@]} = 0 ]]; then
+        variables=($(compgen -v))
+      fi
+      for variable in "${variables[@]}"; do
+        if [[ $(type -t "${variable}") = function ]]; then
+          if [[ ${BASH_VERSINFO[0]}${BASH_VERSINFO[1]} -ge 43 ]]; then
+            declare -pf "${variable}"
+          else
+            type "${variable}"
+          fi
+        else
+          declare -p "${variable}" || : ; echo -n "${CSI}0m"
+        fi
+      done
+      ;;
+    e|'e '*)
+      _debug_input="${_debug_input:2}"
+      if [[ -z ${_debug_input} ]]; then
+        return 0
+      fi
+      _trace_eval
+      ;;
+    '?'|h)
+      echo 'Primitive bash debugger (PBDB)'
+      echo '------------------------------'
+      echo '?/h - This help messages'
+      echo 'c   - Continue execution'
+      echo 'd/u - Move down/up the stack. Useful for "l"'
+      echo 'l   - Print lines of code'
+      echo 'p   - Print variable(s)'
+      echo 'e   - Eval statement (default)'
+      echo 't   - Print traceback'
+      echo 'q   - Quit and exit current bash script'
+      ;;
+    b)
+      echo "Breakpoints"
+      echo "-----------"
+      for tmp in ${breakpoint_lines[@]+"${!breakpoint_lines[@]}"}; do
+        echo "${breakpoint_lines[tmp]}:"$'\t'"${breakpoint_files[tmp]}"
+        if [[ ${breakpoint_conditions[tmp]} != '' ]]; then
+          echo "    When: ${breakpoint_conditions[tmp]}"
+        fi
+      done
+      _trace_enable_debug_trap
+      ;;
+    "b "*)
+      tmp="${_debug_input#b }"
+      breakpoint_lines+=("${tmp%% *}")
+      tmp="${tmp#* }"
+      local patten='^ *$'
+      if [[ tmp =~ ${pattern} ]]; then
+        local filename="$(_trace_get_caller_filename ${_debug_stack_level})"
+        if [[ ${filename::1} != "/" ]]; then
+          filename="$(real_path "${filename}")"
+        fi
+        breakpoint_files+=("${filename}")
+      else
+        breakpoint_files+=("${tmp%% *}")
+        tmp="${tmp#* }"
+      fi
+
+      if [[ tmp =~ ${pattern} ]]; then
+        breakpoint_conditions+=('')
+      else
+        breakpoint_conditions+=("${tmp}")
+      fi
       ;;
     *)
       if [[ -z ${_debug_input} ]]; then
         return 0
       fi
-      # I have NO idea why I have to do "exec 1>&2;" But I do
-      eval "exec 1>&2; set -xv; ${_debug_input}; set +xv" | _debug_rv=$?
-      echo "Return: ${_debug_rv}"
+      _trace_eval
       ;;
   esac
   return 0
+}
+
+function _trace_get_caller_filename()
+{
+  # Plus one more for this funciton
+  local filename="$(caller "$(($1+1))")"
+  filename="${filename#* }"
+  filename="${filename#* }"
+  echo "${filename}"
+}
+
+function _trace_eval()
+{
+  # I have NO idea why I have to do "exec 1>&2;" But I do
+  eval "exec 1>&2; set -xv; ${_debug_input}; set +xv" | _debug_rv=$?
+  echo "Return: ${_debug_rv}"
 }
 
 # Use trace FD to get rid of unwanted stuff, like set +xv
