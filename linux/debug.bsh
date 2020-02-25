@@ -8,6 +8,9 @@ source "$(dirname "${BASH_SOURCE[0]}")/findin"
 source "$(dirname "${BASH_SOURCE[0]}")/colors.bsh"
 source "$(dirname "${BASH_SOURCE[0]}")/set_flags.bsh"
 source "$(dirname "${BASH_SOURCE[0]}")/real_path"
+source "$(dirname "${BASH_SOURCE[0]}")/isin"
+
+_trace_filename="$(real_path "${BASH_SOURCE[0]}")"
 
 CSI=$'\x1b['
 : ${_debug_prompt='$ '}
@@ -83,7 +86,27 @@ function set_trace()
 
 function _set_trace_next()
 {
-  : trap -- DEBUG
+  # trap -- DEBUG
+  local caller_info="$(caller)"
+  if [[ ! ${caller_info} =~ ${_trace_last_filename} ]]; then
+    # new file
+    _trace_last_filename="^[^ ]* [^ ]* ${filename}$"
+    _trace_last_abs_filename="$(real_path "${_trace_last_filename}")"
+    _trace_active_breakpoints=()
+    local x
+    for x in ${breakpoint_lines[@]+"${!breakpoint_lines[@]}"}; do
+      if [[ ${breakpoint_files[x]} == ${_trace_last_abs_filename} ]]; then
+        _trace_active_breakpoints+=("${breakpoint_lines[x]}")
+      fi
+    done
+  fi
+
+  if isin "${caller_info%% *}" ${_trace_active_breakpoints[@]+"${_trace_active_breakpoints[@]}"}; then
+    set_trace
+  fi
+
+
+  # debug_print_traceback
   # set_trace
   # This needs to be smarter, it needs to say "If not in debug, at the same stack, then set_trace
   # I can do the same for step in
@@ -91,6 +114,13 @@ function _set_trace_next()
 
 function _trace_enable_debug_trap()
 {
+  local filename
+  local function
+  local line
+  _trace_split_caller 2
+  _trace_last_filename="^$"
+  _trace_last_abs_filename="$(real_path "${filename}")"
+
   trap _set_trace_next DEBUG
 }
 
@@ -360,6 +390,9 @@ function _trace_repl()
   _trace_read
   case "${_debug_input}" in
     c)
+      if [[ ${#breakpoint_lines[@]} -gt 0 ]]; then
+        _trace_enable_debug_trap
+      fi
       return 1
       ;;
     q)
@@ -417,23 +450,7 @@ function _trace_repl()
             }' "${file}"
       ;;
     t)
-      echo 'Traceback'
-      echo '---------'
-
-      # Start at one, as to not include set_trace itself
-      local -i i=1
-      local stack=''
-      local line
-      while line=("$(caller $i)"); do
-        stack+="$(sed $'s| |\t|2' <<< "${line}")"$'\n'
-        ((++i))
-      done
-
-      if command -v column &> /dev/null; then
-        column -c1 -s $'\t' -t <<< "${stack}"
-      else
-        echo "${stack}"
-      fi
+      debug_print_traceback 2
       ;;
     p|'p '*)
       local variables=(${_debug_input:2})
@@ -482,7 +499,6 @@ function _trace_repl()
           echo "    When: ${breakpoint_conditions[tmp]}"
         fi
       done
-      _trace_enable_debug_trap
       ;;
     "b "*)
       tmp="${_debug_input#b }"
@@ -490,7 +506,10 @@ function _trace_repl()
       tmp="${tmp#* }"
       local patten='^ *$'
       if [[ tmp =~ ${pattern} ]]; then
-        local filename="$(_trace_get_caller_filename ${_debug_stack_level})"
+        local filename
+        local function
+        local line
+        _trace_split_caller "${_debug_stack_level}"
         if [[ ${filename::1} != "/" ]]; then
           filename="$(real_path "${filename}")"
         fi
@@ -516,13 +535,35 @@ function _trace_repl()
   return 0
 }
 
-function _trace_get_caller_filename()
+function _trace_split_caller()
 {
   # Plus one more for this funciton
-  local filename="$(caller "$(($1+1))")"
+  filename="$(caller "${1}")"
+  function="${filename%% *}"
   filename="${filename#* }"
+  line="${filename%% *}"
   filename="${filename#* }"
-  echo "${filename}"
+}
+
+function debug_print_traceback()
+{
+  echo 'Traceback'
+  echo '---------'
+
+  # Start at one, as to not include set_trace itself
+  local -i i=${1-2}
+  local stack=''
+  local line
+  while line=("$(caller $i)"); do
+    stack+="$(sed -e $'s| |\t|' -e $'s| |\t|' <<< "${line}")"$'\n'
+    i+=1
+  done
+
+  if command -v column &> /dev/null; then
+    column -c1 -s $'\t' -t <<< "${stack}"
+  else
+    echo "${stack}"
+  fi
 }
 
 function _trace_eval()
