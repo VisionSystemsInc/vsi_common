@@ -36,25 +36,26 @@ function set_trace()
   local _debug_stdout
   local _debug_input
   local -i _debug_prompt_offset=${#_debug_prompt}+1
-  local -i _debug_hide_debug_stack=${1-0}+1
-  local -i _debug_stack_level=1
-
   # History vars
   local -i _debug_history_index
   local _debug_history_found
   local _debug_history=()
+
+  # Global variables? This is not compatible
+  declare -gi _debug_stack_level=${_debug_stack_level-1}
+  declare -gi _debug_hide_debug_stack=${_debug_hide_debug_stack-${1-0}+1}
   # Breakpoint vars
-  local _debug_breakpoint_lines=()
-  local _debug_breakpoint_files=()
-  local _debug_breakpoint_conditions=()
-  # Other DEBUG trap vars
-  local _debug_last_filename
-  local _debug_last_abs_filename
-  local _debug_active_breakpoints
-  local _debug_active_breakpoints_conditions
-  local _debug_active_step_over
-  local _debug_active_step_in
-  local _debug_active_step_out
+  # declare _debug_breakpoint_lines=()
+  # declare _debug_breakpoint_files=()
+  # declare _debug_breakpoint_conditions=()
+  # # Other DEBUG trap vars
+  # declare _debug_last_filename
+  # declare _debug_last_abs_filename
+  # declare _debug_active_breakpoints
+  # declare _debug_active_breakpoints_conditions
+  # declare _debug_active_step_over
+  # declare _debug_active_step_in
+  # declare _debug_active_step_out
 
   # Reset colors
   echo -n "${NC}"
@@ -141,23 +142,26 @@ function _set_trace_next()
     _debug_last_abs_filename="$(real_path "${_debug_last_filename}")"
     _debug_active_breakpoints=()
     _debug_active_breakpoints_conditions=()
-    local _trace_breakpoint_index
-    for _trace_breakpoint_index in ${_debug_breakpoint_lines[@]+"${!_debug_breakpoint_lines[@]}"}; do
-      if [[ ${_debug_breakpoint_files[_trace_breakpoint_index]} == ${_debug_last_abs_filename} ]]; then
-        _debug_active_breakpoints+=("${_debug_breakpoint_lines[_trace_breakpoint_index]}")
-        _debug_active_breakpoints_conditions+=("${_debug_breakpoint_conditions[_trace_breakpoint_index]}")
+    local _debug_breakpoint_index
+declare -p _debug_active_breakpoints _debug_caller_info _debug_last_filename _debug_last_abs_filename
+declare -p _debug_breakpoint_lines
+    for _debug_breakpoint_index in ${_debug_breakpoint_lines[@]+"${!_debug_breakpoint_lines[@]}"}; do
+      declare -p _debug_last_abs_filename
+      echo "${_debug_breakpoint_files[_debug_breakpoint_index]}"
+      if [[ ${_debug_breakpoint_files[_debug_breakpoint_index]} == ${_debug_last_abs_filename} ]]; then
+        _debug_active_breakpoints+=("${_debug_breakpoint_lines[_debug_breakpoint_index]}")
+        _debug_active_breakpoints_conditions+=("${_debug_breakpoint_conditions[_debug_breakpoint_index]}")
       fi
     done
   fi
-
   local _trace_current_line="${_debug_caller_info%% *}"
-  for _trace_breakpoint_index in ${_debug_active_breakpoints[@]+"${!_debug_active_breakpoints[@]}"}; do
-    if [[ ${_debug_active_breakpoints[_trace_breakpoint_index]} = ${_trace_current_line} ]]; then
-      if [[ ${_debug_active_breakpoints_conditions[_trace_breakpoint_index]} == "" ]]; then
+  for _debug_breakpoint_index in ${_debug_active_breakpoints[@]+"${!_debug_active_breakpoints[@]}"}; do
+    if [[ ${_debug_active_breakpoints[_debug_breakpoint_index]} = ${_trace_current_line} ]]; then
+      if [[ ${_debug_active_breakpoints_conditions[_debug_breakpoint_index]} == "" ]]; then
         _trace_set_trace 1
         break
       else
-        eval "${_debug_active_breakpoints_conditions[_trace_breakpoint_index]}" && _trace_set_trace 1
+        eval "${_debug_active_breakpoints_conditions[_debug_breakpoint_index]}" && _trace_set_trace 1
         break
       fi
     fi
