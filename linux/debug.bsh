@@ -4,13 +4,16 @@ if [[ $- != *i* ]]; then
   source_once &> /dev/null && return 0
 fi
 
-source "$(dirname "${BASH_SOURCE[0]}")/findin"
-source "$(dirname "${BASH_SOURCE[0]}")/colors.bsh"
-source "$(dirname "${BASH_SOURCE[0]}")/set_flags.bsh"
-source "$(dirname "${BASH_SOURCE[0]}")/real_path"
-source "$(dirname "${BASH_SOURCE[0]}")/isin"
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
 
-_trace_filename="$(real_path "${BASH_SOURCE[0]}")"
+source "${VSI_COMMON_DIR}/linux/findin"
+source "${VSI_COMMON_DIR}/linux/isin"
+source "${VSI_COMMON_DIR}/linux/colors.bsh"
+source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
+source "${VSI_COMMON_DIR}/linux/real_path"
+source "${VSI_COMMON_DIR}/linux/file_tools.bsh"
 
 CSI=$'\x1b['
 : ${_debug_prompt='$ '}
@@ -19,30 +22,45 @@ CSI=$'\x1b['
 : ${_debug_L_line="$(FG_24 156 220 254)"}
 : ${_debug_L_current_line="${LIGHT_GREEN}"}
 
-# :Arguments: ``[$1]`` - By default outputs to 2, but if you redirects stderr,
-#                        you can specify a different fd to output to
+: ${JUST_DEBUG_READ_METHOD=manual}
+: ${JUST_DEBUG_HISTORY=~/.debug_bash_history}
+: ${JUST_DEBUG_HISTORY_LENGTH=1000}
+
+# :Arguments: [``$1``] - Number of stacks to skip
+# :Output: By default outputs to stderr(2), but if you redirect stderr, you can
+#          redirect :func:`set_trace` to another stream (3 for example) using
+#          ``2>&3``.
 function set_trace()
 {
   unset_flags x v
-  echo -n "${NC}"
-  local -i _debug_stack_level=1
   local _debug_stdout
   local _debug_input
+  local -i _debug_prompt_offset=${#_debug_prompt}+1
+  local -i _debug_hide_debug_stack=${1-0}+1
+  local -i _debug_stack_level=1
+
+  # History vars
   local -i _debug_history_index
   local _debug_history_found
   local _debug_history=()
-  local -i _debug_prompt_offset=${#_debug_prompt}+1
+  # Breakpoint vars
+  local _debug_breakpoint_lines=()
+  local _debug_breakpoint_files=()
+  local _debug_breakpoint_conditions=()
+  # Other DEBUG trap vars
+  local _debug_last_filename
+  local _debug_last_abs_filename
+  local _debug_active_breakpoints
+  local _debug_active_breakpoints_conditions
+  local _debug_active_step_over
+  local _debug_active_step_in
+  local _debug_active_step_out
+
+  # Reset colors
+  echo -n "${NC}"
 
   # Load History
-  : ${JUST_DEBUG_HISTORY=~/.debug_bash_history}
-  : ${JUST_DEBUG_HISTORY_LENGTH=1000}
-  if [[ -e ${JUST_DEBUG_HISTORY} ]]; then
-     while IFS= read -rd '' _debug_input || [ -n "${_debug_input}" ]; do
-       _debug_history+=("$_debug_input")
-     done < "${JUST_DEBUG_HISTORY}"
-  fi
-  _debug_history_index="${#_debug_history[@]}"
-  _debug_input=''
+  _trace_load_history
 
   # Copy stdout
   if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "41" ]; then
@@ -53,23 +71,10 @@ function set_trace()
   fi
   # Make stdout messages go to stderr. This way if you are debugging in a "$(blah)"
   # then the output from debugging won't break the main script
-  exec 1>&${1-2}
+  exec 1>&2
 
-  # REPL loop
-  while _trace_repl ; do
-    # Add new line to the history buffer
-    if [[ -n ${_debug_input} ]]; then
-      _debug_history_found="$(findin "${_debug_input}" "${_debug_history[@]}")"
-      if [[ ${_debug_history_found} != -1 ]]; then
-        _debug_history=("${_debug_history[@]::_debug_history_found}"
-                        "${_debug_history[@]:_debug_history_found+1}"
-                        "${_debug_input}")
-      else
-        _debug_history+=("${_debug_input}")
-      fi
-      _debug_history_index=${#_debug_history[@]}
-    fi
-  done
+  # Run the inner set_trace loop
+  _trace_set_trace
 
   # Restore stdout, and close copy
   exec 1>&${_debug_stdout}
@@ -81,29 +86,94 @@ function set_trace()
 
   # Save history
   _trace_save_history
+
   reset_flags x v
+}
+
+function _trace_set_trace()
+{
+  _debug_active_step_over=0
+  _debug_active_step_in=0
+  _debug_active_step_out=0
+
+  _debug_input=''
+
+  # REPL loop
+  while _trace_repl ; do
+    # Add new line to the history buffer
+    _trace_add_history "${debug_input}"
+  done
+}
+
+function _trace_add_history()
+{
+  if [[ ${JUST_DEBUG_READ_METHOD} = manual && -n ${1-} ]]; then
+    _debug_history_found="$(findin "${1}" "${_debug_history[@]}")"
+    if [[ ${_debug_history_found} != -1 ]]; then
+      _debug_history=("${_debug_history[@]::_debug_history_found}"
+                      "${_debug_history[@]:_debug_history_found+1}"
+                      "${1}")
+    else
+      _debug_history+=("${1}")
+    fi
+    _debug_history_index=${#_debug_history[@]}
+  fi
+}
+
+function _trace_load_history()
+{
+  if [[ ${JUST_DEBUG_READ_METHOD} = manual ]]; then
+    if [[ -e ${JUST_DEBUG_HISTORY} ]]; then
+      while IFS= read -rd '' _debug_input || [ -n "${_debug_input}" ]; do
+        _debug_history+=("$_debug_input")
+      done < "${JUST_DEBUG_HISTORY}"
+    fi
+    _debug_history_index="${#_debug_history[@]}"
+  fi
 }
 
 function _set_trace_next()
 {
-  # trap -- DEBUG
-  local caller_info="$(caller)"
-  if [[ ! ${caller_info} =~ ${_trace_last_filename} ]]; then
+  local _debug_caller_info="$(caller 0)"
+  if [[ ${_debug_caller_info#* * } != ${_debug_last_filename} ]]; then
     # new file
-    _trace_last_filename="^[^ ]* [^ ]* ${filename}$"
-    _trace_last_abs_filename="$(real_path "${_trace_last_filename}")"
-    _trace_active_breakpoints=()
-    local x
-    for x in ${breakpoint_lines[@]+"${!breakpoint_lines[@]}"}; do
-      if [[ ${breakpoint_files[x]} == ${_trace_last_abs_filename} ]]; then
-        _trace_active_breakpoints+=("${breakpoint_lines[x]}")
+    _debug_last_filename="${_debug_caller_info#* * }"
+    _debug_last_abs_filename="$(real_path "${_debug_last_filename}")"
+    _debug_active_breakpoints=()
+    _debug_active_breakpoints_conditions=()
+    local _trace_breakpoint_index
+    for _trace_breakpoint_index in ${_debug_breakpoint_lines[@]+"${!_debug_breakpoint_lines[@]}"}; do
+      if [[ ${_debug_breakpoint_files[_trace_breakpoint_index]} == ${_debug_last_abs_filename} ]]; then
+        _debug_active_breakpoints+=("${_debug_breakpoint_lines[_trace_breakpoint_index]}")
+        _debug_active_breakpoints_conditions+=("${_debug_breakpoint_conditions[_trace_breakpoint_index]}")
       fi
     done
   fi
 
-  if isin "${caller_info%% *}" ${_trace_active_breakpoints[@]+"${_trace_active_breakpoints[@]}"}; then
-    set_trace
-  fi
+  local _trace_current_line="${_debug_caller_info%% *}"
+  for _trace_breakpoint_index in ${_debug_active_breakpoints[@]+"${!_debug_active_breakpoints[@]}"}; do
+    if [[ ${_debug_active_breakpoints[_trace_breakpoint_index]} = ${_trace_current_line} ]]; then
+      if [[ ${_debug_active_breakpoints_conditions[_trace_breakpoint_index]} == "" ]]; then
+        _trace_set_trace 1
+        break
+      else
+        eval "${_debug_active_breakpoints_conditions[_trace_breakpoint_index]}" && _trace_set_trace 1
+        break
+      fi
+    fi
+  done
+
+ #Step
+ # 1) Store stack depth
+ # 2) in here, check if caller (depth+1) is true, when false, then set_trace
+ #Step out
+ # 1) Set Return trap, and set_trace when function name+filename+stack depth matches?
+ #Step in
+ # 1) Break on first non-debug.bsh(${BASH_SOURCE[0]}) caller 0
+
+  # if isin  ; then
+  #   set_trace 1
+  # fi
 
 
   # debug_print_traceback
@@ -118,26 +188,28 @@ function _trace_enable_debug_trap()
   local function
   local line
   _trace_split_caller 2
-  _trace_last_filename="^$"
-  _trace_last_abs_filename="$(real_path "${filename}")"
+  _debug_last_filename="^$"
+  _debug_last_abs_filename="$(real_path "${filename}")"
 
   trap _set_trace_next DEBUG
 }
 
 function _trace_save_history()
 {
-  local -i index=${#_debug_history[@]}-${JUST_DEBUG_HISTORY_LENGTH}
-  if [[ ${index} -lt 0 ]]; then
-    index=0
-  fi
-  set -xv
-  _debug_history=(${_debug_history[@]+"${_debug_history[@]:index}"})
+  if [[ ${JUST_DEBUG_READ_METHOD} = manual ]]; then
+    local -i index=${#_debug_history[@]}-${JUST_DEBUG_HISTORY_LENGTH}
+    if [[ ${index} -lt 0 ]]; then
+      index=0
+    fi
 
-  if [[ ${#_debug_history[@]} -ge 1 ]]; then
-    mkdir -p "$(dirname "${JUST_DEBUG_HISTORY}")"
-    echo -n "${_debug_history[0]}" > "${JUST_DEBUG_HISTORY}"
-    if [[ ${#_debug_history[@]} -gt 1 ]]; then
-      printf '\0%s' "${_debug_history[@]:1}" >> "${JUST_DEBUG_HISTORY}"
+    _debug_history=(${_debug_history[@]+"${_debug_history[@]:index}"})
+
+    if [[ ${#_debug_history[@]} -ge 1 ]]; then
+      mkdir -p "$(dirname "${JUST_DEBUG_HISTORY}")"
+      echo -n "${_debug_history[0]}" > "${JUST_DEBUG_HISTORY}"
+      if [[ ${#_debug_history[@]} -gt 1 ]]; then
+        printf '\0%s' "${_debug_history[@]:1}" >> "${JUST_DEBUG_HISTORY}"
+      fi
     fi
   fi
 }
@@ -155,7 +227,7 @@ function _trace_get_cols()
   echo "$(tput cols)"
 }
 
-function _trace_read()
+function _trace_manual_bash_read()
 {
   # History, null separated file in Home dir
 
@@ -164,16 +236,13 @@ function _trace_read()
   local line=''
   local lines=()
   local key=''
-  local -i index=0
+  local -i cursor_x=0
+  local -i cursor_y=0
   local tmp
   local -i calc1
   LOCALE=C
   LC_ALL=C
   echo -n "${_debug_prompt}"
-
-  local breakpoint_lines=()
-  local breakpoint_files=()
-  local breakpoint_conditions=()
 
   local window_width="$(tput cols)"
   while :; do
@@ -189,7 +258,7 @@ function _trace_read()
             line="${line%\\}"$'\n'
             lines+=("${line}")
             line=''
-            index=0
+            cursor_x=0
             echo
             printf "%$((_debug_prompt_offset-1))s" ''
             ;;
@@ -225,7 +294,7 @@ function _trace_read()
                   _debug_history_index=_debug_history_index-1
                   line="${_debug_history[_debug_history_index]}"
                   echo -n "${CSI}2K${CSI}0E${_debug_prompt}${line}"
-                  index="${#line}"
+                  cursor_x="${#line}"
                 fi
                 ;;
               $'\x42') # Down
@@ -236,36 +305,35 @@ function _trace_read()
                   line="${_debug_history[_debug_history_index]}"
                 fi
                 echo -n "${CSI}2K${CSI}0E${_debug_prompt}${line}"
-                index="${#line}"
+                cursor_x="${#line}"
                 ;;
               $'\x43') # Right
-                if [[ ${index} -lt ${#line} ]]; then
+                if [[ ${cursor_x} -lt ${#line} ]]; then
                   echo -n "${CSI}1C"
-                  index+=1
+                  cursor_x+=1
                 fi
                 ;;
               $'\x44') # Left
-                if [[ ${index} -gt 0 ]]; then
+                if [[ ${cursor_x} -gt 0 ]]; then
                   echo -n "${CSI}1D"
-                  index=${index}-1
+                  cursor_x=${cursor_x}-1
                 fi
                 ;;
               $'\x48') # Home
-                echo home > /tmp/tmp
                 echo -n "${CSI}${_debug_prompt_offset}G"
-                index=0
+                cursor_x=0
                 ;;
               $'\x46') # End
-                echo end $((_debug_prompt_offset+index)) >> /tmp/tmp
-                echo -n "${CSI}$((_debug_prompt_offset+index))G"
-                index="${#line}"
+                calc1=${_debug_prompt_offset}+${#line}
+                echo -n "${CSI}${calc1}G"
+                cursor_x="${#line}"
                 ;;
               $'\x7e') # Delete
-                if [[ ${#line} -gt 0 && ${index} -lt ${#line} ]]; then
-                  calc1=${#line}-${index}-1
-                  line="${line::index}${line:index+1}"
-                  echo -n $'\x1b[0K'"${line:index}"$'\x1b['"${calc1}D"
-                  index=${index}
+                if [[ ${#line} -gt 0 && ${cursor_x} -lt ${#line} ]]; then
+                  calc1=${#line}-${cursor_x}-1
+                  line="${line::cursor_x}${line:cursor_x+1}"
+                  echo -n $'\x1b[0K'"${line:cursor_x}"$'\x1b['"${calc1}D"
+                  cursor_x=${cursor_x}
                 fi
                 ;;
             esac
@@ -351,37 +419,52 @@ function _trace_read()
           line="${line%\\}"$'\n'
           lines+=("${line}")
           line=''
-          index=0
+          cursor_x=0
           echo
           printf "%$((_debug_prompt_offset-1))s" ''
         fi
         ;;
       $'\x7f') # Back space
         if [ "${#line}" -gt 0 ]; then
-          if [[ ${index} = ${#line} ]]; then
+          if [[ ${cursor_x} = ${#line} ]]; then
             echo -n $'\x1b[1D \x1b[1D'
             line="${line::${#line}-1}"
           else
-            calc1=${#line}-${index}
-            line="${line::index-1}${line:index}"
-            echo -n $'\x1b[1D\x1b[0K'"${line:index-1}"$'\x1b['"${calc1}D"
+            calc1=${#line}-${cursor_x}
+            line="${line::cursor_x-1}${line:cursor_x}"
+            echo -n $'\x1b[1D\x1b[0K'"${line:cursor_x-1}"$'\x1b['"${calc1}D"
           fi
-          index=${index}-1
+          cursor_x=${cursor_x}-1
         fi
         ;;
       *)
-        if [[ ${index} = ${#line} ]]; then
+        if [[ ${cursor_x} = ${#line} ]]; then
           echo -n "${key}"
           line+="${key}"
         else
-          calc1=${#line}-${index}
-          line="${line::index}${key}${line:index}"
-          echo -n $'\x1b[0K'"${line:index}"$'\x1b['"${calc1}D"
+          calc1=${#line}-${cursor_x}
+          line="${line::cursor_x}${key}${line:cursor_x}"
+          echo -n $'\x1b[0K'"${line:cursor_x}"$'\x1b['"${calc1}D"
         fi
-        index+=1
+        cursor_x+=1
         ;;
     esac
   done
+}
+
+function _trace_read()
+{
+  if [[ ${JUST_DEBUG_READ_METHOD} = manual ]]; then
+    _trace_manual_bash_read
+  elif [[ ${JUST_DEBUG_READ_METHOD} != read ]]; then
+    _debug_input="$(export _debug_read_color_scheme _debug_prompt JUST_DEBUG_HISTORY
+                    ${JUST_DEBUG_READ_METHOD} "${VSI_COMMON_DIR}/linux/debug_readline.py" 3>&2 2>&1 1>&3)"
+  else
+    HISTFILE="${JUST_DEBUG_HISTORY}.read"
+    history -n
+    IFS= read -p "${_debug_prompt}" -r -d $'\n' -e _debug_input
+    echo "${_debug_input}" >> "${HISTFILE}"
+  fi
 }
 
 function _trace_repl()
@@ -390,7 +473,7 @@ function _trace_repl()
   _trace_read
   case "${_debug_input}" in
     c)
-      if [[ ${#breakpoint_lines[@]} -gt 0 ]]; then
+      if [[ ${#_debug_breakpoint_lines[@]} -gt 0 ]]; then
         _trace_enable_debug_trap
       fi
       return 1
@@ -404,20 +487,20 @@ function _trace_repl()
       if [[ ${_debug_stack_level} -le 0 ]]; then
         _debug_stack_level=1
       fi
-      echo "(${_debug_stack_level}): $(caller ${_debug_stack_level})"
+      echo "(${_debug_stack_level}): $(caller $((_debug_stack_level + _debug_hide_debug_stack)))"
       ;;
     u)
-      if caller $((_debug_stack_level + 1)) &> /dev/null; then
+      if caller $((_debug_stack_level + _debug_hide_debug_stack + 1)) &> /dev/null; then
         _debug_stack_level+=1
       fi
-      echo "(${_debug_stack_level}): $(caller ${_debug_stack_level})"
+      echo "(${_debug_stack_level}): $(caller $((_debug_stack_level + _debug_hide_debug_stack)))"
       ;;
     # n)
     #   trap _set_trace_next DEBUG
     #   return 3
     #   ;;
     l)
-      local file="$(caller ${_debug_stack_level})"
+      local file="$(caller $((_debug_stack_level + _debug_hide_debug_stack)))"
       local line_number="${file%% *}"
       file="${file#* }"
       # line_number="$((line_number - 5))"
@@ -450,12 +533,11 @@ function _trace_repl()
             }' "${file}"
       ;;
     t)
-      debug_print_traceback 2
+      debug_print_traceback $((2+_debug_hide_debug_stack))
       ;;
     p|'p '*)
       local variables=(${_debug_input:2})
       local variable
-      # declare -p ${variables[@]+"${variables[@]}"}
       if [[ ${#variables[@]} = 0 ]]; then
         variables=($(compgen -v))
       fi
@@ -482,6 +564,9 @@ function _trace_repl()
       echo 'Primitive bash debugger (PBDB)'
       echo '------------------------------'
       echo '?/h - This help messages'
+      echo 'b   - Set breakpoint: line [filename] [condition]'
+      echo '      No arguments prints list of breakpoints'
+      echo 'bc  - Clear breakpoint #'
       echo 'c   - Continue execution'
       echo 'd/u - Move down/up the stack. Useful for "l"'
       echo 'l   - Print lines of code'
@@ -493,37 +578,45 @@ function _trace_repl()
     b)
       echo "Breakpoints"
       echo "-----------"
-      for tmp in ${breakpoint_lines[@]+"${!breakpoint_lines[@]}"}; do
-        echo "${breakpoint_lines[tmp]}:"$'\t'"${breakpoint_files[tmp]}"
-        if [[ ${breakpoint_conditions[tmp]} != '' ]]; then
-          echo "    When: ${breakpoint_conditions[tmp]}"
+      for tmp in ${_debug_breakpoint_lines[@]+"${!_debug_breakpoint_lines[@]}"}; do
+        echo "${tmp}"$'\t'"${_debug_breakpoint_lines[tmp]}:"$'\t'"${_debug_breakpoint_files[tmp]}"
+        if [[ ${_debug_breakpoint_conditions[tmp]} != '' ]]; then
+          echo "    When: ${_debug_breakpoint_conditions[tmp]}"
         fi
       done
       ;;
     "b "*)
       tmp="${_debug_input#b }"
-      breakpoint_lines+=("${tmp%% *}")
-      tmp="${tmp#* }"
-      local patten='^ *$'
-      if [[ tmp =~ ${pattern} ]]; then
+      _debug_breakpoint_lines+=("${tmp%% *}")
+      local pattern='^ *[0-9]+ *$'
+      if [[ ${tmp} =~ ${pattern} ]]; then
         local filename
         local function
         local line
-        _trace_split_caller "${_debug_stack_level}"
-        if [[ ${filename::1} != "/" ]]; then
-          filename="$(real_path "${filename}")"
-        fi
-        breakpoint_files+=("${filename}")
+        _trace_split_caller $((_debug_stack_level + _debug_hide_debug_stack + 1))
+        _debug_breakpoint_files+=("$(real_path "${filename}")")
+        _debug_breakpoint_conditions+=('')
       else
-        breakpoint_files+=("${tmp%% *}")
         tmp="${tmp#* }"
-      fi
+        _debug_breakpoint_files+=("$(real_path "${tmp%% *}")")
 
-      if [[ tmp =~ ${pattern} ]]; then
-        breakpoint_conditions+=('')
-      else
-        breakpoint_conditions+=("${tmp}")
+        if [[ ${tmp} = ${tmp#* } ]]; then
+          _debug_breakpoint_conditions+=('')
+        else
+          _debug_breakpoint_conditions+=("${tmp#* }")
+        fi
       fi
+      ;;
+    bc) # Clear all breakpoints
+      _debug_breakpoint_lines=()
+      _debug_breakpoint_files=()
+      _debug_breakpoint_conditions=()
+      ;;
+    "bc "*) # Clear breakpoint
+      calc1="${_debug_input#bc }"
+      _debug_breakpoint_lines=("${_debug_breakpoint_lines[@]::calc1}" "${_debug_breakpoint_lines[@]:calc1+1}")
+      _debug_breakpoint_files=("${_debug_breakpoint_files[@]::calc1}" "${_debug_breakpoint_files[@]:calc1+1}")
+      _debug_breakpoint_conditions=("${_debug_breakpoint_conditions[@]::calc1}" "${_debug_breakpoint_conditions[@]:calc1+1}")
       ;;
     *)
       if [[ -z ${_debug_input} ]]; then
@@ -539,9 +632,9 @@ function _trace_split_caller()
 {
   # Plus one more for this funciton
   filename="$(caller "${1}")"
-  function="${filename%% *}"
-  filename="${filename#* }"
   line="${filename%% *}"
+  filename="${filename#* }"
+  function="${filename%% *}"
   filename="${filename#* }"
 }
 
