@@ -42,8 +42,7 @@ function set_trace()
   local _debug_history=()
 
   # Global variables? This is not compatible
-  declare -gi _debug_stack_level=${_debug_stack_level-1}
-  declare -gi _debug_hide_debug_stack=${_debug_hide_debug_stack-${1-0}+1}
+
   # Breakpoint vars
   # declare _debug_breakpoint_lines=()
   # declare _debug_breakpoint_files=()
@@ -93,6 +92,8 @@ function set_trace()
 
 function _trace_set_trace()
 {
+  local -i _debug_stack_level=1
+  local -i _debug_hide_debug_stack=${1-0}+1
   _debug_active_step_over=0
   _debug_active_step_in=0
   _debug_active_step_out=0
@@ -138,30 +139,16 @@ function _set_trace_next()
   local _debug_caller_info="$(caller 0)"
   if [[ ${_debug_caller_info#* * } != ${_debug_last_filename} ]]; then
     # new file
-    _debug_last_filename="${_debug_caller_info#* * }"
-    _debug_last_abs_filename="$(real_path "${_debug_last_filename}")"
-    _debug_active_breakpoints=()
-    _debug_active_breakpoints_conditions=()
-    local _debug_breakpoint_index
-declare -p _debug_active_breakpoints _debug_caller_info _debug_last_filename _debug_last_abs_filename
-declare -p _debug_breakpoint_lines
-    for _debug_breakpoint_index in ${_debug_breakpoint_lines[@]+"${!_debug_breakpoint_lines[@]}"}; do
-      declare -p _debug_last_abs_filename
-      echo "${_debug_breakpoint_files[_debug_breakpoint_index]}"
-      if [[ ${_debug_breakpoint_files[_debug_breakpoint_index]} == ${_debug_last_abs_filename} ]]; then
-        _debug_active_breakpoints+=("${_debug_breakpoint_lines[_debug_breakpoint_index]}")
-        _debug_active_breakpoints_conditions+=("${_debug_breakpoint_conditions[_debug_breakpoint_index]}")
-      fi
-    done
+    _trace_set_active_breakpoints "${_debug_caller_info#* * }"
   fi
   local _trace_current_line="${_debug_caller_info%% *}"
   for _debug_breakpoint_index in ${_debug_active_breakpoints[@]+"${!_debug_active_breakpoints[@]}"}; do
     if [[ ${_debug_active_breakpoints[_debug_breakpoint_index]} = ${_trace_current_line} ]]; then
       if [[ ${_debug_active_breakpoints_conditions[_debug_breakpoint_index]} == "" ]]; then
-        _trace_set_trace 1
+        _trace_set_trace 0
         break
       else
-        eval "${_debug_active_breakpoints_conditions[_debug_breakpoint_index]}" && _trace_set_trace 1
+        eval "${_debug_active_breakpoints_conditions[_debug_breakpoint_index]}" && _trace_set_trace 0
         break
       fi
     fi
@@ -184,6 +171,21 @@ declare -p _debug_breakpoint_lines
   # set_trace
   # This needs to be smarter, it needs to say "If not in debug, at the same stack, then set_trace
   # I can do the same for step in
+}
+
+function _trace_set_active_breakpoints()
+{
+  _debug_last_filename="${1}"
+  _debug_last_abs_filename="$(real_path "${_debug_last_filename}")"
+  _debug_active_breakpoints=()
+  _debug_active_breakpoints_conditions=()
+  local _debug_breakpoint_index
+  for _debug_breakpoint_index in ${_debug_breakpoint_lines[@]+"${!_debug_breakpoint_lines[@]}"}; do
+    if [[ ${_debug_breakpoint_files[_debug_breakpoint_index]} == ${_debug_last_abs_filename} ]]; then
+      _debug_active_breakpoints+=("${_debug_breakpoint_lines[_debug_breakpoint_index]}")
+      _debug_active_breakpoints_conditions+=("${_debug_breakpoint_conditions[_debug_breakpoint_index]}")
+    fi
+  done
 }
 
 function _trace_enable_debug_trap()
@@ -511,18 +513,23 @@ function _trace_repl()
       local func="${file%% *}"
       file="${file#* }"
 
-      if [[ ${line_number} -lt 0 ]]; then
-        line_number=0
-      fi
+      _trace_set_active_breakpoints "${file}"
 
       echo "${_debug_L_file_color}${file}: ${_debug_L_function_color}${func}()${NC}"
       echo
-      awk -v "line_number=${line_number}" \
-          'BEGIN { line0 = line_number - 3;
-                   line1 = line_number + 3;
+      awk -v "line0=$((line_number-3))" \
+          -v "line1=$((line_number+3))" \
+          -v "breakpoints_data=${_debug_active_breakpoints[@]+${_debug_active_breakpoints[@]}}" \
+          'BEGIN { split(breakpoints_data, tmp, " ");
+                   for (i in tmp) breakpoints[tmp[i]]=""
                    pad = int(log(line1)/log(10))+1
                    pad = sprintf("%%-%dd%%s %%s\n", pad) }
            NR >= line0 && NR <= line1 {
+             if (NR in breakpoints) {
+               printf("\x1b[31m*\x1b[0m")
+             } else {
+               printf(" ")
+             }
              if (NR == line_number) {
                printf("'"${_debug_L_current_line}"'")
                printf(pad, NR, ">", $0);
