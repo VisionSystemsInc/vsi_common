@@ -32,7 +32,10 @@ CSI=$'\x1b['
 #          ``2>&3``.
 function set_trace()
 {
-  unset_flags x v
+  # unset_flags x v
+  # set_flags T
+  set +xv -T
+
   local _debug_stdout
   local _debug_input
   local -i _debug_prompt_offset=${#_debug_prompt}+1
@@ -50,7 +53,7 @@ function set_trace()
   # # Other DEBUG trap vars
   # declare _debug_last_filename
   # declare _debug_last_abs_filename
-  # declare _debug_active_breakpoints
+  # declare _debug_active_breakpoints_lines
   # declare _debug_active_breakpoints_conditions
   # declare _debug_active_step_over
   # declare _debug_active_step_in
@@ -87,7 +90,7 @@ function set_trace()
   # Save history
   _trace_save_history
 
-  reset_flags x v
+  # reset_flags x v T
 }
 
 function _trace_set_trace()
@@ -137,13 +140,34 @@ function _trace_load_history()
 function _set_trace_next()
 {
   local _debug_caller_info="$(caller 0)"
-  if [[ ${_debug_caller_info#* * } != ${_debug_last_filename} ]]; then
-    # new file
-    _trace_set_active_breakpoints "${_debug_caller_info#* * }"
+  local _debug_current_file="${_debug_caller_info#* * }"
+
+  if [[ ${_debug_current_file} != ${BASH_SOURCE[0]} ]]; then
+    if [[ ${_debug_active_step_over} = 1 ]]; then
+      if ! caller "${_debug_break_depth}" &> /dev/null; then
+        _trace_set_trace 0
+      fi
+      #Step
+      # 1) Store stack depth
+      # 2) in here, check if caller (depth+1) is true, when false, then set_trace
+    elif [[ ${_debug_active_step_in} = 1 ]]; then
+      _trace_set_trace 0
+      #Step in
+      # 1) Break on first non-debug.bsh(${BASH_SOURCE[0]}) caller 0
+    elif [[ ${_debug_active_step_out} = 1 ]]; then
+      :
+      #Step out
+      # 1) Set Return trap, and set_trace when function name+filename+stack depth matches?
+    fi
   fi
-  local _trace_current_line="${_debug_caller_info%% *}"
-  for _debug_breakpoint_index in ${_debug_active_breakpoints[@]+"${!_debug_active_breakpoints[@]}"}; do
-    if [[ ${_debug_active_breakpoints[_debug_breakpoint_index]} = ${_trace_current_line} ]]; then
+
+  if [[ ${_debug_current_file} != ${_debug_last_filename} ]]; then
+    # new file
+    _trace_set_active_breakpoints "${_debug_current_file}"
+  fi
+  local _debug_current_line="${_debug_caller_info%% *}"
+  for _debug_breakpoint_index in ${_debug_active_breakpoints_lines[@]+"${!_debug_active_breakpoints_lines[@]}"}; do
+    if [[ ${_debug_active_breakpoints_lines[_debug_breakpoint_index]} = ${_debug_current_line} ]]; then
       if [[ ${_debug_active_breakpoints_conditions[_debug_breakpoint_index]} == "" ]]; then
         _trace_set_trace 0
         break
@@ -153,14 +177,6 @@ function _set_trace_next()
       fi
     fi
   done
-
- #Step
- # 1) Store stack depth
- # 2) in here, check if caller (depth+1) is true, when false, then set_trace
- #Step out
- # 1) Set Return trap, and set_trace when function name+filename+stack depth matches?
- #Step in
- # 1) Break on first non-debug.bsh(${BASH_SOURCE[0]}) caller 0
 
   # if isin  ; then
   #   set_trace 1
@@ -177,12 +193,12 @@ function _trace_set_active_breakpoints()
 {
   _debug_last_filename="${1}"
   _debug_last_abs_filename="$(real_path "${_debug_last_filename}")"
-  _debug_active_breakpoints=()
+  _debug_active_breakpoints_lines=()
   _debug_active_breakpoints_conditions=()
   local _debug_breakpoint_index
   for _debug_breakpoint_index in ${_debug_breakpoint_lines[@]+"${!_debug_breakpoint_lines[@]}"}; do
     if [[ ${_debug_breakpoint_files[_debug_breakpoint_index]} == ${_debug_last_abs_filename} ]]; then
-      _debug_active_breakpoints+=("${_debug_breakpoint_lines[_debug_breakpoint_index]}")
+      _debug_active_breakpoints_lines+=("${_debug_breakpoint_lines[_debug_breakpoint_index]}")
       _debug_active_breakpoints_conditions+=("${_debug_breakpoint_conditions[_debug_breakpoint_index]}")
     fi
   done
@@ -193,7 +209,7 @@ function _trace_enable_debug_trap()
   local filename
   local function
   local line
-  _trace_split_caller 2
+  _trace_split_caller 1
   _debug_last_filename="^$"
   _debug_last_abs_filename="$(real_path "${filename}")"
 
@@ -476,6 +492,14 @@ function _trace_read()
 function _trace_repl()
 {
   local _debug_rv=0
+  local filename
+  local line
+  local function
+  _trace_split_caller $((_debug_stack_level + _debug_hide_debug_stack))
+
+  echo -n "Line: "
+  _trace_print_code "${filename}" "${line}" 0
+
   _trace_read
   case "${_debug_input}" in
     c)
@@ -501,47 +525,10 @@ function _trace_repl()
       fi
       echo "(${_debug_stack_level}): $(caller $((_debug_stack_level + _debug_hide_debug_stack)))"
       ;;
-    # n)
-    #   trap _set_trace_next DEBUG
-    #   return 3
-    #   ;;
     l)
-      local file="$(caller $((_debug_stack_level + _debug_hide_debug_stack)))"
-      local line_number="${file%% *}"
-      file="${file#* }"
-      # line_number="$((line_number - 5))"
-      local func="${file%% *}"
-      file="${file#* }"
-
-      _trace_set_active_breakpoints "${file}"
-
-      echo "${_debug_L_file_color}${file}: ${_debug_L_function_color}${func}()${NC}"
+      echo "${_debug_L_file_color}${filename}: ${_debug_L_function_color}${function}()${NC}"
       echo
-      awk -v "line0=$((line_number-3))" \
-          -v "line1=$((line_number+3))" \
-          -v "breakpoints_data=${_debug_active_breakpoints[@]+${_debug_active_breakpoints[@]}}" \
-          'BEGIN { split(breakpoints_data, tmp, " ");
-                   for (i in tmp) breakpoints[tmp[i]]=""
-                   pad = int(log(line1)/log(10))+1
-                   pad = sprintf("%%-%dd%%s %%s\n", pad) }
-           NR >= line0 && NR <= line1 {
-             if (NR in breakpoints) {
-               printf("\x1b[31m*\x1b[0m")
-             } else {
-               printf(" ")
-             }
-             if (NR == line_number) {
-               printf("'"${_debug_L_current_line}"'")
-               printf(pad, NR, ">", $0);
-             } else {
-               printf("'"${_debug_L_line}"'")
-               printf(pad, NR, ":", $0);
-             }
-             if (NR == line1) { exit }
-           }
-           END {
-             printf("\x1b[0m")
-            }' "${file}"
+      _trace_print_code "${filename}" "${line}" 3
       ;;
     t)
       debug_print_traceback $((2+_debug_hide_debug_stack))
@@ -604,7 +591,7 @@ function _trace_repl()
         local filename
         local function
         local line
-        _trace_split_caller $((_debug_stack_level + _debug_hide_debug_stack + 1))
+        _trace_split_caller $((_debug_stack_level + _debug_hide_debug_stack))
         _debug_breakpoint_files+=("$(real_path "${filename}")")
         _debug_breakpoint_conditions+=('')
       else
@@ -617,17 +604,38 @@ function _trace_repl()
           _debug_breakpoint_conditions+=("${tmp#* }")
         fi
       fi
+      _trace_set_active_breakpoints "${filename}"
       ;;
     bc) # Clear all breakpoints
       _debug_breakpoint_lines=()
       _debug_breakpoint_files=()
       _debug_breakpoint_conditions=()
+      _debug_active_breakpoints_lines=()
+      _debug_active_breakpoints_conditions=()
       ;;
     "bc "*) # Clear breakpoint
       calc1="${_debug_input#bc }"
       _debug_breakpoint_lines=("${_debug_breakpoint_lines[@]::calc1}" "${_debug_breakpoint_lines[@]:calc1+1}")
       _debug_breakpoint_files=("${_debug_breakpoint_files[@]::calc1}" "${_debug_breakpoint_files[@]:calc1+1}")
       _debug_breakpoint_conditions=("${_debug_breakpoint_conditions[@]::calc1}" "${_debug_breakpoint_conditions[@]:calc1+1}")
+      _trace_set_active_breakpoints "${filename}"
+      ;;
+    s)
+      _debug_active_step_in=1
+      _trace_enable_debug_trap
+      _debug_break_depth=$(("$(_trace_stack_depth)"-_debug_hide_debug_stack-3))
+      return 3
+      ;;
+    n)
+      _debug_active_step_over=1
+      _trace_enable_debug_trap
+      _debug_break_depth=$(("$(_trace_stack_depth)"-_debug_hide_debug_stack-1))
+      return 3
+      ;;
+    r)
+      _debug_active_step_out=1
+      _trace_enable_debug_trap
+      return 3
       ;;
     *)
       if [[ -z ${_debug_input} ]]; then
@@ -639,14 +647,58 @@ function _trace_repl()
   return 0
 }
 
+# $1 - Filename
+# $2 - Line number
+# $3 - Spread
+function _trace_print_code()
+{
+  awk -v "line0=$((${2} - ${3}))" \
+      -v "line_number=${2}" \
+      -v "line1=$((${2} + ${3}))" \
+      -v "breakpoints_data=${_debug_active_breakpoints_lines[@]+${_debug_active_breakpoints_lines[*]}}" \
+      'BEGIN { split(breakpoints_data, tmp, " ");
+                for (i in tmp) breakpoints[tmp[i]]=""
+                pad = int(log(line1)/log(10))+1
+                pad = sprintf("%%-%dd%%s %%s\n", pad) }
+        NR >= line0 && NR <= line1 {
+          if (NR in breakpoints) {
+            printf("\x1b[31m*\x1b[0m")
+          } else {
+            printf(" ")
+          }
+          if (NR == line_number) {
+            printf("'"${_debug_L_current_line}"'")
+            printf(pad, NR, ">", $0);
+          } else {
+            printf("'"${_debug_L_line}"'")
+            printf(pad, NR, ":", $0);
+          }
+          if (NR == line1) { exit }
+        }
+        END {
+          printf("\x1b[0m")
+        }' "${1}"
+}
+
 function _trace_split_caller()
 {
+  local -i depth=${1}+1
   # Plus one more for this funciton
-  filename="$(caller "${1}")"
+  filename="$(caller ${depth})"
   line="${filename%% *}"
   filename="${filename#* }"
   function="${filename%% *}"
   filename="${filename#* }"
+}
+
+function _trace_stack_depth()
+{
+  local -i depth=0
+  while caller "${depth}" &> /dev/null; do
+    caller "${depth}"
+    depth+=1
+  done
+  echo "${depth}"
 }
 
 function debug_print_traceback()
