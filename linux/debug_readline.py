@@ -16,6 +16,7 @@ from pygments.styles import get_style_by_name
 def key_bindings():
   key_binding = KeyBindings()
   key_binding.add('enter')(return_handler)
+  key_binding.add('tab')(tab_handler)
   return key_binding
 
 def return_handler(event):
@@ -25,6 +26,15 @@ def return_handler(event):
     buffer.text=buffer.text[:-1]+'\n'
   else:
     buffer.validate_and_handle()
+
+def tab_handler(event):
+  buffer = event.current_buffer
+  document = buffer.document
+  if buffer.auto_suggest:
+    suggestion = buffer.auto_suggest.get_suggestion(buffer, document)
+    if suggestion.text:
+      buffer.text+=suggestion.text
+      buffer.cursor_position+=len(suggestion.text)
 
 def prompt_continuation(width, line_number, is_soft_wrap):
   return ' '*(width-2) + "… "
