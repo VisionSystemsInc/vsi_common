@@ -32,9 +32,8 @@ CSI=$'\x1b['
 #          ``2>&3``.
 function set_trace()
 {
-  # unset_flags x v
-  # set_flags T
-  set +xv -T
+  unset_flags x v
+  set_flags T
 
   local _debug_stdout
   local _debug_input
@@ -43,21 +42,6 @@ function set_trace()
   local -i _debug_history_index
   local _debug_history_found
   local _debug_history=()
-
-  # Global variables? This is not compatible
-
-  # Breakpoint vars
-  # declare _debug_breakpoint_lines=()
-  # declare _debug_breakpoint_files=()
-  # declare _debug_breakpoint_conditions=()
-  # # Other DEBUG trap vars
-  # declare _debug_last_filename
-  # declare _debug_last_abs_filename
-  # declare _debug_active_breakpoints_lines
-  # declare _debug_active_breakpoints_conditions
-  # declare _debug_active_step_over
-  # declare _debug_active_step_in
-  # declare _debug_active_step_out
 
   # Reset colors
   echo -n "${NC}"
@@ -90,7 +74,7 @@ function set_trace()
   # Save history
   _trace_save_history
 
-  # reset_flags x v T
+  reset_flags x v T
 }
 
 function _trace_set_trace()
@@ -106,7 +90,7 @@ function _trace_set_trace()
   # REPL loop
   while _trace_repl ; do
     # Add new line to the history buffer
-    _trace_add_history "${debug_input}"
+    _trace_add_history "${_debug_input}"
   done
 }
 
@@ -142,25 +126,16 @@ function _set_trace_next()
   local _debug_caller_info="$(caller 0)"
   local _debug_current_file="${_debug_caller_info#* * }"
 
+  # Code to handle step in/over/out
   if [[ ${_debug_current_file} != ${BASH_SOURCE[0]} ]]; then
-    if [[ ${_debug_active_step_over} = 1 ]]; then
+    if [[ ${_debug_active_step} = 1 ]]; then
       if ! caller "${_debug_break_depth}" &> /dev/null; then
         _trace_set_trace 0
       fi
-      #Step
-      # 1) Store stack depth
-      # 2) in here, check if caller (depth+1) is true, when false, then set_trace
-    elif [[ ${_debug_active_step_in} = 1 ]]; then
-      _trace_set_trace 0
-      #Step in
-      # 1) Break on first non-debug.bsh(${BASH_SOURCE[0]}) caller 0
-    elif [[ ${_debug_active_step_out} = 1 ]]; then
-      :
-      #Step out
-      # 1) Set Return trap, and set_trace when function name+filename+stack depth matches?
     fi
   fi
 
+  # Break point code
   if [[ ${_debug_current_file} != ${_debug_last_filename} ]]; then
     # new file
     _trace_set_active_breakpoints "${_debug_current_file}"
@@ -177,16 +152,6 @@ function _set_trace_next()
       fi
     fi
   done
-
-  # if isin  ; then
-  #   set_trace 1
-  # fi
-
-
-  # debug_print_traceback
-  # set_trace
-  # This needs to be smarter, it needs to say "If not in debug, at the same stack, then set_trace
-  # I can do the same for step in
 }
 
 function _trace_set_active_breakpoints()
@@ -567,10 +532,11 @@ function _trace_repl()
       echo 'bc  - Clear breakpoint #'
       echo 'c   - Continue execution'
       echo 'd/u - Move down/up the stack. Useful for "l"'
+      echo 'e   - Eval statement (default)'
       echo 'l   - Print lines of code'
       echo 'p   - Print variable(s)'
-      echo 'e   - Eval statement (default)'
       echo 't   - Print traceback'
+      echo 's/n/r - Step in/over/out'
       echo 'q   - Quit and exit current bash script'
       ;;
     b)
@@ -621,19 +587,20 @@ function _trace_repl()
       _trace_set_active_breakpoints "${filename}"
       ;;
     s)
-      _debug_active_step_in=1
+      _debug_active_step=1
+      _debug_break_depth=$(("$(_trace_stack_depth)"-_debug_hide_debug_stack-1))
       _trace_enable_debug_trap
-      _debug_break_depth=$(("$(_trace_stack_depth)"-_debug_hide_debug_stack-3))
       return 3
       ;;
     n)
-      _debug_active_step_over=1
+      _debug_active_step=1
+      _debug_break_depth=$(("$(_trace_stack_depth)"-_debug_hide_debug_stack-2))
       _trace_enable_debug_trap
-      _debug_break_depth=$(("$(_trace_stack_depth)"-_debug_hide_debug_stack-1))
       return 3
       ;;
     r)
-      _debug_active_step_out=1
+      _debug_active_step=1
+      _debug_break_depth=$(("$(_trace_stack_depth)"-_debug_hide_debug_stack-3))
       _trace_enable_debug_trap
       return 3
       ;;
@@ -695,7 +662,6 @@ function _trace_stack_depth()
 {
   local -i depth=0
   while caller "${depth}" &> /dev/null; do
-    caller "${depth}"
     depth+=1
   done
   echo "${depth}"
