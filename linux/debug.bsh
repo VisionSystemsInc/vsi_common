@@ -4,6 +4,8 @@ if [[ $- != *i* ]]; then
   source_once &> /dev/null && return 0
 fi
 
+#*# linux/debug.bsh
+
 if [ -z ${VSI_COMMON_DIR+set} ]; then
   VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 fi
@@ -15,40 +17,88 @@ source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
 source "${VSI_COMMON_DIR}/linux/real_path"
 source "${VSI_COMMON_DIR}/linux/file_tools.bsh"
 
-CSI=$'\x1b['
+#**
+# ==============================
+# PBDB - Primitive Bash Debugger
+# ==============================
+#
+# .. default-domain:: bash
+#
+# .. file:: debug.bsh
+#
+# A debugger written in bash with no extra requirements to debug bash scripts.
+#
+# The debugger can be started via calling :function:`set_trace`
+#
+# To get "dbstop if error" behavior (start the debugger automatically on an error)
+#
+# .. rubric:: dbstop if error
+#
+# .. code-block:: bash
+#
+#   set -Ee # Preferably set -Eeu
+#   trap set_trace ERR
+#**
+
+#**
+# .. envvar:: _debug_prompt
+#
+# The prompt the debugger shows, default ``$ ``
+#**
 : ${_debug_prompt='$ '}
+#**
+# .. envvar:: _debug_L_file_color
+# .. envvar:: _debug_L_function_color
+# .. envvar:: _debug_L_line
+# .. envvar:: _debug_L_current_line
+#
+# The default colors used when printing out lines of code (``l`` command)
+#**
 : ${_debug_L_file_color="$(FG_24 86 156 214)"}
 : ${_debug_L_function_color="$(FG_24 220 220 170)"}
 : ${_debug_L_line="$(FG_24 156 220 254)"}
 : ${_debug_L_current_line="${LIGHT_GREEN}"}
 
+#**
+# .. envvar:: JUST_DEBUG_READ_METHOD
+#
+# The method for reading from the keyboard. Three methods are supported.
+#
+# - ``read`` - Using "readline" via ``read -e``, including it's own separate history file. This is ok for single line entry only, but works using pure bash
+# - ``manual`` - A manual implementation of read that supports multiple lines (via ending a line with ``\`` and pressing enter), has a separate history (:envvar:`JUST_DEBUG_HISTORY`), and is not finished. Also works using pure bash
+# - ``{python}`` - By specifying the name of a python executable (can be full path or just ``python3``), runs ``debug_readline.py`` in python to get use input. This is the best option, but requires a python install with ``prompt_toolkit`` and ``pygments`` installed. The color scheme for python can be changed by setting the ``_debug_read_color_scheme`` environment variable (default ``vim``).
+#**
 : ${JUST_DEBUG_READ_METHOD=read}
+
+#**
+# .. envvar:: JUST_DEBUG_HISTORY
+#
+# The history file used for storing previous values. The ``read`` :envvar:`JUST_DEBUG_READ_METHOD` appends a 2 to the filename, and the ``python`` method appends a ``3``
+#
+# .. envvar:: JUST_DEBUG_HISTORY_LENGTH
+#
+# The ``manual`` :envvar:`JUST_DEBUG_READ_METHOD` will limit itself to :envvar:`JUST_DEBUG_HISTORY_LENGTH` unique entries, default ``1000``.
+#**
 : ${JUST_DEBUG_HISTORY=~/.debug_bash_history}
 : ${JUST_DEBUG_HISTORY_LENGTH=1000}
 
+# Set this to empty here, so other logic doesn't have a undefined error. This
+# variable is used to determine how many breakpoints there are.
+_debug_breakpoint_lines=()
+
+#**
+# .. function:: set_trace
+#
 # :Arguments: [``$1``] - Number of stacks to skip
 # :Output: By default outputs to stderr(2), but if you redirect stderr, you can
 #          redirect :func:`set_trace` to another stream (3 for example) using
 #          ``2>&3``.
+#
+# Starts the debugger
+#**
+declare _debug_stdout
 function set_trace()
 {
-  unset_flags x v
-  set_flags T
-
-  local _debug_stdout
-  local _debug_input
-  local -i _debug_prompt_offset=${#_debug_prompt}+1
-  # History vars
-  local -i _debug_history_index
-  local _debug_history_found
-  local _debug_history=()
-
-  # Reset colors
-  echo -n "${NC}"
-
-  # Load History
-  _trace_load_history
-
   # Copy stdout
   if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "41" ]; then
     exec {_debug_stdout}>&1
@@ -56,25 +106,12 @@ function set_trace()
     find_open_fd _debug_stdout
     eval "exec ${_debug_stdout}>&1"
   fi
-  # Make stdout messages go to stderr. This way if you are debugging in a "$(blah)"
-  # then the output from debugging won't break the main script
-  exec 1>&2
+
+  # Load History
+  _trace_load_history
 
   # Run the inner set_trace loop
   _trace_set_trace
-
-  # Restore stdout, and close copy
-  exec 1>&${_debug_stdout}
-  if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "41" ]; then
-    exec {_debug_stdout}>&-
-  else
-    eval "${_debug_stdout}>&-"
-  fi
-
-  # Save history
-  _trace_save_history
-
-  reset_flags x v T
 }
 
 # Stack diagram:
@@ -91,29 +128,43 @@ function set_trace()
 
 function _trace_set_trace()
 {
+  unset_flags x v
+  set_flags T
+
+  local _debug_input=''
   local -i _debug_stack_level=1
   # This variable helps with the math in _trace_repl, in _trace_set_trace it
   # needs -1, and in set_trace it would be -2
   local -i _debug_hide_debug_stack=${1-0}+1
-
   local _trace_repl_list_line
 
+  # Make stdout messages go to stderr. This way if you are debugging in a "$(blah)"
+  # then the output from debugging won't break the main script
+  exec 1>&2
+
+  # Reset colors
+  echo -n "${NC}"
+
   local filename
-  local line
+  local line_number
   local function
   _trace_split_caller $((_debug_stack_level + _debug_hide_debug_stack - 1))
 
-  _debug_input=''
   _debug_active_step=0
 
   echo -n "Line: "
-  _trace_print_code "${filename}" "${line}" 0
+  _trace_print_code "${filename}" "${line_number}" 0
 
   # REPL loop
   while _trace_repl ; do
     # Add new line to the history buffer
     _trace_add_history "${_debug_input}"
   done
+
+  # Restore stdout, and close copy
+  exec 1>&${_debug_stdout}
+
+  reset_flags x v T
 }
 
 function _set_trace_next_trap()
@@ -150,7 +201,7 @@ function _trace_enable_debug_trap()
 {
   local filename
   local function
-  local line
+  local line_number
   _trace_split_caller 1
   _debug_last_filename="^$"
 
@@ -186,7 +237,7 @@ function _trace_read()
     _debug_input="$(export _debug_read_color_scheme _debug_prompt JUST_DEBUG_HISTORY
                     ${JUST_DEBUG_READ_METHOD} "${VSI_COMMON_DIR}/linux/debug_readline.py" 3>&2 2>&1 1>&3)"
   else
-    HISTFILE="${JUST_DEBUG_HISTORY}.read"
+    HISTFILE="${JUST_DEBUG_HISTORY}2"
     history -n
     IFS= read -p "${_debug_prompt}" -r -d $'\n' -e _debug_input
     echo "${_debug_input}" >> "${HISTFILE}"
@@ -206,26 +257,28 @@ function _trace_repl()
       return 1
       ;;
     q)
-      _trace_save_history
       exit 2
       ;;
     d)
       _debug_stack_level=${_debug_stack_level}-1
       if [[ ${_debug_stack_level} -le 0 ]]; then
         _debug_stack_level=1
+      else
+        _trace_split_caller $((_debug_stack_level + _debug_hide_debug_stack))
       fi
-      echo "(${_debug_stack_level}): $(caller $((_debug_stack_level + _debug_hide_debug_stack)))"
+      echo "(${_debug_stack_level}): ${line_number} ${function} ${filename}"
       ;;
     u)
       if caller $((_debug_stack_level + _debug_hide_debug_stack + 1)) &> /dev/null; then
         _debug_stack_level+=1
+        _trace_split_caller $((_debug_stack_level + _debug_hide_debug_stack))
       fi
-      echo "(${_debug_stack_level}): $(caller $((_debug_stack_level + _debug_hide_debug_stack)))"
+      echo "(${_debug_stack_level}): ${line_number} ${function} ${filename}"
       ;;
     l)
       echo "${_debug_L_file_color}${filename}: ${_debug_L_function_color}${function}()${NC}"
       echo
-      _trace_print_code "${filename}" "${_trace_repl_list_line:-${line}}" 3
+      _trace_print_code "${filename}" "${_trace_repl_list_line:-${line_number}}" 3
       ;;
     "l "*)
       local print_lines=(${_debug_input:2})
@@ -234,11 +287,11 @@ function _trace_repl()
       echo
       if [[ ${#print_lines[@]} = 1 || ${#print_lines[@]} = 2 ]]; then
         if [[ ${print_lines[0]} = +0 ]]; then
-          _trace_repl_list_line="${line}"
+          _trace_repl_list_line="${line_number}"
         elif [[ ${print_lines[0]::1} = + ]]; then
-          _trace_repl_list_line=$((${_trace_repl_list_line-${line}} + ${print_lines[0]:1}))
+          _trace_repl_list_line=$((${_trace_repl_list_line-${line_number}} + ${print_lines[0]:1}))
         elif [[ ${print_lines[0]::1} = - ]]; then
-          _trace_repl_list_line=$((${_trace_repl_list_line-${line}} - ${print_lines[0]:1}))
+          _trace_repl_list_line=$((${_trace_repl_list_line-${line_number}} - ${print_lines[0]:1}))
           if [[ ${_trace_repl_list_line} -lt 0 ]]; then
             _trace_repl_list_line=0
           fi
@@ -248,7 +301,7 @@ function _trace_repl()
 
         _trace_print_code "${filename}" "${_trace_repl_list_line}" "${print_lines[1]-3}"
       else
-        _trace_print_code "${_trace_repl_list_line:-${line}}" "${line}" 3
+        _trace_print_code "${_trace_repl_list_line:-${line_number}}" "${line_number}" 3
       fi
       ;;
     t)
@@ -308,22 +361,22 @@ function _trace_repl()
     "b "*)
       tmp="${_debug_input#b }"
       local pattern='^ *[0-9]+ *$'
-      local line
+      # local this_line
       if [[ ${tmp} =~ ${pattern} ]]; then
-        local filename
-        local function
-        _trace_split_caller $((_debug_stack_level + _debug_hide_debug_stack))
+        # local filename
+        # local function
+        # _trace_split_caller $((_debug_stack_level + _debug_hide_debug_stack))
         _trace_add_breakpoint "${tmp%% *}" "${filename}"
-        line="${tmp%% *}"
       else
-        # Strip the line number
+        this_line="${tmp%% *}"
+        # Strip the this_line number
         tmp="${tmp#* }"
 
         # If no condition
         if [[ ${tmp} = ${tmp#* } ]]; then
-          _trace_add_breakpoint "${line}" "${tmp%% *}"
+          _trace_add_breakpoint "${this_line}" "${tmp%% *}"
         else
-          _trace_add_breakpoint "${line}" "${tmp%% *}" "${tmp#* }"
+          _trace_add_breakpoint "${this_line}" "${tmp%% *}" "${tmp#* }"
         fi
       fi
       _trace_set_active_breakpoints "${filename}"
@@ -380,13 +433,13 @@ function _trace_repl()
 function _trace_print_code()
 {
   awk -v "line0=$((${2} - ${3}))" \
-      -v "line_number=${line}" \
+      -v "line_number=${line_number}" \
       -v "line1=$((${2} + ${3}))" \
       -v "breakpoints_data=${_debug_active_breakpoints_lines[@]+${_debug_active_breakpoints_lines[*]}}" \
       'BEGIN { split(breakpoints_data, tmp, " ");
                 for (i in tmp) breakpoints[tmp[i]]=""
                 pad = int(log(line1)/log(10))+1
-                pad = sprintf("%%-%dd%%s %%s\n", pad) }
+                pad = sprintf("%%-%dd%%s %%s\x1b[0m\n", pad) }
         NR >= line0 && NR <= line1 {
           if (NR in breakpoints) {
             printf("\x1b[31m*\x1b[0m")
@@ -412,7 +465,7 @@ function _trace_split_caller()
   # Plus one more for this function
   local -i depth=${1}+1
   filename="$(caller ${depth})"
-  line="${filename%% *}"
+  line_number="${filename%% *}"
   filename="${filename#* }"
   function="${filename%% *}"
   filename="${filename#* }"
@@ -435,7 +488,7 @@ function _trace_stack_depth()
   echo "${depth}"
 }
 
-# $1 - line
+# $1 - line_number
 # $2 - filename
 # [$3] - condition
 function _trace_add_breakpoint()
@@ -489,6 +542,8 @@ function _trace_eval()
 function _trace_add_history()
 {
   if [[ ${JUST_DEBUG_READ_METHOD} = manual && -n ${1-} ]]; then
+    local _debug_history_found
+
     _debug_history_found="$(findin "${1}" "${_debug_history[@]}")"
     if [[ ${_debug_history_found} != -1 ]]; then
       _debug_history=("${_debug_history[@]::_debug_history_found}"
@@ -498,12 +553,19 @@ function _trace_add_history()
       _debug_history+=("${1}")
     fi
     _debug_history_index=${#_debug_history[@]}
+
+    # Save history
+    _trace_save_history
   fi
 }
 
+declare -i _debug_history_index
 function _trace_load_history()
 {
   if [[ ${JUST_DEBUG_READ_METHOD} = manual ]]; then
+    # History vars
+    _debug_history=()
+
     if [[ -e ${JUST_DEBUG_HISTORY} ]]; then
       while IFS= read -rd '' _debug_input || [ -n "${_debug_input}" ]; do
         _debug_history+=("$_debug_input")
@@ -561,6 +623,8 @@ function _trace_manual_bash_read()
   local -i calc1
   LOCALE=C
   LC_ALL=C
+  local -i _debug_prompt_offset=${#_debug_prompt}+1
+
   echo -n "${_debug_prompt}"
 
   local window_width="$(tput cols)"
