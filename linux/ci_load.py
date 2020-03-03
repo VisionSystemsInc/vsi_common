@@ -304,20 +304,19 @@ class CiLoad:
     self.project_dir = os.path.normpath(os.path.abspath(self.project_dir))
 
 if __name__ == '__main__':
-  try:
-    ci_load = CiLoad()
-    ci_load.setup_parser()
-    ci_load.parse()
+  ci_load = CiLoad()
+  ci_load.setup_parser()
+  ci_load.parse()
 
-    ci_load.setup()
+  ci_load.setup()
 
-    ci_load.write_push_pull_file()
-    ci_load.pull_images()
+  ci_load.write_push_pull_file()
+  ci_load.pull_images()
 
-    ci_load.write_restore_recipe()
-    ci_load.restore_recipes()
+  ci_load.write_restore_recipe()
+  ci_load.restore_recipes()
 
-    ci_load.write_add_cache()
-    ci_load.build_stages()
+  ci_load.write_add_cache()
+  ci_load.build_stages()
 
-    ci_load.push_images()
+  ci_load.push_images()
