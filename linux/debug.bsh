@@ -432,32 +432,36 @@ function _trace_repl()
 # $3 - Spread
 function _trace_print_code()
 {
-  awk -v "line0=$((${2} - ${3}))" \
-      -v "line_number=${line_number}" \
-      -v "line1=$((${2} + ${3}))" \
-      -v "breakpoints_data=${_debug_active_breakpoints_lines[@]+${_debug_active_breakpoints_lines[*]}}" \
-      'BEGIN { split(breakpoints_data, tmp, " ");
-                for (i in tmp) breakpoints[tmp[i]]=""
-                pad = int(log(line1)/log(10))+1
-                pad = sprintf("%%-%dd%%s %%s\x1b[0m\n", pad) }
-        NR >= line0 && NR <= line1 {
-          if (NR in breakpoints) {
-            printf("\x1b[31m*\x1b[0m")
-          } else {
-            printf(" ")
+  if [[ -f ${1} ]]; then
+    awk -v "line0=$((${2} - ${3}))" \
+        -v "line_number=${line_number}" \
+        -v "line1=$((${2} + ${3}))" \
+        -v "breakpoints_data=${_debug_active_breakpoints_lines[@]+${_debug_active_breakpoints_lines[*]}}" \
+        'BEGIN { split(breakpoints_data, tmp, " ");
+                  for (i in tmp) breakpoints[tmp[i]]=""
+                  pad = int(log(line1)/log(10))+1
+                  pad = sprintf("%%-%dd%%s %%s\x1b[0m\n", pad) }
+          NR >= line0 && NR <= line1 {
+            if (NR in breakpoints) {
+              printf("\x1b[31m*\x1b[0m")
+            } else {
+              printf(" ")
+            }
+            if (NR == line_number) {
+              printf("'"${_debug_L_current_line}"'")
+              printf(pad, NR, ">", $0);
+            } else {
+              printf("'"${_debug_L_line}"'")
+              printf(pad, NR, ":", $0);
+            }
+            if (NR == line1) { exit }
           }
-          if (NR == line_number) {
-            printf("'"${_debug_L_current_line}"'")
-            printf(pad, NR, ">", $0);
-          } else {
-            printf("'"${_debug_L_line}"'")
-            printf(pad, NR, ":", $0);
-          }
-          if (NR == line1) { exit }
-        }
-        END {
-          printf("\x1b[0m")
-        }' "${1}"
+          END {
+            printf("\x1b[0m")
+          }' "${1}"
+  else
+    echo "File \"${1}\" not found." >&2
+  fi
 }
 
 function _trace_split_caller()
