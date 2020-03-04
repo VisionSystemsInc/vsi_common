@@ -393,8 +393,18 @@ function relative_path()
   for (( j=${#start[@]}-i; j>0; j--)); do
     ans+=('..')
   done
-  ans+=("${path[@]:i+1}")
-  if [[ ${#ans[@]} = 0 ]]; then
+  if [ "${BASH_VERSINFO[0]}" -lt 4 ]; then
+    # Bash 3.2 bug
+    # (x=(11 22 33 44); IFS=x; y=1; z=("${x[@]:y+1}"); declare -p z)
+    # has one space delimited element, not two nor IFS delimited
+    for (( j=i+1; j<=${#path[@]}; j++ )); do
+      ans+=(${path[@]+"${path[@]:j:1}"})
+    done
+  else
+    ans+=(${path[@]+"${path[@]:i+1}"})
+  fi
+  declare -p path ans >&2
+  if [ "${#ans[@]}" = "0" ]; then
     echo '.'
   else
     echo "${ans[*]}"
