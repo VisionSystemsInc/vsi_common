@@ -127,6 +127,7 @@ begin_test "normpath"
   [ "$(normpath ../../wtf/)" = "../../wtf" ]
   [ "$(normpath ../../../wtf/)" = "../../../wtf" ]
   [ "$(normpath ./../../../wtf/)" = "../../../wtf" ]
+  [ "$(normpath '/*')" = "/*" ]
 )
 end_test
 
@@ -174,5 +175,117 @@ begin_test "basename"
   [ "$(command basename a)" = "$(basename a)" ]
   [ "$(command basename a/b)" = "$(basename a/b)" ]
   [ "$(command basename /a)" = "$(basename /a)" ]
+)
+end_test
+
+begin_test "common prefix"
+(
+  setup_test
+  [[ $(common_prefix "/home/swenson/spam" "/home/swen/spam") = /home/swen ]]
+  [[ $(common_prefix "/home/swen/spam" "/home/swen/eggs") = /home/swen/ ]]
+  [[ $(common_prefix "/home/swen/spam" "/home/swen/spam") = /home/swen/spam ]]
+  [[ $(common_prefix "home/swenson/spam" "home/swen/spam") = home/swen ]]
+  [[ $(common_prefix "/home/swen/spam" "/home/swen/eggs") = /home/swen/ ]]
+  [[ $(common_prefix "/home/swen/spam" "/home/swen/spam") = /home/swen/spam ]]
+
+
+  testlist=('' 'abc' 'Xbcd' 'Xb' 'XY' 'abcd' 'aXc' 'abd' 'ab' 'aX' 'abcX')
+  for s1 in "${testlist[@]}"; do
+    for s2 in "${testlist[@]}"; do
+      p="$(common_prefix "${s1}" "${s2}")"
+      [[ ${s1::${#p}} = ${p} ]]
+      [[ ${s2::${#p}} = ${p} ]]
+      if [[ ${s1} != ${s2} ]]; then
+        [[ ${s1::${#p}+1} != ${s2::${#p}+1} ]]
+      fi
+    done
+  done
+)
+end_test
+
+relpath_check()
+{
+  [ "$(relative_path "${1}" "${2}")" == "${3}" ]
+  [ "$(relative_path "${1}/" "${2}")" == "${3}" ]
+  [ "$(relative_path "${1}" "${2}/")" == "${3}" ]
+  [ "$(relative_path "${1}/" "${2}/")" == "${3}" ]
+}
+
+begin_test "relaive path"
+(
+  setup_test
+  # relpath_check '/    a   b/å/⮀*/!' '/    a   b/å/⮀/xäå/?'        '../../../⮀*/!'
+
+  # relpath_check '/'                  '/A'                          '..'
+  # relpath_check '/A'                 '/'                           'A'
+  # relpath_check '/  & /  !/*/\\/E'   '/'                           '  & /  !/*/\\/E'
+  # relpath_check '/'                  '/  & /  !/*/\\/E'            '../../../../..'
+  relpath_check '/  & /  !/*/\\/E'   '/  & /  !/?/\\/E/F'          '../../../../*/\\/E'
+  relpath_check '/X/Y'               '/  & /  !/C/\\/E/F'          '../../../../../../X/Y'
+  relpath_check '/  & /  !/C'        '/A'                          '../  & /  !/C'
+  relpath_check '/A /  !/C'          '/A /B'                       '../  !/C'
+  relpath_check '/Â/  !/C'           '/Â/  !/C'                    '.'
+  relpath_check '/  & /B / C'        '/  & /B / C/D'               '..'
+  relpath_check '/  & /  !/C'        '/  & /  !/C/\\/Ê'            '../..'
+  relpath_check '/Å/  !/C'           '/Å/  !/D'                    '../C'
+  relpath_check '/.A /*B/C'          '/.A /*B/\\/E'                '../../C'
+  relpath_check '/  & /  !/C'        '/  & /D'                     '../  !/C'
+  relpath_check '/  & /  !/C'        '/  & /\\/E'                  '../../  !/C'
+  relpath_check '/  & /  !/C'        '/\\/E/F'                     '../../../  & /  !/C'
+
+  relpath_check /home/part1/part2    /home/part1/part3             '../part2'
+  relpath_check /home/part1/part2    /home/part4/part5             '../../part1/part2'
+  relpath_check /home/part1/part2    /work/part6/part7             '../../../home/part1/part2'
+  relpath_check /home/part1          /work/part1/part2/part3/part4 '../../../../../home/part1'
+  relpath_check /home                /work/part2/part3             '../../../home'
+  relpath_check /                    /work/part2/part3/part4       '../../../..'
+  relpath_check /home/part1/part2    /home/part1/part2/part3/part4 '../..'
+  relpath_check /home/part1/part2    /home/part1/part2/part3       '..'
+  relpath_check /home/part1/part2    /home/part1/part2             '.'
+  relpath_check /home/part1/part2    /home/part1                   'part2'
+  relpath_check /home/part1/part2    /home                         'part1/part2'
+  relpath_check /home/part1/part2    /                             'home/part1/part2'
+  relpath_check /home/part1/part2    /work                         '../home/part1/part2'
+  relpath_check /home/part1/part2    /work/part1                   '../../home/part1/part2'
+  relpath_check /home/part1/part2    /work/part1/part2             '../../../home/part1/part2'
+  relpath_check /home/part1/part2    /work/part1/part2/part3       '../../../../home/part1/part2'
+  relpath_check /home/part1/part2    /work/part1/part2/part3/part4 '../../../../../home/part1/part2'
+  relpath_check home/part1/part2     home/part1/part3              '../part2'
+  relpath_check home/part1/part2     home/part4/part5              '../../part1/part2'
+  relpath_check home/part1/part2     work/part6/part7              '../../../home/part1/part2'
+  relpath_check home/part1           work/part1/part2/part3/part4  '../../../../../home/part1'
+  relpath_check home                 work/part2/part3              '../../../home'
+  relpath_check .                    work/part2/part3              '../../..'
+  relpath_check home/part1/part2     home/part1/part2/part3/part4  '../..'
+  relpath_check home/part1/part2     home/part1/part2/part3        '..'
+  relpath_check home/part1/part2     home/part1/part2              '.'
+  relpath_check home/part1/part2     home/part1                    'part2'
+  relpath_check home/part1/part2     home                          'part1/part2'
+  relpath_check home/part1/part2     .                             'home/part1/part2'
+  relpath_check home/part1/part2     work                          '../home/part1/part2'
+  relpath_check home/part1/part2     work/part1                    '../../home/part1/part2'
+  relpath_check home/part1/part2     work/part1/part2              '../../../home/part1/part2'
+  relpath_check home/part1/part2     work/part1/part2/part3        '../../../../home/part1/part2'
+  relpath_check home/part1/part2     work/part1/part2/part3/part4  '../../../../../home/part1/part2'
+
+  curdir="$(basename "$(pwd)")"
+
+  relpath_check "a" . "a"
+  relpath_check "$(pwd)/a" . "a"
+  relpath_check "a/b" . "a/b"
+  relpath_check "../a/b" . "../a/b"
+  relpath_check "a" "../b" "../${curdir}/a"
+  relpath_check "a/b" "../c" "../${curdir}/a/b"
+  relpath_check "a" "b/c" "../../a"
+  relpath_check "a" "a" "."
+  relpath_check "/foo/bar/bat" "/x/y/z" '../../../foo/bar/bat'
+  relpath_check "/foo/bar/bat" "/foo/bar" 'bat'
+  relpath_check "/foo/bar/bat" "/" 'foo/bar/bat'
+  relpath_check "/" "/foo/bar/bat" '../../..'
+  relpath_check "/foo/bar/bat" "/x" '../foo/bar/bat'
+  relpath_check "/x" "/foo/bar/bat" '../../../x'
+  relpath_check "/" "/" '.'
+  relpath_check "/a" "/a" '.'
+  relpath_check "/a/b" "/a/b" '.'
 )
 end_test
