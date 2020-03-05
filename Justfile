@@ -57,7 +57,9 @@ function caseify()
     test_int_appveyor) # Run integration tests for windows appveyor
       (
         source elements.bsh
-        test_list=($(ls "${VSI_COMMON_DIR}/tests/int/"))
+        pushd "${VSI_COMMON_DIR}/tests/int/" &> /dev/null
+          test_list=(*)
+        popd &> /dev/null
         remove_element_a test_list test-common_source.bsh
         tests=()
         for x in "${test_list[@]}"; do

@@ -92,6 +92,7 @@ _just()
 
   # Get sub_commands
   local just_subcommands
+  #WARNING: Susceptible to wildcard expansion (what if a subcommand is literal *)
   just_subcommands=($(IFS=$'\n'; (_just_subcommands_from_array | sort -u ) <<< "${parsed_help_a[*]}"))
 
   # Declare here so I can use it in .just plugin
@@ -120,6 +121,7 @@ _just()
   # If the last word completed is a subcommand, only match subtargets
   if isin "$3" ${just_subcommands+"${just_subcommands[@]}"} ]; then
     _just_subtargets_from_array "${3}" ${parsed_help_a+"${parsed_help_a[@]}"}
+    #WARNING: Susceptible to wildcard expansion (what if a subtarget is literal *)
     COMPREPLY+=($(\compgen -W "${just_subtargets+${just_subtargets[*]}}" -- $2))
     return 0
   fi
@@ -135,6 +137,7 @@ _just()
   done
 
   # Simply just auto complete all commands
+  #WARNING: Susceptible to wildcard expansion (what if a command is literal *)
   COMPREPLY+=($(\compgen -o bashdefault -W "${just_commands+${just_commands[*]}} ${just_subcommands+${just_subcommands[*]}}" -- $2))
 
   return 0
