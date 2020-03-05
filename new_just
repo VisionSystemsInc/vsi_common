@@ -5,6 +5,10 @@
 
 temp_file="$(mktemp)"
 
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
+
 # Use a command like true, so that when I comment, it still works
 # COMMENT NEXT LINE when developing, uncomment before commiting.
 cat - << 'true' > "${temp_file}"
@@ -49,111 +53,237 @@ cat - << 'true' > "${temp_file}"
 #   :env:`new_just new_just VSI_DIR`
 #**
 
-if [ -z ${VSI_COMMON_DIR+set} ]; then
-  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
-fi
+# These functions are auto replaced by .circleci/config.yml when uploaded to
+# https://visionsystemsinc.github.io/vsi_common/new_just using the pattern
+# "function function_name(){ :;}"
+
 if [ -f "${VSI_COMMON_DIR}/linux/ask_question" ]; then
   source "${VSI_COMMON_DIR}/linux/ask_question"
 else
-  function ask_question()
-  {
+ask_question () 
+{ 
     if [[ $# > 2 ]]; then
-      local default_response="$3"
+        local default_response="$3";
     else
-      local default_response=
-    fi
+        local default_response=;
+    fi;
     if [ "${!2=}" != "" ]; then
-      local override=${!2}
-    fi
+        local override=${!2};
+    fi;
     while true; do
-      if [ "${override=}" != "" ]; then
-        echo "$1 ${!2}"
-        ans=$override
-        override=""
-      elif [ "$default_response" == "" ]; then
-        read -r -p "$1 " ans
-      else
-        read -r -p "$1 ($default_response) " ans
-      fi
-      if [ "$ans" == "" ]; then
-        ans="$default_response"
-      fi
-      case $ans in
-        [Yy]* ) printf -v "$2" '%i' 1; break;;
-        [Nn]* ) printf -v "$2" '%i' 0; break;;
-        * ) echo "Please answer yes or no (y/n)";;
-      esac
+        if [ "${override=}" != "" ]; then
+            echo "$1 ${!2}";
+            ans=$override;
+            override="";
+        else
+            if [ "$default_response" == "" ]; then
+                read -r -p "$1 " ans;
+            else
+                read -r -p "$1 ($default_response) " ans;
+            fi;
+        fi;
+        if [ "$ans" == "" ]; then
+            ans="$default_response";
+        fi;
+        case $ans in 
+            [Yy]*)
+                printf -v "$2" '%i' 1;
+                break
+            ;;
+            [Nn]*)
+                printf -v "$2" '%i' 0;
+                break
+            ;;
+            *)
+                echo "Please answer yes or no (y/n)"
+            ;;
+        esac;
     done
-  }
+}
 fi
 
 if [ -f "${VSI_COMMON_DIR}/linux/string_tools.bsh" ]; then
   source "${VSI_COMMON_DIR}/linux/string_tools.bsh"
 else
-  function quote_escape()
-  {
-    local foo42=\'\\\'\'
+quote_escape () 
+{ 
+    local foo42=\'\\\'\';
     echo "'${1//\'/${foo42}}'"
-  }
+}
 fi
 
 # Use unwrapping echo so that this file is easier to read
 if [ -f "${VSI_COMMON_DIR}/linux/uwecho.bsh" ]; then
   source "${VSI_COMMON_DIR}/linux/uwecho.bsh"
 else
-  function uwecho()
-  {
-    local line_number="$(caller)"
-    local file_name="${line_number#* }"
-    line_number="${line_number%% *}"
-    local lines="$(echo -n ${@+"${@}"} | wc -l)"
-    line_number=$((line_number-lines))
-    local source_line="$(sed -n "${line_number}p" "${file_name}")"
-    local spaces="$(echo -n "${source_line}" | sed -E 's|^( *uwecho +['"'"'"]?).*|\1|' | tr -d '\n' | wc -c)"
-    spaces="${spaces#${spaces%%[![:space:]]*}}"
-    local args=()
-    local arg
+uwecho () 
+{ 
+    local line_number="$(caller)";
+    local file_name="${line_number#* }";
+    line_number="${line_number%% *}";
+    local lines="$(echo -n ${@+"${@}"} | wc -l)";
+    line_number=$((line_number-lines));
+    local source_line="$(sed -n "${line_number}p" "${file_name}")";
+    local spaces="$(echo -n "${source_line}" | sed -E 's|^( *uwecho +['"'"'"]?).*|\1|' | tr -d '\n' | wc -c)";
+    spaces="${spaces#${spaces%%[![:space:]]*}}";
+    local args=();
+    local arg;
     while (( $# )); do
-      IFS= read -rd '' arg < <(sed '2,$s|^ \{'"${spaces}"'\}||' <<< "$1") || :
-      args+=("${arg}")
-      shift 1
-    done
+        IFS= read -rd '' arg < <(sed '2,$s|^ \{'"${spaces}"'\}||' <<< "$1") || :;
+        args+=("${arg}");
+        shift 1;
+    done;
     echo -n ${args+"${args[@]}"}
-  }
+}
+fi
+if [ -f "${VSI_COMMON_DIR}/linux/set_flags.bsh" ]; then
+  source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
+else
+_save_oflag () 
+{ 
+    local flag="VSI_COMMON_SET_OFLAG_${1}";
+    if [ "${!flag+set}" != "set" ]; then
+        if [[ ${SHELLOPTS} =~ (^|:)${1}(:|$) ]]; then
+            read "${flag}" <<< 1;
+        else
+            read "${flag}" <<< 0;
+        fi;
+    fi
+}
+set_oflag () 
+{ 
+    _save_oflag "$1";
+    set -o "$1"
+}
+reset_oflag () 
+{ 
+    local flag="VSI_COMMON_SET_OFLAG_$1";
+    if [ "${!flag+set}" == "set" ]; then
+        if [ "${!flag}" == "1" ]; then
+            set -o "$1";
+        else
+            set +o "$1";
+        fi;
+        unset "${flag}";
+    fi
+}
 fi
 
-# Use a bash relpath function
-if [ -f "${VSI_COMMON_DIR}/linux/relpath" ]; then
-  source "${VSI_COMMON_DIR}/linux/relpath"
+# Use a bash dir_tools.bsh function
+if [ -f "${VSI_COMMON_DIR}/linux/dir_tools.bsh" ]; then
+  source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
 else
-  function relpath()
-  {
-    current="${1:+"$2"}"
-    target="${1:-"$2"}"
-    if [[ ${target} =~ ^\./*$ ]]; then
-      target="/"
+normpath () 
+{ 
+    local IFS;
+    local x;
+    local components;
+    local new_components=();
+    local absolute=0;
+    IFS=/;
+    set_oflag noglob;
+    components=(${1});
+    reset_oflag noglob;
+    if [ "${1:0:1}" = "/" ]; then
+        absolute=1;
+    fi;
+    for x in "${!components[@]}";
+    do
+        current="${components[$x]}";
+        if [ "${current}" = "." ] || [ -z "${current}" ]; then
+            continue;
+        else
+            if [ "${current}" = ".." ]; then
+                if [ "${#new_components[@]}" = "0" ]; then
+                    if [ "${absolute}" = "1" ]; then
+                        continue;
+                    else
+                        new_components+=("${current}");
+                    fi;
+                else
+                    if [ "${new_components[${#new_components[@]}-1]}" = ".." ]; then
+                        new_components+=("${current}");
+                    else
+                        unset "new_components[${#new_components[@]}-1]";
+                    fi;
+                fi;
+            else
+                new_components+=("${current}");
+            fi;
+        fi;
+    done;
+    if [ "${absolute}" = "1" ]; then
+        echo "/${new_components+${new_components[*]}}";
+    else
+        if [ "${#new_components[@]}" -gt 0 ] && [ "${new_components[0]}" = ".." ]; then
+            echo "${new_components[*]}";
+        else
+            if [ "${#new_components[@]}" -gt 0 ]; then
+                echo "./${new_components+${new_components[*]}}";
+            else
+                echo ".";
+            fi;
+        fi;
     fi
-    if [[ ${current} =~ ^\./*$ ]]; then
-      current="/"
+}
+relative_path () 
+{ 
+    local path;
+    local start;
+    if [[ ${1::1} != / ]]; then
+        path="${PWD}/${1}";
+    else
+        path="${1}";
+    fi;
+    if [[ ${2::1} != / ]]; then
+        start="${PWD}/${2}";
+    else
+        start="${2}";
+    fi;
+    local IFS='/';
+    set_oflag noglob;
+    path=($(normpath "${path}"));
+    start=($(normpath "${start}"));
+    reset_oflag noglob;
+    unset path[0];
+    unset start[0];
+    local -i i;
+    local s1;
+    local s2;
+    if [[ ${#path[@]} -lt ${#start[@]} ]]; then
+        s1=(${path[@]+"${path[@]}"});
+        s2=(${start[@]+"${start[@]}"});
+    else
+        s1=(${start[@]+"${start[@]}"});
+        s2=(${path[@]+"${path[@]}"});
+    fi;
+    for ((i=0; i<${#s1[@]}; i++ ))
+    do
+        if [ "${s1[i]}" != "${s2[i]}" ]; then
+            break;
+        fi;
+    done;
+    local ans=();
+    local -i j;
+    for ((j=${#start[@]}-i; j>0; j--))
+    do
+        ans+=('..');
+    done;
+    if [ "${BASH_VERSINFO[0]}" -lt 4 ]; then
+        for ((j=i+1; j<=${#path[@]}; j++ ))
+        do
+            ans+=(${path[@]+"${path[@]:j:1}"});
+        done;
+    else
+        ans+=(${path[@]+"${path[@]:i+1}"});
+    fi;
+    declare -p path ans 1>&2;
+    if [ "${#ans[@]}" = "0" ]; then
+        echo '.';
+    else
+        echo "${ans[*]}";
     fi
-    : "${current:="/"}"
-    target="/$(sed -E 's|^/*||;s|/*$||' <<< "${target}")" >&2
-    current="/$(sed -E 's|^/*||;s|/*$||' <<< "${current}")" >&2
-    appendix="${target##/}"
-    relative=''
-    while appendix="${target#"$current"/}"
-      [ "$current" != '/' ] && [ "$appendix" = "$target" ]; do
-      if [ "$current" = "$appendix" ]; then
-        relative="${relative:-.}"
-        echo "${relative#/}"
-        return 0
-      fi
-      current="${current%/*}"
-      relative="$relative${relative:+/}.."
-    done
-    relative="$relative${relative:+${appendix:+/}}${appendix#/}"
-    echo "$relative"
-  }
+}
 fi
 
 #**
@@ -1266,7 +1396,7 @@ function new_just()
   if [ "${USE_VSI_COMMON}" = "1" ]; then
     # RELATIVE_PATH="$(python -c "import os; print(os.path.relpath('${VSI_DIR}', '${PROJECT_DIR}'))")"
     # RELATIVE_PATH="$(perl -e "use File::Spec; print File::Spec->abs2rel('${VSI_DIR}','${PROJECT_DIR}');")"
-    RELATIVE_PATH="$(relpath "${VSI_DIR}" "${PROJECT_DIR}")"
+    RELATIVE_PATH="$(relative_path "${VSI_DIR}" "${PROJECT_DIR}")"
   fi
 
   if [ "${USE_VSI_COMMON}" = "1" ]; then
@@ -1408,10 +1538,9 @@ function new_just_cleanup()
   # We want to delete the temp file when we are done executing, so that uwecho
   # can use the file, the entire point of making the file
   if [ -e "${temp_file-}" ]; then
-    rm "${temp_file}"
+    \rm "${temp_file}"
   fi
   echo
-  exit
 }
 
 if [ "${BASH_SOURCE[0]}" = "${0}" ] || [ "$(basename "${BASH_SOURCE[0]}")" = "${0}" ]; then
