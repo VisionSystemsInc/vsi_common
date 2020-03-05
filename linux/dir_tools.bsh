@@ -5,6 +5,7 @@ if [[ $- != *i* ]]; then
 fi
 
 source "${VSI_COMMON_DIR}/linux/signal_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
 
 #*# linux/dir_tools
 
@@ -149,7 +150,7 @@ _make_temp_path_cleanup()
 #**
 # .. function:: normpath
 #
-# :Argumetns: * ``$1`` - path
+# :Arguments: * ``$1`` - path
 #
 # :Output: *stdout* - Normalized path
 #
@@ -166,7 +167,9 @@ normpath()
   local absolute=0
 
   IFS=/
+  set_oflag noglob
   components=(${1})
+  reset_oflag noglob
 
   # Special for absolute path
   if [ "${1:0:1}" = "/" ]; then
@@ -295,4 +298,115 @@ function get_mktemp_dir()
   fi
 
   echo "${tmp}"
+}
+
+#**
+# .. function:: common_prefix
+#
+# Return the longest prefix of all list elements. Based on python's ``os.path.commonprefix``
+#
+# :Arguments: - ``$1`` - A path
+#             - ``$2`` - Another path
+# :Output: **stdout** - The longest common prefix
+#
+# .. note::
+#
+#    This function may return invalid paths because it works a character at a time.
+#**
+function common_prefix()
+{
+  local s1
+  local s2
+  if [[ ${#1} -lt ${#2} ]]; then
+    s1="${1}"
+    s2="${2}"
+  else
+    s1="${2}"
+    s2="${1}"
+  fi
+
+  local -i i
+  for (( i=0; i<${#s1}; i++ )); do
+    if [[ ${s1:i:1} != ${s2:i:1} ]]; then
+      echo "${s1::i}"
+      return
+    fi
+  done
+
+  echo "${s1}"
+}
+
+#**
+# .. function:: relative_path
+#
+# Return a relative filepath to path from the start directory.
+#
+# :Arguments: - ``$1`` - The file path
+#             - ``$2`` - The start path
+# :Output: **stdout** - The relative path
+#
+# This is a path computation: the filesystem is not accessed to confirm the existence or nature of path or start. Based on python's os.path.relpath
+#**
+function relative_path()
+{
+  local path
+  local start
+
+  if [[ ${1::1} != / ]]; then
+    path="${PWD}/${1}"
+  else
+    path="${1}"
+  fi
+  if [[ ${2::1} != / ]]; then
+    start="${PWD}/${2}"
+  else
+    start="${2}"
+  fi
+  local IFS='/'
+  set_oflag noglob
+  path=($(normpath "${path}"))
+  start=($(normpath "${start}"))
+  reset_oflag noglob
+  # Everything is absolute path, and starts with a /, this results in the first
+  # element being "", do this to fix the math....
+  unset path[0]
+  unset start[0]
+
+  local -i i
+  local s1
+  local s2
+  if [[ ${#path[@]} -lt ${#start[@]} ]]; then
+    s1=(${path[@]+"${path[@]}"})
+    s2=(${start[@]+"${start[@]}"})
+  else
+    s1=(${start[@]+"${start[@]}"})
+    s2=(${path[@]+"${path[@]}"})
+  fi
+
+  for (( i=0; i<${#s1[@]}; i++ )); do
+    if [ "${s1[i]}" != "${s2[i]}" ]; then
+      break
+    fi
+  done
+  local ans=()
+  local -i j
+  for (( j=${#start[@]}-i; j>0; j--)); do
+    ans+=('..')
+  done
+  if [ "${BASH_VERSINFO[0]}" -lt 4 ]; then
+    # Bash 3.2 bug
+    # (x=(11 22 33 44); IFS=x; y=1; z=("${x[@]:y+1}"); declare -p z)
+    # has one space delimited element, not two nor IFS delimited
+    for (( j=i+1; j<=${#path[@]}; j++ )); do
+      ans+=(${path[@]+"${path[@]:j:1}"})
+    done
+  else
+    ans+=(${path[@]+"${path[@]:i+1}"})
+  fi
+  declare -p path ans >&2
+  if [ "${#ans[@]}" = "0" ]; then
+    echo '.'
+  else
+    echo "${ans[*]}"
+  fi
 }

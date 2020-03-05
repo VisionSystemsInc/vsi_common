@@ -98,12 +98,24 @@ jobs:
       - run:
           name: Checkout gh-pages and update
           command: |
+            # Load the functions new_just uses
+            source ./linux/new_just
+
             git checkout gh-pages || git checkout --orphan gh-pages
             git reset --hard # This is important if gh-pages was just created
             git rm $(git ls-files)
             mv /docs/html/* ./
             touch .nojekyll
+
+            # restore new_just file
             git show "origin/${CIRCLE_BRANCH}:linux/new_just" > ./new_just
+            # patch the missing functions with copies from the sourced version above
+            function_names=($(sed -nE 's|^ *function (.*)\(\)\{ :;}|\1|p' ./new_just))
+
+            for function_name in "${function_names[@]}"; do
+              declare -pf "${function_name}" | sed -i '/function '"${function_name}"'(){ :;}/{r /dev/stdin
+                                                                                              d}' ./new_just
+            done
 
             git add --all
             if [ "$(git status --porcelain -uno | wc -l)" != "0" ]; then
