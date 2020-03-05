@@ -167,9 +167,15 @@ normpath()
   local absolute=0
 
   IFS=/
-  set_oflag noglob
+  local noglob=0
+  if [[ ${SHELLOPTS} =~ (^|:)noglob(:|$) ]]; then
+    noglob=1
+  fi
+  set -o noglob
   components=(${1})
-  reset_oflag noglob
+  if [ "${noglob}" = "0" ]; then
+    set +o noglob
+  fi
 
   # Special for absolute path
   if [ "${1:0:1}" = "/" ]; then
@@ -227,7 +233,15 @@ normpath()
 basenames()
 {
   local IFS=/
+  local noglob=0
+  if [[ ${SHELLOPTS} =~ (^|:)noglob(:|$) ]]; then
+    noglob=1
+  fi
+  set -o noglob
   local components=($(normpath "${2}"))
+  if [ "${noglob}" = "0" ]; then
+    set +o noglob
+  fi
   local -i min=${#components[@]}-$1
 
   min=$(($min<0?0:$min))
@@ -362,11 +376,19 @@ function relative_path()
   else
     start="${2}"
   fi
+
   local IFS='/'
-  set_oflag noglob
+  local noglob=0
+  if [[ ${SHELLOPTS} =~ (^|:)noglob(:|$) ]]; then
+    noglob=1
+  fi
+  set -o noglob
   path=($(normpath "${path}"))
   start=($(normpath "${start}"))
-  reset_oflag noglob
+  if [ "${noglob}" = "0" ]; then
+    set +o noglob
+  fi
+
   # Everything is absolute path, and starts with a /, this results in the first
   # element being "", do this to fix the math....
   unset path[0]
@@ -403,7 +425,6 @@ function relative_path()
   else
     ans+=(${path[@]+"${path[@]:i+1}"})
   fi
-  declare -p path ans >&2
   if [ "${#ans[@]}" = "0" ]; then
     echo '.'
   else
