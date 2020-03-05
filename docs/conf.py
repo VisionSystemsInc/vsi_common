@@ -19,13 +19,13 @@ sys.path.insert(0, os.path.abspath('/src/python'))
 # -- Project information -----------------------------------------------------
 
 project = 'VSI Common'
-copyright = '2018, Vision Systems, Inc'
+copyright = '2020, Vision Systems, Inc'
 author = 'Vision Systems, Inc'
 
 # The short X.Y version
 version = ''
 # The full version, including alpha/beta/rc tags
-release = '0.0.7'
+release = os.environ['JUST_VERSION']
 
 
 # -- General configuration ---------------------------------------------------
