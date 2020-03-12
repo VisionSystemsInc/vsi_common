@@ -1,26 +1,16 @@
 import IPython.core.debugger
+import IPython.terminal.debugger
 from functools import partial
 import sys
 
 import vsi.tools.vdb as vdb
 from vsi.tools.vdb import set_attach, attach, pipe_server
 
-class Tracer(IPython.core.debugger.Tracer):
-  ''' Used by Vdb '''
-  def __init__(self, colors=None, skipInput = True, *args, **kwargs):
-    try:
-      super(Tracer, self).__init__(colors)
-    except ValueError:
-      #This is JUST IN CASE invalid color is specified, should not be relied on
-      super(Tracer, self).__init__('Linux')
-    self.debugger = Vdb(skipInput, self.debugger.color_scheme_table.active_scheme_name, *args, **kwargs)
-    #This may be dirty, but is less likely to miss features in the future
-
-class Vdb(IPython.core.debugger.Pdb):
-  ''' VSI Debugger '''
+class Vdb(IPython.terminal.debugger.TerminalPdb):
+  ''' VSI Debugger, based off of IPython's 5.x or newer debugger '''
   def __init__(self, skipInput=True, *args, **kwargs):
     self.__ignore_next_user_return = skipInput
-    IPython.core.debugger.Pdb.__init__(self, *args, **kwargs)
+    IPython.terminal.debugger.TerminalPdb.__init__(self, *args, **kwargs)
     self.prompt = 'vdb> '
 
   #Modifications to skip initial user input
@@ -29,7 +19,7 @@ class Vdb(IPython.core.debugger.Pdb):
       self.__ignore_next_user_return = False
       self.onecmd('c')#continue, effectively ignoring the first input
     else:
-      IPython.core.debugger.Pdb.interaction(self, frame, None)
+      IPython.terminal.debugger.TerminalPdb.interaction(self, frame, None)
 
   #everything needed from set_trace, minus sys.settrace
   def _pre_settrace(self, frame=None):
@@ -58,15 +48,15 @@ except:
 
 class VdbPostMortemHook(vdb.PostMortemHook):
   @staticmethod
-  def set_post_mortem(interactive=False, colors=None):
+  def set_post_mortem(interactive=False):
     sys.excepthook = partial(vdb.dbstop_exception_hook,
-                             post_mortem=partial(post_mortem, colors=colors),
+                             post_mortem=post_mortem,
                              interactive=interactive)
 
 def dbclear_if_error():
   VdbPostMortemHook.dbclear_if_error()
 
-def dbstop_if_error(interactive=False, colors=None):
+def dbstop_if_error(interactive=False):
   ''' Run this to auto start the vdb debugger on an exception.
 
   Arguments
@@ -78,10 +68,8 @@ def dbstop_if_error(interactive=False, colors=None):
       %debug instead. This will not help in the multithread case in ipython...
       ipython does too much, just don't try that. Unless someone adds a way to
       override ipython's override.
-  colors : str
-      Default None. Set ipython debugger color scheme
   '''
-  VdbPostMortemHook.dbstop_if_error(interactive=interactive, colors=colors)
+  VdbPostMortemHook.dbstop_if_error(interactive=interactive)
 
 class DbStopIfError(vdb.DbStopIfErrorGeneric):
   ''' With statement for local dbstop situations '''
@@ -120,7 +108,7 @@ def runpdb(lines, debugger=None):
     pass
 
   if not debugger:
-    debugger = Tracer().debugger
+    debugger = Vdb()
 
   debugger._pre_settrace(frame=sys._getframe().f_back)
 
@@ -131,26 +119,13 @@ def runpdb(lines, debugger=None):
 
   return debugger
 
-def get_colors(colors=None):
-  if colors is None:
-    from IPython import get_ipython
-    ip = get_ipython()
-    if ip is None:
-      colors='Linux'
-    else:
-     colors = ip.colors
-  return colors
-
-def set_trace(frame=None, colors=None, depth=None):
+def set_trace(frame=None, depth=None):
   ''' Helper function, like pdb.set_trace
-
-  set colors = "NoColor", "Linux", or "LightBG"
   '''
-  colors=get_colors(colors)
   frame = vdb.find_frame(frame, depth if depth is not None else 2 if frame is None else 0)
-  Tracer(skipInput=False, colors=colors).debugger.set_trace(frame)
+  Vdb().set_trace(frame)
 
-def post_mortem(tb=None, colors=None):
+def post_mortem(tb=None):
   ''' Helper function, like pdb.post_mortem '''
   # handling the default
   if tb is None:
@@ -160,7 +135,7 @@ def post_mortem(tb=None, colors=None):
     if tb is None:
       raise ValueError("A valid traceback must be passed if no "
                        "exception is being handled")
-  colors = get_colors(colors)
-  tracer = Tracer(skipInput=False, colors=colors)
-  tracer.debugger.reset()
-  tracer.debugger.interaction(None, tb)
+
+  debugger=Vdb()
+  debugger.reset()
+  debugger.interaction(None, tb)
