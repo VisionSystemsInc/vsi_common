@@ -11,8 +11,8 @@ def generate_scene_xml(output_file, model_dir_rel, num_blocks, num_subblocks, su
   output_file : str
       The output file
   model_dir_rel :
-  num_blocks : array_like
-  num_subblocks : array_like
+  num_blocks : int
+  num_subblocks : int
   subblock_size : int
       The subblock size
 

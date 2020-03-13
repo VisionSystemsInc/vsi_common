@@ -7,9 +7,9 @@ def natural_sorted(iterable, key=None, *args, **kwargs):
 
     Parameters
     ----------
-    iterable : iterable
+    iterable : :term:`iterable`
         The data to be sorted.
-    key : func
+    key : :term:`function`
         The sorting function.
     *args
         Variable length argument list.

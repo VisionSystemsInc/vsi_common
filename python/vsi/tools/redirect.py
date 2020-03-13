@@ -177,9 +177,9 @@ class PopenRedirect(FileRedirect):
 
         Parameters
         ----------
-        stdout : file_like
+        stdout : :term:`file-like object`
             Stdout File like object, must have .write method
-        stderr : file_like
+        stderr : :term:`file-like object`
             Stderr File like object, must have .write method
     '''
     self.stdout_output = stdout
@@ -294,7 +294,7 @@ class Redirect(RedirectBase): #Version 2
 
         Parameters
         ----------
-        file_like : :class:`file_like`, optional
+        file_like : :term:`file-like object`, optional
             File Output Argument. All File output arguments should use File
             like Python objects that have a .write call. Many of the arguments
             override the other argument for ease of use
@@ -310,15 +310,15 @@ class Redirect(RedirectBase): #Version 2
             Output stdout_py and stderr_py to the py file.
         stdout_c : :class:`str`, optional
         stderr_c : :class:`str`, optional
-        stdout_py : :class:`file_like`, optional
-        stderr_py : :class:`file_like`, optional
+        stdout_py : :term:`file-like object`, optional
+        stderr_py : :term:`file-like object`, optional
             Output to each individual stream for maximum customization.
         stdout_c_fd : :class:`int`, optional
         stderr_c_fd : :class:`int`, optional
              The default file number used for stdout (1) and stderr (2). There
              should be no reason to override this
-        stdout_py_module : :class:`module`, optional
-        stderr_py_module : :class:`module`, optional
+        stdout_py_module : :term:`module`, optional
+        stderr_py_module : :term:`module`, optional
         stdout_py_name : :class:`str`, optional
         stderr_py_name : :class:`str`, optional
             Because of the nature of python, in order to replace and restore
@@ -586,10 +586,10 @@ class Capture(RedirectBase): #version 1
             The fd to be replaced, usually 2 will work, but change it in case
             this is not right in your case (default: 2)
             None means to not redirect
-        stdout_py : :class:`file_like`, optional
+        stdout_py : :term:`file-like object`, optional
             The file object to be replaced (default: sys.stdout)
             None means to not redirect
-        stderr_py : :class:`file_like`, optional
+        stderr_py : :term:`file-like object`, optional
             The file object to be replaced (default: sys.stderr)
             None means to not redirect
         group : :class:`bool`, optional

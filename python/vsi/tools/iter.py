@@ -8,7 +8,7 @@ def sub_block(data, block=3, overlap=0, subok=False):
 
       Parameters
       ----------
-      data : array_like
+      data : numpy.ndarray
           N-dimensional array
       block : int
           The block size of the final blocks. Should have length N or be a
@@ -22,7 +22,7 @@ def sub_block(data, block=3, overlap=0, subok=False):
 
       Returns
       -------
-      array_like
+      numpy.ndarray
           windows - N + N dimensional array where the first N dimensions are
           the window indexes, and the next N dimension are the data dimensions.
           Keep in mind, all the data is linked to the original data array.

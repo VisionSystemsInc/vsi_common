@@ -14,7 +14,7 @@ def findProcess(imageName, filterString):
 
   Returns
   -------
-  array_like
+  :term:`iterator`
       The Process
   """
   pid = Popen(['wmic', 'path', 'win32_process', 'where',

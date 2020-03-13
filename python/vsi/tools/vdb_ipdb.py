@@ -99,7 +99,7 @@ def runpdb(lines, debugger=None):
 
   Arguments
   ---------
-  lines : array_like
+  lines : :obj:`str` or :obj:`list` or :obj:`tuple`
       Collection of strings to be executed as if you were already in the
       debugger. Useful for setting breakpoints programatically.
 

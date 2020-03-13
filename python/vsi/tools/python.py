@@ -114,7 +114,7 @@ def get_file(fid, mode='rb'):
 
   Returns
   -------
-  file_like
+  :term:`file-like object`
       The opened file object
   '''
 
@@ -155,14 +155,14 @@ def update_wrapper_class(wrapper, wrapped):
 
   Parameters
   ----------
-  wrapper : class
+  wrapper : :term:`class`
       The class to be updated
-  wrapped : class
+  wrapped : :term:`class`
       The original function/class
 
   Returns
   -------
-  class
+  :term:`class`
       A subclass of ``wrapper`` that has the updated attributes. If ``wrapped``
       was a function, ``wrapper`` is still a class.
   '''
@@ -191,7 +191,7 @@ def _meta_generate_class(cls, *args, **kwargs):
 
   Parameters
   ----------
-  cls : class
+  cls : :term:`class`
       The class of the decorator type
   args : tuple
       The arguments passed to the decorate, when decorating a class
@@ -262,12 +262,12 @@ class _BasicDecorator(object):
 
   Parameters
   ----------
-  fun : func
+  fun : :term:`function`
       The function that gets wrapped
 
   Attributes
   ----------
-  fun : func
+  fun : :term:`function`
       The function that is being wrapped
 
   Examples
@@ -326,7 +326,7 @@ class _BasicArgumentDecorator(object):
 
         Parameters
         ----------
-        fun : func
+        fun : :term:`function`
           The Function
     '''
 
@@ -472,7 +472,7 @@ def args_to_kwargs(function, args=tuple(), kwargs={}):
 
      Parameters
      ----------
-     function : func
+     function : :term:`function`
          The Function
      args : tuple
      kwargs : dict
@@ -602,8 +602,6 @@ def args_to_kwargs_easy(*args, **kwargs):
   '''
      Parameters
      ----------
-     function : func
-          Function being parsed
      *args : tuple
           Variable length argument list.
      **kwargs : dict
@@ -611,7 +609,7 @@ def args_to_kwargs_easy(*args, **kwargs):
 
      Returns
      -------
-     array_like
+     dict
   '''
   return args_to_kwargs(args[0], args[1:], kwargs)
 
@@ -627,7 +625,7 @@ def args_to_kwargs_unbound_easy(*args, **kwargs):
 
      Returns
      -------
-     array_like
+     dict
   '''
   return args_to_kwargs_unbound(args[0], args[1], args[2:], kwargs)
 
@@ -728,13 +726,13 @@ def nested_patch(obj, condition, patch, _spare_key = None):
 
   Parameters
   ----------
-  obj: mapping or iterable or object
+  obj: :term:`mapping` or :term:`iterable` or object
       The python object to be patched. Typically a dict, but can be a list,
       etc... or even a normal object, but that kind of defeats the purpose
-  condition: func
+  condition: :term:`function`
       The condition function to decide if each value should be patched.
       ``condition`` takes two arguments, ``(key, value)``
-  patch: func
+  patch: :term:`function`
       Callable that should return a patched version of the value. ``patch``
       takes two arguments, ``(key, value)``
 

@@ -35,7 +35,7 @@ def open(name, server=False):
 
   Returns
   -------
-  array_like
+  :class:`Pipe`
       The pipe
 
 
@@ -123,7 +123,7 @@ class Pipe(object):
 
     Returns
     -------
-    array_like
+    bool
     """
     return windll.kernel32.WaitNamedPipeA(PIPE_PREFIX+name, timeout__ms)
 
