@@ -46,8 +46,17 @@ extensions = [
     'sphinx.ext.ifconfig',
     'sphinx.ext.viewcode',
     'sphinx.ext.githubpages',
+    'sphinx.ext.intersphinx',
     'vsi_domains'
 ]
+
+# Link to other documentation (e.g., numpy, python, etc.)
+intersphinx_mapping = {
+    'ipython': ('https://ipython.readthedocs.io/en/stable/', None),
+    'matplotlib': ('https://matplotlib.org/', None),
+    'numpy': ('https://docs.scipy.org/doc/numpy/', None),
+    'python': ('https://docs.python.org/3.7', None),
+}
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -88,55 +97,26 @@ napoleon_include_special_with_doc = True
 
 # Autodoc parameters
 
-# from sphinx.autodoc.importer import import_object
-# import_object('IPython', )
+autodoc_mock_imports = [
+    "numpy",
+    "matplotlib",
+    "rpdb",
+    "rpdb2",
+    "mpl_toolkits",
+    "IPython",
+    "brl_init",
+    "boxm2_adaptor",
+    "boxm2_scene_adaptor",
+    "vpgl_adaptor_boxm2_batch",
+    "yaml",
+]
 
-autodoc_mock_imports = ["pyopencl", "vtk", "numpy", "matplotlib",
-                        "rpdb", "rpdb2", "PIL", "skimage", "mpl_toolkits",
-                        "scipy", "IPython",
-                        "brl_init", "boxm2_adaptor", "boxm2_scene_adaptor",
-                        "vpgl_adaptor_boxm2_batch", "yaml"]
-
-
-# Remove warnings due to a bug in the Python docs with nitpick_ignore
-nitpick_ignore = [('py:class', 'bool'),
-                  ('py:class', 'object'),
-                  ('py:class', 'str'),
-                  ('py:class', 'int'),
-                  ('py:class', 'float'),
-                  ('py:class', 'func'),
-                  ('py:class', 'dict'),
-                  ('py:class', 'iterable'),
-                  ('py:class', 'mapping'),
-                  ('py:class', 'list'),
-                  ('py:class', 'class'),
-                  ('py:class', 'tuple'),
-                  ('py:class', 'module'),
-                  ('py:class', 'file_like'),
-                  ('py:class', 'frame'), # watch dog
-                  ('py:class', 'Exception'),
-
-                  ('py:class', 'numpy.array'), # numpy
-                  ('py:class', 'array_like'),
-
-                  ('py:class', 'figure'), # Matplotlib
-                  ('py:class', 'axes'),
-
-                  ('py:class', 'subprocess.Popen'),
-                  ('py:class', 'rpdb2.CDebuggerCoreThread'),
-                  ('py:class', 'IPython.core.debugger.Tracer'),
-                  ('py:class', 'IPython.core.debugger.Pdb'),
-                  ('py:class', 'threading.Thread'),
-                  ('py:class', 're.Pattern'),
-
-                  ('py:class', 'BasicDecorator'), # Using decorator currently blocks sphinx
-
-                  ('py:exc', 'OSError'),
-                  ('py:exc', 'Exception'),
-                  ('py:exc', 'ValueError'),
-                  ('py:exc', 'SystemExit'),
-                  ('py:exc', 'AttributeError'),
-                  ('py:exc', 'KeyboardInterrupt')]
+nitpick_ignore = [
+    ('py:class', 'frame'), # watch dog
+    ('py:class', 'rpdb2.CDebuggerCoreThread'),
+    ('py:class', 're.Pattern'),
+    ('py:class', 'BasicDecorator'), # Using decorator currently blocks sphinx
+]
 
 # -- Options for HTML output -------------------------------------------------
 

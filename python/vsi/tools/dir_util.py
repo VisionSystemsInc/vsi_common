@@ -295,7 +295,7 @@ def copytree(src, dst, symlinks=False, ignore=None):
 
   Parameters
   ----------
-  src : array_like
+  src : :term:`path-like object`
       The Source Tree
   dst : str
       The Destination Directory may not already exist. If exception(s) occur,
@@ -306,7 +306,7 @@ def copytree(src, dst, symlinks=False, ignore=None):
       Optional. True if the symbolic links in the source tree result in
       symbolic links in the destination tree. False if the contents of the
       files pointed to by symbolic links are copied.
-  ignore : array_like
+  ignore : :term:`function`
       The optional ignore argument is a callable. If given, it is called with
       the `src` parameter, which is the directory being visited by
       copytree(), and `names` which is the list of `src` contents, as
@@ -375,7 +375,7 @@ def root_dir(directory):
 
       Parameters
       ----------
-      directory : array_like
+      directory : str
           The Directory
 
       Returns

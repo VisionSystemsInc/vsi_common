@@ -20,7 +20,7 @@ def argumet_parser():
 def main(args=sys.argv[1:]):
   ''' Parameters
       ----------
-      args : array_like
+      args : list
           An array of arguments
 '''
   parser = argumet_parser()

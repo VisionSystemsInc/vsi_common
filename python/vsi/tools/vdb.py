@@ -149,7 +149,7 @@ class RunningTrace():
 
         Parameters
         ----------
-        debugger_cls : class
+        debugger_cls : :term:`class`
             Bdb based Debugger class to be mixed in
 
         Returns
@@ -263,7 +263,7 @@ class DbStopIfErrorGeneric(object):
   def get_post_mortem(self):
     ''' Returns
         -------
-        func
+        :term:`function`
             Should return a function that takes a traceback as the first
             argument and any additional args/kwargs sent to __init__ after that
 
@@ -295,13 +295,13 @@ def dbstop_exception_hook(type, value, tb,
                           interactive=False):
     ''' Parameters
         ----------
-        type : class
+        type : :term:`class`
           sys.excepthook variable
         value : object
           sys.excepthook variable
         tb : object
           sys.excepthook variable
-        post_mortem : func
+        post_mortem : :term:`function`
           The Post Mortem Handler Function
         Interactive : bool
             True if interactive. False if not.

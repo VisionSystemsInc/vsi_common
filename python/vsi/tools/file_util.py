@@ -6,7 +6,7 @@ def lncp(source, dest):
 
       Parameters
       ----------
-      source : array_like
+      source : str
         The Source
       dest : str
           The Destination

@@ -68,7 +68,7 @@ def glob(pathname, case=None):
 
   Returns
   -------
-  array_like
+  list
       A list of paths matching a pathname pattern
 
 
@@ -162,7 +162,7 @@ def glob0(dirname, basename, case=None):
   
   Returns
   -------
-  array_like
+  list
       A list of basenames
   """
   if dirname == '':
@@ -185,7 +185,7 @@ def glob1(dirname, pattern, case=None):
   
   Returns
   -------
-  array_like
+  list
       A list of basenames
   """
   if not dirname:
@@ -210,7 +210,7 @@ def fnmatch_filter(names, pat, casesensitive):
 
   Parameters
   ----------
-  names : array_like
+  names : :obj:`list` or :obj:`tuple`
       A list of names
   pat : str
       A pattern
@@ -219,7 +219,7 @@ def fnmatch_filter(names, pat, casesensitive):
 
   Returns
   -------
-  array_like
+  list
       The subset of the list NAMES that match PAT
   """
   result=[]

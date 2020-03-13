@@ -7,14 +7,14 @@ import matplotlib.pyplot as plt
 def zoom_factory(ax=None,base_scale=1.5):
     ''' Parameters
         ----------
-        ax : axes
+        ax : :mod:`matplotlib.axes`
             The Axes
         base_scale : float
             The Base Scale
 
         Returns
         -------
-        func
+        :term:`function`
             The Zoom Function
 
     '''
@@ -80,7 +80,7 @@ def figure_with_zoom(*args, **kwargs):
 
         Returns
         -------
-        figure
+        :mod:`matplotlib.figure`
             The Zoomed Figure
     '''
     # add zooming capabilities to figures
