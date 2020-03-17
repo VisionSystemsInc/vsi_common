@@ -579,7 +579,13 @@ function _docker_clean_actions()
     stop)
       for x in "${containers[@]}"; do
         Docker stop -t 30 "${x}"
-        Docker rm -f "${x}" || :
+        Docker rm -f "${x}" &> /dev/null || :
+        # Wait until the container no longer exists. The docker rm command is
+        # synchronous; however, the stop command also triggers an rm on
+        # containers marked with the --rm flag.
+        while docker container inspect "${x}" &> /dev/null; do
+          echo -n .
+        done
       done
       Docker volume rm "${1}"
       ;;
