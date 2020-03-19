@@ -149,9 +149,15 @@ normpath ()
     local new_components=();
     local absolute=0;
     IFS=/;
-    set_oflag noglob;
+    local noglob=0;
+    if [[ ${SHELLOPTS} =~ (^|:)noglob(:|$) ]]; then
+        noglob=1;
+    fi;
+    set -o noglob;
     components=(${1});
-    reset_oflag noglob;
+    if [ "${noglob}" = "0" ]; then
+        set +o noglob;
+    fi;
     if [ "${1:0:1}" = "/" ]; then
         absolute=1;
     fi;
@@ -209,10 +215,16 @@ relative_path ()
         start="${2}";
     fi;
     local IFS='/';
-    set_oflag noglob;
+    local noglob=0;
+    if [[ ${SHELLOPTS} =~ (^|:)noglob(:|$) ]]; then
+        noglob=1;
+    fi;
+    set -o noglob;
     path=($(normpath "${path}"));
     start=($(normpath "${start}"));
-    reset_oflag noglob;
+    if [ "${noglob}" = "0" ]; then
+        set +o noglob;
+    fi;
     unset path[0];
     unset start[0];
     local -i i;
@@ -245,7 +257,6 @@ relative_path ()
     else
         ans+=(${path[@]+"${path[@]:i+1}"});
     fi;
-    declare -p path ans 1>&2;
     if [ "${#ans[@]}" = "0" ]; then
         echo '.';
     else
