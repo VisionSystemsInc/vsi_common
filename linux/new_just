@@ -1344,14 +1344,23 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ] || [ "$(basename "${BASH_SOURCE[0]}")" = "${
 
   # Cleanup
   trap "new_just_cleanup" EXIT
-  trap "new_just_cleanup" INT
-  trap "new_just_cleanup" TERM
+  # On Ctrl+C, input commands repeat, basically breaking the purpose of Ctrl+C
+  # By adding an exit here, it catches the Ctrl+C/kill signal, cleans up, and
+  # then exits the script. Clear the exit trap, so that is is not run twice
+  # sometimes
+  trap "new_just_cleanup; trap -- EXIT; exit" INT
+  trap "new_just_cleanup; trap -- EXIT; exit" TERM
+  # I didn't makes these traps just "exit", becuase I'm not sure that'll work
+  # in all OSes and cornercases
 
   # Redirect stderr to stdout, and stdout to 3; now the only way to write to
   # stdout or stderr is to write to 3
   exec 3>&1 # Copy stdout to 3
   exec 1>&2 # Copy stderr to 1
   just_stdout=3 new_just ${@+"${@}"}
+
+  # Stop new_just_cleanup from being called twice
+  trap -- EXIT
 fi
 
 new_just_cleanup
