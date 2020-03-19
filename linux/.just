@@ -1,4 +1,4 @@
-#!/usr/bin/env false
+#!/usr/bin/env false bash
 #This file should be sourced, NOT run!
 
 if [ -z ${VSI_COMMON_DIR+set} ]; then
