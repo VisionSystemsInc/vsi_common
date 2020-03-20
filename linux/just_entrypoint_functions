@@ -36,7 +36,7 @@ source "${VSI_COMMON_DIR}/linux/mount_tools.bsh"
 # :file:`just_entrypoint_functions` runs
 # - :func:`docker_setup_user`
 #
-# .. Seealso::
+# .. seealso::
 #   :func:`docker_setup_user`
 #
 # .. function:: docker_setup_user
@@ -44,13 +44,14 @@ source "${VSI_COMMON_DIR}/linux/mount_tools.bsh"
 # Create user/group
 #
 # :Parameters:
-#   * [``DOCKER_ACCOUNTS_CREATE_USER``] - Enables the adding of a new user. If the particular username already exist, it is replaced. Default: 1
-#   * [``DOCKER_ACCOUNTS_CREATE_GROUPS``] - Enables the adding of new groups. The first group is set as the user's primary group. Each subsequent group is set as an additional group, and the user is added as a member of each of these groups. If a group name already exists, an increasing number is appended until the name does not exist. if the GID already exists, it is just used again. Default: 1
-#   * [``DOCKER_ACCOUNTS_POSIX_GROUPS``] - Enables filtering group names removing non-posix characters. This is important for operating systems like CentOS, etc... that actually follow the posix rules, unlike Debian. If 100% of the characters are non-posix, the name becomes simply "group". Default: 1
+#   * [``DOCKER_ACCOUNTS_CREATE_USER``] - Enables the adding of a new user. If the particular username already exists, it is replaced. Default: 1
+#   * [``DOCKER_ACCOUNTS_CREATE_GROUPS``] - Enables the adding of new groups. The first group is set as the user's primary group. Each subsequent group is set as an additional group, and the user is added as a member of each of these groups. If a group name already exists, an incrementing number is appended until the name does not exist. If the GID already exists, it is just used again. Default: 1
+#   * [``DOCKER_ACCOUNTS_POSIX_GROUPS``] - Enables filtering group names removing non-posix characters. This is important for operating systems like CentOS, etc... that actually follow the posix rules, unlike Debian. If 100% of the characters are non-posix, the name is based on DOCKER_UNNAMED_GROUP_NAME. Default: 1
 #   * [``DOCKER_USERNAME``] - The username used to create the new user. Default: user
 #   * [``DOCKER_UID``] - The UID used when creating the new user. Default: 1000
 #   * [``DOCKER_GROUP_NAMES``] - The group name(s) used when creating the groups for the new user. IFS delimited string (default: space, tab, newline). Default: user (only the primary group)
-#   * [``DOCKER_GIDS``] - The GIDs used when creating the new groups. IFS delimited string. Default: 1000
+#   * [``DOCKER_GIDS``] - The corresponding GID(s) used when creating the new groups. IFS delimited string. Default: 1000
+#   * [``DOCKER_UNNAMED_GROUP_NAME``] - The group name used for an unnamed group. Default: group
 #   * [``DOCKER_HOME``] - The home directory used when creating a new user. When the new directory is created, it is owned (non-recursively) by the UID/GID. Default: /home/${``DOCKER_USERNAME``}
 #**
 
@@ -66,6 +67,7 @@ function docker_setup_user()
   : ${DOCKER_UID=1000}
   : ${DOCKER_GROUP_NAMES=user}
   : ${DOCKER_GIDS=1000}
+  : ${DOCKER_UNNAMED_GROUP_NAME=group}
   : ${DOCKER_HOME=/home/${DOCKER_USERNAME}}
 
   # Convert to arrays
@@ -74,7 +76,7 @@ function docker_setup_user()
   # Ensure these two arrays are the same length
   for (( i=${#DOCKER_GROUP_NAMES[@]}; i<${#DOCKER_GIDS[@]}; i++ )); do
     # add_to_group will ensure unique names, but I'll help it out to get it started
-    DOCKER_GROUP_NAMES+=("group_${i}")
+    DOCKER_GROUP_NAMES+=("${DOCKER_UNNAMED_GROUP_NAME}_${i}")
   done
 
   if [ "${DOCKER_ACCOUNTS_POSIX_GROUPS}" == "1" ]; then
@@ -82,8 +84,8 @@ function docker_setup_user()
     for i in "${!DOCKER_GROUP_NAMES[@]}"; do
       DOCKER_GROUP_NAMES[$i]="$(sed 's|[^0-9a-zA-Z._ -]||g
                                      # in cases where 100% of characters were non-posix
-                                     # simply name the group "group"
-                                     s|^ *$|group|' <<< "${DOCKER_GROUP_NAMES[$i]}")"
+                                     # name the group based on DOCKER_UNNAMED_GROUP_NAME
+                                     s|^ *$|'"${DOCKER_UNNAMED_GROUP_NAME}"'|' <<< "${DOCKER_GROUP_NAMES[$i]}")"
     done
   fi
 
@@ -92,8 +94,8 @@ function docker_setup_user()
     add_user ${DOCKER_USERNAME} ${DOCKER_UID} ${DOCKER_GIDS[0]} "${DOCKER_HOME}"
 
     mkdir -p "${DOCKER_HOME}"
-    # This will fail when you are mount in your home dir as readonly, and
-    # that's ok, so silence and ignore the error
+    # This will fail when you mount in your home dir as readonly, which is
+    # ok, so silence and ignore the error
     chown ${DOCKER_UID}:${DOCKER_GIDS[0]} "${DOCKER_HOME}" &> /dev/null || :
   fi
 
@@ -139,7 +141,7 @@ function retry_as_user()
 #
 # Create symlinks based on ``JUST_DOCKER_ENTRYPOINT_LINKS``
 #
-# When :func:`docker_compose_override generate_docker_compose_override` processes mounts, the desired mount will not be possible in some cases such as nfs with squash root. Instead the base mount point is mounted into the container and a symlink is created to link the desired locations. This function creates these symlinks based on the // separated string ``JUST_DOCKER_ENTRYPOINT_LINKS``. e.g., "source//destination//source//destination".
+# When :func:`docker_compose_override generate_docker_compose_override` processes mounts, the desired mount will not be possible in some cases, such as nfs with squash root. Instead, the root of an nfs mount point is mounted into the container in a secondary location, and a symlink is created from the subdirectory to the original mount point. This function creates these symlinks based on the // separated string ``JUST_DOCKER_ENTRYPOINT_LINKS``. e.g., "source//destination//source//destination".
 #
 # .. rubric:: Usage
 #
