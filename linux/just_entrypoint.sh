@@ -41,7 +41,7 @@ set -eu
 #   * ``JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS`` - non-recursively chmod the directories listed to 777 so that any initial ownership issues are avoided. Can also be customized/disabled by passing a value in for ``JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS``, but being non-recursive, this should never have a noticeable time penalty.
 #   * These two features give volumes a much more desirable default behavior for non-root users.
 #
-# #. Next the entrypoint (and everything else from here on) is re-executed as the user that was created in :func:`just_entrypoint_functions docker_setup_user`. If you need to give the user root privileges, the suggested method is to use ``gosu root`` after giving ``gosu`` ``chmod u+s /usr/local/bin/gosu`` permissions. However, this is not suggested for when deploying.
+# 7. Next, the entrypoint (and everything else from here on) is re-executed as the user that was created in :func:`just_entrypoint_functions docker_setup_user`. If you need to give the user root privileges, the suggested method is to give ``gosu`` special permissions (``chmod u+s /usr/local/bin/gosu``) and use ``gosu root {command}``. However, this is not suggested when deploying.
 # #. Loads the settings for the project/user according to :envvar:`JUST_SETTINGS`.
 # #. If :envvar:`JUST_PROJECT_PREFIX` is set, runs :func:`just_entrypoint_user_functions.bsh filter_docker_variables` to remove project variables ending in ``_DOCKER``. This can be disabled by setting ``JUST_FILTER_DOCKER`` to ``0``
 # #. Replace ``//`` with `/` in project variables if running on Windows using mingw or cygwin. Cygwin-like systems have a habit of `expanding variables <http://mingw.org/wiki/Posix_path_conversion>`_. Extra slashes are added in project environment files using :envvar:`JUST_PATH_ESC`, which cygwin-like systems evaluate as a ``/``, else empty. An unfortunate side effect of this is the `//` is still in the container. While this is usually harmless, there are cases when the extra slash in the variables cause code to crash.
@@ -82,7 +82,7 @@ set -eu
 #
 # .. note::
 #
-#    The intended use of :envvar:`JUST_ROOT_PATCH_DIR` and :envvar:`JUST_USER_PATCH_DIR` is to add files to them from either docker recipes or in the Dockerfile. While you can mount a folder or volume to this location, that is not the intent. For example, on Windows all files may appear to have execute permissions, which may not by what you want.
+#    The intended use of :envvar:`JUST_ROOT_PATCH_DIR` and :envvar:`JUST_USER_PATCH_DIR` is to add files to them from either docker recipes or in the Dockerfile. While you can mount a folder or volume to this location, that is not the intent. For example, on Windows all files may appear to have execute permissions, which may not be what you want.
 #**
 
 : ${VSI_COMMON_DIR=/vsi}
