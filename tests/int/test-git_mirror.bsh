@@ -1,0 +1,160 @@
+#!/usr/bin/env bash
+
+. "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
+VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+
+# These tests chain together, so no point in continuing after one breaks
+TESTLIB_STOP_AFTER_FAILS=1
+unset TESTLIB_SKIP_TESTS TESTLIB_RUN_SINGLE_TEST
+
+function setup()
+{
+  # Better way to take care of committers on vanilla
+  export GIT_COMMITTER_NAME='Foo Bar'
+  export GIT_COMMITTER_EMAIL='foo.bar@example.com'
+
+  BUILD_REPO="${TRASHDIR}/build_repo"
+  PRETEND_REPO="${TRASHDIR}/pretend_repo"
+
+  if [ "${OS-}" = "Windows_NT" ]; then
+    DIFFICULT_NAME='diff  i cult'
+  else
+    DIFFICULT_NAME=$'diff  i \t cult'
+  fi
+
+  TRANSFER_DIR="${TRASHDIR}/transfer"
+  MIRROR_DIR="${TRASHDIR}/mirror"
+
+  mkdir -p "${TRANSFER_DIR}"
+  cat - << EOF > "${TRANSFER_DIR}/info.env"
+repos[.]="${MIRROR_DIR}/main"
+repos[lfs]="${MIRROR_DIR}/lfs"
+repos['${DIFFICULT_NAME}']="${MIRROR_DIR}"/'${DIFFICULT_NAME}'
+repos['${DIFFICULT_NAME}/docker/recipes']="${MIRROR_DIR}/recipes"
+EOF
+
+  local os
+  if [ "${OS-}" = "Windows_NT" ]; then
+    os=windows-amd64
+  elif [[ ${OSTYPE} = darwin* ]]; then
+    os=darwin-amd64
+  else
+    os=linux-amd64
+  fi
+
+  pushd "${TRASHDIR}" &> /dev/null
+    if command -v curl &> /dev/null; then
+      curl -Lo "lfs.zip" "https://github.com/sinbad/lfs-folderstore/releases/download/v1.0.0/lfs-folderstore-${os}-v1.0.0.zip" &> /dev/null
+    else
+      wget -O "lfs.zip" "https://github.com/sinbad/lfs-folderstore/releases/download/v1.0.0/lfs-folderstore-${os}-v1.0.0.zip" &> /dev/null
+    fi
+    unzip lfs.zip &> /dev/null
+    chmod 755 lfs-folderstore-${os}/lfs-folderstore
+  popd &> /dev/null
+
+  # TODO: Replace this with a bunch of git configs instead
+  echo '#!/usr/bin/env bash
+git -c lfs.customtransfer.lfs-folder.path="'"${TRASHDIR}/lfs-folderstore-${os}/lfs-folderstore"'" -c lfs.customtransfer.lfs-folder.args="'"${MIRROR_DIR}/lfs/lfs/objects"'" -c lfs.standalonetransferagent=lfs-folder ${@+"${@}"}' > "${TRASHDIR}/git2"
+  chmod 755 "${TRASHDIR}/git2"
+
+  # The lfs-folderstore will not work unless the dir exists :(
+  mkdir -p "${MIRROR_DIR}/lfs/lfs/objects"
+
+  CLONE_DIR="${TRASHDIR}/clone"
+}
+
+# sets difficult, BUILD_REPO, PRETEND_REPO
+begin_test "Part 1 - Setup test repo"
+(
+  setup_test
+
+  mkdir -p "${BUILD_REPO}"
+  pushd "${BUILD_REPO}" &> /dev/null
+    git init
+    touch readme
+    git add readme
+    git commit -m "Initial commit"
+
+    git submodule add https://github.com/visionsystemsinc/vsi_common.git "${DIFFICULT_NAME}"
+    
+    # Git itself can't handle newlines, althought the config file actually can escape them
+    # This is a PURE git bug, plain and simple.  
+    # This won't actually create a newline in the name, it just ignores it
+    # git submodule add https://github.com/visionsystemsinc/vsi_common $'  diff\ticult\n'
+    # This will.
+    # git mv $'  diff  i \t cult' $' \n diff  i \t cult'
+    # However, at random this give permission denied errors, good thing I don't need it...
+
+    git submodule add https://bitbucket.org/andyneff/lfs_sample.git lfs
+    # git mv lfs $'\nlfs\t\t'
+    # git mv lfs $'lfs\t\t'
+    git commit -m "Added submodules"
+  popd &> /dev/null
+
+  # 2 - Simulate github
+  mkdir -p "${PRETEND_REPO}"
+  pushd "${PRETEND_REPO}" &> /dev/null
+    git clone --mirror "${BUILD_REPO}" .
+  popd &> /dev/null
+)
+end_test
+
+begin_test "Part 2 - Initial mirror"
+(
+  setup_test
+  
+  pushd "${TRASHDIR}" &> /dev/null
+    git_mirror mirror "${PRETEND_REPO}"
+  popd &> /dev/null
+)
+end_test
+
+PREP_FILE=("${TRASHDIR}/pretend_repo_prep/"transfer_*.tgz)
+
+begin_test "Part 3 - Update a prepped mirror"
+(
+  setup_test
+  
+  pushd "${TRASHDIR}" &> /dev/null
+    git_mirror mirror "${TRASHDIR}/pretend_repo_prep"
+  popd &> /dev/null
+)
+end_test
+
+begin_test "Part 4 - Simulating transfer"
+(
+  setup_test
+  mkdir -p "${TRANSFER_DIR}"
+  pushd "${TRANSFER_DIR}" &> /dev/null
+    tar zxf "${PREP_FILE[0]}"
+  popd &> /dev/null
+)
+end_test
+
+begin_test "Part 5 - Pushing to mirror"
+(
+  setup_test
+  
+  for d in main lfs "${DIFFICULT_NAME}" recipes; do
+    mkdir -p "${MIRROR_DIR}/${d}"
+    pushd "${MIRROR_DIR}/${d}" &> /dev/null
+      git init --bare
+    popd &> /dev/null
+  done
+
+  GIT="${TRASHDIR}/git2" git_mirror push "${TRANSFER_DIR}/info.env" "${TRANSFER_DIR}"
+)
+end_test
+
+begin_test "Part 6 - Cloning from mirror"
+(
+  setup_test
+
+  GIT="${TRASHDIR}/git2" git_mirror clone "${TRANSFER_DIR}/info.env" "${CLONE_DIR}"
+
+  # Tests
+  [[ $(sha256sum ${CLONE_DIR}/lfs/heart.jpg | awk '{print $1}') == 259e5122c42220369b8ee2f3570858e08db668bda9832cd96233ed4e11ae9e25 ]]
+  [[ -f "${CLONE_DIR}/${DIFFICULT_NAME}/setup.env" ]]
+  [[ -f "${CLONE_DIR}/${DIFFICULT_NAME}/docker/recipes/README.rst" ]]
+)
+end_test
