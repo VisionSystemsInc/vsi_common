@@ -146,6 +146,16 @@ skipped=0
 #**
 
 #**
+# .. envvar:: TESTLIB_KEEP_PAUSE_AFTER_ERROR
+#
+# Pauses before allowing testlib to cleanup and delete all temporary files.
+#
+# A better alternative to :envvar:`TESTLIB_KEEP_TEMP_DIRS`, so that you are given time to investigate a problem, and can then press any key to cleanup the temporary directory
+#
+# :Default: ``0``
+#**
+
+#**
 # .. envvar:: TESTLIB_SHOW_TIMING
 #
 # Display test time after each test
@@ -248,7 +258,12 @@ atexit ()
     teardown
   fi
 
+
   if [ "${TESTLIB_KEEP_TEMP_DIRS-}" != "1" ]; then
+    # Only works if stdin is connected, aka only one test file on run_tests
+    if [ "${failures}" != "0" -a "${TESTLIB_KEEP_PAUSE_AFTER_ERROR-0}" = "1" ]; then
+      read -rsn1 -p "Press any key to continue..." x
+    fi
     rm -rf "$TRASHDIR"
   fi
 
@@ -595,7 +610,6 @@ end_test ()
 
   if [ "${TESTLIB_STOP_AFTER_FAILS-0}" != "0" ] && [ "${failures}" -ge "${TESTLIB_STOP_AFTER_FAILS}" ]; then
     # Skip the rest of the tests.
-    declare -p TESTLIB_STOP_AFTER_FAILS failures >> /tmp/wtd
     TESTLIB_SKIP_TESTS='.*'
   fi
 }

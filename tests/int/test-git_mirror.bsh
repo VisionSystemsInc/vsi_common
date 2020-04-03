@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 
 . "$(dirname "${BASH_SOURCE[0]}")/../testlib.bsh"
-VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.."; pwd)"
+
+. "${VSI_COMMON_DIR}/linux/git_mirror"
 
 # These tests chain together, so no point in continuing after one breaks
 TESTLIB_STOP_AFTER_FAILS=1
@@ -65,8 +67,18 @@ EOF
   popd &> /dev/null
 
   # TODO: Replace this with a bunch of git configs instead
+#   echo '#!/usr/bin/env bash
+# if config file exists?
+# git config lfs.customtransfer.lfs-folder.path "'"${TRASHDIR}/lfs-folderstore-${os}/lfs-folderstore"'"
+# # git config lfs.customtransfer.lfs-folder.args "'"${MIRROR_DIR}/lfs/lfs/objects"'"
+# git config lfs.customtransfer.lfs-folder.args "${LFS_DIR}"
+# git config lfs.standalonetransferagent lfs-folder
+# git ${@+"${@}"}' > "${TRASHDIR}/git2"
   echo '#!/usr/bin/env bash
-git -c lfs.customtransfer.lfs-folder.path="'"${TRASHDIR}/lfs-folderstore-${os}/lfs-folderstore"'" -c lfs.customtransfer.lfs-folder.args="'"${MIRROR_DIR}/lfs/lfs/objects"'" -c lfs.standalonetransferagent=lfs-folder ${@+"${@}"}' > "${TRASHDIR}/git2"
+git -c lfs.customtransfer.lfs-folder.path="'"${TRASHDIR}/lfs-folderstore-${os}/lfs-folderstore"'" \
+    -c lfs.customtransfer.lfs-folder.args="${LFS_DIR}" \
+    -c lfs.standalonetransferagent=lfs-folder \
+    ${@+"${@}"}' > "${TRASHDIR}/git2"
   chmod 755 "${TRASHDIR}/git2"
 
   # The lfs-folderstore will not work unless the dir exists :(
@@ -75,10 +87,73 @@ git -c lfs.customtransfer.lfs-folder.path="'"${TRASHDIR}/lfs-folderstore-${os}/l
   CLONE_DIR="${TRASHDIR}/clone"
 }
 
-# sets difficult, BUILD_REPO, PRETEND_REPO
 begin_test "Part 1 - Setup test repo"
 (
   setup_test
+
+  # Sub sub module
+  mkdir -p "${BUILD_REPO}_sub_sub"
+  pushd "${BUILD_REPO}_sub_sub" &> /dev/null
+    git init .
+    touch readme_sub_sub
+    git add readme_sub_sub
+    git commit -m "Initial commit"
+  popd &> /dev/null
+  mkdir -p "${PRETEND_REPO}_sub_sub"
+  pushd "${PRETEND_REPO}_sub_sub" &> /dev/null
+    # This only works right, because all branches appear to be "topic" branches,
+    # so a push --mirror (once) will do what I want. Doesn't work well with more
+    # complexities like lfs
+    git clone --mirror "${BUILD_REPO}_sub_sub" .
+    # git init --bare .
+    # cd "${BUILD_REPO}_sub_sub"
+    # git remote add origin "${PRETEND_REPO}_sub_sub"
+    # git push origin --mirror
+  popd &> /dev/null
+  
+  # Sub module
+  mkdir -p "${BUILD_REPO}_sub"
+  pushd "${BUILD_REPO}_sub" &> /dev/null
+    git init .
+    touch readme_sub
+    git add readme_sub
+    git submodule add "${PRETEND_REPO}_sub_sub" "a_sub_sub_module"
+    git commit -m "Initial commit"
+  popd &> /dev/null
+  mkdir -p "${PRETEND_REPO}_sub"
+  pushd "${PRETEND_REPO}_sub" &> /dev/null
+    git clone --mirror "${BUILD_REPO}_sub" .
+    # git init --bare .
+    # cd "${BUILD_REPO}_sub"
+    # git remote add origin "${PRETEND_REPO}_sub"
+    # git push origin --mirror
+  popd &> /dev/null
+  
+  # LFS Repo
+  mkdir -p "${BUILD_REPO}_lfs"
+  pushd "${BUILD_REPO}_lfs" &> /dev/null
+    git init .
+    git lfs track '*.bin'
+    echo hi > readme1.bin
+    git add readme1.bin .gitattributes
+    git commit -m "Initial commit"
+
+    echo bye > readme1.bin
+    git add readme1.bin
+    git commit -m "Another commit"
+  popd &> /dev/null
+  mkdir -p "${PRETEND_REPO}_lfs"
+  pushd "${PRETEND_REPO}_lfs" &> /dev/null
+    git clone --mirror "${BUILD_REPO}_lfs" .
+    # https://github.com/git-lfs/git-lfs/issues/1338#issuecomment-229736496
+    LFS_DIR="${BUILD_REPO}_lfs/.git/lfs/objects" "${TRASHDIR}/git2" lfs fetch --all
+    # git init --bare .
+    # cd "${BUILD_REPO}_lfs"
+    # git remote add origin "${PRETEND_REPO}_lfs"
+    # LFS_DIR="${PRETEND_REPO}_lfs/lfs/lfs/objects" "${TRASHDIR}/git2" push origin --mirror
+  popd &> /dev/null
+  
+  # Main Repo
 
   mkdir -p "${BUILD_REPO}"
   pushd "${BUILD_REPO}" &> /dev/null
@@ -86,28 +161,31 @@ begin_test "Part 1 - Setup test repo"
     touch readme
     git add readme
     git commit -m "Initial commit"
+    git tag "original_commit"
 
-    git submodule add https://github.com/visionsystemsinc/vsi_common.git "${DIFFICULT_NAME}"
-    
-    # Git itself can't handle newlines, althought the config file actually can escape them
-    # This is a PURE git bug, plain and simple.  
+    # LFS_DIR="${PRETEND_REPO}_lfs/lfs/objects" "${TRASHDIR}/git2" submodule add "${PRETEND_REPO}_lfs" "lfs"
+    GIT_LFS_SKIP_SMUDGE=1 git submodule add "${PRETEND_REPO}_lfs" "lfs"
+    git submodule add "${PRETEND_REPO}_sub" "${DIFFICULT_NAME}"
+    # Git itself can't handle newlines, although the config file actually can
+    # escape them. This is a PURE git bug, plain and simple.
     # This won't actually create a newline in the name, it just ignores it
-    # git submodule add https://github.com/visionsystemsinc/vsi_common $'  diff\ticult\n'
+    # git submodule add https://github.com/visionsystemsinc/vsi_common $'  foo\tar\n'
     # This will.
     # git mv $'  diff  i \t cult' $' \n diff  i \t cult'
     # However, at random this give permission denied errors, good thing I don't need it...
-
-    git submodule add https://bitbucket.org/andyneff/lfs_sample.git lfs
-    # git mv lfs $'\nlfs\t\t'
-    # git mv lfs $'lfs\t\t'
+    
     git commit -m "Added submodules"
   popd &> /dev/null
-
-  # 2 - Simulate github
   mkdir -p "${PRETEND_REPO}"
   pushd "${PRETEND_REPO}" &> /dev/null
     git clone --mirror "${BUILD_REPO}" .
+    # git init --bare .
+    # cd "${BUILD_REPO}"
+    # git remote add origin "${PRETEND_REPO}"
+    # git push origin --mirror
   popd &> /dev/null
+  
+  # read -p "Press any key to continues" >&${stdout-1}
 )
 end_test
 
@@ -116,7 +194,7 @@ begin_test "Part 2 - Initial mirror"
   setup_test
   
   pushd "${TRASHDIR}" &> /dev/null
-    git_mirror mirror "${PRETEND_REPO}"
+    LFS_DIR="${PRETEND_REPO}_lfs/lfs/lfs/objects" GIT="${TRASHDIR}/git2" git_mirror_main "${PRETEND_REPO}"
   popd &> /dev/null
 )
 end_test
@@ -128,7 +206,7 @@ begin_test "Part 3 - Update a prepped mirror"
   setup_test
   
   pushd "${TRASHDIR}" &> /dev/null
-    git_mirror mirror "${TRASHDIR}/pretend_repo_prep"
+    git_mirror_main "${TRASHDIR}/pretend_repo_prep"
   popd &> /dev/null
 )
 end_test
@@ -154,7 +232,7 @@ begin_test "Part 5 - Pushing to mirror"
     popd &> /dev/null
   done
 
-  GIT="${TRASHDIR}/git2" git_mirror push "${TRANSFER_DIR}/info.env" "${TRANSFER_DIR}"
+  LFS_DIR="${MIRROR_DIR}/lfs/lfs/objects" GIT="${TRASHDIR}/git2" git_push_main "${TRANSFER_DIR}/info.env" "${TRANSFER_DIR}"
 )
 end_test
 
@@ -162,7 +240,7 @@ begin_test "Part 6 - Cloning from mirror"
 (
   setup_test
 
-  GIT="${TRASHDIR}/git2" git_mirror clone "${TRANSFER_DIR}/info.env" "${CLONE_DIR}"
+  LFS_DIR="${MIRROR_DIR}/lfs/lfs/objects" GIT="${TRASHDIR}/git2" git_clone_main "${TRANSFER_DIR}/info.env" "${CLONE_DIR}"
 
   # Tests
   [[ $(sha256sum ${CLONE_DIR}/lfs/heart.jpg | awk '{print $1}') == 259e5122c42220369b8ee2f3570858e08db668bda9832cd96233ed4e11ae9e25 ]]
