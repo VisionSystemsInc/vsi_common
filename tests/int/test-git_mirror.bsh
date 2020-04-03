@@ -1,0 +1,251 @@
+#!/usr/bin/env bash
+
+. "$(dirname "${BASH_SOURCE[0]}")/../testlib.bsh"
+VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.."; pwd)"
+
+. "${VSI_COMMON_DIR}/linux/git_mirror"
+
+# These tests chain together, so no point in continuing after one breaks
+TESTLIB_STOP_AFTER_FAILS=1
+unset TESTLIB_SKIP_TESTS TESTLIB_RUN_SINGLE_TEST
+
+if ! git lfs &> /dev/null; then
+  TESTLIB_SKIP_TESTS='.*'
+fi
+
+function setup()
+{
+  # Easier way to take care of committers on vanilla install
+  export GIT_COMMITTER_NAME='Foo Bar'
+  export GIT_AUTHOR_NAME='Foo Bar'
+  export GIT_COMMITTER_EMAIL='foo.bar@example.com'
+  export GIT_AUTHOR_EMAIL='foo.bar@example.com'
+
+  BUILD_REPO="${TRASHDIR}/build_repo"
+  PRETEND_REPO="${TRASHDIR}/pretend_repo"
+
+  if [ "${OS-}" = "Windows_NT" ]; then
+    DIFFICULT_NAME='diff  i cult'
+  else
+    DIFFICULT_NAME=$'diff  i \t cult'
+  fi
+
+  TRANSFER_DIR="${TRASHDIR}/transfer"
+  MIRROR_DIR="${TRASHDIR}/mirror"
+
+  mkdir -p "${TRANSFER_DIR}"
+  if [ "${BASH_VERSINFO[0]}" -ge 4 ]; then
+    cat - << EOF > "${TRANSFER_DIR}/info.env"
+repos[.]="${MIRROR_DIR}/main"
+repos[lfs]="${MIRROR_DIR}/lfs"
+repos['${DIFFICULT_NAME}']="${MIRROR_DIR}"/'${DIFFICULT_NAME}'
+repos['${DIFFICULT_NAME}/a_sub_sub_module']="${MIRROR_DIR}/recipes"
+EOF
+  else
+    cat - << EOF > "${TRANSFER_DIR}/info.env"
+repo_paths=('.' lfs '${DIFFICULT_NAME}' '${DIFFICULT_NAME}/a_sub_sub_module')
+repo_urls=("${MIRROR_DIR}/main"
+           "${MIRROR_DIR}/lfs"
+           "${MIRROR_DIR}"/'${DIFFICULT_NAME}'
+           "${MIRROR_DIR}/recipes")
+EOF
+  fi
+
+  local os
+  if [ "${OS-}" = "Windows_NT" ]; then
+    os=windows-amd64
+  elif [[ ${OSTYPE} = darwin* ]]; then
+    os=darwin-amd64
+  else
+    os=linux-amd64
+  fi
+
+  pushd "${TRASHDIR}" &> /dev/null
+    if command -v curl &> /dev/null; then
+      curl -Lo "lfs.zip" "https://github.com/sinbad/lfs-folderstore/releases/download/v1.0.0/lfs-folderstore-${os}-v1.0.0.zip" &> /dev/null
+    else
+      wget -O "lfs.zip" "https://github.com/sinbad/lfs-folderstore/releases/download/v1.0.0/lfs-folderstore-${os}-v1.0.0.zip" &> /dev/null
+    fi
+    unzip lfs.zip &> /dev/null
+    chmod 755 lfs-folderstore-${os}/lfs-folderstore
+  popd &> /dev/null
+
+  echo '#!/usr/bin/env bash
+git -c lfs.customtransfer.lfs-folder.path="'"${TRASHDIR}/lfs-folderstore-${os}/lfs-folderstore"'" \
+    -c lfs.customtransfer.lfs-folder.args="${LFS_DIR}" \
+    -c lfs.standalonetransferagent=lfs-folder \
+    ${@+"${@}"}' > "${TRASHDIR}/git2"
+  chmod 755 "${TRASHDIR}/git2"
+
+  # The lfs-folderstore will not work unless the dir exists :(
+  mkdir -p "${MIRROR_DIR}/lfs/lfs/objects"
+
+  CLONE_DIR="${TRASHDIR}/clone"
+}
+
+begin_test "Part 1 - Setup test repo"
+(
+  setup_test
+
+  # Sub sub module
+  mkdir -p "${BUILD_REPO}_sub_sub"
+  pushd "${BUILD_REPO}_sub_sub" &> /dev/null
+    git init .
+    touch readme_sub_sub
+    git add readme_sub_sub
+    git commit -m "Initial commit"
+  popd &> /dev/null
+  mkdir -p "${PRETEND_REPO}_sub_sub"
+  pushd "${PRETEND_REPO}_sub_sub" &> /dev/null
+    # This only works right, because all branches appear to be "topic" branches,
+    # so a push --mirror (once) will do what I want. Doesn't work well with more
+    # complexities like lfs
+    git clone --mirror "${BUILD_REPO}_sub_sub" .
+    # git init --bare .
+    # cd "${BUILD_REPO}_sub_sub"
+    # git remote add origin "${PRETEND_REPO}_sub_sub"
+    # git push origin --mirror
+  popd &> /dev/null
+
+  # Sub module
+  mkdir -p "${BUILD_REPO}_sub"
+  pushd "${BUILD_REPO}_sub" &> /dev/null
+    git init .
+    touch readme_sub
+    git add readme_sub
+    git submodule add "${PRETEND_REPO}_sub_sub" "a_sub_sub_module"
+    git commit -m "Initial commit"
+  popd &> /dev/null
+  mkdir -p "${PRETEND_REPO}_sub"
+  pushd "${PRETEND_REPO}_sub" &> /dev/null
+    git clone --mirror "${BUILD_REPO}_sub" .
+    # git init --bare .
+    # cd "${BUILD_REPO}_sub"
+    # git remote add origin "${PRETEND_REPO}_sub"
+    # git push origin --mirror
+  popd &> /dev/null
+
+  # LFS Repo
+  mkdir -p "${BUILD_REPO}_lfs"
+  pushd "${BUILD_REPO}_lfs" &> /dev/null
+    git init .
+    git lfs track '*.bin'
+    echo hi > readme1.bin
+    git add readme1.bin .gitattributes
+    git commit -m "Initial commit"
+
+    echo bye > readme1.bin
+    git add readme1.bin
+    git commit -m "Another commit"
+  popd &> /dev/null
+  mkdir -p "${PRETEND_REPO}_lfs"
+  pushd "${PRETEND_REPO}_lfs" &> /dev/null
+    git clone --mirror "${BUILD_REPO}_lfs" .
+    # https://github.com/git-lfs/git-lfs/issues/1338#issuecomment-229736496
+    LFS_DIR="${BUILD_REPO}_lfs/.git/lfs/objects" "${TRASHDIR}/git2" lfs fetch --all
+    # git init --bare .
+    # cd "${BUILD_REPO}_lfs"
+    # git remote add origin "${PRETEND_REPO}_lfs"
+    # LFS_DIR="${PRETEND_REPO}_lfs/lfs/lfs/objects" "${TRASHDIR}/git2" push origin --mirror
+  popd &> /dev/null
+
+  # Main Repo
+
+  mkdir -p "${BUILD_REPO}"
+  pushd "${BUILD_REPO}" &> /dev/null
+    git init
+    touch readme
+    git add readme
+    git commit -m "Initial commit"
+    git tag "original_commit"
+
+    # LFS_DIR="${PRETEND_REPO}_lfs/lfs/objects" "${TRASHDIR}/git2" submodule add "${PRETEND_REPO}_lfs" "lfs"
+    GIT_LFS_SKIP_SMUDGE=1 git submodule add "${PRETEND_REPO}_lfs" "lfs"
+    git submodule add "${PRETEND_REPO}_sub" "${DIFFICULT_NAME}"
+    # Git itself can't handle newlines, although the config file actually can
+    # escape them. This is a PURE git bug, plain and simple.
+    # This won't actually create a newline in the name, it just ignores it
+    # git submodule add https://github.com/visionsystemsinc/vsi_common $'  foo\tar\n'
+    # This will.
+    # git mv $'  diff  i \t cult' $' \n diff  i \t cult'
+    # However, at random this give permission denied errors, good thing I don't need it...
+
+    git commit -m "Added submodules"
+  popd &> /dev/null
+  mkdir -p "${PRETEND_REPO}"
+  pushd "${PRETEND_REPO}" &> /dev/null
+    git clone --mirror "${BUILD_REPO}" .
+    # git init --bare .
+    # cd "${BUILD_REPO}"
+    # git remote add origin "${PRETEND_REPO}"
+    # git push origin --mirror
+  popd &> /dev/null
+
+  # read -p "Press any key to continues" >&${stdout-1}
+)
+end_test
+
+begin_test "Part 2 - Initial mirror"
+(
+  setup_test
+
+  pushd "${TRASHDIR}" &> /dev/null
+    LFS_DIR="${PRETEND_REPO}_lfs/lfs/objects" GIT="${TRASHDIR}/git2" git_mirror_main "${PRETEND_REPO}"
+  popd &> /dev/null
+)
+end_test
+
+PREP_FILE=("${TRASHDIR}/pretend_repo_prep/"transfer_*.tgz)
+
+begin_test "Part 3 - Update a prepped mirror"
+(
+  setup_test
+
+  pushd "${TRASHDIR}" &> /dev/null
+    git_mirror_main "${TRASHDIR}/pretend_repo_prep"
+  popd &> /dev/null
+)
+end_test
+
+begin_test "Part 4 - Simulating transfer"
+(
+  setup_test
+  mkdir -p "${TRANSFER_DIR}"
+  pushd "${TRANSFER_DIR}" &> /dev/null
+    tar zxf "${PREP_FILE[0]}"
+  popd &> /dev/null
+)
+end_test
+
+begin_test "Part 5 - Pushing to mirror"
+(
+  setup_test
+
+  for d in main lfs "${DIFFICULT_NAME}" recipes; do
+    mkdir -p "${MIRROR_DIR}/${d}"
+    pushd "${MIRROR_DIR}/${d}" &> /dev/null
+      git init --bare
+    popd &> /dev/null
+  done
+
+  LFS_DIR="${MIRROR_DIR}/lfs/lfs/objects" GIT="${TRASHDIR}/git2" git_push_main "${TRANSFER_DIR}/info.env" "${TRANSFER_DIR}"
+)
+end_test
+
+begin_test "Part 6 - Cloning from mirror"
+(
+  setup_test
+
+  LFS_DIR="${MIRROR_DIR}/lfs/lfs/objects" GIT="${TRASHDIR}/git2" git_clone_main "${TRANSFER_DIR}/info.env" "${CLONE_DIR}"
+
+  # Tests
+  [[ -f "${CLONE_DIR}/${DIFFICULT_NAME}/readme_sub" ]]
+  [[ -f "${CLONE_DIR}/${DIFFICULT_NAME}/a_sub_sub_module/readme_sub_sub" ]]
+  [[ $(sha256sum ${CLONE_DIR}/lfs/readme1.bin | awk '{print $1}') == abc6fd595fc079d3114d4b71a4d84b1d1d0f79df1e70f8813212f2a65d8916df ]]
+  # This file shouldn't exist yet
+  [[ ! -e "${CLONE_DIR}/.git/modules/lfs/lfs/objects/98/ea/98ea6e4f216f2fb4b69fff9b3a44842c38686ca685f3f55dc48c5d3fb1107be4" ]]
+  cd "${CLONE_DIR}/lfs"
+  LFS_DIR="${MIRROR_DIR}/lfs/lfs/objects" "${TRASHDIR}/git2" lfs fetch --all
+  [[ -e "${CLONE_DIR}/.git/modules/lfs/lfs/objects/98/ea/98ea6e4f216f2fb4b69fff9b3a44842c38686ca685f3f55dc48c5d3fb1107be4" ]]
+)
+end_test
