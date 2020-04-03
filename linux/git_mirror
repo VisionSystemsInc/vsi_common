@@ -1,14 +1,19 @@
 #!/usr/bin/env bash
-# if [[ $- != *i* ]]; then
-#   source_once &> /dev/null && return 0
-# fi
+if [[ $- != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
+source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
 
 GIT_MIRROR_SOURCE="$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)"/"$(basename "${BASH_SOURCE[0]}")"
 
 : ${GIT=git}
 
 # TODO: Move to dir_tools
-function os_compatible_mktemp()
+function mktemp_compat()
 {  # Stupid mac compatibility
   local dir="${1}"
   while [[ -e ${dir} ]]; do
@@ -21,23 +26,12 @@ function os_compatible_mktemp()
 #########################
 # Auto Colored sections #
 #########################
-# TODO: Replace TEMP_DIR with make_temp_path
-function cleanup_files()
-{
-  if [[ -d ${TEMP_DIR-} ]]; then
-    rm -rf "${TEMP_DIR}"
-  fi
-  if [[ -f ${COLOR_FILE-} ]]; then
-    rm "${COLOR_FILE}"
-  fi
-  echo -n $'\e[0m'
-}
-
 # TODO: Move to colors.bsh
 function next_section()
 {
   if [[ -z ${COLOR_FILE+set} ]]; then
-    export COLOR_FILE="$(mktemp)"
+    make_temp_path COLOR_FILE
+    export COLOR_FILE
   fi
   local COLORS=($'\e[31m' $'\e[32m' $'\e[33m' $'\e[34m' $'\e[0m')
   local -i COLOR_INDEX="$(cat "${COLOR_FILE}" || echo 0)"
@@ -89,13 +83,11 @@ fi
 # LFS Check #
 #############
 
-# Outputs - __git_mirror_has_lfs
 # Returns -
 function git_mirror_has_lfs()
 {
   if [ -z "${__git_mirror_has_lfs:+set}" ]; then
-    # TODO: replace with versions.bsh
-    if [ "${GIT_VERSION[0]}" -le "1" -a "${GIT_VERSION[1]}" -le "8" -a "${GIT_VERSION[2]}" -lt "2" ] ||  ! ${GIT} lfs &> /dev/null; then
+    if ! ${GIT} lfs &> /dev/null; then
       __git_mirror_has_lfs=1 # Does not have it
     else
       __git_mirror_has_lfs=0 # Does have it
@@ -145,7 +137,7 @@ function clone_submodules()
         ${GIT} remote set-url origin "$(${GIT} config "${submodule}.url")"
       popd &> /dev/null
     else
-      prepped_submodule_path="$(os_compatible_mktemp "${PREP_DIR}")/${full_relative_path}"
+      prepped_submodule_path="$(mktemp_compat "${PREP_DIR}")/${full_relative_path}"
       next_section "Cloning a fresh copy of ${full_relative_path}"
       ${GIT} clone --mirror "$(${GIT} config "${submodule}.url")" "${prepped_submodule_path}"
     fi
@@ -239,6 +231,7 @@ function git_mirror_main()
     exit 1
   fi
 
+  local MAIN_REPO
   if [ -f "${1}/"*"/config" ]; then
     pushd "$(dirname "${1}/"*"/config")" &> /dev/null
       MAIN_REPO="$(${GIT} config --get remote.origin.url)"
@@ -246,9 +239,9 @@ function git_mirror_main()
   else
     MAIN_REPO="${1}"
   fi
-  BRANCH="${2-master}"
+  local BRANCH="${2-master}"
 
-  MAIN_DIR="$(basename "${MAIN_REPO}")"
+  local MAIN_DIR="$(basename "${MAIN_REPO}")"
   MAIN_DIR="${MAIN_DIR%.*}"
   PREP_DIR="$(pwd)/${MAIN_DIR}_prep"
 
@@ -273,7 +266,8 @@ function git_mirror_main()
   fi
 
   next_section "Re-cloning locally"
-  TEMP_DIR="$(mktemp -d)"
+  local TEMP_DIR
+  make_temp_path TEMP_DIR -d
   # The local non-bare doesn't need to waste time copying LFS objects
   GIT_LFS_SKIP_SMUDGE=1 ${GIT} clone "${PREP_DIR}/${MAIN_DIR}" "${TEMP_DIR}"
 
@@ -290,15 +284,16 @@ function git_mirror_main()
     clone_submodules
   popd &> /dev/null
 
-  temp_file="$(mktemp)"
-  TAR_INCREMENTAL=1
+  local temp_file
+  make_temp_path temp_file
+  local TAR_INCREMENTAL=1
   tar -cf /dev/null -g "${temp_file}" /dev/null &> /dev/null || TAR_INCREMENTAL=0
-  rm "${temp_file}"
 
 
   pushd "${PREP_DIR}" &> /dev/null
     next_section "Creating tar file..."
-    tar_file="transfer_$(date '+%Y_%m_%d_%H_%M_%S')"
+    local tar_file="transfer_$(date '+%Y_%m_%d_%H_%M_%S')"
+    local last_tar_file
     if [[ ${TAR_INCREMENTAL} = 1 ]]; then
       # Get the last one, alphabetically speaking
       last_tar_file="$(ls "${PREP_DIR}"/transfer_*.snar 2>/dev/null | tail -n1)"
