@@ -197,14 +197,13 @@ function clone_submodules()
 
   # And the recursion goes on... foreach runs in sh, I'm forcing bash
   # I need to pass prefix/displaypath on to the bash function, so export it.
-  PS4="${PS4}" PREP_DIR="${PREP_DIR}" base_submodule_path="${base_submodule_path}" ${GIT} submodule foreach --quiet "export prefix displaypath; bash -xveuc 'ps -f $$; source \"${GIT_MIRROR_SOURCE[0]}\"; clone_submodules'"
+  PREP_DIR="${PREP_DIR}" base_submodule_path="${base_submodule_path}" ${GIT} submodule foreach --quiet "export prefix displaypath; bash -euc 'source \"${GIT_MIRROR_SOURCE[0]}\"; clone_submodules'"
 }
 
 function clone_from_mirror()
 {
   # Arrays aren't exported, reload
-  local -A repos
-  source "${1}"
+  _git_mirror_load_info "${1}"
 
   local submodule_name
   local full_relative_path
@@ -212,7 +211,7 @@ function clone_from_mirror()
   # Remove trailing slashes, because on some versions of git (2.17.1), prefix
   # has a trailing slash
   base_submodule_path="${base_submodule_path%/}"
-  local current_repo="${repos[${base_submodule_path:-.}]}"
+  local current_repo="$(_git_mirror_get_url "${base_submodule_path:-.}")"
   next_section "Cloning repo: ${current_repo}"
 
   ${GIT} submodule init
@@ -221,7 +220,7 @@ function clone_from_mirror()
 
   for submodule_name in ${submodule_names[@]+"${submodule_names[@]}"}; do
     full_relative_path="${base_submodule_path}${base_submodule_path:+/}$(${GIT} config -f .gitmodules ${submodule_name}.path)"
-    ${GIT} config "${submodule_name}.url" "${repos[${full_relative_path}]}"
+    ${GIT} config "${submodule_name}.url" "$(_git_mirror_get_url "${full_relative_path}")"
   done
   next_section "Updating ${current_repo}'s submodules"
   ${GIT} submodule update
@@ -347,9 +346,10 @@ function _git_mirror_get_url()
   for index in "${!repo_paths[@]}"; do
     if [ "${repo_paths[$index]}" = "${1}" ]; then
       echo "${repo_urls[$index]}"
-      break
+      return
     fi
   done
+  echo "Error: no entry found for: ${1}" >&2
 }
 
 function git_clone_main()
