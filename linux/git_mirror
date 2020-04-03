@@ -325,14 +325,42 @@ function git_mirror_main()
   popd &> /dev/null
 }
 
+function _git_mirror_load_info()
+{
+  if [ "${BASH_VERSINFO[0]}" -ge "4" ]; then
+    local -A repos
+    repo_paths=()
+    repo_urls=()
+    local index
+  fi
+  source "${1}"
+  if [ "${BASH_VERSINFO[0]}" -ge "4" ]; then
+    local key
+    repo_paths=(${repo_paths[@]+"${repo_paths[@]}"} "${!repos[@]}")
+    for key in "${!repos[@]}"; do
+      repo_urls=(${repo_urls[@]+"${repo_urls[@]}"} "${repos[${key}]}")
+    done
+  fi
+}
+
+function _git_mirror_get_url()
+{
+  local index
+  for index in "${!repo_paths[@]}"; do
+    if [ "${repo_paths[$index]}" = "${1}" ]; then
+      echo "${repo_urls[$index]}"
+      break
+    fi
+  done
+}
+
 function git_clone_main()
 {
-  local -A repos
-  source "${1}"
+  _git_mirror_load_info "${1}"
   mkdir -p "${2-.}"
   pushd "${2-.}" &> /dev/null
     if [ ! -d ./.git ]; then
-      ${GIT} clone "${repos[.]}" .
+      ${GIT} clone "$(_git_mirror_get_url .)" .
     fi
     clone_from_mirror "${1}"
   popd &> /dev/null
@@ -340,39 +368,46 @@ function git_clone_main()
 
 function git_push_main()
 {
-  local -A repos
-  source "${1}"
+  _git_mirror_load_info "${1}"
+  local main_repo_url="$(_git_mirror_get_url .)"
+  local repo_path
   pushd "${2}" &> /dev/null
-    repo_dir="$(dirname */config)"
-    next_section "Processing main repo: ${repo_dir}"
-    pushd "${repo_dir}" &> /dev/null
-      ${GIT} push --mirror "${repos[.]}"
+    repo_path="$(dirname */config)"
+    next_section "Processing main repo: ${repo_path}"
+    pushd "${repo_path}" &> /dev/null
+      ${GIT} push --mirror "${main_repo_url}"
 
       if git_mirror_has_lfs; then
-        next_section "Pushing lfs objects for ${repo_dir}"
-        ${GIT} remote add mirror "${repos[.]}" 2>/dev/null || ${GIT} remote set-url mirror "${repos[.]}"
+        next_section "Pushing lfs objects for ${repo_path}"
+        ${GIT} remote add mirror "${main_repo_url}" 2>/dev/null || ${GIT} remote set-url mirror "${main_repo_url}"
         ${GIT} lfs push mirror --all || :
         # Does not work on file systems, only with real lfs servers
       fi
     popd &> /dev/null
-    # Remove this, since we are done with it
-    unset repos[.]
+
+    local index
     # Loop through the remaining repos
-    for repo_path in ${repos[@]+"${!repos[@]}"}; do
-      repo_dir="$(dirname */"${repo_path}/config")"
-      next_section "Processing submodule repo: ${repo_dir}"
-      if [[ -d ${repo_dir} ]]; then
-        pushd "${repo_dir}" &> /dev/null
-          ${GIT} push --mirror "${repos[${repo_path}]}"
+    for index in ${repo_paths[@]+"${!repo_paths[@]}"}; do
+      # Skip this, since we are done with it
+      if [ "${repo_paths[$index]}" = "." ]; then
+        continue
+      fi
+
+      repo_path="$(dirname */"${repo_paths[$index]}/config")"
+      
+      next_section "Processing submodule repo: ${repo_path}"
+      if [[ -d ${repo_path} ]]; then
+        pushd "${repo_path}" &> /dev/null
+          ${GIT} push --mirror "${repo_urls[$index]}"
           if git_mirror_has_lfs; then
-            next_section "Pushing lfs objects for ${repo_dir}"
-            ${GIT} remote add mirror "${repos[${repo_path}]}" 2>/dev/null || ${GIT} remote set-url mirror "${repos[${repo_path}]}"
+            next_section "Pushing lfs objects for ${repo_path}"
+            ${GIT} remote add mirror "${repo_urls[$index]}" 2>/dev/null || ${GIT} remote set-url mirror "${repo_urls[$index]}"
             # Does not work on file systems, only with real lfs servers, unless you set up lfs-filestore
             ${GIT} lfs push mirror --all || :
           fi
         popd &> /dev/null
       else
-        echo "No dir found for submodule ${repo_path}"
+        echo "No dir found for submodule ${repo_paths[$index]}"
       fi
     done
   popd &> /dev/null
