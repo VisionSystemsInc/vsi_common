@@ -120,6 +120,9 @@ function clone_submodules()
   local submodule
 
   local base_submodule_path="${base_submodule_path-}${base_submodule_path:+/}${prefix-${displaypath-}}"
+  # Remove trailing slashes, because on some versions of git (2.17.1), prefix
+  # has a trailing slash
+  base_submodule_path="${base_submodule_path%/}"
 
   # Update submodule urls to use PREP_DIR
   for submodule in ${submodule_names[@]+"${submodule_names[@]}"}; do
@@ -189,7 +192,11 @@ function clone_submodules()
 
   # And the recursion goes on... foreach runs in sh, I'm forcing bash
   # I need to pass prefix/displaypath on to the bash function, so export it.
-  PREP_DIR="${PREP_DIR}" base_submodule_path="${base_submodule_path}" ${GIT} submodule foreach --quiet "export prefix displaypath; bash -euc 'source \"${GIT_MIRROR_SOURCE[0]}\"; clone_submodules'"
+  PREP_DIR="${PREP_DIR}" base_submodule_path="${base_submodule_path}" ${GIT} submodule foreach --quiet "export prefix displaypath; bash -euc 'unset GIT_DIR; source \"${GIT_MIRROR_SOURCE[0]}\"; clone_submodules'"
+  # The "unset GIT_DIR" is due to the fact that somewhere between git 2.17 and
+  # 2.21, git-submodule-foreach started setting the GIT_DIR, and this will undo
+  # that. The logic here does not need GIT_DIR set, in fact it is constantly
+  # cd'ing so that the commands work as expected, and this breaks those
 }
 
 function clone_from_mirror()
@@ -216,7 +223,7 @@ function clone_from_mirror()
   done
   next_section "Updating ${current_repo}'s submodules"
   ${GIT} submodule update
-  base_submodule_path="${base_submodule_path-}" ${GIT} submodule foreach --quiet "export prefix displaypath; bash -euc 'source \"${GIT_MIRROR_SOURCE[0]}\"; clone_from_mirror \"${1}\"'"
+  base_submodule_path="${base_submodule_path-}" ${GIT} submodule foreach --quiet "export prefix displaypath; bash -euc 'unset GIT_DIR; source \"${GIT_MIRROR_SOURCE[0]}\"; clone_from_mirror \"${1}\"'"
 }
 
 #########
@@ -387,7 +394,7 @@ function git_push_main()
       fi
 
       repo_path="$(dirname */"${repo_paths[$index]}/config")"
-      
+
       next_section "Processing submodule repo: ${repo_path}"
       if [[ -d ${repo_path} ]]; then
         pushd "${repo_path}" &> /dev/null
