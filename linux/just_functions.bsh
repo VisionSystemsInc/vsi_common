@@ -101,6 +101,7 @@ function _get_owner_id()
 #
 #   :func:`get_args`, :func:`get_additional_args`
 #**
+
 : ${JUST_SEPARATOR='--'}
 
 #**
@@ -127,12 +128,12 @@ function _get_owner_id()
 #
 # Certain just targets can be used for many different projects, and rather then repeating this code, just_plugins give a way to expose the common code of these targets to many different projects.
 #
-# To add a plugins to your project, simply add the plugin filenames to your :file:`.justplugins` file.
+# To add plugins to your project, simply add the plugin filenames to your :file:`.justplugins` file.
 #
 # When writing a new plugin, you need to follow a few rules:
 #
-# 1. A case statement in a defaultify function should be written, but with a unique name that should not be likely to be used anywhere else. All plugin functions will have to exist in the same namespace.
-# 2. Adds the case function names to the array :envvar:`JUST_DEFAULTIFY_FUNCTIONS` to allow commonly used functionality to be added to the targets for just
+# 1. A case statement in a defaultify function must be written. The case statement should have a unique name that is not likely to be used anywhere else. All plugin functions have to exist in the same namespace.
+# 2. Add the case names to the array :envvar:`JUST_DEFAULTIFY_FUNCTIONS` to allow the commonly used functionality to be added as targets for just
 # 3. Add the plugin filename to the array :envvar:`JUST_HELP_FILES`
 # 4. Must return non-zero if the argument is not matched, and return 0 on target match
 #
@@ -161,15 +162,14 @@ function _get_owner_id()
 ##     }
 #**
 
-# The above need the ## before foo|bar, or else just help will pick it up as a
-# valid command. ## is a special pattern in the docs entrypoint
+# The above example needs the ## before foo|bar, or else just help will pick it up as a valid command. ## is a special pattern in the docs entrypoint
 
 #**
 # .. envvar:: JUST_PLUGIN_FILE
 #
 # Name of the just plugin file
 #
-# Defaults to :file:`.justplugins` in the same directory as the Justfile, but can be overridden to another filename/path by exporting to this variable
+# Defaults to :file:`.justplugins` in the same directory as the Justfile, but can be overridden to another filename/path by exporting this variable
 #
 # .. note::
 #
@@ -196,11 +196,11 @@ fi
 #**
 # .. envvar:: JUST_HELP_FILES
 #
-# This should include just_functions.bsh, which ever Justfile is used, and any plugins. The plugin is responsible for adding itself to this array.
+# This should include just_functions.bsh, the Justfile, and any plugins. The plugin is responsible for adding itself to this array.
 #
 # .. rubric:: Usage
 #
-# Every project should have a setup script, typically called ``setup.env``. This script filename is stored in :envvar:`JUST_SETUP_SCRIPT` and is the location where :envvar:`JUST_HELP_FILES` should be set
+# Every project should have a :ref:`setup file <just-setup-file>`, typically called ``setup.env``. This script's location is stored in :envvar:`JUST_SETUP_SCRIPT` and is also where :envvar:`JUST_HELP_FILES` should be set.
 #
 # .. seealso::
 #
@@ -216,12 +216,21 @@ fi
 #
 # Variable prefix for project
 #
-# Some just functions will need to know what all the project variables are called (using compgen). This should be defined in your environment script, and does not need to be overridable
+# Some just functions need to know the prefix used for a project's environment variables (e.g., in order to list all project env variables using compgen). This should be defined in your project's settings env file, and does not need to be overridable.
 #
 # .. envvar:: JUST_SETTINGS
 #
-# Absolute path to the project env file used
+# Absolute path to the project settings env file; set automatically when you source :file:`just_env`
 #
+# JUST_SETTINGS is set automatically by :file:`just_env`, which is used to setup the project's environment by sourcing the projects settings env file very early in the project's Justfile.
+#
+# .. rubric:: Example
+#
+# Typically, the Justfile will include a line like this very near the top:
+#
+# .. code-block:: bash
+#
+#   source "${VSI_COMMON_DIR}/linux/just_env" "$(dirname "${BASH_SOURCE[0]}")"/'my_project.env'
 #
 # .. function:: source_environment_files
 #
@@ -229,8 +238,8 @@ fi
 #
 # The just system works by sourcing environment files
 #
-# 1. First ${project_dir}/local.env. This file should never be added to version control. It should contain customizations for that particular install.
-# 2. The project file. This file should ideally contain all the default values necessary to run without any local.env settings.
+# 1. First, ${project_dir}/local.env. This file should never be added to version control. It should contain customizations for that particular install.
+# 2. Then, the project's settings env file. This file should ideally contain all the default values necessary to run without any local.env settings.
 # 3. Last, ${project_dir}/local_post.env. This file should never be added to version control. It is rarely used, except in situations where the value of a variable is based off of another variable. This is why it is loaded last.
 # 4. Any plugins that are identified, are also sourced
 #
@@ -246,15 +255,16 @@ fi
 # ``JUST_LOCAL_SETTINGS`` and ``JUST_LOCAL_SETTINGS_POST`` must not be set in the project environment file or in the local.env file, as it will not have the desired effect. Instead, they should either be manually set in the environment or set in the setup script (see :envvar:`JUST_SETUP_SCRIPT`)
 #
 # .. note::
-#   Certain exceptions make sense for not storing values in the project file, such as credentials, encryption keys, etc... information that should not be hard-coded ever.
+#   Certain exceptions to not storing values in the project settings file make sense such as credentials, encryption keys, etc... information that should not be hard-coded ever.
 #
 #
-#   Only require settings in ``local.env`` when it cannot be avoided. For example, sometimes its better to add default behavior of create keys if possible. Such as using openssl to create ssl certs in a default location (that is ignored by version control)
+#   Only require settings in ``local.env`` when it cannot be avoided. For example, it might be reasonable to use openssl to create ssl certs in a default location (that is ignored by version control).
 #
 # .. seealso::
 #
 #   :func:`just_common.bsh _just_get_plugins` :envvar:`JUST_SETUP_SCRIPT`
 #**
+
 function source_environment_files()
 {
   local project_dir="$(dirname "${1}")"
@@ -273,10 +283,10 @@ function source_environment_files()
       perm=$(_get_owner_id "${project_dir}")
     fi
 
-    # If the current user is the same who owns the repo files, then generate
+    # If the current user is the same one who owns the repo files, then generate
     # the local file. The prevents other users from creating local.env files in
-    # your directory by accident. Also doesn't error if read-only or other
-    # permission errors
+    # your directory by accident. But doesn't error if the directory is read-only
+    # or there is some other permission error
     if [ "${perm}" = "$(id -u)" ]; then
       echo "# Put local setting in this file" 2>/dev/null > "${JUST_LOCAL_SETTINGS}" &&
       {
@@ -322,10 +332,10 @@ function source_environment_files()
   done
   reset_flag a
 
-  # There is a feature of the set -a feature in bash that will actually export
+  # There is a feature of the set -a builtin in bash that will actually export
   # functions. While we don't need this, it is normally harmless. However in the
-  # macOS case sh somehow get invoked by python on start, and thus complains if
-  # a function name with a hyphen in it has been exported. Again, this is
+  # macOS case, sh somehow gets invoked by python on start, and thus complains
+  # if a function name with a hyphen in it has been exported. Again, this is
   # harmless but annoying
   while IFS= read -r x || [[ -n ${x} ]] ; do
     x=${x##* }
@@ -348,6 +358,7 @@ function source_environment_files()
 #
 #   :file:`just_env`
 #**
+
 function auto_path_escape()
 {
   local var
@@ -388,9 +399,9 @@ function auto_path_escape()
 #
 #   ``: ${MY_VAR=default}``
 #
-# However, this syntax does not work for an array. Bash 3.2 does not give an equivalent 1 line version of this. To cover this scenario, :func:`set_temp_array` is used to set a default value if an array is not already set. Using :func:`set_temp_array`, an array can be set to a default value if not already set in two lines
+# However, this syntax does not work for an array. Bash 3.2 does not give an equivalent one line version of this. Instead, using :func:`set_temp_array`, JUST_TEMP_ARRAY can be set to a default value if not already set (albeit, in two lines).
 #
-# It works by checking if an array is set. If it is set, it copies all the values to the array JUST_TEMP_ARRAY. If it is not set, it will copy the rest of the arguments (the default values) to ``JUST_TEMP_ARRAY``. When using this function with set -u turned on, it is best to reference ``JUST_TEMP_ARRAY`` by (${JUST_TEMP_ARRAY+"${JUST_TEMP_ARRAY[@]}"}) in case the array is empty, as this triggers Bash's unbound variable test.
+# It works by checking if an array is set. If it is, it copies all the values to the array JUST_TEMP_ARRAY. If it is not, it will copy the rest of the arguments (the default values) to ``JUST_TEMP_ARRAY``. When using this function with set -u turned on, it is best to reference ``JUST_TEMP_ARRAY`` by (${JUST_TEMP_ARRAY+"${JUST_TEMP_ARRAY[@]}"}) in case the array is empty, as this triggers bash's unbound variable test.
 #
 # .. rubric:: Example
 #
@@ -427,15 +438,13 @@ function set_temp_array()
 #
 #             ``$2...`` - Default values of the array
 #
-# :Output: ``JUST_TEMP_ARRAY`` - Destination for all the values set
-#
 # Set array to default values if not already set.
 #
-# In bash, when setting a variable to a default value if it has not already been set, it is typical to follow the pattern:
+# In bash, when setting a variable to a default value, if it has not already been set, it is typical to follow the pattern:
 #
 #   ``: ${MY_VAR=default}``
 #
-# However, this syntax does not work for an array. Bash 3.2 does not give an equivalent 1 line version of this. To cover this scenario, :func:`set_array_default` is used to set a default value if an array is not already set.
+# However, this syntax does not work for an array. Bash 3.2 does not give an equivalent one line version of this. Instead, using :func:`set_array_default`, an array can be set to a default value if not already set (albeit, in two lines).
 #
 # It works by checking if an array is set. If it is set, nothing happens. If it is not set, it will copy the rest of the arguments (the default values) to the array named.
 #
@@ -476,7 +485,7 @@ function set_array_default()
 #
 # :Parameters: indent - How much the right side should be indented to make a uniform output
 #
-# Restructures text to indented properly on wrap around
+# Restructures text to indent properly on wrap around
 #
 # Each line consists of a command that will be printed on the left, and the indented description on the right. The description is wrapped around based on tput cols.
 #
@@ -667,10 +676,11 @@ function print_help()
 #**
 # .. function:: is_powershell
 #
-# Check if the current command windows is powershell
+# Check if the current command window is powershell
 #
-# Using a Window title trick, determine if the shell is running in powershell, or not, for example command prompt windows, cygwin or git bash
+# Using a Window's title trick, determine if the shell is running in powershell or some other shell (e.g., Windows command prompt, cygwin or git bash)
 #**
+
 function is_powershell()
 {
   if [ "${JUST_IS_TTY-0}" == "1" ]; then
@@ -710,6 +720,7 @@ function is_powershell()
 #
 #   https://tinyurl.com/yb5jjzqt
 #**
+
 function need_tty()
 {
   if [ "${OS-}" != "Windows_NT" ] || [ "${JUST_IS_TTY-}" = "1" ]; then
@@ -742,7 +753,7 @@ function need_tty()
 #
 # Pops up a new powershell window and runs just
 #
-# Cygwin bash is pretty bad. The new git bash (MINGW64) does not have a tty. This is a problem for docker. Powershell does have a tty, buy can not run bash scrips natively. The solution is to run bash in powershell (which is not as straight forward as it sounds). This function is designed to re-execute in a new powershell on Windows if not in powershell
+# Cygwin bash is pretty bad. The new git bash (MINGW64) does not have a tty. This is a problem for docker. Powershell does have a tty, but cannot run bash scrips natively. The solution is to run bash in powershell (which is not as straight forward as it sounds). This function is designed to re-execute in a new powershell on Windows if not in powershell
 #
 # :Parameters: [``JUST_PTY``] - PTY app to use create a psuedoterminal for windows apps. By default, uses ``winpty``. Set to ``powershell`` for the old behavior
 #
@@ -798,7 +809,7 @@ function defaultify()
   arg="${1}"
   shift 1
   case "${arg}" in
-    --dryrun|-n) #Dryrun flag. Used to echo instead of run commands
+    --dryrun|-n) # Dryrun flag. Used to echo instead of run commands
       export DRYRUN="print_command just --wrap"
       ;;
     --separator) # Commands that can take an undefined number of additional \
@@ -888,7 +899,7 @@ function defaultify()
         extra_args=$#
       fi
       ;;
-    -h|--help|help) #Print help
+    -h|--help|help) # Print help
       print_help
       ;;
     _null)
@@ -980,7 +991,7 @@ declare -i extra_args
 #
 # The main loop of just
 #
-# Handles determining what subcommands are, and calling commands and subcommands.
+# Handles determining what subcommands are and calling commands and subcommands.
 #
 # When one target is called from another target, justify should be used to do the calling, for example:
 #
@@ -1206,11 +1217,11 @@ function get_additional_args()
 #
 # A non-eval method for loading and exporting a text file of keys/values
 #
-# :Arguments: Inputs ``$1`` - Filename of file to be loaded.
+# :Arguments: Inputs ``$1`` - Filename of file to be loaded
 #
-# :Parameters: [:envvar:`JUST_SAFE_LOAD_DELIMITER`] - By default, = is use between key and value. If = is needed, then this environment variable can override the delimiter
+# :Parameters: [:envvar:`JUST_SAFE_LOAD_DELIMITER`] - By default, = is used between key and value. If = is needed, then this environment variable can override the delimiter.
 #
-# :Output: All keys are set as environment variables, and exported
+# :Output: All keys are set as environment variables and exported
 #
 # .. rubric:: Example
 #
@@ -1225,7 +1236,7 @@ function get_additional_args()
 #
 # .. rubric:: Bugs
 #
-# As with anything in a language like Bash, it's not guaranteed that an arbitrary command won't be executed with this, but as far as is known, there are no known issues with this function.
+# As with anything in a language like bash, it's not guaranteed that an arbitrary command won't be executed with this, but as far as is known, there are no known issues with this function.
 #**
 
 function safe_load() # Loads a very simple safe config file, and sets environment variables accordingly
@@ -1245,7 +1256,7 @@ function safe_load() # Loads a very simple safe config file, and sets environmen
 #
 # Plugin file
 #
-# The filename defaults to .justplugins, next to your Justfile, but can be overridden by exporting the environment variable :envvar:`JUST_PLUGIN_FILE`.
+# The filename defaults to .justplugins and sits next to your Justfile, but can be overridden by exporting the environment variable :envvar:`JUST_PLUGIN_FILE`.
 #
 # Lists the various plugin files. Blank lines and # comment lines are allowed
 #**

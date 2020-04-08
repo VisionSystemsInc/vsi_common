@@ -36,15 +36,15 @@ source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
 #
 # This is done in three steps:
 #
-# 1. First, the images are pull from ``JUST_DOCKER_COMPOSE_CACHE_REPO``, if available.
-# 2. Next, the images are built against the dockerfiles using the downloaded cache.
+# 1. First, the images are pulled from ``JUST_DOCKER_COMPOSE_CACHE_REPO``, if available.
+# 2. Next, the images are built against the Dockerfiles using the downloaded cache.
 # 3. Lastly, the images are pushed back to ``JUST_DOCKER_COMPOSE_CACHE_REPO`` to keep them up to date.
 #
-# - Every stage is backed up, as long as they are given a name. They must have a name, or they cannot be targeted using the ``docker`` cli or ``docker-compose``. These stages are named: ``${JUST_DOCKER_COMPOSE_CACHE_REPO}:${main_service_name}_${stage_name}``
+# - Every stage is backed up as long as it is given a name. It must have a name because without one, it cannot be targeted using the ``docker`` cli or ``docker-compose``. These stages are named: ``${JUST_DOCKER_COMPOSE_CACHE_REPO}:${main_service_name}_${stage_name}``
 # - The final stage is tagged as: ``${JUST_DOCKER_COMPOSE_CACHE_REPO}:final_${main_service_name}``
-# - Any VSI recipes used are also identified, and tagged: ``${JUST_DOCKER_COMPOSE_CACHE_REPO}:recipe_${main_service_name}_${recipe_name}``. The recipes contain "ONBUILD" commands that are different images than the ``${JUST_DOCKER_COMPOSE_CACHE_REPO}:${main_service_name}_${stage_name}`` version of them.
+# - Any VSI recipes used are also identified and tagged: ``${JUST_DOCKER_COMPOSE_CACHE_REPO}:recipe_${main_service_name}_${recipe_name}``. The recipes contain "ONBUILD" commands that are different images than the ``${JUST_DOCKER_COMPOSE_CACHE_REPO}:${main_service_name}_${stage_name}`` version of them.
 #
-# Even though all the stages are restored, only the services specified (``$2`` ...) are retagged so that they can be used. If you need more than one service images restored, you will need to specify them all. If multiple services use the same image tag, they do not need to be specified. E.g. service ``foo`` uses image ``stuff:foo``, service ``bar`` uses image ``stuff:bar``, and service ``car`` uses image ``stuff:bar`, only ``foo`` and ``bar`` need to be passed in.
+# Even though all the stages are restored, only the services specified (``$2`` ...) are retagged so that they can be used. If you need more than one service's images restored, you will need to specify them all. If multiple services use the same image tag, they do not need to be specified. For example, service ``foo`` uses image ``stuff:foo``, service ``bar`` uses image ``stuff:bar``, and service ``car`` uses image ``stuff:bar`, only services ``foo`` and ``bar`` need to be passed in.
 #**
 function docker-compose_restore_from_cache()
 {
@@ -117,7 +117,7 @@ function docker-compose_restore_from_cache()
     Docker-compose -f "${temp_file}" -f "${temp_override}" --project-directory "$(dirname "${compose_file}")" build "${services[@]}"
   fi
 
-  # Tag the final image, for push
+  # Tag the final image for push
   if [ "${main_image_name}" != "" ]; then
     Docker tag "${main_image_name}" "${JUST_DOCKER_COMPOSE_CACHE_REPO}:final_${main_service}"
   fi
@@ -192,13 +192,13 @@ function _dynamic_docker-compose_add_cache_from()
   local main_service="${1}"
   local i
 
-  # anchor the main stage
+  # Anchor the main stage
   local compose_content="$(sed "s|  ${1}:|& \&main_stage|")"
 
-  # A rendered docker-compose file is always in alphabetical order, The only top
-  # level keys are x-*, version, services, secrets, and networks. So I can always
-  # add a new services before "^version:". Start by getting the line number of
-  # the version line-1
+  # A rendered docker-compose file is always in alphabetical order, The only
+  # top-level keys are x-*, version, services, secrets, and networks. Therefore,
+  # I can always add new services before "^version:". Start by getting the line
+  # number of the version line-1
   i="$(sed -n '/^version:/=' <<< "${compose_content}")"
   i=$((i-1))
 
@@ -206,7 +206,7 @@ function _dynamic_docker-compose_add_cache_from()
   # | setup stages |
   # ----------------
   # This loop will both patch the docker-compose ${file} and generate
-  # a compose override file ${override} that will combine in two different
+  # a compose override file, ${override}, that will be combined in two different
   # ways to make our final configuration.
   # - Anchors can't work across, so we need the ${file} method
   # - We can't override target without redefining/anchoring all of build, so
@@ -241,7 +241,7 @@ function _dynamic_docker-compose_add_cache_from()
          # https://stackoverflow.com/a/26141656/4166604
   done | sed "${i}"'r/dev/stdin' <(echo "${compose_content}")
 
-    # ------------------
+  # ------------------
   # | setup services |
   # ------------------
   # Build services using cache
@@ -263,7 +263,7 @@ function _dynamic_docker-compose_add_cache_from()
 # :Parameters: ``JUST_RECIPE_REPO`` - Name of recipe image to look for. Default: ``vsiri/recipe``
 # :Output: **stdout** - Newline separated list of the tags of the recipes
 #
-# Looks for recipes that are used in the dockerfiles.
+# Looks for recipes that are used in the Dockerfiles.
 #**
 function get_docker_recipes()
 {
@@ -294,7 +294,7 @@ function get_docker_recipes()
 #
 # :Arguments: ``$1``... - Dockerfiles to parse
 #
-# Scans dockerfiles for ``vsiri/recipe:`` images, and calls :cmd:`build_recipes` on the recipes discovered. Accepts multiple files and ``-`` for stdin
+# Scans Dockerfiles for ``vsiri/recipe:`` images, and calls :cmd:`build_recipes` on the recipes discovered. Accepts multiple files and ``-`` for stdin
 #
 # .. command:: log
 #
@@ -306,7 +306,7 @@ function get_docker_recipes()
 #
 #   Does not pick up containers that didn't exist when starting ``just`` log
 #
-# Override the log target in your ``Justfile`` and call ``__docker-compose-log`` if you need to set other parameter.
+# Override the log target in your ``Justfile`` and call ``__docker-compose-log`` if you need to set other parameters.
 #
 # .. command:: docker_clean
 #
@@ -316,7 +316,7 @@ function get_docker_recipes()
 #
 # 1. ``ask`` - (default) Interactively asks you if you want to use the stop, delete, or error strategy.
 # 2. ``stop`` - Attempts to stop the containers with a 30 second timeout and then forcefully remove the current containers mounting the volume, without prompting
-# 3. ``delete`` - Mounts the volume and deletes all of the files. May not work when a container is running a database, or the volumes modified by the entrypoint, i.e. adding user permissions.
+# 3. ``delete`` - Mounts the volume and deletes all of the files. May not work when a container is running a database, or the volume is modified by the entrypoint, e.g. by adding user permissions.
 # 4. ``error`` - Errors out instead of cleaning the volume
 #
 # The action for a specific volume is specified by setting the label ``com.vsi.just.clean_action``.
@@ -333,7 +333,7 @@ function get_docker_recipes()
 # delete
 # ------
 #
-# In the case of ``delete`` strategy, an optional labels ``com.vsi.just.clean_setup`` can be specified to designate what just target to run to repopulate a volume. Typically this just target should run ``sh -c ":"`` or similar. This allows the entrypoint or another command to properply setup the volume, and set permissions, etc...
+# In the case of the ``delete`` strategy, an optional label, ``com.vsi.just.clean_setup``, can be specified to designate what just target to run to repopulate a volume. Typically this just target should run ``sh -c ":"`` or similar. This allows the entrypoint or another command to properly setup the volume, and set permissions, etc...
 #
 #**
 function docker_defaultify()
@@ -347,7 +347,7 @@ function docker_defaultify()
           Docker-compose build ${@+"${@}"}
       extra_args=$#
       ;;
-    build_recipes-auto) # Build recipes used in specified dockerfiles. "-" for \
+    build_recipes-auto) # Build recipes used in specified Dockerfiles. "-" for \
                         # stdin; multiple files (via wildcards) accepted
       if [ "$#" = "0" ]; then
         source "${VSI_COMMON_DIR}/linux/colors.bsh"
@@ -401,7 +401,7 @@ function docker_defaultify()
         # Command outputs stdout on 1, stderr on 2; then add "NUL+Return" Value on Stderr
         # printf will buffer stdout (letting "stderr+NUL+rv" stream out in real time)
         # printf then redirects its output to 2, so now 2 contains "stderr+NUL+rv+NUL+stdout"
-        # finally, stderr is redirected to 1, allowing the read commands to read "stderr+NUL+rv+NUL+stdout"
+        # Finally, stderr is redirected to 1, allowing the read commands to read "stderr+NUL+rv+NUL+stdout"
 
         # Echo stdout as if the command was run normally. Important for dryrun
         echo "${rm_out}"
@@ -450,7 +450,7 @@ function docker_defaultify()
                           # bash session. Set COMPOSE_SERVICES to limit to a
                           # specific service. Additional arguments are run in
                           # lieu of bash
-      # not Docker-compose; no quotes
+      # Not Docker-compose; no quotes
       local containers=($(docker-compose ps -q ${COMPOSE_SERVICES-} || :))
       if [ "${#containers[@]}" == 0 ]; then
         echo "No running containers found"

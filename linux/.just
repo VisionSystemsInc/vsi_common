@@ -1,5 +1,5 @@
 #!/usr/bin/env false bash
-#This file should be sourced, NOT run!
+# This file should be sourced, NOT run!
 
 if [ -z ${VSI_COMMON_DIR+set} ]; then
   VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)"
@@ -20,11 +20,11 @@ source "${VSI_COMMON_DIR}/linux/elements.bsh"
 #
 # .. file:: .just
 #
-# *Tab* completion suggestions based on parsing the :file:`Justfile` case statements can easily be added to your bash session by sourcing the :file:`.just` file. This file is sourced for you when you source the :ref:`setup file <just-setup-file>`
+# *Tab* completion suggestions based on parsing the :file:`Justfile`'s case statements can easily be added to your bash session by sourcing the :file:`.just` file. Note: this file is sourced for you when you source the :ref:`setup file <just-setup-file>`
 #
-# The *tab* completion script can be extended by adding a ``.just`` file to your project next to the :file:`Justfile`. Write what would normally go inside the ``complete`` function to the ``.just`` file (without the bash ``function()`` header). This file will be sourced by :file:`.just` after the ``just_commands`` and ``_just_subcommands`` arrays are populated. See :ref:`here <just_autocomplete>` for an example:
+# The *tab* completion script can be extended by adding a ``.just`` file to your project next to the :file:`Justfile`. Put what would normally go inside the ``complete -F`` function in the ``.just`` file (but without the bash ``function()`` header). This file will be sourced by :file:`.just` after the ``just_commands`` and ``_just_subcommands`` arrays are populated. See `just`'s default implementation :ref:`here <just_autocomplete>` for an example.
 #
-# The ``.just`` can optionally set a ``JUST_RETURN`` variable that will be stop the execution of the rest of :file:`.just` and return the vaule of ``JUST_RETURN``. This is useful when you do not want the rest of the default behavior in a particular case.
+# The project's ``.just`` file can optionally set a ``JUST_RETURN`` variable that will stop the execution of the rest of :file:`.just` and return the value of ``JUST_RETURN``. This is useful when you do not want the rest of the default behavior in a particular case.
 #
 # .. seealso::
 #
@@ -68,7 +68,7 @@ _just()
   JUST_HELP_FILES=(${just_files+"${just_files[@]}"})
 
   # 3. Emulate finding and adding plugins
-  # _just_load_justfile should have made the justfile the first entry in JUST_HELP_FILES
+  # _just_load_justfile should have made the Justfile the first entry in JUST_HELP_FILES
   local just_dir="$(dirname "${JUST_HELP_FILES[0]}")"
   _just_get_plugins "${just_dir}"
   for just_plugin in ${JUST_PLUGINS+"${JUST_PLUGINS[@]}"}; do
@@ -98,7 +98,7 @@ _just()
   # Declare here so I can use it in .just plugin
   local just_subtargets=()
 
-  # Call local .just if it exists. Starts with checking the local justfile, and
+  # Call local .just if it exists. Starts with checking the Justfile, and
   # then all plugin directories
   local sourced_dotjusts=()
   for i in ${JUST_HELP_FILES+"${JUST_HELP_FILES[@]}"}; do
@@ -144,6 +144,7 @@ _just()
 }
 
 # https://stackoverflow.com/a/19062943/4166604
+# see also: man --pager="less -p '^\s+compopt'" bash
 if ! command -v compopt &> /dev/null; then
   # While this won't allow compopt to behave the way we always want on bash 3.2
   # It's the best "default" behavior

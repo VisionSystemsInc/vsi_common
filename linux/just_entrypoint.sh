@@ -14,40 +14,44 @@ set -eu
 # .. file:: just_entrypoint.sh
 #
 # .. note::
-#    This is the default entrypoint for J.U.S.T. projects. By default, docker entrypoint runs as root, which can introduce a number of obstacles and undesired side effects. Hard coding user information into images is slow and limited. :file:`just_entrypoint.sh` will setup everything needed to dynamically make the user inside the container have your desired ids (by default by querying your ids on the host).
+#    This is the default entrypoint for J.U.S.T. projects. By default, the docker entrypoint runs as root, which can introduce a number of obstacles and undesired side effects. Hard coding user information into images is slow and limited. :file:`just_entrypoint.sh` will setup everything needed to dynamically make the user inside the container have your desired ids (by default, by querying your ids on the host).
 #
 # The entrypoint is designed to take care of 5 major problems for you
 #
-# #. Creating a user with the right UID/GID
-# #. Fix NFS mounts to work with nfs mounts with squash root enabled. (Does not currently support kerberos auth)
+# #. Creating a user with the right UID/GID such that
+#
+#   * Files created in directories (volumes) mounted from the host will have the correct permissions
+#   * The container, if given access to the X11 daemon, will be allowed to draw windows (e.g., display figures)
+#
 # #. Fix initial permissions of internal volumes
+# #. Workaround NFS mounts when squash root is enabled. (Does not currently support kerberos auth)
 # #. Remove project environment variables ending in ``_DOCKER``
-# #. Remove ``//`` from the begining of environment variables to handle the mingw/cygwin expansion workaround
+# #. Remove ``//`` from the beginning of environment variables to handle the mingw/cygwin expansion workaround
 #
 # Here's a walkthrough of how the entrypoint runs:
 #
 # #. The entrypoint starts running as ``root``
-# #. Loads the just environment only for root according to :envvar:`JUST_SETTINGS`. These values will be removed by the time the entrypoint is executed as the user below, to prevent unexpected variable corruption.
+# #. Loads the just environment for root according to :envvar:`JUST_SETTINGS`. These variables will be removed by the time the entrypoint is executed as the user below, to prevent unexpected variable corruption.
 # #. Any files in :envvar:`JUST_ROOT_PATCH_DIR` will be executed (in alphabetical order) if they have the execute flag set, else they are sourced.
-# #. Runs :func:`just_entrypoint_functions docker_setup_user` to set up the user with the appropriate ids. This is superior to other methods that would build an image with a UID and GID embedded in it, since you do not need to rebuild the image to have it adapt to your ids. Furthermore, it will capture all your gids by default, working correctly in more corner cases.
-# #. Runs :func:`just_entrypoint_functions docker_link_mounts` in conjuntion with :func:`docker_functions.bsh Just-docker-compose` to create symlinks where nfs mounts should appear, in the case that nfs is used. :func:`docker_functions.bsh Just-docker-compose` will identify nfs mounts, and mount the root of an nfs mount point in case squash_root is used and set ``JUST_DOCKER_ENTRYPOINT_LINKS``. :func:`just_entrypoint_functions docker_link_mounts` uses the information encoded in ``JUST_DOCKER_ENTRYPOINT_LINKS`` to create symlink where there were originally supposed to be mounted.
-# #. Runs :func:`just_entrypoint_functions docker_setup_data_volumes` to fix initial permission issues for internal data volumes. When an empty internal data is initially created by docker, the folder is owned and writeable by root. This changes it to match the desired user's permissions. :func:`docker_functions.bsh Just-docker-compose` automaticlly determines the list of internal data volumes and passes them in as ``JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES``, which is then passes into :func:`just_entrypoint_functions docker_setup_data_volumes` as ``JUST_DOCKER_ENTRYPOINT_CHOWN_DIRS`` and ``JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS``
+# #. Runs :func:`just_entrypoint_functions docker_setup_user` to set up the user with the appropriate ids. This is superior to other methods that would build an image with a UID and GID embedded in it, since you do not need to rebuild the image to have it adopt a different id. Furthermore, it will capture *all* your gids by default, which allows more corner cases to work correctly.
+# #. In the case that nfs is used, runs :func:`just_entrypoint_functions docker_link_mounts` in conjunction with :func:`docker_functions.bsh Just-docker-compose` to create symlinks where nfs mounts should appear. First, :func:`docker_functions.bsh Just-docker-compose` will identify nfs mounts and mount the root of an nfs mount point (assuming squash_root is typically enabled) to a secondary location, and add the mount point to ``JUST_DOCKER_ENTRYPOINT_LINKS``. Then, :func:`just_entrypoint_functions docker_link_mounts` uses the information encoded in ``JUST_DOCKER_ENTRYPOINT_LINKS`` to create symlinks to the nfs subdirectories in the locations they were originally supposed to be mounted.
+# #. Runs :func:`just_entrypoint_functions docker_setup_data_volumes` to fix initial permission issues for internal data volumes. When an empty internal data volume is initially created by docker, the folder is owned and writable by root. This changes the folder to match the desired user's permissions. :func:`docker_functions.bsh Just-docker-compose` automatically determines the list of internal data volumes and passes them in as ``JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES``, which it then passes into :func:`just_entrypoint_functions docker_setup_data_volumes` as ``JUST_DOCKER_ENTRYPOINT_CHOWN_DIRS`` and ``JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS``
 #
-#   * ``JUST_DOCKER_ENTRYPOINT_CHOWN_DIRS`` - recursively chowns all the files in the volumes listed to match the user. This could be slow with many files, but it only executes when the volumes permissions are bad, typically only first time the container is started. If you need to customized/disable this feature, pass the environment variable ``JUST_DOCKER_ENTRYPOINT_CHOWN_DIRS`` into the container, and it will override the default of using ``JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES``.
-#   * ``JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS`` - non-recursively chmod the directories listed to 777 so that any initial ownership issues are avoided. Can also be customized/disabled by passing a value in for the ``JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS`` line, but being non-recursive, this should never have a noticeable time penalty.
+#   * ``JUST_DOCKER_ENTRYPOINT_CHOWN_DIRS`` - recursively chowns all the files in the volumes listed to match the user. This could be slow with many files, but it only executes when the volumes permissions are bad, typically only the first time the container is started. If you need to customized/disable this feature, set and pass the environment variable ``JUST_DOCKER_ENTRYPOINT_CHOWN_DIRS`` into the container to specify which directories to chown. This will override the default of ``JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES``.
+#   * ``JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS`` - non-recursively chmod the directories listed to 777 so that any initial ownership issues are avoided. Can also be customized/disabled by passing a value in for ``JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS``, but being non-recursive, this should never have a noticeable time penalty.
 #   * These two features give volumes a much more desirable default behavior for non-root users.
 #
-# 7. Next the entrypoint (and everything else from here on) is switched over to the user that was created in :func:`just_entrypoint_functions docker_setup_user`. If you need to give the user root privliges, the suggested method is to use ``gosu``. Giving ``gosu`` ``chmod u+s /usr/local/bin/gosu`` permissions will accomplish this, but is not suggested for final deployment.
-# #. Loads the just environment for the user accoring to :envvar:`JUST_SETTINGS`.
-# #. If :envvar:`JUSTFILE` is set, runs :func:`just_entrypoint_user_functions.bsh filter_docker_variables` to remove project variables ending in ``_DOCKER``. This can be disabled by setting ``JUST_FILTER_DOCKER`` to ``0``
-# #. Replace ``//`` with `/` in project variables if running on windows using mingw or cygwin. Cygwin-like systems have a habit of `expanding variables <http://mingw.org/wiki/Posix_path_conversion>`_. Extra slashes are added in project environment files using :envvar:`JUST_PATH_ESC`, which cygwin-like systems evaluate as a ``/``, else empty. An unfortunate side effect of this is the `//` is still in the container. While this is usually harmeless, there are cases when the extra slash in the variables cause code to crash.
-# #. Any files in :envvar:`JUST_USER_PATCH_DIR` will be execcuted if they have the execute flag set, else they are sourced.
+# 7. Next, the entrypoint (and everything else from here on) is re-executed as the user that was created in :func:`just_entrypoint_functions docker_setup_user`. If you need to give the user root privileges, the suggested method is to give ``gosu`` special permissions (``chmod u+s /usr/local/bin/gosu``) and use ``gosu root {command}``. However, this is not suggested when deploying.
+# #. Loads the settings for the project/user according to :envvar:`JUST_SETTINGS`.
+# #. If :envvar:`JUST_PROJECT_PREFIX` is set, runs :func:`just_entrypoint_user_functions.bsh filter_docker_variables` to remove project variables ending in ``_DOCKER``. This can be disabled by setting ``JUST_FILTER_DOCKER`` to ``0``
+# #. Replace ``//`` with `/` in project variables if running on Windows using mingw or cygwin. Cygwin-like systems have a habit of `expanding variables <http://mingw.org/wiki/Posix_path_conversion>`_. Extra slashes are added in project environment files using :envvar:`JUST_PATH_ESC`, which cygwin-like systems evaluate as a ``/``, else empty. An unfortunate side effect of this is the `//` is still in the container. While this is usually harmless, there are cases when the extra slash in the variables cause code to crash.
+# #. Any files in :envvar:`JUST_USER_PATCH_DIR` will be executed if they have the execute flag set, else they are sourced.
 # #. If :envvar:`JUSTFILE` was passed in, this signifies to the entrypoint that an internal just call will be used. This means ``just`` is prepended to the command to ``exec``, so you don't have to.
 # #. If :envvar:`JUSTFILE` is not set, the command arguments are run using ``exec``
 #
 # The function ``sudo`` that calls ``gosu`` is also exported, for ease of use.
 #
-# If you have your own entrypoint point you want to daisy-chain with the just entrypoint, changing the ``ENTRYPOINT`` field in the docker file will allow this
+# If you have your own entrypoint that you want to daisy-chain with the just entrypoint, changing the ``ENTRYPOINT`` field in the docker file will allow this.
 #
 # .. code-block:: dockerfile
 #
@@ -57,7 +61,7 @@ set -eu
 #
 #    CMD some_command
 #
-# If a project needs to customize the behavior more than is possible, the developer is encouraged to copy the original file into their project, customize it, add it to the image, and that entrypoint instead of the one in vsi_common
+# If a project needs to customize the behavior more than is possible, the developer is encouraged to copy the original file into their project, customize it, add it to the image, and call that entrypoint instead of the one in vsi_common.
 #
 # .. literalinclude:: just_entrypoint.auto.sh
 #    :language: bash
@@ -65,7 +69,7 @@ set -eu
 # :Parameters: * :envvar:`JUST_SETTINGS` - Location of project env settings file.
 #              * :envvar:`VSI_COMMON_DIR` - Optional, location of VSI dir, defaults to /vsi
 #              * ``DOCKER_USERNAME`` - Optional, username for new user, defaults to user
-# :Internal Use: * ``ALREADY_RUN_ONCE`` - Tracks if entrypoint has already sudoed to user.
+# :Internal Use: * ``ALREADY_RUN_ONCE`` - Tracks if entrypoint has already sudo'd to user.
 #                * ``JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES`` - Passed from :func:`docker_functions.bsh Just-docker-compose`
 #
 # .. envvar:: JUST_ROOT_PATCH_DIR
@@ -78,7 +82,7 @@ set -eu
 #
 # .. note::
 #
-#    The intended use of :envvar:`JUST_ROOT_PATCH_DIR` and :envvar:`JUST_USER_PATCH_DIR` is to have files added to it from either docker recipes or in the Dockerfile. While you can mount a folder or volume to this location, that is not the intent. For example: On windows all files may appear to have execute permissions, which may not by what you want.
+#    The intended use of :envvar:`JUST_ROOT_PATCH_DIR` and :envvar:`JUST_USER_PATCH_DIR` is to add files to them from either docker recipes or in the Dockerfile. While you can mount a folder or volume to this location, that is not the intent. For example, on Windows all files may appear to have execute permissions, which may not be what you want.
 #**
 
 : ${VSI_COMMON_DIR=/vsi}
@@ -94,7 +98,7 @@ if [ "${ALREADY_RUN_ONCE+set}" != "set" ]; then
   if [ -n "${BASH_SOURCE+set}" ]; then
     file="${BASH_SOURCE[0]}"
   else
-    file="${0}" #sh compatibility
+    file="${0}" # sh compatibility
   fi
 
   (
@@ -113,7 +117,7 @@ if [ "${ALREADY_RUN_ONCE+set}" != "set" ]; then
       fi
     done
 
-    # create the user and associated groups and handle nfs symlinks
+    # Create the user and associated groups and handle nfs symlinks
     # Setup the container to be more friendly to non-root users and
     # add other advanced J.U.S.T. features
     JUST_DOCKER_ENTRYPOINT_CHOWN_DIRS="${JUST_DOCKER_ENTRYPOINT_CHOWN_DIRS-${JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES-}}" \

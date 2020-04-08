@@ -28,22 +28,21 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
 
       echo hi 1>&2 # No extra spaces, as bash doesn't allow that
 
-
 * Closing an open file
 
   .. code-block:: bash
 
       exec 3>&-
 
-      exec 3&>- #Works, but wrong style. This is dealing with descriptors
+      exec 3&>- # WRONG style. This is dealing with descriptors
 
-* Redirecing to a file
+* Redirecting to a file
 
   .. code-block:: bash
 
-      run_some_command &> /dev/null # Spaced added arround &>
+      run_some_command &> /dev/null # Spaces added around &>
 
-      run_some_command >& /dev/null # Works, but wrong style
+      run_some_command >& /dev/null # WRONG style. This is dealing with filenames
 
 * Checking to see if a variable exists
 
@@ -57,17 +56,17 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
         do_something
       fi
 
-      if [ -z "${variable:+set}" ]; then # If (not set) or (set to null)
+      if [ -z "${variable:+set}" ]; then # If not set OR set to null
         do_something
       fi
 
-      if [ -n "${variable:+set}" ]; then # If set and not null
+      if [ -n "${variable:+set}" ]; then # If set AND not null
         do_something
       fi
 
 * Scripting file naming and shebangs
 
-  * Files that are only meant to be sources should have a ``.bsh`` extension, and should have the following header:
+  * Files that are only meant to be sourced should have a ``.bsh`` extension, and should have the following header:
 
     .. code:: bash
 
@@ -77,9 +76,9 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
           source_once &> /dev/null && return 0
         fi
 
-    * The ``false`` signifies this file if for sourcing only. The ``bash`` at the end of the line tricks most editors into parsing the file as bash.
+    * ``false`` signifies this file is for sourcing only. The ``bash`` at the end of the line tricks most editors into parsing the file as bash.
 
-    * ``source_once`` is a component that will cause the file to only be sourced one time, even if other files attempt to source the file multiple times. The improves load time and debugging as the same files are not loaded multiple times. See :file:`source_once.bsh` for more information
+    * ``source_once`` is a component that will cause the file to only be sourced one time, even if other files attempt to source the file multiple times. This improves load time and debugging as the same files are not loaded multiple times. See :file:`source_once.bsh` for more information
 
   * Some files need to retain ``sh`` compatibility, and should have a ``.sh`` extension instead
 
@@ -89,7 +88,7 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
 
         #!/usr/bin/env bash
 
-  * Files that can be source or executed, should follow the same rules as executable scripts, in addition to:
+  * Files that can be sourced or executed should follow the same rules as executable scripts in addition to:
 
     * Most of the code should be contained in functions
 

@@ -32,7 +32,7 @@ source "${VSI_COMMON_DIR}/linux/colors.bsh"
 #
 # Instead of hard-coding "git" everywhere, use the variable :envvar:`GIT` so that when the need comes, it is easier to switch which executable gets called. Set to empty string to have any calls to git skipped.
 #
-# All :func:`git_defaultify` targets will be skipped if the value of:envvar:`GIT` is not found or empty.
+# All :func:`git_defaultify` targets will be skipped if the value of :envvar:`GIT` is not found or empty.
 #**
 
 : ${GIT=git}
@@ -48,7 +48,7 @@ source "${VSI_COMMON_DIR}/linux/colors.bsh"
 #
 # :Arguments: [``$1...``] - Glob expressions to be matched, just like '`git-submodule--helper`'
 #
-# :Output: ``submodule_names`` - array of submodules names (matched if filters supplied)
+# :Output: ``submodule_names`` - array of submodule names (matched if filters supplied)
 #
 #          ``submodule_paths`` - corresponding array of submodule paths
 #**
@@ -59,14 +59,14 @@ function submodule-helper-list()
   local submodule_data="$(git config -l -f .gitmodules | sed -nE 's|^submodule.(.*).path=(.*)|\1'$'\t''\2|p')"
   local IFS=$'\n'
   # Parse submodule data
-# Git modules can't have newlines in the "name", but the path could, and also both can have tabs and spaces
-# [submodule "w	t  f"]
-# 	path = w\tt\n  f
-# 	url = https://github.com/visionsystemsinc/vsi_common.git
-# git config output :-\
-# submodule.w     t  f.path=w     t
-#   f
-# submodule.w     t  f.url=https://github.com/visionsystemsinc/vsi_common.git
+  # Git modules can't have newlines in the "name", but the path could, and both can have tabs and spaces
+  # [submodule "w	t  f"]
+  # 	path = w\tt\n  f
+  # 	url = https://github.com/visionsystemsinc/vsi_common.git
+  # git config output :-\
+  # submodule.w     t  f.path=w     t
+  #   f
+  # submodule.w     t  f.url=https://github.com/visionsystemsinc/vsi_common.git
 
   local noglob=0
   if [[ ${SHELLOPTS} =~ (^|:)noglob(:|$) ]]; then
@@ -79,7 +79,7 @@ function submodule-helper-list()
     set +o noglob
   fi
 
-  # If there are any argument, filter out unmatched submodules
+  # If there are any arguments, filter out unmatched submodules
   if (( $# )); then
     local i
     local j
@@ -224,8 +224,8 @@ function safe_git_submodule_update()
         continue
       fi
       pushd "${sm_path}" > /dev/null
-        # This is my equivalent to "git submodule sync". It uses a specific remote,
-        # that it not of the defaults, to handle issue #186
+        # This is my equivalent to "git submodule sync". It uses a specific remote
+        # that it not one of the defaults to handle issue #186
         git remote add "${JUST_GIT_UPSTREAM-just_upstream}" "${submodule_url}" &> /dev/null || \
           git remote set-url "${JUST_GIT_UPSTREAM-just_upstream}" "${submodule_url}"
 
@@ -241,7 +241,8 @@ function safe_git_submodule_update()
           popd > /dev/null
           continue
         fi
-        # if git ls-files --others --exclude-standard --directory --no-empty-directory --error-unmatch -- ':/*' >/dev/null 2>/dev/null; then Removed the -- to be compatible with slightly older git versions. Should work on newer
+        # Removed the -- to be compatible with slightly older git versions. Should work on newer
+        # if git ls-files --others --exclude-standard --directory --no-empty-directory --error-unmatch -- ':/*' >/dev/null 2>/dev/null; then
         if git ls-files --others --exclude-standard --directory --no-empty-directory --error-unmatch ':/*' >/dev/null 2>/dev/null; then
           echo "Untracked files in ${sm_path}"
           _checkout_git_submodule ${name} "${sm_path}" \
@@ -261,8 +262,8 @@ function safe_git_submodule_update()
       i="${i#* }"
       echo
       echo "******************************************************************"
-      echo "Repository ${BOLD}${RED}${i}${NC} ${YELLOW}does not appear to be on the expected SHA${NC}. If you have changes that"
-      echo "you want to track in the parent module run:"
+      echo "${YELLOW}Repository${NC} ${BOLD}${RED}${i}${NC} ${YELLOW}does not appear to be on the expected SHA${NC}!"
+      echo "If you have changes that you want to track in the parent module run:"
       echo "  'git add $i' followed by 'git commit', or if you want to reset the"
       echo "submodule to the expected SHA run:"
       echo "  'git submodule update $i'"
@@ -273,7 +274,7 @@ function safe_git_submodule_update()
     if [ "${presskey+set}" == "set" ]; then
       echo
       echo "*************************** WARNING ******************************"
-      echo "Tried to safely update submodules, however ${RED}something went wrong${NC}."
+      echo "Tried to safely update submodules, however ${RED}something went wrong${NC}!"
       echo "After resolving the problems, you can try updating the main repo"
       echo "again. If this is not working for you, you can fall back to"
       echo "  'git submodule update --init --recursive'"
@@ -297,12 +298,11 @@ function safe_git_submodule_update()
 #
 # Reattach detached heads in submodules.
 #
-# Search for all submodules recursively in the current working directory for repos with detached heads. Looks through the branch heads for a name (in the form of refs/heads/branch_name). If a match is found, only the first one is used. If no match found, empty string, then branch is left detached.
+# Search recursively in the current working directory for all submodules with detached heads. For each, look through all named branches (in the form of refs/heads/branch_name) for one with a SHA that matches that of the detached head (if more than one, the first one is used). If no match found, i.e., empty string, then branch is left detached.
 #**
 git_reattach_heads()
 {
-
-  # if detached, get sha, and first branch name, and then reattach
+  # If detached, get SHA & first branch name, and then reattach
   git submodule foreach --recursive '
   if [ "$(git rev-parse --abbrev-ref --symbolic-full-name HEAD)" = "HEAD" ]; then
     current_sha="$(git rev-parse HEAD)"
@@ -327,22 +327,22 @@ function git_defaultify()
     #**
     # .. command:: git_submodule-update
     #
-    # :Parameters: - ``JUST_GIT_UPSTREAM`` - The submodule remote name used. When :cmd:`git_submodule-update` syncs, it will this remote. Default: ``just_upstream``
-    #              - ``JUST_GIT_USE_REMOTE`` - The submodule remote name used for fetching the new commits. Useful if you have your own person set of remotes you want to use. Default: ``${JUST_GIT_UPSTREAM}``
+    # :Parameters: - ``JUST_GIT_UPSTREAM`` - The submodule remote name used. When :cmd:`git_submodule-update` syncs, it will use this remote. Default: ``just_upstream``
+    #              - ``JUST_GIT_USE_REMOTE`` - The submodule remote name used for fetching the new commits. Useful if you have your own set of remotes you want to use. Default: ``${JUST_GIT_UPSTREAM}``
     #
-    # Recursively updates all submodules, in a ff-only manner. Also reattaches heads if possible.
+    # Recursively updates all submodules in a ff-only manner. Also reattaches heads if possible.
     #
-    # Sets ``JUST_GIT_SUBMODULE_SYNCED`` to ``1`` on the first run, so that subsequent calls are skipped. If you have reason to call it multiple times, you can reset ``JUST_GIT_SUBMODULE_SYNCED``.
+    # Sets ``JUST_GIT_SUBMODULE_SYNCED`` to ``1`` on the first run so that subsequent calls are skipped. If you have reason to call it multiple times, you can reset ``JUST_GIT_SUBMODULE_SYNCED``.
     #**
-    git_submodule-update) # Safe git submodule update which is careful to not \
-                          # remove commits by accident. Only updates submodules \
-                          # by going forward in history. Unlike normal git \
-                          # submodule update, uses a specific remote \
-                          # ${JUST_GIT_UPSTREAM-just_upstream}, and only syncs that \
-                          # that one remote. Will update from ${JUST_GIT_USE_REMOTE-${JUST_GIT_UPSTREAM}}, \
-                          # In addition, after sync and update, \
-                          # detached heads are reattached if they happen to land \
-                          # on a local tracking branch.
+    git_submodule-update) # A safe git submodule update that is careful not to \
+                          # discard commits by accident. Unlike the standard \
+                          # git submodule update, submodules are only updated \
+                          # going forward in history. Also, this version uses a \
+                          # specific remote, ${JUST_GIT_UPSTREAM-just_upstream}, and only syncs that \
+                          # one remote. It then updates from ${JUST_GIT_USE_REMOTE-${JUST_GIT_UPSTREAM}}. \
+                          # Additionally, after sync and update, detached heads \
+                          # are reattached if they happen to land on a local \
+                          # tracking branch.
       extra_args=$#
 
       if ! command -v "${GIT}" >& /dev/null; then
@@ -360,15 +360,22 @@ function git_defaultify()
         echo "Already synced submodules earlier... (JUST_GIT_SUBMODULE_SYNCED=${JUST_GIT_SUBMODULE_SYNCED-})" >&2
       fi
       ;;
-    git_make-submodules-relative) # Reset the paths in git submodules to be \
+    #**
+    # .. command:: git_make-submodules-relative
+    #
+    # Recursively update all submodules to have relative paths.
+    #
+    # Reset the paths in git submodules to be relative paths (relative to the $(pwd)) rather than absolute paths. This path is specified in the .git file stored in the submodule's root directory (which is how submodules are managed by git). Relative paths are now the default in git; however, there have been versions where either by design or bug, this path was absolute. The relative path of the submodule is computed using one of: a version of realpath that supports the --relative-to flag, python or perl. If none of these programs are available, the update fails.
+    #
+    # :Uses: realpath with the --relative-to flag, python or perl.
+    #**
+    git_make-submodules-relative) # Reset the paths in all git submodules to be \
                                   # relative paths rather than absolute paths. \
                                   # This is important for having portable \
                                   # repositories, which is important for \
-                                  # mounting into a docker. Will reset git \
-                                  # modules to the $(pwd) when you run this, \
-                                  # so you should be in the main repo's base \
-                                  # directory. Requires: realpath with \
-                                  # --relative-to, python or perl.
+                                  # mounting into a docker. Resets modules \
+                                  # relative to the $(pwd), so you should \
+                                  # be in the main repo's base directory.
       if ! command -v "${GIT}" >& /dev/null; then
         echo "Git not found, skipping submodule conversion" >&2
         return 0

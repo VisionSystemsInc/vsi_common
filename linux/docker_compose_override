@@ -103,8 +103,8 @@ function _env_echo()
 #
 #     * Volumes listed in ``${1}_VOLUMES`` are added to every service
 #     * Volumes in ``${1}_VOLUME_1``, ``${1}_VOLUME_2``, ... are added to every service
-#     * Volumes listed in ``${1}_<upper(service_name)>_VOLUMES`` are added just to that service.
-#     * Volumes listed in ``${1}_<upper(service_name)>_VOLUME_1``, ``${1}_<upper(service_name)>_VOLUME_2``, ... are added just to that service.
+#     * Volumes listed in ``${1}_<upper(service_name)>_VOLUMES`` are added only to that service.
+#     * Volumes listed in ``${1}_<upper(service_name)>_VOLUME_1``, ``${1}_<upper(service_name)>_VOLUME_2``, ... are added only to that service.
 #     * **Note**: If the yaml file uses anchors, this will not be reflected in this auto generated file. You will have to set the value of ``${1}_<upper(other_service_name)>_VOLUMES`` as well
 #
 # * Environment features:
@@ -148,14 +148,14 @@ function _env_echo()
 #   :Default: ``0``
 #   :Optional: True
 #
-# Also, adds the ``${1}_.*_DOCKER`` version of the variable (as is) when using the transparent environment variable swap feature.
+# Also exports the ``${1}_.*_DOCKER`` version of the variable when using the transparent environment variable swap feature (the swap effectively becomes a copy).
 #
 # .. var:: MOUNT_PREFIX
 #
 #   :Default: ``/host_mnt``
 #   :Optional: True
 #
-# Some mounted file systems will not allow subdirectories to be mounted by root, such as nfs with squash root turned on. In this case, generate_docker_compose_override will mount the base mount point in a side location, and symlink the subdirectory in where it was supposed to be mounted. This may be slightly less than ideal, but this is the best that can be done with these file systems. The :var:`MOUNT_PREFIX` is the location where these mount points are mounted. These mount points are not intended to be used by the apps running in the container.
+# Some mounted file systems will not allow subdirectories to be mounted by root, such as nfs with squash root turned on. In this case, generate_docker_compose_override will mount the root of an nfs mount point in a secondary location, and then symlink the subdirectory to its original mount point. This may be slightly less than ideal, but this is the best that can be done with these file systems. The :var:`MOUNT_PREFIX` is the secondary location where these mount points are mounted. Apps running in a container should use the expected mount point, not these secondary mount points.
 #
 # .. var:: DOCKER_COMPOSE_FILES
 #
@@ -273,7 +273,7 @@ function generate_docker_compose_override()
     parse-docker-compose-volumes ${services_name[$service_index]} <<< "${compose_config}"
     docker-compose-volumes
 
-    # Get internal volumes of
+    # Get internal volumes of service
     for volume in "${!DOCKER_VOLUME_SOURCES[@]}"; do
       if is_internal_docker_volume "${DOCKER_VOLUME_SOURCES[$volume]}"; then
         if [ "${DOCKER_VOLUME_FORMATS[$volume]}" == "short" ]; then
@@ -348,7 +348,7 @@ function generate_docker_compose_override()
       over_volumes+=("      - ${volume_host}:${volume_docker}${volume_flags}")
       IFS="${OLD_IFS}"
     done
-    # remove duplicates https://unix.stackexchange.com/q/159695,
+    # Remove duplicates (https://unix.stackexchange.com/q/159695) because
     # docker-compose doesn't like them
     IFS=$'\n'
     over_volumes=($(awk '!count[$0]++' <<< ${over_volumes+"${over_volumes[*]}"}))
