@@ -56,7 +56,7 @@ source "${VSI_COMMON_DIR}/linux/colors.bsh"
 function submodule-helper-list()
 {
   # Get submodule data
-  local submodule_data="$(git config -l -f .gitmodules | sed -nE 's|^submodule.(.*).path=(.*)|\1'$'\t''\2|p')"
+  local submodule_data="$("${GIT}" config -l -f .gitmodules | sed -nE 's|^submodule.(.*).path=(.*)|\1'$'\t''\2|p')"
   local IFS=$'\n'
   # Parse submodule data
   # Git modules can't have newlines in the "name", but the path could, and both can have tabs and spaces
@@ -83,7 +83,7 @@ function submodule-helper-list()
   if (( $# )); then
     local i
     local j
-    local git_root_dir="$(git rev-parse --show-toplevel)"
+    local git_root_dir="$("${GIT}" rev-parse --show-toplevel)"
     # Store array size, since the length changes in the loop
     local submodules=${#submodule_names[@]}
     local pattern
@@ -131,10 +131,10 @@ function _checkout_git_submodule()
 {
   popd > /dev/null
 
-  if ! git -c foo=bar version &> /dev/null; then
+  if ! "${GIT}" -c foo=bar version &> /dev/null; then
     # This is older than 1.8, so it doesn't support -c OR submodule.${1}.update
     echo "${YELLOW}Warning:${NC} your version of git is too old. Doing normal submodule update" >&2
-    if git submodule update "${2}"; then
+    if "${GIT}" submodule update "${2}"; then
       if [ -f "${2}/.gitmodules" ]; then
         pushd "${2}" &> /dev/null
         show_summary_message=0 safe_git_submodule_update
@@ -145,7 +145,7 @@ function _checkout_git_submodule()
       echo
     fi
   else
-    if PATH="${VSI_COMMON_DIR}/linux:${PATH}" git -c submodule.${1}.update='!bash git_safe_update' submodule update "${2}"; then
+    if PATH="${VSI_COMMON_DIR}/linux:${PATH}" "${GIT}" -c submodule.${1}.update='!bash git_safe_update' submodule update "${2}"; then
       if [ -f "${2}/.gitmodules" ]; then
         pushd "${2}" &> /dev/null
         show_summary_message=0 safe_git_submodule_update
@@ -201,10 +201,10 @@ function safe_git_submodule_update()
       name="${submodule_names[$i]}"
       sm_path="${submodule_paths[$i]}"
 
-      if ! git config submodule."$name".url; then
-        if [ "$(git ls-tree HEAD:"$(dirname "${sm_path}")" "$(basename "${sm_path}")" | awk '{print $2}')" == "commit" ]; then
+      if ! "${GIT}" config submodule."$name".url; then
+        if [ "$("${GIT}" ls-tree HEAD:"$(dirname "${sm_path}")" "$(basename "${sm_path}")" | awk '{print $2}')" == "commit" ]; then
           echo "Uninitialized submodule $name...Initializing"
-          git submodule init $sm_path
+          "${GIT}" submodule init $sm_path
         else
           # There are cases where novices remove a submodule and forget to
           # remove it from the .gitmodules files. In this case, it will show up
@@ -215,35 +215,35 @@ function safe_git_submodule_update()
           continue
         fi
       fi
-      submodule_url="$(git config submodule."$name".url)"
+      submodule_url="$("${GIT}" config submodule."$name".url)"
       if [ -z "${submodule_url}" ] || ( [ ! -d "$sm_path"/.git ] && [ ! -f "$sm_path"/.git ] ); then
-        if ! [ "$(git config -f .gitmodules submodule.${name}.update)" == "none" ]; then
+        if ! [ "$("${GIT}" config -f .gitmodules submodule.${name}.update)" == "none" ]; then
           echo "Submodule $name is not checked out! Initializing and updating..."
-          git submodule update --init "${sm_path}"
+          "${GIT}" submodule update --init "${sm_path}"
         fi
         continue
       fi
       pushd "${sm_path}" > /dev/null
         # This is my equivalent to "git submodule sync". It uses a specific remote
         # that it not one of the defaults to handle issue #186
-        git remote add "${JUST_GIT_UPSTREAM-just_upstream}" "${submodule_url}" &> /dev/null || \
-          git remote set-url "${JUST_GIT_UPSTREAM-just_upstream}" "${submodule_url}"
+        "${GIT}" remote add "${JUST_GIT_UPSTREAM-just_upstream}" "${submodule_url}" &> /dev/null || \
+          "${GIT}" remote set-url "${JUST_GIT_UPSTREAM-just_upstream}" "${submodule_url}"
 
-        if ! git diff --no-ext-diff --quiet; then
+        if ! "${GIT}" diff --no-ext-diff --quiet; then
           echo "Uncommited tracked files in ${sm_path}"
           _checkout_git_submodule ${name} "${sm_path}" \
             "You need to add or discard (checkout) changes and resolve any conflicts in the submodule: ${name}"
           continue
         fi
-        if ! git diff --no-ext-diff --cached --quiet; then
+        if ! "${GIT}" diff --no-ext-diff --cached --quiet; then
           echo "Staged tracked files in ${sm_path}"
           read -n1 -r -p "You need to commit/reset files and resolve any conflicts in the submodule: ${name}" presskey
           popd > /dev/null
           continue
         fi
         # Removed the -- to be compatible with slightly older git versions. Should work on newer
-        # if git ls-files --others --exclude-standard --directory --no-empty-directory --error-unmatch -- ':/*' >/dev/null 2>/dev/null; then
-        if git ls-files --others --exclude-standard --directory --no-empty-directory --error-unmatch ':/*' >/dev/null 2>/dev/null; then
+        # if "${GIT}" ls-files --others --exclude-standard --directory --no-empty-directory --error-unmatch -- ':/*' >/dev/null 2>/dev/null; then
+        if "${GIT}" ls-files --others --exclude-standard --directory --no-empty-directory --error-unmatch ':/*' >/dev/null 2>/dev/null; then
           echo "Untracked files in ${sm_path}"
           _checkout_git_submodule ${name} "${sm_path}" \
             "You need to resolve any conflicts in the submodule: ${name}."
@@ -257,7 +257,7 @@ function safe_git_submodule_update()
   if [ "${show_summary_message-0}" == "1" ]; then
     local IFS=$'\n'
     local message_printed=0
-    for i in $(git submodule status --recursive | \grep ^+ || :); do
+    for i in $("${GIT}" submodule status --recursive | \grep ^+ || :); do
       i="${i% *}"
       i="${i#* }"
       echo
@@ -303,12 +303,12 @@ function safe_git_submodule_update()
 git_reattach_heads()
 {
   # If detached, get SHA & first branch name, and then reattach
-  git submodule foreach --recursive '
-  if [ "$(git rev-parse --abbrev-ref --symbolic-full-name HEAD)" = "HEAD" ]; then
-    current_sha="$(git rev-parse HEAD)"
-    branch_name="$(git show-ref --heads | sed -En "/^${current_sha} .*/{ s|.*/(.*)|\1|; p; q}")"
+  "${GIT}" submodule foreach --recursive '
+  if [ "$('"${GIT}"' rev-parse --abbrev-ref --symbolic-full-name HEAD)" = "HEAD" ]; then
+    current_sha="$('"${GIT}"' rev-parse HEAD)"
+    branch_name="$('"${GIT}"' show-ref --heads | sed -En "/^${current_sha} .*/{ s|.*/(.*)|\1|; p; q}")"
     if [ "${branch_name}" != "" ]; then
-      git checkout "${branch_name}"
+      '"${GIT}"' checkout "${branch_name}"
     fi
   fi'
 }
