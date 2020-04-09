@@ -46,9 +46,13 @@ GIT_MIRROR_SOURCE="$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)"/"$(basename "${B
 # Name/path of git executable
 #
 # Instead of hard-coding "git" everywhere, use the variable :envvar:`GIT` so that when the need comes, it is easier to switch which executable gets called. Default is ``git``.
+#
+# .. note::
+#   When using the GIT env variable in this file, do not surround it with quotes as you normally would. Although this prevents using a path to ``git`` with a space in it, in exchange, it may be possible (eventually) to enable a dry-run-ish capability if GIT is set to 'echo git'. However, this feature does not currently work and even in the future may not work very well because this script is constantly cloning and cd'ing to new repos.
 #**
 
 : ${GIT=git}
+
 
 #**
 # .. function:: os_compatible_mktemp
@@ -104,7 +108,7 @@ function next_section()
 }
 
 # TODO: replace block with versions.bsh
-GIT_VERSION="$("${GIT}" --version)"
+GIT_VERSION="$(${GIT} --version)"
 git_version_pattern='git version ([0-9]*)\.([0-9]*)\.([0-9]*).*'
 [[ ${GIT_VERSION} =~ ${git_version_pattern} ]]
 GIT_VERSION=("${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}")
@@ -135,7 +139,7 @@ GIT_VERSION=("${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}")
 if [ "${GIT_VERSION[0]}" = "2" -a "${GIT_VERSION[1]}" -ge "6" ] || [[ ${GIT_VERSION[0]} -gt 2 ]]; then
   function get_submodule_names()
   {
-    "${GIT}" config --name-only --get-regexp '^submodule\..*\.url$' | sed 's|.url$||'
+    ${GIT} config --name-only --get-regexp '^submodule\..*\.url$' | sed 's|.url$||'
   }
 else
   function get_submodule_names()
@@ -147,7 +151,7 @@ else
       # Get first newline terminated line of that record, it's the name
       IFS= read -r -d $'\n' record <<< "${record}"
       names+=("${record}")
-    done < <("${GIT}" config -z --get-regexp '^submodule\..*\.url$')
+    done < <(${GIT} config -z --get-regexp '^submodule\..*\.url$')
 
     for line in ${names[@]+"${names[@]}"}; do
       echo "${line%.url}"
@@ -169,7 +173,7 @@ fi
 function git_mirror_has_lfs()
 {
   if [ -z "${__git_mirror_has_lfs:+set}" ]; then
-    if ! "${GIT}" lfs &> /dev/null; then
+    if ! ${GIT} lfs &> /dev/null; then
       __git_mirror_has_lfs=1 # Does not have lfs
     else
       __git_mirror_has_lfs=0 # Does have lfs
@@ -196,12 +200,12 @@ function git_mirror_has_lfs()
 function clone_submodules()
 {
   # Init (any) submodules
-  "${GIT}" submodule init
+  ${GIT} submodule init
 
   # Submodule names can't contain newlines
   local IFS=$'\n'
   # This does not work for init only modules
-  #   submodule_names=($("${GIT}" submodule foreach --quiet 'echo "${name}"'))
+  #   submodule_names=($(${GIT} submodule foreach --quiet 'echo "${name}"'))
   # This does
   local submodule_names=($(get_submodule_names))
 
@@ -217,7 +221,7 @@ function clone_submodules()
   # Update submodule urls to use PREP_DIR
   for submodule in ${submodule_names[@]+"${submodule_names[@]}"}; do
     # Calculate full submodule path wrt superproject (not just parent submodule)
-    full_relative_path="${base_submodule_path}${base_submodule_path:+/}$("${GIT}" config -f .gitmodules ${submodule}.path)"
+    full_relative_path="${base_submodule_path}${base_submodule_path:+/}$(${GIT} config -f .gitmodules ${submodule}.path)"
 
     # Search for existing prepped submodule
     # https://stackoverflow.com/a/52657447/4166604
@@ -227,23 +231,23 @@ function clone_submodules()
       # Re-establish url in case it changed
       prepped_submodule_path="$(dirname "${prepped_submodule_path}")"
       pushd "${prepped_submodule_path}"&> /dev/null
-        "${GIT}" remote set-url origin "$("${GIT}" config "${submodule}.url")"
+        ${GIT} remote set-url origin "$(${GIT} config "${submodule}.url")"
       popd &> /dev/null
     else
       prepped_submodule_path="$(mktemp_compat "${PREP_DIR}")/${full_relative_path}"
       next_section "Cloning a fresh copy of ${full_relative_path}"
-      "${GIT}" clone --mirror "$("${GIT}" config "${submodule}.url")" "${prepped_submodule_path}"
+      ${GIT} clone --mirror "$(${GIT} config "${submodule}.url")" "${prepped_submodule_path}"
     fi
 
-    "${GIT}" config "${submodule}.url" "${prepped_submodule_path}"
+    ${GIT} config "${submodule}.url" "${prepped_submodule_path}"
   done
 
   # Checkout submodule
   next_section "Updating submodules for ${prefix-${displaypath-${MAIN_REPO}}}"
   # The local non-bare doesn't need to waste time copying LFS objects
-  GIT_LFS_SKIP_SMUDGE=1 "${GIT}" submodule update
+  GIT_LFS_SKIP_SMUDGE=1 ${GIT} submodule update
   # Restore the origin urls after update, so that relative URLs work
-  "${GIT}" submodule sync
+  ${GIT} submodule sync
 
   if git_mirror_has_lfs; then
     next_section "Fetching lfs objects for ${prefix-${displaypath-${MAIN_REPO}}}"
@@ -254,7 +258,7 @@ function clone_submodules()
       prepped_submodule_path="$(dirname "$(echo "${PREP_DIR}"/*/"${base_submodule_path}/config")")"
     fi
 
-    local lfs_dir="$("${GIT}" rev-parse --git-dir)/lfs"
+    local lfs_dir="$(${GIT} rev-parse --git-dir)/lfs"
     # Incase it it doesn't exist
     mkdir -p "${lfs_dir}" "${prepped_submodule_path}/lfs/"
 
@@ -273,7 +277,7 @@ function clone_submodules()
       ln -s "${prepped_submodule_path}/lfs" "${lfs_dir}"
     fi
 
-    "${GIT}" lfs fetch --all
+    ${GIT} lfs fetch --all
 
     if [[ ${OS-} = "Windows_NT" && -n $(ls -A "${lfs_dir}") ]]; then
       cp -a "${lfs_dir}"/* "${prepped_submodule_path}/lfs/"
@@ -283,7 +287,7 @@ function clone_submodules()
   # And the recursion goes on... foreach runs in sh, so I'm forcing bash. I need
   # to pass the prefix/displaypath variables from git into the called function,
   # so export them.
-  PREP_DIR="${PREP_DIR}" base_submodule_path="${base_submodule_path}" "${GIT}" submodule foreach --quiet "export prefix displaypath; bash -euc 'unset GIT_DIR; source \"${GIT_MIRROR_SOURCE[0]}\"; clone_submodules'"
+  PREP_DIR="${PREP_DIR}" base_submodule_path="${base_submodule_path}" ${GIT} submodule foreach --quiet "export prefix displaypath; bash -euc 'unset GIT_DIR; source \"${GIT_MIRROR_SOURCE[0]}\"; clone_submodules'"
   # The "unset GIT_DIR" is needed because somewhere between git 2.17 and 2.21,
   # git-submodule-foreach started setting the GIT_DIR; however, the logic here
   # is constantly switching directories into different repositories &
@@ -319,22 +323,22 @@ function clone_from_mirror()
   local current_repo="$(_git_mirror_get_url "${base_submodule_path:-.}")"
   next_section "Cloning repo: ${current_repo}"
 
-  "${GIT}" submodule init
+  ${GIT} submodule init
   local IFS=$'\n'
   local submodule_names=($(get_submodule_names))
 
   for submodule_name in ${submodule_names[@]+"${submodule_names[@]}"}; do
-    full_relative_path="${base_submodule_path}${base_submodule_path:+/}$("${GIT}" config -f .gitmodules ${submodule_name}.path)"
-    "${GIT}" config "${submodule_name}.url" "$(_git_mirror_get_url "${full_relative_path}")"
+    full_relative_path="${base_submodule_path}${base_submodule_path:+/}$(${GIT} config -f .gitmodules ${submodule_name}.path)"
+    ${GIT} config "${submodule_name}.url" "$(_git_mirror_get_url "${full_relative_path}")"
   done
   next_section "Updating ${current_repo}'s submodules"
-  "${GIT}" submodule update
+  ${GIT} submodule update
 
   # And the recursion goes on... foreach runs in sh, so I'm forcing bash. I need
   # to pass the prefix/displaypath variables from git into the called function,
   # so export them.
   base_submodule_path="${base_submodule_path-}" \
-      "${GIT}" submodule foreach --quiet "export prefix displaypath; bash -euc \
+      ${GIT} submodule foreach --quiet "export prefix displaypath; bash -euc \
           'unset GIT_DIR; source \"${GIT_MIRROR_SOURCE[0]}\"; clone_from_mirror \"${1}\"'"
 }
 
@@ -404,7 +408,7 @@ function git_mirror_main()
   local MAIN_REPO
   if [ -f "${1}/"*"/config" ]; then
     pushd "$(dirname "${1}/"*"/config")" &> /dev/null
-      MAIN_REPO="$("${GIT}" config --get remote.origin.url)"
+      MAIN_REPO="$(${GIT} config --get remote.origin.url)"
     popd &> /dev/null
   else
     MAIN_REPO="${1}"
@@ -421,16 +425,16 @@ function git_mirror_main()
   mkdir -p "${PREP_DIR}"
   if [ ! -e "${PREP_DIR}/${MAIN_DIR}" ]; then
     next_section "Cloning super project ${MAIN_REPO}..."
-    "${GIT}" clone --mirror "${MAIN_REPO}" "${PREP_DIR}/${MAIN_DIR}"
+    ${GIT} clone --mirror "${MAIN_REPO}" "${PREP_DIR}/${MAIN_DIR}"
   else
     next_section "Fetching for super project ${MAIN_REPO} using last run..."
     pushd "${PREP_DIR}/${MAIN_DIR}" &> /dev/null
       # Re-establish url in case it changed
-      "${GIT}" remote set-url origin "${MAIN_REPO}"
+      ${GIT} remote set-url origin "${MAIN_REPO}"
       if [ "${GIT_VERSION[0]}" = "2" -a "${GIT_VERSION[1]}" -ge "17" ] || [[ ${GIT_VERSION[0]} -gt 2 ]]; then
-        "${GIT}" fetch -pP origin
+        ${GIT} fetch -pP origin
       else
-        "${GIT}" fetch -p origin
+        ${GIT} fetch -p origin
       fi
     popd &> /dev/null
   fi
@@ -439,15 +443,15 @@ function git_mirror_main()
   local TEMP_DIR
   make_temp_path TEMP_DIR -d
   # The local non-bare doesn't need to waste time copying LFS objects
-  GIT_LFS_SKIP_SMUDGE=1 "${GIT}" clone "${PREP_DIR}/${MAIN_DIR}" "${TEMP_DIR}"
+  GIT_LFS_SKIP_SMUDGE=1 ${GIT} clone "${PREP_DIR}/${MAIN_DIR}" "${TEMP_DIR}"
 
   # git submodule init
   pushd "${TEMP_DIR}" &> /dev/null
     # The local non-bare doesn't need to waste time copying LFS objects
-    GIT_LFS_SKIP_SMUDGE=1 "${GIT}" checkout "${BRANCH}"
+    GIT_LFS_SKIP_SMUDGE=1 ${GIT} checkout "${BRANCH}"
 
     # Restore origin to not point to mirror, so relative submodules work right
-    "${GIT}" remote set-url origin "${MAIN_REPO}"
+    ${GIT} remote set-url origin "${MAIN_REPO}"
 
     # This effectively does git submodule update --recursive --init,
     # but plumbs the submodules to use the "${PREP_DIR}" instead
@@ -546,7 +550,7 @@ function git_clone_main()
   mkdir -p "${2-.}"
   pushd "${2-.}" &> /dev/null
     if [ ! -d ./.git ]; then
-      "${GIT}" clone "$(_git_mirror_get_url .)" .
+      ${GIT} clone "$(_git_mirror_get_url .)" .
     fi
     clone_from_mirror "${1}"
   popd &> /dev/null
@@ -594,12 +598,12 @@ function git_push_main()
     repo_path="$(dirname */config)"
     next_section "Processing main repo: ${repo_path}"
     pushd "${repo_path}" &> /dev/null
-      "${GIT}" push --mirror "${main_repo_url}"
+      ${GIT} push --mirror "${main_repo_url}"
 
       if git_mirror_has_lfs; then
         next_section "Pushing lfs objects for ${repo_path}"
-        "${GIT}" remote add mirror "${main_repo_url}" 2>/dev/null || "${GIT}" remote set-url mirror "${main_repo_url}"
-        "${GIT}" lfs push mirror --all || :
+        ${GIT} remote add mirror "${main_repo_url}" 2>/dev/null || ${GIT} remote set-url mirror "${main_repo_url}"
+        ${GIT} lfs push mirror --all || :
         # Does not work on file systems, only with real lfs servers
       fi
     popd &> /dev/null
@@ -617,12 +621,12 @@ function git_push_main()
       next_section "Processing submodule repo: ${repo_path}"
       if [[ -d ${repo_path} ]]; then
         pushd "${repo_path}" &> /dev/null
-          "${GIT}" push --mirror "${repo_urls[$index]}"
+          ${GIT} push --mirror "${repo_urls[$index]}"
           if git_mirror_has_lfs; then
             next_section "Pushing lfs objects for ${repo_path}"
-            "${GIT}" remote add mirror "${repo_urls[$index]}" 2>/dev/null || "${GIT}" remote set-url mirror "${repo_urls[$index]}"
+            ${GIT} remote add mirror "${repo_urls[$index]}" 2>/dev/null || ${GIT} remote set-url mirror "${repo_urls[$index]}"
             # Does not work on file systems, only with real lfs servers, unless you set up lfs-filestore
-            "${GIT}" lfs push mirror --all || :
+            ${GIT} lfs push mirror --all || :
           fi
         popd &> /dev/null
       else
