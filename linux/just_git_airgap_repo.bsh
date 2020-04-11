@@ -121,13 +121,16 @@ function git_tracking_branches()
 
   local OLD_IFS="${IFS}"
   IFS=$'\n'
-  # E.g., upstream:short=origin/master, remoteref=refs/heads/master
-  # and upstreeam:track=[gone] if the remote-tracking branch has been pruned
+  # E.g., upstream:short=origin/master, refname=refs/heads/master and
+  # upstreeam:track=[gone] if the remote-tracking branch has been pruned
   # Note: %(upstream:track) requires git >= 1.9.0
   # Note: No quotes around subshell to create array
   local tracking_branches=($( \
-      ${GIT} for-each-ref --format='%(upstream:short) %(remoteref) %(upstream:track)' refs/heads | \
-      awk 'NF' | grep -v '\[gone\]$' | sed 's/[[:space:]]+$//' | grep "^${remote_name}" || :))
+      ${GIT} for-each-ref --format='%(upstream:short) %(refname) %(upstream:track)' refs/heads | \
+      # Discard lines in which upstream is unset, i.e., those with a leading
+      # space; also trim whitespace at the end of each line
+      grep -v '^ ' | grep -v '\[gone\]$' | grep "^${remote_name}" | sed 's/[[:space:]]+$//' || :))
+  
   IFS="${OLD_IFS}"
   #
   # Similarly: git rev-parse --abbrev-ref master@{upstream} will also give the
