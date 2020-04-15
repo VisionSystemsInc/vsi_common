@@ -132,7 +132,6 @@ function git_tracking_branches()
       # Discard lines in which upstream is unset, i.e., those with a leading
       # space; also trim whitespace at the end of each line
       grep -v '^ ' | grep -v '\[gone\]$' | grep "^${remote_name}" | sed 's/[[:space:]]+$//' || :))
-  
   IFS="${OLD_IFS}"
   #
   # Similarly: git rev-parse --abbrev-ref master@{upstream} will also give the
@@ -199,15 +198,28 @@ function outgoing_commits()
   IFS="${OLD_IFS}"
 }
 
-# Submodule diff
-# TODO document
+#**
+# .. function:: submodule_summary
+#
+# Compare the expected commit of each submodule to its current working tree
+#
+# Using ``git diff --submodule=log``, compare the working tree of each submodule to the version commited to HEAD of the super project, and list any commits that are missing or now present in the submodule. For example, if an earlier commit in the submodule is checked out, there will be missing commits in the submodule according to the super project. Similarly, if a commit is made to the submodule, there will be new commits present in the submodule according to the super project.
+#
+# :Output: - ``*stdout*`` - Each submodule's differences in terms of commits
+#
+# .. seealso:: https://git-scm.com/docs/git-diff#Documentation/git-diff.txt---submoduleltformatgt
+#
 # TODO support iterating through all submodules
+#**
+
 function submodule_summary()
 {
-  IFS=$'\n';
-  for x in $(git config --name-only --file .gitmodules --get-regexp '^submodule\..*\.path$'); do
-    git diff --submodule=log "$(git config --file .gitmodules --get "${x}")";
+  local OLD_IFS="${IFS}"
+  IFS=$'\n'
+  for x in $("${GIT}" config --name-only --file .gitmodules --get-regexp '^submodule\..*\.path$'); do
+    "${GIT}" diff --submodule=log "$("${GIT}" config --file .gitmodules --get "${x}")"
   done
+  IFS="${OLD_IFS}"
 }
 
 # TODO it would be nice to have a function to check for unpushed commits in a submodule for its commited state
