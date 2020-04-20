@@ -124,17 +124,19 @@ function git_tracking_branches()
   local OLD_IFS="${IFS}"
   IFS=$'\n'
   # E.g., upstream:short=origin/master, refname=refs/heads/master and
-  # upstreeam:track=[gone] if the remote-tracking branch has been pruned
+  # upstream:track=[gone] if the remote-tracking branch has been pruned
   # Note: %(upstream:track) requires git >= 1.9.0
   # Note: No quotes around subshell to create array
   local tracking_branches=($( \
       ${GIT} for-each-ref --format='%(upstream:short) %(refname) %(upstream:track)' refs/heads | \
-      # Discard lines in which upstream is unset, i.e., those with a leading
-      # space; also trim whitespace at the end of each line
+      # Discard lines in which upstream is unset, i.e., those with a leading space
+      # RE this seems brittle
+      # Also trim whitespace at the end of each line
+      # TODO switch to string_tools.bsh:rtrim
       grep -v '^ ' | grep -v '\[gone\]$' | grep "^${remote_name}" | sed 's/[[:space:]]+$//' || :))
   IFS="${OLD_IFS}"
   #
-  # Similarly: git rev-parse --abbrev-ref master@{upstream} will also give the
+  # Similarly: git rev-parse --abbrev-ref branch@{upstream} will also give the
   # tracking branch (or error if one doesn't exist or has been pruned). This
   # can be combined with git for-each-ref --format='%(refname:short)' refs/heads
   # which lists all local branches.
@@ -144,22 +146,22 @@ function git_tracking_branches()
   # be calculated manually with git log --format='%H' branch@{upstream}..branch
   # for outgoing commits and git log --format='%H' branch..branch@{upstream}
   # for incoming
+  # RE git rev-list --left-right --boundary branch@{upstream}...branch lists
+  # both incoming and outgoing changes as well (the symmetric difference)
+  # git remote show origin actually queries the remote; however, it doesn't
+  # provide the same level of tracking detail
+
   # git remote show origin actually queries the remote; however, it doesn't
   # provide the same level of tracking detail
 
   just_git_tracking_branches=()
   just_git_remote_tracking_branches=()
-  # FIXME how to do this without the if statement; args in array have spaces.
-  # Do you have to set the IFS again?
-  if [ "${#tracking_branches}" -gt 0 ]; then
-    local tracking_branch
-    for tracking_branch in "${tracking_branches[@]}"; do
-      local branch="$(echo "${tracking_branch}" | awk '{print $2}')"
-      # Strip refs/heads prefix from the remoteref
-      just_git_tracking_branches+=("${branch/refs\/heads\//}")
-      just_git_remote_tracking_branches+=("$(echo "${tracking_branch}" | awk '{print $1}')")
-    done
-  fi
+  for tracking_branch in ${tracking_branches+"${tracking_branches[@]}"}; do
+    local branch="$(echo "${tracking_branch}" | awk '{print $2}')"
+    # Strip refs/heads prefix from the remoteref
+    just_git_tracking_branches+=("${branch/refs\/heads\//}")
+    just_git_remote_tracking_branches+=("$(echo "${tracking_branch}" | awk '{print $1}')")
+  done
 }
 
 #**
