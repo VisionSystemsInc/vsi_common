@@ -1,10 +1,13 @@
 
-import rpdb
 import os
 import sys
-import vsi.tools.vdb as vdb
 from functools import partial
 import traceback
+import socket
+
+import rpdb
+
+import vsi.tools.vdb as vdb
 
 DEFAULT_IP = '127.0.0.1'
 DEFAULT_PORT = 4444
