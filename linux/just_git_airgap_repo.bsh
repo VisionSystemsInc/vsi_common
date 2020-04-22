@@ -84,7 +84,7 @@ source "${VSI_COMMON_DIR}/linux/git_mirror"
 # List all commits on branches that have not been pushed to a remote. This is a set operation: it lists all the commits from a branch in the DAG except those reachable by a remote-tracking branch. It does not require an *associated* remote-tracking branch
 #
 # REVIEW what order should these go in
-# :Arguments: - ``1`` - A remote-tracking branch's name to filter by; e.g., master. If unset, then don't filter
+# :Arguments: - ``1`` - A branch's name to filter by; e.g., master. If unset, then don't filter
 #             - ``2`` - A name of a remote to filter by; e.g., origin. If unset, then don't filter
 #
 # :Output: - ``*stdout*`` - Print all unpushed commits for tracking branches to stdout
@@ -111,7 +111,7 @@ function log_unpushed_commits()
 #          - ``just_git_remote_tracking_branches`` - A corresponding array of remote-tracking branch names
 #
 # .. note::
-#    - A branch that you create locally and then push to a remote is not configured as a remote-tracking branch by default. You must use the -u flag with 'git push' or 'git branch'.
+#    - A branch that you create locally and then push to a remote is not configured as a local-tracking branch by default. You must use the -u flag with 'git push' or 'git branch'.
 #   - A branch cannot track multiple remotes.
 #   - Requires git >= 1.9.0
 #**
@@ -170,7 +170,7 @@ function git_tracking_branches()
 # List all unpushed commits for a tracking branches to stdout
 #
 # REVIEW what order should these go in
-# :Arguments: - ``1`` - A remote-tracking branch's name to filter by; e.g., master. If unset, then don't filter by branch name
+# :Arguments: - ``1`` - A local-tracking branch's name to filter by; e.g., master. If unset, then don't filter by branch name
 #             - ``2`` - A name of a remote to filter by; e.g., origin. If unset, then don't filter
 #
 # :Output: - ``*stdout*`` - Print all unpushed commits for tracking branches to stdout
@@ -209,7 +209,7 @@ function log_outgoing_commits()
 #
 # Compare the expected commit of each submodule to its current working tree
 #
-# Using ``git diff --submodule=log``, compare the working tree of each submodule to the version commited to HEAD of the super project, and list any commits that are missing or now present in the submodule. For example, if an earlier commit in the submodule is checked out, there will be missing commits in the submodule according to the super project. Similarly, if a commit is made to the submodule, there will be new commits present in the submodule according to the super project.
+# Using ``git diff --submodule=log``, compare the working tree of each submodule to the version commited to HEAD of the super project, and list any commits that are missing and/or now present in the submodule. For example, if an earlier commit in the submodule is checked out, there will be missing commits in the submodule according to the super project. Similarly, if a commit is made to the submodule, there will be new commits present in the submodule according to the super project. Of course, the commit graph could diverge in more complicated ways.
 #
 # :Output: - ``*stdout*`` - Each submodule's differences in terms of commits
 #
@@ -345,10 +345,7 @@ function relocate_git_defaultify()
       branch="${2-master}"
       # TODO add support for output directory
       git_mirror_main "${url}" "${branch}"
-      # REVIEW is this how to handle extra args in this case
-      if [ "$#" -gt 0 ]; then
-        extra_args=1
-      fi
+      extra_args="$#"
       ;;
 
     git_import-repo) # Push a repo exported with `git export-repo` to an \
@@ -364,10 +361,9 @@ function relocate_git_defaultify()
       extra_args=$#
       ;;
 
-    # TODO Support iterating through all submodules too. This could be useful
-    # to make sure all submodules have been pushed to their associated
-    # remote/branch
+    # TODO Support iterating through all submodules too
     # TODO Generalize to support log_outgoing_commits too
+    # TODO Support filtering by branch/remote
     git_unpushed-commits) # List unpushed commits on a branch
       if ! command -v ${GIT} >& /dev/null; then
         echo "Git not found, skipping listing of unpushed commits" >&2
@@ -387,9 +383,6 @@ function relocate_git_defaultify()
           echo
         fi
         echo "${commits}"
-      fi
-      if [ "$#" -gt 0 ]; then
-        extra_args=1
       fi
       ;;
 
