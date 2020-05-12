@@ -271,7 +271,7 @@ function clone_submodules()
 }
 
 #**
-# .. function:: clone_from_mirror
+# .. function:: update_submodule
 #
 # Clone a submodule and any of its submodules (recursively)
 #
@@ -284,8 +284,7 @@ function clone_submodules()
 # :Output: The recursively cloned submodule
 #**
 
-# REVIEW rename to update_submodules; it's not cloning anything
-function clone_from_mirror()
+function update_submodule()
 {
   # Arrays aren't exported, reload
   _git_mirror_load_info "${1}"
@@ -297,8 +296,10 @@ function clone_from_mirror()
   # has a trailing slash
   base_submodule_path="${base_submodule_path%/}"
   local current_repo="$(_git_mirror_get_url "${base_submodule_path:-.}")"
-  next_section "Cloning repo: ${current_repo}"
+  next_section "Initializing ${current_repo}'s submodules"
 
+  # This is only done once when initially cloning the repo, so should not need
+  # a sync
   ${GIT} submodule init
   local IFS=$'\n'
   local submodule_names=($(get_submodule_names))
@@ -315,7 +316,7 @@ function clone_from_mirror()
   # so export them.
   base_submodule_path="${base_submodule_path-}" \
       ${GIT} submodule foreach --quiet "export prefix displaypath; bash -euc \
-          'unset GIT_DIR; source \"${GIT_MIRROR_SOURCE[0]}\"; clone_from_mirror \"${1}\"'"
+          'unset GIT_DIR; source \"${GIT_MIRROR_SOURCE[0]}\"; update_submodule \"${1}\"'"
 }
 
 #**
@@ -434,12 +435,12 @@ function git_mirror_main()
     clone_submodules
   popd &> /dev/null
 
+
   # Test if tar supports incremental backups
   local temp_file
   make_temp_path temp_file
   local TAR_INCREMENTAL=1
   tar -cf /dev/null -g "${temp_file}" /dev/null &> /dev/null || TAR_INCREMENTAL=0
-
 
   pushd "${PREP_DIR}" &> /dev/null
     next_section "Creating tar file..."
@@ -528,7 +529,7 @@ function git_clone_main()
     if [ ! -d ./.git ]; then
       ${GIT} clone "$(_git_mirror_get_url .)" .
     fi
-    clone_from_mirror "${1}"
+    update_submodule "${1}"
   popd &> /dev/null
 }
 
@@ -538,7 +539,7 @@ function git_clone_main()
 # Push the mirrored repository and all submodules to a new git server
 #
 # After transferring the archive file created by :func:`git_mirror_main` to your destination and extracting it, this function pushes all the mirrored repositories in the extracted archive to your own mirrors on a new git server.
-# 
+#
 # .. note:: The mirrors must be init'd on the git server.
 #
 # However, because the urls for your mirrors will be different from the original repo urls in .gitmodules, and modifying the urls will change the git repo, which we do not want to do, you must create a file specifying the mapping between each repository's original url and its mirror url (remote). The main repo is referred to as ``.`` while the rest of the repos are referred to by the relative path with respect to the main repo (e.g. ``external/vsi_common``). These need to be stored in an associative array called ``repos``.
