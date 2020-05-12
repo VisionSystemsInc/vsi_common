@@ -7,6 +7,7 @@ if [ -z ${VSI_COMMON_DIR+set} ]; then
   VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 fi
 source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/parser.bsh"
 
 GIT_MIRROR_SOURCE="$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)"/"$(basename "${BASH_SOURCE[0]}")"
 
@@ -374,12 +375,29 @@ function update_submodule()
 # ``git_mirror_main`` does not mirror all submodules that have ever been part of the repo, only those from a specific branch/sha/tag you specify (master by default). This is because trying to mirror all submodules from the past could be very lengthy, and is very likely to include urls that do not exist anymore.
 #**
 
+# TODO add OUTPUT_DIR and split into git_mirror_repos and archive_mirror
 function git_mirror_main()
 {
   if [[ $# = 0 ]]; then
     echo "Usage:" >&2
-    echo "${BASH_SOURCE[0]} <REPO_URL|PREP_DIR> [BRANCH/SHA]" >&2
+    echo "${BASH_SOURCE[0]} <REPO_URL> [BRANCH|SHA] [OUTPUT_PREP_DIR]" >&2
+    echo "${BASH_SOURCE[0]} <EXISTING_PREP_DIR> [BRANCH|SHA]" >&2
     exit 1
+  elif [[ $# = 3 ]]; then
+    # REVIEW the URL could be a path to a bare repo on the filesystem...
+    # RE git ls-remote --heads URL does work, but the server can ask for a
+    # username/pass on the tty
+    # RE echo 'git ls-remote --heads URL; exit' | script
+    # will avoid this, but I'm still not sure that's what we want
+    # RE it may be ok to ask for the username/pass (or recommend the git@
+    # syntax) because we will need it to create the mirror (although this will
+    # ask for the credentials twice)
+    # RE alternatively, do git ls-remote if the URL looks like a file path
+    if ! parse_url "${1}"; then
+      echo "If specifying the OUTPUT_PREP_DIR, the first argument must be the"
+      echo "REPO_URL"
+      exit 1
+    fi
   fi
 
   local MAIN_REPO
@@ -394,7 +412,7 @@ function git_mirror_main()
 
   local MAIN_DIR="$(basename "${MAIN_REPO}")"
   MAIN_DIR="${MAIN_DIR%.*}"
-  PREP_DIR="$(pwd)/${MAIN_DIR}_prep"
+  PREP_DIR="${3-"$(pwd)/${MAIN_DIR}_prep"}"
 
   #########################
   # Get the super project #
