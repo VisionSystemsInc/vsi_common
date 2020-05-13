@@ -44,6 +44,7 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 
 source "${VSI_COMMON_DIR}/linux/ask_question"
 source "${VSI_COMMON_DIR}/linux/git_mirror"
+source "${VSI_COMMON_DIR}/linux/uwecho.bsh"
 
 #**
 # .. envvar:: GIT
@@ -230,7 +231,7 @@ function submodule_summary()
 #**
 # .. function:: make_remote_urls_pushable
 #
-# Change the remote url of a git repo to use the git@ prefix instead of https
+# Change the remote url of a git repo to use the git@ syntax instead of https
 #
 # Query the git repository's remotes; if the URL of the remote is specified using the the https:// protocol, convert it to the ssh transfer protocol (git@..) to make pushing changes to the remote server easier. Assume a very basic url format: https://git-server.com/co/project.git without port, query, or fragment sections. Warn if these exist
 #
@@ -274,6 +275,7 @@ function toplevel()
 }
 
 # Get the (relative) path from the top-level repository to the submodule
+# NOTE the submodules must have been checked out recursively
 function submodule_paths()
 {
   # At some point, prefix was deprecated and removed in favor of displaypath
@@ -285,6 +287,7 @@ function submodule_paths()
 }
 
 # Get all submodule urls
+# NOTE the submodules must have been checked out recursively
 function submodule_urls()
 {
   # REVIEW should i unset GIT_DIR?
@@ -326,6 +329,11 @@ function orphan_commit_repo_map
 {
   orphan_branch="${1-__just_git_mirror_info_file}"
 
+  # Create the file that maps between the submodule's path and it's new URL.
+  # This mapping has to be created in the current repo because the
+  # mirror, __just_git_mirror, is not cloned recursively
+  repo_map="$(create_default_repo_map)"
+
   # Clone (non-recursively) the repo in which to make the orphan commit.
   # Avoids possibly needing to run 'git reset --hard' after checking out the
   # orphan branch and then 'git checkout' after commiting to it.
@@ -333,6 +341,13 @@ function orphan_commit_repo_map
   # TODO clone into an automatically deleting temporary directory; requires
   # mktemp_compat from dir_tools
   # RE this temp dir does not auto-delete
+  if [ "$(ls -A __just_git_mirror)" ]; then
+    echo "The temporary directory, ./__just_git_mirror, already exists and is"
+    echo "not empty. This script will delete it and continue."
+    ask_question "Is that ok?" answer_delete n
+    [ "$answer_delete" == "0" ] && return 1
+    rm -rf __just_git_mirror
+  fi
   "${GIT}" clone --no-checkout ./ __just_git_mirror
   pushd __just_git_mirror &>/dev/null
     # Avoids checking out the files in the previously checked-out branch
@@ -343,10 +358,9 @@ function orphan_commit_repo_map
     "${GIT}" checkout "${orphan_branch}" 2>/dev/null || \
         "${GIT}" checkout --orphan "${orphan_branch}"
 
-    # Create the file that maps between the submodule's path and it's new URL
-    create_default_repo_map > repo_map.env
+    echo "${repo_map}" > repo_map.env
 
-    ${GIT} add repo_map.env && git commit -m "commit the repo_map.env file needed by just:git_mirror.bsh that maps repo_paths to urls"
+    ${GIT} add repo_map.env && git commit --allow-empty -m "commit the repo_map.env file needed by just:git_mirror.bsh that maps repo_paths to urls"
     ${GIT} push --force origin "${orphan_branch}"
   popd &>/dev/null
   rm -rf __just_git_mirror
@@ -364,21 +378,20 @@ function orphan_commit_repo_map
 
 function add_import-repo_just_project()
 {
-  PREP_DIR="${1}"
+  prep_dir="$(realpath "${1}")"
 
-  # git archive external/vsi_common to ${PREP_DIR}/.vsi_common; does not include
+  # git archive external/vsi_common to ${prep_dir}/.vsi_common; does not include
   # submodules, but that that's ok
   pushd external/vsi_common &>/dev/null
-    git archive --format=tar --prefix=.vsi_common/ HEAD | (cd "${PREP_DIR}" && tar xf -)
+    git archive --format=tar --prefix=.vsi_common/ HEAD | (cd "${prep_dir}" && tar xf -)
   popd &>/dev/null
 
-  # Creates a simple Justfile, setup.env, and airgap.env to the PREP_DIR
+  # Creates a simple Justfile, setup.env, and airgap.env in the prep_dir
   uwecho '#!/usr/bin/env bash
 
           source "${VSI_COMMON_DIR}/linux/just_env" "$(dirname "${BASH_SOURCE[0]}")"/'airgap.env'
 
-          # Plugins
-          source "${VSI_COMMON_DIR}/linux/just_git_airgap_repo.bsh"
+          source "${VSI_COMMON_DIR}/linux/git_mirror"
 
           cd "${AIRGAP_MIRROR_CWD}"
           function caseify()
@@ -387,29 +400,30 @@ function add_import-repo_just_project()
             shift 1
 
             case ${just_arg} in
-              # git import-repo is a target in just_git_airgap_repo
-
+              git_export-repo) # Push the mirrored repos to new (initialized) locations
+                git_push_main repo_map.env
+                ;;
               *)
                 defaultify "${just_arg}" ${@+"${@}"}
                 ;;
             esac
           }
-          ' >> "${PREP_DIR}"/Justfile
-  uwecho 'JUST_PROJECT_PREFIX=MIRROR
+          ' >> "${prep_dir}"/Justfile
+  uwecho 'JUST_PROJECT_PREFIX=AIRGAP_MIRROR
           JUST_VERSION="0.2.2+1dev"
-          if [ -z "${MIRROR_CWD+set}" ]; then
-            MIRROR_CWD="$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)"
+          if [ -z "${AIRGAP_MIRROR_CWD+set}" ]; then
+            AIRGAP_MIRROR_CWD="$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)"
           fi
 
           ### YOU MUST SET THESE VARIABLES ###
           # REVIEW if unset, ask in the Justfile
           JUST_GIT_AIRGAP_SERVER=
           JUST_GIT_AIRGAP_ORGANIZATION=
-          ' >> "${PREP_DIR}"/airgap.env
+          ' >> "${prep_dir}"/airgap.env
   uwecho 'export JUST_SETUP_SCRIPT="$(basename "${BASH_SOURCE[0]}")"
           source "$(dirname "${BASH_SOURCE[0]}")/"'.vsi_common/env.bsh'
           unset JUSTFILE
-          ' >> "${PREP_DIR}"/setup.env
+          ' >> "${prep_dir}"/setup.env
 }
 
 #**
@@ -436,6 +450,7 @@ function relocate_git_defaultify()
 
       # This is more important for clone-airgap-repo than import-repo
       # REVIEW can this return the orphan branch name somehow
+      # RE simply don't declare the variable local
       orphan_commit_repo_map __just_git_mirror_info_file
 
       # REVIEW this could be moved to git_import-repo
@@ -445,7 +460,7 @@ function relocate_git_defaultify()
       add_import-repo_just_project "${prep_dir}"
 
       # Mirror and archive all the repos
-      if [[ $# = 2 ]]; then
+      if [[ $# = 1 ]] || [[ $# = 2 ]]; then
         git_mirror mirror "${remote_url}" "${branch}" "${prep_dir}"
       else
         git_mirror mirror "${prep_dir}" "${branch}"
@@ -473,6 +488,7 @@ function relocate_git_defaultify()
     # TODO Support iterating through all submodules too
     # TODO Generalize to support log_outgoing_commits too
     # TODO Support filtering by branch/remote
+    # TODO Move to just_git_functions
     git_unpushed-commits) # List unpushed commits on a branch
       if ! command -v ${GIT} >& /dev/null; then
         echo "Git not found, skipping listing of unpushed commits" >&2
@@ -495,8 +511,9 @@ function relocate_git_defaultify()
       fi
       ;;
 
-    git_make-remote-urls-pushable) # Change the remote url of all submodules to \
-                                   # use the git@ prefix instead of https
+    # TODO Move to just_git_functions
+    git_make-remote-urls-pushable) # Change the remote urls to use the git@ \
+                                   # syntax instead of https
       if ! command -v ${GIT} >& /dev/null; then
         echo "Git not found, skipping remote url conversion" >&2
         return 0
