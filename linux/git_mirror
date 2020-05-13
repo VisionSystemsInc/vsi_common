@@ -74,6 +74,7 @@ function next_section()
     make_temp_path COLOR_FILE
     export COLOR_FILE
   fi
+  # REVIEW remove red; it seems like an error
   local COLORS=($'\e[31m' $'\e[32m' $'\e[33m' $'\e[34m' $'\e[0m')
   local -i COLOR_INDEX="$(cat "${COLOR_FILE}" || echo 0)"
   COLOR_INDEX+=1
@@ -195,14 +196,14 @@ function clone_submodules()
   # has a trailing slash
   base_submodule_path="${base_submodule_path%/}"
 
-  # Update submodule urls to use PREP_DIR
+  # Update submodule urls to use GIT_MIRROR_PREP_DIR
   for submodule in ${submodule_names[@]+"${submodule_names[@]}"}; do
     # Calculate full submodule path wrt superproject (not just parent submodule)
     full_relative_path="${base_submodule_path}${base_submodule_path:+/}$(${GIT} config -f .gitmodules ${submodule}.path)"
 
     # Search for existing prepped submodule
     # https://stackoverflow.com/a/52657447/4166604
-    prepped_submodule_path="$(echo "${PREP_DIR}"/*/"${full_relative_path}/config")"
+    prepped_submodule_path="$(echo "${GIT_MIRROR_PREP_DIR}"/*/"${full_relative_path}/config")"
     # If I already have this submodule, use it
     if [[ -f ${prepped_submodule_path} ]]; then
       # Re-establish url in case it changed
@@ -211,7 +212,7 @@ function clone_submodules()
         ${GIT} remote set-url origin "$(${GIT} config "${submodule}.url")"
       popd &> /dev/null
     else
-      prepped_submodule_path="$(mktemp_compat "${PREP_DIR}")/${full_relative_path}"
+      prepped_submodule_path="$(mktemp_compat "${GIT_MIRROR_PREP_DIR}")/${full_relative_path}"
       next_section "Cloning a fresh copy of ${full_relative_path}"
       ${GIT} clone --mirror "$(${GIT} config "${submodule}.url")" "${prepped_submodule_path}"
     fi
@@ -220,19 +221,19 @@ function clone_submodules()
   done
 
   # Checkout submodule
-  next_section "Updating submodules for ${prefix-${displaypath-${MAIN_REPO}}}"
+  next_section "Updating submodules for ${prefix-${displaypath-${GIT_MIRROR_MAIN_REPO}}}"
   # The local non-bare doesn't need to waste time copying LFS objects
   GIT_LFS_SKIP_SMUDGE=1 ${GIT} submodule update
   # Restore the origin urls after update, so that relative URLs work
   ${GIT} submodule sync
 
   if git_mirror_has_lfs; then
-    next_section "Fetching lfs objects for ${prefix-${displaypath-${MAIN_REPO}}}"
+    next_section "Fetching lfs objects for ${prefix-${displaypath-${GIT_MIRROR_MAIN_REPO}}}"
     # Determine this (sub)modules' prepared path
     if [[ -z ${base_submodule_path} ]]; then
-      prepped_submodule_path="${PREP_DIR}/${MAIN_DIR}"
+      prepped_submodule_path="${GIT_MIRROR_PREP_DIR}/${MAIN_DIR}"
     else
-      prepped_submodule_path="$(dirname "$(echo "${PREP_DIR}"/*/"${base_submodule_path}/config")")"
+      prepped_submodule_path="$(dirname "$(echo "${GIT_MIRROR_PREP_DIR}"/*/"${base_submodule_path}/config")")"
     fi
 
     local lfs_dir="$(${GIT} rev-parse --git-dir)/lfs"
@@ -264,7 +265,7 @@ function clone_submodules()
   # And the recursion goes on... foreach runs in sh, so I'm forcing bash. I need
   # to pass the prefix/displaypath variables from git into the called function,
   # so export them.
-  PREP_DIR="${PREP_DIR}" base_submodule_path="${base_submodule_path}" ${GIT} submodule foreach --quiet "export prefix displaypath; bash -euc 'unset GIT_DIR; source \"${GIT_MIRROR_SOURCE[0]}\"; clone_submodules'"
+  GIT_MIRROR_PREP_DIR="${GIT_MIRROR_PREP_DIR}" base_submodule_path="${base_submodule_path}" ${GIT} submodule foreach --quiet "export prefix displaypath; bash -euc 'unset GIT_DIR; source \"${GIT_MIRROR_SOURCE[0]}\"; clone_submodules'"
   # The "unset GIT_DIR" is needed because somewhere between git 2.17 and 2.21,
   # git-submodule-foreach started setting the GIT_DIR; however, the logic here
   # is constantly switching directories into different repositories &
@@ -375,8 +376,14 @@ function update_submodule()
 # ``git_mirror_main`` does not mirror all submodules that have ever been part of the repo, only those from a specific branch/sha/tag you specify (master by default). This is because trying to mirror all submodules from the past could be very lengthy, and is very likely to include urls that do not exist anymore.
 #**
 
-# TODO split into git_mirror_repos and archive_mirror
 function git_mirror_main()
+{
+  git_mirror_repos ${@+"${@}"}
+  archive_mirrors "${GIT_MIRROR_PREP_DIR}"
+}
+
+# TODO add documentation
+function git_mirror_repos()
 {
   if [[ $# = 0 ]]; then
     echo "Usage:" >&2
@@ -400,32 +407,31 @@ function git_mirror_main()
     fi
   fi
 
-  local MAIN_REPO
   if [ -f "${1}/"*"/config" ]; then
     pushd "$(dirname "${1}/"*"/config")" &> /dev/null
-      MAIN_REPO="$(${GIT} config --get remote.origin.url)"
+      GIT_MIRROR_MAIN_REPO="$(${GIT} config --get remote.origin.url)"
     popd &> /dev/null
   else
-    MAIN_REPO="${1}"
+    GIT_MIRROR_MAIN_REPO="${1}"
   fi
   local BRANCH="${2-master}"
 
-  local MAIN_DIR="$(basename "${MAIN_REPO}")"
+  local MAIN_DIR="$(basename "${GIT_MIRROR_MAIN_REPO}")"
   MAIN_DIR="${MAIN_DIR%.*}"
-  local PREP_DIR="$(pwd)/${3-"${MAIN_DIR}_prep"}"
+  GIT_MIRROR_PREP_DIR="$(pwd)/${3-"${MAIN_DIR}_prep"}"
 
   #########################
   # Get the super project #
   #########################
-  mkdir -p "${PREP_DIR}"
-  if [ ! -e "${PREP_DIR}/${MAIN_DIR}" ]; then
-    next_section "Cloning super project ${MAIN_REPO}..."
-    ${GIT} clone --mirror "${MAIN_REPO}" "${PREP_DIR}/${MAIN_DIR}"
+  mkdir -p "${GIT_MIRROR_PREP_DIR}"
+  if [ ! -e "${GIT_MIRROR_PREP_DIR}/${MAIN_DIR}" ]; then
+    next_section "Cloning super project ${GIT_MIRROR_MAIN_REPO}..."
+    ${GIT} clone --mirror "${GIT_MIRROR_MAIN_REPO}" "${GIT_MIRROR_PREP_DIR}/${MAIN_DIR}"
   else
-    next_section "Fetching for super project ${MAIN_REPO} using last run..."
-    pushd "${PREP_DIR}/${MAIN_DIR}" &> /dev/null
+    next_section "Fetching for super project ${GIT_MIRROR_MAIN_REPO} using last run..."
+    pushd "${GIT_MIRROR_PREP_DIR}/${MAIN_DIR}" &> /dev/null
       # Re-establish url in case it changed
-      ${GIT} remote set-url origin "${MAIN_REPO}"
+      ${GIT} remote set-url origin "${GIT_MIRROR_MAIN_REPO}"
       if [ "${GIT_VERSION[0]}" = "2" -a "${GIT_VERSION[1]}" -ge "17" ] || [[ ${GIT_VERSION[0]} -gt 2 ]]; then
         ${GIT} fetch -pP origin
       else
@@ -438,7 +444,7 @@ function git_mirror_main()
   local TEMP_DIR
   make_temp_path TEMP_DIR -d
   # The local non-bare doesn't need to waste time copying LFS objects
-  GIT_LFS_SKIP_SMUDGE=1 ${GIT} clone "${PREP_DIR}/${MAIN_DIR}" "${TEMP_DIR}"
+  GIT_LFS_SKIP_SMUDGE=1 ${GIT} clone "${GIT_MIRROR_PREP_DIR}/${MAIN_DIR}" "${TEMP_DIR}"
 
   # git submodule init
   pushd "${TEMP_DIR}" &> /dev/null
@@ -446,13 +452,17 @@ function git_mirror_main()
     GIT_LFS_SKIP_SMUDGE=1 ${GIT} checkout "${BRANCH}"
 
     # Restore origin to not point to mirror, so relative submodules work right
-    ${GIT} remote set-url origin "${MAIN_REPO}"
+    ${GIT} remote set-url origin "${GIT_MIRROR_MAIN_REPO}"
 
     # This effectively does git submodule update --recursive --init,
-    # but plumbs the submodules to use the "${PREP_DIR}" instead
+    # but plumbs the submodules to use the "${GIT_MIRROR_PREP_DIR}" instead
     clone_submodules
   popd &> /dev/null
+}
 
+function archive_mirrors()
+{
+  local prep_dir="${1}"
 
   # Test if tar supports incremental backups
   local temp_file
@@ -460,13 +470,13 @@ function git_mirror_main()
   local TAR_INCREMENTAL=1
   tar -cf /dev/null -g "${temp_file}" /dev/null &> /dev/null || TAR_INCREMENTAL=0
 
-  pushd "${PREP_DIR}" &> /dev/null
+  pushd "${prep_dir}" &> /dev/null
     next_section "Creating tar file..."
     local tar_file="transfer_$(date '+%Y_%m_%d_%H_%M_%S')"
     local last_tar_file
     if [[ ${TAR_INCREMENTAL} = 1 ]]; then
       # Get the last one, alphabetically speaking
-      last_tar_file="$(ls "${PREP_DIR}"/transfer_*.snar 2>/dev/null | tail -n1)"
+      last_tar_file="$(ls "${prep_dir}"/transfer_*.snar 2>/dev/null | tail -n1)"
       last_tar_file="$(basename "${last_tar_file%.snar}")"
       tar czf "${tar_file}.tgz" -g "${tar_file}.snar" */
     else
@@ -477,12 +487,12 @@ function git_mirror_main()
       next_section "Creating an incremental tar file too, based on ${last_tar_file}"
       tar czf "${tar_file}_${last_tar_file}.tgz" -g "${last_tar_file}.snar" */
       next_section "Your new tar file is ready:"
-      echo "${PREP_DIR}/${tar_file}"
+      echo "${prep_dir}/${tar_file}"
       echo "and you have an incremental file:"
       echo "${tar_file}_${last_tar_file}.tgz"
     else
       next_section "Your new tar file is ready:"
-      echo "${PREP_DIR}/${tar_file}"
+      echo "${prep_dir}/${tar_file}"
     fi
   popd &> /dev/null
 }
