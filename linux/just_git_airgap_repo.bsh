@@ -371,7 +371,7 @@ function orphan_commit_repo_map
   #     "${GIT}" checkout --orphan "${orphan_branch}"
   #git reset --hard # This is important if "${orphan_branch}" was just created
   #
-  # create_repo_map > repo_map.env
+  #echo "${repo_map}" > repo_map.env
   #
   #"${GIT}" checkout "${current_branch}" # This could be expensive
 }
@@ -423,6 +423,12 @@ function add_import-repo_just_project()
           ### YOU MUST SET THESE VARIABLES ###
           JUST_GIT_AIRGAP_SERVER=
           JUST_GIT_AIRGAP_ORGANIZATION=
+
+          if [ -z "${JUST_GIT_AIRGAP_SERVER}" ] || [ -z "${JUST_GIT_AIRGAP_ORGANIZATION}" ]; then
+            echo "ERROR You must set the values of JUST_GIT_AIRGAP_SERVER"
+            echo "and JUST_GIT_AIRGAP_ORGANIZATION in the ./airgap.env file"
+            exit 1
+          fi
           ' >> "${prep_dir}"/airgap.env
   uwecho 'export JUST_SETUP_SCRIPT="$(basename "${BASH_SOURCE[0]}")"
           source "$(dirname "${BASH_SOURCE[0]}")/"'.vsi_common/env.bsh'
@@ -507,11 +513,13 @@ function relocate_git_defaultify()
 
         # This is a mirror (bare) repo
         # REVIEW this could be moved to git_import-repo
-        # RE although would have to know the name of the branch
+        # RE although it would have to know the name of the branch:file
         # RE perhaps that is ok. it makes sense that the git_import-repo would be
         # tightly coupled with the git_export-repo
-        # RE and it already has to know the name of the file
+        # RE saving it here also allows the user to edit it, if needed...
         git show __just_git_mirror_info_file:repo_map.env > ../repo_map.env
+        # Just in case...
+        cp ../repo_map.env ../repo_map.env.bak
       popd &>/dev/null
 
       # Copy a simple Justfile to make import-repo easy
@@ -525,11 +533,32 @@ function relocate_git_defaultify()
 
     git_import-repo) # Push a repo exported with `git export-repo` to an \
                      # initialized git repo
-      source repo_map.env
+      # Assume we are using the simple just project setup by
+      # add_import-repo_just_project in git_export-repo, and are therefore
+      # currently in the PREP_DIR
+
+      # Find the main_dir
+      local main_dir="$(dirname */config)"
+
+      source repo_map.env # Sets repo_paths and repo_urls
+      # Now that the env variables used by repo_urls in repo_map.env have been
+      # expanded, resave the file so that users don't have to set those env
+      # variables during git_clone-airgap-repo.
+      # We could write out this file in the same way that create_repo_map does,
+      # but this is easier; and this file should no longer need to be inspected
+      # by a human
       declare -p repo_urls > repo_map.env
       declare -p repo_paths >> repo_map.env
-      # TODO commit to same orphan branch
-      git_push_main ${@+"${@}"}
+      repo_map="$(cat repo_map.env)"
+
+      # Now that the repo_urls have been expanded, update the repo_map.env file
+      # in the orphan branch so that they are correct going forward
+      pushd "${main_dir}" &>/dev/null
+        orphan_commit_repo_map "${repo_map}"
+      popd &>/dev/null
+
+      git_push_main repo_map.env ./
+
       extra_args=$#
       ;;
 
