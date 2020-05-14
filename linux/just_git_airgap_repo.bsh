@@ -445,34 +445,50 @@ function relocate_git_defaultify()
   arg=$1
   shift 1
   case $arg in
-    git_guided-export-repo)
-      local OLD_IFS="${IFS}"
-      IFS=$'\n'
-      # No quotes around subshell to create array (although IFS must be correct)
-      local remotes=($(git remote -v | grep '(fetch)$' | awk '{print $1 " " $2}'))
-      IFS="${OLD_IFS}"
-
-      # REVIEW this is fine the first time git_mirror_main is called, but what
-      # about subsequent times
-      local remote_name
+    # I'm not sure why the target git_export-repo_--guided doesn't work
+    git_export-repo-guided) # Walk through how to export a mirror of the git \
+                            # repository, including all submodules, to a tarball
       local remote_url
-      if [ "${#remotes[@]}" -eq 0 ]; then
-        # This is not strictly a requirement for a simple repo that only you
-        # work on locally, however we won't worry about that use case now
-        echo "This repository has no remotes. Please push the repo to a"
-        echo "git server and try again."
-        exit 1
-      elif [ "${#remotes[@]}" -eq 1 ]; then
-        remote_name="$(echo "${remotes[0]}" | awk '{print $1}')"
-        remote_url="$(echo "${remotes[0]}" | awk '{print $2}')"
-        echo "Using remote '${remote_name}' located at ${remote_url}"
-      elif [ "${remotes[@]}" -gt 1 ]; then
-        echo "Please choose a remote:"
-        local picked
-        # TODO would be nice if picker supported a default option (origin)
-        picker "${remotes[@]}" || picked=$?
-        remote_name="$(echo "${remotes[picked-1]}" | awk '{print $1}')"
-        remote_url="$(echo "${remotes[picked-1]}" | awk '{print $2}')"
+      local prep_dir
+      local branch
+      local output_dir
+
+      echo "Would you like to:"
+      picker "Create a new mirror" \
+             "Base off an existing mirror (i.e., a PREP_DIR)" || picked=$?
+      echo
+
+      if [ "${picked}" = 1 ]; then
+        local OLD_IFS="${IFS}"
+        IFS=$'\n'
+        # No quotes around subshell to create array (although IFS must be correct)
+        local remotes=($(git remote -v | grep '(fetch)$' | awk '{print $1 " " $2}'))
+        IFS="${OLD_IFS}"
+
+        # REVIEW this is fine the first time git_mirror_main is called, but what
+        # about subsequent times
+        local remote_name
+        local remote_url
+        if [ "${#remotes[@]}" -eq 0 ]; then
+          # This is not strictly a requirement for a simple repo that only you
+          # work on locally, however we won't worry about that use case now
+          echo "This repository has no remotes. Please push the repo to a"
+          echo "git server and try again."
+          exit 1
+        elif [ "${#remotes[@]}" -eq 1 ]; then
+          remote_name="$(echo "${remotes[0]}" | awk '{print $1}')"
+          remote_url="$(echo "${remotes[0]}" | awk '{print $2}')"
+          echo "Using remote '${remote_name}' located at ${remote_url}"
+        elif [ "${remotes[@]}" -gt 1 ]; then
+          echo "Please choose a remote:"
+          local picked
+          # TODO would be nice if picker supported a default option (origin)
+          picker "${remotes[@]}" || picked=$?
+          remote_name="$(echo "${remotes[picked-1]}" | awk '{print $1}')"
+          remote_url="$(echo "${remotes[picked-1]}" | awk '{print $2}')"
+        fi
+      else
+        read -r -e -p "Where is the existing mirror: " prep_dir
       fi
 
       # List local branches
@@ -483,7 +499,22 @@ function relocate_git_defaultify()
       picker "${branches[@]}" || picked=$?
       local branch="${branches[picked-1]}"
 
-      #justify git_export-repo
+      if [ -z "${prep_dir}" ]; then
+        read -r -e -p "Where would you like the mirror to be created: " output_dir
+      fi
+
+      # Good lord
+      if [ -n "${prep_dir}" ] && [ -n "${branch}" ]; then
+        justify git_export-repo "${prep_dir}" "${branch}"
+      elif [ -n "${prep_dir}" ]; then
+        justify git_export-repo "${prep_dir}"
+      elif [ -n "${remote_url}" ] && [ -n "${branch}" ] && [ -n "${output_dir}" ]; then
+        justify git_export-repo "${remote_url}" "${branch}" "${output_dir}"
+      elif [ -n "${remote_url}" ] && [ -n "${branch}" ]; then
+        justify git_export-repo "${remote_url}" "${branch}"
+      elif [ -n "${remote_url}" ]; then
+        justify git_export-repo "${remote_url}"
+      fi
       ;;
 
     # REVIEW rename git_mirror-repo and git_push-airgap-repo
