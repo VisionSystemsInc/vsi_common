@@ -453,57 +453,107 @@ function relocate_git_defaultify()
       local branch
       local output_dir
 
-      echo "Would you like to:"
-      picker "Create a new mirror" \
-             "Base off an existing mirror (i.e., a PREP_DIR)" || picked=$?
-      echo
-
-      if [ "${picked}" = 1 ]; then
-        local OLD_IFS="${IFS}"
-        IFS=$'\n'
-        # No quotes around subshell to create array (although IFS must be correct)
-        local remotes=($(git remote -v | grep '(fetch)$' | awk '{print $1 " " $2}'))
-        IFS="${OLD_IFS}"
-
-        # REVIEW this is fine the first time git_mirror_main is called, but what
-        # about subsequent times
-        local remote_name
-        local remote_url
-        if [ "${#remotes[@]}" -eq 0 ]; then
-          # This is not strictly a requirement for a simple repo that only you
-          # work on locally, however we won't worry about that use case now
-          echo "This repository has no remotes. Please push the repo to a"
-          echo "git server and try again."
-          exit 1
-        elif [ "${#remotes[@]}" -eq 1 ]; then
-          remote_name="$(echo "${remotes[0]}" | awk '{print $1}')"
-          remote_url="$(echo "${remotes[0]}" | awk '{print $2}')"
-          echo "Using remote '${remote_name}' located at ${remote_url}"
-        elif [ "${remotes[@]}" -gt 1 ]; then
-          echo "Please choose a remote:"
-          local picked
-          # TODO would be nice if picker supported a default option (origin)
-          picker "${remotes[@]}" || picked=$?
-          remote_name="$(echo "${remotes[picked-1]}" | awk '{print $1}')"
-          remote_url="$(echo "${remotes[picked-1]}" | awk '{print $2}')"
+      while (( $# )); do
+        # Convert arguments of the form -f=val to -f val and --flag=val to --flag val
+        # https://medium.com/@binaryphile/nice-one-elegant-in-its-simplicity-eee6b433bc90
+        if [[ $1 == -?=* ]] || [[ $1 == --*=* ]]; then
+          set -- "${1%%=*}" "${1#*=}" "${@:2}"
         fi
-      else
-        read -r -e -p "Where is the existing mirror: " prep_dir
+        case $1 in
+          -r|--remote-url) # Repository's remote URL
+            remote_url=$2
+            shift 2
+            ;;
+          -p|--prep-dir) # The directory to which the repo has previously been \
+                         # mirrored; it acts as a cache
+            prep_dir=$2
+            shift 2
+            ;;
+          -o|--output-dir) # The directory in which to mirror the repo
+            output_dir=$2
+            shift 2
+            ;;
+          -b|--branch) # The branch from which to identify the submodules
+            branch=$2
+            shift 2
+            ;;
+          -h|--help)
+            usage
+            exit 1
+            ;;
+          *)
+            echo "Positional arguments are not allowed: $arg"
+            exit 1
+            ;;
+        esac
+      done
+      # only prep_dir or remote_url can be set
+      if [ -n "${prep_dir}" ] && [ -n "${remote_url}" ]; then
+        echo "Only one of --prep_dir and --remote-url can be given"
+        exit 1
+      fi
+      if [ -n "${prep_dir}" ] && [ -n "${output_dir}" ]; then
+        echo "Only one of --prep_dir and --output_dir can be given"
+        exit 1
       fi
 
-      # List local branches
-      local branches=($("${GIT}" for-each-ref --format='%(refname:short)' refs/heads))
-      local picked
-      echo "Please choose which branch you would like to base the submodules off"
-      # TODO would be nice if picker supported a default option (current_branch)
-      picker "${branches[@]}" || picked=$?
-      local branch="${branches[picked-1]}"
+      if [ -z "${remote_url}" ] && [ -z "${prep_dir}" ]; then
+        echo "Would you like to:"
+        picker "Create a new mirror" \
+              "Base off an existing mirror (i.e., a PREP_DIR)" || picked=$?
+        echo
+        if [ "${picked}" = 1 ]; then
+          local OLD_IFS="${IFS}"
+          IFS=$'\n'
+          # No quotes around subshell to create array (although IFS must be correct)
+          local remotes=($(git remote -v | grep '(fetch)$' | awk '{print $1 " " $2}'))
+          IFS="${OLD_IFS}"
 
-      if [ -z "${prep_dir}" ]; then
+          # REVIEW this is fine the first time git_mirror_main is called, but what
+          # about subsequent times
+          local remote_name
+          local remote_url
+          if [ "${#remotes[@]}" -eq 0 ]; then
+            # This is not strictly a requirement for a simple repo that only you
+            # work on locally, however we won't worry about that use case now
+            echo "This repository has no remotes. Please push the repo to a"
+            echo "git server and try again."
+            exit 1
+          elif [ "${#remotes[@]}" -eq 1 ]; then
+            remote_name="$(echo "${remotes[0]}" | awk '{print $1}')"
+            remote_url="$(echo "${remotes[0]}" | awk '{print $2}')"
+            echo "Using remote '${remote_name}' located at ${remote_url}"
+          elif [ "${remotes[@]}" -gt 1 ]; then
+            echo "Please choose a remote:"
+            local picked
+            # TODO would be nice if picker supported a default option (origin)
+            picker "${remotes[@]}" || picked=$?
+            remote_name="$(echo "${remotes[picked-1]}" | awk '{print $1}')"
+            remote_url="$(echo "${remotes[picked-1]}" | awk '{print $2}')"
+          fi
+        else
+          read -r -e -p "Where is the existing mirror: " prep_dir
+          echo
+        fi
+      fi
+
+      if [ -z "${branch}" ]; then
+        # List local branches
+        local branches=($("${GIT}" for-each-ref --format='%(refname:short)' refs/heads))
+        local picked
+        echo "Please choose which branch you would like to base the submodules off"
+        # TODO would be nice if picker supported a default option (current_branch)
+        picker "${branches[@]}" || picked=$?
+        local branch="${branches[picked-1]}"
+      fi
+
+      if [ -z "${prep_dir}" ] && [ -z "${output_dir}" ]; then
         read -r -e -p "Where would you like the mirror to be created: " output_dir
+        echo
       fi
 
       # Good lord
+      # RE with an array squasher, this could be refactored to two conditions
       if [ -n "${prep_dir}" ] && [ -n "${branch}" ]; then
         justify git_export-repo "${prep_dir}" "${branch}"
       elif [ -n "${prep_dir}" ]; then
