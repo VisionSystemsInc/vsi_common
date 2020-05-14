@@ -92,11 +92,12 @@ source "${VSI_COMMON_DIR}/linux/uwecho.bsh"
 
 function log_unpushed_commits()
 {
-  # Note: Only supports passing in a single branch and remote name
+  # NOTE Only supports passing in a single branch and remote name
   local branch="${1---branches}"
   local remote_name="${2-}"
 
-  local commits="$(${GIT} log "${branch}" --not --remotes="${remote_name}" --decorate --graph --format=short --color=always)"
+  local commits="$(${GIT} log --decorate --graph --format=short --color=always \
+      "${branch}" --not --remotes="${remote_name}")"
   echo "${commits}"
 }
 
@@ -125,8 +126,8 @@ function git_tracking_branches()
   IFS=$'\n'
   # E.g., upstream:short=origin/master, refname=refs/heads/master and
   # upstream:track=[gone] if the remote-tracking branch has been pruned
-  # Note: %(upstream:track) requires git >= 1.9.0
-  # Note: No quotes around subshell to create array
+  # NOTE %(upstream:track) requires git >= 1.9.0
+  # NOTE No quotes around subshell to create array
   local tracking_branches=($( \
       ${GIT} for-each-ref --format='%(upstream:short) %(refname) %(upstream:track)' refs/heads | \
       # Discard lines in which upstream is unset, i.e., those with a leading space
@@ -173,12 +174,11 @@ function git_tracking_branches()
 # :Output: - ``*stdout*`` - Print all unpushed commits for tracking branches to stdout
 #
 # .. note:: A branch cannot track multiple remotes.
-#
-# TODO i would like to support two optional arrays, but i think this would require ENV vars. is that acceptable
 #**
 
 function log_outgoing_commits()
 {
+  # NOTE Only supports passing in a single branch and remote name
   local remote_name="${2-}"
 
   local tracking_branches
@@ -193,7 +193,8 @@ function log_outgoing_commits()
   local tracking_branch
   local commits=()
   for tracking_branch in "${tracking_branches[@]}"; do
-    commits+=("$(${GIT} log --decorate --graph --format=short --color=always "${tracking_branch}"@{upstream}.."${tracking_branch}")")
+    commits+=("$(${GIT} log --decorate --graph --format=short --color=always \
+        "${tracking_branch}"@{upstream}.."${tracking_branch}")")
   done
   local OLD_IFS="${IFS}"
   IFS=$'\n'
@@ -225,7 +226,7 @@ function submodule_summary()
   IFS="${OLD_IFS}"
 }
 
-# 'git push --recurse-submodules=check' (available in git 1.8.0) will check for unpushed commits in a submodule for its current commited state in the parent project
+# 'git push --recurse-submodules=check' (available in git 1.8.0) will check for unpushed commits in a submodule for its current committed state in the parent project
 # RE 'git config push.recurseSubmodules check' (available in git 2.7.0)
 
 #**
@@ -236,6 +237,9 @@ function submodule_summary()
 # Query the git repository's remotes; if the URL of the remote is specified using the the https:// protocol, convert it to the ssh transfer protocol (git@..) to make pushing changes to the remote server easier. Assume a very basic url format: https://git-server.com/co/project.git without port, query, or fragment sections. Warn if these exist
 #
 # :Arguments: - ``1`` - A name of a remote to filter by; e.g., origin. If unset, then don't filter
+#
+# .. note::
+#  This does not change the submodule's tracked URL, i.e., the URL in the .gitmodules file, only the url in .git/config
 #**
 
 function make_remote_urls_pushable()
@@ -252,7 +256,7 @@ function make_remote_urls_pushable()
       continue
     fi
 
-    # Note: If the git server has a non-standard port (which would not be the
+    # NOTE If the git server has a non-standard port (which would not be the
     # same as https port), you have to do ssh://git@server:port/...
     if parse_url "${remote_url}"; then # Sets just_url_parsed_host and just_url_parsed_rpath
       if [ "${just_url_parsed_port}" != "" ] || \
@@ -275,12 +279,13 @@ function toplevel()
 }
 
 # Get the (relative) path from the top-level repository to the submodule
-# NOTE the submodules must have been checked out recursively (which is obviously
+#
+# NOTE The submodules must have been checked out recursively (which is obviously
 # not the case in a bare/mirror repo)
 function submodule_paths()
 {
   # At some point, prefix was deprecated and removed in favor of displaypath
-  # Note: prefix/displaypath only provides the expected path if this command is
+  # NOTE prefix/displaypath only provides the expected path if this command is
   # run from the root of the top-level repository. Fortunately, that is the case
   # in the Justfile.
   # Alternatively, add JUST_PROJECT_DIR to just or use :func:`toplevel`
@@ -288,7 +293,7 @@ function submodule_paths()
 }
 
 # Get all submodule urls
-# NOTE the submodules must have been checked out recursively (which is obviously
+# NOTE The submodules must have been checked out recursively (which is obviously
 # not the case in a bare/mirror repo)
 function submodule_urls()
 {
@@ -299,8 +304,16 @@ function submodule_urls()
 
 # Create a URL with env variables that will expand to the mirrored repo's new
 # location on the airgapped git server of the form:
+# repo_paths=(
+#   ./
+#   ./docker/recipes
+# )
+# repo_urls=(
 #   '${JUST_GIT_AIRGAP_SERVER}/${JUST_GIT_AIRGAP_ORGANIZATION}'/vsi_common.git
-# which could expand to https://git-server/org/vsi_common.git
+#   '${JUST_GIT_AIRGAP_SERVER}/${JUST_GIT_AIRGAP_ORGANIZATION}'/recipes.git
+# )
+# which could, for example, expand to https://git-server/org/vsi_common.git and
+# https://git-server/org/recipes.git
 #
 # NOTE that this function could be overridden by the user
 function create_repo_map()
@@ -314,11 +327,17 @@ function create_repo_map()
   local repo_urls=()
   local repo_path
   for repo_path in "${repo_paths[@]}"; do
-    # Note: Quotes around JUST_AIRGAP_GIT_SERVER aren't necessary here because
+    # NOTE Quotes around JUST_AIRGAP_GIT_SERVER aren't necessary here because
     # the entries will be quoted when printed to file
     repo_urls+=('${JUST_GIT_AIRGAP_SERVER}/${JUST_GIT_AIRGAP_ORGANIZATION}'/$(basename "${repo_path}"))
   done
 
+  printf '# NOTE: This file is automatically created by `create_repo_map`.\n'
+  printf '#'
+  printf '# If this mapping between submodules and URLs does not suit your\n'
+  printf '# needs, you can edit it directly or override `create_repo_map`\n'
+  printf '# before calling `just git export-repo`'
+  printf '\n\n'
   printf 'repo_paths=(\n'
   printf '  "%s"\n' "${repo_paths[@]}"
   printf ')\n\n'
@@ -327,7 +346,11 @@ function create_repo_map()
   printf ')\n'
 }
 
-# Create an orphan commit in the repo
+# Given a repo_map like the one produced by :func:`create_repo_map`, make an
+# orphan commit in the repo (on a branch named __just_git_mirror_info_file by
+# default) to a file named repo_map.env. An intermediate product of this
+# function is a shallow clone of the current repo to a directory called
+# __just_git_clone, which is removed at the end of the function
 function orphan_commit_repo_map
 {
   repo_map="${1}"
@@ -336,7 +359,7 @@ function orphan_commit_repo_map
   # Clone (non-recursively) the repo in which to make the orphan commit.
   # Avoids possibly needing to run 'git reset --hard' after checking out the
   # orphan branch and then 'git checkout' after committing to it.
-  # Note: Uses hard-links on linux
+  # NOTE Uses hard-links on linux
   # TODO clone into an automatically deleting temporary directory; requires
   # mktemp_compat from dir_tools.bsh
   # RE this temp dir does not auto-delete
@@ -376,6 +399,7 @@ function orphan_commit_repo_map
   #"${GIT}" checkout "${current_branch}" # This could be expensive
 }
 
+# Creates a simple Justfile, setup.env, and airgap.env in the prep_dir
 function add_import-repo_just_project()
 {
   prep_dir="$(realpath "${1}")"
@@ -386,7 +410,6 @@ function add_import-repo_just_project()
     git archive --format=tar --prefix=.vsi_common/ HEAD | (cd "${prep_dir}" && tar xf -)
   popd &>/dev/null
 
-  # Creates a simple Justfile, setup.env, and airgap.env in the prep_dir
   # REVIEW it might be nicer not to import a plugin here so that there is only
   # one target in just help
   uwecho '#!/usr/bin/env bash
@@ -414,7 +437,7 @@ function add_import-repo_just_project()
   # REVIEW if someone overrides create_repo_map, these env vars might not need
   # to be set
   # RE that's ok. if they are needed in repo_map.env and unset, then the script
-  # will die if set -u is enabled (which should be in just)
+  # will die if set -eu is enabled (which should be in just)
   # RE although the error makes it very clear how to fix it the problem
   # REVIEW if unset, ask in the Justfile
   # RE can't ask in the Justfile without disabling set -u
@@ -445,7 +468,7 @@ function relocate_git_defaultify()
   arg=$1
   shift 1
   case $arg in
-    # I'm not sure why the target git_export-repo_--guided doesn't work
+    # REVIEW When just supports it, rename 'git export-repo --guided'
     git_export-repo-guided) # Walk through how to export a mirror of the git \
                             # repository, including all submodules, to a tarball
       local remote_url
@@ -453,6 +476,7 @@ function relocate_git_defaultify()
       local branch
       local output_dir
 
+      # TODO Switch to command_tools:parse_args
       while (( $# )); do
         # Convert arguments of the form -f=val to -f val and --flag=val to --flag val
         # https://medium.com/@binaryphile/nice-one-elegant-in-its-simplicity-eee6b433bc90
@@ -478,6 +502,7 @@ function relocate_git_defaultify()
             shift 2
             ;;
           -h|--help)
+            # FIXME add usage
             usage
             exit 1
             ;;
@@ -487,20 +512,22 @@ function relocate_git_defaultify()
             ;;
         esac
       done
-      # only prep_dir or remote_url can be set
+      # Only prep_dir xor remote_url can be set
       if [ -n "${prep_dir}" ] && [ -n "${remote_url}" ]; then
         echo "Only one of --prep_dir and --remote-url can be given"
         exit 1
       fi
+      # Only prep_dir xor output_dir can be set
       if [ -n "${prep_dir}" ] && [ -n "${output_dir}" ]; then
         echo "Only one of --prep_dir and --output_dir can be given"
         exit 1
       fi
 
+
       if [ -z "${remote_url}" ] && [ -z "${prep_dir}" ]; then
         echo "Would you like to:"
         picker "Create a new mirror" \
-              "Base off an existing mirror (i.e., a PREP_DIR)" || picked=$?
+               "Base off an existing mirror (i.e., a PREP_DIR)" || picked=$?
         echo
         if [ "${picked}" = 1 ]; then
           local OLD_IFS="${IFS}"
@@ -509,8 +536,6 @@ function relocate_git_defaultify()
           local remotes=($(git remote -v | grep '(fetch)$' | awk '{print $1 " " $2}'))
           IFS="${OLD_IFS}"
 
-          # REVIEW this is fine the first time git_mirror_main is called, but what
-          # about subsequent times
           local remote_name
           local remote_url
           if [ "${#remotes[@]}" -eq 0 ]; then
@@ -522,7 +547,9 @@ function relocate_git_defaultify()
           elif [ "${#remotes[@]}" -eq 1 ]; then
             remote_name="$(echo "${remotes[0]}" | awk '{print $1}')"
             remote_url="$(echo "${remotes[0]}" | awk '{print $2}')"
-            echo "Using remote '${remote_name}' located at ${remote_url}"
+            echo "This repository has only one remote, '${remote_name}', located at"
+            echo "   ${remote_url}"
+            echo
           elif [ "${remotes[@]}" -gt 1 ]; then
             echo "Please choose a remote:"
             local picked
@@ -539,6 +566,7 @@ function relocate_git_defaultify()
 
       if [ -z "${branch}" ]; then
         # List local branches
+        # REVIEW if there is only one branch, just use it
         local branches=($("${GIT}" for-each-ref --format='%(refname:short)' refs/heads))
         local picked
         echo "Please choose which branch you would like to base the submodules off"
@@ -570,6 +598,7 @@ function relocate_git_defaultify()
     # REVIEW rename git_mirror-repo and git_push-airgap-repo
     git_export-repo) # Export a mirror of the git repository, including all \
                      # submodules, to a tarball
+      # REVIEW move this functionality into a function
 
       # Sets GIT_MIRROR_PREP_DIR and GIT_MIRROR_MAIN_REPO
       git_mirror_repos ${@+"${@}"}
@@ -592,7 +621,7 @@ function relocate_git_defaultify()
 
         # We are in a mirror (bare) repo here
         # REVIEW this could be moved to git_import-repo
-        # RE although it would have to know the name of the branch:file
+        # RE although it too would have to know the name of the branch:file
         # RE perhaps that is ok. it makes sense that the git_import-repo would be
         # tightly coupled with the git_export-repo
         # RE saving it here also allows the user to edit it, if needed...
@@ -612,12 +641,14 @@ function relocate_git_defaultify()
 
     git_import-repo) # Push a repo exported with `git export-repo` to an \
                      # initialized git repo
+      # REVIEW move this functionality into a function
+
       # Assume we are using the simple just project setup by
       # add_import-repo_just_project in git_export-repo, and are therefore
       # currently in the PREP_DIR
 
       # Find the main_dir
-      local main_dir="$(dirname */config)"
+      local main_dir="$(dirname "$(ls */config)")"
 
       # FIXME this should error if there are unbound variables; once that's
       # fixed, test for the error and print a message saying to set the var
@@ -648,17 +679,18 @@ function relocate_git_defaultify()
     git_clone-airgap-repo) # Clone a repo exported with `git export-repo`. This \
                            # is necessary because we do not want to update the \
                            # url's of the submodules
-      make_temp_path REPO_MAP # auto-deleting file
+      local repo_map
+      make_temp_path repo_map # auto-deleting file
       # The repo map's submodule URLs were corrected in git_import-repo
-      git show __just_git_mirror_info_file:repo_map.env > "${REPO_MAP}"
-      git_clone_main "${REPO_MAP}" ./
+      git show __just_git_mirror_info_file:repo_map.env > "${repo_map}"
+      git_clone_main "${repo_map}" ./
 
       extra_args=$#
       ;;
 
     # TODO Support iterating through all submodules too
     # TODO Generalize to support log_outgoing_commits too
-    # TODO Support filtering by branch/remote
+    # TODO Support filtering by branches/remotes
     # TODO Move to just_git_functions
     git_unpushed-commits) # List unpushed commits on a branch
       if ! command -v ${GIT} >& /dev/null; then
@@ -690,7 +722,7 @@ function relocate_git_defaultify()
         return 0
       fi
 
-      # TODO support iterating through all submodules
+      # TODO Support iterating through all submodules
       make_remote_urls_pushable
       ;;
 
