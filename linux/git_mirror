@@ -7,7 +7,6 @@ if [ -z ${VSI_COMMON_DIR+set} ]; then
   VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 fi
 source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
-source "${VSI_COMMON_DIR}/linux/parser.bsh"
 
 GIT_MIRROR_SOURCE="$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)"/"$(basename "${BASH_SOURCE[0]}")"
 
@@ -391,19 +390,15 @@ function git_mirror_repos()
     echo "${BASH_SOURCE[0]} EXISTING_PREP_DIR [BRANCH|SHA]" >&2
     exit 1
   elif [[ $# = 3 ]]; then
-    # REVIEW the URL could be a path to a bare repo on the filesystem...
-    # RE git ls-remote --heads URL does work, but the server can ask for a
-    # username/pass on the tty
-    # RE echo 'git ls-remote --heads URL; exit' | script
-    # will avoid this, but I'm still not sure that's what we want
-    # RE it may be ok to ask for the username/pass (or recommend the git@
-    # syntax) because we will need it to create the mirror (although this will
-    # ask for the credentials twice)
-    # RE alternatively, do git ls-remote if the URL looks like a file path
-    if ! parse_url "${1}"; then
-      echo "If specifying the OUTPUT_PREP_DIR, the first argument must be the"
-      echo "REPO_URL"
-      exit 1
+    if [ -d "${1}" ]; then
+      # Does the directory look like a PREP_DIR
+      ( cd "${1}" && ls */config &>/dev/null )
+      if [ $? -eq 0 ]; then
+        # REVIEW this isn't strictly necessary...
+        echo "If specifying the OUTPUT_PREP_DIR, the first argument must be the"
+            "REPO_URL"
+        exit 1
+      fi
     fi
   fi
 
