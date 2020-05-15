@@ -252,24 +252,50 @@ function make_remote_urls_pushable()
     local remote_name
     local remote_url
     read -r remote_name remote_url <<< "$(echo "${remote}" | awk '{print $1 " " $2}')"
-    if [ "${specified_remote_name}" != "${remote_name}" ]; then
+    if [ -n "${specified_remote_name}" ] && \
+       [ "${specified_remote_name}" != "${remote_name}" ]; then
       continue
     fi
 
-    # NOTE If the git server has a non-standard port (which would not be the
-    # same as https port), you have to do ssh://git@server:port/...
-    if parse_url "${remote_url}"; then # Sets just_url_parsed_host and just_url_parsed_rpath
-      if [ "${just_url_parsed_port}" != "" ] || \
-         [ "${just_url_parsed_query}" != "" ] || \
-         [ "${just_url_parsed_fragment}" != "" ]; then
+    local remote_git_url_rv=0
+    local remote_git_url
+    # local foo="$(bar)" || rv=$? does not work as one line in bash 4.2 or older. Ues two lines
+    remote_git_url="$(_https_to_git_protocol "${remote_url}")" || remote_git_url_rv=$?
+    if [ "${remote_git_url_rv}" == "0" ]; then
+      ${GIT} remote set-url "${remote_name}" --push "${remote_git_url}"
+    else # See if URL is already in the expected format
+      # This is very simple; basically undo the simple transform done here.
+      # Perhaps one day we will have a git remote url parser in parser.bsh
+      local remote_https_url="$(echo "${remote_url}" | sed -e 's#^git@#https://#' -e 's#:#/#3')"
+      if ! parse_url "${remote_https_url}"; then
         echo "WARNING URL is non-standard. Skipping ${remote_url}"
-      elif [ "${just_url_parsed_scheme}" == "http" ] || \
-           [ "${just_url_parsed_scheme}" == "https" ]; then
-        remote_git_url="git@${just_url_parsed_host}:${just_url_parsed_rpath}"
-        ${GIT} remote set-url "${remote_name}" --push "${remote_git_url}"
       fi
     fi
   done
+}
+
+function _https_to_git_protocol()
+{
+  local remote_url="${1}"
+
+  # Be very conservative about which URLs will convert
+  # NOTE If the git server has a non-standard port (which would not be the
+  # same as https port), you have to do ssh://git@server:port/...
+  if parse_url "${remote_url}"; then # Sets just_url_parsed_host, just_url_parsed_rpath, etc.
+    if [ "${just_url_parsed_port}" != "" ] || \
+       [ "${just_url_parsed_query}" != "" ] || \
+       [ "${just_url_parsed_fragment}" != "" ]; then
+      echo "${remote_url}"
+      return 1
+    elif [ "${just_url_parsed_scheme}" == "http" ] || \
+         [ "${just_url_parsed_scheme}" == "https" ]; then
+      local remote_git_url="git@${just_url_parsed_host}:${just_url_parsed_rpath}"
+      echo "${remote_git_url}"
+    fi
+  else
+    echo "${remote_url}"
+    return 1
+  fi
 }
 
 # Similar to git rev-parse --show-toplevel
@@ -566,13 +592,34 @@ function relocate_git_defaultify()
 
       if [ -z "${branch}" ]; then
         # List local branches
-        # REVIEW if there is only one branch, just use it
         local branches=($("${GIT}" for-each-ref --format='%(refname:short)' refs/heads))
-        local picked
-        echo "Please choose which branch you would like to base the submodules off"
-        # TODO would be nice if picker supported a default option (current_branch)
-        picker "${branches[@]}" || picked=$?
-        local branch="${branches[picked-1]}"
+        if [ "${#branches[@]}" -eq 1 ]; then
+          branch="${branches[0]}"
+          echo "Using the only branch in this repository: '${branch}'"
+          echo
+        else
+          local picked
+          echo "Please choose which branch you would like to base the submodules off"
+          # TODO would be nice if picker supported a default option (current_branch)
+          picker "${branches[@]}" || picked=$?
+          local branch="${branches[picked-1]}"
+        fi
+      fi
+
+      ask_question "Do you want to ensure all local changes have been pushed to '${remote_name}'" \
+          dryrun_response y
+      if [ "${dryrun_response}" == "1" ]; then
+        # Connecting to the URL is required when creating the mirror, so this is ok
+        push_url="$(${GIT} remote get-url --push "${remote_name}")"
+        push_url="$(_https_to_git_protocol "${push_url}" || :)"
+        if [ "$(${GIT} push --dry-run --recurse-submodules=check "${push_url}" "${branch}" 2>&1)" != \
+            "Everything up-to-date" ]; then
+          echo
+          echo "WARNING there are unpushed changes on branch, '${branch}'. You may"
+          echo "want to ensure all changes have been pushed to the remote server."
+          ask_question "Continue?" response n
+          [ "$response" == "0" ] && unset response && return 1
+        fi
       fi
 
       if [ -z "${prep_dir}" ] && [ -z "${output_dir}" ]; then
