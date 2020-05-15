@@ -62,7 +62,7 @@ source "${VSI_COMMON_DIR}/linux/uwecho.bsh"
 : ${GIT=git}
 
 
-# unit tests:
+# Unit Tests
 # NOTE a tracking branch must actually be setup
 # nothing unpushed - branch (non-tracking) behind origin/master
 # nothing unpushed - branch (non-tracking) equal to origin/master
@@ -92,7 +92,7 @@ source "${VSI_COMMON_DIR}/linux/uwecho.bsh"
 
 function log_unpushed_commits()
 {
-  # NOTE Only supports passing in a single branch and remote name
+  # NOTE Only supports passing in a single branch and named remote
   local branch="${1---branches}"
   local remote_name="${2-}"
 
@@ -119,7 +119,7 @@ function log_unpushed_commits()
 
 function git_tracking_branches()
 {
-  # REVIEW could support multiple remote names with a for loop
+  # REVIEW could support multiple named remotes with a for loop
   local remote_name="${1-}"
 
   local OLD_IFS="${IFS}"
@@ -178,7 +178,7 @@ function git_tracking_branches()
 
 function log_outgoing_commits()
 {
-  # NOTE Only supports passing in a single branch and remote name
+  # NOTE Only supports passing in a single branch and named remote
   local remote_name="${2-}"
 
   local tracking_branches
@@ -571,9 +571,18 @@ function relocate_git_defaultify()
       fi
 
 
+      # Unit Tests
+      # no remote_name
+      #   no remotes (repo initialized locally)
+      #   a single named remote
+      #   multiple named remotes
+      # set remote_name
+      #   a single remote url for a named remote
+      #   multiple remote urls for a named remote (via git remote set-url --add)
+
       local remote_name
       local remote_url
-      # Were either remote_name or prep_dir provided as flags
+      # Are either remote_name or prep_dir provided as flags
       if [ -z "${remote_name}" ] && [ -z "${prep_dir}" ]; then
         echo "Would you like to:"
         picker "Create a new mirror from a URL" \
@@ -591,8 +600,10 @@ function relocate_git_defaultify()
           IFS="${OLD_IFS}"
 
           if [ "${#remotes[@]}" -eq 0 ]; then
-            # This is not strictly a requirement for a simple repo that only you
-            # work on locally, however we won't worry about that use case now
+            # REVIEW either the repo is misconfigured or initialized locally.
+            # In latter case at least, we could mirror the repo directly
+            # work on locally
+            # RE we won't worry about that use case now
             echo "This repository has no remotes. Please push the repo to a"
             echo "git server and try again."
             exit 1
@@ -625,6 +636,8 @@ function relocate_git_defaultify()
         IFS="${OLD_IFS}"
 
         if [ "${#remote_urls[@]}" -eq 0 ]; then
+            # This shouldn't happen; if the repo has a named remote, it should
+            # have an associated remote url
             echo "This repository is misconfigured: it has no remotes. Please fix!"
             exit 1
         elif [ "${#remote_urls[@]}" -eq 1 ]; then
@@ -637,8 +650,12 @@ function relocate_git_defaultify()
         fi
       fi
 
+      # Unit Tests
+      # a single branch
+      # multiple branches
+
       local branch
-      # Was branch provided as a flag
+      # Is branch provided as a flag
       if [ -z "${branch}" ]; then
         local branch
         # List local branches (branch names cannot have spaces)
@@ -656,7 +673,23 @@ function relocate_git_defaultify()
         fi
       fi
 
-      # Was check_remote set by a flag
+      # Unit Tests
+      # all commits have been pushed
+      # a commit has not been pushed - should fail
+      # a submodule has commits that have not been pushed - should fail
+      #
+      # variations:
+      # a single https url in .git/config
+      # a single git@ url in .git/config
+      # a single https url and a git@ pushurl
+      # a single https url and multiple git@ pushurls, none of which are
+      #   trivially convertible
+      # a single https url and multiple git@ pushurls, one of which is
+      #   trivially convertible
+      # a single pushurl that is misconfigured somehow (gi@ instead of git@; it
+      #   does not have the correct path component)
+
+      # Is check_remote set by a flag
       if [ -z "${check_remote}" ]; then
         ask_question "Do you want to ensure all local changes have been pushed to '${remote_name}'" \
             dryrun_response y
@@ -679,17 +712,38 @@ function relocate_git_defaultify()
         if [ "${#push_urls[@]}" -eq 1 ]; then
           push_url="${push_urls[0]}"
         else
-          local picked
-          echo "Please choose which remote (push) url you would like to use:"
-          picker "${push_urls[@]}" || picked=$?
-          push_url="${push_urls[picked-1]}"
+          remote_git_url="$(_https_to_git_protocol "${remote_url}" || :)"
+          local trivially_convertible="0"
+          for push_url in "${push_urls[@]}"; do
+            # There should only be a single trivially convertible url
+            if [ "${push_url}" == "${remote_git_url}" ]; then
+              trivially_convertible="1"
+              push_url="${remote_git_url}"
+              break
+            fi
+          done
+
+          if [ "${trivially_convertible}" == "0" ]; then
+            local picked
+            echo "Please choose which remote (push) url you would like to use:"
+            picker "${push_urls[@]}" || picked=$?
+            push_url="${push_urls[picked-1]}"
+          fi
         fi
 
         # Connecting to the URL is required when creating the mirror, so this
         # is ok
         push_url="$(_https_to_git_protocol "${push_url}" || :)"
-        if [ "$(${GIT} push --dry-run --recurse-submodules=check "${push_url}" "${branch}" 2>&1)" != \
-            "Everything up-to-date" ]; then
+        local dryrun_test_rv=0
+        local dryrun_test
+        # local foo="$(bar)" || rv=$? does not work as one line in bash 4.2 or older. Ues two lines
+        dryrun_test="$(${GIT} push --dry-run --recurse-submodules=check "${push_url}" "${branch}" 2>&1)" || \
+            dryrun_test_rv=$?
+        if [ "${dryrun_test_rv}" != "0" ]; then
+          echo "${dryrun_test}"
+          exit 1
+        fi
+        if [ "${dryrun_test}" != "Everything up-to-date" ]; then
           echo
           echo "WARNING there are unpushed changes on branch, '${branch}'. You may"
           echo "want to ensure all changes have been pushed to the remote server."
@@ -698,7 +752,7 @@ function relocate_git_defaultify()
         fi
       fi
 
-      # Was output_dir provided as a flag
+      # Is output_dir provided as a flag
       if [ -z "${prep_dir}" ] && [ -z "${output_dir}" ]; then
         read -r -e -p "Where would you like the mirror to be created: " output_dir
         echo
