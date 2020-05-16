@@ -32,7 +32,7 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 # 4. Extract the archive
 #   a) In vsi_common_prep, edit mirror.env and set
 #     - JUST_GIT_AIRGAP_SERVER=https://git-server.com/
-#     - JUST_GIT_AIRGAP_ORGANIZATION=org
+#     - JUST_GIT_AIRGAP_ORGANIZATION=projectA
 #    ALTERNATIVELY the Justfile could ask for these things
 # 5. ``source setup.env``
 # 6. ``just git import-repo`` - Push the mirrored repository and all submodules to a new git server as defined by info.env
@@ -353,20 +353,30 @@ function create_repo_map()
   local repo_paths=($(submodule_paths))
   IFS="${OLD_IFS}"
 
-  local repo_urls=()
   local repo_path
+  local repo_urls=()
   for repo_path in "${repo_paths[@]}"; do
-    # NOTE Quotes around JUST_AIRGAP_GIT_SERVER aren't necessary here because
-    # the entries will be quoted when printed to file
+    # NOTE Quotes around JUST_AIRGAP_GIT_SERVER and JUST_GIT_AIRGAP_ORGANIZATION
+    # aren't necessary here because the entries will be quoted when printed to
+    # file
     repo_urls+=('${JUST_GIT_AIRGAP_SERVER}/${JUST_GIT_AIRGAP_ORGANIZATION}'/$(basename "${repo_path}"))
   done
 
-  printf '# NOTE: This file is automatically created by `create_repo_map`.\n'
-  printf '#'
+  printf '# NOTE: This file is automatically created by\n'
+  printf '#   just:just_git_airgap_repo.bsh:create_repo_map\n'
+  printf '#\n'
   printf '# If this mapping between submodules and URLs does not suit your\n'
-  printf '# needs, you can edit it directly or override `create_repo_map`\n'
-  printf '# before calling `just git export-repo`'
+  printf '# needs, you can edit this file directly before calling\n'
+  printf '# `just git import-repo` or override `create_repo_map` before calling\n'
+  printf '# `just git export-repo`\n'
   printf '\n\n'
+  # This is not as nice as if the script would die automatically when it is
+  # sourced if an env variable is null, but that doesn't seem possible;
+  # set -u only check for unset variables, not null
+  printf '# Error if these env variables are unset\n'
+  printf ': ${JUST_GIT_AIRGAP_SERVER:?"UNSET: Please set in ./airgap.env"}\n'
+  printf ': ${JUST_GIT_AIRGAP_ORGANIZATION:?"UNSET: Please set in ./airgap.env"}\n'
+  printf '\n'
   printf 'repo_paths=(\n'
   printf '  "%s"\n' "${repo_paths[@]}"
   printf ')\n\n'
@@ -468,11 +478,9 @@ function add_import-repo_just_project()
           ' >> "${prep_dir}"/Justfile
   # REVIEW If someone overrides create_repo_map, these env vars might not need
   # to be set
-  # RE That's ok. if they are needed in repo_map.env and unset, then the script
-  # will die if set -eu is enabled (which should be in just)
-  # RE Although the error makes it very clear how to fix it the problem
-  # REVIEW If unset, ask in the Justfile
-  # RE Can't ask in the Justfile without disabling set -u
+  # RE Currently, these variables are checked in repo_map.env, and the script
+  # will then die because set -eu is enabled by just
+  # RE Don't explicitly error here because these variables may not be needed
   uwecho 'JUST_PROJECT_PREFIX=AIRGAP_MIRROR
           JUST_VERSION="0.2.2+1dev"
           if [ -z "${AIRGAP_MIRROR_CWD+set}" ]; then
@@ -480,6 +488,9 @@ function add_import-repo_just_project()
           fi
 
           ### YOU MUST SET THESE VARIABLES ###
+          # For example:
+          # JUST_GIT_AIRGAP_SERVER=https://git-server.com # or git@git-server.com:
+          # JUST_GIT_AIRGAP_ORGANIZATION=projectA
           JUST_GIT_AIRGAP_SERVER=
           JUST_GIT_AIRGAP_ORGANIZATION=
           ' >> "${prep_dir}"/airgap.env
@@ -759,11 +770,10 @@ function relocate_git_defaultify()
       fi
 
       # Still not easy
-      local args=("${prep_dir}" "${remote_url}" "${branch}" "${output_dir}")
       local arg
       local set_args=()
       # Squish null elements out of the array
-      for arg in "${args[@]}"; do
+      for arg in "${prep_dir}" "${remote_url}" "${branch}" "${output_dir}"; do
         if [ -n "${arg}" ]; then set_args+=("${arg}"); fi
       done
       # set_args cannot be an empty array
@@ -827,9 +837,6 @@ function relocate_git_defaultify()
       # Find the main_dir
       local main_dir="$(dirname "$(ls */config)")"
 
-      # FIXME This should error if there are unbound variables; once that's
-      # fixed, test for the error and print a message saying to set the var
-      # in either local.env or the airgap.env file
       source repo_map.env # Sets repo_paths and repo_urls
       # Now that the env variables used by repo_urls in repo_map.env have been
       # expanded, resave the file so that users don't have to set those env
