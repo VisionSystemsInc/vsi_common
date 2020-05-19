@@ -457,35 +457,30 @@ function add_import-repo_just_project()
     git archive --format=tar --prefix=.vsi_common/ HEAD | (cd "${prep_dir}" && tar xf -)
   popd &>/dev/null
 
+  uwecho 'These mirrored git repositories were automatically created by
+            just:just_git_airgap_repo:git_export-repo. To push them to
+          their respective air-gapped git servers, simply:
+
+          1. Edit airgap.env to set a few environment variables
+             or (if necessary)
+             Edit repo_map.env directly
+          2. `source setup.env`
+          3. `just git import-repo`
+          ' > "${prep_dir}"/README
   # REVIEW It might be nicer not to import a plugin here so that there is only
   # one target in just help
   uwecho '#!/usr/bin/env bash
 
           source "${VSI_COMMON_DIR}/linux/just_env" "$(dirname "${BASH_SOURCE[0]}")"/'airgap.env'
-
           source "${VSI_COMMON_DIR}/linux/just_git_airgap_repo.bsh"
 
           cd "${AIRGAP_MIRROR_CWD}"
-          function caseify()
-          {
-            local just_arg=$1
-            shift 1
-
-            case ${just_arg} in
-              git_push-to-mirrors) # Push the mirrored repos to new (initialized) locations
-                justify git import-repo
-                ;;
-              *)
-                defaultify "${just_arg}" ${@+"${@}"}
-                ;;
-            esac
-          }
+          function caseify() { defaultify ${@+"${@}"}; }
           ' >> "${prep_dir}"/Justfile
-  # REVIEW If someone overrides create_repo_map, these env vars might not need
-  # to be set
-  # RE Don't explicitly error here because these variables may not be needed
-  # RE Currently, these variables are checked in repo_map.env, and the script
-  # will then die because set -eu is enabled by just
+  # REVIEW If someone overrides create_repo_map, these env vars may not need
+  # to be set--so don't explicitly error here. Currently, these variables are
+  # checked in repo_map.env, and the script will then die because set -eu is
+  # enabled by just
   uwecho 'JUST_PROJECT_PREFIX=AIRGAP_MIRROR
           JUST_VERSION="0.2.2+1dev"
           if [ -z "${AIRGAP_MIRROR_CWD+set}" ]; then
