@@ -397,8 +397,9 @@ function orphan_commit_repo_map
   orphan_branch="${2-__just_git_mirror_info_file}"
 
   # Clone (non-recursively) the repo in which to make the orphan commit.
-  # Avoids possibly needing to run 'git reset --hard' after checking out the
-  # orphan branch and then 'git checkout' after committing to it.
+  # Supports starting in a bare repo. Also avoids possibly needing to run
+  # 'git reset --hard' after checking out the orphan branch followed by
+  # 'git checkout' after committing to it.
   # NOTE Uses hard-links on linux
   # TODO Clone into an automatically deleting temporary directory; requires
   # mktemp_compat from dir_tools.bsh
@@ -811,25 +812,9 @@ function relocate_git_defaultify()
       local main_dir="$(dirname "$(cd "${GIT_MIRROR_PREP_DIR}" && ls */config)")"
 
       # Create the file that maps between the submodule's path and its new URL.
-      # This mapping MUST be created in the current repo because neither the
-      # mirror in the prep_dir nor the clone created from it (__just_git_clone)
-      # are recursively updated
-      repo_map="$(create_repo_map)"
-
-      # This is more important for clone-airgap-repo than import-repo
-      pushd "${GIT_MIRROR_PREP_DIR}/${main_dir}" &>/dev/null
-        # Clone the mirrored repo in the prep_dir and push to it instead of
-        # the actual repo to avoid adding the orphan commit to it
-        # REVIEW Set the orphan branch name as an env var
-        orphan_commit_repo_map "${repo_map}"
-
-        # We are in a mirror (bare) repo here.
-        # Saving this file here allows the user to edit it, if needed...
-        # NOTE git_import-repo needs to know this info too
-        git show __just_git_mirror_info_file:repo_map.env > ../repo_map.env
-        # Just in case...
-        cp ../repo_map.env ../repo_map.env.bak
-      popd &>/dev/null
+      # This mapping MUST be created in this repo because the mirror in the
+      # prep_dir does not have its submodules recursively updated
+      create_repo_map | tee "${GIT_MIRROR_PREP_DIR}"/repo_map{.env,.env.bak} >/dev/null
 
       # Copy a simple Justfile to make import-repo easy
       add_import-repo_just_project "${GIT_MIRROR_PREP_DIR}"
@@ -856,7 +841,7 @@ function relocate_git_defaultify()
       # expanded, resave the file so that users don't have to set those env
       # variables during git_clone-airgap-repo.
       # We could write out this file in the same way that create_repo_map does,
-      # but this is easier; and this file should no longer need to be inspected
+      # but this is easier, and this file should no longer need to be inspected
       # by a human
       declare -p repo_urls > repo_map.env
       declare -p repo_paths >> repo_map.env
