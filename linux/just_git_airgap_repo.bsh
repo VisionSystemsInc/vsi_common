@@ -348,13 +348,15 @@ function submodule_urls()
 # which could, for example, expand to https://git-server/org/vsi_common.git and
 # https://git-server/org/recipes.git
 #
-# NOTE that this function could be overridden by the user
+# NOTE The user can override this function if it does not suit her needs
 function create_repo_map()
 {
+  local repo_name="${1}"
+
   local OLD_IFS="${IFS}"
   IFS=$'\n'
   # No quotes around subshell to create array (although IFS must be correct)
-  local repo_paths=("$(basename "$(pwd)")" $(submodule_paths))
+  local repo_paths=("${repo_name}" $(submodule_paths))
   IFS="${OLD_IFS}"
 
   local repo_path
@@ -365,7 +367,8 @@ function create_repo_map()
     # file
     repo_urls+=('${JUST_GIT_AIRGAP_SERVER}/${JUST_GIT_AIRGAP_ORGANIZATION}'/$(basename "${repo_path}"))
   done
-  repo_paths[0]="./"
+  # Rename the toplevel repo to '.'
+  repo_paths[0]='.'
 
   printf '# NOTE: This file is automatically created by\n'
   printf '#   just:just_git_airgap_repo.bsh:create_repo_map\n'
@@ -386,7 +389,7 @@ function create_repo_map()
   printf '  "%s"\n' "${repo_paths[@]}"
   printf ')\n\n'
   printf 'repo_urls=(\n'
-  printf '  "%s"\n' "${repo_urls[@]}"
+  printf '  "%s.git"\n' "${repo_urls[@]}"
   printf ')\n'
 }
 
@@ -807,10 +810,15 @@ function relocate_git_defaultify()
       # This is how git_push_main computes this variable
       local main_dir="$(dirname "$(cd "${GIT_MIRROR_PREP_DIR}" && ls */config)")"
 
+      # Find the name of the toplevel repo according to the remote url
+      # This is how git_mirror_main computes this variable
+      local repo_name="$(basename "${GIT_MIRROR_MAIN_REPO}")"
+      repo_name="${repo_name%.*}"
+
       # Create the file that maps between the submodule's path and its new URL.
       # This mapping MUST be created in this repo because the mirror in the
       # prep_dir does not have its submodules recursively updated
-      create_repo_map | tee "${GIT_MIRROR_PREP_DIR}"/repo_map.env >/dev/null
+      create_repo_map "${repo_name}"| tee "${GIT_MIRROR_PREP_DIR}"/repo_map.env >/dev/null
 
       # Copy a simple Justfile to make import-repo easy
       add_import-repo_just_project "${GIT_MIRROR_PREP_DIR}"
