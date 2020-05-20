@@ -717,16 +717,9 @@ function relocate_git_defaultify()
       # a single https url in .git/config
       # a single git@ url in .git/config
       # a single https url and a git@ pushurl
-      # a single https url and multiple git@ pushurls, none of which are
-      #   trivially convertible
-      # a single https url and multiple git@ pushurls, one of which is
-      #   trivially convertible
       # a single pushurl that is misconfigured somehow (gi@ instead of git@; it
       #   does not have the correct path component)
 
-      # REVIEW We might not always want to use _https_to_git_protocol. You can
-      # authenticate over https; although, sometimes git@ is easier if the keys
-      # have been shared
       # Is check_remote set by a flag
       if [ -z "${check_remote}" ]; then
         ask_question "Do you want to ensure all local changes have been pushed to '${remote_name}'" \
@@ -755,32 +748,14 @@ function relocate_git_defaultify()
         # Not only is a pushurl configured, but there are multiple of them
         # (which is prob rare)
         else
-          # Convert the remote_url to the git@ syntax (if possible) and see if
-          # it matches (exactly) any of the pushurls
-          # We have to convert the remote_url to the git@ syntax because we
-          # currently don't have a git URL parser, which supports more formats
-          # than the http protocol
-          remote_git_url="$(_https_to_git_protocol "${remote_url}" || :)"
-          local trivially_convertible="0"
-          for push_url in "${push_urls[@]}"; do
-            if [ "${push_url}" == "${remote_git_url}" ]; then
-              trivially_convertible="1"
-              push_url="${remote_git_url}"
-              break
-            fi
-          done
-
-          if [ "${trivially_convertible}" == "0" ]; then
-            local picked
-            echo "Please choose which remote (push) url you would like to use:"
-            picker "${push_urls[@]}" || picked=$?
-            push_url="${push_urls[picked-1]}"
-          fi
+          local picked
+          echo "Please choose which remote (push) url you would like to use:"
+          picker "${push_urls[@]}" || picked=$?
+          push_url="${push_urls[picked-1]}"
         fi
 
         # Connecting to the URL is required when creating the mirror, so this
         # is ok
-        push_url="$(_https_to_git_protocol "${push_url}" || :)"
         local dryrun_test_rv=0
         local dryrun_test
         # local foo="$(bar)" || rv=$? does not work as one line in bash 4.2 or older. Ues two lines
