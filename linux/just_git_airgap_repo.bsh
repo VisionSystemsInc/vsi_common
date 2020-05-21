@@ -305,7 +305,7 @@ function _https_to_git_protocol()
   fi
 }
 
-# Similar to git rev-parse --show-toplevel
+# Similar to git rev-parse --show-superproject-working-tree
 function toplevel()
 {
    realpath "$(${GIT} rev-parse --git-dir)" | awk -F '/.git' '{print $1}'
@@ -367,9 +367,26 @@ function create_repo_map()
     # file
     repo_urls+=('${JUST_GIT_AIRGAP_SERVER}/${JUST_GIT_AIRGAP_ORGANIZATION}'/$(basename "${repo_path}"))
   done
-  # Rename the toplevel repo to '.'
+  # Rename the top-level repo to '.'
   repo_paths[0]='.'
 
+  print_repo_map
+}
+
+#**
+# Create the contents of the repo_map.env file
+#
+# Serialize the repository mapping such that it can be sourced by
+# :func:`git_push_main` and :func:`git_clone_main` in :file:`git_mirror`.
+#
+# :Arguments: repo_paths - The (relative) path from the top-level repository to each submodule (recursively)
+#             repo_urls - The respective url for each submodule (recursively)
+#
+# :Output: *stdout* - The contents of the repo_map.env file
+#**
+
+function print_repo_map()
+{
   printf '# NOTE: This file is automatically created by\n'
   printf '#   just:just_git_airgap_repo.bsh:create_repo_map\n'
   printf '#\n'
@@ -818,7 +835,7 @@ function relocate_git_defaultify()
       # This is how git_push_main computes this variable
       local main_dir="$(dirname "$(cd "${GIT_MIRROR_PREP_DIR}" && ls */config)")"
 
-      # Find the name of the toplevel repo according to the remote url
+      # Find the name of the top-level repo according to the remote url
       # This is how git_mirror_main computes this variable
       local repo_name="$(basename "${GIT_MIRROR_MAIN_REPO}")"
       repo_name="${repo_name%.*}"
@@ -852,12 +869,8 @@ function relocate_git_defaultify()
       source repo_map.env # Sets repo_paths and repo_urls
       # Now that the env variables used by repo_urls in repo_map.env have been
       # expanded, resave the file
-      # We could write out this file in the same way that create_repo_map does,
-      # but this is easier, and this file should no longer need to be inspected
-      # by a human
-      declare -p repo_paths > repo_map.env
       # REVIEW run urls through _https_to_git_protocol
-      declare -p repo_urls >> repo_map.env
+      print_repo_map > repo_map.env
       repo_map="$(cat repo_map.env)"
 
       # Now that the repo_urls have been expanded, update the repo_map.env file
@@ -868,8 +881,6 @@ function relocate_git_defaultify()
       popd &>/dev/null
 
       git_push_main repo_map.env ./
-
-      extra_args=$#
       ;;
 
     git_clone-airgap-repo) # Clone a repo exported with `git export-repo`. This \
@@ -880,8 +891,6 @@ function relocate_git_defaultify()
       # The repo map's submodule URLs were corrected in git_import-repo
       git show origin/__just_git_mirror_info_file:repo_map.env > "${repo_map_file}"
       git_clone_main "${repo_map_file}" ./
-
-      extra_args=$#
       ;;
 
     # TODO Support iterating through all submodules too
