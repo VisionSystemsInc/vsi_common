@@ -306,6 +306,7 @@ function _https_to_git_protocol()
 }
 
 # Similar to git rev-parse --show-superproject-working-tree
+# This won't work if the git-dir is separate
 function toplevel()
 {
    realpath "$(${GIT} rev-parse --git-dir)" | awk -F '/.git' '{print $1}'
@@ -381,6 +382,22 @@ function create_repo_map()
   # Rename the top-level repo to '.'
   repo_paths[0]='.'
 
+  # Ugh
+  printf '# NOTE: This file is automatically created by\n'
+  printf '#   just:just_git_airgap_repo.bsh:create_repo_map\n'
+  printf '#\n'
+  printf '# If this mapping between submodules and URLs does not suit your\n'
+  printf '# needs, you can edit this file directly before calling\n'
+  printf '# `just git import-repo` or override `create_repo_map` before calling\n'
+  printf '# `just git export-repo`\n'
+  printf '\n\n'
+  # This is not as nice as if the script would die automatically when it is
+  # sourced if an env variable is null, but that doesn't seem possible;
+  # set -u only check for unset variables, not null
+  printf '# Error if these env variables are unset\n'
+  printf ': ${JUST_GIT_AIRGAP_SERVER:?"UNSET: Please set in ./airgap.env"}\n'
+  printf ': ${JUST_GIT_AIRGAP_ORGANIZATION:?"UNSET: Please set in ./airgap.env"}\n'
+  printf '\n'
   print_repo_map
 }
 
@@ -398,21 +415,6 @@ function create_repo_map()
 
 function print_repo_map()
 {
-  printf '# NOTE: This file is automatically created by\n'
-  printf '#   just:just_git_airgap_repo.bsh:create_repo_map\n'
-  printf '#\n'
-  printf '# If this mapping between submodules and URLs does not suit your\n'
-  printf '# needs, you can edit this file directly before calling\n'
-  printf '# `just git import-repo` or override `create_repo_map` before calling\n'
-  printf '# `just git export-repo`\n'
-  printf '\n\n'
-  # This is not as nice as if the script would die automatically when it is
-  # sourced if an env variable is null, but that doesn't seem possible;
-  # set -u only check for unset variables, not null
-  printf '# Error if these env variables are unset\n'
-  printf ': ${JUST_GIT_AIRGAP_SERVER:?"UNSET: Please set in ./airgap.env"}\n'
-  printf ': ${JUST_GIT_AIRGAP_ORGANIZATION:?"UNSET: Please set in ./airgap.env"}\n'
-  printf '\n'
   printf 'repo_paths=(\n'
   printf '  "%s"\n' "${repo_paths[@]}"
   printf ')\n\n'
@@ -516,6 +518,7 @@ function add_import-repo_just_project()
   # checked in repo_map.env, and the script will then die because set -eu is
   # enabled by just
   # REVIEW Could merge airgap.env and repo_map.env
+  # REVIEW should these env variables use the ': ${VAR=}' syntax
   uwecho 'JUST_PROJECT_PREFIX=AIRGAP_MIRROR
           JUST_VERSION="0.2.2+1dev"
           if [ -z "${AIRGAP_MIRROR_CWD+set}" ]; then
