@@ -589,25 +589,31 @@ function relocate_git_defaultify()
   arg=$1
   shift 1
   case $arg in
-    # Create a mirror of a git repository (which is not the same thing as a \
-    # clone) and all of its submodules (for a specific branch). The remote \
-    # URL of this git repository will be used to create the mirror archive. \
+    # Create a mirror of a git repository (which is not the same thing as a
+    # clone) and all of its submodules (for a specific branch). The mirror is
+    # based on the URL of a git remote in this clone---not directly on this
+    # clone itself.
     #
     # REVIEW When just supports it, rename 'git export-repo --guided'
     git_export-repo-guided) # Walk through how to export a mirror of the git \
                             # repository, including all submodules, to a tarball
+      if [ $# -eq 0 ]; then
+        echo "Creating a mirror of a git repository (which is not the same"
+        echo "thing as a clone) and all of its submodules (for a specific"
+        echo "branch). The mirror is based on the URL for a git remote in this"
+        echo "clone---not directly on this clone itself."
+        echo
+        echo "NOTE A question can be bypassed by adding the respective flag."
+        echo "Add --help to see the flags."
+        echo
+      fi
+
       local check_remote
       local remote_url
       local remote_name
       local prep_dir
       local branch
       local output_dir
-
-      if [ $# -eq 0 ]; then
-        echo "NOTE A question can be bypassed by adding the respective flag."
-        echo "Add --help to see the flags."
-        echo
-      fi
 
       # REVIEW Switch to command_tools:parse_args
       # RE Doesn't support help or die on unprocessed flags/positional arguments,
@@ -705,7 +711,7 @@ function relocate_git_defaultify()
       # Are either remote_name or prep_dir provided as flags
       if [ -z "${remote_name:+x}" ] && [ -z "${prep_dir:+x}" ]; then
         echo "Would you like to:"
-        picker "Create a new mirror from a URL" \
+        picker "Create a new mirror from a remote's URL" \
                "Base off an existing airgap mirror (i.e., a PREP_DIR)" || picked=$?
         echo
         if [ "${picked}" -eq 1 ]; then
@@ -811,6 +817,7 @@ function relocate_git_defaultify()
       if [ -z "${check_remote:+x}" ]; then
         ask_question "Do you want to ensure all local changes have been pushed to '${remote_name}'" \
             dryrun_response y
+        echo
       elif [ "${check_remote}" == "0" ]; then
         dryrun_response="0"
       else
@@ -865,7 +872,7 @@ function relocate_git_defaultify()
           echo "WARNING there are unpushed changes on branch, '${branch}'. You may"
           echo "want to ensure all changes have been pushed to the remote server."
           ask_question "Continue?" response n
-          [ "$response" == "0" ] && unset response && return 1
+          [ "$response" == "0" ] && exit 1
         fi
       fi
 
