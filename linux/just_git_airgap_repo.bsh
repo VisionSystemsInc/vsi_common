@@ -803,48 +803,66 @@ function relocate_git_defaultify()
       fi
 
       # Unit Tests
-      # all commits have been pushed
+      # all commits have been pushed - should succeed
       # a commit has not been pushed - should fail
       # a submodule has commits that have not been pushed - should fail
       #
       # variations:
-      # a single https url in .git/config
-      # a single git@ url in .git/config
-      # a single https url and a git@ pushurl
+      # a single https url in .git/config - should convert it to the git@ and
+      #     offer both as pushurls
+      # multiple https urls in .git/config - should convert them to the git@
+      #     syntax and offer all as pushurls
+      # duplicate https urls in .git/config - should convert them to the git@
+      #     syntax and offer the unique list as pushurls
+      # a single pushurl (https or git@) - should pick it automatically
+      # multiple pushurls - should ask to pick
       # a single pushurl that is misconfigured somehow (gi@ instead of git@; it
-      #   does not have the correct path component)
+      #   does not have the correct path component) - dry-run should fail
 
       # Is check_remote set by a flag
       if [ -z "${check_remote:+x}" ]; then
         ask_question "Do you want to ensure all local changes have been pushed to '${remote_name}'" \
-            dryrun_response y
-        echo
-      elif [ "${check_remote}" == "0" ]; then
-        dryrun_response="0"
-      else
-        dryrun_response="1"
+            check_remote y
       fi
-      if [ "${dryrun_response}" == "1" ]; then
+      if [ "${check_remote}" == "1" ]; then
         local OLD_IFS="${IFS}"
         IFS=$'\n'
+        local push_urls
+        local push_urls_rv=0
         # List urls configured for git push (i.e., the url xor the pushurl
         # if configured in the .git/config:[remote] section)
         # NOTE since git 1.8, a remote (e.g., origin) can have multiple
         # associated pushurls
         # No quotes around subshell to create array (although IFS must be correct)
-        local push_urls=($(${GIT} remote get-url --push --all "${remote_name}"))
-        IFS="${OLD_IFS}"
+        push_urls=($(${GIT} config --get-all remote."${remote_name}".pushurl)) || push_urls_rv=$?
+        # If no pushurl is configured, get the urls. We will try converting
+        # these to the git@ syntax and offering them as additional options to
+        # the set pushurls
+        if [ "${push_urls_rv}" -ne 0 ]; then
+          push_urls=($(${GIT} config --get-all remote."${remote_name}".url))
 
-        # REVIEW Could try to convert the pushurls to the git@ syntax using
-        # _https_to_git_protocol and offer them as additional options to the
-        # set of pushurls
+          local push_url
+          local git_push_url
+          local to_add=()
+          for push_url in "${push_urls[@]}"; do
+            local git_push_url_rv=0
+            git_push_url="$(_https_to_git_protocol "${push_url}")" || git_push_url_rv=$?
+            if [ "${git_push_url_rv}" -eq 0 ]; then
+              to_add+=("${git_push_url}")
+            fi
+          done
+          for push_url in "${to_add[@]}"; do
+            push_urls+=("${push_url}")
+          done
+        fi
+        # Make the list unique
+        # https://stackoverflow.com/a/13648438/1771778
+        push_urls=($(printf "%s\n" "${push_urls[@]}" | sort -u))
+        IFS="${OLD_IFS}"
 
         local push_url
         # Either the url (if no pushurl is configured) or a single pushurl is
         # configured
-        # RE Unfortunately, I can't tell the difference between these two, short
-        # of looking at .git/config
-        # RE Actually, git config --get-all remote.origin.pushurl works
         if [ "${#push_urls[@]}" -eq 1 ]; then
           push_url="${push_urls[0]}"
         # Not only is a pushurl configured, but there are multiple of them
@@ -868,7 +886,10 @@ function relocate_git_defaultify()
           echo "${dryrun_test}"
           exit 1
         fi
-        if [ "${dryrun_test}" != "Everything up-to-date" ]; then
+        if [ "${dryrun_test}" == "Everything up-to-date" ]; then
+          echo "Everything up-to-date"
+          echo
+        else
           echo
           echo "WARNING there are unpushed changes on branch, '${branch}'. You may"
           echo "want to ensure all changes have been pushed to the remote server."
