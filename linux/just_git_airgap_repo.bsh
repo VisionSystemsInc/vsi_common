@@ -829,21 +829,23 @@ function relocate_git_defaultify()
         IFS=$'\n'
         local push_urls
         local push_urls_rv=0
-        # List urls configured for git push (i.e., the url xor the pushurl
-        # if configured in the .git/config:[remote] section)
+        # List urls configured for git push (i.e., the pushurl if configured in
+        # the .git/config:[remote] section)
         # NOTE since git 1.8, a remote (e.g., origin) can have multiple
         # associated pushurls
         # No quotes around subshell to create array (although IFS must be correct)
         push_urls=($(${GIT} config --get-all remote."${remote_name}".pushurl)) || push_urls_rv=$?
-        # If no pushurl is configured, get the urls. We will try converting
-        # these to the git@ syntax and offering them as additional options to
-        # the set pushurls
+        # If no pushurl is configured, get the urls (which would be used as the
+        # pushurl)
         if [ "${push_urls_rv}" -ne 0 ]; then
+          # No quotes around subshell to create array (although IFS must be correct)
           push_urls=($(${GIT} config --get-all remote."${remote_name}".url))
 
           local push_url
           local git_push_url
           local to_add=()
+          # Try converting these to the git@ syntax and offering them as
+          # additional options in the set of pushurls
           for push_url in "${push_urls[@]}"; do
             local git_push_url_rv=0
             git_push_url="$(_https_to_git_protocol "${push_url}")" || git_push_url_rv=$?
@@ -862,8 +864,8 @@ function relocate_git_defaultify()
         IFS="${OLD_IFS}"
 
         local push_url
-        # Either the url (if no pushurl is configured) or a single pushurl is
-        # configured
+        # Either a single url (which cannot be converted to the git@ syntax) or
+        # a single pushurl is configured
         if [ "${#push_urls[@]}" -eq 1 ]; then
           push_url="${push_urls[0]}"
         # Not only is a pushurl configured, but there are multiple of them
@@ -891,6 +893,7 @@ function relocate_git_defaultify()
           echo "Everything up-to-date"
           echo
         else
+          echo "${dryrun_test}"
           echo
           echo "WARNING there are unpushed changes on branch, '${branch}'. You may"
           echo "want to ensure all changes have been pushed to the remote server."
