@@ -141,8 +141,6 @@ def NamedTemporaryFileFactory(test_self):
   def NamedTemporaryFile(**kwargs):
     kwargs['dir'] = test_self.temp_dir.name
     rv = NamedTemporaryFileOrig(**kwargs)
-    # TODO: Change and document "temp_log_file"
-    test_self.temp_log_file = rv.name
     return rv
   return NamedTemporaryFile
 
