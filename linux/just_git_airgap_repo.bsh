@@ -540,14 +540,41 @@ function add_import-repo_just_project()
           ' > "${prep_dir}"/setup.env
 }
 
-# In order to be able to call the git_clone-airgap-repo just target, the
-# vsi_common submodule must first be initialized and updated. This function
-# will do that. It follows the same steps as git_mirror:git_clone_main. This
-# function gets appended to repo_map.env and orphan committed in the
-# git_import-repo target. In order to use it, repo_map.env must be grabbed out
-# of the orphan commit with
-#   git show origin/__just_git_mirror_info_file:repo_map.env
-# and then sourced
+# After (shallow) cloning the air-gapped repository, the submodules must be
+# re-configured and initialized/updated (recursively). This is handled by the
+# git_clone-airgap-repo just target. However, this is not possible without the
+# vsi_common submodule, which must first be initialized and updated.
+#
+# This function prints a function, git_airgap_submodule_update, which is
+# appended to repo_map.env and orphan committed in the git_import-repo just
+# target. git_airgap_submodule_update follows the same steps as
+# git_mirror:git_clone_main.
+#
+# In order to call git_airgap_submodule_update, repo_map.env must be grabbed
+# out of the orphan commit and then sourced. Obviously no just functions can
+# be called yet, so this must be done in the file specified by
+# :envvar:`JUST_SETUP_SCRIPT` (typically called setup.env). For example, the
+# setup.env script, which typically looks like:
+#
+#   export JUST_SETUP_SCRIPT="$(basename "${BASH_SOURCE[0]}")"
+#   source "$(dirname "${BASH_SOURCE[0]}")/external/vsi_common/env.bsh"
+#
+# would become:
+#
+#   export JUST_SETUP_SCRIPT="$(basename "${BASH_SOURCE[0]}")"
+#   if [ ! -f "$(dirname "${BASH_SOURCE[0]}")/external/vsi_common/env.bsh" ]; then
+#     echo "'just' could not be loaded. Trying to setup the repository as an"
+#     echo "air-gapped repository"
+#     # source the contents of repo_map.env (in a bash 3.2 compatible way)
+#     source /dev/stdin <<< "$(git show origin/__just_git_mirror_info_file:repo_map.env 2>/dev/null || :)"
+#     if [ ! declare -Fx git_airgap_submodule_update ]; then
+#       echo "ERROR the vsi_common submodule could not be found
+#       return 1
+#     fi
+#     git_airgap_submodule_update "$(dirname "${BASH_SOURCE[0]}")/external/vsi_common"
+#   fi
+#   source "$(dirname "${BASH_SOURCE[0]}")/external/vsi_common/env.bsh"
+
 function print_git_airgap_submodule_update()
 {
   # NOTE Do not use vsi_common functionality in this function! It is saved to
