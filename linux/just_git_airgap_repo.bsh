@@ -811,6 +811,27 @@ function relocate_git_defaultify()
           echo
           remote_url="${remote_urls[picked-1]}"
         fi
+      elif [ -n "${prep_dir+x}" ]; then
+        # This is how git_mirror_main computes this variable
+        if [ -f "${JUST_WORKING_DIR}/${prep_dir}/"*"/config" ]; then
+          pushd "$(dirname "${JUST_WORKING_DIR}/${prep_dir}/"*"/config")" &> /dev/null
+            # This is the only remote that exists in the prep_dir
+            remote_name="origin"
+            remote_url="$(${GIT} config --get remote.origin.url)"
+            # Simply treat the prep_dir as the output_dir
+            # REVIEW I do this primarily because the the rest of this target
+            # assumes it is operating on this repository. However, during
+            # check_remote for instance, this could mean a different set of
+            # push_urls from the one used to create the prep_dir is offered
+            # RE I've been thinking I need to add a push-url flag; if i did
+            # that, I could set push_urls here
+            output_dir="${prep_dir}"
+            unset prep_dir
+          popd &> /dev/null
+        else
+          echo "ERROR ${prep_dir} does not look like a PREP_DIR"
+          exit 1
+        fi
       fi
 
       # Unit Tests
@@ -941,21 +962,14 @@ function relocate_git_defaultify()
         fi
       fi
 
-      # Is output_dir provided as a flag
-      if [ -z "${prep_dir+x}" ] && [ -z "${output_dir+x}" ]; then
-        read -r -e -p "Where would you like the mirror to be created: " output_dir
+      # Is output_dir set: either as a flag or inferred from prep_dir
+      if [ -z "${output_dir+x}" ]; then
+        echo "Where would you like the mirror to be created (Note: this dir"
+        read -r -e -p "should be kept and re-used during future mirrors):" output_dir
         echo
       fi
 
-      # Still not easy
-      local arg
-      local set_args=()
-      # Squish null elements out of the array
-      for arg in "${prep_dir-}" "${remote_url-}" "${branch-}" "${output_dir-}"; do
-        if [ -n "${arg}" ]; then set_args+=("${arg}"); fi
-      done
-      # set_args cannot be an empty array
-      justify git_export-repo "${set_args[@]}"
+      justify git_export-repo "${remote_url}" "${branch}" "${output_dir}"
       ;;
 
     # REVIEW Rename to git_mirror-repo and git_push-airgap-repo
