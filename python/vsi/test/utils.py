@@ -144,6 +144,7 @@ def NamedTemporaryFileFactory(test_self):
     return rv
   return NamedTemporaryFile
 
+
 class TestNamedTemporaryFileCase(TestCase):
   def setUp(self):
     self.patches.append(mock.patch.object(tempfile, 'NamedTemporaryFile',
