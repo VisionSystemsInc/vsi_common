@@ -1,5 +1,6 @@
-from unittest import TestCase as TestCaseOriginal
+from unittest import mock, TestCase as TestCaseOriginal
 from unittest.util import safe_repr
+import tempfile
 from tempfile import (
   NamedTemporaryFile as NamedTemporaryFileOrig,
   TemporaryDirectory
@@ -140,7 +141,12 @@ def NamedTemporaryFileFactory(test_self):
   def NamedTemporaryFile(**kwargs):
     kwargs['dir'] = test_self.temp_dir.name
     rv = NamedTemporaryFileOrig(**kwargs)
-    # TODO: Change and document "temp_log_file"
-    test_self.temp_log_file = rv.name
     return rv
   return NamedTemporaryFile
+
+
+class TestNamedTemporaryFileCase(TestCase):
+  def setUp(self):
+    self.patches.append(mock.patch.object(tempfile, 'NamedTemporaryFile',
+                                          NamedTemporaryFileFactory(self)))
+    super().setUp()
