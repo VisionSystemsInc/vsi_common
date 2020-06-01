@@ -308,15 +308,27 @@ function safe_git_submodule_update()
 
 git_reattach_heads()
 {
-  # If detached, get SHA & first branch name, and then reattach
-  ${GIT} submodule foreach --recursive '
-  if [ "$('${GIT}' rev-parse --abbrev-ref --symbolic-full-name HEAD)" = "HEAD" ]; then
-    current_sha="$('${GIT}' rev-parse HEAD)"
-    branch_name="$('${GIT}' show-ref --heads | sed -En "/^${current_sha} .*/{ s|.*/(.*)|\1|; p; q;}")"
-    if [ "${branch_name}" != "" ]; then
-      '${GIT}' checkout "${branch_name}"
-    fi
-  fi'
+  if [ $# -eq 0 ]; then
+    local OLD_IFS="${IFS}"
+    IFS=$'\n'
+    submodule_paths=($(${GIT} submodule foreach --recursive 'echo ${prefix-${displaypath}}'))
+    IFS="${OLD_IFS}"
+  else
+    submodule_paths=("${@}")
+  fi
+
+  for submodule_path in "${submodule_paths[@]}"; do
+    pushd "${submodule_path}" &>/dev/null
+      # If detached, get SHA & first branch name, and then reattach
+      if [ "$(${GIT} rev-parse --abbrev-ref --symbolic-full-name HEAD)" = "HEAD" ]; then
+        current_sha="$(${GIT} rev-parse HEAD)"
+        branch_name="$(${GIT} show-ref --heads | sed -En "/^${current_sha} .*/{ s|.*/(.*)|\1|; p; q;}")"
+        if [ "${branch_name}" != "" ]; then
+          ${GIT} checkout "${branch_name}"
+        fi
+      fi
+    popd &>/dev/null
+  done
 }
 
 #**
