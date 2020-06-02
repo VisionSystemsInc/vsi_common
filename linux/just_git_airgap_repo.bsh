@@ -607,6 +607,25 @@ function print_git_airgap_submodule_update()
           '
 }
 
+# List urls configured for git fetch (i.e., the urls in the .git/config:[remote]
+# section). Deduplicate urls
+# NOTE Since git 1.8, a remote (e.g., origin) can have multiple associated urls
+# (and pushurls) (see .git/config)
+function git_remote_urls()
+{
+  local OLD_IFS="${IFS}"
+  IFS=$'\n'
+  # Make the list unique, preserving order
+  # https://stackoverflow.com/a/31038481/1771778
+  # https://stackoverflow.com/a/17562858/1771778
+  #
+  # No quotes around subshell to create array (although IFS must be correct)
+  local remote_urls=($(${GIT} config --get-all remote."${remote_name}".url | awk '!a[$0]++'))
+  remote_urls="${remote_urls[*]}"
+  IFS="${OLD_IFS}"
+  echo "${remote_urls}"
+}
+
 #**
 # .. function:: relocate_git_defaultify
 #
@@ -744,8 +763,8 @@ function relocate_git_defaultify()
       #   a single remote url for a named remote
       #   multiple remote urls for a named remote (via git remote set-url --add)
 
-      local remote_name
-      local remote_url
+      local remote_names
+      unset remote_names
       # Are either remote_name or prep_dir provided as flags
       if [ -z "${remote_name+x}" ] && [ -z "${prep_dir+x}" ]; then
         echo "Would you like to:"
@@ -756,8 +775,8 @@ function relocate_git_defaultify()
           local OLD_IFS="${IFS}"
           IFS=$'\n'
           # No quotes around subshell to create array (although IFS must be correct)
-          local git_remotes=($(${GIT} remote))
-          if [ "${#git_remotes[@]}" -eq 0 ]; then
+          remote_names=($(${GIT} remote))
+          if [ "${#remote_names[@]}" -eq 0 ]; then
             # REVIEW Either the repo is misconfigured or initialized locally.
             # In the latter case at least, we could mirror the repo directly
             # RE We won't worry about that use case now
@@ -765,49 +784,7 @@ function relocate_git_defaultify()
             echo "git server and try again."
             exit 1
           fi
-
-          local remote_urls=()
-          local remote_names=()
-          for remote_name in "${git_remotes[@]}"; do
-            # List urls configured for git fetch (i.e., the urls in the
-            # .git/config:[remote] section)
-            # NOTE Since git 1.8, a remote (e.g., origin) can have multiple
-            # associated urls (and pushurls) (see .git/config)
-            #
-            # Make the list unique, preserving order
-            # https://stackoverflow.com/a/31038481/1771778
-            # https://stackoverflow.com/a/17562858/1771778
-            #
-            # No quotes around subshell to create array (although IFS must be correct)
-            remote_urls+=($(${GIT} config --get-all remote."${remote_name}".url | awk '!a[$0]++'))
-            local i
-            for i in "${!remote_urls[@]}"; do
-              remote_names+=("${remote_name}")
-            done
-          done
           IFS="${OLD_IFS}"
-
-          if [ "${#remote_urls[@]}" -eq 1 ]; then
-            remote_name="${remote_names[0]}"
-            remote_url="${remote_urls[0]}"
-            echo "Using the only remote in this repository: '${remote_name}' located at"
-            echo "   ${remote_url}"
-            echo
-          elif [ "${#remote_urls[@]}" -gt 1 ]; then
-            local remote_strings=()
-            local i
-            for i in "${!remote_urls[@]}"; do
-              remote_strings+=("$(printf "%s\t%s\n" "${remote_names[$i]}" "${remote_urls[$i]}")")
-            done
-
-            echo "Please choose a remote:"
-            local picked
-            # TODO Would be nice if picker supported a default option (origin)
-            picker "${remote_strings[@]}" || picked=$?
-            echo
-            remote_name="${remote_names[picked-1]}"
-            remote_url="${remote_urls[picked-1]}"
-          fi
         else
           # cd so that tab completion works
           pushd "${JUST_WORKING_DIR}" &>/dev/null
@@ -816,38 +793,59 @@ function relocate_git_defaultify()
           popd &>/dev/null
         fi
       elif [ -n "${remote_name+x}" ]; then
-        local OLD_IFS="${IFS}"
-        IFS=$'\n'
-        # List urls configured for git fetch (i.e., the urls in the
-        # .git/config:[remote] section)
-        # NOTE Since git 1.8, a remote (e.g., origin) can have multiple
-        # associated urls (and pushurls) (see .git/config)
-        # No quotes around subshell to create array (although IFS must be correct)
-        local remote_urls=($(${GIT} config --get-all remote."${remote_name}".url))
-        IFS="${OLD_IFS}"
+        remote_names=("${remote_name}")
+      fi
+      # remote_names or prep_dir is set
 
-        if [ "${#remote_urls[@]}" -eq 0 ]; then
-          # This shouldn't happen; if the repo has a named remote, it should
-          # have an associated remote url
-          echo "This repository is misconfigured: it has no remotes. Please fix!"
-          exit 1
-        elif [ "${#remote_urls[@]}" -eq 1 ]; then
+
+      local remote_url
+      local remote_name
+      if [ -n "${remote_names+x}" ]; then
+        local remote_urls=()
+        local respective_remote_names=()
+        for remote_name in "${remote_names[@]}"; do
+          local OLD_IFS="${IFS}"
+          IFS=$'\n'
+          # List urls configured for git fetch (i.e., the urls in the
+          # .git/config:[remote] section)
+          # NOTE Since git 1.8, a remote (e.g., origin) can have multiple
+          # associated urls (and pushurls) (see .git/config)
+          #
+          # Make the list unique, preserving order
+          # https://stackoverflow.com/a/31038481/1771778
+          # https://stackoverflow.com/a/17562858/1771778
+          #
+          # No quotes around subshell to create array (although IFS must be correct)
+          remote_urls+=($(${GIT} config --get-all remote."${remote_name}".url | awk '!a[$0]++'))
+          local i
+          for i in "${!remote_urls[@]}"; do
+            respective_remote_names+=("${remote_name}")
+          done
+          IFS="${OLD_IFS}"
+        done
+
+        if [ "${#remote_urls[@]}" -eq 1 ]; then
+          remote_name="${respective_remote_names[0]}"
           remote_url="${remote_urls[0]}"
           echo "Using remote: '${remote_name}' located at"
           echo "   ${remote_url}"
           echo
-        else
-          # REVIEW no flag to set this var; add a --force flag to select the
-          # first url
+        elif [ "${#remote_urls[@]}" -gt 1 ]; then
+          local remote_strings=()
+          local i
+          for i in "${!remote_urls[@]}"; do
+            remote_strings+=("$(printf "%s\t%s\n" "${respective_remote_names[$i]}" "${remote_urls[$i]}")")
+          done
+
+          echo "Please choose a remote:"
           local picked
-          echo "Please choose which remote url you would like to use:"
-          picker "${remote_urls[@]}" || picked=$?
+          # TODO Would be nice if picker supported a default option (origin)
+          picker "${remote_strings[@]}" || picked=$?
           echo
+          remote_name="${respective_remote_names[picked-1]}"
           remote_url="${remote_urls[picked-1]}"
         fi
-      fi
-
-      if [ -n "${prep_dir+x}" ]; then
+      elif [ -n "${prep_dir+x}" ]; then
         # This is how git_mirror_main computes this variable
         if [ -f "${JUST_WORKING_DIR}/${prep_dir}/"*"/config" ]; then
           pushd "$(dirname "${JUST_WORKING_DIR}/${prep_dir}/"*"/config")" &> /dev/null
@@ -869,6 +867,7 @@ function relocate_git_defaultify()
           exit 1
         fi
       fi
+
 
       # Unit Tests
       # a single branch
@@ -893,6 +892,7 @@ function relocate_git_defaultify()
           branch="${branches[picked-1]}"
         fi
       fi
+
 
       # Unit Tests
       # all commits have been pushed - should succeed
@@ -1001,7 +1001,9 @@ function relocate_git_defaultify()
         fi
       fi
 
-      # Is output_dir unset: neither as a flag or inferred from prep_dir
+
+      # Is output_dir unset; i.e., it was not set either as a flag or inferred
+      # from prep_dir
       if [ -z "${output_dir+x}" ]; then
         # cd so that tab completion works
         pushd "${JUST_WORKING_DIR}" &>/dev/null
@@ -1009,7 +1011,9 @@ function relocate_git_defaultify()
           # a prep_dir
           # RE I guess that would be ok though
           echo "Where would you like the mirror to be created"
-          read -r -e -p "(Note: keep this directory and reuse it during future mirrors): " output_dir
+          read -r -e -p \
+              "(Note: keep this directory as a cache and reuse it during future mirrors): " \
+              output_dir
           echo
         popd &>/dev/null
       fi
