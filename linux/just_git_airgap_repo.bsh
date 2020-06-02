@@ -332,6 +332,10 @@ function get_submodule_paths_recursively()
 #
 # NOTE The submodules must have been checked out recursively (which is obviously
 # not the case in a bare/mirror repo)
+#
+# REVIEW This gets the url for the origin. The correct url is the one tracked by
+# the .gitmodules file
+# RE git_mirror does this: git config submodule.docker/recipes.url
 function get_submodule_urls_recursively()
 {
   # REVIEW Should i unset GIT_DIR?
@@ -607,25 +611,6 @@ function print_git_airgap_submodule_update()
           '
 }
 
-# List urls configured for git fetch (i.e., the urls in the .git/config:[remote]
-# section). Deduplicate urls
-# NOTE Since git 1.8, a remote (e.g., origin) can have multiple associated urls
-# (and pushurls) (see .git/config)
-function git_remote_urls()
-{
-  local OLD_IFS="${IFS}"
-  IFS=$'\n'
-  # Make the list unique, preserving order
-  # https://stackoverflow.com/a/31038481/1771778
-  # https://stackoverflow.com/a/17562858/1771778
-  #
-  # No quotes around subshell to create array (although IFS must be correct)
-  local remote_urls=($(${GIT} config --get-all remote."${remote_name}".url | awk '!a[$0]++'))
-  remote_urls="${remote_urls[*]}"
-  IFS="${OLD_IFS}"
-  echo "${remote_urls}"
-}
-
 #**
 # .. function:: relocate_git_defaultify
 #
@@ -806,17 +791,7 @@ function relocate_git_defaultify()
         for remote_name in "${remote_names[@]}"; do
           local OLD_IFS="${IFS}"
           IFS=$'\n'
-          # List urls configured for git fetch (i.e., the urls in the
-          # .git/config:[remote] section)
-          # NOTE Since git 1.8, a remote (e.g., origin) can have multiple
-          # associated urls (and pushurls) (see .git/config)
-          #
-          # Make the list unique, preserving order
-          # https://stackoverflow.com/a/31038481/1771778
-          # https://stackoverflow.com/a/17562858/1771778
-          #
-          # No quotes around subshell to create array (although IFS must be correct)
-          remote_urls+=($(${GIT} config --get-all remote."${remote_name}".url | awk '!a[$0]++'))
+          remote_urls=($(get_remote_urls))
           local i
           for i in "${!remote_urls[@]}"; do
             respective_remote_names+=("${remote_name}")
