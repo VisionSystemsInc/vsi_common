@@ -480,26 +480,48 @@ function archive_mirrors()
   pushd "${prep_dir}" &> /dev/null
     next_section "Creating tar file..."
     local tar_file="transfer_$(date '+%Y_%m_%d_%H_%M_%S')"
+
+    # Determine what tar files currently exist in the prep_dir
+    # Using absolute paths here, and when creating the archive, somehow makes
+    # this compatible with bash 3.2; otherwise, if ./archive.tgz was excluded,
+    # then any file called archive.tgz (anywhere in the tree) would be excluded
+    local OLD_IFS="${IFS}"
+    IFS=$'\n'
+    local existing_tar_files=($(ls "${PWD}"/{*.tgz,*.snar} 2>/dev/null || :))
+    IFS="${OLD_IFS}"
+    local to_exclude_args=("--exclude" "${PWD}/${tar_file}.tgz" "--exclude" "${PWD}/${tar_file%.*}.snar")
+    local existing_tar_file
+    for existing_tar_file in ${existing_tar_files[@]+"${existing_tar_files[@]}"}; do
+      to_exclude_args+=("--exclude" "${existing_tar_file}")
+    done
+
+    # Because the archive is created with absolute paths, count how many path
+    # components to strip off when creating the tar; equal to the number of
+    # slashes in the current path
+    local x="$(tr -d -c '/' <<< "${PWD}/")"
+    local ncomponents="${#x}"
+
     local last_tar_file
     if [[ ${TAR_INCREMENTAL} = 1 ]]; then
       # Get the last one, alphabetically speaking
       last_tar_file="$(ls "${prep_dir}"/transfer_*.snar 2>/dev/null | tail -n1)"
       last_tar_file="$(basename "${last_tar_file%.snar}")"
-      tar czf "${tar_file}.tgz" -g "${tar_file}.snar" */
+      tar czf "${tar_file}.tgz" -g "${tar_file}.snar" --strip-components "${ncomponents}" "${to_exclude_args[@]}" "${PWD}"
     else
-      tar czf "${tar_file}.tgz" */
+      tar czf "${tar_file}.tgz" --strip-components "${ncomponents}" "${to_exclude_args[@]}" "${PWD}"
     fi
 
     if [[ ${TAR_INCREMENTAL} = 1 ]] && [[ ${last_tar_file} != "" ]]; then
       next_section "Creating an incremental tar file too, based on ${last_tar_file}"
-      tar czf "${tar_file}_${last_tar_file}.tgz" -g "${last_tar_file}.snar" */
+      to_exclude_args+=("--exclude" "${tar_file}_${last_tar_file}.tgz" "--exclude" "${last_tar_file}.snar")
+      tar czf "${tar_file}_${last_tar_file}.tgz" -g "${last_tar_file}.snar" --strip-components "${ncomponents}" "${to_exclude_args[@]}" "${PWD}"
       next_section "Your new tar file is ready:"
-      echo "${prep_dir}/${tar_file}"
+      echo "${prep_dir}/${tar_file}.tgz"
       echo "and you have an incremental file:"
       echo "${tar_file}_${last_tar_file}.tgz"
     else
       next_section "Your new tar file is ready:"
-      echo "${prep_dir}/${tar_file}"
+      echo "${prep_dir}/${tar_file}.tgz"
     fi
   popd &> /dev/null
 }
