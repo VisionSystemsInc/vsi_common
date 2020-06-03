@@ -215,7 +215,11 @@ function clone_submodules()
         # Re-establish url in case it changed
         ${GIT} remote set-url origin "${submodule_url}"
         # Fetch the latest changes
-        ${GIT} remote update
+        if [ "${GIT_VERSION[0]}" = "2" -a "${GIT_VERSION[1]}" -ge "17" ] || [[ ${GIT_VERSION[0]} -gt 2 ]]; then
+          ${GIT} fetch -pP origin
+        else
+          ${GIT} fetch -p origin
+        fi
       popd &> /dev/null
     else
       prepped_submodule_path="$(mktemp_compat "${GIT_MIRROR_PREP_DIR}")/${full_relative_path}"
@@ -450,7 +454,6 @@ function git_mirror_repos()
   # The local non-bare repo doesn't need to waste time copying LFS objects
   GIT_LFS_SKIP_SMUDGE=1 ${GIT} clone "${GIT_MIRROR_PREP_DIR}/${MAIN_DIR}" "${TEMP_DIR}"
 
-  # git submodule init
   pushd "${TEMP_DIR}" &> /dev/null
     # The local non-bare repo doesn't need to waste time copying LFS objects
     GIT_LFS_SKIP_SMUDGE=1 ${GIT} checkout "${BRANCH}"
