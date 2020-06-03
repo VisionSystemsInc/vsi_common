@@ -791,7 +791,17 @@ function relocate_git_defaultify()
         for remote_name in "${remote_names[@]}"; do
           local OLD_IFS="${IFS}"
           IFS=$'\n'
-          remote_urls=($(get_remote_urls))
+          # List urls configured for git fetch (i.e., the urls in the
+          # .git/config:[remote] section)
+          # NOTE Since git 1.8, a remote (e.g., origin) can have multiple
+          # associated urls (and pushurls) (see .git/config)
+          #
+          # Make the list unique, preserving order
+          # https://stackoverflow.com/a/31038481/1771778
+          # https://stackoverflow.com/a/17562858/1771778
+          #
+          # No quotes around subshell to create array (although IFS must be correct)
+          remote_urls+=($(${GIT} config --get-all remote."${remote_name}".url | awk '!a[$0]++'))
           local i
           for i in "${!remote_urls[@]}"; do
             respective_remote_names+=("${remote_name}")
