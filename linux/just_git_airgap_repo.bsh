@@ -738,6 +738,7 @@ function relocate_git_defaultify()
       # Unit Tests
       # no remote_name
       #   no remotes (repo initialized locally)
+      #   a single named remote with no url - expect fail (misconfigured repo)
       #   a single named remote
       #   a single named remote with multiple urls
       #   a single named remote with multiple urls, one of which is a duplicate
@@ -747,6 +748,17 @@ function relocate_git_defaultify()
       # set remote_name
       #   a single remote url for a named remote
       #   multiple remote urls for a named remote (via git remote set-url --add)
+      #   a named remote that does not exist
+
+      local valid_remote_names=($(${GIT} remote))
+      if [ "${#valid_remote_names[@]}" -eq 0 ]; then
+        # REVIEW Either the repo is misconfigured or initialized locally.
+        # In the latter case at least, we could mirror the repo directly
+        # RE We won't worry about that use case now
+        echo "This repository has no remotes. Please push the repo to a"
+        echo "git server and try again."
+        exit 1
+      fi
 
       local remote_names
       unset remote_names
@@ -760,15 +772,7 @@ function relocate_git_defaultify()
           local OLD_IFS="${IFS}"
           IFS=$'\n'
           # No quotes around subshell to create array (although IFS must be correct)
-          remote_names=($(${GIT} remote))
-          if [ "${#remote_names[@]}" -eq 0 ]; then
-            # REVIEW Either the repo is misconfigured or initialized locally.
-            # In the latter case at least, we could mirror the repo directly
-            # RE We won't worry about that use case now
-            echo "This repository has no remotes. Please push the repo to a"
-            echo "git server and try again."
-            exit 1
-          fi
+          remote_names=("${valid_remote_names[@]}")
           IFS="${OLD_IFS}"
         else
           # cd so that tab completion works
@@ -778,7 +782,17 @@ function relocate_git_defaultify()
           popd &>/dev/null
         fi
       elif [ -n "${remote_name+x}" ]; then
+        # Validate remote_name is a git remote
+        if ! isin "${remote_name}" "${valid_remote_names[@]}"; then
+          echo "ERROR Unknown git remote provided with flag --remote-name: ${remote_name}"
+          exit 1
+        fi
+
         remote_names=("${remote_name}")
+      elif [ -n "${prep_dir+x}" ]; then
+        # Because prep_dir must always be validated, whether it was provided as
+        # a flag or asked for, it is validated below
+        :
       fi
       # remote_names or prep_dir is set
 
@@ -786,8 +800,8 @@ function relocate_git_defaultify()
       local remote_url
       local remote_name
       if [ -n "${remote_names+x}" ]; then
-        local remote_urls=()
-        local respective_remote_names=()
+        local associated_remote_urls=()
+        local associated_remote_names=()
         for remote_name in "${remote_names[@]}"; do
           local OLD_IFS="${IFS}"
           IFS=$'\n'
@@ -801,26 +815,32 @@ function relocate_git_defaultify()
           # https://stackoverflow.com/a/17562858/1771778
           #
           # No quotes around subshell to create array (although IFS must be correct)
-          local urls=($(${GIT} config --get-all remote."${remote_name}".url | awk '!a[$0]++'))
-          remote_urls+=("${urls[@]}")
+          local remote_urls=($(${GIT} config --get-all remote."${remote_name}".url | awk '!a[$0]++'))
+          associated_remote_urls+=("${remote_urls[@]}")
           local i
-          for i in "${!urls[@]}"; do
-            respective_remote_names+=("${remote_name}")
+          for i in "${!remote_urls[@]}"; do
+            associated_remote_names+=("${remote_name}")
           done
           IFS="${OLD_IFS}"
         done
 
-        if [ "${#remote_urls[@]}" -eq 1 ]; then
-          remote_name="${respective_remote_names[0]}"
-          remote_url="${remote_urls[0]}"
+        if [ "${#associated_remote_urls[@]}" -eq 0 ]; then
+          # This shouldn't happen; if the repo has a named remote, it should
+          # have an associated remote url
+          echo "ERROR This repository is misconfigured: it has no remote urls."
+          echo "Please fix!"
+          exit 1
+        elif [ "${#associated_remote_urls[@]}" -eq 1 ]; then
+          remote_name="${associated_remote_names[0]}"
+          remote_url="${associated_remote_urls[0]}"
           echo "Using remote: '${remote_name}' located at"
           echo "   ${remote_url}"
           echo
-        elif [ "${#remote_urls[@]}" -gt 1 ]; then
+        elif [ "${#associated_remote_urls[@]}" -gt 1 ]; then
           local remote_strings=()
           local i
-          for i in "${!remote_urls[@]}"; do
-            remote_strings+=("$(printf "%s\t%s\n" "${respective_remote_names[$i]}" "${remote_urls[$i]}")")
+          for i in "${!associated_remote_urls[@]}"; do
+            remote_strings+=("$(printf "%s\t%s\n" "${associated_remote_names[$i]}" "${associated_remote_urls[$i]}")")
           done
 
           echo "Please choose a remote:"
@@ -828,11 +848,12 @@ function relocate_git_defaultify()
           # TODO Would be nice if picker supported a default option (origin)
           picker "${remote_strings[@]}" || picked=$?
           echo
-          remote_name="${respective_remote_names[picked-1]}"
-          remote_url="${remote_urls[picked-1]}"
+          remote_name="${associated_remote_names[picked-1]}"
+          remote_url="${associated_remote_urls[picked-1]}"
         fi
       elif [ -n "${prep_dir+x}" ]; then
-        # This is how git_mirror_main computes this variable
+        # Validate this looks like a prep_dir; this is how git_mirror_main
+        # computes this variable
         if [ -f "${JUST_WORKING_DIR}/${prep_dir}/"*"/config" ]; then
           pushd "$(dirname "${JUST_WORKING_DIR}/${prep_dir}/"*"/config")" &> /dev/null
             # This is the only remote that exists in the prep_dir
@@ -856,15 +877,28 @@ function relocate_git_defaultify()
 
 
       # Unit Tests
-      # a single branch
-      # multiple branches
+      # no branch
+      #   a single branch
+      #   multiple branches
+      # set branch
+      #   a branch that does not exist
+
+      local valid_branches=($(${GIT} for-each-ref --format='%(refname:short)' refs/heads))
+      if [ "${#valid_remote_names[@]}" -eq 0 ]; then
+        # REVIEW Either the repo is misconfigured or initialized locally.
+        # In the latter case at least, we could mirror the repo directly
+        # RE We won't worry about that use case now
+          echo "ERROR This repository is misconfigured: it has no branches."
+          echo "Please fix!"
+        exit 1
+      fi
 
       local branch
       # Is branch provided as a flag
       if [ -z "${branch+x}" ]; then
         local branch
         # List local branches (branch names cannot have spaces)
-        branches=($(${GIT} for-each-ref --format='%(refname:short)' refs/heads))
+        branches=("${valid_branches[@]}")
         if [ "${#branches[@]}" -eq 1 ]; then
           branch="${branches[0]}"
           echo "Using the only branch in this repository: '${branch}'"
@@ -876,6 +910,12 @@ function relocate_git_defaultify()
           picker "${branches[@]}" || picked=$?
           echo
           branch="${branches[picked-1]}"
+        fi
+      elif [ -n "${branch+x}" ]; then
+        # Validate branch is a git branch
+        if ! isin "${branch}" "${valid_branches[@]}"; then
+          echo "ERROR Unknown git branch provided with flag --branch: ${branch}"
+          exit 1
         fi
       fi
 
@@ -932,9 +972,7 @@ function relocate_git_defaultify()
               to_add+=("${git_push_url}")
             fi
           done
-          for push_url in ${to_add+"${to_add[@]}"}; do
-            push_urls+=("${push_url}")
-          done
+          push_urls+=(${to_add+"${to_add[@]}"})
         fi
         # Make the list unique, preserving order
         # https://stackoverflow.com/a/31038481/1771778
@@ -1000,7 +1038,7 @@ function relocate_git_defaultify()
           # RE I guess that would be ok though
           echo "Where would you like the mirror to be created"
           read -r -e -p \
-              "(Note: keep this directory as a cache and reuse it during future mirrors): " \
+              "Note: keep this directory as a cache and reuse it during future mirrors: " \
               output_dir
           echo
         popd &>/dev/null
