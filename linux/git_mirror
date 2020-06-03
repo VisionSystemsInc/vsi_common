@@ -176,7 +176,7 @@ function git_mirror_has_lfs()
 
 function clone_submodules()
 {
-  # Init (any) submodules
+  # Init (any) submodules non-recursively
   ${GIT} submodule init
 
   # Submodule names can't contain newlines
@@ -190,6 +190,7 @@ function clone_submodules()
   local full_relative_path
   local submodule
 
+  # I am currently in base_submodule_path of the local non-bare repo
   local base_submodule_path="${base_submodule_path-}${base_submodule_path:+/}${prefix-${displaypath-}}"
   # Remove trailing slashes, because on some versions of git (2.17.1), prefix
   # has a trailing slash
@@ -200,26 +201,29 @@ function clone_submodules()
     # Calculate full submodule path wrt superproject (not just parent submodule)
     full_relative_path="${base_submodule_path}${base_submodule_path:+/}$(${GIT} config -f .gitmodules ${submodule}.path)"
 
-    # Search for existing prepped submodule
+    # Get the url of the submodule set by init above
+    submodule_url="$(${GIT} config "${submodule}.url")"
+
+    # Search for existing prepped mirror
     # https://stackoverflow.com/a/52657447/4166604
     prepped_submodule_path="$(echo "${GIT_MIRROR_PREP_DIR}"/*/"${full_relative_path}/config")"
     # If I already have this submodule, use it
     if [[ -f ${prepped_submodule_path} ]]; then
-      # Re-establish url in case it changed
       prepped_submodule_path="$(dirname "${prepped_submodule_path}")"
-      submodule_url="$(${GIT} config "${submodule}.url")"
+      # cd into the prepped mirror
       pushd "${prepped_submodule_path}"&> /dev/null
-        # REVIEW Seems wrong; if done as a command, this returns 1 and traps
-        #${GIT} remote set-url origin "$(${GIT} config "${submodule}.url")"
+        # Re-establish url in case it changed
         ${GIT} remote set-url origin "${submodule_url}"
+        # Fetch the latest changes
         ${GIT} remote update
       popd &> /dev/null
     else
       prepped_submodule_path="$(mktemp_compat "${GIT_MIRROR_PREP_DIR}")/${full_relative_path}"
       next_section "Cloning a fresh copy of ${full_relative_path}"
-      ${GIT} clone --mirror "$(${GIT} config "${submodule}.url")" "${prepped_submodule_path}"
+      ${GIT} clone --mirror "${submodule_url}" "${prepped_submodule_path}"
     fi
 
+    # Set the local non-bare repo's url to point to the prepped mirror
     ${GIT} config "${submodule}.url" "${prepped_submodule_path}"
   done
 
