@@ -505,9 +505,14 @@ function archive_mirrors()
     # For example, --exclude ./archive.tgz would exclude not only a file
     # in the PWD called archive.tgz, but any file in a subdirectory called
     # archive.tgz.
-    # As as workaround, using absolute paths everywhere works, but then the
-    # path components must be stripped off before being archived (a feature
-    # that is not always available)
+    # As as workaround, using absolute paths everywhere works on BSD, but then
+    # the path components must be stripped off before being archived.
+    #
+    # Unfortunately, BSD < 3 and GNU < 1.31 (at least) only support the
+    # --strip-components flag on extraction. Fortunately, GNU tar, does work as
+    # expected when excluding specific files with relative paths in the toplevel
+    # directory being archived. Therefore, with GNU tar, using relative paths
+    # everywhere works
     tar_version_info # Sets tar_version and tar_vendor
     local tar_version_arr
     split_version_string tar_version_arr "${tar_version}"
@@ -520,11 +525,12 @@ function archive_mirrors()
       local ncomponents="${#x}"
     else
       # This will work properly on GNU tar, but on older versions of BSD tar,
-      # like 2.8.3, this will suffer the problem mentioned above.
-      # In this case, this is ok because our archives are datetime stamped
+      # like 2.8.3, this will suffer the problem of excluded file collisions
+      # mentioned above.
+      # This is ok here because our archives are datetime stamped so a collision
+      # is very unlikely
       CWD='.'
-      # This is a no-op on BSD < 3 and GNU < 1.31 (at least) because they only
-      # support the --strip-components flag on extraction
+      # This is a no-op
       local ncomponents=1
     fi
 
