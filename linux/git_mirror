@@ -7,6 +7,7 @@ if [ -z ${VSI_COMMON_DIR+set} ]; then
   VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 fi
 source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/requirements.bsh"
 
 GIT_MIRROR_SOURCE="$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)"/"$(basename "${BASH_SOURCE[0]}")"
 
@@ -496,25 +497,47 @@ function archive_mirrors()
     next_section "Creating tar file..."
     local tar_file="transfer_$(date '+%Y_%m_%d_%H_%M_%S')"
 
+    # BSD tar does not handle excluded files well: for some reason, if given
+    # a pattern to exclude, any file that matches that pattern in its directory
+    # tree is excluded. Even if a specific file is being excluded, if the file
+    # is in a toplevel directory being archived, and the path is relative
+    # (e.g., ./), any file with that name in its directory tree is excluded.
+    # For example, --exclude ./archive.tgz would exclude not only a file
+    # in the PWD called archive.tgz, but any file in a subdirectory called
+    # archive.tgz.
+    # As as workaround, using absolute paths everywhere works, but then the
+    # path components must be stripped off before being archived (a feature
+    # that is not always available)
+    tar_version_info # Sets tar_version and tar_vendor
+    local tar_version_arr
+    split_version_string tar_version_arr "${tar_version}"
+    if [ "${tar_vendor}" == "BSD" ] && [ "${tar_version_arr[0]}" -ge 3 ]; then
+      CWD="${PWD}"
+      # Because the archive is created with absolute paths, count how many path
+      # components to strip off when creating the tar; equal to the number of
+      # slashes in the current path
+      local x="$(tr -d -c '/' <<< "${CWD}/")"
+      local ncomponents="${#x}"
+    else
+      # This will work properly on GNU tar, but on older versions of BSD tar,
+      # like 2.8.3, this will suffer the problem mentioned above.
+      # In this case, this is ok because our archives are datetime stamped
+      CWD='.'
+      # This is a no-op on BSD < 3 and GNU < 1.31 (at least) because they only
+      # support the --strip-components flag on extraction
+      local ncomponents=1
+    fi
+
     # Determine what tar files currently exist in the prep_dir
-    # Using absolute paths here, and when creating the archive, somehow makes
-    # this compatible with bash 3.2; otherwise, if ./archive.tgz was excluded,
-    # then any file called archive.tgz (anywhere in the tree) would be excluded
     local OLD_IFS="${IFS}"
     IFS=$'\n'
-    local existing_tar_files=($(ls "${PWD}"/{*.tgz,*.snar} 2>/dev/null || :))
+    local existing_tar_files=($(ls "${CWD}"/{*.tgz,*.snar} 2>/dev/null || :))
     IFS="${OLD_IFS}"
-    local to_exclude_args=("--exclude" "${PWD}/${tar_file}.tgz" "--exclude" "${PWD}/${tar_file%.*}.snar")
+    local to_exclude_args=("--exclude" "${CWD}/${tar_file}.tgz" "--exclude" "${CWD}/${tar_file%.*}.snar")
     local existing_tar_file
     for existing_tar_file in ${existing_tar_files[@]+"${existing_tar_files[@]}"}; do
       to_exclude_args+=("--exclude" "${existing_tar_file}")
     done
-
-    # Because the archive is created with absolute paths, count how many path
-    # components to strip off when creating the tar; equal to the number of
-    # slashes in the current path
-    local x="$(tr -d -c '/' <<< "${PWD}/")"
-    local ncomponents="${#x}"
 
     local last_tar_file
     if [[ ${TAR_INCREMENTAL} = 1 ]]; then
@@ -524,15 +547,15 @@ function archive_mirrors()
       # NOTE GNU tar (which is versioned differently than bsdtar) echos:
       #   tar: Removing leading `/' from member names' to stderr
       # RE ignore for now
-      tar czf "${tar_file}.tgz" -g "${tar_file}.snar" --strip-components "${ncomponents}" "${to_exclude_args[@]}" "${PWD}"
+      tar czf "${tar_file}.tgz" -g "${tar_file}.snar" --strip-components "${ncomponents}" "${to_exclude_args[@]}" "${CWD}"
     else
-      tar czf "${tar_file}.tgz" --strip-components "${ncomponents}" "${to_exclude_args[@]}" "${PWD}"
+      tar czf "${tar_file}.tgz" --strip-components "${ncomponents}" "${to_exclude_args[@]}" "${CWD}"
     fi
 
     if [[ ${TAR_INCREMENTAL} = 1 ]] && [[ ${last_tar_file} != "" ]]; then
       next_section "Creating an incremental tar file too, based on ${last_tar_file}"
       to_exclude_args+=("--exclude" "${tar_file}_${last_tar_file}.tgz" "--exclude" "${last_tar_file}.snar")
-      tar czf "${tar_file}_${last_tar_file}.tgz" -g "${last_tar_file}.snar" --strip-components "${ncomponents}" "${to_exclude_args[@]}" "${PWD}"
+      tar czf "${tar_file}_${last_tar_file}.tgz" -g "${last_tar_file}.snar" --strip-components "${ncomponents}" "${to_exclude_args[@]}" "${CWD}"
       next_section "Your new tar file is ready:"
       echo "${prep_dir}/${tar_file}.tgz"
       echo "and you have an incremental file:"
