@@ -358,33 +358,27 @@ function bash_version()
   "${BASH-bash}" --version | sed -nE 's|[^0-9]+([0-9.()]*).*|\1|;s|\((.*)\)|r\1|;p;q'
 }
 
-function is_gnu_tar()
+#**
+# .. function:: tar_version_info
+#
+# Sets the vendor and version number of ``tar``.
+#
+# :Parameters: [``TAR``] - The ``tar`` executable what will be called. Can be overwritten to call a different executable. Defaults to ``tar``.
+# :Output: - ``tar_vendor`` - The ``tar`` vendor (BSD or GNU)
+#          - ``tar_version`` - The ``tar`` version number
+#**
+function tar_version_info()
 {
-  [[ "$("${TAR-tar}" --version | head -n1)" == "tar (GNU tar)"* ]]
-}
-
-# macOS
-function is_bsd_tar()
-{
-  [[ "$("${TAR-tar}" --version)" == "bsdtar"* ]]
-}
-
-function gnutar_version()
-{
-  if ! is_gnu_tar; then
-    echo "ERROR ${TAR-tar} is not GNU tar"
+  local version_info="$("${TAR-tar}" --version)"
+  if [[ "${version_info}" == "tar (GNU tar)"* ]]; then
+    tar_version="$(echo "${version_info}" | awk 'NR==1{print $4}')"
+    tar_vendor="GNU"
+  # macOS
+  elif [[ "${version_info}" == "bsdtar"* ]]; then
+    tar_version="$(echo "${version_info}" | awk '{print $2}')"
+    tar_vendor="BSD"
+  else
+    echo "ERROR unrecognized tar vendor"
     return 1
   fi
-  version_info=("$("${TAR-tar}" --version)")
-  "${TAR-tar}" --version | head -n1 | awk '{print $4}'
-}
-
-function bsdtar_version()
-{
-  if ! is_bsd_tar; then
-    echo "ERROR ${TAR-tar} is not BSD tar"
-    return 1
-  fi
-  version_info=("$("${TAR-tar}" --version)")
-  "${TAR-tar}" --version | awk '{print $2}'
 }
