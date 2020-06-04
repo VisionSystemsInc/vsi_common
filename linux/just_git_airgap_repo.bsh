@@ -821,13 +821,24 @@ function relocate_git_defaultify()
           #
           # No quotes around subshell to create array (although IFS must be correct)
           local remote_urls=($(${GIT} config --get-all remote."${remote_name}".url | awk '!a[$0]++'))
+          IFS="${OLD_IFS}"
+          if [ "${#remote_urls[@]}" -eq 0 ]; then
+            # This shouldn't happen; if the repo has a named remote, it should
+            # have an associated remote url
+            echo "ERROR This repository is misconfigured: it has no urls for remote '${remote_name}'."
+            echo "Please fix!"
+            exit 1
+          fi
           associated_remote_urls+=("${remote_urls[@]}")
           local i
           for i in "${!remote_urls[@]}"; do
             associated_remote_names+=("${remote_name}")
           done
-          IFS="${OLD_IFS}"
         done
+        if [ "${#associated_remote_names[@]}" -ne "${#associated_remote_urls[@]}" ]; then
+          echo "ASSERT These two arrays are expected to have the same length"
+          exit 1
+        fi
 
         if [ "${#associated_remote_urls[@]}" -eq 0 ]; then
           # This shouldn't happen; if the repo has a named remote, it should
