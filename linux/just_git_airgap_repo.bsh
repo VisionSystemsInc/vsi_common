@@ -28,12 +28,11 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 # 2. Transfer ``vsi_common_prep/transfer_{date}.tgz`` to your destination.
 # 3. On the destination, create a directory, e.g., vsi_common_prep, and move the archive into it
 # 4. Extract the archive (the archive will extract directly into this directory)
-#   a) In vsi_common_prep, edit repo_map.env and set the environment variables. For example,
-#     - JUST_GIT_AIRGAP_SERVER=https://git-server.com/
-#     - JUST_GIT_AIRGAP_ORGANIZATION=projectA
+#   a) In vsi_common_prep, edit repo_map.env and set the JUST_GIT_AIRGAP_MIRROR_URL environment variable. For example,
+#     - JUST_GIT_AIRGAP_MIRROR_URL=https://git-server.com/projectA
 # 5. If not already, initialize bare repositories on the air-gapped git server for vsi_common and its submodule, recipes. In this example, these should be located at
-#   - https://git-server.com/projectA/vsi_common
-#   - https://git-server.com/projectA/recipes
+#   - https://git-server.com/projectA/vsi_common.git
+#   - https://git-server.com/projectA/recipes.git
 # 6. ``source setup.env``
 # 7. ``just git import-repo`` - Push the mirrored repository and all submodules to a new git server as defined by repo_map.env
 # 8. Incremental updates can be pushed to the repositories using much the same process. See :file:`git_mirror_main`.
@@ -358,7 +357,7 @@ function get_submodule_urls_recursively()
 #**
 # Create the contents of the repo_map.env file
 #
-# Create the repository mapping such that, once the JUST_GIT_AIRGAP_SERVER and JUST_GIT_AIRGAP_ORGANIZATION environment variables are defined, it can be serialized by :func:`git_push_main` and :func:`git_clone_main` in :file:`git_mirror`.
+# Create the repository mapping such that, once the JUST_GIT_AIRGAP_MIRROR_URL environment variable is defined, it can be serialized by :func:`git_push_main` and :func:`git_clone_main` in :file:`git_mirror`.
 #
 # :Argument: ``$1`` - The top-level repository name (e.g., vsi_common)
 #
@@ -366,16 +365,20 @@ function get_submodule_urls_recursively()
 #
 # .. code-block:: bash
 #
+# # Delay setting this variable until the archive has been moved to the
+# # destination in case the information must be controlled
+# JUST_GIT_AIRGAP_MIRROR_URL=
+#
 # repo_paths=(
 #   ./
 #   ./docker/recipes
 # )
 # repo_urls=(
-#   '${JUST_GIT_AIRGAP_SERVER}/${JUST_GIT_AIRGAP_ORGANIZATION}'/vsi_common.git
-#   '${JUST_GIT_AIRGAP_SERVER}/${JUST_GIT_AIRGAP_ORGANIZATION}'/recipes.git
+#   '${JUST_GIT_AIRGAP_MIRROR_URL}'/vsi_common.git
+#   '${JUST_GIT_AIRGAP_MIRROR_URL}'/recipes.git
 # )
 #
-# Note that the urls are specified with env variables :envvar:`JUST_GIT_AIRGAP_SERVER` and :envvar:`JUST_GIT_AIRGAP_ORGANIZATION` which will expand to the mirrored repositories' new locations on the air-gapped git server; e.g., https://git-server/vsi/vsi_common.git and https://git-server/vsi/recipes.git.
+# Note that the urls are specified with env variable :envvar:`JUST_GIT_AIRGAP_MIRROR_URL`, which will expand to the mirrored repositories' new locations on the air-gapped git server; e.g., https://git-server/projectA/vsi_common.git and https://git-server/projectA/recipes.git.
 #
 # .. note:: The user can override this function if it does not suit her needs
 #**
@@ -395,10 +398,9 @@ function create_repo_map()
   local repo_urls=()
   for repo_path in "${repo_paths[@]}"; do
     # The respective url for each submodule (recursively)
-    # NOTE Quotes around JUST_AIRGAP_GIT_SERVER and JUST_GIT_AIRGAP_ORGANIZATION
-    # aren't necessary here because the entries will be quoted when printed to
-    # file
-    repo_urls+=('${JUST_GIT_AIRGAP_SERVER}/${JUST_GIT_AIRGAP_ORGANIZATION}'/$(basename "${repo_path}")'.git')
+    # NOTE Quotes around JUST_GIT_AIRGAP_MIRROR_URL aren't necessary here because
+    # the entries will be quoted when printed to file
+    repo_urls+=('${JUST_GIT_AIRGAP_MIRROR_URL}'/$(basename "${repo_path}")'.git')
   done
   # Rename the top-level repo to '.'
   repo_paths[0]='.'
@@ -412,23 +414,21 @@ function create_repo_map()
   printf '# `just git import-repo` or override `create_repo_map` before calling\n'
   printf '# `just git export-repo`\n'
   printf '\n\n'
-  # JUST_GIT_AIRGAP_SERVER can use filesystem paths, but they need to be
+  # JUST_GIT_AIRGAP_MIRROR_URL can use filesystem paths, but they need to be
   # absolute paths because git_mirror:git_push_main changes into the directory
   # of each repository it pushes
-  printf '### YOU MUST SET THESE VARIABLES ###\n'
+  printf '### YOU MUST SET THIS VARIABLE ###\n'
   printf '# For example:\n'
-  printf '# JUST_GIT_AIRGAP_SERVER=git@git-server.com: # Note the : at the end\n'
-  printf '# JUST_GIT_AIRGAP_ORGANIZATION=projectA\n'
-  printf 'JUST_GIT_AIRGAP_SERVER=\n'
-  printf 'JUST_GIT_AIRGAP_ORGANIZATION=\n'
+  printf '# JUST_GIT_AIRGAP_MIRROR_URL=git@git-server.com:projectA\n'
+  printf 'JUST_GIT_AIRGAP_MIRROR_URL=\n'
   printf '\n\n'
 
   # This is not as nice as if the script would die automatically when it is
   # sourced if an env variable is null, but that doesn't seem possible;
   # set -u only check for unset variables, not null
-  printf '# Error if these env variables are unset\n'
-  printf ': ${JUST_GIT_AIRGAP_SERVER:?"UNSET: Please set in ./airgap.env"}\n'
-  printf ': ${JUST_GIT_AIRGAP_ORGANIZATION:?"UNSET: Please set in ./airgap.env"}\n'
+  # RE Although this does provide a nice error message
+  printf '# Error if this env variable is unset\n'
+  printf ': ${JUST_GIT_AIRGAP_MIRROR_URL:?"UNSET: Please set in ./repo_map.env"}\n'
   printf '\n'
 
   # Serialize the repository mapping such that it can be sourced by
