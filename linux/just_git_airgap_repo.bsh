@@ -386,6 +386,7 @@ function create_repo_map()
 
   local OLD_IFS="${IFS}"
   IFS=$'\n'
+  # The (relative) path from the top-level repository to each submodule (recursively)
   # No quotes around subshell to create array (although IFS must be correct)
   local repo_paths=("${repo_name}" $(get_submodule_paths_recursively))
   IFS="${OLD_IFS}"
@@ -393,6 +394,7 @@ function create_repo_map()
   local repo_path
   local repo_urls=()
   for repo_path in "${repo_paths[@]}"; do
+    # The respective url for each submodule (recursively)
     # NOTE Quotes around JUST_AIRGAP_GIT_SERVER and JUST_GIT_AIRGAP_ORGANIZATION
     # aren't necessary here because the entries will be quoted when printed to
     # file
@@ -401,7 +403,7 @@ function create_repo_map()
   # Rename the top-level repo to '.'
   repo_paths[0]='.'
 
-  # Ugh
+  # TODO use uwecho
   printf '# NOTE: This file is automatically created by\n'
   printf '#   just:just_git_airgap_repo.bsh:create_repo_map\n'
   printf '#\n'
@@ -410,6 +412,17 @@ function create_repo_map()
   printf '# `just git import-repo` or override `create_repo_map` before calling\n'
   printf '# `just git export-repo`\n'
   printf '\n\n'
+  # JUST_GIT_AIRGAP_SERVER can use filesystem paths, but they need to be
+  # absolute paths because git_mirror:git_push_main changes into the directory
+  # of each repository it pushes
+  printf ' ### YOU MUST SET THESE VARIABLES ###\n'
+  printf ' # For example:\n'
+  printf ' # JUST_GIT_AIRGAP_SERVER=git@git-server.com: # Note the : at the end\n'
+  printf ' # JUST_GIT_AIRGAP_ORGANIZATION=projectA\n'
+  printf 'JUST_GIT_AIRGAP_SERVER=\n'
+  printf 'JUST_GIT_AIRGAP_ORGANIZATION=\n'
+  printf '\n\n'
+
   # This is not as nice as if the script would die automatically when it is
   # sourced if an env variable is null, but that doesn't seem possible;
   # set -u only check for unset variables, not null
@@ -417,29 +430,17 @@ function create_repo_map()
   printf ': ${JUST_GIT_AIRGAP_SERVER:?"UNSET: Please set in ./airgap.env"}\n'
   printf ': ${JUST_GIT_AIRGAP_ORGANIZATION:?"UNSET: Please set in ./airgap.env"}\n'
   printf '\n'
-  print_repo_map
-}
 
-#**
-# Output a string that can be saved as the repo_map.env file
-#
-# Serialize the repository mapping such that it can be sourced by
-# :func:`git_push_main` and :func:`git_clone_main` in :file:`git_mirror`.
-#
-# :Arguments: repo_paths - The (relative) path from the top-level repository to each submodule (recursively)
-#             repo_urls - The respective url for each submodule (recursively)
-#
-# :Output: *stdout* - The contents of the repo_map.env file
-#**
-
-function print_repo_map()
-{
+  # Serialize the repository mapping such that it can be sourced by
+  # :func:`git_push_main` and :func:`git_clone_main` in :file:`git_mirror`.
   printf 'repo_paths=(\n'
   printf '  "%s"\n' "${repo_paths[@]}"
   printf ')\n\n'
   printf 'repo_urls=(\n'
   printf '  "%s"\n' "${repo_urls[@]}"
   printf ')\n'
+
+  print_git_airgap_submodule_update
 }
 
 # Given a repo_map like the one produced by :func:`create_repo_map`, make an
@@ -518,44 +519,27 @@ function add_import-repo_just_project()
 
           To push them to their respective air-gapped git servers, simply:
 
-          1. Edit airgap.env to set a few environment variables
-             or (if necessary)
-             Edit repo_map.env directly
+          1. Edit repo_map.env to set a few environment variables (or, if
+             necessary, update repo_map.env as needed)
           2. `source setup.env`
           3. `just git import-repo`
           ' > "${prep_dir}"/README.md
   # REVIEW It might be nicer not to import a plugin here so that there is only
   # one target in just help
   uwecho '#!/usr/bin/env bash
+          export JUST_PROJECT_PREFIX=AIRGAP_MIRROR
+          export JUST_VERSION="'"${JUST_VERSION}"'"
+          if [ -z "${AIRGAP_MIRROR_CWD+set}" ]; then
+            export AIRGAP_MIRROR_CWD="$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)"
+          fi
 
-          source "${VSI_COMMON_DIR}/linux/just_env" "$(dirname "${BASH_SOURCE[0]}")"/'airgap.env'
+          JUST_LOCAL_SETTINGS=/dev/null source "${VSI_COMMON_DIR}/linux/just_env" /dev/null
+
           source "${VSI_COMMON_DIR}/linux/just_git_airgap_repo.bsh"
 
           cd "${AIRGAP_MIRROR_CWD}"
           function caseify() { defaultify ${@+"${@}"}; }
           ' > "${prep_dir}"/Justfile
-  # REVIEW If someone overrides create_repo_map, these env vars may not need
-  # to be set--so don't explicitly error here. Currently, these variables are
-  # checked in repo_map.env, and the script will then die because set -eu is
-  # enabled by just
-  # JUST_GIT_AIRGAP_SERVER can use filesystem paths, but they need to be
-  # absolute paths because git_mirror:git_push_main changes into the directory
-  # of each repository it pushes
-  # REVIEW Could merge airgap.env and repo_map.env
-  # REVIEW Should these env variables use the ': ${VAR=}' syntax
-  uwecho 'JUST_PROJECT_PREFIX=AIRGAP_MIRROR
-          JUST_VERSION="'"${JUST_VERSION}"'"
-          if [ -z "${AIRGAP_MIRROR_CWD+set}" ]; then
-            AIRGAP_MIRROR_CWD="$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)"
-          fi
-
-          ### YOU MUST SET THESE VARIABLES ###
-          # For example:
-          # JUST_GIT_AIRGAP_SERVER=git@git-server.com: # Note the : at the end
-          # JUST_GIT_AIRGAP_ORGANIZATION=projectA
-          JUST_GIT_AIRGAP_SERVER=
-          JUST_GIT_AIRGAP_ORGANIZATION=
-          ' > "${prep_dir}"/airgap.env
   uwecho 'export JUST_SETUP_SCRIPT="$(basename "${BASH_SOURCE[0]}")"
           source "$(dirname "${BASH_SOURCE[0]}")/.vsi_common/env.bsh"
           unset JUSTFILE
@@ -1123,14 +1107,6 @@ function relocate_git_defaultify()
       # This is how git_push_main computes this variable
       local main_dir="$(dirname "$(ls */config)")"
 
-      source repo_map.env # Sets repo_paths and repo_urls
-      # Now that the env variables used by repo_urls in repo_map.env have been
-      # expanded, resave the file
-      # REVIEW run urls through _https_to_git_protocol
-      # RE no, because the user can just modify them in the repo_map.env; could
-      # print a message suggesting the git@ protocol syntax
-      print_repo_map > repo_map.env
-      print_git_airgap_submodule_update >> repo_map.env
       repo_map="$(cat repo_map.env)"
 
       # Now that the repo_urls have been expanded, update the repo_map.env file
