@@ -696,7 +696,11 @@ function git_push_main()
       # of a remote branch. However, a mirror should not have any remote
       # branches. This causes an error, "deny updating a hidden ref:", when
       # pushing to a gitlab server. For now, only filter out refs/remotes
-      ${GIT} for-each-ref --format='delete %(refname)' | grep '^delete refs/remotes' | ${GIT} update-ref --stdin
+      local ref
+      # Spaces are not allowed in a refname
+      for ref in $(${GIT} for-each-ref --format='delete %(refname)' | grep '^delete refs/remotes' || :); do
+        ${GIT} update-ref -d "${ref}"
+      done
 
       # Push to the mirror
       ${GIT} push --mirror "${main_repo_url}"
@@ -723,7 +727,11 @@ function git_push_main()
       if [[ -d ${repo_path} ]]; then
         pushd "${repo_path}" &> /dev/null
           # Filter out malformed refs (see above)
-          ${GIT} for-each-ref --format='delete %(refname)' | grep '^delete refs/remotes' | ${GIT} update-ref --stdin
+          local ref
+          # Spaces are not allowed in a refname
+          for ref in $(${GIT} for-each-ref --format='delete %(refname)' | grep '^delete refs/remotes' || :); do
+            ${GIT} update-ref -d "${ref}"
+          done
 
           # Push to the mirror
           ${GIT} push --mirror "${repo_urls[$index]}"
