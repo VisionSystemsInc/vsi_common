@@ -62,8 +62,7 @@ function picker()
     return 0
   fi
 
-  : ${DEFAULT_RESPONSE=}
-
+  local DEFAULT_RESPONSE="${DEFAULT_RESPONSE=}"
   local key
   key=$1
   shift 1
@@ -108,33 +107,22 @@ function usage()
 }
 
 if [ "${BASH_SOURCE[0]}" = "${0}" ] || [ "$(basename "${BASH_SOURCE[0]}")" = "${0}" ]; then
-  if (( $# )); then
-    default=
-    while (( $# )); do
-      # Convert arguments of the form -f=val to -f val and --flag=val to --flag val
-      # https://medium.com/@binaryphile/nice-one-elegant-in-its-simplicity-eee6b433bc90
-      if [[ $1 == -?=* ]] || [[ $1 == --*=* ]]; then
-        set -- "${1%%=*}" "${1#*=}" "${@:2}"
-      fi
-      case $1 in
-        -d|--default) # Default response
-          default=$2
-          shift 2
-          ;;
-        -h|--help)
-          usage
-          exit 1
-          ;;
-        *) # Positional arguments must come after flags
-          break
-          ;;
-      esac
-    done
-    DEFAULT_RESPONSE="${default}" picker my_choice ${@+"${@}"}
-    echo ${my_choice}
-    exit $((${my_choice_index--1}+1))
-  else
-    usage
-    exit 1
+  if [ -z ${VSI_COMMON_DIR+set} ]; then
+    VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
   fi
+  source "${VSI_COMMON_DIR}/linux/command_tools.bsh"
+
+  usage_help=0
+
+  parse_args parsed_args --help usage_help -h usage_help -d DEFAULT_RESPONSE: --default DEFAULT_RESPONSE: -- ${@+"${@}"}
+  shift "${parsed_args}"
+
+  if [ "${usage_help}" != "0" ]; then
+    usage
+    exit 0
+  fi
+
+  picker my_choice ${@+"${@}"}
+  echo "${my_choice}"
+  exit $((${my_choice_index--1}+1))
 fi
