@@ -367,6 +367,8 @@ function get_submodule_urls_recursively()
 #
 # :Argument: ``$1`` - The top-level repository name (e.g., vsi_common)
 #
+# :Parameter: ``ASSOCIATIVE_REPO_MAP`` - Set to a value to create the repo map as an associative-array, ``repos``, as opposed to two partitioned arrays (which is bash 3.2 compatible): ``repo_urls`` and ``repo_paths``. (Default: unset; i.e., partitioned)
+#
 # :Output: *stdout* - The contents of the repo_map.env file. For example,
 #
 # .. code-block:: bash
@@ -394,6 +396,8 @@ function get_submodule_urls_recursively()
 function create_repo_map()
 {
   local repo_name="${1}"
+
+  local ASSOCIATIVE_REPO_MAP="${ASSOCIATIVE_REPO_MAP=}"
 
   local OLD_IFS="${IFS}"
   IFS=$'\n'
@@ -444,15 +448,21 @@ function create_repo_map()
 
   # Serialize the repository mapping such that it can be sourced by
   # :func:`git_push_main` and :func:`git_clone_main` in :file:`git_mirror`.
-  # REVIEW Print this as an associative array by default, with an env var that
-  # supports this format for bash 3.2. print_git_airgap_submodule_update would
-  # also have to be updated
-  printf 'repo_paths=(\n'
-  printf '  "%s"\n' "${repo_paths[@]}"
-  printf ')\n\n'
-  printf 'repo_urls=(\n'
-  printf '  "%s"\n' "${repo_urls[@]}"
-  printf ')\n\n\n'
+  if [ -n "${ASSOCIATIVE_REPO_MAP}" ]; then
+    printf 'declare -A repos\n'
+    for index in "${!repo_paths[@]}"; do
+      # The %s in [] is implicitly quoted by bash
+      printf 'repos[%s]="%s"\n' "${repo_paths[$index]}" "${repo_urls[$index]}"
+    done
+  else
+    printf 'repo_paths=(\n'
+    printf '  "%s"\n' "${repo_paths[@]}"
+    printf ')\n\n'
+    printf 'repo_urls=(\n'
+    printf '  "%s"\n' "${repo_urls[@]}"
+    printf ')\n'
+  fi
+  printf '\n\n'
 
   print_git_airgap_submodule_update
 }
@@ -620,18 +630,25 @@ function print_git_airgap_submodule_update()
             [[ "${submodule_path}" != */ ]] && submodule_path="${submodule_path}/"
 
             # Find submodule in the list
-            local index
-            local is_found
-            for index in "${!repo_paths[@]}"; do
-              [ "${repo_paths[$index]}" = "${submodule_path}" ] && is_found=1 && break
-            done
-            if [ -z "${is_found:+set}" ]; then
+            local repo_url
+            if [ declare -p repos &>/dev/null ]; then
+              repo_url="${repos["${submodule_path}"]}"
+              unset repos
+            else
+              local index
+              for index in "${!repo_paths[@]}"; do
+                if [ "${repo_paths[$index]}" = "${submodule_path}" ]; then
+                  repo_url="${repo_urls[$index]}"
+                  break
+                fi
+              done
+              unset repo_urls repo_paths
+            fi
+            if [ -z "${repo_url:+set}" ]; then
               echo "ERROR submodule_path, ${submodule_path}, not found in repo_paths:"
               for index in "${!repo_paths[@]}"; do echo "  ${repo_paths[$index]}"; done
               return 1
             fi
-            local repo_url="${repo_urls[$index]}"
-            unset repo_urls repo_paths
 
             # This follows just:git_mirror:git_clone_main
             git submodule init "${submodule_path}"
