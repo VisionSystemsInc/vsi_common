@@ -415,8 +415,9 @@ function create_repo_map()
           # needs, you can edit this file directly before calling
           # `just git import-repo` or override `create_repo_map` before calling
           # `just git export-repo`
+
           '
-  echo
+
   # JUST_GIT_AIRGAP_MIRROR_URL can use filesystem paths, but they need to be
   # absolute paths because git_mirror:git_push_main changes into the directory
   # of each repository it pushes
@@ -424,8 +425,8 @@ function create_repo_map()
           # For example:
           # JUST_GIT_AIRGAP_MIRROR_URL=git@git-server.com:projectA
           JUST_GIT_AIRGAP_MIRROR_URL=
+
           '
-  echo
 
   # This is not as nice as if the script would die automatically when it is
   # sourced if an env variable is null, but that doesn't seem possible;
@@ -433,8 +434,8 @@ function create_repo_map()
   # RE Although this does provide a nice error message
   uwecho '# Error if this env variable is unset
           : ${JUST_GIT_AIRGAP_MIRROR_URL:?"ERROR: Please set this variable in ./repo_map.env"}
+
           '
-  echo
 
   # Serialize the repository mapping such that it can be sourced by
   # :func:`git_push_main` and :func:`git_clone_main` in :file:`git_mirror`.
@@ -579,7 +580,7 @@ function add_import-repo_just_project()
 #     # source the contents of repo_map.env (in a bash 3.2 compatible way)
 #     source /dev/stdin <<< "$(git show origin/__just_git_mirror_info_file:repo_map.env 2>/dev/null || :)"
 #     if ! declare -Fx git_airgap_submodule_update; then
-#       echo "ERROR the vsi_common submodule could not be found
+#       echo "ERROR the vsi_common submodule could not be found!
 #       return 1
 #     fi
 #     git_airgap_submodule_update external/vsi_common/"
@@ -599,21 +600,29 @@ function print_git_airgap_submodule_update()
             set -eu # fail fast
 
             local submodule_path="${1}"
-            # Add trailing slash if it does not exist
+          '
+            # When get_submodule_paths_recursively lists the submodules in
+            # create_repo_map, a slash is included at the end of the path
+  uwecho '  # Add trailing slash if it does not exist
             [[ "${submodule_path}" != */ ]] && submodule_path="${submodule_path}/"
 
             # Find submodule in the list
             local index
+            local is_found
             for index in "${!repo_paths[@]}"; do
-              [ "${repo_paths[$index]}" = "${submodule_path}" ] && break
+              [ "${repo_paths[$index]}" = "${submodule_path}" ] && is_found=1 && break
             done
-            repo_url="${repo_urls[$index]}"
+            if [ -z "${is_found:+set}" ]; then
+              echo "ERROR submodule_path, ${submodule_path}, not found in repo_paths:"
+              for index in "${!repo_paths[@]}"; do echo "  ${repo_paths[$index]}"; done
+              return 1
+            fi
+            local repo_url="${repo_urls[$index]}"
             unset repo_urls repo_paths
 
             # This follows just:git_mirror:git_clone_main
             git submodule init "${submodule_path}"
             git config "submodule.${submodule_path}.url" "${repo_url}"
-            unset repo_url
             git submodule update "${submodule_path}"
           )
           '
