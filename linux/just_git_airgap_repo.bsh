@@ -331,12 +331,20 @@ function toplevel()
 # RE cf. git_mirror for how to manually do this recursively
 function get_submodule_paths_recursively()
 {
+  local OLD_IFS="${IFS}"
+  IFS=$'\n'
+  local submodule_path
   # At some point, prefix was deprecated and removed in favor of displaypath
   # NOTE prefix/displaypath only provides the expected path if this command is
   # run from the root of the top-level repository. Fortunately, that is the case
   # in the Justfile.
   # Alternatively, add JUST_PROJECT_DIR to just or use :func:`toplevel`
-  ${GIT} submodule foreach --quiet --recursive 'echo ${prefix-${displaypath}}'
+  for submodule_path in $(${GIT} submodule foreach --quiet --recursive 'echo ${prefix-${displaypath}}'); do
+    # Remove trailing slashes because on some versions of git (1.8.3, 2.17.1),
+    # prefix has a trailing slash
+    echo "${submodule_path%/}"
+  done
+  IFS="${OLD_IFS}"
 }
 
 # Get all submodule urls
@@ -622,12 +630,8 @@ function print_git_airgap_submodule_update()
           (
             set -eu # fail fast
 
-            local submodule_path="${1}"
-          '
-            # When get_submodule_paths_recursively lists the submodules in
-            # create_repo_map, a slash is included at the end of the path
-  uwecho '  # Add trailing slash if it does not exist
-            [[ "${submodule_path}" != */ ]] && submodule_path="${submodule_path}/"
+            # Strip trailing slash
+            local submodule_path="${1%/}"
 
             # Find submodule in the list
             local repo_url
