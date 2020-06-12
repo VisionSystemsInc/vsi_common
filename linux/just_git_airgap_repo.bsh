@@ -662,6 +662,72 @@ function print_git_airgap_submodule_update()
           '
 }
 
+function git_push_check_submodule_recursive()
+{
+  local submodule_paths
+  local submodule_shas
+  if [ $# -eq 0 ]; then
+    local OLD_IFS="${IFS}"
+    IFS=$'\n'
+    submodule_paths=($(${GIT} submodule foreach --quiet --recursive 'echo ${prefix-${displaypath}}'))
+    submodule_shas=($(${GIT} submodule status --recursive | cut -c2- | awk '{print $1}'))
+    IFS="${OLD_IFS}"
+  else
+    submodule_paths=("${@}")
+    submodule_shas=()
+    local submodule_path
+    for submodule_path in "${submodules_paths[@]}"; do
+      submodule_shas+=($(${GIT} submodule status "${submodule_path}" | cut -c2- | awk '{print $1}'))
+    done
+  fi
+
+  local submodule_sha
+  local submodule_path
+  for index in "${!submodule_paths[@]}"; do
+    submodule_sha="${submodule_shas[$index]}"
+    submodule_path="${submodule_paths[$index]}"
+    pushd "${submodule_path}" &>/dev/null
+      # FIXME How do you figure out if a commit exists in the submodule's
+      # tracked remote url
+      # RE git config -f .gitmodules submodule.{path}.url can show the tracked
+      # URL. However, this URL can be a full URL, a URL relative to the parent
+      # repo's URL, or a filesystem path (relative or absolute)
+      #
+      # git branch -r --contains SHA will show a list of remote/branch refs
+      # that contain a SHA. If no remote/branch refs are returned, this means
+      # the commit has not been pushed. However, if a remote/branch ref is
+      # returned, it could be for a remote with url other than the url the
+      # parent module tracks the submodule with in .gitmodules
+      # RE A git fetch shouldn't be necessary because, presumably, the new
+      # commits were made in this repo. The only way that wouldn't be true would
+      # be if the commit was cherry-picked and pushed from another copy of the
+      # repo, or the position of remote/branch was reset manually
+      # RE How do we match the tracked url to the remote name
+      # RE RE What about changes to the protocol...
+      # This would work: we could add a new temporary remote for the tracked
+      # url, fetch, do git branch -r --contains SHA | grep "^  remote", and
+      # finally delete the temporary remote
+      # RE I don't love touching the real repository. Could clone it (which uses
+      # hard links), update the url, and work there. This is what we do with
+      # just_upstream; unfortunately, that does not use the url from .gitmodules
+      # (although it is probably the same)
+      #
+      # git ls-remote --heads remote_name/URL will list the current SHA of each
+      # head
+      #
+      # git submodule status and git submodule status --cached will show the
+      # current and tracked SHA respectively
+      # RE could use the tracked SHA and git branch -r --contains tracked
+      # to list the remote/branch refs that contain the SHA
+      # RE We still have to match the tracked url to the remote name
+      #
+      # Perhaps I should just use the mirrors and check things there
+      # RE That would require doing the check in git_export-repo instaed of
+      # git_export-repo-guided
+    popd &>/dev/null
+  done
+}
+
 #**
 # .. function:: relocate_git_defaultify
 #
