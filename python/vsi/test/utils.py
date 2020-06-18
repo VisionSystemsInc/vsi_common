@@ -12,7 +12,7 @@ import types
 
 class TestCase(TestCaseOriginal):
   '''
-  TestCase class for terra tests
+  TestCase class for common tests
 
   * Auto creates ``self.temp_dir``, a self deleting temporary directory for
     each test
@@ -24,7 +24,7 @@ class TestCase(TestCaseOriginal):
 
   .. code-block:: python
 
-      class TestSomething(terra.test.utils.TestCase):
+      class TestSomething(vsi.test.utils.TestCase):
         def setUp(self):
           self.patches.append(mock.patch.object(settings, '_wrapped', None))
           super().setUp()
