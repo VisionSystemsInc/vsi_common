@@ -728,6 +728,19 @@ function git_push_check_recursive_submodules()
       local git_dir="$(realpath "$(${GIT} rev-parse --git-dir)")"
       mkdir -p __just_git_clone
       pushd __just_git_clone &>/dev/null
+        # Fake out a git repo and submodule. I need to know the URL tracked by
+        # the .gitmodules file (because that is what is used when cloning the
+        # repo). However, I can't use git config -f .gitmodules because the
+        # path can (annoyingly) be a relative URL (either to a web address or
+        # filesystem path) and I can't figure out any other way to expand it
+        # other then running git submodule sync (or init if not already).
+        # However, this will also "synchronize the submodules' remote URL
+        # configuration setting to the value specified in .gitmodules". That is
+        # to say, it updates the value in .git/config as well as the value in
+        # .git/modules/docker/recipes/config, which is a problem we've run into
+        # before: issue #186
+        # RE In git v2.9.0, git submodule--helper resolve-relative-url, was
+        # added to do this, but relative URLs exist as far back as v1.8.3
         ${GIT} init &> /dev/null
         # Copy the config file, removing the worktree line
         sed -E '/^[[:blank:]]*worktree[[:blank:]]*=.+$/d' "${git_dir}/config" > .git/config
@@ -742,17 +755,6 @@ function git_push_check_recursive_submodules()
         ${GIT} update-index --add --cacheinfo 160000 "${tracked_sha}" "${sm_path}" &> /dev/null
         ${GIT} submodule init "${sm_path}" &> /dev/null
 
-        # Can't use git config -f .gitmodules because the path can be a relative
-        # URL (annoyingly) and I can't figure out any other way to expand it
-        # other then running git submodule sync (or init if not already).
-        # However, this will also "synchronize the submodules' remote URL
-        # configuration setting to the value specified in .gitmodules". That is
-        # to say, it updates the value in .git/config as well as the value in
-        # .git/modules/docker/recipes/config, which is a problem we've run into
-        # before: issue #186
-        # RE In git v2.9.0, git submodule--helper resolve-relative-url, was
-        # added to do this
-        # RE Relative URLs exist as far back as v1.8.3
         local submodule_url="$(${GIT} config "${sm_key}.url")"
       popd &>/dev/null
       rm -rf __just_git_clone
@@ -760,7 +762,9 @@ function git_push_check_recursive_submodules()
       # If the url is a relative URL/path to a directory then make it an
       # absolute path because the path returned by git config is relative to
       # the PWD, not the submodule path... (i know there could be false
-      # positives...not sure what to do about that)
+      # positives...not sure what to do about that). If I could go into the
+      # submodule and run git remote -v, that would give me the correct
+      # relative URL
       # ALTERNATIVELY prefix the proper number of ../
       if [ "${submodule_url:0:1}" != "/" ] && [ -d "${submodule_url}" ]; then
           submodule_url="$(realpath "${submodule_url}")"
