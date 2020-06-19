@@ -8,6 +8,7 @@ JUST_DEFAULTIFY_FUNCTIONS+=(docker_defaultify)
 JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 
 source "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
+source "${VSI_COMMON_DIR}/linux/compat.bsh"
 
 #*# just/plugins/docker/just_docker_functions
 
@@ -54,7 +55,7 @@ function docker-compose_restore_from_cache()
   # Render compose file
   local compose_rendered="$(docker-compose -f "${compose_file}" config)"
   local compose_yarp="$(yarp <<< "${compose_rendered}")"
-  local docker_compose_version="$(sed -nE "s|^version = '(.*)'$|\1|p" <<< "${compose_yarp}")"
+  local docker_compose_version="$(sed -n${sed_flag_rE} "s|^version = '(.*)'$|\1|p" <<< "${compose_yarp}")"
   local dockerfile="$(get_dockerfile_from_compose "${compose_file}" "${1}" "${compose_yarp}")"
 
   local JUST_DOCKER_COMPOSE_CACHE_REPO="${JUST_DOCKER_COMPOSE_CACHE_REPO:-vsiri/ci_cache}"
@@ -84,7 +85,7 @@ function docker-compose_restore_from_cache()
   # Restore recipes from cache #
   ##############################
   local recipes_compose_file="${VSI_COMMON_DIR}/docker/recipes/docker-compose.yml"
-  local recipe_compose_version="$(yarp < "${recipes_compose_file}" | sed -nE "s|^version = '(.*)'$|\1|p")"
+  local recipe_compose_version="$(yarp < "${recipes_compose_file}" | sed -n${sed_flag_rE} "s|^version = '(.*)'$|\1|p")"
   _dynamic_docker-compose_restore_recipes "${1}" > "${temp_override}"
 
   if [ "${JUST_DOCKER_COMPOSE_BUILD-1}" = "1" ]; then
@@ -100,7 +101,7 @@ function docker-compose_restore_from_cache()
   ############################################################
   # Restore services from cache and setup stages for pushing #
   ############################################################
-  local main_image_name="$(sed -nE "s|^services.${main_service}.image = ||p" <<< "${compose_yarp}")"
+  local main_image_name="$(sed -n${sed_flag_rE} "s|^services.${main_service}.image = ||p" <<< "${compose_yarp}")"
   _dynamic_docker-compose_add_cache_from "${@}" <<< "${compose_rendered}" > "${temp_file}" 3>"${temp_override}"
 
   # The above function's for loop is in a different subshell actually, in order
@@ -123,8 +124,8 @@ function docker-compose_restore_from_cache()
   fi
   # local target
   # for i in ${@+"${@:2}"}; do
-  #   image_name="$(sed -nE "s|^services.${i}.image = ||p" <<< "${compose_yarp}")"
-  #   target="$(sed -nE "s|^services.${i}.build.target = ||p" <<< "${compose_yarp}")"
+  #   image_name="$(sed -n${sed_flag_rE} "s|^services.${i}.image = ||p" <<< "${compose_yarp}")"
+  #   target="$(sed -n${sed_flag_rE} "s|^services.${i}.build.target = ||p" <<< "${compose_yarp}")"
 
   #   if [ "${image_name}" != "" ]; then
   #     if [ "${target}" = "" ]; then
@@ -272,7 +273,8 @@ function get_docker_recipes()
   JUST_RECIPE_REPO="${JUST_RECIPE_REPO//./\\.}"
   # Need to escpae / for the first search
   JUST_RECIPE_REPO="${JUST_RECIPE_REPO////\\/}"
-  sed -nE '/^ *[fF][rR][oO][mM] *'"${JUST_RECIPE_REPO}"':/{
+  sed -n${sed_flag_rE} \
+          '/^ *[fF][rR][oO][mM] *'"${JUST_RECIPE_REPO}"':/{
             s/^ *[fF][rR][oO][mM]  *'"${JUST_RECIPE_REPO}"':([^ ]+).*/\1/
             # Skip (miss) lines with a $ in it, they have variable names that I
             # will not be able to match
