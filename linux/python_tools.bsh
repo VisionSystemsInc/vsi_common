@@ -1,0 +1,68 @@
+#!/usr/bin/env false bash
+
+if [[ $- != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
+#*# linux/python_tools
+
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
+source "${VSI_COMMON_DIR}/linux/elements.bsh"
+
+#**
+# ============
+# Python Tools
+# ============
+#
+# .. default-domain:: bash
+#
+# .. file:: python_tools.bsh
+#
+# Functions to help communicate with python
+#**
+
+#**
+# .. function:: array_to_python_ast_list_of_strings
+#
+# :Arguments: * ``$1`` - Variable to set result to. If the destination is an array, it will be unset (and become global)
+#             * [``$2``...] - Array elements (to be treated as strings)
+#
+# Set ``$1`` to a python ast.literal_eval compliant string for an list of strings
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
+#   array_to_python_ast_list_of_strings x 1 '1"1' "2'2" stuff
+#   # x=["1", "1\"1", "2'2", "stuff"]
+#**
+function array_to_python_ast_list_of_strings()
+{
+  if is_array "${1}"; then
+    unset "${1}"
+  fi
+
+  if [ "${1}" != "indirect" ]; then
+    local indirect
+  fi
+  if [ "${1}" != "string" ]; then
+    local string
+  fi
+
+  indirect="${1}"
+  shift 1
+  string='['
+  if (( $# )); then
+    string+="\"${1//\"/\\\"}\""
+    shift 1
+  fi
+  while (( $# )); do
+    string+=", \"${1//\"/\\\"}\""
+    shift 1
+  done
+  string="${string}]"
+
+  dynamic_set "${indirect}" "${string}"
+}
