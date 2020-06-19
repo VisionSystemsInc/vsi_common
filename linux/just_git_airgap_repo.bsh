@@ -52,6 +52,7 @@ source "${VSI_COMMON_DIR}/linux/git_mirror"
 source "${VSI_COMMON_DIR}/linux/uwecho.bsh"
 source "${VSI_COMMON_DIR}/linux/parser.bsh"
 source "${VSI_COMMON_DIR}/linux/requirements.bsh"
+source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
 
 #**
 # .. envvar:: GIT
@@ -687,10 +688,9 @@ function print_git_airgap_submodule_update()
 #
 # "git submodule--helper resolve-relative-url" bash port
 #
-# Reproduces what git submodule-helper resolve-relative-url does. Not all
-# versions of git are modern enough to have this feature.
+# Reproduces what ``git submodule-helper resolve-relative-url`` does. Not all versions of git are modern enough to have this feature.
 #
-# :Arguments: [``$1``] - Submodule name to be matched, just like '`git-submodule--helper`'; e.g., submodule.docker/recipes
+# :Arguments: ``$1`` - URL to be expanded
 #
 # :Output: *stdout* - Expanded URL
 #**
@@ -699,36 +699,21 @@ split_version_string git_version_arr "$(git_version)"
 if [ "${git_version_arr[0]}" -ge 2 ] && [ "${git_version_arr[1]}" -ge 9 ]; then
   function submodule-helper-resolve-relative-url()
   {
-    local sm_key="${1}" # E.g., submodule.docker/recipes
-    local sm_path="$(${GIT} config -f .gitmodules ${sm_key}.path)"
+    local gitmodules_url="${1}"
 
     # In git v2.9.0, this command can replace all of this work
-    ${GIT} submodule--helper resolve-relative-url "$(${GIT} -C "${sm_path}" config -f "${PWD}"/.gitmodules "${sm_key}".url)"
+    ${GIT} submodule--helper resolve-relative-url "${gitmodules_url}"
   }
 else
   function submodule-helper-resolve-relative-url()
   {
-    # TODO Rework this so that it just takes the relative URL; the actual
-    # details of the submodule don't matter
+    local gitmodules_url="${1}"
+    local remote_url="$(${GIT} config remote.origin.url)"
 
-    local sm_key="${1}" # E.g., submodule.docker/recipes
-    local sm_path="$(${GIT} config -f .gitmodules ${sm_key}.path)"
-
-    # TODO Work in an automatically deleting temporary directory; requires
-    # mktemp_compat from dir_tools.bsh
-    # RE this temp dir does not auto-delete
-    if ls -A __just_git_clone &>/dev/null; then
-      echo "The temporary directory, ./__just_git_clone, already exists and is"
-      echo "not empty. This script will delete it and continue."
-      ask_question "Is that ok?" answer_delete n
-      [ "$answer_delete" == "0" ] && return 1
-      rm -rf __just_git_clone
-    fi
-    # It seems this path is usually abs, unless you are in the top-level repo,
-    # then the path is .git
-    local git_dir="$(realpath "$(${GIT} rev-parse --git-dir)")"
-    mkdir -p __just_git_clone
-    pushd __just_git_clone 1>/dev/null
+    # Work in an automatically deleting temporary directory
+    local temp_repo
+    make_temp_path temp_repo -d
+    pushd "${temp_repo}" 1>/dev/null
       # Fake out a git repo and submodule. I need to know the URL tracked by
       # the .gitmodules file (because that is what is used when cloning the
       # repo). However, I can't use git config -f .gitmodules because the
@@ -742,25 +727,51 @@ else
       # before: issue #186
       # RE In git v2.9.0, git submodule--helper resolve-relative-url, was
       # added to do this, but relative URLs exist as far back as v1.8.3
-      ${GIT} init 1> /dev/null
-      # Copy the config file, removing the worktree line
-      sed -E '/^[[:blank:]]*worktree[[:blank:]]*=.+$/d' "${git_dir}/config" > .git/config
-      ${GIT} config --remove-section "${sm_key}"
-      cp ../.gitmodules .
+      ${GIT} init 1>/dev/null
+      ${GIT} config remote.origin.url "${remote_url}"
+      uwecho "[submodule \"submod\"]
+                path = submod
+                url = ${gitmodules_url}" > .gitmodules
 
-      ${GIT} add .gitmodules 1> /dev/null
-      ${GIT} -c "user.name=git_push_check_recursive_submodules" \
-            -c "user.email=<git_push_check_recursive_submodules@just_git_airgap_repo.git>" \
-            commit -m "commit the .gitmodules file" 1> /dev/null
       # from https://stackoverflow.com/a/37378302/1771778
-      ${GIT} update-index --add --cacheinfo 160000 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "${sm_path}" 1> /dev/null
-      ${GIT} submodule init "${sm_path}" 1> /dev/null
+      ${GIT} update-index --add --cacheinfo 160000 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa submod 1>/dev/null
+      ${GIT} submodule init submod 1>/dev/null
 
-      submodule_url="$(${GIT} config "${sm_key}.url")"
+      ${GIT} config submodule.submod.url
     popd 1>/dev/null
-    rm -rf __just_git_clone
+  }
+fi
 
-    echo "${submodule_url}"
+#**
+# .. function:: git_C
+#
+# "git -C" bash port
+#
+# Reproduces what ``git -C`` does. Not all versions of git are modern enough to have this feature.
+#
+# :Arguments: ``$1`` - The path in ``git -C <path>``
+#             ``$2...`` - The rest of the ``git`` CLI arguments
+#
+# :Output: *stdout* - Expanded URL
+#**
+
+if [ "${git_version_arr[0]}" -ge 1 ] && \
+   [ "${git_version_arr[1]}" -ge 8 ] && \
+   [ "${git_version_arr[2]}" -ge 5 ]; then
+  function git_C()
+  {
+    ${GIT} -C ${@+"${@}"}
+  }
+else
+  function git_C()
+  {
+    local working_dir="${1}"
+    shift 1
+    pushd "${working_dir}" 1>/dev/null
+      # Arguments should already be expanded
+      # REVIEW @andy
+      ${GIT} ${@+"${@}"}
+    popd 1>/dev/null
   }
 fi
 unset git_version_arr
@@ -792,7 +803,7 @@ function git_push_check_recursive_submodules()
       # Remove trailing slash
       sm_path="${sm_path%/}"
       local tracked_sha="$(${GIT} submodule status --cached "${sm_path}" | cut -c2- | awk '{print $1}')"
-      local submodule_url="$(submodule-helper-resolve-relative-url "${sm_key}")"
+      local submodule_url="$(submodule-helper-resolve-relative-url "$(git_C "${sm_path}" config -f "${PWD}"/.gitmodules "${sm_key}".url)")"
 
       # If the url is a relative URL/path to a directory then make it an
       # absolute path because the path returned by git config is relative to
