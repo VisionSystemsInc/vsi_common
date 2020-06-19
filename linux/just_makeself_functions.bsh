@@ -8,6 +8,7 @@ JUST_DEFAULTIFY_FUNCTIONS+=(makeself_defaultify)
 JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 
 source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/command_tools.bsh"
 
 #*# just/plugins/just_makeself_functions
 
@@ -58,7 +59,17 @@ function makeself_defaultify()
     #**
     # .. command:: makeself_just
     #**
-    makeself_just-project-locally) # Make a self extracting executable for a just project, locally
+    makeself_just-project-locally) # Make a self extracting executable for a just \
+        # project, locally. Add "--tests" flag to include VSI Common's unit tests. \
+        # Unit tests can be run via: just --wrap bash -c 'cd ${VSI_COMMON_DIR}; just test'
+      local include_unit_tests
+      parse_args extra_args --tests include_unit_tests -- ${@+"${@}"}
+      if [ "${include_unit_tests}" = "0" ]; then
+        include_unit_tests='--exclude=test-*.bsh'
+      else
+        include_unit_tests=""
+      fi
+
       if [ ! -f "${PROJECT_CWD}/build/makeself/makeself.sh" ]; then
         justify makeself setup-local
       fi
@@ -75,7 +86,7 @@ function makeself_defaultify()
       "${PROJECT_CWD}/build/makeself/makeself.sh" \
           --header "${PROJECT_CWD}/build/makeself/makeself-header_just.sh" \
           --noprogress --nomd5 --nocrc --nox11 --keep-umask \
-          --tar-extra "--show-transformed --transform s|^\./|./${vsi_common_rel}/| --exclude=test-*.bsh --exclude=./docs --exclude=.git --exclude=*.egg-info" \
+          --tar-extra "--show-transformed --transform s|^\./|./${vsi_common_rel}/| ${include_unit_tests} --exclude=./docs --exclude=.git --exclude=*.egg-info" \
           "${VSI_COMMON_DIR}" ./dist/just just_label "./${vsi_common_rel}/freeze/just_wrapper"
       # You can't put quotes in tar-extra apparently, it'll screw things up.
       ;;
