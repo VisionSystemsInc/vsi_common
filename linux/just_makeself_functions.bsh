@@ -39,7 +39,7 @@ function makeself_defaultify()
 
   case $arg in
     #**
-    # .. command:: makeself_just
+    # .. command:: makeself_setup-local
     #
     # Download and install makeself locally in Project's CWD/build/makeself
     #**
@@ -57,7 +57,23 @@ function makeself_defaultify()
       popd &> /dev/null
     ;;
     #**
-    # .. command:: makeself_just
+    # .. command:: makeself_just-project-locally
+    #
+    # :Arguments: * ``[--tests]`` - Include unit tests. Calling this from another project is tricky though. For example, ``./just --wrap bash -c 'JUSTFILE="${VSI_COMMON_DIR}/Justfile" just test'``
+    # :Uses: - ``tar`` - Only works with GNU Tar on the path.
+    #
+    # Creates a just project executable using makeself. Should be called from the main project's just project, or else directory paths will not line up. After the initial executable is added, called to :command:`makeself_add-files-locally` should be made to add project files. For example:
+    #
+    # * Project: ``foo`` in ``.``
+    # * Submodule: ``bar`` in ``./external/bar``
+    # * VSI Common in ``./external/bar/external/vsi_common``
+    #
+    # #. Call: ``just makeself_just-project-locally`` in ``.``
+    # #. Get bar relative dir: ``local bar_rel="$(relative_path "${BAR_CWD}" .)" # NOTE: Does not start with ./``
+    # #. Call: ``makeself_add-files-locally ./external/bar '"--show-transformed --transform s|^\./|./${bar_rel}/| --exclude=.git --exclude=./docs --exclude=./external --exclude=./tests"'`` in ``.``
+    # #. Call: ``makeself_add-files-locally ./ '"--exclude=.git --exclude=./docs --exclude=./external/bar --exclude=./tests"'`` in ``.``
+    #
+    # All calls are made from the root repo directory (``.``), and the output will be in ``./dist``
     #**
     makeself_just-project-locally) # Make a self extracting executable for a just \
         # project, locally. Add "--tests" flag to include VSI Common's unit tests. \
@@ -90,6 +106,21 @@ function makeself_defaultify()
           "${VSI_COMMON_DIR}" ./dist/just just_label "./${vsi_common_rel}/freeze/just_wrapper"
       # You can't put quotes in tar-extra apparently, it'll screw things up.
       ;;
+    #**
+    # .. command:: makeself_add-files-locally
+    #
+    # :Arguments: * ``$1`` - Directory to add
+    #             * ``[$2]`` - Extra tar flags to be passed to makeself/tar
+    #
+    # After the initial just executable is created by calling :command:`makeself_just-project-locally`, project directories are called using :command:`makeself_add-files-locally`
+    #
+    # The second argument should be used to exclude files, and in complicated situations, set up path transforms.
+    # * Simple: ``${project_dir}/external/vsi_common``
+    # * Complicated: ``${project_dir}/external/${other_project}/external/vsi_common``
+    #
+    # .. seealso::
+    #   :command:`makeself_just-project-locally`
+    #**
     makeself_add-files-locally) # Append files to a makeself executable
       MAKESELF_PARSE=true "${PROJECT_CWD}/build/makeself/makeself.sh" \
           --header "${PROJECT_CWD}/build/makeself/makeself-header_just.sh" \
