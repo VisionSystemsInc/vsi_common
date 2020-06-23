@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+
+. "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
+. "$(dirname "${BASH_SOURCE[0]}")/../linux/python_tools.bsh"
+
+begin_test "Array to python ast literal eval list of strings"
+(
+  setup_test
+
+  x=(11 22 33)
+  is_array x
+  array_to_python_ast_list_of_strings x "${x[@]}"
+  [ "${x}" = '["11", "22", "33"]' ]
+  # Test array replacement works
+  not is_array x
+  # Make sure local variables aren't leaking
+  not declare -p string
+  not declare -p indirect
+
+  x=('1"1' "2'2" "3  3")
+  array_to_python_ast_list_of_strings indirect "${x[@]}"
+  [ "${indirect}" = '["1\"1", "2'"'"'2", "3  3"]' ]
+  not declare -p string
+
+  x=()
+  array_to_python_ast_list_of_strings string ${x[@]+"${x[@]}"}
+  [ "${indirect}" = '["1\"1", "2'"'"'2", "3  3"]' ]
+  [ "${string}" = '[]' ]
+)
+end_test
+
+begin_expected_fail_test "Array to python ast literal eval list of strings lose locality"
+(
+  setup_test
+
+  function foo()
+  {
+    local x=11
+    x[1]=22
+    x[2]=33
+    array_to_python_ast_list_of_strings x "${x[@]}"
+    [ "${x}" = '["11", "22", "33"]' ]
+  }
+  foo
+  # This line should fail, but doesn't
+  not [ "${x-}" = '["11", "22", "33"]' ]
+)
+end_test
