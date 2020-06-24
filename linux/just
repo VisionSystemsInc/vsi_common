@@ -181,6 +181,34 @@ function print_error()
   local line
   # Stop any errors in here from throwing more errors (infinite loop), otherwise
   # "while line=("$(caller $i)"); do" would have inherited the trap, and retrapped
+
+  #**
+  # ..envvar:: JUST_IGNORE_EXIT_CODES
+  #
+  # A regular expression that represents exit codes that will result in a just stack trace not being printed out. This is good for handling errors that are expected to happen, and do not need a misleading stack track when you know the problem is a known issue, like a missing file, etc... Default: ``0``, (disabled).
+  #
+  # .. rubric:: Examples:
+  #
+  # .. code-block:: bash
+  #
+  #     # Justfile example
+  #     just_target)
+  #       local JUST_IGNORE_EXIT_CODES=2
+  #       bash -c "exit 2"
+  #       ;;
+  #
+  #     # More example values
+  #     25      # Only 25 is ignore
+  #     24$|^25 # 24 or 25 is ignored ^ is implied at the beginning, and $ at the end
+  #     2.      # 20-29
+  #     .*      # All exit codes
+  #     3.$|^72 # 30-39 or 72
+  #     $|5|^   # Any code with a 5 in it, 5, 15, 25... 50-59, etc
+  #**
+  if [[ ${rv} =~ ^${JUST_IGNORE_EXIT_CODES-0}$ ]]; then
+    return
+  fi
+
   set +E
   echo >&2
   if [ -e /.dockerenv ]; then
