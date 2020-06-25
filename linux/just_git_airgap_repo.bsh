@@ -64,7 +64,7 @@ source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
 # All :func:`relocate_git_defaultify` targets will be skipped if the value of :envvar:`GIT` is not found or empty.
 #
 # .. note::
-#   When using the GIT env variable in this file, do not surround it with quotes as you normally would. Although this prevents using a path to ``git`` with a space in it, in exchange, it may be possible (eventually) to enable a dry-run-ish capability if GIT is set to 'echo git'.
+#   When using the GIT env variable in this file, do not surround it with quotes as you normally would. Although this prevents using a path to ``git`` with a space in it, in exchange, it may be possible (eventually) to enable a dry-run-ish capability if GIT is set to ``echo git``.
 #**
 
 : ${GIT=git}
@@ -120,7 +120,7 @@ function log_unpushed_commits()
 #          - ``just_git_remote_tracking_branches`` - A corresponding array of remote-tracking branch names
 #
 # .. note::
-#    - A branch that you create locally and then push to a remote is not configured as a local-tracking branch by default. You must use the -u flag with 'git push' or 'git branch'.
+#    - A branch that you create locally and then push to a remote is not configured as a local-tracking branch by default. You must use the -u flag with ``git push`` or ``git branch``.
 #   - A branch cannot track multiple remotes.
 #   - Requires git >= 1.9.0
 #**
@@ -222,7 +222,7 @@ function log_outgoing_commits()
 #
 # Compare the expected commit of each submodule to its current working tree
 #
-# Using ``git diff --submodule=log``, compare the working tree of each submodule to the version commited to HEAD of the super project, and list any commits that are missing and/or now present in the submodule. For example, if an earlier commit in the submodule is checked out, there will be missing commits in the submodule according to the super project. Similarly, if a commit is made to the submodule, there will be new commits present in the submodule according to the super project. Of course, the commit graph could diverge in more complicated ways.
+# Using ``git diff --submodule=log``, compare the working tree of each submodule to the version committed to HEAD of the super project, and list any commits that are missing and/or now present in the submodule. For example, if an earlier commit in the submodule is checked out, there will be missing commits in the submodule according to the super project. Similarly, if a commit is made to the submodule, there will be new commits present in the submodule according to the super project. Of course, the commit graph could diverge in more complicated ways.
 #
 # :Output: - ``*stdout*`` - Each submodule's differences in terms of commits
 #
@@ -243,6 +243,7 @@ function submodule_summary()
 
 # 'git push --recurse-submodules=check' (available in git 1.8.0) will check for unpushed commits in a submodule for its current committed state in the parent project
 # RE 'git config push.recurseSubmodules check' (available in git 2.7.0)
+# RE This only seems to work if it is used with a set of outgoing commits that contains a change to a submodule. And, despite its name, it does not seem to recurse into submodules
 
 #**
 # .. function:: make_remote_urls_pushable
@@ -601,6 +602,11 @@ function add_import-repo_just_project()
           ' > "${prep_dir}"/setup.env
 }
 
+#**
+# .. function:: print_git_airgap_submodule_update
+#
+# Print a func to bootstrap ``just`` by cloning a relocated repository
+#
 # After (shallow) cloning the air-gapped repository, the submodules must be
 # re-configured and initialized/updated (recursively). This is handled by the
 # git_clone-airgap-repo just target. However, this is not possible without the
@@ -610,6 +616,7 @@ function add_import-repo_just_project()
 # appended to repo_map.env and orphan committed in the git_import-repo just
 # target. git_airgap_submodule_update follows the same steps as
 # git_mirror:git_clone_main.
+# REVIEW If I ever create it, replace with git_mirror:update_submodule
 #
 # In order to call git_airgap_submodule_update, repo_map.env must be grabbed
 # out of the orphan commit and then sourced. Obviously, no just functions can
@@ -627,7 +634,8 @@ function add_import-repo_just_project()
 #     echo "'just' could not be loaded. Trying to setup the repository as an"
 #     echo "air-gapped repository"
 #     # source the contents of repo_map.env (in a bash 3.2 compatible way)
-#     source /dev/stdin <<< "$(git show origin/__just_git_mirror_info_file:repo_map.env 2>/dev/null || :)"
+#     source /dev/stdin <<< \
+#         "$(git show origin/__just_git_mirror_info_file:repo_map.env 2>/dev/null || :)"
 #     if ! declare -Fx git_airgap_submodule_update; then
 #       echo "ERROR the vsi_common submodule could not be found!
 #       return 1
@@ -635,6 +643,13 @@ function add_import-repo_just_project()
 #     git_airgap_submodule_update external/vsi_common/"
 #   fi
 #   source "$(dirname "${BASH_SOURCE[0]}")/external/vsi_common/env.bsh"
+#
+# At this point, it is possible to run ``just git clone-airgap-repos`` to
+# recursively initialize and clone the submodules from their air-gapped mirrors
+#
+# REVIEW This could become a git hook; however, the hook would still have to be
+# added in the setup.env file
+#**
 
 function print_git_airgap_submodule_update()
 {
@@ -1333,6 +1348,7 @@ function relocate_git_defaultify()
       extra_args=$#
       ;;
 
+    # NOTE this is tightly coupled with git_export-repo
     git_import-repo) # Push a repo exported with `git export-repo` to an \
                      # initialized git repo
       # REVIEW Move this functionality into a function
