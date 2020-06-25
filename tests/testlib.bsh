@@ -430,6 +430,16 @@ begin_expected_fail_test()
   _expected_failure=1 _begin_common_test ${@+"${@}"}
 }
 
+begin_fail_zone()
+{
+  echo 1 > "${TRASHDIR}/.expected_failure"
+}
+
+end_fail_zone()
+{
+  echo 0 > "${TRASHDIR}/.expected_failure"
+}
+
 #**
 # .. function:: begin_required_fail_test
 #
@@ -526,78 +536,61 @@ end_test ()
     time_e=$(awk "BEGIN {print \"\t\" $(get_time_seconds)-${_time_0}}")
   fi
 
+  # Handle missing call to setup_test
   if [ ! -e "${TRASHDIR}/.setup_test" ]; then
     # This is a "no matter what, failure". No expected/required failure work
     # around for this
     printf "%-80s ${TESTLIB_BAD_COLOR}SETUP FAILURE${TESTLIB_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
     failures=$(( failures + 1 ))
+  # Handle a skipped test
   elif [ "${__testlib_skip_test-}" = "1" ] && [ "${test_status}" -eq 0 ]; then
     printf "%-80s ${TESTLIB_GOOD_COLOR}SKIPPED${TESTLIB_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
     skipped=$((skipped+1))
-  elif [ "${required_fail}" -eq 1 ] && [ "$test_status" -ne 0 ]; then
-    printf "%-80s ${TESTLIB_GOOD_COLOR}FAIL REQUIRED${TESTLIB_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
-    required_failures=$((required_failures+1))
+  # Handle a required fail
+  elif [ "${required_fail}" -eq 1 ]; then
+    if [ "$test_status" -ne 0 ]; then
+      printf "%-80s ${TESTLIB_GOOD_COLOR}FAIL REQUIRED${TESTLIB_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
+      required_failures=$((required_failures+1))
+    else
+      failures=$(( failures + 1 ))
+      printf "%-80s ${TESTLIB_BAD_COLOR}SHOULD HAVE FAILED${TESTLIB_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
+      testlib_print_test_trace
+    fi
+  # Handle an expected fail
+  elif [ "${expected_failure}" -eq 1 ]; then
+    if [ -f "${TRASHDIR}/.expected_failure" ]; then
+      local expected_failure_state="$(<"${TRASHDIR}/.expected_failure")"
+      if [ "${expected_failure_state}" = "1" ]; then
+        if [ "${test_status}" = "0" ]; then
+          printf "%-80s ${TESTLIB_WARN_COLOR}UNEXPECTED SUCCESS T1${TESTLIB_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
+          unexpected_successes=$(( unexpected_successes + 1 ))
+        else
+          printf "%-80s ${TESTLIB_GOOD_COLOR}FAIL EXPECTED${TESTLIB_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
+          expected_failures=$(( expected_failures + 1 ))
+        fi
+      else
+        if [ "${test_status}" = "0" ]; then
+          printf "%-80s ${TESTLIB_WARN_COLOR}UNEXPECTED SUCCESS T2${TESTLIB_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
+          unexpected_successes=$(( unexpected_successes + 1 ))
+        else
+          printf "%-80s ${TESTLIB_BAD_COLOR}SHOULD HAVE FAILED ELSEWHERE${TESTLIB_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
+          failures=$(( failures + 1 ))
+          testlib_print_test_trace
+        fi
+      fi
+    else
+      # Handle missing call to begin_fail_zone
+      printf "%-80s ${TESTLIB_BAD_COLOR}EXPECTED FAILURE SETUP ERROR${TESTLIB_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
+      failures=$(( failures + 1 ))
+    fi
+    # Remove account file
+    rm -f "${TRASHDIR}/.expected_failure"
   elif [ "${required_fail}" -eq 0 ] && [ "$test_status" -eq 0 ]; then
     printf "%-80s ${TESTLIB_GOOD_COLOR}OK${TESTLIB_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
-  elif [ "${expected_failure}" -eq 1 ]; then
-    printf "%-80s ${TESTLIB_GOOD_COLOR}FAIL EXPECTED${TESTLIB_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
-    expected_failures=$(( expected_failures + 1 ))
   else
+    printf "%-80s ${TESTLIB_BAD_COLOR}FAILED${TESTLIB_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
     failures=$(( failures + 1 ))
-    if [ "${required_fail}" -eq 1 ]; then
-      printf "%-80s ${TESTLIB_BAD_COLOR}SHOULD HAVE FAILED${TESTLIB_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
-    else
-      printf "%-80s ${TESTLIB_BAD_COLOR}FAILED${TESTLIB_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
-    fi
-
-    local test_output
-    # Darling has issue printing out too fast https://github.com/darlinghq/darling/issues/640
-    # This perl command can slow it down enough that it works on my computer
-    if command -v sw_vers &> /dev/null && [ "$(sw_vers -buildVersion)" = "Darling" ]; then
-      find_open_fd test_output
-      # Technically, the process substitution happens before the eval, but that
-      # doesn't matter in the end, still works correctly.
-      eval "exec ${test_output}> >(perl -e 'print && select undef,undef,undef,0.0001 while <>;' >&2 )"
-    elif [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "41" ]; then
-      exec {test_output}>&2
-    else
-      find_open_fd test_output
-      eval "exec ${test_output}>&2"
-    fi
-
-    (
-      if [ "${TESTLIB_REDIRECT_OUTPUT}" -ge "1" ]; then
-
-        if [ "${err}" = "${xtrace}" ]; then
-          echo "-- stderr --"
-        else
-          echo "-- xtrace --"
-        fi
-        grep -v -e $'^\+[^\t]*\tend_test' \
-                -e $'^\+[^\t]*\tset +x -e' <"${xtrace}" |
-          sed $'s|^[^+]| \t&|' |
-          column -c1 -s $'\t' -t |
-          sed 's/^/    /'
-      fi
-      if [ "${TESTLIB_REDIRECT_OUTPUT}" -ge "2" ]; then
-        if [ "${err}" != "${xtrace}" ]; then
-          echo "-- stderr --"
-          sed 's/^/    /' <"${err}"
-        fi
-      fi
-      if [ "${TESTLIB_REDIRECT_OUTPUT}" -ge "3" ]; then
-        echo "-- stdout --"
-        sed 's/^/    /' <"${out}"
-      fi
-      echo "-- EOF $test_description --"
-    ) 1>&${test_output}
-
-    # Close fd test_output, which will end perl if its running
-    if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "41" ]; then
-      exec {test_output}>&-
-    else
-      eval "exec ${test_output}>&-"
-    fi
+    testlib_print_test_trace
   fi
 
   if [ "${tracking_touched_files-}" = "1" ]; then
@@ -612,6 +605,58 @@ end_test ()
   if [ "${TESTLIB_STOP_AFTER_FAILS-0}" != "0" ] && [ "${failures}" -ge "${TESTLIB_STOP_AFTER_FAILS}" ]; then
     # Skip the rest of the tests.
     TESTLIB_SKIP_TESTS='.*'
+  fi
+}
+
+function testlib_print_test_trace()
+{
+  local test_output
+  # Darling has issue printing out too fast https://github.com/darlinghq/darling/issues/640
+  # This perl command can slow it down enough that it works on my computer
+  if command -v sw_vers &> /dev/null && [ "$(sw_vers -buildVersion)" = "Darling" ]; then
+    find_open_fd test_output
+    # Technically, the process substitution happens before the eval, but that
+    # doesn't matter in the end, still works correctly.
+    eval "exec ${test_output}> >(perl -e 'print && select undef,undef,undef,0.0001 while <>;' >&2 )"
+  elif [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "41" ]; then
+    exec {test_output}>&2
+  else
+    find_open_fd test_output
+    eval "exec ${test_output}>&2"
+  fi
+
+  (
+    if [ "${TESTLIB_REDIRECT_OUTPUT}" -ge "1" ]; then
+
+      if [ "${err}" = "${xtrace}" ]; then
+        echo "-- stderr --"
+      else
+        echo "-- xtrace --"
+      fi
+      grep -v -e $'^\+[^\t]*\tend_test' \
+              -e $'^\+[^\t]*\tset +x -e' <"${xtrace}" |
+        sed $'s|^[^+]| \t&|' |
+        column -c1 -s $'\t' -t |
+        sed 's/^/    /'
+    fi
+    if [ "${TESTLIB_REDIRECT_OUTPUT}" -ge "2" ]; then
+      if [ "${err}" != "${xtrace}" ]; then
+        echo "-- stderr --"
+        sed 's/^/    /' <"${err}"
+      fi
+    fi
+    if [ "${TESTLIB_REDIRECT_OUTPUT}" -ge "3" ]; then
+      echo "-- stdout --"
+      sed 's/^/    /' <"${out}"
+    fi
+    echo "-- EOF $test_description --"
+  ) 1>&${test_output}
+
+  # Close fd test_output, which will end perl if its running
+  if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "41" ]; then
+    exec {test_output}>&-
+  else
+    eval "exec ${test_output}>&-"
   fi
 }
 

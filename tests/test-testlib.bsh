@@ -16,6 +16,7 @@ begin_expected_fail_test "Test Expected Fail"
 
   echo "Failing test ${@+${@}}"
 
+  begin_fail_zone
   false
 )
 end_test
@@ -88,10 +89,11 @@ begin_test "Run actual failing tests"
 
   summary_file="${TESTDIR}/quiz-testlib.bsh"
 
-  # There should be three failures!
-  [ "$(awk '{print $2}' "${summary_file}")" -eq 3 ]
+  # There should be 5 failures and 2 unexpected successes!
+  [ "$(awk '{print $2" "$3}' "${summary_file}")" = "5 2" ]
 )
 end_test
+
 
 begin_test "Test TESTLIB_STOP_AFTER_FAILS"
 (
@@ -104,10 +106,25 @@ begin_test "Test TESTLIB_STOP_AFTER_FAILS"
 
   TESTLIB_STOP_AFTER_FAILS=1 TESTLIB_SUMMARY_DIR=${TESTDIR} "${THIS_TEST_DIR}/quiz-testlib.bsh" 2>&1 || :
   # There should be 1 failure, 2 skips!
-  [ "$(awk '{print $2" "$6}' "${summary_file}")" = "1 2" ]
+  [ "$(awk '{print $2" "$6}' "${summary_file}")" = "1 6" ]
 
   TESTLIB_STOP_AFTER_FAILS=2 TESTLIB_SUMMARY_DIR=${TESTDIR} "${THIS_TEST_DIR}/quiz-testlib.bsh" 2>&1 || :
   # There should be 2 failure, 1 skips!
-  [ "$(awk '{print $2" "$6}' "${summary_file}")" = "2 1" ]
+  [ "$(awk '{print $2" "$6}' "${summary_file}")" = "2 5" ]
+)
+end_test
+
+begin_expected_fail_test "Test expected to fail end_fail_zone"
+(
+  setup_test
+
+  begin_fail_zone
+  true
+  end_fail_zone
+
+  true
+
+  begin_fail_zone
+  false
 )
 end_test
