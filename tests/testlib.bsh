@@ -3,9 +3,9 @@
 #*# tests/testlib
 
 #**
-# ============
-# Test Library
-# ============
+# ================
+# VSI Test Library
+# ================
 #
 # .. default-domain:: bash
 #
@@ -13,9 +13,29 @@
 #
 # Simple shell command language test library
 #
-# .. rubric:: Usage
+# :Copyright: Original version: (c) 2011-13 by Ryan Tomayko <http://tomayko.com>
 #
-# . testlib.bsh
+#             License: MIT
+# :Author: Ryan Tomayko
+#
+# ## Writing unit tests
+#
+# Test Lib gives you are number of basic unit test functionality from bash, including:
+#
+# - Running tests in subshells to prevent environment variable pollution.
+# - An automatically self deleting :envvar:`TRASHDIR` for all the tests
+# - An automatically self deleting :envvar:`TESTDIR` for each individual test
+# - A tally of successful run and failed tests, and additionally expected failures, unexpected successes, required failures, and skipped tests
+# - Individual est times :envvar:`TESTLIB_SHOW_TIMING`
+# - :func:`setup` - A user defined function run before the first test
+# - :func:`teardown` - A user defined function after the last test
+# - Keep temporary directories for debugging :envvar:`TESTLIB_KEEP_TEMP_DIRS`
+# - Pause before deleting temporary directories if there is is a failure, for inspection :envvar:`TESTLIB_KEEP_PAUSE_AFTER_ERROR`
+# - Run only a single test by it's description :envvar:`TESTLIB_RUN_SINGLE_TEST`
+# - Regular expression to skip tests by description :envvar:`TESTLIB_SKIP_TESTS`
+# - Control stderr/stdout redirection :envvar:`TESTLIB_REDIRECT_OUTPUT`
+# - Stop testing after ``N`` failures :envvar:`TESTLIB_STOP_AFTER_FAILS`
+# - Disable custom PS4 in trace :envvar:`TESTLIB_NO_PS4`
 #
 # .. rubric:: Example
 #
@@ -37,10 +57,7 @@
 #   )
 #   end_test
 #
-#   When a test fails its stdout and stderr are shown.
-#
-# .. note::
-#   Tests must 'set -e' within the subshell block or failed assertions will not cause the test to fail and the result may be misreported. While this is not required, most tests will have this on.
+#   Any command that evaluates to false "fails" the test. When a test fails its stdout, stderr, and call trace are printed out.
 #
 # .. rubric:: Bugs
 #
@@ -50,19 +67,23 @@
 #
 #     runtests 2>&1 | less -R
 #
-# :Copyright: Original version: (c) 2011-13 by Ryan Tomayko <http://tomayko.com>
+# ## Test status
 #
-#             License: MIT
-# :Author: Ryan Tomayko
-# :Modification History: Andy Neff
+# Every test will print out a line with its name, and the status of the test run.
 #
-#              * Added :func:`begin_expected_fail_test`
-#              * Added optional :func:`setup`/:func:`teardown` functions
-#              * Removed PATH
-#              * Added robodoc documentation
-#              * Use pushd/popd for each test instead of cd
-#              * Auto prepend filename to description
-#              * Added custom PS4
+# Possible results of a test:
+#
+# - ``OK`` - The test passed!
+# - ``FAILED`` - The test did not pass. Trace is printed out for debugging.
+# - ``SETUP FAILURE`` - Each test must call :func:`setup_test`, and it was not detected for this test.
+# - ``SKIPPED`` - The test was not run.
+# - ``FAIL REQUIRED`` - A test successfully failed as it is required to.
+# - ``FAIL EXPECTED`` - A test successfully failed as it is expected to.
+# - ``SHOULD HAVE FAILED ELSEWHERE`` - A required or expected failed test failed in an the wrong area of the code. There is something wrong with the test, and a trace is printed out for debugging.
+# - ``SHOULD HAVE FAILED`` - A required failed test did not fail. There is something wrong with the test, and a trace is printed out for debugging.
+# - ``UNEXPECTED SUCCESS`` - An expected failed test never actually failed. This doesn't count as a failure, but a middle ground in its own category.
+# - ``REQUIRED FAILURE SETUP ERROR`` - A required failed test did not call :func:`begin_fail_zone`, and is considered setup incorrectly.
+# - ``EXPECTED FAILURE SETUP ERROR`` - An expected failed test did not call :func:`begin_fail_zone`, and is considered setup incorrectly.
 #**
 
 if [ -z ${VSI_COMMON_DIR+set} ]; then
@@ -110,8 +131,6 @@ skipped=0
 #
 # .. seealso::
 #   :envvar:`TESTDIR`
-#
-# :Author: Ryan Tomayko
 #**
 
 #**
@@ -123,8 +142,6 @@ skipped=0
 #
 # .. seealso::
 #   :envvar:`TRASHDIR`
-#
-# :Author: Ryan Tomayko
 #**
 
 #**
@@ -233,14 +250,7 @@ skipped=0
 #
 # Automatically called on exit by trap.
 #
-# Checks to see if teardown is defined, and calls it. teardown is typically a function, alias, or something that makes sense to call.
-#
-# :Author: Ryan Tomaydo
-# :Modification History: Andy Neff
-#
-#             * Added :func:`setup` cleanup
-#             * Added :func:`teardown`
-#             * Added :envvar:`TESTLIB_KEEP_TEMP_DIRS` flags
+# Checks to see if :func:`teardown` is defined, and calls it. :func:`teardown` is typically a function, alias, or something that makes sense to call.
 #**
 atexit ()
 {
@@ -405,8 +415,6 @@ _begin_common_test ()
 #
 # .. seealso::
 #   :func:`end_test`
-#
-# :Author: Ryan Tomayko
 #**
 begin_test ()
 {
@@ -421,7 +429,7 @@ begin_test ()
 #
 # .. rubric:: Usage
 #
-# Define the beginning of a test that is expected to fail
+# Define the beginning of a test that is expected to fail. Failures may only occur in "fail zones" denoted by :func:`begin_fail_zone` and :func:`end_fail_zone`
 #**
 begin_expected_fail_test()
 {
@@ -430,11 +438,58 @@ begin_expected_fail_test()
   _expected_failure=1 _begin_common_test ${@+"${@}"}
 }
 
+#**
+# .. function:: begin_fail_zone
+#
+# Start a fail zone
+#
+# In practice, having an expected fail or required fail leads to the possibility of a test failing somewhere you don't expect it to. For this reason, fail zones must be denoted in order for :func:`begin_expected_fail_test` and :func:`begin_required_fail_test` test to to succeed, and the the failures must occur in them only. If a test a failure happens outside the fail zone, the test will be marked as a failure, with the message ``SHOULD HAVE FAILED ELSEWHERE``.
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
+#   begin_expected_fail_test "Some test"
+#   (
+#     setup_test
+#     # Failing here would result in failure
+#     begin_fail_zone
+#     false is ok here
+#   )
+#**
 begin_fail_zone()
 {
   echo 1 > "${TRASHDIR}/.testlib_failure_zone"
 }
 
+#**
+# .. function:: end_fail_zone
+#
+# End a fail zone
+#
+# While not common, it might be possible to have a test that is likely to fail in one of many places, for this reason a fail zone can be turned off, before being turned on again.
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
+#   begin_required_fail_test "Some test"
+#   (
+#     setup_test
+#     true something
+#
+#     begin_fail_zone
+#     maybe_false
+#     end_fail_zone
+#
+#     true again
+#
+#     begin_fail_zone
+#     false_if_other_was_not
+#     # end_fail_zone # not required at the end of the test, but won't hurt
+#   )
+#   end_test
+#**
 end_fail_zone()
 {
   echo 0 > "${TRASHDIR}/.testlib_failure_zone"
@@ -509,8 +564,6 @@ setup_test()
 #
 # .. seealso::
 #   :func:`begin_test`
-#
-# :Author: Ryan Tomayko
 #**
 end_test ()
 {
