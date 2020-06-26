@@ -720,6 +720,7 @@ if [ "${git_version_arr[0]}" -ge 2 ] && [ "${git_version_arr[1]}" -ge 9 ]; then
     local up_path="${2-}"
 
     # In git v2.9.0, this command can replace all of this work
+    # REVIEW This resolves based on remote.origin.url unfortunately
     ${GIT} submodule--helper resolve-relative-url "${gitmodules_url}" "${up_path}"
   }
 else
@@ -770,80 +771,80 @@ unset git_version_arr
 # as, just_git_functions.bsh:safe_git_submodule_update
 function git_push_check_recursive_submodules()
 {
-    local OLD_IFS="${IFS}"
-    IFS=$'\n'
-    # More robust than just_git_functions.bsh:submodule-helper-list
-    local submodule_keys=($(get_submodule_names))
-    #local tracked_shas=($(${GIT} submodule foreach --quiet 'echo "${prefix-"${displaypath}"}" ${sha1}'))
-    IFS="${OLD_IFS}"
+  local OLD_IFS="${IFS}"
+  IFS=$'\n'
+  # More robust than just_git_functions.bsh:submodule-helper-list
+  local submodule_keys=($(get_submodule_names))
+  #local tracked_shas=($(${GIT} submodule foreach --quiet 'echo "${prefix-"${displaypath}"}" ${sha1}'))
+  IFS="${OLD_IFS}"
 
-    if [ -z "${unpushed_tracked_commit+x}" ]; then
-      local recursive_index=0 # HACKY
-      local unpushed_tracked_commit=0
-    else
-      local recursive_index=$((recursive_index+1))
+  if [ -z "${unpushed_tracked_commit+x}" ]; then
+    local recursive_index=0 # HACKY
+    local unpushed_tracked_commit=0
+  else
+    local recursive_index=$((recursive_index+1))
+  fi
+
+  for sm_key in ${submodule_keys[@]+"${submodule_keys[@]}"}; do
+    local sm_path="$(${GIT} config -f .gitmodules ${sm_key}.path)"
+    local sm_name="${sm_key#submodule.}"
+    # Remove trailing slash
+    sm_path="${sm_path%/}"
+    local tracked_sha="$(${GIT} submodule status --cached "${sm_path}" | cut -c2- | awk '{print $1}')"
+    local submodule_url="$(${GIT} config -f "${PWD}"/.gitmodules "${sm_key}".url)"
+    # URLs/paths relative to the CWD must either start with ./ or ../
+    # according to git. This is how git:v2.16.0:git-submodule.sh checks for
+    # this
+    if [[ "${submodule_url}" == "./"* ]] || [[ "${submodule_url}" == "../"* ]]; then
+      # from https://github.com/git/git/blob/v2.16.0/git-submodule.sh#L1060
+      # rewrite foo/bar as ../.. to find path from
+      # submodule work tree to superproject work tree
+      up_path="$(printf '%s\n' "$sm_path" | sed "s/[^/][^/]*/../g")"
+      # guarantee a trailing /
+      up_path=${up_path%/}/
+      # path from submodule work tree to submodule origin repo
+      sub_origin_url="$(submodule-helper-resolve-relative-url "${submodule_url}" "${up_path}")"
+      submodule_url="${sub_origin_url}"
     fi
 
-    for sm_key in ${submodule_keys[@]+"${submodule_keys[@]}"}; do
-      local sm_path="$(${GIT} config -f .gitmodules ${sm_key}.path)"
-      local sm_name="${sm_key#submodule.}"
-      # Remove trailing slash
-      sm_path="${sm_path%/}"
-      local tracked_sha="$(${GIT} submodule status --cached "${sm_path}" | cut -c2- | awk '{print $1}')"
-      local submodule_url="$(${GIT} config -f "${PWD}"/.gitmodules "${sm_key}".url)"
-      # URLs/paths relative to the CWD must either start with ./ or ../
-      # according to git. This is how git:v2.16.0:git-submodule.sh checks for
-      # this
-      if [[ "${submodule_url}" == "./"* ]] || [[ "${submodule_url}" == "../"* ]]; then
-        # from https://github.com/git/git/blob/v2.16.0/git-submodule.sh#L1060
-        # rewrite foo/bar as ../.. to find path from
-        # submodule work tree to superproject work tree
-        up_path="$(printf '%s\n' "$sm_path" | sed "s/[^/][^/]*/../g")"
-        # guarantee a trailing /
-        up_path=${up_path%/}/
-        # path from submodule work tree to submodule origin repo
-        sub_origin_url="$(submodule-helper-resolve-relative-url "${submodule_url}" "${up_path}")"
-        submodule_url="${sub_origin_url}"
-      fi
-
-      # If the url is a relative URL/path to a directory then make it an
-      # absolute path because the path returned by git config is relative to
-      # the PWD, not the submodule path... (i know there could be false
-      # positives...not sure what to do about that). If I could go into the
-      # submodule and run git remote -v, that would give me the correct
-      # relative URL
-      # ALTERNATIVELY prefix the proper number of ../
-      if [ "${submodule_url:0:1}" != "/" ] && [ -d "${submodule_url}" ]; then
-          submodule_url="$(realpath "${submodule_url}")"
-      fi
-
-      pushd "${sm_path}" &>/dev/null
-        # This is my equivalent to "git submodule sync". It uses a specific remote
-        # that it not one of the defaults to handle issue #186
-        ${GIT} remote add "${JUST_GIT_UPSTREAM-just_upstream}" "${submodule_url}" &> /dev/null || \
-          ${GIT} remote set-url "${JUST_GIT_UPSTREAM-just_upstream}" "${submodule_url}"
-
-        ${GIT} fetch "${JUST_GIT_UPSTREAM-just_upstream}"
-
-        # git branch -r --contains SHA will show a list of remote/branch refs
-        # that contain a SHA. If no remote/branch refs are returned, this means
-        # the commit has not been pushed
-        if [ "$(${GIT} branch -r --contains "${tracked_sha}" | grep "^  ${JUST_GIT_UPSTREAM-just_upstream}")" = "" ]; then
-          echo "WARNING The commit tracked by the parent repository of the"
-          echo "submodule, '${sm_name}', has not been pushed to the"
-          echo "remote URL tracked by the parent repository:"
-          echo "  ${submodule_url}"
-          echo
-          unpushed_tracked_commit=1
-        fi
-
-        git_push_check_recursive_submodules
-      popd &>/dev/null
-    done
-
-    if [ "${recursive_index}" -eq 0 ]; then
-      return ${unpushed_tracked_commit}
+    # If the url is a relative URL/path to a directory then make it an
+    # absolute path because the path returned by git config is relative to
+    # the PWD, not the submodule path... (i know there could be false
+    # positives...not sure what to do about that). If I could go into the
+    # submodule and run git remote -v, that would give me the correct
+    # relative URL
+    # ALTERNATIVELY prefix the proper number of ../
+    if [ "${submodule_url:0:1}" != "/" ] && [ -d "${submodule_url}" ]; then
+        submodule_url="$(realpath "${submodule_url}")"
     fi
+
+    pushd "${sm_path}" &>/dev/null
+      # This is my equivalent to "git submodule sync". It uses a specific remote
+      # that it not one of the defaults to handle issue #186
+      ${GIT} remote add "${JUST_GIT_UPSTREAM-just_upstream}" "${submodule_url}" &> /dev/null || \
+        ${GIT} remote set-url "${JUST_GIT_UPSTREAM-just_upstream}" "${submodule_url}"
+
+      ${GIT} fetch "${JUST_GIT_UPSTREAM-just_upstream}"
+
+      # git branch -r --contains SHA will show a list of remote/branch refs
+      # that contain a SHA. If no remote/branch refs are returned, this means
+      # the commit has not been pushed
+      if [ "$(${GIT} branch -r --contains "${tracked_sha}" | grep "^  ${JUST_GIT_UPSTREAM-just_upstream}")" = "" ]; then
+        echo "WARNING The commit tracked by the parent repository of the"
+        echo "submodule, '${sm_name}', has not been pushed to the"
+        echo "remote URL tracked by the parent repository:"
+        echo "  ${submodule_url}"
+        echo
+        unpushed_tracked_commit=1
+      fi
+
+      git_push_check_recursive_submodules
+    popd &>/dev/null
+  done
+
+  if [ "${recursive_index}" -eq 0 ]; then
+    return ${unpushed_tracked_commit}
+  fi
 }
 
 #**
