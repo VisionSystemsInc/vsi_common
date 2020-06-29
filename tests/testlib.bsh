@@ -3,9 +3,9 @@
 #*# tests/testlib
 
 #**
-# ================
-# VSI Test Library
-# ================
+# ===========
+# VSI Testlib
+# ===========
 #
 # .. default-domain:: bash
 #
@@ -16,11 +16,10 @@
 # :Copyright: Original version: (c) 2011-13 by Ryan Tomayko <http://tomayko.com>
 #
 #             License: MIT
-# :Author: Ryan Tomayko
 #
 # ## Writing unit tests
 #
-# Test Lib gives you a number of basic unit test functionality from bash, including:
+# Testlib gives you a number of basic unit test functionality from bash, including:
 #
 # - Running tests in subshells to prevent environment variable pollution.
 # - An automatically self deleting :envvar:`TRASHDIR` for all the tests
@@ -35,10 +34,11 @@
 # - Regular expression to skip tests by description: :envvar:`TESTLIB_SKIP_TESTS`
 # - Control stderr/stdout redirection :envvar:`TESTLIB_REDIRECT_OUTPUT`
 # - Stop testing after ``N`` failures :envvar:`TESTLIB_STOP_AFTER_FAILS`
-# - Disable custom PS4 in trace :envvar:`TESTLIB_NO_PS4`
+# - Custom PS4 in trace using :envvar:`TESTLIB_PS4`
 # - Ability to conditionally skip a test by calling :func:`skip_next_test` in any condition check
 # - Track files outside the :envvar:`TRASHDIR` with :func:`ttouch` so that they will be automatically deleted during cleanup.
 # - Other helper functions like :func:`not`, :func:`not_s`, :func:`test_utils.bsh check_a`, :func:`test_utils.bsh check_ra`, :func:`test_utils.bsh contiguous_a`
+# - Auto discover and run tests script: :file:`run_tests`
 #
 # .. rubric:: Example
 #
@@ -229,9 +229,9 @@ skipped=0
 : ${TESTLIB_REDIRECT_OUTPUT=3}
 
 #**
-# .. envvar:: TESTLIB_NO_PS4
+# .. envvar:: TESTLIB_PS4
 #
-# If set, will disable the custom PS4 output. Useful for some coverage tools
+# Optionally set a custom PS4 output for trace output on test errors. If unset, the testlib default is use: ``+${BASH_SOURCE[0]##*/}:${LINENO})\t``
 #
 # :Default: *unset*
 #**
@@ -304,13 +304,15 @@ atexit ()
 trap_chain "atexit" EXIT
 
 
-if [ -z "${TESTLIB_NO_PS4+set}" ]; then
+if [ -z "${TESTLIB_PS4+set}" ]; then
   if declare -p BASH_SOURCE &> /dev/null; then
     PS4=$'+${BASH_SOURCE[0]##*/}:${LINENO})\t'
   else # Else sh probably
     # Not as accurate, but better than nothing
     PS4=$'+${0##*/}:${LINENO})\t'
   fi
+else
+  PS4="${TESTLIB_PS4}"
 fi
 
 # Common code for begin tests

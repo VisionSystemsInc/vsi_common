@@ -9,7 +9,7 @@ function caseify()
   shift 1
 
   : ${TESTLIB_PARALLEL=$(nproc)}
-  export TESTLIB_NO_PS4=1
+  export TESTLIB_PS4='+'
   export TESTLIB_REDIRECT_OUTPUT=0
 
   case "${cmd}" in
