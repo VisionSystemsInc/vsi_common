@@ -15,21 +15,25 @@ RUN set -euxv; \
           findutils; \
     elif command -v apt-get; then \
       apt-get update; \
-      DEBIAN_FRONTEND=noninteractive  apt-get install --no-install-recommends -y \
-              # cmp for unit tests
-              diffutils \
-              # nm for lwhich
-              binutils \
-              # column
-              bsdmainutils \
-              # xxd for unit tests
-              vim; \
+      DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
+             # cmp for unit tests
+             diffutils \
+             # nm for lwhich
+             binutils \
+             # column for unit tests
+             bsdmainutils \
+             # xxd for unit tests
+             vim; \
     elif command -v zypper; then \
-      zypper -n install -y \
-                # nm for lwhich
-                binutils \
-                # xxd for unit tests
-                vim; \
+      zypper --gpg-auto-import-keys --non-interactive install -y \
+             # column for unit tests
+             util-linux \
+             # cmp for unit tests
+             diffutils \
+             # nm for lwhich
+             binutils \
+             # xxd for unit tests
+             vim; \
     elif [ -f /etc/os-release ]; then \
       source /etc/os-release; \
       if [ "${ID}" = "clear-linux-os" ]; then \
