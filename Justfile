@@ -50,6 +50,21 @@ function caseify()
       Just-docker-compose run "bash_test_${version}" ${@+"${@}"}
       extra_args+=$#
       ;;
+
+    build_oses) # Build images for other OSes
+      local VSI_COMMON_TEST_OS
+      local VSI_COMMON_TEST_OS_TAG_NAME
+      for VSI_COMMON_TEST_OS in ${VSI_COMMON_TEST_OSES[@]+"${VSI_COMMON_TEST_OSES[@]}"}; do
+        export VSI_COMMON_TEST_OS
+        # sanitize tag name
+        VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS//:/_}
+        export VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS_TAG_NAME//@/_}
+        Just-docker-compose build os
+      done
+      ;;
+    test_os) # Run test in docker image on specific os
+
+      ;;
     ci_load) # Load ci
       justify docker-compose_ci-load "${VSI_COMMON_DIR}/docker-compose.yml" "bash_test_${1}"
       extra_args=1
