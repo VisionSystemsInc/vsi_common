@@ -58,12 +58,23 @@ function caseify()
         export VSI_COMMON_TEST_OS
         # sanitize tag name
         VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS//:/_}
+        VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS_TAG_NAME////_}
         export VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS_TAG_NAME//@/_}
         Just-docker-compose build os
       done
       ;;
-    test_os) # Run test in docker image on specific os
-
+    test_oses) # Run test in docker image on specific os
+      local VSI_COMMON_TEST_OS
+      local VSI_COMMON_TEST_OS_TAG_NAME
+      for VSI_COMMON_TEST_OS in ${VSI_COMMON_TEST_OSES[@]+"${VSI_COMMON_TEST_OSES[@]}"}; do
+        export VSI_COMMON_TEST_OS
+        # sanitize tag name
+        VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS//:/_}
+        VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS_TAG_NAME////_}
+        export VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS_TAG_NAME//@/_}
+        Just-docker-compose run os ${@+"${@}"}
+      done
+      extra_args+=$#
       ;;
     ci_load) # Load ci
       justify docker-compose_ci-load "${VSI_COMMON_DIR}/docker-compose.yml" "bash_test_${1}"

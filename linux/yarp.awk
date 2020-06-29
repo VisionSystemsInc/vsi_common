@@ -15,7 +15,7 @@ function get_path()
 {
   result=""
   sep="" # Make it so the first key doesn't have a period before it
-  for (join_i = 0; join_i < length(indents); ++join_i)
+  for (join_i = 0; join_i < length_sequences; ++join_i)
   {
     if (sequences[join_i] != -1)
     {
@@ -36,18 +36,19 @@ function process_sequence(sequence, key, indents, paths, sequences)
 {
   if ( sequence )
   {
-    sequences[length(sequences)-1]++
+    sequences[length_sequences-1]++
 
     if ( key != "\"\"" )
     {
       indent += 2
-      indents[length(indents)] = indent
-      paths[length(paths)] = key
-      sequences[length(sequences)] = -1
+      indents[length_sequences] = indent
+      paths[length_sequences] = key
+      sequences[length_sequences] = -1
+      ++length_sequences
     }
   }
   else
-    sequences[length(sequences)-1] = -1
+    sequences[length_sequences-1] = -1
 }
 
 function get_indent(str)
@@ -81,11 +82,12 @@ function process_line(str)
   if ( indent < last_indent )
   {
     # Add sequence, because in the sequence case, it's > not >=
-    while ( length(indents) && indents[length(indents)-1] > indent) # + sequence )
+    while ( length_sequences && indents[length_sequences-1] > indent) # + sequence )
     {
-      delete indents[length(indents)-1]
-      delete paths[length(paths)-1]
-      delete sequences[length(sequences)-1]
+      delete indents[length_sequences-1]
+      delete paths[length_sequences-1]
+      delete sequences[length_sequences-1]
+      --length_sequences
     }
     last_indent = indent
   }
@@ -93,23 +95,25 @@ function process_line(str)
   # Indenting
   if ( indent > last_indent )
   {
-    indents[length(indents)] = indent
-    paths[length(paths)] = key
-    sequences[length(sequences)] = -1
+    indents[length_sequences] = indent
+    paths[length_sequences] = key
+    sequences[length_sequences] = -1
+    ++length_sequences
 
     process_sequence(sequence, key, indents, paths, sequences)
   } # Same indent
   else if (indent == last_indent )
   {
     # Corner case
-    if ( length(paths) == 0)
+    if ( length_sequences == 0)
     {
-      paths[0]=""
-      sequences[0]=-1
-      indents[0]=0
+      paths[0] = ""
+      sequences[0] = -1
+      indents[0] = 0
+      length_sequences = 1
     }
 
-    paths[length(paths)-1] = key
+    paths[length_sequences-1] = key
 
     process_sequence(sequence, key, indents, paths, sequences)
   }
@@ -186,6 +190,8 @@ BEGIN {
   delete paths[0]
   delete indents[0]
   delete sequences[0]
+
+  length_sequences = 0
 
   last_indent = 0
 }
