@@ -20,22 +20,25 @@
 #
 # ## Writing unit tests
 #
-# Test Lib gives you are number of basic unit test functionality from bash, including:
+# Test Lib gives you a number of basic unit test functionality from bash, including:
 #
 # - Running tests in subshells to prevent environment variable pollution.
 # - An automatically self deleting :envvar:`TRASHDIR` for all the tests
-# - An automatically self deleting :envvar:`TESTDIR` for each individual test
-# - A tally of successful run and failed tests, and additionally expected failures, unexpected successes, required failures, and skipped tests
-# - Individual est times :envvar:`TESTLIB_SHOW_TIMING`
+# - An automatically self deleting :envvar:`TESTDIR` for each individual test (in the :envvar:`TRASHDIR`)
+# - A tally of successfully run and failed tests, and additionally expected failures, unexpected successes, required failures, and skipped tests
+# - Individual est times: :envvar:`TESTLIB_SHOW_TIMING`
 # - A user defined :func:`setup` function run before the first test in a file
 # - A user defined :func:`teardown` function run after the last test in a file
-# - Keep temporary directories for debugging :envvar:`TESTLIB_KEEP_TEMP_DIRS`
-# - Pause before deleting temporary directories if there is is a failure, for inspection :envvar:`TESTLIB_KEEP_PAUSE_AFTER_ERROR`
-# - Run only a single test by it's description :envvar:`TESTLIB_RUN_SINGLE_TEST`
-# - Regular expression to skip tests by description :envvar:`TESTLIB_SKIP_TESTS`
+# - Keep temporary directories for debugging: :envvar:`TESTLIB_KEEP_TEMP_DIRS`
+# - Pause before deleting temporary directories if there is a failure for inspection: :envvar:`TESTLIB_KEEP_PAUSE_AFTER_ERROR`
+# - Run only a single test by its description: :envvar:`TESTLIB_RUN_SINGLE_TEST`
+# - Regular expression to skip tests by description: :envvar:`TESTLIB_SKIP_TESTS`
 # - Control stderr/stdout redirection :envvar:`TESTLIB_REDIRECT_OUTPUT`
 # - Stop testing after ``N`` failures :envvar:`TESTLIB_STOP_AFTER_FAILS`
 # - Disable custom PS4 in trace :envvar:`TESTLIB_NO_PS4`
+# - Ability to conditionally skip a test by calling :func:`skip_next_test` in any condition check
+# - Track files outside the :envvar:`TRASHDIR` with :func:`ttouch` so that they will be automatically deleted during cleanup.
+# - Other helper functions like :func:`not`, :func:`not_s`, :func:`test_utils.bsh check_a`, :func:`test_utils.bsh check_ra`, :func:`test_utils.bsh contiguous_a`
 #
 # .. rubric:: Example
 #
@@ -57,7 +60,7 @@
 #   )
 #   end_test
 #
-#   Any command that evaluates to false "fails" the test. When a test fails its stdout, stderr, and call trace are printed out.
+#   Any command that evaluates to false "fails" the test. When a test fails, its stdout, stderr, and call trace are printed out.
 #
 # .. rubric:: Bugs
 #
@@ -79,11 +82,11 @@
 # - ``SKIPPED`` - The test was not run.
 # - ``FAIL REQUIRED`` - A test successfully failed as it is required to.
 # - ``FAIL EXPECTED`` - A test successfully failed as it is expected to.
-# - ``SHOULD HAVE FAILED ELSEWHERE`` - A required or expected failed test failed in an the wrong area of the code. There is something wrong with the test, and a trace is printed out for debugging.
-# - ``SHOULD HAVE FAILED`` - A required failed test did not fail. There is something wrong with the test, and a trace is printed out for debugging.
-# - ``UNEXPECTED SUCCESS`` - An expected failed test never actually failed. This doesn't count as a failure, but a middle ground in its own category.
-# - ``REQUIRED FAILURE SETUP ERROR`` - A required failed test did not call :func:`begin_fail_zone`, and is considered setup incorrectly.
-# - ``EXPECTED FAILURE SETUP ERROR`` - An expected failed test did not call :func:`begin_fail_zone`, and is considered setup incorrectly.
+# - ``SHOULD HAVE FAILED ELSEWHERE`` - A required or expected to fail test failed in an the wrong area of the code. There is something wrong with the test, and a trace is printed out for debugging.
+# - ``SHOULD HAVE FAILED`` - A required to fail test did not fail. There is something wrong with the test, and a trace is printed out for debugging.
+# - ``UNEXPECTED SUCCESS`` - An expected to fail test never actually failed. This doesn't count as a failure, but a middle ground in its own category.
+# - ``REQUIRED FAILURE SETUP ERROR`` - A required to fail test did not call :func:`begin_fail_zone` and is considered setup incorrectly.
+# - ``EXPECTED FAILURE SETUP ERROR`` - An expected to fail test did not call :func:`begin_fail_zone` and is considered setup incorrectly.
 #**
 
 if [ -z ${VSI_COMMON_DIR+set} ]; then
@@ -425,11 +428,13 @@ begin_test ()
 #**
 # .. function:: begin_expected_fail_test
 #
-# Beginning of expected fail test demarcation
+# Beginning of expected to fail test demarcation
 #
 # .. rubric:: Usage
 #
-# Define the beginning of a test that is expected to fail. Failures may only occur in "fail zones" denoted by :func:`begin_fail_zone` and :func:`end_fail_zone`
+# Define the beginning of a test that is expected to fail. Failures may only occur in "fail zones" denoted by :func:`begin_fail_zone` and :func:`end_fail_zone`. When a test fails in a fail zone, it is counted as a success. If a test that was expected to fail test never fails, it counts as an "unexpected success" rather than a normal success. If the test fails outside a fail zone, it is marked as a failure.
+#
+# The typical use case for expecting a failure, is a known bug is being tested, and has not or cannot be fixed yet. For this reason, a success is counted as an "unexpected success" rather than a normal success. While unexpected successes do not cause a non-zero exit code, they can easily be notices as something that should be updated.
 #**
 begin_expected_fail_test()
 {
@@ -439,11 +444,29 @@ begin_expected_fail_test()
 }
 
 #**
+# .. function:: begin_required_fail_test
+#
+# Beginning of required to fail test demarcation
+#
+# .. rubric:: Usage
+#
+# Define the beginning of a test that is required to fail. Failures may only occur in "fail zones" denoted by :func:`begin_fail_zone` and :func:`end_fail_zone`. When a test fails in a fail zone, it is counted as a success. If a required to fail test never fails, it counts as a failure. If the test fails outside a fail zone, it is marked as a failure.
+#
+# The typical use case for requiring a failure, is testing that an exception is raise under proper circumstances.
+#**
+begin_required_fail_test()
+{
+  test_status=$? # Must be first command
+  # Override _begin_common_test default
+  _required_fail=1 _begin_common_test ${@+"${@}"}
+}
+
+#**
 # .. function:: begin_fail_zone
 #
 # Start a fail zone
 #
-# In practice, having an expected fail or required fail leads to the possibility of a test failing somewhere you don't expect it to. For this reason, fail zones must be denoted in order for :func:`begin_expected_fail_test` and :func:`begin_required_fail_test` tests to succeed, and the the failures must only occur in a fail zone. If a test a failure happens outside the fail zone, the test will be marked as a failure, with the message ``SHOULD HAVE FAILED ELSEWHERE``.
+# In practice, having an test that is expected or required to fail leads to the possibility of a test failing somewhere you don't expect it to. For this reason, fail zones must be denoted in order for :func:`begin_expected_fail_test` and :func:`begin_required_fail_test` tests to succeed, and the the failures must only occur in a fail zone. If a test a failure happens outside the fail zone, the test will be marked as a failure, with the message ``SHOULD HAVE FAILED ELSEWHERE``.
 #
 # Typically this will be called right before the last last line of a test
 #
@@ -495,22 +518,6 @@ begin_fail_zone()
 end_fail_zone()
 {
   echo 0 > "${TRASHDIR}/.testlib_failure_zone"
-}
-
-#**
-# .. function:: begin_required_fail_test
-#
-# Beginning of required fail test demarcation
-#
-# .. rubric:: Usage
-#
-# Define the beginning of a test that is required to fail
-#**
-begin_required_fail_test()
-{
-  test_status=$? # Must be first command
-  # Override _begin_common_test default
-  _required_fail=1 _begin_common_test ${@+"${@}"}
 }
 
 #**
@@ -859,7 +866,7 @@ not_s()
 #
 # Start tracking touched files
 #
-# After running :func:`track_touched_files`, any call to touch will cause that file to be added to the internal list (touched_files). Just prior to the teardown phase, all of these files will be automatically removed for your convenience.
+# After running :func:`track_touched_files`, any call to :func:`ttouch` will cause that file to be added to the internal list (touched_files). Just prior to the teardown phase, all of these files will be automatically removed for your convenience.
 #
 # .. rubric:: Example
 #
@@ -871,7 +878,7 @@ not_s()
 #   }
 #   begin_test Testing
 #   (
-#     touch /tmp/hiya
+#     ttouch /tmp/hiya
 #   )
 #   end_test
 #
