@@ -5,7 +5,8 @@
 VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 . "${VSI_COMMON_DIR}/linux/time_tools.bsh"
 
-begin_test "get_time_seconds"
+[[ ! $(date +%N) =~ ^[0-9]+$ ]] && skip_next_test
+begin_test "get_time_seconds fractional seconds"
 (
   setup_test
   time1="$(get_time_seconds)"
@@ -21,6 +22,24 @@ begin_test "get_time_seconds"
   [ "${t_diff}" -lt 8000 ]
 )
 end_test
+
+begin_test "get_time_seconds whole second"
+(
+  setup_test
+  time1="$(get_time_seconds)"
+  sleep 1
+  time2="$(get_time_seconds)"
+
+  t_diff="$(echo "${time1}" "${time2}" | awk '{printf "%.0f\n", ($2-$1)*1000}')"
+  [ "${t_diff}" -gt 990 ]
+  # 9000 is a ridiculous value, but when using an emulator on a virtual machine
+  # time delays can add up to a second or two. So basically 9000 serves as a
+  # upper bound to make sure something didn't go wrong and it's in the billions
+  # of milliseconds or something
+  [ "${t_diff}" -lt 9000 ]
+)
+end_test
+
 
 [ "${OS-}" = "Windows_NT" ] && skip_next_test
 command -v perl &> /dev/null || skip_next_test
