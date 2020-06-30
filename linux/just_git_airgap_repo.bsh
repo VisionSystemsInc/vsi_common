@@ -328,7 +328,7 @@ function _https_to_git_protocol()
 # This won't work if the git-dir is separate
 function toplevel()
 {
-   realpath "$(${GIT} rev-parse --git-dir)" | awk -F '/.git' '{print $1}'
+   real_path "$(${GIT} rev-parse --git-dir)" | awk -F '/.git' '{print $1}'
 }
 
 # Get the (relative) path from the top-level repository to the submodule
@@ -560,7 +560,7 @@ function orphan_commit_repo_map
 function add_import-repo_just_project()
 {
   # Need the abs path because we change directories when copying vsi_common
-  prep_dir="$(realpath "${1}")"
+  prep_dir="$(real_path "${1}")"
 
   # git archive external/vsi_common to ${prep_dir}/.vsi_common
   # does not include submodules, but that that's ok
@@ -720,7 +720,7 @@ if [ "${git_version_arr[0]}" -ge 2 ] && [ "${git_version_arr[1]}" -ge 9 ]; then
     local up_path="${2-}"
 
     # In git v2.9.0, this command can replace all of this work
-    # REVIEW This resolves based on remote.origin.url unfortunately
+    # This resolves based on remote.origin.url unfortunately
     ${GIT} submodule--helper resolve-relative-url "${gitmodules_url}" "${up_path}"
   }
 else
@@ -771,6 +771,8 @@ unset git_version_arr
 # as, just_git_functions.bsh:safe_git_submodule_update
 function git_push_check_recursive_submodules()
 {
+  local remote_name="${1-origin}"
+
   local OLD_IFS="${IFS}"
   IFS=$'\n'
   # More robust than just_git_functions.bsh:submodule-helper-list
@@ -796,6 +798,18 @@ function git_push_check_recursive_submodules()
     # according to git. This is how git:v2.16.0:git-submodule.sh checks for
     # this
     if [[ "${submodule_url}" == "./"* ]] || [[ "${submodule_url}" == "../"* ]]; then
+      # Ugh; all this work to to get the submodule's URL resolved without
+      # actually running sync (which modifies the repo), and here I am
+      # modifying the repo
+      # ALTERNATIVELY The other version of submodule-helper-resolve-relative-url
+      # could support a remote name
+      # ALTERNATIVELY Let it use origin and fix it up after
+      if [ "${recursive_index}" -eq 0 ] && [ "${remote_name}" != "origin" ]; then
+        local origin_url="$(${GIT} config remote.origin.url)"
+        local desired_url="$(${GIT} config remote."${remote_name}".url)"
+        ${GIT} remote set-url "${remote_name}" "${desired_url}" "${origin_url}"
+      fi
+
       # from https://github.com/git/git/blob/v2.16.0/git-submodule.sh#L1060
       # rewrite foo/bar as ../.. to find path from
       # submodule work tree to superproject work tree
@@ -805,6 +819,11 @@ function git_push_check_recursive_submodules()
       # path from submodule work tree to submodule origin repo
       sub_origin_url="$(submodule-helper-resolve-relative-url "${submodule_url}" "${up_path}")"
       submodule_url="${sub_origin_url}"
+
+      # Reset the origin's URL to its original value
+      if [ "${recursive_index}" -eq 0 ] && [ "${remote_name}" != "origin" ]; then
+        ${GIT} remote set-url "${remote_name}" "${origin_url}" "${desired_url}"
+      fi
     fi
 
     # If the url is a relative URL/path to a directory then make it an
@@ -815,7 +834,7 @@ function git_push_check_recursive_submodules()
     # relative URL
     # ALTERNATIVELY prefix the proper number of ../
     if [ "${submodule_url:0:1}" != "/" ] && [ -d "${submodule_url}" ]; then
-        submodule_url="$(realpath "${submodule_url}")"
+        submodule_url="$(real_path "${submodule_url}")"
     fi
 
     pushd "${sm_path}" &>/dev/null
