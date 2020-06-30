@@ -19,7 +19,7 @@ Testlib gives you a number of basic unit test functionality from bash, including
 - Running tests in subshells to prevent environment variable pollution.
 - An automatically self deleting :envvar:`TRASHDIR` for all the tests
 - An automatically self deleting :envvar:`TESTDIR` for each individual test (in the :envvar:`TRASHDIR`)
-- A tally of successfully run and failed tests, and additionally expected failures, unexpected successes, required failures, and skipped tests
+- A tally of successfully run and failed tests, in addition to expected failures, unexpected successes, required failures, and skipped tests
 - Individual est times: :envvar:`TESTLIB_SHOW_TIMING`
 - A user defined :func:`setup` function run before the first test in a file
 - A user defined :func:`teardown` function run after the last test in a file
@@ -72,11 +72,11 @@ Every test will print out a line with its name, and the status of the test run.
 Possible results of a test:
 
 - ``OK`` - The test passed!
-- ``FAILED`` - The test did not pass. Trace is printed out for debugging.
+- ``FAILED`` - The test did not pass. A trace is printed out for debugging.
 - ``SETUP FAILURE`` - Each test must call :func:`setup_test`, and it was not detected for this test.
 - ``SKIPPED`` - The test was not run.
-- ``FAIL REQUIRED`` - A test successfully failed as it is required to.
-- ``FAIL EXPECTED`` - A test successfully failed as it is expected to.
+- ``FAIL REQUIRED`` - A test successfully failed as it is required to. If the test succeeds, it is treated as a failed test.
+- ``FAIL EXPECTED`` - A test successfully failed as it is expected to. If the test succeeds, it is treated as an unexpected success.
 - ``SHOULD HAVE FAILED ELSEWHERE`` - A required or expected to fail test failed in an the wrong area of the code. There is something wrong with the test, and a trace is printed out for debugging.
 - ``SHOULD HAVE FAILED`` - A required to fail test did not fail. There is something wrong with the test, and a trace is printed out for debugging.
 - ``UNEXPECTED SUCCESS`` - An expected to fail test never actually failed. This doesn't count as a failure, but a middle ground in its own category.
@@ -214,9 +214,12 @@ Beginning of expected to fail test demarcation
 
 .. rubric:: Usage
 
-Define the beginning of a test that is expected to fail. Failures may only occur in "fail zones" denoted by :func:`begin_fail_zone` and :func:`end_fail_zone`. When a test fails in a fail zone, it is counted as a success. If a test that was expected to fail test never fails, it counts as an "unexpected success" rather than a normal success. If the test fails outside a fail zone, it is marked as a failure.
+Define the beginning of a test that is expected to fail. Failures may only occur in "fail zones" denoted by :func:`begin_fail_zone` and :func:`end_fail_zone`. When a test fails in a fail zone, it is counted as a success. If a test that was expected to fail never fails, it counts as an "unexpected success" rather than a normal success. If the test fails outside a fail zone, it is marked as a failure.
 
-The typical use case for expecting a failure, is a known bug is being tested, and has not or cannot be fixed yet. For this reason, a success is counted as an "unexpected success" rather than a normal success. While unexpected successes do not cause a non-zero exit code, they can easily be notices as something that should be updated.
+The typical use case for expecting a failure is when a known bug is being tested and has not or cannot be fixed yet. For this reason, a success is counted as an "unexpected success" rather than a normal success. While unexpected successes do not cause a non-zero exit code, they can easily be noticed as something that should be checked out.
+
+.. note::
+  :func:`end_fail_zone` is not typically needed.
 
 .. function:: begin_required_fail_test
 
@@ -224,15 +227,18 @@ Beginning of required to fail test demarcation
 
 .. rubric:: Usage
 
-Define the beginning of a test that is required to fail. Failures may only occur in "fail zones" denoted by :func:`begin_fail_zone` and :func:`end_fail_zone`. When a test fails in a fail zone, it is counted as a success. If a required to fail test never fails, it counts as a failure. If the test fails outside a fail zone, it is marked as a failure.
+Define the beginning of a test that is required to fail. Failures may only occur in "fail zones" denoted by :func:`begin_fail_zone` and :func:`end_fail_zone`. When a test fails in a fail zone, it is counted as a success. If a test that was required to fail never fails, it counts as a failure. If the test fails outside a fail zone, it is marked as a failure.
 
-The typical use case for requiring a failure, is testing that an exception is raise under proper circumstances. :func:`end_fail_zone` is not typically needed.
+The typical use case for requiring a failure is testing that an exception is raise under proper circumstances.
+
+.. note::
+  :func:`end_fail_zone` is not typically needed.
 
 .. function:: begin_fail_zone
 
 Start a fail zone
 
-In practice, having an test that is expected or required to fail leads to the possibility of a test failing somewhere you don't expect it to. For this reason, fail zones must be denoted in order for :func:`begin_expected_fail_test` and :func:`begin_required_fail_test` tests to succeed, and the the failures must only occur in a fail zone. If a test a failure happens outside the fail zone, the test will be marked as a failure, with the message ``SHOULD HAVE FAILED ELSEWHERE``.
+In practice, having a test that is expected or required to fail leads to the possibility of a test failing somewhere you don't expect it to. For this reason, fail zones must be denoted in order for :func:`begin_expected_fail_test` and :func:`begin_required_fail_test` tests to succeed, and the failures must only occur in a fail zone. If a failure happens outside the fail zone, the test will be marked as a failure with the message ``SHOULD HAVE FAILED ELSEWHERE``.
 
 Typically this will be called right before the last last line of a test
 
@@ -252,7 +258,7 @@ Typically this will be called right before the last last line of a test
 
 End a fail zone
 
-While not common, it might be possible to have a test that is likely to fail in one of many places, for this reason a fail zone can be turned off, before being turned on again.
+While not common, it might be possible to have a test that is likely to fail in one of many places; for this reason a fail zone can be turned off, before being turned on again.
 
 .. rubric:: Example
 
