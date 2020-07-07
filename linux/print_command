@@ -4,6 +4,8 @@ if [[ $- != *i* ]]; then
   source_once &> /dev/null && return 0
 fi
 
+source "${VSI_COMMON_DIR}/linux/findin"
+
 #*# linux/print_command
 
 #**
@@ -42,33 +44,144 @@ fi
 #   eval "$(print_command "${stuff[@]}")"
 #   or
 #   bash -c "$(print_command "${stuff[@]}")"
+#
+# .. seealso::
+#   :func:`print_command_env`
+#     Version that captures changes in the environment
 #**
 function print_command()
 {
+  _print_command ${@+"${@}"}
+  # Add a newline to the end
+  echo ""
+}
+
+function _print_command()
+{
   while [ "$#" -gt 0 ]; do
-    # if [[ ${1} =~ ^[a-zA-Z0-9_.:/=-]*$ ]]; then
     # https://unix.stackexchange.com/a/357932/123413
-    if [[ ${1} =~ ^[a-zA-Z0-9_.:/=@%^,+-]*$ ]]; then
-      printf '%s' "${1}"
+    if [[ ${1} =~ ^[a-zA-Z0-9_.:/=@%^,+-]+$ ]]; then
+      if [ "${1::1}" = "-" ]; then
+        # Printf is 1000 times slower in windows (fork cost), so only use it if
+        # you have to. The only time this is an issue, if if you use -e -E -n
+        printf '%s' "${1}"
+      else
+        echo -n "${1}"
+      fi
     else
-      printf "'${1//\'/\'\"\'\"\'}'"
+      echo -n "'${1//\'/\'\"\'\"\'}'"
     fi
     shift 1
-    [ "$#" -gt 0 ] && printf " "
+    if [ "$#" -gt 0 ]; then
+      echo -n " "
+    fi
   done
-  printf "\n"
+}
 
-  # if command -v python &> /dev/null; then
-  #   python -c "import pipes as p; import sys as s; print(' '.join([p.quote(x) for x in s.argv[1:]]))" "${@}"
-  # else
-  #   # FAR from perfect... Need to escape " and not always print ''
-  #   while [ "$#" -gt 0 ]; do
-  #     printf \'"$1"\'
-  #     shift 1
-  #     [ "$#" -gt 0 ] && printf " "
-  #   done
-  #   printf "\n"
-  # fi
+#**
+# .. function:: print_command_save_env
+#
+# Sets the saved version of the environment, to compare with when calling :func:`print_command_env`
+#
+# :func:`print_command_env` needs a before version of the environment, to compare with so it will know which environment variables changes. The only "optional variable assignments" or exported variables that will not be captures, are ones set the same value they already have.
+#**
+function print_command_save_env()
+{
+  # Create a copy of the original env
+  __print_command_export_names=($(compgen -A export))
+  __print_command_export_values=()
+  for __name in ${__print_command_export_names[@]+"${__print_command_export_names[@]}"}; do
+    __print_command_export_values+=("${!__name}")
+  done
+
+  # Now that print_command_env is setup, export print_command_env so it is
+  # available in children
+  export -f print_command_env
+}
+
+#**
+# .. function:: print_command_env
+#
+# :Arguments: ``$1``... - List of command + arguments to be echoed
+# :Output: *stdout* - A quote escaped version of the command + arguments, ready for ``eval``
+#
+# Accurately echoes out a properly escaped single string representation of a command + arguments, including any "optional variable assignments" and exported environment variables.
+#
+# When :func:`print_command_save_env` is called, the environment is saved and any changes made to the environment from then on, are captures in a call to :func:`print_command_env`
+#
+# .. rubric:: Example
+#
+# .. code:: bash
+#
+#   export A=1
+#   export B=2
+#
+#   function foo()
+#   {
+#     ${DRYRUN} some command ${@+"${@}"}
+#   }
+#
+#   print_command_save_env
+#   export DRYRUN=print_command
+#
+#   # ...
+#
+#   foo -e q=5
+#   # some command -e q=5
+#   A=2 foo -t
+#   # A=2 some command -t
+#   B=2 foo -f
+#   # some command -f
+#   unset A; foo -y
+#   # (unset A; some command -y)
+#   export A=1
+#   export C=4
+#   foo c
+#   # C=4 some command c
+#**
+function print_command_env()
+{
+  local __print_command_new_export_names=($(compgen -A export))
+  local __print_command_name
+  local __print_command_index
+  local __print_command_parentheses=0
+
+  if [ -z "${__print_command_export_names+set}" ]; then
+    echo "Warning: print_command_env called without print_command_save_env being called first" >&2
+    print_command ${@+"${@}"}
+    return
+  fi
+
+  # Look for unset variables
+  for __print_command_name in ${__print_command_export_names[@]+"${__print_command_export_names[@]}"}; do
+    __print_command_index="$(findin "${__print_command_name}" ${__print_command_new_export_names[@]+"${__print_command_new_export_names[@]}"})"
+    if [ "${__print_command_index}" = "-1" ]; then
+      if [ "${__print_command_parentheses}" = "0" ]; then
+        echo -n "("
+        __print_command_parentheses=1
+      fi
+      echo -n "unset ${__print_command_name}; "
+    fi
+  done
+
+  for __print_command_name in ${__print_command_new_export_names[@]+"${__print_command_new_export_names[@]}"}; do
+    __print_command_index="$(findin "${__print_command_name}" ${__print_command_export_names[@]+"${__print_command_export_names[@]}"})"
+    if [ "${__print_command_index}" = "-1" ] || [ "${!__print_command_name}" != "${__print_command_export_values[__print_command_index]}" ]; then
+      if [[ ${!__print_command_name} =~ ^[a-zA-Z0-9_.:/=@%^,+-]+$ ]]; then
+        echo -n "${__print_command_name}=${!__print_command_name} "
+      else
+        echo -n "${__print_command_name}='${!__print_command_name//\'/\'\"\'\"\'}' "
+      fi
+    fi
+  done
+
+  _print_command ${@+"${@}"}
+
+  if [ "${__print_command_parentheses}" = "1" ]; then
+    echo ")"
+  else
+    echo ""
+  fi
 }
 
 if [ "${BASH_SOURCE[0]}" = "${0}" ] || [ "$(basename "${BASH_SOURCE[0]}")" = "${0}" ]; then

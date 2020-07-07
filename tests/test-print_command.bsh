@@ -10,9 +10,10 @@ function common_test()
 
   [ "$(print_command)" = "" ]
   [ "$(print_command foo %s bar)" = "foo %s bar" ]
+  [ "$(print_command -n test -e foobar)" = "-n test -e foobar" ]
   [ "$(print_command 'azAZ0-9_.:/=@%^,+-')" = "azAZ0-9_.:/=@%^,+-" ]
   [ "$(print_command '!' \* \$ \# \@ \(\) \{\} \[\] \;)" = "'!' '*' '$' '#' @ '()' '{}' '[]' ';'" ]
-  [ "$(print_command echo test "this'this" "f o  o")" = "echo test 'this'\"'\"'this' 'f o  o'" ]
+  [ "$(print_command echo test "this'this" "" "f o  o")" = "echo test 'this'\"'\"'this' '' 'f o  o'" ]
 }
 
 begin_test "print_command CLI"
@@ -27,5 +28,27 @@ begin_test "print_command"
   setup_test
   . "${VSI_COMMON_DIR}/linux/print_command"
   common_test function
+)
+end_test
+
+begin_test "print_command_env"
+(
+  setup_test
+  . "${VSI_COMMON_DIR}/linux/print_command"
+
+  export A=3
+  export B=2
+  print_command_save_env
+
+  [ "$(print_command_env foo)" = "foo" ]
+  [ "$(print_command_env foo "b a  r")" = "foo 'b a  r'" ]
+  [ "$(A=3 print_command_env foo)" = "foo" ]
+  [ "$(B=3 print_command_env foo)" = "B=3 foo" ]
+  [ "$(C="b a  r" print_command_env foo)" = "C='b a  r' foo" ]
+  [ "$(unset A; print_command_env foo)" = "(unset A; foo)" ]
+  [ "$(export B="f  o o"; unset A; D=15 C="b a  r" print_command_env foo)" = "(unset A; B='f  o o' C='b a  r' D=15 foo)" ]
+
+  export print_command_env
+  [ "$(B=15 bash -c "print_command_env foo bar")" = "B=15 foo bar" ]
 )
 end_test
