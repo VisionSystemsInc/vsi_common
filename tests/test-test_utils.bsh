@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+
+. "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
+VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+. "$(dirname "${BASH_SOURCE[0]}")/test_utils.bsh"
+
+begin_test "Test check string"
+(
+  setup_test
+
+  check_str 1234567890 1234567890
+
+  function ans()
+  {
+    echo $'\e[1;31m'"ERROR"$'\e[0m'": Strings differ"
+    echo "${1}"$'\e[1;31m'"${2}"$'\e[0m'"${3}"
+    echo "${4}"$'\e[1;31m'"${5}"$'\e[0m'"${6}"
+  }
+
+  # Make sure the rv is non-zero
+  not check_str 1234567890 1234566890
+  # Middles wrong
+  [ "$(check_str 1234567890 1234566890 2>&1)" = "$(ans 123456 7 890 123456 6 890)" ]
+  [ "$(check_str 1234567890 1234576890 2>&1)" = "$(ans 12345 67 890 12345 76 890)" ]
+  [ "$(check_str 1234567890 12345890 2>&1)" = "$(ans 12345 67 890 12345 "" 890)" ]
+  [ "$(check_str 12345890 1234567890 2>&1)" = "$(ans 12345 "" 890 12345 67 890)" ]
+  [ "$(check_str 1234555890 123455567890 2>&1)" = "$(ans 1234555 "" 890 1234555 67 890)" ]
+  [ "$(check_str 1234567890 1@34567890 2>&1)" = "$(ans 1 2 34567890 1 @ 34567890)" ]
+  [ "$(check_str 1234567890 12345678^0 2>&1)" = "$(ans 12345678 9 0 12345678 ^ 0)" ]
+
+  # Beginning wrong
+  [ "$(check_str abcdef ABCdef 2>&1)" = "$(ans "" abc def "" ABC def)" ]
+  [ "$(check_str abcdef Abcdef 2>&1)" = "$(ans "" a bcdef "" A bcdef)" ]
+  [ "$(check_str abcdef bcdef 2>&1)" = "$(ans "" a bcdef "" "" bcdef)" ]
+  [ "$(check_str bcdef abcdef 2>&1)" = "$(ans "" "" bcdef "" a bcdef)" ]
+  # End wrong
+  [ "$(check_str uvwxyz uvwXYZ 2>&1)" = "$(ans uvw xyz "" uvw XYZ "")" ]
+  [ "$(check_str uvwxyz uvwxyZ 2>&1)" = "$(ans uvwxy z "" uvwxy Z "")" ]
+  [ "$(check_str uvwxyz uvwxy 2>&1)" = "$(ans uvwxy z "" uvwxy "" "")" ]
+  [ "$(check_str uvwxy uvwxyz 2>&1)" = "$(ans uvwxy "" "" uvwxy z "")" ]
+)
+end_test
