@@ -111,13 +111,21 @@ function _docs_serialize_dirs()
 
 function _sphinx_docker_compose()
 {
-  ${DRYRUN} ${DRYRUN+env} DOCS_SOURCE_DIR="${src_dir}" \
-      DOCS_DIR="${docs_dir}" \
-      VSI_COMMON_UID="${uid}" \
-      VSI_COMMON_GIDS="${gid}" \
-      JUST_SETTINGS="${JUST_PATH_ESC}/src/$(basename "${JUST_SETTINGS}")" \
-      ${DOCKER_COMPOSE} \
-         -f "${VSI_COMMON_DIR}/docker/vsi_common/docker-compose.yml" ${@+"${@}"}
+  local src_dir="${JUST_PROJECT_PREFIX}_SPHINX_SRC_DIR"
+  src_dir="${!src_dir:-${!id_project_cwd}}"
+
+  local uid="${JUST_PROJECT_PREFIX}_UID"
+  uid="${!uid-1000}"
+  local gid="${JUST_PROJECT_PREFIX}_GID"
+  gid="${!gid-1000}"
+
+  DOCS_SOURCE_DIR="${src_dir}" \
+  DOCS_DIR="${docs_dir}" \
+  VSI_COMMON_UID="${uid}" \
+  VSI_COMMON_GIDS="${gid}" \
+  JUST_SETTINGS="${JUST_PATH_ESC}/src/$(basename "${JUST_SETTINGS}")" \
+  Docker-compose \
+      -f "${VSI_COMMON_DIR}/docker/vsi_common/docker-compose.yml" ${@+"${@}"}
 }
 
 #**
@@ -231,14 +239,6 @@ function docs_defaultify()
   local docs_dir="${JUST_PROJECT_PREFIX}_SPHINX_DIR"
   docs_dir="${!docs_dir:-${!id_project_cwd}/docs}"
 
-  local src_dir="${JUST_PROJECT_PREFIX}_SPHINX_SRC_DIR"
-  src_dir="${!src_dir:-${!id_project_cwd}}"
-
-  local uid="${JUST_PROJECT_PREFIX}_UID"
-  uid="${!uid-1000}"
-  local gid="${JUST_PROJECT_PREFIX}_GID"
-  gid="${!gid-1000}"
-
   arg=$1
   shift 1
   case $arg in
@@ -317,7 +317,7 @@ function docs_defaultify()
         precompile_script="${!JUST_TEMP_ARRAY}"
       fi
 
-      _sphinx_docker_compose run --rm \
+      _sphinx_docker_compose run \
           -e SPHINXOPTS \
           -e DOCS_EXCLUDE_DIRS="$(_docs_serialize_dirs "${exclude_dirs[@]}")" \
           -e DOCS_AUTODOC_EXCLUDE_DIRS="$(_docs_serialize_dirs "${autodoc_exclude_dirs[@]}")" \
