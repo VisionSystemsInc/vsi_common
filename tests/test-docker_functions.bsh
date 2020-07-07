@@ -200,12 +200,43 @@ end_test
 begin_test "Parse docker args"
 (
   setup_test
+
+  # Normal case
   parse-docker --config=blah.json -D -v run -v /foo:/bar debian:9 bash
-  a1=(--config=blah.json -D -v)
-  a2=(-v /foo:/bar debian:9 bash)
-  cmp_elements_a docker_args a1
+  check_a docker_args --config=blah.json -D -v
   [ "${docker_command}" = "run" ]
-  cmp_elements_a docker_command_args a2
+  check_a docker_command_args -v /foo:/bar debian:9 bash
+
+  # Test all args that take an argument
+  for arg in -H -l --config --context --host --log-level --tlscacert --tlscert --tlskey; do
+    parse-docker "${arg}" foobar
+    declare -p docker_args docker_command docker_command_args
+    check_a docker_args "${arg}" foobar
+    [ "${docker_command-}" = "" ]
+    check_a docker_command_args
+
+    # Test = notation
+    parse-docker "${arg}=foobar"
+    check_a docker_args "${arg}=foobar"
+    [ "${docker_command-}" = "" ]
+    check_a docker_command_args
+  done
+
+  # Test single letter combine notation too
+  for arg in -H -l; do
+    parse-docker "${arg}foobar"
+    check_a docker_args "${arg}foobar"
+    [ "${docker_command-}" = "" ]
+    check_a docker_command_args
+  done
+
+  # Test all flags
+  for arg in -v --version --tls -D --debug --tlsverify; do
+    parse-docker "${arg}"
+    check_a docker_args "${arg}"
+    [ "${docker_command-}" = "" ]
+    check_a docker_command_args
+  done
 )
 end_test
 
