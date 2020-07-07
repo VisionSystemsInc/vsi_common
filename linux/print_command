@@ -88,15 +88,17 @@ function _print_command()
 function print_command_save_env()
 {
   # Create a copy of the original env
-  __print_command_export_names=($(compgen -A export))
-  __print_command_export_values=()
+  local __print_command_export_names=($(compgen -A export -X __print_command_copy_*))
+  local __name
+
   for __name in ${__print_command_export_names[@]+"${__print_command_export_names[@]}"}; do
-    __print_command_export_values+=("${!__name}")
+    export __print_command_copy_${__name}="${!__name}"
   done
 
   # Now that print_command_env is setup, export print_command_env so it is
   # available in children
   export -f print_command_env
+  export -f _print_command
 }
 
 #**
@@ -139,23 +141,35 @@ function print_command_save_env()
 #   foo c
 #   # C=4 some command c
 #**
+
+# Add special case for PWD
 function print_command_env()
 {
-  local __print_command_new_export_names=($(compgen -A export))
+  local __print_command_new_export_names=($(compgen -A export -X __print_command_copy_*))
+  local __print_command_new_name
   local __print_command_name
-  local __print_command_index
   local __print_command_parentheses=0
 
-  if [ -z "${__print_command_export_names+set}" ]; then
+  # Path should always beee set...
+  if [ -z "${__print_command_copy_PATH+set}" ]; then
     echo "Warning: print_command_env called without print_command_save_env being called first" >&2
-    print_command ${@+"${@}"}
-    return
+  fi
+
+  # Handle PWD, because I can
+  if [ "${PWD}" != "${__print_command_copy_PWD}" ]; then
+    if [[ ${PWD} =~ ^[a-zA-Z0-9_.:/=@%^,+-]+$ ]]; then
+      echo -n "(cd ${PWD}; "
+    else
+      echo -n "(cd '${PWD//\'/\'\"\'\"\'}'; "
+    fi
+    __print_command_parentheses=1
   fi
 
   # Look for unset variables
-  for __print_command_name in ${__print_command_export_names[@]+"${__print_command_export_names[@]}"}; do
-    __print_command_index="$(findin "${__print_command_name}" ${__print_command_new_export_names[@]+"${__print_command_new_export_names[@]}"})"
-    if [ "${__print_command_index}" = "-1" ]; then
+  for __print_command_name in $(compgen -A export __print_command_copy_); do
+    # If it is no longer an exported variable
+    __print_command_name="${__print_command_name#__print_command_copy_}"
+    if ! compgen -A export -X "!${__print_command_name}" &> /dev/null; then
       if [ "${__print_command_parentheses}" = "0" ]; then
         echo -n "("
         __print_command_parentheses=1
@@ -164,13 +178,19 @@ function print_command_env()
     fi
   done
 
-  for __print_command_name in ${__print_command_new_export_names[@]+"${__print_command_new_export_names[@]}"}; do
-    __print_command_index="$(findin "${__print_command_name}" ${__print_command_export_names[@]+"${__print_command_export_names[@]}"})"
-    if [ "${__print_command_index}" = "-1" ] || [ "${!__print_command_name}" != "${__print_command_export_values[__print_command_index]}" ]; then
-      if [[ ${!__print_command_name} =~ ^[a-zA-Z0-9_.:/=@%^,+-]+$ ]]; then
-        echo -n "${__print_command_name}=${!__print_command_name} "
+  for __print_command_new_name in ${__print_command_new_export_names[@]+"${__print_command_new_export_names[@]}"}; do
+    # Skip PWD and _, it's a special case
+    if [ "${__print_command_new_name}" = "_" -o "${__print_command_new_name}" = "PWD" -o \
+         "${__print_command_new_name}" = "SHLVL" -o "${__print_command_new_name}" = "OLDPWD" ]; then
+      continue
+    fi
+    __print_command_name="__print_command_copy_${__print_command_new_name}"
+    # If it was unset or set to a new value
+    if [ -z "${!__print_command_name+set}" ] || [ "${!__print_command_name}" != "${!__print_command_new_name}" ]; then
+      if [[ ${!__print_command_new_name} =~ ^[a-zA-Z0-9_.:/=@%^,+-]+$ ]]; then
+        echo -n "${__print_command_new_name}=${!__print_command_new_name} "
       else
-        echo -n "${__print_command_name}='${!__print_command_name//\'/\'\"\'\"\'}' "
+        echo -n "${__print_command_new_name}='${!__print_command_new_name//\'/\'\"\'\"\'}' "
       fi
     fi
   done

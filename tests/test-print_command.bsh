@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 . "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
+. "$(dirname "${BASH_SOURCE[0]}")/test_utils.bsh"
 
 VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 
@@ -8,12 +9,18 @@ function common_test()
 {
   [ "$(type -t print_command)" = "$1" ]
 
-  [ "$(print_command)" = "" ]
-  [ "$(print_command foo %s bar)" = "foo %s bar" ]
-  [ "$(print_command -n test -e foobar)" = "-n test -e foobar" ]
-  [ "$(print_command 'azAZ0-9_.:/=@%^,+-')" = "azAZ0-9_.:/=@%^,+-" ]
-  [ "$(print_command '!' \* \$ \# \@ \(\) \{\} \[\] \;)" = "'!' '*' '$' '#' @ '()' '{}' '[]' ';'" ]
-  [ "$(print_command echo test "this'this" "" "f o  o")" = "echo test 'this'\"'\"'this' '' 'f o  o'" ]
+  check_str "$(print_command)" \
+            ""
+  check_str "$(print_command foo %s bar)" \
+            "foo %s bar"
+  check_str "$(print_command -n test -e foobar)" \
+            "-n test -e foobar"
+  check_str "$(print_command 'azAZ0-9_.:/=@%^,+-')" \
+            "azAZ0-9_.:/=@%^,+-"
+  check_str "$(print_command '!' \* \$ \# \@ \(\) \{\} \[\] \;)" \
+            "'!' '*' '$' '#' @ '()' '{}' '[]' ';'"
+  check_str "$(print_command echo test "this'this" "" "f o  o")" \
+            "echo test 'this'\"'\"'this' '' 'f o  o'"
 }
 
 begin_test "print_command CLI"
@@ -40,15 +47,28 @@ begin_test "print_command_env"
   export B=2
   print_command_save_env
 
-  [ "$(print_command_env foo)" = "foo" ]
-  [ "$(print_command_env foo "b a  r")" = "foo 'b a  r'" ]
-  [ "$(A=3 print_command_env foo)" = "foo" ]
-  [ "$(B=3 print_command_env foo)" = "B=3 foo" ]
-  [ "$(C="b a  r" print_command_env foo)" = "C='b a  r' foo" ]
-  [ "$(unset A; print_command_env foo)" = "(unset A; foo)" ]
-  [ "$(export B="f  o o"; unset A; D=15 C="b a  r" print_command_env foo)" = "(unset A; B='f  o o' C='b a  r' D=15 foo)" ]
+  check_str "$(print_command_env foo)" \
+            "foo"
+  check_str "$(print_command_env foo "b a  r")" \
+            "foo 'b a  r'"
+  check_str "$(A=3 print_command_env foo)" \
+            "foo"
+  check_str "$(B=3 print_command_env foo)" \
+            "B=3 foo"
+  check_str "$(C="b a  r" print_command_env foo)" \
+            "C='b a  r' foo"
+  check_str "$(unset A; print_command_env foo)" \
+            "(unset A; foo)"
+  check_str "$(export B="f  o o"; unset A; D=15 C="b a  r" print_command_env foo)" \
+            "(unset A; B='f  o o' C='b a  r' D=15 foo)"
 
+  # Test child process
   export print_command_env
-  [ "$(B=15 bash -c "print_command_env foo bar")" = "B=15 foo bar" ]
+  check_str "$(B=15 bash -c "print_command_env foo bar")" \
+            "B=15 foo bar"
+
+  # Test cd
+  check_str "$(unset A; B=15 C="b a  r" bash -c "cd "${TRASHDIR}"; print_command_env foo bar")" \
+            "(cd ${TRASHDIR}; unset A; B=15 C='b a  r' foo bar)"
 )
 end_test
