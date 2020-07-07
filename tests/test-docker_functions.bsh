@@ -371,13 +371,65 @@ begin_test "Parse docker-compose args"
   export JUSTFILE="${TESTDIR}/Justfile"
 
   parse-docker-compose run test
+  check_a docker_compose_args
+  [ "${docker_compose_arguments}" = "run" ]
+  check_a docker_compose_arguments_args test
+
+  # Test all args that take an argument
+  for arg in -f -p -H -c --file --project-name --host --context --log-level \
+             --tlscacert --tlscert --tlskey --project-directory --env-file; do
+    parse-docker-compose "${arg}" foobar
+    check_a docker_compose_args "${arg}" foobar
+    [ "${docker_compose_arguments-}" = "" ]
+    check_a docker_compose_arguments_args
+
+    # Test = notation
+    parse-docker-compose "${arg}=foobar"
+    check_a docker_compose_args "${arg}=foobar"
+    [ "${docker_compose_arguments-}" = "" ]
+    check_a docker_compose_arguments_args
+  done
+
+  # Test single letter combine notation too
+  for arg in -f -p -H -c; do
+    parse-docker-compose "${arg}foobar"
+    check_a docker_compose_args "${arg}foobar"
+    [ "${docker_compose_arguments-}" = "" ]
+    check_a docker_compose_arguments_args
+  done
+
+  # Test all flags
+  for arg in --no-ansi -v --verbose --tls --skip-hostname-check --tlsverify --compatibility; do
+    parse-docker-compose "${arg}"
+    check_a docker_compose_args "${arg}"
+    [ "${docker_compose_arguments-}" = "" ]
+    check_a docker_compose_arguments_args
+  done
 
   parse-docker-compose --no-ansi -H=blah.json --verbose run -v /foo:/bar debian bash
-  a1=(--no-ansi -H=blah.json --verbose)
-  a2=(-v /foo:/bar debian bash)
-  cmp_elements_a docker_compose_args a1
+  check_a docker_compose_args --no-ansi -H=blah.json --verbose
   [ "${docker_compose_arguments}" = "run" ]
-  cmp_elements_a docker_compose_arguments_args a2
+  check_a docker_compose_arguments_args -v /foo:/bar debian bash
+)
+end_test
+
+begin_test "Parse docker compose project name"
+(
+  setup_test
+
+  parse-docker-compose --project-name foo
+  [ "${docker_compose_project_name}" = "foo" ]
+
+  parse-docker-compose --project-name foo run alpine
+  [ "${docker_compose_project_name}" = "foo" ]
+  parse-docker-compose -p bar run alpine
+  [ "${docker_compose_project_name}" = "bar" ]
+  parse-docker-compose -p foobar run alpine
+  [ "${docker_compose_project_name}" = "foobar" ]
+
+  # Make sure -p/--project-name wins
+  COMPOSE_PROJECT_NAME=foo parse-docker-compose -p bar run alpine
+  [ "${docker_compose_project_name}" = "bar" ]
 )
 end_test
 
