@@ -4,6 +4,91 @@
 VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 . "$(dirname "${BASH_SOURCE[0]}")/test_utils.bsh"
 
+begin_test "Test check array"
+(
+  setup_test
+
+  a1=()
+  a2=(11 22 33)
+  check_a a1
+  check_a a2 11 22 33
+
+  ans0=$'\e[1;31m'"ERROR"$'\e[0m'": Arrays differ"$'\n'
+
+  not check_a a1 ""
+  check_str "$(check_a a1 "" 2>&1)" \
+            "${ans0}"$'a1=()\nArray had 1 too few values'
+  not check_a a2 11 22 33 44
+  check_str "$(check_a a2 11 22 33 44 2>&1)" \
+            "${ans0}"$'a2=(11 22 33)\nArray had 1 too few values'
+  not check_a a2 22 33
+  check_str "$(check_a a2 22 33 2>&1)" \
+            "${ans0}"$'Element 0 (a2[0]) is different:\n11 != 22'
+  not check_a a2 11 33
+  check_str "$(check_a a2 11 33 2>&1)" \
+            "${ans0}"$'Element 1 (a2[1]) is different:\n22 != 33'
+  not check_a a2 11 22
+  check_str "$(check_a a2 11 22 2>&1)" \
+            "${ans0}"$'a2=(11 22 33)\nArray had 1 too many values'
+
+  # Non contiguous case
+  unset a2[1]
+  not check_a a2 11 22
+  check_str "$(check_a a2 11 22 2>&1)" \
+            "${ans0}"$'Element 1 (a2[2]) is different:\n33 != 22'
+)
+end_test
+
+begin_test "Test regex check array"
+(
+  setup_test
+
+  a1=()
+  a2=(11 22 33)
+  check_ra a1
+  check_ra a2 11 22 33
+
+  check_ra a2 1+ '^[0-9]+$' 3
+  check_ra a2 2* . '^33$'
+  not check_ra a2 1+ '^[0-9]+$' 4
+
+  not check_ra a1 ""
+  not check_ra a2 11 22 33 44
+  not check_ra a2 22 33
+  not check_ra a2 11 22
+)
+end_test
+
+begin_test "Test contiguous array"
+(
+  setup_test
+  a1=(1 2 3)
+  contiguous_a a1
+
+  unset a1[0]
+  not contiguous_a a1
+
+  a1=(1 2 3)
+  unset a1[1]
+  not contiguous_a a1
+  a1+=(4)
+  not contiguous_a a1
+
+  a1=(1 2 3)
+  unset a1[2]
+  contiguous_a a1
+  unset a1[1]
+  contiguous_a a1
+  a1+=(4)
+  contiguous_a a1
+  unset a1[1]
+  unset a1[0]
+  contiguous_a a1
+  a1+=(4)
+  contiguous_a a1
+)
+end_test
+
 begin_test "Test check string"
 (
   setup_test
@@ -13,7 +98,9 @@ begin_test "Test check string"
   function ans()
   {
     echo $'\e[1;31m'"ERROR"$'\e[0m'": Strings differ"
+    echo "====================="
     echo "${1}"$'\e[1;31m'"${2}"$'\e[0m'"${3}"
+    echo "---------------------"
     echo "${4}"$'\e[1;31m'"${5}"$'\e[0m'"${6}"
   }
 
@@ -38,5 +125,9 @@ begin_test "Test check string"
   [ "$(check_str uvwxyz uvwxyZ 2>&1)" = "$(ans uvwxy z "" uvwxy Z "")" ]
   [ "$(check_str uvwxyz uvwxy 2>&1)" = "$(ans uvwxy z "" uvwxy "" "")" ]
   [ "$(check_str uvwxy uvwxyz 2>&1)" = "$(ans uvwxy "" "" uvwxy z "")" ]
+
+  # [ "$(check_str $'ERROR: Arrays differ\nArray had 1 too many values' $'ERROR: Arrays differ\na2=(11 22 33)\nArray had 1 too many values')" =
+  #   "$(ans $'ERROR: Arrays differ\n "" "Array had 1 too many values"
+  #          $'ERROR: Arrays differ\n "a2=(11 22 33)" "Array had 1 too many values")" ]
 )
 end_test
