@@ -6,11 +6,23 @@ function caseify()
 {
   local cmd="${1}"
   shift 1
+
+  local vsi_common_excludes='--exclude=./docs --exclude=.git --exclude=*.egg-info'
+
   case "${cmd}" in
-    makeself)
+    juste) # Make a pure just executable, not a project executable (Not finished. .juste_wrapper needs to be merged into just_wrapper)
       cd /src
       mkdir -p /src/dist
-      /makeself/makeself.sh --tar-extra "--exclude=.git --exclude=docs ../.juste_wrapper" --noprogress --nomd5 --nocrc --nox11 --keep-umask --header /makeself/makeself-header_just.sh vsi_common/ /src/dist/juste juste_label ./.juste_wrapper
+      /makeself/makeself.sh \
+        --header /makeself/makeself-header_just.sh \
+        --noprogress --nomd5 --nocrc --nox11 --keep-umask \
+        --tar-extra "${vsi_common_excludes} ../.juste_wrapper" \
+        vsi_common/ /src/dist/juste juste_label ./.juste_wrapper
+      ;;
+
+    makeself) # Run makeself
+      /makeself/makeself.sh ${@+"${@}"}
+      extra_args=$#
       ;;
 
     just-project) # Make a self extracting executable for a just \
@@ -28,22 +40,22 @@ function caseify()
       local vsi_common_rel="${1}"
 
       # Start by adding just vsi_common, and transform it to have the same relative path as vsi_common_dir really has.
-      "/makeself/makeself.sh" \
-          --header "/makeself/makeself-header_just.sh" \
+      /makeself/makeself.sh \
+          --header /makeself/makeself-header_just.sh \
           --noprogress --nomd5 --nocrc --nox11 --keep-umask \
-          --tar-extra "--show-transformed --transform s|^\./|./${vsi_common_rel}/| ${include_unit_tests} --exclude=./docs --exclude=.git --exclude=*.egg-info" \
-          "${VSI_COMMON_DIR}" /dist/just just_label "./${vsi_common_rel}/freeze/just_wrapper"
+          --tar-extra "--show-transformed --transform s|^\./|./${vsi_common_rel}/| ${include_unit_tests} ${vsi_common_exlcudes}" \
+          "${VSI_COMMON_DIR}" "/dist/${MAKESELF_NAME-just}" "${MAKESELF_LABEL-just_label}" "./${vsi_common_rel}/freeze/just_wrapper"
       # You can't put quotes in tar-extra apparently, it'll screw things up.
 
       extra_args=1
       ;;
     add-files) # Append files to a makeself executable
       pushd /src &> /dev/null
-        MAKESELF_PARSE=true "/makeself/makeself.sh" \
-            --header "/makeself/makeself-header_just.sh" \
+        MAKESELF_PARSE=true /makeself/makeself.sh \
+            --header /makeself/makeself-header_just.sh \
             --noprogress --nomd5 --nocrc --nox11 --keep-umask \
             --tar-extra "${1-}" --append \
-            . /dist/just
+            . "/dist/${MAKESELF_NAME-just}"
 
         extra_args=$#
       popd &> /dev/null
