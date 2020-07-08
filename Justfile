@@ -37,10 +37,6 @@ function caseify()
       )
       extra_args=$#
       ;;
-    # --test) # Run only this test
-    #   export TESTLIB_RUN_SINGLE_TEST="${1}"
-    #   extra_args=1
-    #   ;;
     test_int) # Run integration tests
       local JUST_IGNORE_EXIT_CODES=123
       justify test --dir int ${@+"${@}"}

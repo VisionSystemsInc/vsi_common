@@ -23,6 +23,25 @@ source "${VSI_COMMON_DIR}/linux/compat.bsh"
 # .. file:: just_makeself_functions.bsh
 #**
 
+function _makeself_docker_compose()
+{
+  local id_project_cwd="${JUST_PROJECT_PREFIX}_CWD"
+
+  local MAKESELF_DIST_DIR="${JUST_PROJECT_PREFIX}_MAKESELF_DIST_DIR"
+  export MAKESELF_DIST_DIR="${!MAKESELF_DIST_DIR:-${MAKESELF_SOURCE_DIR}/dist}"
+
+  local VSI_COMMON_UID="${JUST_PROJECT_PREFIX}_UID"
+  export VSI_COMMON_UID="${!VSI_COMMON_UID-1000}"
+  local VSI_COMMON_GIDS="${JUST_PROJECT_PREFIX}_GID"
+  export VSI_COMMON_GIDS="${!VSI_COMMON_GIDS-1000}"
+
+  local VSI_COMMON_JUST_SETTINGS="${VSI_COMMON_JUST_SETTINGS-"${JUST_PATH_ESC}/src/$(basename "${JUST_SETTINGS}")"}"
+  export VSI_COMMON_JUST_SETTINGS
+
+  Just-docker-compose \
+    -f "${VSI_COMMON_DIR}/docker/vsi_common/docker-compose.yml" ${@+"${@}"}
+}
+
 #**
 # .. function:: makeself_defaultify
 #**
@@ -38,35 +57,20 @@ function makeself_defaultify()
   local PROJECT_CWD="${JUST_PROJECT_PREFIX}_CWD"
   PROJECT_CWD="${!PROJECT_CWD}"
 
+  local MAKESELF_SOURCE_DIR="${JUST_PROJECT_PREFIX}_MAKESELF_SRC_DIR"
+  export MAKESELF_SOURCE_DIR="${!MAKESELF_SOURCE_DIR:-${!id_project_cwd}}"
+
   case $arg in
-    #**
-    # .. command:: makeself_setup-local
-    #
-    # Download and install makeself locally in Project's CWD/build/makeself
-    #**
-    makeself_setup-local) # Setup makeself locally
-      mkdir -p "${PROJECT_CWD}/build/makeself"
-      pushd "${PROJECT_CWD}/build/makeself"
-        curl -LO "https://github.com/megastep/makeself/archive/${JUST_MAKESELF_VERSION}/makeself.tar.gz"
-        tar xf makeself.tar.gz --strip-components=1
-        rm makeself.tar.gz
+    makeself_build) # Build the makeself docker images
+      if [ "${MAKESELF_IMAGE-vsiri/makeself:latest}" != "vsiri/makeself:latest" ]; then
+        source "${VSI_COMMON_DIR}/linux/colors.bsh"
+        echo "${RED}ERROR${NC}: You should use your own Justfile to build \"${MAKESELF_IMAGE}\"" >&2
+        false
+      fi
+      justify build recipes-auto "${VSI_COMMON_DIR}/docker/vsi_common/makeself.Dockerfile"
+      _makeself_docker_compose build makeself
+      ;;
 
-        # Disable makeself's argument parser (so all arguments go to just by
-        # default) and make quiet the default
-        sed '1,/^while true/s|^while true|while \\${MAKESELF_PARSE-false}|; 1,/^quiet="n"/s|^quiet="n"|quiet="y"|' \
-            "${PROJECT_CWD}/build/makeself/makeself-header.sh" > "${PROJECT_CWD}/build/makeself/makeself-header_just.sh"
-
-        # Add sourcing local.env to the header, to cover corner cases like needing to to change TMPDIR
-        sed -${sed_flag_i} '2r /dev/stdin' "${PROJECT_CWD}/build/makeself/makeself-header_just.sh" < \
-          <(echo 'for check_dir in "\`dirname \$0\`" "\${PWD}"; do'
-            echo '  if test -f "\${check_dir}/local.env"; then'
-            echo '    set -a'
-            echo '    source "\${check_dir}/local.env"'
-            echo '    set +a'
-            echo '  fi'
-            echo 'done')
-      popd &> /dev/null
-    ;;
     #**
     # .. command:: makeself_just-project-locally
     #
@@ -86,65 +90,118 @@ function makeself_defaultify()
     #
     # All calls are made from the root repo directory (``.``), and the output will be in ``./dist``
     #**
-    makeself_just-project-locally) # Make a self extracting executable for a just \
-        # project, locally. Add "--tests" flag to include VSI Common's unit tests. \
-        # Unit tests can be run via: just --wrap bash -c 'cd ${VSI_COMMON_DIR}; just test'
-      local include_unit_tests
-      parse_args extra_args --tests include_unit_tests -- ${@+"${@}"}
-      if [ "${include_unit_tests}" = "0" ]; then
-        include_unit_tests='--exclude=test-*.bsh'
-      else
-        include_unit_tests=""
-      fi
-
-      if [ ! -f "${PROJECT_CWD}/build/makeself/makeself.sh" ]; then
-        justify makeself setup-local
-      fi
-
-      # Ideally, this should be the App's CWD, since just projects cd into their
-      # Project CWD. We want the dist dir relative to what ever dir we are in now.
-      mkdir -p "./dist"
-
-      # Review: Does the transform below handle (multiple) spaces in the path correctly???
+    makeself_just-project) # Makeself
       local vsi_common_rel="$(relative_path "${VSI_COMMON_DIR}" .)" # Does not start with ./
 
-      # Start by adding just vsi_common, and transform it to have the same relative path as vsi_common_dir really has.
-      # NOTE: This will only work on gnu-tar
-      "${PROJECT_CWD}/build/makeself/makeself.sh" \
-          --header "${PROJECT_CWD}/build/makeself/makeself-header_just.sh" \
-          --noprogress --nomd5 --nocrc --nox11 --keep-umask \
-          --tar-extra "--show-transformed --transform s|^\./|./${vsi_common_rel}/| ${include_unit_tests} --exclude=./docs --exclude=.git --exclude=*.egg-info" \
-          "${VSI_COMMON_DIR}" ./dist/just just_label "./${vsi_common_rel}/freeze/just_wrapper"
-      # You can't put quotes in tar-extra apparently, it'll screw things up.
+      _makeself_docker_compose run makeself just-project "${vsi_common_rel}"
       ;;
     #**
-    # .. command:: makeself_add-files-locally
+    # .. command:: makeself_add-files
     #
     # :Arguments: * ``$1`` - Directory to add
     #             * ``[$2]`` - Extra tar flags to be passed to makeself/tar
     #
-    # After the initial just executable is created by calling :command:`makeself_just-project-locally`, project directories are called using :command:`makeself_add-files-locally`
+    # After the initial just executable is created by calling :command:`makeself_just-project`, project directories are added using :command:`makeself_add-files`
     #
-    # The second argument should be used to exclude files, and in complicated situations, set up path transforms.
-    # * Simple: ``${project_dir}/external/vsi_common``
-    # * Complicated: ``${project_dir}/external/${other_project}/external/vsi_common``
+    # The second argument can be used to exclude files, and in complicated situations, set up path transforms.
+    # * Simple case: ``${project_dir}/external/vsi_common``
+    # * Complicated case: ``${project_dir}/external/${other_project}/external/vsi_common``
+    #
+    # .. rubric:: Example
+    #
+    # .. code-block:: bash
+    #
+    #   makeself) # Simple case
+    #     justify makeself just-project external/vsi_common
+    #     justify makeself add-files "${MY_PROJECT_CWD}"
     #
     # .. seealso::
-    #   :command:`makeself_just-project-locally`
+    #   :command:`makeself_just-project`
     #**
-    makeself_add-files-locally) # Append files to a makeself executable
-      MAKESELF_PARSE=true "${PROJECT_CWD}/build/makeself/makeself.sh" \
-          --header "${PROJECT_CWD}/build/makeself/makeself-header_just.sh" \
-          --noprogress --nomd5 --nocrc --nox11 --keep-umask \
-          --tar-extra "${2-}" --append \
-          "${1}" ./dist/just
-
+    makeself_add-files) # Append files to a makeself executable
+      export MAKESELF_SOURCE_DIR="${1}"
       if [ "${2+set}" ]; then
         extra_args=2
       else
         extra_args=1
       fi
+      shift 1
+
+      _makeself_docker_compose run makeself add-files ${@+"${@}"}
       ;;
+
+    ##**
+    ## .. command:: makeself_setup-local
+    ##
+    ## Download and install makeself locally in Project's CWD/build/makeself
+    ##**
+    ## makeself_setup-local) # Setup makeself locally
+    #   mkdir -p "${PROJECT_CWD}/build/makeself"
+    #   pushd "${PROJECT_CWD}/build/makeself"
+    #     curl -LO "https://github.com/megastep/makeself/archive/${JUST_MAKESELF_VERSION}/makeself.tar.gz"
+    #     tar xf makeself.tar.gz --strip-components=1
+    #     rm makeself.tar.gz
+
+    #     # Disable makeself's argument parser (so all arguments go to just by
+    #     # default) and make quiet the default
+    #     sed '1,/^while true/s|^while true|while \\${MAKESELF_PARSE-false}|; 1,/^quiet="n"/s|^quiet="n"|quiet="y"|' \
+    #         "${PROJECT_CWD}/build/makeself/makeself-header.sh" > "${PROJECT_CWD}/build/makeself/makeself-header_just.sh"
+
+    #     # Add sourcing local.env to the header, to cover corner cases like needing to to change TMPDIR
+    #     sed -${sed_flag_i} '2r /dev/stdin' "${PROJECT_CWD}/build/makeself/makeself-header_just.sh" < \
+    #       <(echo 'for check_dir in "\`dirname \$0\`" "\${PWD}"; do'
+    #         echo '  if test -f "\${check_dir}/local.env"; then'
+    #         echo '    set -a'
+    #         echo '    source "\${check_dir}/local.env"'
+    #         echo '    set +a'
+    #         echo '  fi'
+    #         echo 'done')
+    #   popd &> /dev/null
+    # ;;
+    ## makeself_just-project-locally) # Make a self extracting executable for a just \
+    #     # project, locally. Add "--tests" flag to include VSI Common's unit tests. \
+    #     # Unit tests can be run via: just --wrap bash -c 'cd ${VSI_COMMON_DIR}; just test'
+    #   local include_unit_tests
+    #   parse_args extra_args --tests include_unit_tests -- ${@+"${@}"}
+    #   if [ "${include_unit_tests}" = "0" ]; then
+    #     include_unit_tests='--exclude=test-*.bsh'
+    #   else
+    #     include_unit_tests=""
+    #   fi
+
+    #   if [ ! -f "${PROJECT_CWD}/build/makeself/makeself.sh" ]; then
+    #     justify makeself setup-local
+    #   fi
+
+    #   # Ideally, this should be the App's CWD, since just projects cd into their
+    #   # Project CWD. We want the dist dir relative to what ever dir we are in now.
+    #   mkdir -p "./dist"
+
+    #   # Review: Does the transform below handle (multiple) spaces in the path correctly???
+    #   local vsi_common_rel="$(relative_path "${VSI_COMMON_DIR}" .)" # Does not start with ./
+
+    #   # Start by adding just vsi_common, and transform it to have the same relative path as vsi_common_dir really has.
+    #   # NOTE: This will only work on gnu-tar
+    #   "${PROJECT_CWD}/build/makeself/makeself.sh" \
+    #       --header "${PROJECT_CWD}/build/makeself/makeself-header_just.sh" \
+    #       --noprogress --nomd5 --nocrc --nox11 --keep-umask \
+    #       --tar-extra "--show-transformed --transform s|^\./|./${vsi_common_rel}/| ${include_unit_tests} --exclude=./docs --exclude=.git --exclude=*.egg-info" \
+    #       "${VSI_COMMON_DIR}" ./dist/just just_label "./${vsi_common_rel}/freeze/just_wrapper"
+    #   # You can't put quotes in tar-extra apparently, it'll screw things up.
+    #   ;;
+    ## makeself_add-files-locally) # Append files to a makeself executable
+    #   MAKESELF_PARSE=true "${PROJECT_CWD}/build/makeself/makeself.sh" \
+    #       --header "${PROJECT_CWD}/build/makeself/makeself-header_just.sh" \
+    #       --noprogress --nomd5 --nocrc --nox11 --keep-umask \
+    #       --tar-extra "${2-}" --append \
+    #       "${1}" ./dist/just
+
+    #   if [ "${2+set}" ]; then
+    #     extra_args=2
+    #   else
+    #     extra_args=1
+    #   fi
+    #   ;;
     *)
       plugin_not_found=1
       ;;

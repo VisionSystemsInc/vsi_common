@@ -111,19 +111,18 @@ function _docs_serialize_dirs()
 
 function _sphinx_docker_compose()
 {
-  local src_dir="${JUST_PROJECT_PREFIX}_SPHINX_SRC_DIR"
-  src_dir="${!src_dir:-${!id_project_cwd}}"
+  local DOCS_SOURCE_DIR="${JUST_PROJECT_PREFIX}_SPHINX_SRC_DIR"
+  export DOCS_SOURCE_DIR="${!DOCS_SOURCE_DIR:-${!id_project_cwd}}"
+  export DOCS_DIR="${docs_dir}"
 
-  local uid="${JUST_PROJECT_PREFIX}_UID"
-  uid="${!uid-1000}"
-  local gid="${JUST_PROJECT_PREFIX}_GID"
-  gid="${!gid-1000}"
+  local VSI_COMMON_UID="${JUST_PROJECT_PREFIX}_UID"
+  export VSI_COMMON_UID="${!VSI_COMMON_UID-1000}"
+  local VSI_COMMON_GIDS="${JUST_PROJECT_PREFIX}_GID"
+  export VSI_COMMON_GIDS="${!VSI_COMMON_GIDS-1000}"
 
-  DOCS_SOURCE_DIR="${src_dir}" \
-  DOCS_DIR="${docs_dir}" \
-  VSI_COMMON_UID="${uid}" \
-  VSI_COMMON_GIDS="${gid}" \
-  JUST_SETTINGS="${JUST_PATH_ESC}/src/$(basename "${JUST_SETTINGS}")" \
+  local VSI_COMMON_JUST_SETTINGS="${VSI_COMMON_JUST_SETTINGS-"${JUST_PATH_ESC}/src/$(basename "${JUST_SETTINGS}")"}"
+  export VSI_COMMON_JUST_SETTINGS
+
   Docker-compose \
       -f "${VSI_COMMON_DIR}/docker/vsi_common/docker-compose.yml" ${@+"${@}"}
 }
@@ -255,7 +254,7 @@ function docs_defaultify()
         echo "${RED}ERROR${NC}: You should use your own Justfile to build \"${SPHINX_COMPILE_IMAGE}\"" >&2
         false
       fi
-      justify build recipes gosu tini pipenv vsi
+      justify build recipes-auto "${VSI_COMMON_DIR}/docker/vsi_common/sphinx.Dockerfile"
       _sphinx_docker_compose build sphinx
       ;;
 
