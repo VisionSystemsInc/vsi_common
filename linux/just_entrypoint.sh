@@ -88,8 +88,9 @@ set -eu
 : ${VSI_COMMON_DIR=/vsi}
 : ${DOCKER_USERNAME=user}
 
-if [ -d "/.singularity.d" ]; then
-  # Disable the special docker magic in singularity
+# Disable the special docker magic except in docker, no need in singularity
+# TODO: what does podman need?
+if [ ! -f "/.dockerenv" ]; then
   export ALREADY_RUN_ONCE=1
 fi
 
