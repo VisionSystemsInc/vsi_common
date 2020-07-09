@@ -844,60 +844,54 @@ function docker-compose-list-internal-volumes()
 function docker-compose-volumes()
 {
   local volume_line
-  local flag
   DOCKER_VOLUME_SOURCES=()
   DOCKER_VOLUME_TARGETS=()
   DOCKER_VOLUME_FLAGS=()
   DOCKER_VOLUME_FORMATS=()
+  local -i count=0
+
   for volume_line in ${DOCKER_VOLUME_LINES+"${DOCKER_VOLUME_LINES[@]}"}; do
+    # Capital means new volume
     if [[ ${volume_line:0:1} = [SL] ]]; then
-      # If the flag hasn't been added, then add it. This only won't happen on
-      # the first loop through
-      if [ "${#DOCKER_VOLUME_FLAGS[@]}" -lt "${#DOCKER_VOLUME_TARGETS[@]}" ]; then
-        DOCKER_VOLUME_FLAGS+=("${flag}")
-      fi
-      # Clear the flag because it's a new volume (S/L)
-      flag=
+      count+=1
+      # Extend each array, to guarantee there are no holes and they are the
+      # same length. Makes more robust and the code simpler
+      DOCKER_VOLUME_SOURCES[count]=""
+      DOCKER_VOLUME_TARGETS[count]=""
+      DOCKER_VOLUME_FORMATS[count]=""
+      DOCKER_VOLUME_FLAGS[count]=""
     fi
 
     if [ "${volume_line:0:1}" = "S" ]; then # Short format
       volume_line="${volume_line:1}"
       if [[ $volume_line =~ ${DOCKER_VOLUME_PATTERN} ]]; then
-        DOCKER_VOLUME_SOURCES+=("${BASH_REMATCH[1]}")
-        DOCKER_VOLUME_TARGETS+=("${BASH_REMATCH[3]}")
-        DOCKER_VOLUME_FORMATS+=("short")
-        flag=("${BASH_REMATCH[5]}")
+        DOCKER_VOLUME_SOURCES[count]="${BASH_REMATCH[1]}"
+        DOCKER_VOLUME_TARGETS[count]="${BASH_REMATCH[3]}"
+        DOCKER_VOLUME_FORMATS[count]="short"
+        DOCKER_VOLUME_FLAGS[count]="${BASH_REMATCH[5]}"
       else
         echo "Invalid short form volume string: ${volume_line}" >&2
         return 1
       fi
     elif [[ ${volume_line:0:1} = [Ll] ]]; then
       if [ ${volume_line:0:1} = L ]; then
-        DOCKER_VOLUME_FORMATS+=("long")
+        DOCKER_VOLUME_FORMATS[count]="long"
       fi
+      # Remove the L/l, so the rest is simpler to parse
       volume_line="${volume_line:1}"
       if [[ ${volume_line} = source:* ]]; then
-        DOCKER_VOLUME_SOURCES+=("${volume_line#source: *}")
+        DOCKER_VOLUME_SOURCES[count]="${volume_line#source: *}"
       elif [[ ${volume_line} = target:* ]]; then
-        DOCKER_VOLUME_TARGETS+=("${volume_line#target: *}")
-      elif [[ ${volume_line} = type:* ]]; then
-        if [ "${volume_line}" = "type: tmpfs" ]; then
-          DOCKER_VOLUME_SOURCES+=("")
-        fi
-      else
-        if [ "${flag}" = "" ]; then
-          flag="${volume_line}"
+        DOCKER_VOLUME_TARGETS[count]="${volume_line#target: *}"
+      elif [[ ${volume_line} != type:* ]]; then
+        if [ "${DOCKER_VOLUME_FLAGS[count]}" = "" ]; then
+          DOCKER_VOLUME_FLAGS[count]="${volume_line}"
         else
-          flag+=$'\n'"${volume_line}"
+          DOCKER_VOLUME_FLAGS[count]+=$'\n'"${volume_line}"
         fi
       fi
     fi
   done
-
-  # Do the same logic again for the last pass-through
-  if [ "${#DOCKER_VOLUME_FLAGS[@]}" -lt "${#DOCKER_VOLUME_TARGETS[@]}" ]; then
-    DOCKER_VOLUME_FLAGS+=("${flag}")
-  fi
 }
 
 #**

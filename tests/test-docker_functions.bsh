@@ -364,10 +364,10 @@ begin_test "docker compose volumes"
   targets=("/mnt" "/src" "/opt" "/src" "/tmp2")
   flags=("" "" "" "" "")
   formats=(short long short long long)
-  cmp_elements_a DOCKER_VOLUME_SOURCES sources
-  cmp_elements_a DOCKER_VOLUME_TARGETS targets
-  cmp_elements_a DOCKER_VOLUME_FLAGS flags
-  cmp_elements_a DOCKER_VOLUME_FORMATS formats
+  check_a DOCKER_VOLUME_SOURCES "${sources[@]}"
+  check_a DOCKER_VOLUME_TARGETS "${targets[@]}"
+  check_a DOCKER_VOLUME_FLAGS "${flags[@]}"
+  check_a DOCKER_VOLUME_FORMATS "${formats[@]}"
 
   DOCKER_VOLUME_LINES=("S/test1:/test2:ro"
                        "Stest3:/test4:Z"
@@ -392,6 +392,40 @@ begin_test "docker compose volumes"
   cmp_elements_a DOCKER_VOLUME_SOURCES sources
   cmp_elements_a DOCKER_VOLUME_TARGETS targets
   cmp_elements_a DOCKER_VOLUME_FLAGS flags
+)
+end_test
+
+begin_test "docker compose volumes with missing fields"
+(
+  setup_test
+  sources=("/tmp" "/home/user/src" "test" "internal" "")
+  targets=("/mnt" "/src" "/opt" "/src" "/tmp2")
+  flags=(":ro" "" "" "" "")
+  formats=(short long short long long)
+
+  DOCKER_VOLUME_LINES_ORIG=("S/tmp:/mnt:ro"
+       "Lsource: /home/user/src" "ltarget: /src" "ltype: bind"
+       "Stest:/opt"
+       "Lsource: internal" "ltarget: /src" "ltype: volume"
+       "Ltarget: /tmp2" "ltype: tmpfs")
+
+  DOCKER_VOLUME_LINES=("${DOCKER_VOLUME_LINES_ORIG[@]}")
+  unset DOCKER_VOLUME_LINES[2]
+  docker-compose-volumes
+
+  check_a DOCKER_VOLUME_SOURCES "${sources[@]}"
+  check_a DOCKER_VOLUME_TARGETS "/mnt" "" "/opt" "/src" "/tmp2"
+  check_a DOCKER_VOLUME_FLAGS "${flags[@]}"
+  check_a DOCKER_VOLUME_FORMATS "${formats[@]}"
+
+  DOCKER_VOLUME_LINES[1]='Ltarget: /src'
+  docker-compose-volumes
+
+  check_a DOCKER_VOLUME_SOURCES "/tmp" "" "test" "internal" ""
+  check_a DOCKER_VOLUME_TARGETS "${targets[@]}"
+  check_a DOCKER_VOLUME_FLAGS "${flags[@]}"
+  check_a DOCKER_VOLUME_FORMATS "${formats[@]}"
+
 )
 end_test
 
