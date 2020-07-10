@@ -268,39 +268,13 @@ fi
 function source_environment_files()
 {
   local project_dir="$(dirname "${1}")"
-  local project_file="$(basename "${1}")"
   local x
   local JUST_LOCAL_SETTINGS="${JUST_LOCAL_SETTINGS:-${project_dir}/local.env}"
   local JUST_LOCAL_SETTINGS_POST="${JUST_LOCAL_SETTINGS_POST:-${project_dir}/local_post.env}"
 
   export JUST_SETTINGS="$(cd "${project_dir}"; pwd)/${1##*/}"
 
-  if [ ! -e "${JUST_LOCAL_SETTINGS}" ]; then
-    local perm
-    if [ -e "${1}" ]; then
-      perm=$(_get_owner_id "${1}")
-    else
-      perm=$(_get_owner_id "${project_dir}")
-    fi
-
-    # If the current user is the same one who owns the repo files, then generate
-    # the local file. The prevents other users from creating local.env files in
-    # your directory by accident. But doesn't error if the directory is read-only
-    # or there is some other permission error
-    if [ "${perm}" = "$(id -u)" ]; then
-      echo "# Put local setting in this file" 2>/dev/null > "${JUST_LOCAL_SETTINGS}" &&
-      {
-        echo "# You should edit this file and not \"${project_file}\"" >> "${JUST_LOCAL_SETTINGS}"
-        echo "# to customize setting just for your setup/computer" >> "${JUST_LOCAL_SETTINGS}"
-        echo >> "${JUST_LOCAL_SETTINGS}"
-        echo "# If you need a value from \"${project_file}\" to set a custom" >> "${JUST_LOCAL_SETTINGS}"
-        echo "# value, use \"$(basename "${JUST_LOCAL_SETTINGS_POST}")\"" >> "${JUST_LOCAL_SETTINGS}"
-        echo >> "${JUST_LOCAL_SETTINGS}"
-        echo "# NEVER commit this file. Tracked environment changes go in" >> "${JUST_LOCAL_SETTINGS}"
-        echo "# \"${project_file}\" only" >> "${JUST_LOCAL_SETTINGS}"
-      } || :
-    fi
-  fi
+  try_to_create_local_settings_file "${1}"
 
   # if [ ! -e "${JUST_LOCAL_SETTINGS_POST}" ]; then
   #   echo "# Put local setting in this file" > "${JUST_LOCAL_SETTINGS_POST}"
@@ -345,6 +319,52 @@ function source_environment_files()
   done < <(declare -Fx)
 
   check_just_version
+}
+
+#**
+# .. function:: try_to_create_local_settings_file
+#
+# :Arguments: ``$1`` - Path to the settings file
+#
+# :Parameters: ``JUST_LOCAL_SETTINGS`` - The location to create the local.env file
+#              ``JUST_LOCAL_SETTINGS_POST`` - The location to create the local_post.env file
+#
+# Try to create the local.env settings file
+#
+# Create the local.env settings file if a) it does not already exist and b) it will be owned by the correct user.
+#**
+
+function try_to_create_local_settings_file()
+{
+  if [ ! -e "${JUST_LOCAL_SETTINGS}" ]; then
+    local project_dir="$(dirname "${1}")"
+    local project_file="$(basename "${1}")"
+
+    local perm
+    if [ -e "${1}" ]; then
+      perm=$(_get_owner_id "${1}")
+    else
+      perm=$(_get_owner_id "${project_dir}")
+    fi
+
+    # If the current user is the same one who owns the repo files, then generate
+    # the local file. This prevents other users from creating local.env files in
+    # your directory by accident, but it doesn't error if the directory is read-
+    # only or there is some other permission error
+    if [ "${perm}" = "$(id -u)" ]; then
+      echo "# Put local setting in this file" 2>/dev/null > "${JUST_LOCAL_SETTINGS}" &&
+      {
+        echo "# You should edit this file and not \"${project_file}\"" >> "${JUST_LOCAL_SETTINGS}"
+        echo "# to customize setting just for your setup/computer" >> "${JUST_LOCAL_SETTINGS}"
+        echo >> "${JUST_LOCAL_SETTINGS}"
+        echo "# If you need a value from \"${project_file}\" to set a custom" >> "${JUST_LOCAL_SETTINGS}"
+        echo "# value, use \"$(basename "${JUST_LOCAL_SETTINGS_POST}")\"" >> "${JUST_LOCAL_SETTINGS}"
+        echo >> "${JUST_LOCAL_SETTINGS}"
+        echo "# NEVER commit this file. Tracked environment changes go in" >> "${JUST_LOCAL_SETTINGS}"
+        echo "# \"${project_file}\" only" >> "${JUST_LOCAL_SETTINGS}"
+      } || :
+    fi
+  fi
 }
 
 #**
