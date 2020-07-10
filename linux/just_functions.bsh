@@ -274,7 +274,7 @@ function source_environment_files()
 
   export JUST_SETTINGS="$(cd "${project_dir}"; pwd)/${1##*/}"
 
-  try_to_create_local_settings_file "${1}"
+  try_to_create_local_settings_file "${1}" || :
 
   # if [ ! -e "${JUST_LOCAL_SETTINGS_POST}" ]; then
   #   echo "# Put local setting in this file" > "${JUST_LOCAL_SETTINGS_POST}"
@@ -329,6 +329,9 @@ function source_environment_files()
 # :Parameters: ``JUST_LOCAL_SETTINGS`` - The location to create the local.env file
 #              ``JUST_LOCAL_SETTINGS_POST`` - The location to create the local_post.env file
 #
+# :Return Value: * ``0`` - Settings file was created
+#                * ``1`` - Settings file was not created
+#
 # Try to create the local.env settings file
 #
 # Create the local.env settings file if a) it does not already exist and b) it will be owned by the correct user.
@@ -349,8 +352,7 @@ function try_to_create_local_settings_file()
 
     # If the current user is the same one who owns the repo files, then generate
     # the local file. This prevents other users from creating local.env files in
-    # your directory by accident, but it doesn't error if the directory is read-
-    # only or there is some other permission error
+    # your directory by accident
     if [ "${perm}" = "$(id -u)" ]; then
       echo "# Put local setting in this file" 2>/dev/null > "${JUST_LOCAL_SETTINGS}" &&
       {
@@ -362,9 +364,11 @@ function try_to_create_local_settings_file()
         echo >> "${JUST_LOCAL_SETTINGS}"
         echo "# NEVER commit this file. Tracked environment changes go in" >> "${JUST_LOCAL_SETTINGS}"
         echo "# \"${project_file}\" only" >> "${JUST_LOCAL_SETTINGS}"
-      } || :
+        return 0
+      }
     fi
   fi
+  return 1
 }
 
 #**
