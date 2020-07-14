@@ -1,0 +1,137 @@
+#!/usr/bin/env false bash
+
+if [[ $- != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
+JUST_DEFAULTIFY_FUNCTIONS+=(pyinstaller_defaultify)
+JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
+
+source "${VSI_COMMON_DIR}/linux/command_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/elements.bsh"
+source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
+source "${VSI_COMMON_DIR}/linux/ask_question"
+source "${VSI_COMMON_DIR}/linux/just_docker_functions.bsh"
+
+#*# just/plugins/just_pyinstaller_functions
+
+#**
+# .. default-domain:: bash
+#
+#
+#====================================
+# J.U.S.T. PyInstaller Docs Functions
+# ===================================
+#
+# .. file:: just_pyinstaller_functions.bsh
+#
+# Plugin for building PyInstaller executables for a python project
+#**
+
+
+
+function _pyinstaller_docker_compose()
+{
+  local id_project_cwd="${JUST_PROJECT_PREFIX}_CWD"
+
+  local PYINSTALLER_SOURCE_DIR="${JUST_PROJECT_PREFIX}_PYINSTALLER_SRC_DIR"
+  export PYINSTALLER_SOURCE_DIR="${!PYINSTALLER_SOURCE_DIR:-${!id_project_cwd}}"
+  local PYINSTALLER_DIST_DIR="${JUST_PROJECT_PREFIX}_PYINSTALLER_DIST_DIR"
+  export PYINSTALLER_DIST_DIR="${!PYINSTALLER_DIST_DIR:-${!id_project_cwd}}"
+
+  local VSI_COMMON_UID="${JUST_PROJECT_PREFIX}_UID"
+  export VSI_COMMON_UID="${!VSI_COMMON_UID-1000}"
+  local VSI_COMMON_GIDS="${JUST_PROJECT_PREFIX}_GID"
+  export VSI_COMMON_GIDS="${!VSI_COMMON_GIDS-1000}"
+
+  # local VSI_COMMON_JUST_SETTINGS="${VSI_COMMON_JUST_SETTINGS-"${JUST_PATH_ESC}/src/$(basename "${JUST_SETTINGS}")"}"
+  local JUST_SETTINGSS
+  translate_just_settings "${PYINSTALLER_SOURCE_DIR}" /src
+  local VSI_COMMON_JUST_SETTINGS
+  MIFS=/// join_a VSI_COMMON_JUST_SETTINGS ${JUST_SETTINGSS[@]+"${JUST_SETTINGSS[@]}"}
+  export VSI_COMMON_JUST_SETTINGS
+
+  Just-docker-compose \
+      -f "${VSI_COMMON_DIR}/docker/vsi_common/docker-compose.yml" ${@+"${@}"}
+}
+
+#**
+# -----------------------------
+# J.U.S.T. python freeze plugin
+# -----------------------------
+#
+#**
+function pyinstaller_defaultify()
+{
+  arg=$1
+  shift 1
+  case $arg in
+    # sphinx) # Guided "just" make sphinx documents happen (build => setup => compile)
+    #   justify sphinx build
+    #   if [ ! -d "${docs_dir}" ]; then
+    #     justify sphinx setup
+    #   fi
+    #   justify sphinx compile
+    #   ;;
+   pyinstaller_build) # Build the pyinstaller docker images
+      if [ "${PYINSTALLER_IMAGE-vsiri/pyinstaller:latest}" != "vsiri/pyinstaller:latest" ]; then
+        source "${VSI_COMMON_DIR}/linux/colors.bsh"
+        echo "${RED}ERROR${NC}: You should use your own Justfile to build \"${PYINSTALLER_IMAGE}\"" >&2
+        local JUST_IGNORE_EXIT_CODES=1
+        false
+      fi
+      justify build recipes-auto "${VSI_COMMON_DIR}/docker/vsi_common/pyinstaller.Dockerfile"
+      _pyinstaller_docker_compose build pyinstaller
+      ;;
+
+    pyinstaller_pipenv-update) # Update PyInstaller Pipenv file
+      # Create a new volume
+      local volume="$(docker volume create)"
+      local rv=0
+      # Shadow /venv so it copies it. This makes chowning thousands of times faster... or something like that.
+      # extra_pyinstaller_arguments=(-v "${volume}:/venv")
+      # justify sphinx compile nopipenv bash -c "
+      _pyinstaller_docker_compose run -v "${volume}:/venv" pyinstaller nopipenv bash -c "
+          echo 'Owning virtual env'
+          sudo chown -R user: /venv
+          pipenv lock" || rv=$?
+      docker volume rm "${volume}"
+      if [ "${rv}" != 0 ]; then return "${rv}"; fi
+      justify pyinstaller build
+      ;;
+
+    # sphinx_setup) # Setup a new sphinx project
+    #   mkdir -p "${docs_dir}"
+    #   _sphinx_docker_compose run --rm \
+    #       sphinx bash -c "cd /docs; sphinx-quickstart"
+    #   ;;
+    pyinstaller_shell) # Enter the pyinstaller container
+      echo "Run 'just pyinstaller ...' to run pyinstaller"
+      _pyinstaller_docker_compose run pyinstaller bash
+      ;;
+    pyinstaller_run) # Compile sphinx documents
+      _pyinstaller_docker_compose run \
+          ${extra_sphinx_arguments[@]+"${extra_sphinx_arguments[@]}"} \
+          pyinstaller ${@+"${@}"}
+      extra_args+=$#
+      ;;
+    pyinstaller_clean) # Cleans doc directory
+      justify docker-compose clean pyinstaller-build
+      ;;
+    *)
+      plugin_not_found=1
+      ;;
+  esac
+  return 0
+}
+
+#**
+# Advanced Debugging
+# ------------------
+#
+# To run any custom command (like ``bash``), in the docs docker environment, additional arguments can be given to the :cmd:`sphinx_compile` command, and that will be run instead of the docs script. For example:
+#
+# .. code-block:: bash
+#
+#   just docs compile bash``
+#**
