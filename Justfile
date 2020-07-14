@@ -59,7 +59,7 @@ function caseify()
         export VSI_COMMON_TEST_OS
         # sanitize tag name
         VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS//:/_}
-        VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS_TAG_NAME//"/"/_}
+        VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS_TAG_NAME////_}
         export VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS_TAG_NAME//@/_}
         Just-docker-compose build os
       done
@@ -72,7 +72,7 @@ function caseify()
         export VSI_COMMON_TEST_OS
         # sanitize tag name
         VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS//:/_}
-        VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS_TAG_NAME//"/"/_}
+        VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS_TAG_NAME////_}
         export VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS_TAG_NAME//@/_}
         Just-docker-compose run os ${@+"${@}"}
       done
