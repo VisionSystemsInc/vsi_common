@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
-import skimage.color
+from PIL import Image
 
 def grouped_bar(features, bar_labels=None, group_labels=None, ax=None, colors=None):
   ''' features.shape like np.array([n_bars, n_groups])
@@ -373,7 +373,7 @@ def imshow_row(images,*args,**kwargs):
   return fig,ax
 
 
-def overlay_heatmap(image, heatmap, cmap='jet', vmin=0, vmax=1, img_ratio=0.4):
+def overlay_heatmap(image, heatmap, cmap='viridis', vmin=0, vmax=1, img_ratio=0.4):
   """ create a visualization of the image with overlaid heatmap
 
   Parameters
@@ -393,11 +393,21 @@ def overlay_heatmap(image, heatmap, cmap='jet', vmin=0, vmax=1, img_ratio=0.4):
   Exception
       If the image is not grayscale or rgb
   """
-  img_gray = image
-  if len(image.shape) == 3:
-    img_gray = skimage.color.rgb2gray(image)
+  img_gray = np.array(image)
+  if len(img_gray.shape) == 3:
+    if img_gray.shape[2] not in (3,4):
+      raise Exception("Image should have 3 (RGB) or 4 (RGBA) planes")
+    # convert to grayscale
+    if 'float' in str(img_gray.dtype):
+      # convert to RGB byte image, assuming range 0-1
+      img_gray = np.clip(img_gray*255, 0, 255).astype(np.uint8)
+
+    # use PIL to convert RGB to grayscale, convert back to numpy
+    img_gray = np.array(Image.fromarray(img_gray).convert('L'))
+    img_gray = img_gray.astype(np.float) / 255.0
+
   elif len(image.shape) != 2:
-    raise Exception('Image should be grayscale or rgb')
+    raise Exception("Image should have 2 or 3 dimensions")
 
   heatmap_norm = (heatmap - vmin) / (vmax - vmin)
   cmap = mpl.cm.get_cmap(cmap)
