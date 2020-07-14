@@ -5,6 +5,7 @@ if [[ $- != *i* ]]; then
 fi
 
 source "${VSI_COMMON_DIR}/linux/findin"
+source "${VSI_COMMON_DIR}/linux/string_tools.bsh"
 
 #*# linux/print_command
 
@@ -28,6 +29,7 @@ source "${VSI_COMMON_DIR}/linux/findin"
 #
 # :Arguments: ``$1``... - List of command + arguments to be echoed
 # :Output: *stdout* - A quote escaped version of the command + arguments, ready for ``eval``
+# :Uses: :func:`string-tools.bsh-quote_escape`
 #
 # Accurately echoes out a properly escaped single string representation of a command + arguments.
 #
@@ -58,6 +60,8 @@ function print_command()
 
 function _print_command()
 {
+  # Bash < 4.2 https://unix.stackexchange.com/a/411047/123413
+
   while [ "$#" -gt 0 ]; do
     # https://unix.stackexchange.com/a/357932/123413
     if [[ ${1} =~ ^[a-zA-Z0-9_.:/=@%^,+-]+$ ]]; then
@@ -69,7 +73,7 @@ function _print_command()
         echo -n "${1}"
       fi
     else
-      echo -n "'${1//\'/\'\"\'\"\'}'"
+      echo -n "$(quote_escape "${1}")"
     fi
     shift 1
     if [ "$#" -gt 0 ]; then
@@ -106,6 +110,8 @@ function print_command_save_env()
 #
 # :Arguments: ``$1``... - List of command + arguments to be echoed
 # :Output: *stdout* - A quote escaped version of the command + arguments, ready for ``eval``
+# :Uses: * :func:`string-tools.bsh-quote_escape`
+#        * :func:`print_command`
 #
 # Accurately echoes out a properly escaped single string representation of a command + arguments, including any "optional variable assignments" and exported environment variables.
 #
@@ -149,6 +155,7 @@ function print_command_env()
   local __print_command_new_name
   local __print_command_name
   local __print_command_parentheses=0
+  local __print_command_new_value
 
   # Path should always beee set...
   if [ -z "${__print_command_copy_PATH+set}" ]; then
@@ -160,7 +167,7 @@ function print_command_env()
     if [[ ${PWD} =~ ^[a-zA-Z0-9_.:/=@%^,+-]+$ ]]; then
       echo -n "(cd ${PWD}; "
     else
-      echo -n "(cd '${PWD//\'/\'\"\'\"\'}'; "
+      echo -n "(cd $(quote_escape "${PWD}"); "
     fi
     __print_command_parentheses=1
   fi
@@ -169,6 +176,13 @@ function print_command_env()
   for __print_command_name in $(compgen -A export __print_command_copy_); do
     # If it is no longer an exported variable
     __print_command_name="${__print_command_name#__print_command_copy_}"
+
+    # Skip PWD and _, it's a special case
+    if [ "${__print_command_name}" = "_" -o "${__print_command_name}" = "PWD" -o \
+         "${__print_command_name}" = "SHLVL" -o "${__print_command_name}" = "OLDPWD" ]; then
+      continue
+    fi
+
     if ! compgen -A export -X "!${__print_command_name}" &> /dev/null; then
       if [ "${__print_command_parentheses}" = "0" ]; then
         echo -n "("
@@ -178,6 +192,31 @@ function print_command_env()
     fi
   done
 
+  local __print_command_version_check=0
+  # 0 = bash 4.3 or newer
+  # 1 = bash 4.2 or older
+
+  # Cover local shadow corner case in older bashes
+  # https://paper.dropbox.com/doc/BASH-Corner-cases--A3zpNV61~3VRjP3ptdi2HCzcAQ-qAg7oQqDdxIJzhHKzmVEh
+  if [ "${BASH_VERSINFO[0]}" = "4" -a "${BASH_VERSINFO[1]}" -lt "3" ] || [ "${BASH_VERSINFO[0]}" -lt "4" ]; then
+    __print_command_version_check=1
+    for __print_command_new_name in ${__print_command_new_export_names[@]+"${__print_command_new_export_names[@]}"}; do
+      # Skip PWD and _, it's a special case
+      if [ "${__print_command_new_name}" = "_" -o "${__print_command_new_name}" = "PWD" -o \
+           "${__print_command_new_name}" = "SHLVL" -o "${__print_command_new_name}" = "OLDPWD" ]; then
+        continue
+      fi
+
+      if [ -z "${!__print_command_new_name+set}" ]; then
+        if [ "${__print_command_parentheses}" = "0" ]; then
+          echo -n "("
+          __print_command_parentheses=1
+        fi
+        echo -n "unset ${__print_command_name}; "
+      fi
+    done
+  fi
+
   for __print_command_new_name in ${__print_command_new_export_names[@]+"${__print_command_new_export_names[@]}"}; do
     # Skip PWD and _, it's a special case
     if [ "${__print_command_new_name}" = "_" -o "${__print_command_new_name}" = "PWD" -o \
@@ -185,12 +224,32 @@ function print_command_env()
       continue
     fi
     __print_command_name="__print_command_copy_${__print_command_new_name}"
+
+
+    if [ -z "${!__print_command_new_name+set}" ]; then
+      # Older bash handled above
+      if [ "${__print_command_version_check}" = "1" ]; then
+        continue
+      fi
+
+      # Cover local shadow corner case in bash 4.3 or newer
+      # https://paper.dropbox.com/doc/BASH-Corner-cases--A3zpNV61~3VRjP3ptdi2HCzcAQ-qAg7oQqDdxIJzhHKzmVEh
+      # It is possible for compgen to find a variable that appears to be unset.
+      # In this case, the global, not locally unset variable, is exported and used
+
+      # This is the only way I know to access a locally shadowed exported variable
+      __print_command_new_value="$(bash -c "echo \"\${${__print_command_new_name}}\"")"
+    else
+      # Normal case
+      __print_command_new_value="${!__print_command_new_name}"
+    fi
+
     # If it was unset or set to a new value
-    if [ -z "${!__print_command_name+set}" ] || [ "${!__print_command_name}" != "${!__print_command_new_name}" ]; then
-      if [[ ${!__print_command_new_name} =~ ^[a-zA-Z0-9_.:/=@%^,+-]+$ ]]; then
-        echo -n "${__print_command_new_name}=${!__print_command_new_name} "
+    if [ -z "${!__print_command_name+set}" ] || [ "${!__print_command_name}" != "${__print_command_new_value}" ]; then
+      if [[ ${__print_command_new_value} =~ ^[a-zA-Z0-9_.:/=@%^,+-]+$ ]]; then
+        echo -n "${__print_command_new_name}=${__print_command_new_value} "
       else
-        echo -n "${__print_command_new_name}='${!__print_command_new_name//\'/\'\"\'\"\'}' "
+        echo -n "${__print_command_new_name}=$(quote_escape "${__print_command_new_value}") "
       fi
     fi
   done

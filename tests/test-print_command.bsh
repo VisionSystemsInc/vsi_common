@@ -20,7 +20,7 @@ function common_test()
   check_str "$(print_command '!' \* \$ \# \@ \(\) \{\} \[\] \;)" \
             "'!' '*' '$' '#' @ '()' '{}' '[]' ';'"
   check_str "$(print_command echo test "this'this" "" "f o  o")" \
-            "echo test 'this'\"'\"'this' '' 'f o  o'"
+            "echo test 'this'\''this' '' 'f o  o'"
 }
 
 begin_test "print_command CLI"
@@ -62,13 +62,43 @@ begin_test "print_command_env"
   check_str "$(export B="f  o o"; unset A; D=15 C="b a  r" print_command_env foo)" \
             "(unset A; B='f  o o' C='b a  r' D=15 foo)"
 
+  check_str "$(export C='!*$#@(){}[];'; print_command_env foo)" \
+            "C='!*\$#@(){}[];' foo"
+  check_str "$(export D="this'this" E="" F="f o  o"; print_command_env bar)" \
+            "D='this'\''this' E='' F='f o  o' bar"
+
   # Test child process
-  export print_command_env
+  export -f print_command_env
+  export -f quote_escape
+
   check_str "$(B=15 bash -c "print_command_env foo bar")" \
             "B=15 foo bar"
 
   # Test cd
   check_str "$(unset A; B=15 C="b a  r" bash -c "cd "${TRASHDIR}"; print_command_env foo bar")" \
             "(cd ${TRASHDIR}; unset A; B=15 C='b a  r' foo bar)"
+)
+end_test
+
+begin_test "print_command_env locally shadowed variable"
+(
+  setup_test
+  . "${VSI_COMMON_DIR}/linux/print_command"
+
+  export x=15
+  print_command_save_env
+  function foo()
+  {
+    local x
+
+    value="$(print_command_env hi)"
+
+    if [ "${BASH_VERSINFO[0]}" = "4" -a "${BASH_VERSINFO[1]}" -lt "3" ] || [ "${BASH_VERSINFO[0]}" -lt "4" ]; then
+      check_str "${value}" "(unset x; hi)"
+    else
+      check_str "${value}" "hi"
+    fi
+  }
+  foo
 )
 end_test
