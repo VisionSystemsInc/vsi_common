@@ -94,6 +94,19 @@ if [ ! -f "/.dockerenv" ]; then
   export ALREADY_RUN_ONCE=1
 fi
 
+function load_just_settings()
+{
+  source "${VSI_COMMON_DIR}/linux/elements.bsh"
+  local JUST_SETTINGSS
+  local just_settings
+
+  MIFS="${JUST_SETTINGS_SEPARATOR-///}" split_s JUST_SETTINGSS ${JUST_SETTINGS+"${JUST_SETTINGS}"}
+  for just_settings in ${JUST_SETTINGSS[@]+"${JUST_SETTINGSS[@]}"}; do
+    echo "loading ${just_settings} ..." >&2
+    source "${VSI_COMMON_DIR}/linux/just_env" "${just_settings}"
+  done
+}
+
 if [ "${ALREADY_RUN_ONCE+set}" != "set" ]; then
 
   if [ -n "${BASH_SOURCE+set}" ]; then
@@ -105,7 +118,7 @@ if [ "${ALREADY_RUN_ONCE+set}" != "set" ]; then
   (
     # TODO: This will not source local.env if the src directory were on an nfs
     # Not sure ADDing the local files in the Dockerfile is the "right" solution
-    source "${VSI_COMMON_DIR}/linux/just_env" "${JUST_SETTINGS-/dev/null}"
+    load_just_settings
 
     # Sorted: https://serverfault.com/a/122743/321910
     for patch in "${JUST_ROOT_PATCH_DIR-/usr/local/share/just/root_run_patch}"/*; do
@@ -141,7 +154,7 @@ else
   run_just=0
 fi
 
-source "${VSI_COMMON_DIR}/linux/just_env" "${JUST_SETTINGS-/dev/null}"
+load_just_settings
 
 # Remove _DOCKER variables and undo // expansion
 source "${VSI_COMMON_DIR}/linux/just_entrypoint_user_functions.bsh"

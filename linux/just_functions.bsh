@@ -9,6 +9,8 @@ if [ -z ${VSI_COMMON_DIR+set} ]; then
   VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 fi
 source "${VSI_COMMON_DIR}/linux/compat.bsh"
+source "${VSI_COMMON_DIR}/linux/elements.bsh"
+source "${VSI_COMMON_DIR}/linux/container_functions.bsh"
 
 #*# just/just_functions
 
@@ -45,9 +47,7 @@ function check_just_version()
     echo "since it was last updated (${last_just_version})" >&2
     # echo "You may want to source ${JUST_SETUP_SCRIPT-your setup script} again" >&2
     echo "You may want to run 'just_diff -- --' and see what's changed in just." >&2
-    if [ -n "${JUST_VERSION+set}" ]; then
-      echo "When you are done, update 'JUST_VERSION=${JUST_VERSION}' in '$(basename ${JUST_SETTINGS})'" >&2
-    fi
+    echo "When you are done, update 'JUST_VERSION=${JUST_VERSION}' in '${JUST_SETTINGS//${JUST_SETTINGS_SEPARATOR}/"' or '"}'" >&2
     echo >&2
   fi
 }
@@ -233,6 +233,15 @@ fi
 #
 #   source "${VSI_COMMON_DIR}/linux/just_env" "$(dirname "${BASH_SOURCE[0]}")"/'my_project.env'
 #
+# .. note::
+#   :envvar:`JUST_SETTINGS` supports multiple files using the :envvar:`JUST_SETTINGS_SEPARATOR` (default: ``///``). The user and developer should not need to come up with this themselves, as it is automatically generated, unless they are manually overriding it.
+#
+# .. envvar:: JUST_SETTINGS_SEPARATOR
+#
+# Separator used between filenames of :envvar:`JUST_SETTINGS`
+#**
+: ${JUST_SETTINGS_SEPARATOR=///}
+#**
 # .. function:: source_environment_files
 #
 # Convenience function for sourcing environments
@@ -274,9 +283,18 @@ function source_environment_files()
   local JUST_LOCAL_SETTINGS="${JUST_LOCAL_SETTINGS:-${project_dir}/local.env}"
   local JUST_LOCAL_SETTINGS_POST="${JUST_LOCAL_SETTINGS_POST:-${project_dir}/local_post.env}"
 
-  # In case there are multiple calls to source_environment files, the first one
-  # should be considered the JUST_SETTINGS.
-  : ${JUST_SETTINGS="$(cd "${project_dir}"; pwd)/${1##*/}"}
+  # In case there are multiple calls to source_environment files, create an
+  # exportable list of all the file names. Since arrays can't be exported
+  x="$(cd "${project_dir}"; pwd)/${1##*/}"
+
+  if [ -z "${JUST_SETTINGS+set}" ]; then
+    # First settings env file
+    JUST_SETTINGS="${x}"
+  else
+    # Additional settings env file
+    JUST_SETTINGS="${JUST_SETTINGS}${JUST_SETTINGS_SEPARATOR}${x}"
+  fi
+
   export JUST_SETTINGS
 
   if [ ! -e "${JUST_LOCAL_SETTINGS}" ]; then
@@ -347,8 +365,30 @@ function source_environment_files()
       export -fn $x
     fi
   done < <(declare -Fx)
+}
 
-  check_just_version
+#**
+# .. function:: translate_just_settings
+#
+# Convert :envvar:`JUST_SETTINGS` to an array: ``JUST_SETTINGSS``, translating the paths to another filesystem
+#
+# :Arguments: - ``$1`` - Directory name to be translated from
+#             - ``$2`` - Directory name to translate to
+# :Output: ``JUST_SETTINGSS`` - Array of the translated paths
+#
+# Useful for translating :envvar:`JUST_SETTINGS` from host to a container.
+#
+# .. seealso:
+#   :func:`container_functions.bsh-translate_paths`
+#**
+function translate_just_settings()
+{
+  JUST_SETTINGSS=()
+  MIFS="${JUST_SETTINGS_SEPARATOR}" split_s JUST_SETTINGSS ${JUST_SETTINGS+"${JUST_SETTINGS}"}
+  local i
+  for i in ${JUST_SETTINGSS[@]+"${!JUST_SETTINGSS[@]}"}; do
+    JUST_SETTINGSS[i]="$(translate_path "${JUST_SETTINGSS[i]}" ${@+"${@}"})"
+  done
 }
 
 #**
