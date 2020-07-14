@@ -87,11 +87,7 @@ function next_section()
   echo "${COLORS[$COLOR_INDEX]}"${@+"${@}"}
 }
 
-# TODO: Replace block with requirements.bsh
-GIT_VERSION="$(${GIT} --version)"
-git_version_pattern='git version ([0-9]*)\.([0-9]*)\.([0-9]*).*'
-[[ ${GIT_VERSION} =~ ${git_version_pattern} ]]
-GIT_VERSION=("${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}")
+GIT_VERSION="$(git_version)"
 
 #**
 # .. function:: get_submodule_names
@@ -117,8 +113,7 @@ GIT_VERSION=("${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}")
 #**
 
 # If newer than 2.6
-# TODO: Replace with requirements.bsh
-if [ "${GIT_VERSION[0]}" = "2" -a "${GIT_VERSION[1]}" -ge "6" ] || [[ ${GIT_VERSION[0]} -gt 2 ]]; then
+if meet_requirements "${GIT_VERSION}" ">=2.6"; then
   function get_submodule_names()
   {
     ${GIT} config --name-only --get-regexp '^submodule\..*\.url$' | sed 's|.url$||'
@@ -220,7 +215,7 @@ function clone_submodules()
         # Re-establish url in case it changed
         ${GIT} remote set-url origin "${submodule_url}"
         # Fetch the latest changes
-        if [ "${GIT_VERSION[0]}" = "2" -a "${GIT_VERSION[1]}" -ge "17" ] || [[ ${GIT_VERSION[0]} -gt 2 ]]; then
+        if meet_requirements "${GIT_VERSION}" ">=2.17"; then
           ${GIT} fetch -pP origin
         else
           ${GIT} fetch -p origin
@@ -311,7 +306,7 @@ function update_submodules()
   local submodule_name
   local full_relative_path
   local base_submodule_path="${base_submodule_path-}${base_submodule_path:+/}${prefix-${displaypath-}}"
-  # Remove trailing slashes because on some versions of git (1.8.3, 2.17.1),
+  # Remove trailing slashes because on some versions of git (1.8.3, 2.17.1)
   # prefix has a trailing slash
   base_submodule_path="${base_submodule_path%/}"
   local current_repo="$(_git_mirror_get_url "${base_submodule_path:-.}")"
@@ -460,7 +455,7 @@ function git_mirror_repos()
     pushd "${GIT_MIRROR_PREP_DIR}/${MAIN_DIR}" &> /dev/null
       # Re-establish url in case it changed
       ${GIT} remote set-url origin "${GIT_MIRROR_MAIN_REPO}"
-      if [ "${GIT_VERSION[0]}" = "2" -a "${GIT_VERSION[1]}" -ge "17" ] || [[ ${GIT_VERSION[0]} -gt 2 ]]; then
+      if meet_requirements "${GIT_VERSION}" ">=2.17"; then
         ${GIT} fetch -pP origin
       else
         ${GIT} fetch -p origin
