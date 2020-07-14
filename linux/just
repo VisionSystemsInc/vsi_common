@@ -177,10 +177,6 @@ fi
 function print_error()
 {
   local rv=$? # This must be the first line
-  local stack=''
-  local line
-  # Stop any errors in here from throwing more errors (infinite loop), otherwise
-  # "while line=("$(caller $i)"); do" would have inherited the trap, and retrapped
 
   #**
   # ..envvar:: JUST_IGNORE_EXIT_CODES
@@ -211,51 +207,7 @@ function print_error()
 
   set +E
   echo >&2
-  if [ -f /.dockerenv ]; then
-    source "${VSI_COMMON_DIR}/linux/colors.bsh"
-    echo "Call stack ${YELLOW-}(in docker container)${NC-}" >&2
-    echo '--------------------------------' >&2
-  elif [ -d /.singularity.d ]; then
-    source "${VSI_COMMON_DIR}/linux/colors.bsh"
-    echo "Call stack ${YELLOW-}(in singularity container)${NC-}" >&2
-    echo '-------------------------------------' >&2
-  elif [ "${container-}" = "podman" ]; then
-    source "${VSI_COMMON_DIR}/linux/colors.bsh"
-    echo "Call stack ${YELLOW-}(in podman container)${NC-}" >&2
-    echo '--------------------------------' >&2
-  else
-    echo 'Call stack' >&2
-    echo '----------' >&2
-  fi
-  local -i i=0
-  local -i count_pad="$(awk '{print int(log($1)/log(10)+1e-10)+1}' <<< "${#BASH_SOURCE[@]}")"
-  local -i lineno_pad=0
-  local -i funcname_pad=0
-  for (( i=1; i<${#BASH_SOURCE[@]}; ++i)); do
-    if [ "${lineno_pad}" -lt "${#BASH_LINENO[i-1]}" ]; then
-      lineno_pad="${#BASH_LINENO[i-1]}"
-    fi
-    if [ "${funcname_pad}" -lt "${#FUNCNAME[i]}" ]; then
-      funcname_pad="${#FUNCNAME[i]}"
-    fi
-  done
-  funcname_pad+=3
-
-  for (( i=1; i<${#BASH_SOURCE[@]}; ++i)); do
-    printf "%${count_pad}s. %-${funcname_pad}s:%-${lineno_pad}s %s\n" "${i}" "${FUNCNAME[i]:+${FUNCNAME[i]}()}" "${BASH_LINENO[i-1]}" "${BASH_SOURCE[i]}" >&2
-  done
-
-  # Review: Is caller sometimes better than BASH_SOURCE[i]/BASH_LINENO[i-1]/FUNCNAME[i]?
-  # i=0
-  # while line="$(caller $i)"; do
-  #   stack+="$(sed $'s| |\t|g' <<< "${line}")"$'\n'
-  #   ((++i))
-  # done
-  # if command -v column &> /dev/null; then
-  #   column -c1 -s $'\t' -t >&2 <<< "${stack}"
-  # else
-  #   echo "${stack}" >&2
-  # fi
+  print_bash_stack 1
   echo >&2
   echo "$1: line $2: Returned $rv" >&2
 }
@@ -277,6 +229,7 @@ source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
 # Activate source_once
 source "${VSI_COMMON_DIR}/linux/source_once.bsh"
 source "${VSI_COMMON_DIR}/linux/just_functions.bsh"
+source "${VSI_COMMON_DIR}/linux/bash_utils.bsh"
 
 setup_tty ${@+"${@}"}
 
@@ -315,10 +268,17 @@ if [ "${JUSTFILE:0:1}" = "." ]; then
   JUSTFILE="$(real_path "${JUSTFILE}")"
 fi
 
+# Covers certain corner cases, like Just_wrap
+unset JUST_SETTINGS
+
 if ! _just_load_justfile "${JUSTFILE}"; then
   JUST_FILE_NOT_FOUND=1
 fi
 
+# Move this check here, so that if there are multiple JUST_SETTINGS, or other
+# advanced setups, that what ever is set when it is all done being loaded is
+# what really counts.
+check_just_version
 
 if [ "${BASH_SOURCE[0]}" = "${0}" ] || [ "$(basename "${BASH_SOURCE[0]}")" = "${0}" ]; then
   justify ${@+"${@}"}
