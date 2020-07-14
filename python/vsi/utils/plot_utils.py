@@ -8,6 +8,23 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
 from PIL import Image
 
+
+def imshow_with_colorbar(ax, *args, **kwargs):
+  '''Display an image with properly sized colorbar
+
+  Parameters
+  ----------
+  ax : matplotlib Axis
+      The axis on which to draw the image and colorbar
+
+  All remaining arguments (including the image) are passed on to ax.imshow()
+  '''
+  im = ax.imshow(*args, **kwargs)
+  divider = make_axes_locatable(ax)
+  cax = divider.append_axes("right", size="5%", pad=0.05)
+  plt.colorbar(im, cax=cax)
+
+
 def grouped_bar(features, bar_labels=None, group_labels=None, ax=None, colors=None):
   ''' features.shape like np.array([n_bars, n_groups])
 
