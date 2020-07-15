@@ -6,6 +6,7 @@ function caseify()
   shift 1
   case "${cmd}" in
     pyinstaller) # Freeze a python program
+      cd /src
       exec pipenv run "${cmd}" ${@+"${@}"}
       ;;
     nopipenv) # Run command not in pipenv
