@@ -22,3 +22,47 @@ begin_test "Translate paths"
   [ "$(translate_path //foo/boo /grey /gray /foo /bar /stuff /things)" = "/bar/boo" ]
 )
 end_test
+
+begin_test "Container environment override"
+(
+  setup_test
+
+  function test_echo()
+  {
+    echo ":${1}@${2}:"
+  }
+
+  JUST_PROJECT_PREFIX=FOO
+
+  # None
+  check_str "$(container_environment_override test_echo)" ""
+
+  # Windows
+  check_str "$(OS=Windows_NT container_environment_override test_echo)" ":JUST_HOST_WINDOWS@1:"
+
+  # Only _DOCKER
+  export FOO_DIR_DOCKER=/blah
+  check_str "$(container_environment_override test_echo)" ":FOO_DIR@/blah:"
+
+  # _DOCKER and "" should print
+  export FOO_DIR=/stuff
+  ans=":FOO_DIR_HOST@/stuff:"
+  ans+=$'\n:FOO_DIR@/blah:'
+  check_str "$(container_environment_override test_echo)" "${ans}"
+
+  # EXPORT_DOCKER
+  ans+=$'\n:FOO_DIR_DOCKER@/blah:'
+  check_str "$(EXPORT_DOCKER=1 container_environment_override test_echo)" "${ans}"
+
+  # Disable swap
+  ans=":FOO_DIR@/stuff:"
+  ans+=$'\n:FOO_DIR_DOCKER@/blah:'
+  check_str "$(JUST_DISABLE_ENVIRONMENT_SWAP=1 container_environment_override test_echo)" "${ans}"
+
+  # _HOST too. Issue #251
+  export FOO_DIR_HOST=/hosty
+  ans=":FOO_DIR@/blah:"
+  ans+=$'\n:FOO_DIR_HOST@/hosty:'
+  check_str "$(container_environment_override test_echo)" "${ans}"
+)
+end_test
