@@ -102,7 +102,6 @@ function load_just_settings()
 
   MIFS="${JUST_SETTINGS_SEPARATOR-///}" split_s JUST_SETTINGSS ${JUST_SETTINGS+"${JUST_SETTINGS}"}
   for just_settings in ${JUST_SETTINGSS[@]+"${JUST_SETTINGSS[@]}"}; do
-    echo "loading ${just_settings} ..." >&2
     source "${VSI_COMMON_DIR}/linux/just_env" "${just_settings}"
   done
 }
