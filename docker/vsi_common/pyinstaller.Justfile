@@ -7,13 +7,10 @@ function caseify()
   case "${cmd}" in
     pyinstaller) # Freeze a python program
       cd /src
-      exec pipenv run "${cmd}" ${@+"${@}"}
+      exec "${cmd}" --distpath /dist ${@+"${@}"}
       ;;
-    nopipenv) # Run command not in pipenv
-      exec ${@+"${@}"}
-      ;;
-    *) # Run command in pipenv
-      exec pipenv run "${cmd}" ${@+"${@}"}
+    *) # Run command
+      exec "${cmd}" ${@+"${@}"}
       ;;
   esac
 }
