@@ -129,7 +129,7 @@ class CiLoad:
   # 4 docker-compose build
   # 5 tag recipes
   def restore_recipes(self):
-    if self.build:
+    if self.build and self.recipes:
       Popen2([self.docker_compose_exe,
               '-f', self.recipe_compose,
               '-f', self.restore_recipe_file.name,
