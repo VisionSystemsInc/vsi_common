@@ -129,7 +129,7 @@ class CiLoad:
   # 4 docker-compose build
   # 5 tag recipes
   def restore_recipes(self):
-    if self.build:
+    if self.build and self.recipes:
       Popen2([self.docker_compose_exe,
               '-f', self.recipe_compose,
               '-f', self.restore_recipe_file.name,
@@ -223,9 +223,6 @@ class CiLoad:
 
       # Build the main (last) stage here
       build_stage(self.main_service)
-
-      build = yaml_content['services'][f'{self.main_service}_auto_gen_{stage}']['build']
-      cmd = [self.docker_exe, 'build']
 
       for service in self.other_services:
         cmd = [self.docker_exe, 'tag']
