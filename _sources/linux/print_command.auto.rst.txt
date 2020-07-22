@@ -15,6 +15,7 @@ Bash CLI version of :func:`print_command`
 
 :Arguments: ``$1``... - List of command + arguments to be echoed
 :Output: *stdout* - A quote escaped version of the command + arguments, ready for ``eval``
+:Uses: :func:`string_tools.bsh quote_escape`
 
 Accurately echoes out a properly escaped single string representation of a command + arguments.
 
@@ -31,4 +32,55 @@ Accurately echoes out a properly escaped single string representation of a comma
   eval "$(print_command "${stuff[@]}")"
   or
   bash -c "$(print_command "${stuff[@]}")"
+
+.. seealso::
+  :func:`print_command_env`
+    Version that captures changes in the environment
+
+.. function:: print_command_save_env
+
+Sets the saved version of the environment, to compare with when calling :func:`print_command_env`
+
+:func:`print_command_env` needs a before version of the environment, to compare with so it will know which environment variables changes. The only "optional variable assignments" or exported variables that will not be captures, are ones set the same value they already have.
+
+.. function:: print_command_env
+
+:Arguments: ``$1``... - List of command + arguments to be echoed
+:Output: *stdout* - A quote escaped version of the command + arguments, ready for ``eval``
+:Uses: * :func:`string_tools.bsh quote_escape`
+       * :func:`print_command`
+
+Accurately echoes out a properly escaped single string representation of a command + arguments, including any "optional variable assignments" and exported environment variables.
+
+When :func:`print_command_save_env` is called, the environment is saved and any changes made to the environment from then on, are captures in a call to :func:`print_command_env`
+
+.. rubric:: Example
+
+.. code-block:: bash
+
+  export A=1
+  export B=2
+
+  function foo()
+  {
+    ${DRYRUN} some command ${@+"${@}"}
+  }
+
+  print_command_save_env
+  export DRYRUN=print_command
+
+  # ...
+
+  foo -e q=5
+  # some command -e q=5
+  A=2 foo -t
+  # A=2 some command -t
+  B=2 foo -f
+  # some command -f
+  unset A; foo -y
+  # (unset A; some command -y)
+  export A=1
+  export C=4
+  foo c
+  # C=4 some command c
 

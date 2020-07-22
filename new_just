@@ -271,10 +271,32 @@ if [ -f "${VSI_COMMON_DIR}/linux/compat.bsh" ]; then
 else
 load_vsi_compat () 
 { 
+    if [ -z "${VSI_SED_COMPAT-}" ]; then
+        local VSI_SED_COMPAT;
+        if [[ ${OSTYPE-} = darwin* ]]; then
+            VSI_SED_COMPAT=bsd;
+        else
+            if [[ $(sed --version) = GNU* ]]; then
+                VSI_SED_COMPAT=gnu;
+            else
+                VSI_SED_COMPAT=bsd;
+            fi;
+        fi;
+    fi;
     if [ "${VSI_SED_COMPAT-}" = "gnu" ]; then
         sed_flag_rE='r';
     else
         sed_flag_rE='E';
+    fi;
+    if [[ ${OSTYPE-} = darwin* ]]; then
+        sed_flag_i="i ''";
+    else
+        sed_flag_i='i';
+    fi;
+    if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -gt "43" ]; then
+        bash_declare_array_quote="";
+    else
+        bash_declare_array_quote="'";
     fi
 }
 
@@ -381,7 +403,8 @@ function write_setup_env()
 {
   exists "${1}" && return 0
 
-  uwecho 'export JUST_SETUP_SCRIPT="$(basename "${BASH_SOURCE[0]}")"
+  uwecho "test -f $(quote_escape "${RELATIVE_PATH}/linux/check_shell") && $(quote_escape "${RELATIVE_PATH}/linux/check_shell") bash zsh"'
+          export JUST_SETUP_SCRIPT="$(basename "${BASH_SOURCE[0]}")"
           source "$(dirname "${BASH_SOURCE[0]}")/"'"$(quote_escape "${RELATIVE_PATH}/env.bsh")" >> "${1}"
   if [ "${JUSTFILE}" != "Justfile" ]; then
     echo "export JUSTFILE=$(quote_escape "${JUSTFILE}")" >> "${1}"

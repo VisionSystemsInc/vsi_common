@@ -188,25 +188,92 @@
             
   <div class="section" id="j-u-s-t-makeself-functions">
 <h1>J.U.S.T. Makeself Functions<a class="headerlink" href="#j-u-s-t-makeself-functions" title="Permalink to this headline">¶</a></h1>
+<p>A plugin for creating a <a class="reference external" href="https://makeself.io/">makeself executable</a>, using a docker container.</p>
+<p>The features of this plugin are focused on putting <a class="reference internal" href="../just.auto.html#file-just"><code class="xref bash bash-file docutils literal notranslate"><span class="pre">just</span></code></a> in a self sufficient executable, for deployment of just and just projects.</p>
+<ul class="simple">
+<li><p>A just deploying, referred to as <code class="docutils literal notranslate"><span class="pre">juste</span></code> (<code class="docutils literal notranslate"><span class="pre">just</span></code> Executable) allows just to be run without the vsi_common submodule in a project. However, it does require you have <code class="docutils literal notranslate"><span class="pre">juste</span></code> installed/available on every machine you need it on. No other dependencies are needed, other than <code class="docutils literal notranslate"><span class="pre">bash</span></code> and common linux core tools like <code class="docutils literal notranslate"><span class="pre">tar</span></code>, <code class="docutils literal notranslate"><span class="pre">awk</span></code> and <code class="docutils literal notranslate"><span class="pre">sed</span></code>.</p></li>
+<li><p>A “just project executable” is similar to <code class="docutils literal notranslate"><span class="pre">juste</span></code>, but with one significant difference. It includes all the files of a project with it. This means that the repository for a project is no longer needed to run the project. This makes for a very easy to run deployment strategy. Again, the only dependencies are <code class="docutils literal notranslate"><span class="pre">bash</span></code>, <code class="docutils literal notranslate"><span class="pre">tar</span></code>, <code class="docutils literal notranslate"><span class="pre">awk</span></code>, <code class="docutils literal notranslate"><span class="pre">sed</span></code>, etc…</p></li>
+</ul>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Large files should not includes in just project executables. Makeself (quietly) extract the entire contents of the project every time it is run. While this works with in reason, once you start including MBs of files, this time will eventually become noticeable.</p>
+</div>
+<p>The executables made by this plugin put the makeself executables in <code class="docutils literal notranslate"><span class="pre">quiet</span></code> modes, and the normal argument parsing of makeself is also disabled. This creates a smoother experience for the end user.</p>
+<p>Makeself argument parsing can be enabled by exporting <code class="docutils literal notranslate"><span class="pre">MAKESELF_PARSE=true</span></code>. This can be useful if you ever want to permanently extract the executable, and use the expanded version.</p>
 <dl class="file">
 <dt id="file-just_makeself_functions.bsh">
 <code class="sig-name descname">just_makeself_functions.bsh</code><a class="headerlink" href="#file-just_makeself_functions.bsh" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
+<p>Most environment variables try to auto determine reasonable defaults, but they can always be overridden and customized.</p>
+<dl class="env">
+<dt id="env-just_makeself_functions.bsh MAKESELF_NAME">
+<code class="sig-name descname">MAKESELF_NAME</code><a class="headerlink" href="#env-just_makeself_functions.bsh MAKESELF_NAME" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<p>The name of the makeself executable written to <a class="reference internal" href="#env-just_makeself_functions.bsh MAKESELF_DIST_DIR"><code class="xref bash bash-env docutils literal notranslate"><span class="pre">MAKESELF_DIST_DIR</span></code></a>. Default: <code class="docutils literal notranslate"><span class="pre">just</span></code></p>
+<dl class="env">
+<dt id="env-just_makeself_functions.bsh MAKESELF_LABEL">
+<code class="sig-name descname">MAKESELF_LABEL</code><a class="headerlink" href="#env-just_makeself_functions.bsh MAKESELF_LABEL" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<p>The makeself internal “label”. Not really relevant, as quiet mode is enforced. Default: just_label.</p>
+<dl class="env">
+<dt id="env-just_makeself_functions.bsh MAKESELF_SOURCE_DIR">
+<code class="sig-name descname">MAKESELF_SOURCE_DIR</code><a class="headerlink" href="#env-just_makeself_functions.bsh MAKESELF_SOURCE_DIR" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<p>The input directory of the files used to add files to the makeself executable. Default: <code class="docutils literal notranslate"><span class="pre">${JUST_PROJECT_PREFIX}_MAKESELF_SRC_DIR</span></code> or else <code class="docutils literal notranslate"><span class="pre">${JUST_PROJECT_PREFIX}_CWD</span></code>.</p>
+<dl class="env">
+<dt id="env-just_makeself_functions.bsh MAKESELF_DIST_DIR">
+<code class="sig-name descname">MAKESELF_DIST_DIR</code><a class="headerlink" href="#env-just_makeself_functions.bsh MAKESELF_DIST_DIR" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<p>The output directory for the makeself distribution. Default: <code class="docutils literal notranslate"><span class="pre">${MAKESELF_SOURCE_DIR}/dist</span></code></p>
+<dl class="env">
+<dt id="env-just_makeself_functions.bsh VSI_COMMON_UID">
+<code class="sig-name descname">VSI_COMMON_UID</code><a class="headerlink" href="#env-just_makeself_functions.bsh VSI_COMMON_UID" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="env">
+<dt id="env-just_makeself_functions.bsh VSI_COMMON_GIDS">
+<code class="sig-name descname">VSI_COMMON_GIDS</code><a class="headerlink" href="#env-just_makeself_functions.bsh VSI_COMMON_GIDS" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<p>Used to determine user id in container. Should be automatically set by Project’s <code class="docutils literal notranslate"><span class="pre">${JUST_PROJECT_PREFIX}_UID</span></code> and <code class="docutils literal notranslate"><span class="pre">${JUST_PROJECT_PREFIX}_GID</span></code>, or else uses <code class="docutils literal notranslate"><span class="pre">1000</span></code>.</p>
+<dl class="env">
+<dt id="env-just_makeself_functions.bsh VSI_COMMON_JUST_SETTINGS">
+<code class="sig-name descname">VSI_COMMON_JUST_SETTINGS</code><a class="headerlink" href="#env-just_makeself_functions.bsh VSI_COMMON_JUST_SETTINGS" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<p>In more complicated projects, the <span class="target" id="index-0"></span><a class="reference internal" href="../just_functions.auto.html#envvar-JUST_SETTINGS"><code class="xref std std-envvar docutils literal notranslate"><span class="pre">JUST_SETTINGS</span></code></a> variable cannot be auto determined, and must be set via <a class="reference internal" href="#env-just_makeself_functions.bsh VSI_COMMON_JUST_SETTINGS"><code class="xref bash bash-env docutils literal notranslate"><span class="pre">VSI_COMMON_JUST_SETTINGS</span></code></a>.</p>
+<p>Set values should start with <code class="docutils literal notranslate"><span class="pre">${JUST_PATH_ESC}/</span></code> and must be in the container’s file system, not hosts. That means it depends on how <a class="reference internal" href="#env-just_makeself_functions.bsh MAKESELF_SOURCE_DIR"><code class="xref bash bash-env docutils literal notranslate"><span class="pre">MAKESELF_SOURCE_DIR</span></code></a> is mounted.</p>
 <dl class="function">
 <dt id="function-just_makeself_functions.bsh makeself_defaultify">
 <code class="sig-name descname">makeself_defaultify</code><a class="headerlink" href="#function-just_makeself_functions.bsh makeself_defaultify" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="command">
-<dt id="command-just_makeself_functions.bsh makeself_defaultify makeself_setup-local">
-<code class="sig-prename descclassname">just makeself setup-local</code><a class="headerlink" href="#command-just_makeself_functions.bsh makeself_defaultify makeself_setup-local" title="Permalink to this definition">¶</a></dt>
+<dt id="command-just_makeself_functions.bsh makeself_defaultify makeself_build">
+<code class="sig-prename descclassname">just makeself build</code><a class="headerlink" href="#command-just_makeself_functions.bsh makeself_defaultify makeself_build" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
-<p>Download and install makeself locally in Project’s CWD/build/makeself</p>
+<p>Build the makeself docker images.</p>
+<dl class="env">
+<dt id="env-just_makeself_functions.bsh makeself_defaultify MAKESELF_IMAGE">
+<code class="sig-name descname">MAKESELF_IMAGE</code><a class="headerlink" href="#env-just_makeself_functions.bsh makeself_defaultify MAKESELF_IMAGE" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<p>The name of the makeself docker image. Default: vsiri/makeself:latest</p>
+<dl class="env">
+<dt id="env-just_makeself_functions.bsh makeself_defaultify MAKESELF_VERSION">
+<code class="sig-name descname">MAKESELF_VERSION</code><a class="headerlink" href="#env-just_makeself_functions.bsh makeself_defaultify MAKESELF_VERSION" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<p>The branch/tag name or SHA of makeself used. Requires version 2.4.3 or newer.</p>
 <dl class="command">
-<dt id="command-just_makeself_functions.bsh makeself_defaultify makeself_just-project-locally">
-<code class="sig-prename descclassname">just makeself just-project-locally</code><a class="headerlink" href="#command-just_makeself_functions.bsh makeself_defaultify makeself_just-project-locally" title="Permalink to this definition">¶</a></dt>
+<dt id="command-just_makeself_functions.bsh makeself_defaultify makeself_just-project">
+<code class="sig-prename descclassname">just makeself just-project</code><a class="headerlink" href="#command-just_makeself_functions.bsh makeself_defaultify makeself_just-project" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="field-list simple">
@@ -217,11 +284,11 @@
 </dd>
 <dt class="field-even">Uses</dt>
 <dd class="field-even"><ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">tar</span></code> - Only works with GNU Tar on the path.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tar</span></code> - Only works using GNU Tar.</p></li>
 </ul>
 </dd>
 </dl>
-<p>Creates a just project executable using makeself. Should be called from the main project’s just project, otherwise directory paths will not line up. After the initial executable is added, called to <strong class="command">makeself_add-files-locally</strong> should be made to add project files. For example:</p>
+<p>Creates a just project executable using makeself. Should be called from the main project’s just project, otherwise directory paths will be auto determined correctly. After the initial executable is added, called to <strong class="command">makeself_add-files</strong> should be made to add project files. For example:</p>
 <ul class="simple">
 <li><p>Project: <code class="docutils literal notranslate"><span class="pre">foo</span></code> in <code class="docutils literal notranslate"><span class="pre">.</span></code></p></li>
 <li><p>Submodule: <code class="docutils literal notranslate"><span class="pre">bar</span></code> in <code class="docutils literal notranslate"><span class="pre">./external/bar</span></code></p></li>
@@ -233,10 +300,14 @@
 <li><p>Call: <code class="docutils literal notranslate"><span class="pre">makeself_add-files-locally</span> <span class="pre">./external/bar</span> <span class="pre">'&quot;--show-transformed</span> <span class="pre">--transform</span> <span class="pre">s|^\./|./${bar_rel}/|</span> <span class="pre">--exclude=.git</span> <span class="pre">--exclude=./docs</span> <span class="pre">--exclude=./external</span> <span class="pre">--exclude=./tests&quot;'</span></code> in <code class="docutils literal notranslate"><span class="pre">.</span></code></p></li>
 <li><p>Call: <code class="docutils literal notranslate"><span class="pre">makeself_add-files-locally</span> <span class="pre">./</span> <span class="pre">'&quot;--exclude=.git</span> <span class="pre">--exclude=./docs</span> <span class="pre">--exclude=./external/bar</span> <span class="pre">--exclude=./tests&quot;'</span></code> in <code class="docutils literal notranslate"><span class="pre">.</span></code></p></li>
 </ol>
-<p>All calls are made from the root repo directory (<code class="docutils literal notranslate"><span class="pre">.</span></code>), and the output will be in <code class="docutils literal notranslate"><span class="pre">./dist</span></code></p>
+<p>All calls are made from the root repo directory (<code class="docutils literal notranslate"><span class="pre">.</span></code>)</p>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#command-just_makeself_functions.bsh makeself_defaultify makeself_add-files"><code class="xref bash bash-cmd docutils literal notranslate"><span class="pre">makeself_add-files</span></code></a></p>
+</div>
 <dl class="command">
-<dt id="command-just_makeself_functions.bsh makeself_defaultify makeself_add-files-locally">
-<code class="sig-prename descclassname">just makeself add-files-locally</code><a class="headerlink" href="#command-just_makeself_functions.bsh makeself_defaultify makeself_add-files-locally" title="Permalink to this definition">¶</a></dt>
+<dt id="command-just_makeself_functions.bsh makeself_defaultify makeself_add-files">
+<code class="sig-prename descclassname">just makeself add-files</code><a class="headerlink" href="#command-just_makeself_functions.bsh makeself_defaultify makeself_add-files" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="field-list simple">
@@ -247,13 +318,49 @@
 </ul>
 </dd>
 </dl>
-<p>After the initial just executable is created by calling <strong class="command">makeself_just-project-locally</strong>, project directories are called using <strong class="command">makeself_add-files-locally</strong></p>
-<p>The second argument should be used to exclude files, and in complicated situations, set up path transforms.
-* Simple: <code class="docutils literal notranslate"><span class="pre">${project_dir}/external/vsi_common</span></code>
-* Complicated: <code class="docutils literal notranslate"><span class="pre">${project_dir}/external/${other_project}/external/vsi_common</span></code></p>
+<p>After the initial just executable is created by calling <strong class="command">makeself_just-project</strong>, project directories are added using <strong class="command">makeself_add-files</strong></p>
+<p>The second argument can be used to exclude files, and in complicated situations, set up path transforms.
+* Simple case: <code class="docutils literal notranslate"><span class="pre">${project_dir}/external/vsi_common</span></code>
+* Complicated case: <code class="docutils literal notranslate"><span class="pre">${project_dir}/external/${other_project}/external/vsi_common</span></code></p>
+<p class="rubric">Example just targets</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>makeself<span class="o">)</span> <span class="c1"># Simple case</span>
+  justify makeself just-project
+  justify makeself add-files <span class="s2">&quot;</span><span class="si">${</span><span class="nv">MY_PROJECT_CWD</span><span class="si">}</span><span class="s2">&quot;</span> <span class="s2">&quot;--exclude .git --exclude ./external/vsi_common&quot;</span>
+  <span class="p">;;</span>
+
+makeself_complicated<span class="o">)</span> <span class="c1"># Complicated case</span>
+  <span class="c1"># First step is the same, it uses your PWD do determing the &quot;main dir&quot;,</span>
+  <span class="c1"># so it can determine the relative path of VSI_COMMON_DIR</span>
+  justify makeself just-project
+
+  <span class="c1"># The &quot;other project&quot; has a different default settings file.</span>
+  <span class="c1"># Tell the makeself plugin what it is</span>
+  <span class="nb">local</span> <span class="nv">VSI_COMMON_JUST_SETTINGS</span><span class="o">=</span>/src/other_project.env
+  <span class="c1"># Now determine the other project relative path (again, to pwd aka &quot;.&quot;)</span>
+  <span class="c1"># This is too variable to be automated</span>
+  <span class="nb">local</span> <span class="nv">other_project_rel</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>relative_path <span class="s2">&quot;</span><span class="si">${</span><span class="nv">OTHER_PROJECT_CWD</span><span class="si">}</span><span class="s2">&quot;</span> .<span class="k">)</span><span class="s2">&quot;</span>
+  <span class="c1"># Add the other project files</span>
+  justify makeself add-files <span class="s2">&quot;</span><span class="si">${</span><span class="nv">OTHER_PROJECT_CWD</span><span class="si">}</span><span class="s2">&quot;</span> <span class="se">\</span>
+    <span class="s2">&quot;--show-transformed --transform s|^\./|./</span><span class="si">${</span><span class="nv">other_project_rel</span><span class="si">}</span><span class="s2">/| --exclude=.git --exclude=./external/vsi_common&quot;</span>
+    <span class="c1"># The above transform, makes the files in /src/ appear to be in the</span>
+    <span class="c1"># &quot;relative&quot; path, determined above</span>
+
+  <span class="c1"># Finally add the &quot;main&quot; project files.</span>
+  justify makeself add-files <span class="s2">&quot;</span><span class="si">${</span><span class="nv">MY_PROJECT_CWD</span><span class="si">}</span><span class="s2">&quot;</span> <span class="s2">&quot;--exclude .git --exclude ./external/other_project&quot;</span>
+
+  <span class="c1"># A neat trick to &quot;exclude all subdirectories except those you want to include&quot;</span>
+  <span class="c1"># justify makeself add-files &quot;${MY_PROJECT_CWD}&quot; \</span>
+  <span class="c1">#   &quot;$(find . -mindepth 1 -maxdepth 1 -type d -not -name keep_dir_1 \</span>
+  <span class="c1">#                                             -not -name keep_dir_2 \</span>
+  <span class="c1">#                                             -not -name keep_dir_3 -printf &#39; --exclude %p&#39;)&quot;</span>
+  <span class="c1"># Note: This also includes all the files in the root dir too. This can</span>
+  <span class="c1"># be customized you your heart&#39;s content.</span>
+  <span class="p">;;</span>
+</pre></div>
+</div>
 <div class="admonition seealso">
 <p class="admonition-title">See also</p>
-<p><strong class="command">makeself_just-project-locally</strong></p>
+<p><a class="reference internal" href="#command-just_makeself_functions.bsh makeself_defaultify makeself_just-project"><code class="xref bash bash-cmd docutils literal notranslate"><span class="pre">makeself_just-project</span></code></a></p>
 </div>
 </div>
 

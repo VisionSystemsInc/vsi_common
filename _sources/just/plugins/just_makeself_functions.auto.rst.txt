@@ -4,20 +4,72 @@ J.U.S.T. Makeself Functions
 
 .. default-domain:: bash
 
+A plugin for creating a `makeself executable <https://makeself.io/>`_, using a docker container.
+
+The features of this plugin are focused on putting :file:`just` in a self sufficient executable, for deployment of just and just projects.
+
+- A just deploying, referred to as ``juste`` (``just`` Executable) allows just to be run without the vsi_common submodule in a project. However, it does require you have ``juste`` installed/available on every machine you need it on. No other dependencies are needed, other than ``bash`` and common linux core tools like ``tar``, ``awk`` and ``sed``.
+- A "just project executable" is similar to ``juste``, but with one significant difference. It includes all the files of a project with it. This means that the repository for a project is no longer needed to run the project. This makes for a very easy to run deployment strategy. Again, the only dependencies are ``bash``, ``tar``, ``awk``, ``sed``, etc...
+
+.. note::
+
+  Large files should not includes in just project executables. Makeself (quietly) extract the entire contents of the project every time it is run. While this works with in reason, once you start including MBs of files, this time will eventually become noticeable.
+
+The executables made by this plugin put the makeself executables in ``quiet`` modes, and the normal argument parsing of makeself is also disabled. This creates a smoother experience for the end user.
+
+Makeself argument parsing can be enabled by exporting ``MAKESELF_PARSE=true``. This can be useful if you ever want to permanently extract the executable, and use the expanded version.
+
 .. file:: just_makeself_functions.bsh
+
+Most environment variables try to auto determine reasonable defaults, but they can always be overridden and customized.
+
+.. env:: MAKESELF_NAME
+
+The name of the makeself executable written to :env:`MAKESELF_DIST_DIR`. Default: ``just``
+
+.. env:: MAKESELF_LABEL
+
+The makeself internal "label". Not really relevant, as quiet mode is enforced. Default: just_label.
+
+.. env:: MAKESELF_SOURCE_DIR
+
+The input directory of the files used to add files to the makeself executable. Default: ``${JUST_PROJECT_PREFIX}_MAKESELF_SRC_DIR`` or else ``${JUST_PROJECT_PREFIX}_CWD``.
+
+.. env:: MAKESELF_DIST_DIR
+
+The output directory for the makeself distribution. Default: ``${MAKESELF_SOURCE_DIR}/dist``
+
+.. env:: VSI_COMMON_UID
+.. env:: VSI_COMMON_GIDS
+
+Used to determine user id in container. Should be automatically set by Project's ``${JUST_PROJECT_PREFIX}_UID`` and ``${JUST_PROJECT_PREFIX}_GID``, or else uses ``1000``.
+
+.. env:: VSI_COMMON_JUST_SETTINGS
+
+In more complicated projects, the :envvar:`JUST_SETTINGS` variable cannot be auto determined, and must be set via :env:`VSI_COMMON_JUST_SETTINGS`.
+
+Set values should start with ``${JUST_PATH_ESC}/`` and must be in the container's file system, not hosts. That means it depends on how :env:`MAKESELF_SOURCE_DIR` is mounted.
 
 .. function:: makeself_defaultify
 
-.. command:: makeself_setup-local
+.. command:: makeself_build
 
-Download and install makeself locally in Project's CWD/build/makeself
+Build the makeself docker images.
 
-.. command:: makeself_just-project-locally
+.. env:: MAKESELF_IMAGE
+
+The name of the makeself docker image. Default: vsiri/makeself:latest
+
+.. env:: MAKESELF_VERSION
+
+The branch/tag name or SHA of makeself used. Requires version 2.4.3 or newer.
+
+.. command:: makeself_just-project
 
 :Arguments: * ``[--tests]`` - Include unit tests. Calling this from another project is tricky though. For example, ``./just --wrap bash -c 'JUSTFILE="${VSI_COMMON_DIR}/Justfile" just test'``
-:Uses: - ``tar`` - Only works with GNU Tar on the path.
+:Uses: - ``tar`` - Only works using GNU Tar.
 
-Creates a just project executable using makeself. Should be called from the main project's just project, otherwise directory paths will not line up. After the initial executable is added, called to :command:`makeself_add-files-locally` should be made to add project files. For example:
+Creates a just project executable using makeself. Should be called from the main project's just project, otherwise directory paths will be auto determined correctly. After the initial executable is added, called to :command:`makeself_add-files` should be made to add project files. For example:
 
 * Project: ``foo`` in ``.``
 * Submodule: ``bar`` in ``./external/bar``
@@ -28,19 +80,60 @@ Creates a just project executable using makeself. Should be called from the main
 #. Call: ``makeself_add-files-locally ./external/bar '"--show-transformed --transform s|^\./|./${bar_rel}/| --exclude=.git --exclude=./docs --exclude=./external --exclude=./tests"'`` in ``.``
 #. Call: ``makeself_add-files-locally ./ '"--exclude=.git --exclude=./docs --exclude=./external/bar --exclude=./tests"'`` in ``.``
 
-All calls are made from the root repo directory (``.``), and the output will be in ``./dist``
+All calls are made from the root repo directory (``.``)
 
-.. command:: makeself_add-files-locally
+.. seealso::
+  :cmd:`makeself_add-files`
+
+.. command:: makeself_add-files
 
 :Arguments: * ``$1`` - Directory to add
             * ``[$2]`` - Extra tar flags to be passed to makeself/tar
 
-After the initial just executable is created by calling :command:`makeself_just-project-locally`, project directories are called using :command:`makeself_add-files-locally`
+After the initial just executable is created by calling :command:`makeself_just-project`, project directories are added using :command:`makeself_add-files`
 
-The second argument should be used to exclude files, and in complicated situations, set up path transforms.
-* Simple: ``${project_dir}/external/vsi_common``
-* Complicated: ``${project_dir}/external/${other_project}/external/vsi_common``
+The second argument can be used to exclude files, and in complicated situations, set up path transforms.
+* Simple case: ``${project_dir}/external/vsi_common``
+* Complicated case: ``${project_dir}/external/${other_project}/external/vsi_common``
+
+.. rubric:: Example just targets
+
+.. code-block:: bash
+
+  makeself) # Simple case
+    justify makeself just-project
+    justify makeself add-files "${MY_PROJECT_CWD}" "--exclude .git --exclude ./external/vsi_common"
+    ;;
+
+  makeself_complicated) # Complicated case
+    # First step is the same, it uses your PWD do determing the "main dir",
+    # so it can determine the relative path of VSI_COMMON_DIR
+    justify makeself just-project
+
+    # The "other project" has a different default settings file.
+    # Tell the makeself plugin what it is
+    local VSI_COMMON_JUST_SETTINGS=/src/other_project.env
+    # Now determine the other project relative path (again, to pwd aka ".")
+    # This is too variable to be automated
+    local other_project_rel="$(relative_path "${OTHER_PROJECT_CWD}" .)"
+    # Add the other project files
+    justify makeself add-files "${OTHER_PROJECT_CWD}" \
+      "--show-transformed --transform s|^\./|./${other_project_rel}/| --exclude=.git --exclude=./external/vsi_common"
+      # The above transform, makes the files in /src/ appear to be in the
+      # "relative" path, determined above
+
+    # Finally add the "main" project files.
+    justify makeself add-files "${MY_PROJECT_CWD}" "--exclude .git --exclude ./external/other_project"
+
+    # A neat trick to "exclude all subdirectories except those you want to include"
+    # justify makeself add-files "${MY_PROJECT_CWD}" \
+    #   "$(find . -mindepth 1 -maxdepth 1 -type d -not -name keep_dir_1 \
+    #                                             -not -name keep_dir_2 \
+    #                                             -not -name keep_dir_3 -printf ' --exclude %p')"
+    # Note: This also includes all the files in the root dir too. This can
+    # be customized you your heart's content.
+    ;;
 
 .. seealso::
-  :command:`makeself_just-project-locally`
+  :cmd:`makeself_just-project`
 

@@ -1,0 +1,544 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>new_notebook &mdash; VSI Common 0.2.2+1dev documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+  <script type="text/javascript" src="../_static/js/modernizr.min.js"></script>
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script type="text/javascript" src="../_static/jquery.js"></script>
+        <script type="text/javascript" src="../_static/underscore.js"></script>
+        <script type="text/javascript" src="../_static/doctools.js"></script>
+        <script type="text/javascript" src="../_static/language_data.js"></script>
+    
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+    
+
+  
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> VSI Common
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../just/index.html">J.U.S.T. Useful Simple Tasking</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../linux/index.html">Linux Utilities</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../windows/index.html">Windows Utilities</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tests/index.html">Unit Tests</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../python/modules.html">vsi</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../docker/recipes/get-pipenv.auto.html">Get Pipenv</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../docker/recipes/index.html">Docker recipes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../style.html">Contributing Style Guide</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">VSI Common</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="index.html">Module code</a> &raquo;</li>
+        
+      <li>new_notebook</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for new_notebook</h1><div class="highlight"><pre>
+<span></span><span class="ch">#!/usr/bin/env python</span>
+
+<span class="kn">import</span> <span class="nn">argparse</span>
+<span class="kn">import</span> <span class="nn">atexit</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">shutil</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">tempfile</span>
+<span class="kn">from</span> <span class="nn">glob</span> <span class="k">import</span> <span class="n">glob</span>
+
+<span class="k">try</span><span class="p">:</span>
+  <span class="kn">from</span> <span class="nn">urllib.request</span> <span class="k">import</span> <span class="n">urlopen</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+  <span class="kn">from</span> <span class="nn">urllib2</span> <span class="k">import</span> <span class="n">urlopen</span>
+
+<span class="kn">from</span> <span class="nn">subprocess</span> <span class="k">import</span> <span class="n">Popen</span> <span class="k">as</span> <span class="n">Popen_orig</span><span class="p">,</span> <span class="n">PIPE</span>
+
+<div class="viewcode-block" id="Popen"><a class="viewcode-back" href="../linux/python_scripts/new_notebook.html#new_notebook.Popen">[docs]</a><span class="k">class</span> <span class="nc">Popen</span><span class="p">(</span><span class="n">Popen_orig</span><span class="p">):</span>
+<div class="viewcode-block" id="Popen.wait"><a class="viewcode-back" href="../linux/python_scripts/new_notebook.html#new_notebook.Popen.wait">[docs]</a>  <span class="k">def</span> <span class="nf">wait</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="n">rv</span> <span class="o">=</span> <span class="nb">super</span><span class="p">(</span><span class="n">Popen</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>
+    <span class="k">assert</span> <span class="n">rv</span> <span class="o">==</span> <span class="mi">0</span>
+    <span class="k">return</span> <span class="n">rv</span></div></div>
+
+<span class="c1"># https://stackoverflow.com/a/5227009/4166604</span>
+<div class="viewcode-block" id="which"><a class="viewcode-back" href="../linux/python_scripts/new_notebook.html#new_notebook.which">[docs]</a><span class="k">def</span> <span class="nf">which</span><span class="p">(</span><span class="n">file</span><span class="p">,</span> <span class="n">windows_extension</span><span class="o">=</span><span class="s1">&#39;exe&#39;</span><span class="p">):</span>
+  <span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">platform</span><span class="o">==</span><span class="s1">&#39;win32&#39;</span><span class="p">:</span>
+    <span class="n">file</span><span class="o">=</span><span class="n">file</span><span class="o">+</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">extsep</span><span class="o">+</span><span class="n">windows_extension</span>
+  <span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">&quot;PATH&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">pathsep</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">file</span><span class="p">)):</span>
+      <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">file</span><span class="p">)</span>
+  <span class="k">return</span> <span class="kc">None</span></div>
+
+<div class="viewcode-block" id="find"><a class="viewcode-back" href="../linux/python_scripts/new_notebook.html#new_notebook.find">[docs]</a><span class="k">def</span> <span class="nf">find</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">path</span><span class="p">):</span>
+  <span class="k">for</span> <span class="n">root</span><span class="p">,</span> <span class="n">dirs</span><span class="p">,</span> <span class="n">files</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">files</span><span class="p">:</span>
+      <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="patch_site"><a class="viewcode-back" href="../linux/python_scripts/new_notebook.html#new_notebook.patch_site">[docs]</a><span class="k">def</span> <span class="nf">patch_site</span><span class="p">(</span><span class="n">site</span><span class="p">,</span> <span class="n">config_dir</span><span class="p">,</span> <span class="n">data_dir</span><span class="p">):</span>
+  <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">site</span><span class="p">,</span> <span class="s1">&#39;a&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fid</span><span class="p">:</span>
+    <span class="n">fid</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s1">&#39;&#39;&#39;</span>
+<span class="s1">os.environ[&#39;JUPYTER_CONFIG_DIR&#39;] = &#39;&#39;&#39;</span>
+<span class="sd">&#39;&#39;&#39;os.path.abspath(os.path.join(os.path.dirname(__file__), {}))</span>
+<span class="sd">os.environ[&#39;JUPYTER_DATA_DIR&#39;] = &#39;&#39;&#39;</span>
+<span class="sd">&#39;&#39;&#39;os.path.abspath(os.path.join(os.path.dirname(__file__), {}))&#39;&#39;&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+      <span class="nb">repr</span><span class="p">(</span><span class="n">config_dir</span><span class="p">),</span>
+      <span class="nb">repr</span><span class="p">(</span><span class="n">data_dir</span><span class="p">)))</span></div>
+
+<div class="viewcode-block" id="get_parser"><a class="viewcode-back" href="../linux/python_scripts/new_notebook.html#new_notebook.get_parser">[docs]</a><span class="k">def</span> <span class="nf">get_parser</span><span class="p">():</span>
+  <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">()</span>
+  <span class="n">aa</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span>
+  <span class="n">aa</span><span class="p">(</span><span class="s1">&#39;--notebook-dir&#39;</span><span class="p">,</span>
+     <span class="n">default</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">expanduser</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s1">&#39;~&#39;</span><span class="p">,</span> <span class="s1">&#39;notebooks&#39;</span><span class="p">)),</span>
+     <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Location where the notebooks will be stored&quot;</span><span class="p">)</span>
+  <span class="n">aa</span><span class="p">(</span><span class="s1">&#39;--ip&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s1">&#39;0.0.0.0&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s1">&#39;IP the notebook server will bind to&#39;</span><span class="p">)</span>
+  <span class="n">aa</span><span class="p">(</span><span class="s1">&#39;--port&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s1">&#39;8888&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s1">&#39;Port the notebook server will bind to&#39;</span><span class="p">)</span>
+  <span class="n">aa</span><span class="p">(</span><span class="s1">&#39;--browser&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s1">&#39;store_true&#39;</span><span class="p">,</span>
+     <span class="n">help</span><span class="o">=</span><span class="s1">&#39;Open the web browser on start&#39;</span><span class="p">)</span>
+  <span class="n">aa</span><span class="p">(</span><span class="s1">&#39;--random-token&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s1">&#39;store_true&#39;</span><span class="p">,</span>
+     <span class="n">help</span><span class="o">=</span><span class="s1">&#39;Use a random token&#39;</span><span class="p">)</span>
+  <span class="n">aa</span><span class="p">(</span><span class="s1">&#39;--one-python&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s1">&#39;store_true&#39;</span><span class="p">,</span>
+     <span class="n">help</span><span class="o">=</span><span class="s1">&#39;&#39;&#39;Don&#39;t try and look for another python2/3. You may need &#39;&#39;&#39;</span>
+          <span class="sd">&#39;&#39;&#39;to do this if you don&#39;t have the python-devel installed &#39;&#39;&#39;</span>
+          <span class="sd">&#39;&#39;&#39;for both pythons&#39;&#39;&#39;</span><span class="p">)</span>
+  <span class="n">aa</span><span class="p">(</span><span class="s1">&#39;--token&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s1">&#39;Fixed token to use&#39;</span><span class="p">)</span>
+  <span class="k">return</span> <span class="n">parser</span></div>
+
+<span class="n">windows_bash_kernel_json</span> <span class="o">=</span> <span class="sa">r</span><span class="s1">&#39;&#39;&#39;{</span>
+<span class="s1">  &quot;display_name&quot;: &quot;Bash&quot;,</span>
+<span class="s1">  &quot;language&quot;: &quot;bash&quot;,</span>
+<span class="s1">  &quot;argv&quot;: [</span>
+<span class="s1">   &quot;c:\\Windows\\System32\\bash.exe&quot;, &quot;-c&quot;,</span>
+<span class="s1">   &quot;~/bash_kernel/bin/python -m bash_kernel -f \&quot;`wslpath \&quot;</span><span class="si">{connection_file}</span><span class="s1">\&quot;`\&quot;&quot;</span>
+<span class="s1">  ]</span>
+<span class="s1">}&#39;&#39;&#39;</span>
+
+<span class="n">pipfile_3</span> <span class="o">=</span> <span class="s1">&#39;&#39;&#39;[[source]]</span>
+<span class="s1">name = &quot;pypi&quot;</span>
+<span class="s1">url = &quot;https://pypi.org/simple&quot;</span>
+<span class="s1">verify_ssl = true</span>
+
+<span class="s1">[dev-packages]</span>
+
+<span class="s1">[packages]</span>
+
+<span class="s1">[requires]</span>
+<span class="s1">python_version = &quot;3&quot;&#39;&#39;&#39;</span>
+
+<span class="n">pipfile_2</span> <span class="o">=</span> <span class="s1">&#39;&#39;&#39;[[source]]</span>
+<span class="s1">name = &quot;pypi&quot;</span>
+<span class="s1">url = &quot;https://pypi.org/simple&quot;</span>
+<span class="s1">verify_ssl = true</span>
+
+<span class="s1">[dev-packages]</span>
+
+<span class="s1">[packages]</span>
+
+<span class="s1">[requires]</span>
+<span class="s1">python_version = &quot;2&quot;&#39;&#39;&#39;</span>
+
+<span class="n">jupyter_notebook_config_py</span> <span class="o">=</span> <span class="s2">&quot;&quot;&quot;c.NotebookApp.ip = </span><span class="si">{ip}</span><span class="s2"></span>
+<span class="s2"># To link to a specific NIC: pip install netifaces</span>
+<span class="s2"># c.NotebookApp.ip=netifaces.ifaddresses(&#39;eth0&#39;)[netifaces.AF_INET][0][&#39;addr&#39;]</span>
+<span class="s2"># Put in try/except just in case</span>
+<span class="s2">c.NotebookApp.port = </span><span class="si">{port}</span><span class="s2"></span>
+<span class="s2">c.NotebookApp.notebook_dir = </span><span class="si">{notebooks}</span><span class="s2"></span>
+<span class="s2">c.NotebookApp.open_browser = </span><span class="si">{browser}</span><span class="se">\n</span><span class="s2">&quot;&quot;&quot;</span>
+
+<span class="n">add_header</span> <span class="o">=</span> <span class="s1">&#39;&#39;&#39;#!/usr/bin/env python</span>
+
+<span class="s1">import json</span>
+<span class="s1">import os</span>
+<span class="s1">import sys</span>
+<span class="s1">import argparse</span>
+
+<span class="s1">parser = argparse.ArgumentParser(description=&#39;Add kernel.json for </span><span class="si">{}</span><span class="s1">&#39;)</span>
+<span class="s1">parser.add_argument(&#39;name&#39;, help=&#39;Name of kernel&#39;)</span>
+<span class="s1">args = parser.parse_args()</span>
+
+<span class="s1">try:</span>
+<span class="s1">  import ipykernel_launcher</span>
+<span class="s1">  ipykernel = &#39;ipykernel_launcher&#39;</span>
+<span class="s1">except ImportError:</span>
+<span class="s1">  try:</span>
+<span class="s1">    import ipykernel</span>
+<span class="s1">    ipykernel = &#39;ipykernel&#39;</span>
+<span class="s1">  except ImportError:</span>
+<span class="s1">    print(&#39;IPython kernel not found. &quot;pip install ipykernel&quot; and try again&#39;)</span>
+<span class="s1">    exit(1)</span>
+
+<span class="s1">kernel_dir = os.path.join(os.path.dirname(__file__),</span>
+<span class="s1">                          &#39;jupyter_data&#39;,</span>
+<span class="s1">                          &#39;kernels&#39;,</span>
+<span class="s1">                          args.name)</span>
+
+<span class="s1">try:</span>
+<span class="s1">  os.makedirs(kernel_dir)</span>
+<span class="s1">except:</span>
+<span class="s1">  pass</span>
+<span class="s1">&#39;&#39;&#39;</span>
+
+<span class="n">add_virtualenv</span> <span class="o">=</span> <span class="n">add_header</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="s1">&#39;virtualenv. Run script from within an activated virtualenv.&#39;</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;&#39;&#39;</span>
+<span class="s1">kernel = {&#39;display_name&#39;: args.name,</span>
+<span class="s1">          &#39;argv&#39;: [sys.executable, &#39;-m&#39;, ipykernel, </span>
+<span class="s1">                   &#39;-f&#39;, &#39;</span><span class="si">{connection_file}</span><span class="s1">&#39;],</span>
+<span class="s1">          &#39;env&#39;: </span><span class="si">{}</span><span class="s1">}</span>
+
+<span class="s1">with open(os.path.join(kernel_dir, &#39;kernel.json&#39;), &#39;w&#39;) as fid:</span>
+<span class="s1">  json.dump(kernel, fid)</span>
+
+<span class="s1">print(&#39;</span><span class="si">{}</span><span class="s1"> created&#39;.format(kernel_dir))</span>
+<span class="s1">&#39;&#39;&#39;</span>
+
+<span class="n">add_pipenv</span> <span class="o">=</span> <span class="n">add_header</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="s1">&#39;pipenv. Run script from within a pipenv virtualenv (&quot;pipenv run&quot; or &quot;pipenv shell&quot;).&#39;</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;&#39;&#39;</span>
+<span class="s1">import distutils.spawn</span>
+<span class="s1">pipenv = distutils.spawn.find_executable(&#39;pipenv&#39;)</span>
+
+<span class="s1">pipfile = os.environ.get(&#39;PIPENV_PIPFILE&#39;, None)</span>
+<span class="s1">if pipfile is None:</span>
+<span class="s1">  from subprocess import Popen, PIPE</span>
+
+<span class="s1">  pid = Popen([pipenv, &#39;--where&#39;], stdout=PIPE)</span>
+<span class="s1">  pipfile = pid.communicate()[0]</span>
+<span class="s1">  if sys.version_info[0] == 3:</span>
+<span class="s1">    pipfile = pipfile.decode()</span>
+<span class="s1">  pipfile = pipfile.rstrip(&#39;</span><span class="se">\\</span><span class="s1">r</span><span class="se">\\</span><span class="s1">n&#39;)</span>
+
+<span class="s1">  if not pipfile: # If empty, then it wasn&#39;t found</span>
+<span class="s1">    pipfile = os.getcwd()</span>
+<span class="s1">  pipfile = os.path.join(pipfile, &#39;Pipfile&#39;)</span>
+
+<span class="s1">kernel = {&#39;display_name&#39;: args.name,</span>
+<span class="s1">          &#39;argv&#39;: [pipenv, &#39;run&#39;, &#39;python&#39;, &#39;-m&#39;, ipykernel, </span>
+<span class="s1">                   &#39;-f&#39;, &#39;</span><span class="si">{connection_file}</span><span class="s1">&#39;],</span>
+<span class="s1">          &#39;env&#39;: {&#39;PIPENV_PIPFILE&#39;: pipfile}, &#39;language&#39;: &#39;python&#39;}</span>
+
+<span class="s1">with open(os.path.join(kernel_dir, &#39;kernel.json&#39;), &#39;w&#39;) as fid:</span>
+<span class="s1">  json.dump(kernel, fid)</span>
+
+<span class="s1">print(&#39;</span><span class="si">{}</span><span class="s1"> created&#39;.format(kernel_dir))</span>
+<span class="s1">&#39;&#39;&#39;</span>
+
+<div class="viewcode-block" id="main"><a class="viewcode-back" href="../linux/python_scripts/new_notebook.html#new_notebook.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">(</span><span class="n">args</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+  <span class="n">args</span> <span class="o">=</span> <span class="n">get_parser</span><span class="p">()</span><span class="o">.</span><span class="n">parse_args</span><span class="p">(</span><span class="n">args</span><span class="p">)</span>
+
+  <span class="n">tempdir</span> <span class="o">=</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">()</span>
+
+  <span class="n">atexit</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">,</span> <span class="n">tempdir</span><span class="p">)</span>
+
+  <span class="n">env</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+  <span class="n">env</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;PYTHONPATH&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+  <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s1">&#39;Pipfile&#39;</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fid</span><span class="p">:</span>
+    <span class="n">fid</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">pipfile_3</span><span class="p">)</span>
+
+  <span class="n">python2</span> <span class="o">=</span> <span class="kc">None</span>
+  <span class="n">python3</span> <span class="o">=</span> <span class="kc">None</span>
+
+  <span class="c1">### Setup python 3 ###</span>
+  <span class="k">try</span><span class="p">:</span>
+    <span class="n">Popen</span><span class="p">([</span><span class="s1">&#39;pipenv&#39;</span><span class="p">,</span> <span class="s2">&quot;--three&quot;</span><span class="p">,</span> <span class="s1">&#39;install&#39;</span><span class="p">],</span> <span class="n">env</span><span class="o">=</span><span class="n">env</span><span class="p">)</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>
+  <span class="k">except</span> <span class="ne">AssertionError</span><span class="p">:</span>
+    <span class="k">pass</span>
+  <span class="k">else</span><span class="p">:</span>
+    <span class="c1"># Get python3 venv dir</span>
+    <span class="n">python3</span> <span class="o">=</span> <span class="n">Popen</span><span class="p">([</span><span class="s1">&#39;pipenv&#39;</span><span class="p">,</span> <span class="s2">&quot;--venv&quot;</span><span class="p">],</span> <span class="n">stdout</span><span class="o">=</span><span class="n">PIPE</span><span class="p">)</span><span class="o">.</span><span class="n">communicate</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">decode</span><span class="p">()</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="n">python2</span> <span class="o">=</span> <span class="s1">&#39;2&#39;</span>
+
+  <span class="c1">### Setup Python 2 ###</span>
+  <span class="k">if</span> <span class="n">python2</span><span class="p">:</span>
+    <span class="k">try</span><span class="p">:</span>
+      <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">python2</span><span class="p">)</span>
+    <span class="k">except</span> <span class="n">os</span><span class="o">.</span><span class="n">error</span><span class="p">:</span>
+      <span class="k">pass</span>
+
+  <span class="c1"># Set up python2 venv</span>
+  <span class="n">env</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">)</span>
+  <span class="n">env</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s1">&#39;PYTHONPATH&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+  <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s1">&#39;2/Pipfile&#39;</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fid</span><span class="p">:</span>
+    <span class="n">fid</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">pipfile_2</span><span class="p">)</span>
+
+  <span class="k">try</span><span class="p">:</span>
+    <span class="n">Popen</span><span class="p">([</span><span class="s1">&#39;pipenv&#39;</span><span class="p">,</span> <span class="s2">&quot;--two&quot;</span><span class="p">,</span> <span class="s1">&#39;install&#39;</span><span class="p">],</span> <span class="n">env</span><span class="o">=</span><span class="n">env</span><span class="p">,</span> <span class="n">cwd</span><span class="o">=</span><span class="n">python2</span><span class="p">)</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>
+  <span class="k">except</span> <span class="ne">AssertionError</span><span class="p">:</span>
+    <span class="c1"># If Python2 failed, and python3 succeeded, remove python2 subdir</span>
+    <span class="k">if</span> <span class="n">python2</span> <span class="o">==</span> <span class="s1">&#39;2&#39;</span><span class="p">:</span>
+      <span class="n">shutil</span><span class="o">.</span><span class="n">rmtree</span><span class="p">(</span><span class="n">python2</span><span class="p">)</span>
+    <span class="n">python2</span> <span class="o">=</span> <span class="kc">None</span>
+  <span class="k">else</span><span class="p">:</span>
+    <span class="c1"># get python2 venv dir</span>
+    <span class="n">python2</span> <span class="o">=</span> <span class="n">Popen</span><span class="p">([</span><span class="s1">&#39;pipenv&#39;</span><span class="p">,</span> <span class="s2">&quot;--venv&quot;</span><span class="p">],</span> <span class="n">stdout</span><span class="o">=</span><span class="n">PIPE</span><span class="p">,</span> <span class="n">cwd</span><span class="o">=</span><span class="s2">&quot;2&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">communicate</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">decode</span><span class="p">()</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+
+  <span class="c1"># Determine which python dir is the &quot;main&quot; one, favor 3</span>
+  <span class="k">if</span> <span class="n">python3</span><span class="p">:</span>
+    <span class="n">python_dir</span> <span class="o">=</span> <span class="n">python3</span>
+  <span class="k">else</span><span class="p">:</span>
+    <span class="n">python_dir</span> <span class="o">=</span> <span class="n">python2</span>
+
+  <span class="c1"># Setup config dir inside virtual env dir by monkey patching python executable</span>
+  <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;JUPYTER_CONFIG_DIR&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">(),</span> <span class="s2">&quot;jupyter_config&quot;</span><span class="p">)</span>
+  <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;JUPYTER_DATA_DIR&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">getcwd</span><span class="p">(),</span> <span class="s2">&quot;jupyter_data&quot;</span><span class="p">)</span>
+
+  <span class="k">try</span><span class="p">:</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;JUPYTER_CONFIG_DIR&#39;</span><span class="p">])</span>
+  <span class="k">except</span> <span class="n">os</span><span class="o">.</span><span class="n">error</span><span class="p">:</span>
+    <span class="k">pass</span>
+
+  <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;JUPYTER_CONFIG_DIR&#39;</span><span class="p">],</span>
+                        <span class="s1">&#39;jupyter_notebook_config.py&#39;</span><span class="p">),</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fid</span><span class="p">:</span>
+    <span class="n">fid</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">jupyter_notebook_config_py</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+      <span class="n">ip</span><span class="o">=</span><span class="nb">repr</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">ip</span><span class="p">),</span> <span class="n">port</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">port</span><span class="p">,</span>
+      <span class="n">notebooks</span><span class="o">=</span><span class="nb">repr</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">notebook_dir</span><span class="p">),</span>
+      <span class="n">browser</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">browser</span><span class="p">)))</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">args</span><span class="o">.</span><span class="n">random_token</span><span class="p">:</span>
+      <span class="n">fid</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;c.NotebookApp.token = </span><span class="si">{token}</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">token</span><span class="o">=</span><span class="nb">repr</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">token</span><span class="p">)))</span>
+    <span class="n">fid</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+
+  <span class="c1"># On windows, we don&#39;t install the bash_kernel in windows</span>
+  <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="s1">&#39;nt&#39;</span><span class="p">:</span>
+    <span class="n">bin_dir</span> <span class="o">=</span> <span class="s1">&#39;Scripts&#39;</span>
+    <span class="n">lib_dir</span> <span class="o">=</span> <span class="s1">&#39;Lib&#39;</span>
+    <span class="n">bash_kernel</span> <span class="o">=</span> <span class="p">[]</span>
+  <span class="k">else</span><span class="p">:</span>
+    <span class="n">bin_dir</span> <span class="o">=</span> <span class="s1">&#39;bin&#39;</span>
+    <span class="n">lib_dir</span> <span class="o">=</span> <span class="s1">&#39;lib/python*&#39;</span>
+    <span class="n">bash_kernel</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;bash_kernel&#39;</span><span class="p">]</span>
+
+  <span class="c1"># Patch the site.py file</span>
+  <span class="n">site_file</span> <span class="o">=</span> <span class="n">glob</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">python_dir</span><span class="p">,</span> <span class="n">lib_dir</span><span class="p">,</span> <span class="s1">&#39;site.py&#39;</span><span class="p">))[</span><span class="mi">0</span><span class="p">]</span>
+  <span class="n">patch_site</span><span class="p">(</span><span class="n">site_file</span><span class="p">,</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">relpath</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;JUPYTER_CONFIG_DIR&#39;</span><span class="p">],</span>
+                            <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">site_file</span><span class="p">)),</span>
+            <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">relpath</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;JUPYTER_DATA_DIR&#39;</span><span class="p">],</span>
+                            <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">site_file</span><span class="p">)))</span>
+
+  <span class="c1"># Install packages</span>
+  <span class="n">Popen</span><span class="p">([</span><span class="s1">&#39;pipenv&#39;</span><span class="p">,</span>
+         <span class="s1">&#39;install&#39;</span><span class="p">,</span> <span class="s1">&#39;notebook&#39;</span><span class="p">,</span> <span class="s1">&#39;jupyter-contrib-nbextensions&#39;</span><span class="p">,</span>
+         <span class="s1">&#39;ipywidgets&#39;</span><span class="p">]</span> <span class="o">+</span> <span class="n">bash_kernel</span><span class="p">)</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>
+  <span class="c1"># Install the main python kernel</span>
+  <span class="n">Popen</span><span class="p">([</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">python_dir</span><span class="p">),</span> <span class="n">bin_dir</span><span class="p">,</span> <span class="s1">&#39;python&#39;</span><span class="p">),</span>
+        <span class="s1">&#39;-m&#39;</span><span class="p">,</span> <span class="s1">&#39;ipykernel&#39;</span><span class="p">,</span> <span class="s1">&#39;install&#39;</span><span class="p">,</span> <span class="s1">&#39;--user&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>
+  <span class="c1"># Setup Notebook extensions and widgets</span>
+  <span class="n">Popen</span><span class="p">([</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">python_dir</span><span class="p">),</span> <span class="n">bin_dir</span><span class="p">,</span> <span class="s1">&#39;jupyter-contrib&#39;</span><span class="p">),</span>
+        <span class="s1">&#39;nbextension&#39;</span><span class="p">,</span> <span class="s1">&#39;install&#39;</span><span class="p">,</span> <span class="s1">&#39;--user&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>
+  <span class="n">Popen</span><span class="p">([</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">python_dir</span><span class="p">),</span>
+                      <span class="n">bin_dir</span><span class="p">,</span> <span class="s1">&#39;jupyter-nbextension&#39;</span><span class="p">),</span>
+        <span class="s1">&#39;enable&#39;</span><span class="p">,</span> <span class="s1">&#39;--py&#39;</span><span class="p">,</span> <span class="s1">&#39;--user&#39;</span><span class="p">,</span> <span class="s1">&#39;widgetsnbextension&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>
+
+  <span class="c1"># Setup bash_kernel</span>
+  <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">name</span> <span class="o">!=</span> <span class="s2">&quot;nt&quot;</span><span class="p">:</span>
+    <span class="n">Popen</span><span class="p">([</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">abspath</span><span class="p">(</span><span class="n">python_dir</span><span class="p">),</span> <span class="n">bin_dir</span><span class="p">,</span> <span class="s1">&#39;python&#39;</span><span class="p">),</span>
+          <span class="s1">&#39;-m&#39;</span><span class="p">,</span> <span class="s1">&#39;bash_kernel&#39;</span><span class="p">,</span> <span class="s1">&#39;install&#39;</span><span class="p">,</span> <span class="s1">&#39;--user&#39;</span><span class="p">,</span> <span class="s1">&#39;--name&#39;</span><span class="p">,</span> <span class="s1">&#39;Bash&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>
+  <span class="k">else</span><span class="p">:</span>
+    <span class="c1"># on windows, use wsl to setup bash_kernel if available</span>
+    <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="s1">&#39;c:</span><span class="se">\\</span><span class="s1">Windows</span><span class="se">\\</span><span class="s1">System32</span><span class="se">\\</span><span class="s1">bash.exe&#39;</span><span class="p">):</span>
+      <span class="n">Popen</span><span class="p">([</span><span class="s1">&#39;c:</span><span class="se">\\</span><span class="s1">Windows</span><span class="se">\\</span><span class="s1">System32</span><span class="se">\\</span><span class="s1">bash.exe&#39;</span><span class="p">,</span>
+             <span class="s1">&#39;-c&#39;</span><span class="p">,</span>
+             <span class="s1">&#39;tmp_dir=&quot;</span><span class="se">\\</span><span class="s1">$(mktemp -d)&quot;;&#39;</span>
+             <span class="s1">&#39;cd &quot;</span><span class="se">\\</span><span class="s1">$</span><span class="si">{tmp_dir}</span><span class="s1">&quot;;&#39;</span>
+             <span class="s1">&#39;python3 &lt;(curl -L https://bootstrap.pypa.io/get-pip.py) --no-cache-dir -I --root &quot;</span><span class="se">\\</span><span class="s1">$</span><span class="si">{tmp_dir}</span><span class="s1">&quot; virtualenv;&#39;</span>
+             <span class="s1">&#39;PYTHONPATH=&quot;</span><span class="se">\\</span><span class="s1">$(cd &quot;</span><span class="se">\\</span><span class="s1">$</span><span class="si">{tmp_dir}</span><span class="s1">&quot;/usr/local/lib/python*/*-packages/; pwd)&quot; &quot;</span><span class="se">\\</span><span class="s1">$</span><span class="si">{tmp_dir}</span><span class="s1">/usr/local/bin/virtualenv&quot; ~/bash_kernel;&#39;</span>
+             <span class="s1">&#39;~/bash_kernel/bin/pip install --no-cache-dir bash_kernel ipykernel;&#39;</span>
+             <span class="s1">&#39;rm -r &quot;</span><span class="se">\\</span><span class="s1">$</span><span class="si">{tmp_dir}</span><span class="s1">&quot;&#39;</span><span class="p">],</span> <span class="n">shell</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>
+      <span class="k">try</span><span class="p">:</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;JUPYTER_DATA_DIR&#39;</span><span class="p">],</span> <span class="s1">&#39;kernels&#39;</span><span class="p">,</span>
+                                 <span class="s1">&#39;bash&#39;</span><span class="p">))</span>
+      <span class="k">except</span> <span class="n">os</span><span class="o">.</span><span class="n">error</span><span class="p">:</span>
+        <span class="k">pass</span>
+      <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;JUPYTER_DATA_DIR&#39;</span><span class="p">],</span> <span class="s1">&#39;kernels&#39;</span><span class="p">,</span> <span class="s1">&#39;bash&#39;</span><span class="p">,</span>
+                            <span class="s1">&#39;kernel.json&#39;</span><span class="p">),</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fid</span><span class="p">:</span>
+        <span class="n">fid</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">windows_bash_kernel_json</span><span class="p">)</span>
+
+  <span class="c1"># if both pythons worked, setup multi kernels</span>
+  <span class="k">if</span> <span class="n">python2</span> <span class="ow">and</span> <span class="n">python3</span><span class="p">:</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;JUPYTER_CONFIG_DIR&#39;</span><span class="p">],</span>
+                        <span class="s1">&#39;jupyter_notebook_config.py&#39;</span><span class="p">),</span> <span class="s1">&#39;a&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fid</span><span class="p">:</span>
+      <span class="n">fid</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;c.MultiKernelManager.default_kernel_name = &#39;python3&#39;&quot;</span><span class="p">)</span>
+
+    <span class="c1"># patch python2&#39;s site too</span>
+    <span class="n">site_file</span> <span class="o">=</span> <span class="n">glob</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">python2</span><span class="p">,</span> <span class="n">lib_dir</span><span class="p">,</span> <span class="s1">&#39;site.py&#39;</span><span class="p">))[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">patch_site</span><span class="p">(</span><span class="n">site_file</span><span class="p">,</span>
+              <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">relpath</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;JUPYTER_CONFIG_DIR&#39;</span><span class="p">],</span>
+                              <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">site_file</span><span class="p">)),</span>
+              <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">relpath</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;JUPYTER_DATA_DIR&#39;</span><span class="p">],</span>
+                              <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">site_file</span><span class="p">)))</span>
+    <span class="c1"># Install python2&#39;s ipywidget too</span>
+    <span class="n">Popen</span><span class="p">([</span><span class="s1">&#39;pipenv&#39;</span><span class="p">,</span> <span class="s1">&#39;install&#39;</span><span class="p">,</span> <span class="s1">&#39;ipywidgets&#39;</span><span class="p">],</span> <span class="n">cwd</span><span class="o">=</span><span class="s2">&quot;2&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>
+    <span class="c1"># Install the python2 kernel</span>
+    <span class="n">Popen</span><span class="p">([</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">python2</span><span class="p">,</span> <span class="n">bin_dir</span><span class="p">,</span> <span class="s1">&#39;python&#39;</span><span class="p">),</span>
+          <span class="s1">&#39;-m&#39;</span><span class="p">,</span> <span class="s1">&#39;ipykernel&#39;</span><span class="p">,</span> <span class="s1">&#39;install&#39;</span><span class="p">,</span> <span class="s1">&#39;--user&#39;</span><span class="p">,</span> <span class="s1">&#39;--name&#39;</span><span class="p">,</span> <span class="s1">&#39;python2&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>
+
+
+  <span class="c1"># Add add_virtualenv script</span>
+  <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s1">&#39;add_virtualenv.py&#39;</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fid</span><span class="p">:</span>
+    <span class="n">fid</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">add_virtualenv</span><span class="p">)</span>
+  <span class="n">os</span><span class="o">.</span><span class="n">chmod</span><span class="p">(</span><span class="s1">&#39;add_virtualenv.py&#39;</span><span class="p">,</span> <span class="mo">0o755</span><span class="p">)</span>
+
+  <span class="c1"># Add add_pipenv script</span>
+  <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s1">&#39;add_pipenv.py&#39;</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fid</span><span class="p">:</span>
+    <span class="n">fid</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">add_pipenv</span><span class="p">)</span>
+  <span class="n">os</span><span class="o">.</span><span class="n">chmod</span><span class="p">(</span><span class="s1">&#39;add_pipenv.py&#39;</span><span class="p">,</span> <span class="mo">0o755</span><span class="p">)</span>
+
+  <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">---------------------------------</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+  <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Notebook configured successfully!&quot;</span><span class="p">)</span>
+  <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;Run &quot;jupyter-notebook password&quot; to &#39;</span>
+        <span class="s1">&#39;secure your notebook with a password&#39;</span><span class="p">)</span></div>
+
+<span class="k">if</span> <span class="vm">__name__</span><span class="o">==</span><span class="s1">&#39;__main__&#39;</span><span class="p">:</span>
+  <span class="n">main</span><span class="p">()</span>
+</pre></div>
+
+           </div>
+           
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2020, Vision Systems, Inc
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>
