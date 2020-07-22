@@ -105,6 +105,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#pipenv">Pipenv</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#amanda-debian-packages">Amanda debian packages</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#one-true-awk">One True Awk</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#gdal">GDAL</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#j-u-s-t">J.U.S.T.</a></li>
@@ -195,11 +196,14 @@
 
 <span class="k">COPY</span> --from<span class="o">=</span>tini /usr/local /usr/local
 <span class="k">COPY</span> --from<span class="o">=</span>gosu /usr/local /usr/local
+
+<span class="c"># Universal patch command that all recipes could use</span>
+<span class="k">RUN</span> <span class="k">for</span> patch in /usr/local/share/just/container_build_patch/*<span class="p">;</span> <span class="k">do</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">patch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">;</span> <span class="k">done</span>
 </pre></div>
 </div>
 <div class="section" id="how-to-use">
 <h2>How to use<a class="headerlink" href="#how-to-use" title="Permalink to this headline">¶</a></h2>
-<p>When using all the defaults, the recipes can be used directly from dockerhub. However, when one of the recipes needs to customized via a build arg, it is often best to include this repo as a submodule in the greater project, and building from the dockerfiles.</p>
+<p>The recipes can be used directly from dockerhub. It is also possible to include this repo as a submodule in the greater project, and building directly from the dockerfiles.</p>
 </div>
 <div class="section" id="what-this-is-not">
 <h2>What this is not<a class="headerlink" href="#what-this-is-not" title="Permalink to this headline">¶</a></h2>
@@ -454,6 +458,9 @@
 <span class="k">FROM</span><span class="s"> debian:9</span>
 <span class="k">RUN</span> apt-get update<span class="p">;</span> apt-get install vim
 <span class="k">COPY</span> --from<span class="o">=</span>git-lfs /usr/local /usr/local
+...
+<span class="c"># Only needs to be run once for all recipes</span>
+<span class="k">RUN</span> <span class="k">for</span> patch in /usr/local/share/just/container_build_patch/*<span class="p">;</span> <span class="k">do</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">patch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">;</span> <span class="k">done</span>
 </pre></div>
 </div>
 </div>
@@ -580,6 +587,63 @@
 <span class="k">FROM</span><span class="s"> debian:9</span>
 <span class="k">RUN</span> apt-get update<span class="p">;</span> apt-get install vim
 <span class="k">COPY</span> --from<span class="o">=</span>onetrueawk /usr/local /usr/local
+</pre></div>
+</div>
+</div>
+<div class="section" id="gdal">
+<h3>GDAL<a class="headerlink" href="#gdal" title="Permalink to this headline">¶</a></h3>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 21%" />
+<col style="width: 79%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><p>Name</p></td>
+<td><p>GDAL</p></td>
+</tr>
+<tr class="row-even"><td><p>Build Args</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GDAL_VERSION</span></code> - Version of GDAL to download</p></td>
+</tr>
+<tr class="row-odd"><td><p>Output files</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/gdal/usr/local/*</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<p>Compiles GDAL v3, including PROJ v6, ECW J2K 5.5, OPENJPEG 2.3</p>
+<p class="rubric">Example</p>
+<div class="highlight-Dockerfile notranslate"><div class="highlight"><pre><span></span><span class="k">FROM</span><span class="s"> python:3.6.9-slim-jessie as python</span>
+<span class="k">FROM</span><span class="s"> vsiri/recipe:gdal as gdal</span>
+<span class="k">FROM</span><span class="s"> ubuntu:16.04</span>
+
+<span class="c"># set shell to bash</span>
+<span class="k">SHELL</span> <span class="p">[</span><span class="s2">&quot;/usr/bin/env&quot;</span><span class="p">,</span> <span class="s2">&quot;/bin/bash&quot;</span><span class="p">,</span> <span class="s2">&quot;-euxvc&quot;</span><span class="p">]</span>
+
+<span class="c"># install python &amp; gdal</span>
+<span class="k">COPY</span> --from<span class="o">=</span>python /usr/local /usr/local/
+<span class="k">COPY</span> --from<span class="o">=</span>gdal /gdal/usr/local /usr/local
+
+<span class="c"># Only needs to be run once for all recipes</span>
+<span class="k">RUN</span> <span class="k">for</span> patch in /usr/local/share/just/container_build_patch/*<span class="p">;</span> <span class="k">do</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">patch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">;</span> <span class="k">done</span>
+
+<span class="c"># additional dependencies</span>
+<span class="k">RUN</span> apt-get update -y<span class="p">;</span> <span class="se">\</span>
+   <span class="nv">DEBIAN_FRONTEND</span><span class="o">=</span>noninteractive apt-get install -y  --no-install-recommends <span class="se">\</span>
+      expat libffi6 libssl1.0.0 libtiff5 sqlite3 <span class="p">;</span> <span class="se">\</span>
+   rm -rf /var/lib/apt/lists/* <span class="p">;</span>
+
+<span class="c"># install numpy (before pypi GDAL bindings)</span>
+<span class="k">RUN</span> pip3 install numpy <span class="p">;</span>
+
+<span class="c"># pypi GDAL bindings</span>
+<span class="k">RUN</span> <span class="nb">export</span> <span class="nv">BUILD_DEPS</span><span class="o">=</span><span class="s2">&quot;g++&quot;</span> <span class="p">;</span> <span class="se">\</span>
+   apt-get update -y <span class="p">;</span> <span class="se">\</span>
+   <span class="nv">DEBIAN_FRONTEND</span><span class="o">=</span>noninteractive apt-get install -y  --no-install-recommends <span class="se">\</span>
+      <span class="si">${</span><span class="nv">BUILD_DEPS</span><span class="si">}</span> <span class="p">;</span> <span class="se">\</span>
+   pip3 install <span class="nv">GDAL</span><span class="o">==</span><span class="k">$(</span>cat /usr/local/gdal_version<span class="k">)</span> <span class="p">;</span> <span class="se">\</span>
+   apt-get clean <span class="si">${</span><span class="nv">BUILD_DEPS</span><span class="si">}</span> <span class="p">;</span> <span class="se">\</span>
+   rm -rf /var/lib/apt/lists/* <span class="p">;</span>
+
+<span class="k">CMD</span> <span class="p">[</span><span class="s2">&quot;gdalinfo&quot;</span><span class="p">,</span> <span class="s2">&quot;--version&quot;</span><span class="p">]</span>
 </pre></div>
 </div>
 </div>
