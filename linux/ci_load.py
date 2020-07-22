@@ -224,9 +224,6 @@ class CiLoad:
       # Build the main (last) stage here
       build_stage(self.main_service)
 
-      build = yaml_content['services'][f'{self.main_service}_auto_gen_{stage}']['build']
-      cmd = [self.docker_exe, 'build']
-
       for service in self.other_services:
         cmd = [self.docker_exe, 'tag']
 
