@@ -12,18 +12,21 @@ import yaml
 
 stage_pattern=r'^ *from +[a-zA-Z0-9:\./_${}-]* +as +([^\n]*)'
 
-''' Explanation how this script works:
-0. Parses the docker-compose file. The docker-compose file is fed through ``docker-compose config`` so that all variables are substituted and anchors are expanded. This means that this needed to be run within ``just`` so that all environment variables are loaded.
-1. A temporary "push pull" docker-compose yaml file is auto generated. This file will push and pull the cache from dockerhub (or whatever registry you decide to use)
-2. The docker cache images are pulled
-3. Another temporary docker-compose file is auto generated. This file is used to restore the recipes from the cache pulled, using cache-from. So if the image is pulled as "vsi-ri/cache:recipe_gosu" and the image name should be "vsi-ri/recipe:gosu", it will let you build "vsi-ri/recipe:gosu" using "--cache-from = vsi-ri/cache:gosu". Note: this is the ONBUILD recipes, not the gosu stage (recipe "instance") that appears in your actual Dockerfile.
-4. The recipes set up in step 3 are built
-5. The recipes built in step 4 are re-tagged to their "cached" names, so that they are ready to be pushed at the end
-6. A third docker-compose file is auto generated. The original docker-compose file is loaded, and a section for every single stage of the Dockerfile is copied based on the "main service" you specify. All of the possible "cache from" image names are added so that docker can build using the cache and the stages previously build. For example. If you build stage1 then stage2, stage2 shouldn't rebuild stage1, it should cache-from stage1, etc...
-7. Unfortunately docker-compose cannot be used to build a multistage dockerfile efficiently, it will rebuild every stage for unknown reasons. So the docker-compose file is parsed and docker calls are made to build the stages in order. Finally, the main service stage (the final stage) is built, at this point all the previous stages have been built and cached, so only the last stage is built.
-  The (optional) other services are tagged from the cached images just generated (based on the target stage names found in the docker-compose file), and then the main service image is tagged too. This way the image names have been restored so that they are ready for CI to use.
-8. Finally, that now updated images are push back to the registry
+'''
+## Explanation how this script works:
 
+#. Parses the docker-compose file. The docker-compose file is fed through ``docker-compose config`` so that all variables are substituted and anchors are expanded. This means that this needed to be run within ``just`` so that all environment variables are loaded.
+#. A temporary "push pull" docker-compose yaml file is auto generated. This file will push and pull the cache from dockerhub (or whatever registry you decide to use)
+#. The docker cache images are pulled
+#. Another temporary docker-compose file is auto generated. This file is used to restore the recipes from the cache pulled, using cache-from. So if the image is pulled as "vsi-ri/cache:recipe_gosu" and the image name should be "vsi-ri/recipe:gosu", it will let you build "vsi-ri/recipe:gosu" using "--cache-from = vsi-ri/cache:gosu". Note: this is the ONBUILD recipes, not the gosu stage (recipe "instance") that appears in your actual Dockerfile.
+#. The recipes set up in step 3 are built
+#. The recipes built in step 4 are re-tagged to their "cached" names, so that they are ready to be pushed at the end
+#. A third docker-compose file is auto generated. The original docker-compose file is loaded, and a section for every single stage of the Dockerfile is copied based on the "main service" you specify. All of the possible "cache from" image names are added so that docker can build using the cache and the stages previously build. For example. If you build stage1 then stage2, stage2 shouldn't rebuild stage1, it should cache-from stage1, etc...
+#. Unfortunately docker-compose cannot be used to build a multistage dockerfile efficiently, it will rebuild every stage for unknown reasons. So the docker-compose file is parsed and docker calls are made to build the stages in order. Finally, the main service stage (the final stage) is built, at this point all the previous stages have been built and cached, so only the last stage is built.
+
+  * The (optional) other services are tagged from the cached images just generated (based on the target stage names found in the docker-compose file), and then the main service image is tagged too. This way the image names have been restored so that they are ready for CI to use.
+
+#. Finally, that now updated images are push back to the registry
 '''
 
 def Popen2(*args, **kwargs):

@@ -9,6 +9,7 @@ JUST_DEFAULTIFY_FUNCTIONS+=(bashcov_defaultify)
 JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 
 source "${VSI_COMMON_DIR}/linux/colors.bsh"
+source "${VSI_COMMON_DIR}/linux/elements.bsh"
 source "${VSI_COMMON_DIR}/linux/command_tools.bsh"
 
 #*# just/plugins/just_bashcov_functions
@@ -64,6 +65,25 @@ source "${VSI_COMMON_DIR}/linux/command_tools.bsh"
 #    end
 #**
 
+function _bashcov_docker_compose()
+{
+  local VSI_COMMON_UID="${JUST_PROJECT_PREFIX}_UID"
+  export VSI_COMMON_UID="${!VSI_COMMON_UID-1000}"
+  local VSI_COMMON_GIDS="${JUST_PROJECT_PREFIX}_GID"
+  export VSI_COMMON_GIDS="${!VSI_COMMON_GIDS-1000}"
+
+  local JUST_SETTINGSS
+  translate_just_settings "${BASH_COV_SOURCE}" /src
+  local JUST_SETTINGS
+  MIFS=/// join_a VSI_COMMON_JUST_SETTINGS ${JUST_SETTINGSS[@]+"${JUST_SETTINGSS[@]}"}
+  export VSI_COMMON_JUST_SETTINGS
+
+  local COMPOSE_FILE="${VSI_COMMON_DIR}/docker/vsi_common/docker-compose.yml"
+  export COMPOSE_FILE
+
+  Just-docker-compose ${@+"${@}"}
+}
+
 function bashcov_defaultify()
 {
   local id_project_cwd="${JUST_PROJECT_PREFIX}_CWD"
@@ -71,19 +91,6 @@ function bashcov_defaultify()
   # Export variables for docker-compose file
   local BASH_COV_SOURCE_DIR="${JUST_PROJECT_PREFIX}_BASHCOV_SOURCE_DIR"
   export BASH_COV_SOURCE_DIR="${!BASH_COV_SOURCE_DIR:-${!id_project_cwd}}"
-
-  local tmp="${JUST_PROJECT_PREFIX}_UID"
-  local VSI_COMMON_UID="${!tmp-1000}"
-  export VSI_COMMON_UID
-  tmp="${JUST_PROJECT_PREFIX}_GIDS"
-  local VSI_COMMON_GIDS="${!tmp-1000}"
-  export VSI_COMMON_GIDS
-
-  local JUST_SETTINGS="${JUST_PATH_ESC}/src/$(basename "${JUST_SETTINGS}")"
-  export JUST_SETTINGS
-
-  local COMPOSE_FILE="${VSI_COMMON_DIR}/docker/vsi_common/docker-compose.yml"
-  export COMPOSE_FILE
 
   arg=$1
   shift 1
@@ -101,7 +108,7 @@ function bashcov_defaultify()
         echo "${YELLOW}WARNING:${NC} ${BOLD}${BASH_COV_SOURCE_DIR}/coverage${NC} already exists" >&2
       fi
 
-      Just-docker-compose run bashcov bashcov ${@+"${@}"}
+      _bashcov_docker_compose run bashcov bashcov ${@+"${@}"}
       extra_args=$#
       ;;
     #**
@@ -114,7 +121,7 @@ function bashcov_defaultify()
     bashcov_multiple) # Run bashcov over multiple commands, each argument is executed \
                       # separately. There is no way to pass an argument to any of the \
                       # commands; use "just bashcov" for that.
-      Just-docker-compose run bashcov multiple ${@+"${@}"}
+      _bashcov_docker_compose run bashcov multiple ${@+"${@}"}
       extra_args=$#
       ;;
     #**
@@ -125,7 +132,7 @@ function bashcov_defaultify()
     # :Arguments: ``$1``... - Arguments passed to bashcov, one argument per call.
     #**
     bashcov_resume) # Resume running bashcov multiple
-      Just-docker-compose run bashcov resume ${@+"${@}"}
+      _bashcov_docker_compose run bashcov resume ${@+"${@}"}
       extra_args=$#
       ;;
     #**
@@ -134,7 +141,7 @@ function bashcov_defaultify()
     # Enter the bashcov container; for debugging
     #**
     bashcov_shell) # Enter the bashcov container
-      Just-docker-compose run bashcov bash
+      _bashcov_docker_compose run bashcov bash
       ;;
     #**
     # .. command:: bashcov_build
@@ -143,7 +150,7 @@ function bashcov_defaultify()
     #**
     bashcov_build) # Build bashcov docker image
       justify build recipes-auto "${VSI_COMMON_DIR}/docker/vsi_common/bashcov.Dockerfile"
-      Docker-compose build bashcov
+      _bashcov_docker_compose build bashcov
       ;;
     #**
     # .. command:: bashcov_open

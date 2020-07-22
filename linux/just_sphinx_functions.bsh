@@ -111,13 +111,23 @@ function _docs_serialize_dirs()
 
 function _sphinx_docker_compose()
 {
-  ${DRYRUN} ${DRYRUN+env} DOCS_SOURCE_DIR="${src_dir}" \
-      DOCS_DIR="${docs_dir}" \
-      VSI_COMMON_UID="${uid}" \
-      VSI_COMMON_GIDS="${gid}" \
-      JUST_SETTINGS="${JUST_PATH_ESC}/src/$(basename "${JUST_SETTINGS}")" \
-      ${DOCKER_COMPOSE} \
-         -f "${VSI_COMMON_DIR}/docker/vsi_common/docker-compose.yml" ${@+"${@}"}
+  local DOCS_SOURCE_DIR="${JUST_PROJECT_PREFIX}_SPHINX_SRC_DIR"
+  export DOCS_SOURCE_DIR="${!DOCS_SOURCE_DIR:-${!id_project_cwd}}"
+  export DOCS_DIR="${docs_dir}"
+
+  local VSI_COMMON_UID="${JUST_PROJECT_PREFIX}_UID"
+  export VSI_COMMON_UID="${!VSI_COMMON_UID-1000}"
+  local VSI_COMMON_GIDS="${JUST_PROJECT_PREFIX}_GID"
+  export VSI_COMMON_GIDS="${!VSI_COMMON_GIDS-1000}"
+
+  local JUST_SETTINGSS
+  translate_just_settings "${DOCS_SOURCE_DIR}" /src
+  local JUST_SETTINGS
+  MIFS=/// join_a VSI_COMMON_JUST_SETTINGS ${JUST_SETTINGSS[@]+"${JUST_SETTINGSS[@]}"}
+  export VSI_COMMON_JUST_SETTINGS
+
+  Docker-compose \
+      -f "${VSI_COMMON_DIR}/docker/vsi_common/docker-compose.yml" ${@+"${@}"}
 }
 
 #**
@@ -231,14 +241,6 @@ function docs_defaultify()
   local docs_dir="${JUST_PROJECT_PREFIX}_SPHINX_DIR"
   docs_dir="${!docs_dir:-${!id_project_cwd}/docs}"
 
-  local src_dir="${JUST_PROJECT_PREFIX}_SPHINX_SRC_DIR"
-  src_dir="${!src_dir:-${!id_project_cwd}}"
-
-  local uid="${JUST_PROJECT_PREFIX}_UID"
-  uid="${!uid-1000}"
-  local gid="${JUST_PROJECT_PREFIX}_GID"
-  gid="${!gid-1000}"
-
   arg=$1
   shift 1
   case $arg in
@@ -253,9 +255,10 @@ function docs_defaultify()
       if [ "${SPHINX_COMPILE_IMAGE-vsiri/sphinxdocs:compile}" != "vsiri/sphinxdocs:compile" ]; then
         source "${VSI_COMMON_DIR}/linux/colors.bsh"
         echo "${RED}ERROR${NC}: You should use your own Justfile to build \"${SPHINX_COMPILE_IMAGE}\"" >&2
-        false
+        local JUST_IGNORE_EXIT_CODES=1
+        return 1
       fi
-      justify build recipes gosu tini pipenv vsi
+      justify build recipes-auto "${VSI_COMMON_DIR}/docker/vsi_common/sphinx.Dockerfile"
       _sphinx_docker_compose build sphinx
       ;;
 
@@ -264,8 +267,8 @@ function docs_defaultify()
       local volume="$(docker volume create)"
       local rv=0
       # Shadow /venv so it copies it. This makes chowning thousands of times faster... or something like that.
-      extra_sphinx_arguments=(-v "${volume}:/venv")
-      justify sphinx compile nopipenv bash -c "
+      # extra_sphinx_arguments=(-v "${volume}:/venv")
+      _sphinx_docker_compose run -v "${volume}:/venv" sphinx nopipenv bash -c "
           echo 'Owning virtual env'
           sudo chown -R user: /venv/*
           pipenv lock" || rv=$?
@@ -279,11 +282,11 @@ function docs_defaultify()
       _sphinx_docker_compose run --rm \
           sphinx bash -c "cd /docs; sphinx-quickstart"
       ;;
-    sphinx_shell) # Enter the spinx container
+    sphinx_shell) # Enter the sphinx container
       echo "Run 'just docs' to build to docs"
       justify sphinx compile bash
       ;;
-    sphinx_compile) # Compile spinx documents
+    sphinx_compile) # Compile sphinx documents
       local nit_pick
       local rebuild_all
       parse_args extra_args -n nit_pick --nit nit_pick -E rebuild_all --all rebuild_all -- ${@+"${@}"}
@@ -317,7 +320,7 @@ function docs_defaultify()
         precompile_script="${!JUST_TEMP_ARRAY}"
       fi
 
-      _sphinx_docker_compose run --rm \
+      _sphinx_docker_compose run \
           -e SPHINXOPTS \
           -e DOCS_EXCLUDE_DIRS="$(_docs_serialize_dirs "${exclude_dirs[@]}")" \
           -e DOCS_AUTODOC_EXCLUDE_DIRS="$(_docs_serialize_dirs "${autodoc_exclude_dirs[@]}")" \

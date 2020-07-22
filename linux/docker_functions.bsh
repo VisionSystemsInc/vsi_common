@@ -435,21 +435,22 @@ function docker_sanitize_volume()
 function parse-docker()
 {
   docker_args=()
+  docker_command=
   docker_command_args=()
 
   while (( $# )); do
     case "$1" in
+      -H|-l|\
+      --config|--context|--host|--log-level|--tlscacert|--tlscert|--tlskey)
+        docker_args+=("$1" "$2")
+        shift 2
+        ;;
       -H*|-l*|\
-      --config=*|--host=*|--log-level=*|--tlscacert=*|--tlscert=*|--tlskey=*|\
+      --config=*|--context=*|--host=*|--log-level=*|--tlscacert=*|--tlscert=*|--tlskey=*|\
       -D|-v|\
       --debug|--tls|--version|--tlsverify)
         docker_args+=("$1")
         shift 1
-        ;;
-      -H|-l|\
-      --config|--host|--log-level|--tlscacert|--tlscert|--tlskey)
-        docker_args+=("$1" "$2")
-        shift 2
         ;;
       # Anything else must be a docker compose command.
       *)
@@ -843,60 +844,54 @@ function docker-compose-list-internal-volumes()
 function docker-compose-volumes()
 {
   local volume_line
-  local flag
   DOCKER_VOLUME_SOURCES=()
   DOCKER_VOLUME_TARGETS=()
   DOCKER_VOLUME_FLAGS=()
   DOCKER_VOLUME_FORMATS=()
+  local -i count=0
+
   for volume_line in ${DOCKER_VOLUME_LINES+"${DOCKER_VOLUME_LINES[@]}"}; do
+    # Capital means new volume
     if [[ ${volume_line:0:1} = [SL] ]]; then
-      # If the flag hasn't been added, then add it. This only won't happen on
-      # the first loop through
-      if [ "${#DOCKER_VOLUME_FLAGS[@]}" -lt "${#DOCKER_VOLUME_TARGETS[@]}" ]; then
-        DOCKER_VOLUME_FLAGS+=("${flag}")
-      fi
-      # Clear the flag because it's a new volume (S/L)
-      flag=
+      count+=1
+      # Extend each array, to guarantee there are no holes and they are the
+      # same length. Makes more robust and the code simpler
+      DOCKER_VOLUME_SOURCES[count]=""
+      DOCKER_VOLUME_TARGETS[count]=""
+      DOCKER_VOLUME_FORMATS[count]=""
+      DOCKER_VOLUME_FLAGS[count]=""
     fi
 
     if [ "${volume_line:0:1}" = "S" ]; then # Short format
       volume_line="${volume_line:1}"
       if [[ $volume_line =~ ${DOCKER_VOLUME_PATTERN} ]]; then
-        DOCKER_VOLUME_SOURCES+=("${BASH_REMATCH[1]}")
-        DOCKER_VOLUME_TARGETS+=("${BASH_REMATCH[3]}")
-        DOCKER_VOLUME_FORMATS+=("short")
-        flag=("${BASH_REMATCH[5]}")
+        DOCKER_VOLUME_SOURCES[count]="${BASH_REMATCH[1]}"
+        DOCKER_VOLUME_TARGETS[count]="${BASH_REMATCH[3]}"
+        DOCKER_VOLUME_FORMATS[count]="short"
+        DOCKER_VOLUME_FLAGS[count]="${BASH_REMATCH[5]}"
       else
         echo "Invalid short form volume string: ${volume_line}" >&2
         return 1
       fi
     elif [[ ${volume_line:0:1} = [Ll] ]]; then
       if [ ${volume_line:0:1} = L ]; then
-        DOCKER_VOLUME_FORMATS+=("long")
+        DOCKER_VOLUME_FORMATS[count]="long"
       fi
+      # Remove the L/l, so the rest is simpler to parse
       volume_line="${volume_line:1}"
       if [[ ${volume_line} = source:* ]]; then
-        DOCKER_VOLUME_SOURCES+=("${volume_line#source: *}")
+        DOCKER_VOLUME_SOURCES[count]="${volume_line#source: *}"
       elif [[ ${volume_line} = target:* ]]; then
-        DOCKER_VOLUME_TARGETS+=("${volume_line#target: *}")
-      elif [[ ${volume_line} = type:* ]]; then
-        if [ "${volume_line}" = "type: tmpfs" ]; then
-          DOCKER_VOLUME_SOURCES+=("")
-        fi
-      else
-        if [ "${flag}" = "" ]; then
-          flag="${volume_line}"
+        DOCKER_VOLUME_TARGETS[count]="${volume_line#target: *}"
+      elif [[ ${volume_line} != type:* ]]; then
+        if [ "${DOCKER_VOLUME_FLAGS[count]}" = "" ]; then
+          DOCKER_VOLUME_FLAGS[count]="${volume_line}"
         else
-          flag+=$'\n'"${volume_line}"
+          DOCKER_VOLUME_FLAGS[count]+=$'\n'"${volume_line}"
         fi
       fi
     fi
   done
-
-  # Do the same logic again for the last pass-through
-  if [ "${#DOCKER_VOLUME_FLAGS[@]}" -lt "${#DOCKER_VOLUME_TARGETS[@]}" ]; then
-    DOCKER_VOLUME_FLAGS+=("${flag}")
-  fi
 }
 
 #**
@@ -905,8 +900,8 @@ function docker-compose-volumes()
 # :Arguments: ``$1``.. - Arguments to be sent to docker-compose command
 # :Parameters: [``JUST_DOCKER_COMPOSE_DIR``] - By default, the docker-compose files will initially be searched for in the ``JUSTFILE`` directory, and then up the parent dirs until / is hit. However, if you wish to the disable this behavior and start searching for a docker-compose file from the current directory where "just" is called, then set this var to an empty string. You can also set to a specific directory to start searching from within that directory.
 # :Output: * ``docker_compose_args`` - Arguments to docker-compose, before the docker-compose command (run, up, down, etc...)
-#          * ``docker_compose_arguments`` - Docker compose command specified
-#          * ``docker_compose_arguments_args`` - Arguments for the specified command
+#          * ``docker_compose_command`` - Docker compose command specified
+#          * ``docker_compose_command_args`` - Arguments for the specified command
 #          * ``docker_compose_files`` - Array of docker compose files that are used
 #          * ``docker_compose_project_name`` - Docker compose project name
 #
@@ -922,8 +917,8 @@ function docker-compose-volumes()
 #
 # .. code-block:: bash
 #
-#   docker-compose "${docker_compose_args[@]}" "${docker_compose_arguments}" \
-#                  "${docker_compose_arguments_args[@]}"
+#   docker-compose "${docker_compose_args[@]}" "${docker_compose_command}" \
+#                  "${docker_compose_command_args[@]}"
 #
 # .. rubric:: Example
 #
@@ -958,10 +953,12 @@ function parse-docker-compose()
   docker_compose_files=()
   docker_compose_args=()
   docker_compose_project_name=
+  docker_compose_command=
+  docker_compose_command_args=()
 
   while (( $# )); do
     case "$1" in
-      -f|-p|-H)
+      -f|-p|-H|-c)
         docker_compose_args+=("$1" "$2")
         case "$1" in
           -f)
@@ -973,7 +970,7 @@ function parse-docker-compose()
         esac
         shift 2
         ;;
-      -f*|-p*|-H*)
+      -f*|-p*|-H*|-c*)
         docker_compose_args+=("$1")
         case "$1" in
           -f*)
@@ -985,9 +982,10 @@ function parse-docker-compose()
         esac
         shift 1
         ;;
-      --file=*|--project-name=*|--host=*|\
-      --tlscacert=*|--tlscert=*|--tlskey=*|--project-directory=*|\
-      --no-ansi|-v|--verbose|--tls|--skip-hostname-check|--tlsverify)
+      --file=*|--project-name=*|--host=*|--context=*|--log-level=*|\
+      --tlscacert=*|--tlscert=*|--tlskey=*|--project-directory=*|--env-file=*|\
+      --no-ansi|-v|--verbose|--tls|--skip-hostname-check|--tlsverify|\
+      --compatibility)
         docker_compose_args+=("$1")
         case "$1" in
           --file=*)
@@ -999,8 +997,8 @@ function parse-docker-compose()
         esac
         shift 1
         ;;
-      --file|--project-name|--host|\
-      --tlscacert|--tlscert|--tlskey|--project-directory)
+      --file|--project-name|--host|--context|--log-level|\
+      --tlscacert|--tlscert|--tlskey|--project-directory|--env-file)
         docker_compose_args+=("$1" "$2")
         case "$1" in
           --file)
@@ -1014,9 +1012,9 @@ function parse-docker-compose()
         ;;
       # Anything else must be a docker compose command
       *)
-        docker_compose_arguments="$1"
+        docker_compose_command="$1"
         shift 1
-        docker_compose_arguments_args=(${@+"${@}"})
+        docker_compose_command_args=(${@+"${@}"})
         break
         ;;
     esac
@@ -1129,8 +1127,8 @@ function compose_path_separator()
 function Docker-compose()
 {
   local docker_compose_args
-  local docker_compose_arguments
-  local docker_compose_arguments_args
+  local docker_compose_command
+  local docker_compose_command_args
   local docker_compose_files
   local docker_compose_project_name
 
@@ -1145,21 +1143,21 @@ function _Docker-compose()
   local cmd=(${DRYRUN} ${DOCKER_COMPOSE})
   local extra_args_var
 
-  if [ "${docker_compose_arguments}" = "run" ] && [ "${DOCKER_COMPOSE_AUTOREMOVE-1}" == "1" ]; then
+  if [ "${docker_compose_command}" = "run" ] && [ "${DOCKER_COMPOSE_AUTOREMOVE-1}" == "1" ]; then
     docker_compose_extra_command_args+=(--rm)
   fi
 
   # Indirect: add DOCKER_COMPOSE_EXTRA_{COMMAND}_ARGS
-  extra_args_var=$(tr '[a-z]' '[A-Z]' <<< "${docker_compose_arguments}")
+  extra_args_var=$(tr '[a-z]' '[A-Z]' <<< "${docker_compose_command}")
   extra_args_var="DOCKER_COMPOSE_EXTRA_${extra_args_var}_ARGS[@]"
   docker_compose_extra_command_args+=(${!extra_args_var+"${!extra_args_var}"})
 
   "${cmd[@]}" \
       ${docker_compose_args+"${docker_compose_args[@]}"} \
       ${DOCKER_COMPOSE_EXTRA_ARGS+"${DOCKER_COMPOSE_EXTRA_ARGS[@]}"} \
-      ${docker_compose_arguments} \
+      ${docker_compose_command} \
       ${docker_compose_extra_command_args+"${docker_compose_extra_command_args[@]}"} \
-      ${docker_compose_arguments_args+"${docker_compose_arguments_args[@]}"}
+      ${docker_compose_command_args+"${docker_compose_command_args[@]}"}
   return $?
 }
 
@@ -1294,8 +1292,8 @@ function Just-docker-compose()
   fi
 
   local docker_compose_args
-  local docker_compose_arguments
-  local docker_compose_arguments_args
+  local docker_compose_command
+  local docker_compose_command_args
   local docker_compose_files
   local DOCKER_COMPOSE_FILES
   local docker_compose_project_name

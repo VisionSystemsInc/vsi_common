@@ -36,7 +36,7 @@ function vsi_test_env()
   #   # Does not work in darling unless usleep for 1001 and larger. TOO slow
   #   # perl -e 'use Time::HiRes; print && Time::HiRes::usleep(1) while <>;'
   # else
-    env -i "${test_env[@]}" "${@}"
+    ${DRYRUN-} env -i "${test_env[@]}" "${@}"
   # fi
 }
 

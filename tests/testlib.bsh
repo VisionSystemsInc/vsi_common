@@ -32,7 +32,7 @@
 # - Pause before deleting temporary directories if there is a failure for inspection: :envvar:`TESTLIB_KEEP_PAUSE_AFTER_ERROR`
 # - Run only a single test by its description: :envvar:`TESTLIB_RUN_SINGLE_TEST`
 # - Regular expression to skip tests by description: :envvar:`TESTLIB_SKIP_TESTS`
-# - Control stderr/stdout redirection :envvar:`TESTLIB_REDIRECT_OUTPUT`
+# - Controlled stderr/stdout redirection :envvar:`TESTLIB_REDIRECT_OUTPUT`
 # - Stop testing after ``N`` failures :envvar:`TESTLIB_STOP_AFTER_FAILS`
 # - Custom PS4 in trace using :envvar:`TESTLIB_PS4`
 # - Ability to conditionally skip a test by calling :func:`skip_next_test` in any condition check
@@ -205,7 +205,7 @@ skipped=0
 #
 # .. rubric:: Examples
 #
-# .. code:: bash
+# .. code-block:: bash
 #
 #    TESTLIB_SKIP_TESTS='^New Just$|foo'
 #    # Skip "New Just" and anything with "foo" it is, e.g. "food"
@@ -296,7 +296,8 @@ atexit ()
   fi
 
   if [ "${failures}" -gt 0 ]; then
-    exit 1
+    # Make the exit code 123, to be consistent with xargs' behavior
+    exit 123
   else
     exit 0
   fi
@@ -306,7 +307,7 @@ trap_chain "atexit" EXIT
 
 if [ -z "${TESTLIB_PS4+set}" ]; then
   if declare -p BASH_SOURCE &> /dev/null; then
-    PS4=$'+${BASH_SOURCE[0]##*/}:${LINENO})\t'
+    PS4=$'+${BASH_SOURCE[0]##*/}:${LINENO}${FUNCNAME[0]:+:${FUNCNAME[0]}()}\t'
   else # Else sh probably
     # Not as accurate, but better than nothing
     PS4=$'+${0##*/}:${LINENO})\t'
@@ -705,6 +706,13 @@ function testlib_print_test_trace()
 
   (
     if [ "${TESTLIB_REDIRECT_OUTPUT}" -ge "1" ]; then
+
+      if ! command -v column &> /dev/null; then
+        function column()
+        {
+          cat -
+        }
+      fi
 
       if [ "${err}" = "${xtrace}" ]; then
         echo "-- stderr --"

@@ -185,6 +185,7 @@ function generate_docker_compose_override()
   local just_docker_entrypoint_links
   local just_docker_entrypoint_internal_volumes
   local just_docker_entrypoint_internal_ro_volumes
+  local all_dynamic_internal_volumes=()
 
   # indirect fun
   local volumes_name
@@ -309,6 +310,7 @@ function generate_docker_compose_override()
         else
           just_docker_entrypoint_internal_volumes+=("${volume_docker}")
         fi
+        all_dynamic_internal_volumes+=("${volume_host}")
       else # Else the volume is a path, get the real path
         volume_host="$(real_path "${volume_host}")"
       fi
@@ -351,7 +353,7 @@ function generate_docker_compose_override()
     # Remove duplicates (https://unix.stackexchange.com/q/159695) because
     # docker-compose doesn't like them
     IFS=$'\n'
-    over_volumes=($(awk '!count[$0]++' <<< ${over_volumes+"${over_volumes[*]}"}))
+    over_volumes=($(awk '!count[$0]++' <<< ${over_volumes[@]+"${over_volumes[*]}"}))
     if [ "${over_volumes+set}" == "set" ]; then
       echo "    volumes:"
       echo ${over_volumes+"${over_volumes[*]}"}
@@ -377,6 +379,23 @@ function generate_docker_compose_override()
 
     container_environment_override _env_echo
   done
+
+  ###################
+  # volumes section #
+  ###################
+  IFS=$'\n'
+  # Make unique list
+  all_dynamic_internal_volumes=($(awk '!count[$0]++' <<< ${all_dynamic_internal_volumes[@]+"${all_dynamic_internal_volumes[*]}"}))
+  IFS="${OLD_IFS}"
+
+  # A space is needed for older bashes (an extra null "" works only in newer bashes)
+  if [ " ${all_dynamic_internal_volumes[@]+set}" = " set" ]; then
+    # Declare newly added volumes
+    echo "volumes:"
+    for volume in "${all_dynamic_internal_volumes[@]}"; do
+      echo "  ${volume}:"
+    done
+  fi
 }
 
 if [ "${BASH_SOURCE[0]}" = "${0}" ] || [ "$(basename "${BASH_SOURCE[0]}")" = "${0}" ]; then

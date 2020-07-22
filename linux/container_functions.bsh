@@ -20,7 +20,7 @@ fi
 # .. function:: container_environment_override
 #
 # :Arguments: * ``${1}`` - The name of a function that takes two arguments, variable name and variable value, and writes to the corresponding configuration file.
-# :Arguments: * ``JUST_PROJECT_PREFIX`` - The Just project prefix value
+#             * ``JUST_PROJECT_PREFIX`` - The Just project prefix value
 #             * ``JUST_DISABLE_ENVIRONMENT_SWAP`` - Transparently swap environment variables as they are added to the docker environment
 #             * ``EXPORT_DOCKER`` - Also exports the ``${1}_.*_DOCKER`` version of the variable when using the transparent environment variable swap feature (the swap effectively becomes a copy).
 #
@@ -36,6 +36,10 @@ fi
 #**
 function container_environment_override()
 {
+  local var
+  local indirect
+  local indirect2
+
   if [ "${OS-}" = "Windows_NT" ]; then
     "${1}" JUST_HOST_WINDOWS 1
   fi
@@ -50,8 +54,11 @@ function container_environment_override()
         if [ "${JUST_DISABLE_ENVIRONMENT_SWAP-}" == "1" ]; then
           "${1}" ${indirect} "${!indirect}"
         else
-          # Set ENV_VAR_HOST to ${ENV_VAR} in the container
-          "${1}" ${indirect}_HOST "${!indirect}"
+          indirect2="${indirect}_HOST"
+          if [ -z "${!indirect2+set}" ]; then
+            # Set ENV_VAR_HOST to ${ENV_VAR} in the container
+            "${1}" ${indirect}_HOST "${!indirect}"
+          fi
         fi
       fi
       if [ "${JUST_DISABLE_ENVIRONMENT_SWAP-}" == "1" ]; then
@@ -69,4 +76,31 @@ function container_environment_override()
       "${1}" ${var} "${!var}"
     fi
   done
+}
+
+#**
+# .. function:: translate_path
+#
+# Translates a path from one filesystem to another, useful for going from host to a container.
+#
+# :Arguments: * ``$1`` - Original path
+#             * ``$2, [$4, $6, ...]`` - Host paths
+#             * ``$3, [$5, $7, ...]`` - Container paths
+# :Output: **stdout** - The translated path. If none of the path pairs translated the path, the original path returned
+#**
+function translate_path()
+{
+  local __translate_paths_original_path="${1}"
+  local __translate_paths_relative_path
+  shift 1
+
+  while [ $# -gt 1 ]; do
+    __translate_paths_relative_path="$(relative_path "${__translate_paths_original_path}" "${1}")"
+    if [ "${__translate_paths_relative_path:0:3}" != "../" ]; then
+      echo "${2}/${__translate_paths_relative_path}"
+      return
+    fi
+    shift 2
+  done
+  echo "${__translate_paths_original_path}"
 }

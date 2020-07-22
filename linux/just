@@ -176,11 +176,7 @@ fi
 
 function print_error()
 {
-  local rv=$?
-  local stack=''
-  local line
-  # Stop any errors in here from throwing more errors (infinite loop), otherwise
-  # "while line=("$(caller $i)"); do" would have inherited the trap, and retrapped
+  local rv=$? # This must be the first line
 
   #**
   # ..envvar:: JUST_IGNORE_EXIT_CODES
@@ -211,33 +207,9 @@ function print_error()
 
   set +E
   echo >&2
-  if [ -e /.dockerenv ]; then
-    source "${VSI_COMMON_DIR}/linux/colors.bsh"
-    echo "Call stack ${YELLOW-}(in docker container)${NC-}" >&2
-    echo '--------------------------------' >&2
-  else
-    echo 'Call stack' >&2
-    echo '----------' >&2
-  fi
-  local -i i=0
-  while line=("$(caller $i)"); do
-    stack+="$(sed $'s| |\t|2' <<< "${line}")"$'\n'
-    ((++i))
-  done
-  if command -v column &> /dev/null; then
-    column -c1 -s $'\t' -t >&2 <<< "${stack}"
-  else
-    echo "${stack}" >&2
-  fi
+  print_bash_stack 1
   echo >&2
   echo "$1: line $2: Returned $rv" >&2
-  # echo
-  # echo "External call stack"
-  # i=0
-  # while (( i < ${#BASH_SOURCE[@]} )); do
-  #   echo "${BASH_LINENO[$i]} ${FUNCNAME[$i]} ${BASH_SOURCE[$i]}"
-  #   ((++i))
-  # done
 }
 trap 'print_error "${BASH_SOURCE[0]}" "${LINENO}"' ERR
 
@@ -257,6 +229,7 @@ source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
 # Activate source_once
 source "${VSI_COMMON_DIR}/linux/source_once.bsh"
 source "${VSI_COMMON_DIR}/linux/just_functions.bsh"
+source "${VSI_COMMON_DIR}/linux/bash_utils.bsh"
 
 setup_tty ${@+"${@}"}
 
@@ -295,10 +268,17 @@ if [ "${JUSTFILE:0:1}" = "." ]; then
   JUSTFILE="$(real_path "${JUSTFILE}")"
 fi
 
+# Covers certain corner cases, like Just_wrap
+unset JUST_SETTINGS
+
 if ! _just_load_justfile "${JUSTFILE}"; then
   JUST_FILE_NOT_FOUND=1
 fi
 
+# Move this check here, so that if there are multiple JUST_SETTINGS, or other
+# advanced setups, that what ever is set when it is all done being loaded is
+# what really counts.
+check_just_version
 
 if [ "${BASH_SOURCE[0]}" = "${0}" ] || [ "$(basename "${BASH_SOURCE[0]}")" = "${0}" ]; then
   justify ${@+"${@}"}

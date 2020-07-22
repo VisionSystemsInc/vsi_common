@@ -27,6 +27,9 @@ function caseify()
 
   case ${just_arg} in
     test) # Run unit tests
+      # Exit code 123 just means a test failed, no need for a Just stack trace
+      # This has to be outside the (), because the () causes two stack traces
+      local JUST_IGNORE_EXIT_CODES=123
       (
         parse_testlib_args ${@+"${@}"}
         shift "${extra_args}"
@@ -34,20 +37,45 @@ function caseify()
       )
       extra_args=$#
       ;;
-    # --test) # Run only this test
-    #   export TESTLIB_RUN_SINGLE_TEST="${1}"
-    #   extra_args=1
-    #   ;;
     test_int) # Run integration tests
+      local JUST_IGNORE_EXIT_CODES=123
       justify test --dir int ${@+"${@}"}
       extra_args=$#
       ;;
 
     test_docker) # Run tests in docker image. Useful for running in specific bash version ($1)
       local version="${1-5.0}"
+      local JUST_IGNORE_EXIT_CODES=123
       shift 1
       extra_args=1
       Just-docker-compose run "bash_test_${version}" ${@+"${@}"}
+      extra_args+=$#
+      ;;
+
+    build_oses) # Build images for other OSes
+      local VSI_COMMON_TEST_OS
+      local VSI_COMMON_TEST_OS_TAG_NAME
+      for VSI_COMMON_TEST_OS in ${VSI_COMMON_TEST_OSES[@]+"${VSI_COMMON_TEST_OSES[@]}"}; do
+        export VSI_COMMON_TEST_OS
+        # sanitize tag name
+        VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS//:/_}
+        VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS_TAG_NAME////_}
+        export VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS_TAG_NAME//@/_}
+        Just-docker-compose build os
+      done
+      ;;
+    test_oses) # Run test in docker image on specific os
+      local VSI_COMMON_TEST_OS
+      local VSI_COMMON_TEST_OS_TAG_NAME
+      local JUST_IGNORE_EXIT_CODES=123
+      for VSI_COMMON_TEST_OS in ${VSI_COMMON_TEST_OSES[@]+"${VSI_COMMON_TEST_OSES[@]}"}; do
+        export VSI_COMMON_TEST_OS
+        # sanitize tag name
+        VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS//:/_}
+        VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS_TAG_NAME////_}
+        export VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS_TAG_NAME//@/_}
+        Just-docker-compose run os ${@+"${@}"}
+      done
       extra_args+=$#
       ;;
     ci_load) # Load ci
@@ -55,6 +83,7 @@ function caseify()
       extra_args=1
       ;;
     test_int_appveyor) # Run integration tests for windows appveyor
+      local JUST_IGNORE_EXIT_CODES=123
       (
         source elements.bsh
         pushd "${VSI_COMMON_DIR}/tests/int/" &> /dev/null
@@ -70,10 +99,12 @@ function caseify()
       )
       ;;
     test_recipe) # Run docker recipe tests
+      local JUST_IGNORE_EXIT_CODES=123
       TESTLIB_DISCOVERY_DIR="${VSI_COMMON_DIR}/docker/recipes/tests" vsi_test_env "${VSI_COMMON_DIR}/tests/run_tests" ${@+"${@}"}
       extra_args=$#
       ;;
     test_darling) # Run unit tests using darling
+      local JUST_IGNORE_EXIT_CODES=123
       (
         cd "${VSI_COMMON_DIR}"
         TESTLIB_PARALLEL=8 vsi_test_env darling shell ./tests/run_tests ${@+"${@}"}
@@ -105,6 +136,7 @@ function caseify()
       ;;
     test_bash) # Run command (like bash) in the contain for a specific version of bash ($1)
       local bash_version="${1}"
+      local JUST_IGNORE_EXIT_CODES=123
       extra_args=$#
       shift 1
       Just-docker-compose run "bash_test_${bash_version}" ${@+"${@}"}
@@ -130,6 +162,7 @@ function caseify()
       extra_args=$#
       ;;
     test_wine) # Run unit tests using wine
+      local JUST_IGNORE_EXIT_CODES=123
       justify run wine -c "
         cd /z/vsi
         source setup.env

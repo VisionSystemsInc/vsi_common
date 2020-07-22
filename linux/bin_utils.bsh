@@ -21,6 +21,7 @@ if [ -z ${VSI_COMMON_DIR+set} ]; then
 fi
 source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
 source "${VSI_COMMON_DIR}/linux/isin"
+source "${VSI_COMMON_DIR}/linux/compat.bsh"
 
 #**
 # :Functions: - object_bits - Print out the number of bits in an object file (requires nm)
@@ -42,7 +43,7 @@ source "${VSI_COMMON_DIR}/linux/isin"
 #
 # Prints out the number of bits (typically 32 or 64) in a file
 #
-# .. note:
+# .. note::
 #
 #    On macOS, it is common to have both 32 and 64 printed out. I.e. ``32 64``
 #**
@@ -80,7 +81,7 @@ elif [ "${OS-}" = "Windows_NT" ]; then
 else
   function object_bits()
   {
-    nm -D "${1}" | sed -En '/^[0-9A-Fa-f]{8,}/ {p; q}' | awk '{print length($1)*4}'
+    nm -D "${1}" | sed -${sed_flag_rE}n '/^[0-9A-Fa-f]{8,}/ {p; q}' | awk '{print length($1)*4}'
   }
 fi
 
@@ -183,7 +184,8 @@ function lwhich()
   # musl doesn't have ld.so.conf, or cache, or ldconfig -p, so do it manually. The only way this
   # test could have a false positive is in a container situation where ldconfig cache hasn't been
   # built, in which case ldconfig -p would fail anyways.
-  if [ -e /etc/ld.so.cache ]; then
+  # The grep check will work on OSes like Clear Linux that are... special
+  if [ -e /etc/ld.so.cache ] || grep -q '/etc/ld\.so\.conf' "$(command -v ldconfig)"; then
     # This only complicated the wildcard idea, and I don't CARE about this case
     for match in $(${LDCONFIG-ldconfig} -p | grep ${case_insensitive} -E $'^\t'"$1" | awk '{print $(NF)}'); do
       if isxbit ${bits} "${match}" && ! isin "$(basename "$match")" ${filenames+"${filenames[@]}"}; then
