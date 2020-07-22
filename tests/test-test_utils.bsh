@@ -111,20 +111,20 @@ begin_test "Test contiguous array"
 )
 end_test
 
-begin_test "Test assert string eq"
+function ans()
+{
+  echo $'\e[1;31m'"ERROR"$'\e[0m'": Strings differ"
+  echo "====================="
+  echo "${1}"$'\e[41;30m'"${2}"$'\e[0m'"${3}"
+  echo "---------------------"
+  echo "${4}"$'\e[41;30m'"${5}"$'\e[0m'"${6}"
+}
+
+begin_test "Test assert strings eq"
 (
   setup_test
 
   assert_str_eq 1234567890 1234567890
-
-  function ans()
-  {
-    echo $'\e[1;31m'"ERROR"$'\e[0m'": Strings differ"
-    echo "====================="
-    echo "${1}"$'\e[41;30m'"${2}"$'\e[0m'"${3}"
-    echo "---------------------"
-    echo "${4}"$'\e[41;30m'"${5}"$'\e[0m'"${6}"
-  }
 
   # Make sure the rv is non-zero
   not assert_str_eq 1234567890 1234566890 &> /dev/null
@@ -150,5 +150,22 @@ begin_test "Test assert string eq"
 
   # Corner case due to malformed for loop (, instead of &&)
   [[ $(assert_str_eq 167890ab 167767890ab 2>&1) = *$(ans 167 "" 890ab 167 767 890ab)* ]] || false
+)
+end_test
+
+begin_test "Test assert ANSI strings eq"
+(
+  setup_test
+
+  CSI=$'\x1b[' ; :
+
+  # assert_str_eq would have failed
+  ! assert_str_eq "Foo ${CSI}31mbar" "${CSI}21mFoo bar${CSI}0m"
+  # assert_ansi_str_eq
+  assert_ansi_str_eq "Foo ${CSI}31mbar" "${CSI}21mFoo bar${CSI}0m"
+
+  # The diff is ANSI free too
+  [[ $(assert_ansi_str_eq "Foo ${CSI}31mBar" "${CSI}21mFoo bar${CSI}0m" 2>&1) = *$(ans "Foo " B ar "Foo " b ar)* ]] || false
+
 )
 end_test
