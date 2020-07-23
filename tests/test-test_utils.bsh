@@ -5,6 +5,8 @@ VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 . "$(dirname "${BASH_SOURCE[0]}")/test_utils.bsh"
 . "${VSI_COMMON_DIR}/linux/compat.bsh"
 
+NL=$'\n'
+
 function common_check_array_test()
 {
   a1=()
@@ -14,12 +16,12 @@ function common_check_array_test()
 
   bq="${bash_declare_array_quote}"
 
-  ans0=$'\e[1;31m'"ERROR"$'\e[0m'": Arrays differ"$'\n'
+  ans0="${ERR_C}ASSERT ERROR: Arrays differ${NC}${NL}"
 
   not ${1} a1 "" &> /dev/null
   ans="${ans0}a1=()"
-  ans+=$'\nArray had 1 too few values'
-  ans+=$'\ndeclare -a a1='"${bq}()${bq}"
+  ans+="${NL}Array had 1 too few values"
+  ans+="${NL}declare -a a1=${bq}()${bq}"
   [[ $(${1} a1 "" 2>&1) = *${ans}* ]] || false
 
   not ${1} a2 11 22 33 44 &> /dev/null
@@ -113,11 +115,11 @@ end_test
 
 function ans()
 {
-  echo $'\e[1;31m'"ERROR"$'\e[0m'": Strings differ"
-  echo "====================="
-  echo "${1}"$'\e[41;30m'"${2}"$'\e[0m'"${3}"
+  echo "${ERR_C}ASSERT ERROR: Strings differ${NC}"
+  echo         "============================"
+  echo "${1}${HIGHLIGHT_C}${2}${NC}${3}"
   echo "---------------------"
-  echo "${4}"$'\e[41;30m'"${5}"$'\e[0m'"${6}"
+  echo "${4}${HIGHLIGHT_C}${5}${NC}${6}"
 }
 
 begin_test "Test assert strings eq"
@@ -129,27 +131,27 @@ begin_test "Test assert strings eq"
   # Make sure the rv is non-zero
   not assert_str_eq 1234567890 1234566890 &> /dev/null
   # Middles wrong
-  [[ $(assert_str_eq 1234567890 1234566890 2>&1) = *$(ans 123456 7 890 123456 6 890)* ]] || false
-  [[ $(assert_str_eq 1234567890 1234576890 2>&1) = *$(ans 12345 67 890 12345 76 890)* ]] || false
-  [[ $(assert_str_eq 1234567890 12345890 2>&1) = *$(ans 12345 67 890 12345 "" 890)* ]] || false
-  [[ $(assert_str_eq 12345890 1234567890 2>&1) = *$(ans 12345 "" 890 12345 67 890)* ]] || false
-  [[ $(assert_str_eq 1234555890 123455567890 2>&1) = *$(ans 1234555 "" 890 1234555 67 890)* ]] || false
-  [[ $(assert_str_eq 1234567890 1@34567890 2>&1) = *$(ans 1 2 34567890 1 @ 34567890)* ]] || false
-  [[ $(assert_str_eq 1234567890 12345678^0 2>&1) = *$(ans 12345678 9 0 12345678 ^ 0)* ]] || false
+  assert_sub_str "$(assert_str_eq 1234567890 1234566890 2>&1)"   "$(ans 123456   7  890      123456   6  890)"
+  assert_sub_str "$(assert_str_eq 1234567890 1234576890 2>&1)"   "$(ans 12345    67 890      12345    76 890)"
+  assert_sub_str "$(assert_str_eq 1234567890 12345890 2>&1)"     "$(ans 12345    67 890      12345    "" 890)"
+  assert_sub_str "$(assert_str_eq 12345890   1234567890 2>&1)"   "$(ans 12345    "" 890      12345    67 890)"
+  assert_sub_str "$(assert_str_eq 1234555890 123455567890 2>&1)" "$(ans 1234555  "" 890      1234555  67 890)"
+  assert_sub_str "$(assert_str_eq 1234567890 1@34567890 2>&1)"   "$(ans 1        2  34567890 1        @  34567890)"
+  assert_sub_str "$(assert_str_eq 1234567890 12345678^0 2>&1)"   "$(ans 12345678 9  0        12345678 ^  0)"
 
   # Beginning wrong
-  [[ $(assert_str_eq abcdef ABCdef 2>&1) = *$(ans "" abc def "" ABC def)* ]] || false
-  [[ $(assert_str_eq abcdef Abcdef 2>&1) = *$(ans "" a bcdef "" A bcdef)* ]] || false
-  [[ $(assert_str_eq abcdef bcdef 2>&1) = *$(ans "" a bcdef "" "" bcdef)* ]] || false
-  [[ $(assert_str_eq bcdef abcdef 2>&1) = *$(ans "" "" bcdef "" a bcdef)* ]] || false
+  assert_sub_str "$(assert_str_eq abcdef ABCdef 2>&1)" "$(ans "" abc def   "" ABC def)"
+  assert_sub_str "$(assert_str_eq abcdef Abcdef 2>&1)" "$(ans "" a   bcdef "" A   bcdef)"
+  assert_sub_str "$(assert_str_eq abcdef bcdef 2>&1)"  "$(ans "" a   bcdef "" ""  bcdef)"
+  assert_sub_str "$(assert_str_eq bcdef  abcdef 2>&1)" "$(ans "" ""  bcdef "" a   bcdef)"
   # End wrong
-  [[ $(assert_str_eq uvwxyz uvwXYZ 2>&1) = *$(ans uvw xyz "" uvw XYZ "")* ]] || false
-  [[ $(assert_str_eq uvwxyz uvwxyZ 2>&1) = *$(ans uvwxy z "" uvwxy Z "")* ]] || false
-  [[ $(assert_str_eq uvwxyz uvwxy 2>&1) = *$(ans uvwxy z "" uvwxy "" "")* ]] || false
-  [[ $(assert_str_eq uvwxy uvwxyz 2>&1) = *$(ans uvwxy "" "" uvwxy z "")* ]] || false
+  assert_sub_str "$(assert_str_eq uvwxyz uvwXYZ 2>&1)" "$(ans uvw   xyz "" uvw   XYZ "")"
+  assert_sub_str "$(assert_str_eq uvwxyz uvwxyZ 2>&1)" "$(ans uvwxy z   "" uvwxy Z   "")"
+  assert_sub_str "$(assert_str_eq uvwxyz uvwxy 2>&1)"  "$(ans uvwxy z   "" uvwxy ""  "")"
+  assert_sub_str "$(assert_str_eq uvwxy  uvwxyz 2>&1)" "$(ans uvwxy ""  "" uvwxy z   "")"
 
   # Corner case due to malformed for loop (, instead of &&)
-  [[ $(assert_str_eq 167890ab 167767890ab 2>&1) = *$(ans 167 "" 890ab 167 767 890ab)* ]] || false
+  assert_sub_str "$(assert_str_eq 167890ab 167767890ab 2>&1)" "$(ans 167 "" 890ab 167 767 890ab)"
 )
 end_test
 
@@ -157,15 +159,120 @@ begin_test "Test assert ANSI strings eq"
 (
   setup_test
 
-  CSI=$'\x1b[' ; :
+  CSI=$'\x1b[' ; : # This line will mess up the trace a little (it's a partial ANSI code) The ; : helps cope
 
   # assert_str_eq would have failed
-  ! assert_str_eq "Foo ${CSI}31mbar" "${CSI}21mFoo bar${CSI}0m"
+  not assert_str_eq "Foo ${CSI}31mbar" "${CSI}21mFoo bar${CSI}0m"
   # assert_ansi_str_eq
   assert_ansi_str_eq "Foo ${CSI}31mbar" "${CSI}21mFoo bar${CSI}0m"
 
   # The diff is ANSI free too
-  [[ $(assert_ansi_str_eq "Foo ${CSI}31mBar" "${CSI}21mFoo bar${CSI}0m" 2>&1) = *$(ans "Foo " B ar "Foo " b ar)* ]] || false
+  assert_sub_str "$(assert_ansi_str_eq "Foo ${CSI}31mBar" "${CSI}21mFoo bar${CSI}0m" 2>&1)" "$(ans "Foo " B ar "Foo " b ar)"
+)
+end_test
 
+begin_test "Test assert contains"
+(
+  setup_test
+
+  not assert_sub_str Fool foo
+  assert_sub_str "" ""
+  assert_sub_str foo ""
+  assert_sub_str blah blah
+  assert_sub_str fool foo
+  assert_sub_str foobar bar
+  assert_sub_str 123456789 456
+
+  assert_starts_with "" ""
+  assert_starts_with foo ""
+  assert_starts_with blah blah
+  assert_starts_with fool foo
+  not assert_starts_with foobar bar
+  not assert_starts_with 123456789 456
+
+  assert_ends_with "" ""
+  assert_ends_with foo ""
+  assert_ends_with blah blah
+  not assert_ends_with fool foo
+  assert_ends_with foobar bar
+  not assert_ends_with 123456789 456
+)
+end_test
+
+begin_test "Assert test"
+(
+  setup_test
+
+  assert_test 1 = 1
+  not assert_test 1 = 2
+
+  assert_test -z ""
+  not assert_test -z " "
+  assert_test -n " "
+  not assert_test -n ""
+
+  assert_test 1 = 2 -o 3 -gt 0
+  not assert_test 1 = 2 -o 3 -lt 0
+)
+end_test
+
+begin_test "Assert regex equals"
+(
+  setup_test
+  # Symbols
+  a='!@#$%^&*()_+`~-=[]{};":'"'"',./<>?\| = '
+  b='^!@#\$%\^&\*\(\)_\+`~-=\[\]\{\};":'"'"',./<>\?\\\| = '
+
+  assert_re_eq "${a}" "${b}"
+  assert_re_eq "${a}foo" "${b}"
+  not assert_re_eq "${a}" "${b}foo"
+
+  c="${b}$"
+  assert_re_eq "${a}" "${c}"
+  not assert_re_eq "${a}foo" "${c}"
+  not assert_re_eq "${a}" "${c}foo"
+
+  # White spaces
+  a=$'foo\tbar\n'
+  assert_re_eq "${a}" "^foo.bar.$"
+  assert_re_eq "${a}" $'^foo\tbar\n$'
+  assert_re_eq "${a}" "foo.bar"
+  not assert_re_eq "${a}" "^foo.bar$"
+)
+end_test
+
+begin_test "Test not"
+(
+  setup_test
+
+  not false
+
+  if not true; then
+    false
+  else
+    true
+  fi
+
+  not not true
+)
+end_test
+
+begin_test "Test not_s"
+(
+  setup_test
+
+  not_s "[[ 1 == 2 ]]"
+  not not_s "[[ 1 == 1 ]]"
+
+  not_s "(( 1+5 < 6 )) "
+
+  x=test
+  y='t.st'
+  not not_s '[[ $x =~ $y ]]'
+  x=toast
+  not_s '[[ $x =~ $y ]]'
+
+  not_s "not_s true"
+  not not_s "not_s false"
 )
 end_test
