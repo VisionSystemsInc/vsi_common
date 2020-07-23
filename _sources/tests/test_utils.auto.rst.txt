@@ -8,7 +8,7 @@ Test Utilities
 
 Utilities to help in test verifications
 
-.. function:: check_a
+.. function:: assert_array_values
 
 :Arguments: * ``$1`` - Array name
             * [``$2``...] - Array values
@@ -17,17 +17,22 @@ Utilities to help in test verifications
             * ``0`` - Equal
             * ``1`` - A value is not the same
             * ``2`` - The array had less values than specified
+            * ``3`` - The array had more values than specified
 
 Check array values for unit tests
 
 .. seealso::
   :func:`elements.bsh cmp_elements_a`
 
-.. function:: check_ra
+.. function:: assert_array_regex_values
 
-Regex version of :func:`check_a`
+Regex version of :func:`assert_array_values`.
 
-.. function:: contiguous_a
+Only the values (RHS) may contain a bash regex.
+
+.. function:: assert_array_contiguous
+
+Check array values are contiguous for unit tests
 
 :Arguments: ``$1`` - Array name to test
 :Output: Return Value:
@@ -35,8 +40,180 @@ Regex version of :func:`check_a`
             * ``0`` - Array is contiguous
             * ``1`` - Array is not contiguous
 
-Check array values are contiguous for unit tests
+.. note::
+  Uses eval
+
+.. function:: assert_array_eq
+
+Checks if two arrays are identical, including their indicies. Also works on associative arrays.
+
+:Arguments: * ``$1`` - Array name
+            * ``$2`` - Second array name
+:Output: Return Value:
+
+            *  Same return values as :func:`assert_array_values`
+
+.. function:: assert_str_eq
+
+Checks if two strings are equal
+
+:Arguments: * ``$1`` - First string
+            * ``$2`` - Second string
+
+On failure, will print out the strings, coloring from the first diff to the last diff, to emphasize where the string is different.
+
+.. function:: assert_ansi_str_eq
+
+Version os :func:`assert_str_eq` where ANSI codes are stripped, and thus don't count against a string matching
+
+:Arguments:
+
+.. function:: assert_test
+
+Asserts that a test is true. The only real advantage to using this is a formatted error output.
+
+:Arguments: ``$1``... - Arguments to ``test`` aka ``[ ]``
+
+.. rubric:: Example
+
+.. code-block:: bash
+
+  assert_test 4 = 4
+  not assert_test 4 = 5
+  assert_test -z "${EMPTY_STRING}"
+  assert_test -d "${some dir}"
+
+.. function:: assert_sub_str
+
+Asserts that a string is contained in another string.
+
+:Arguments: * ``$1`` - The string
+            * ``$2`` - The substring being checked for
+
+Equivalently checking ``[[ ${str} = *"${substr}"* ]] || false``, with formatted error output
+
+.. function:: assert_starts_with
+
+Asserts that a string starts with the second string
+
+:Arguments: * ``$1`` - The string
+            * ``$2`` - The prefix being checked for
+
+Equivalently checking ``[[ ${str} = "${substr}"* ]] || false``, with formatted error output
+
+.. function:: assert_ends_with
+
+Asserts that a string ends with the second string
+
+:Arguments: * ``$1`` - The string
+            * ``$2`` - The suffix being checked for
+
+Equivalently checking ``[[ ${str} = *"${substr}" ]] || false``, with formatted error output
+
+.. function:: assert_regex_eq
+
+Asserts that a string matches a regex
+
+:Arguments: * ``$1`` - The string being checked
+            * ``$2`` - A regex string
+
+Equivalently checking ``[[ ${str} =~ ${substr} ]] || false``, with formatted error output
+
+.. rubric:: Example
+
+.. code-block:: bash
+
+  assert_regex_eq "foo" 'o'
+  not assert_regex_eq "foo" '^o'
+  assert_regex_eq "foo" 'o$'
+  assert_regex_eq "foo" '^foo$'
+  assert_regex_eq 'a[]' '^a\[\]$'
+
+.. function:: not
+
+:Arguments: ``$1``... - Command and arguments
+:Output: Return value
+
+    * ``0`` - On non-zero return code evaluation
+    * ``1`` - On zero return code
+
+Returns true only when the command fails
+
+Since ``!`` is ignored by "set -e", use :func:`not` instead. This is just a helper to make unittests look nice and not need extra ifs everywhere
+
+.. rubric:: Example
+
+.. code-block:: bash
+
+  # No good, always passes, even if ! true. If this is the last line of a
+  # function, you will be fooled into thinking it is working, because
+  # functions return the return value of the last line, by default.
+  # The "!" does set a non-zero return value, but does not trigger set -e,
+  # similar to [[ ]] in older versions of bash.
+  ! false
+
+  # good
+  not false
+  # equivalent to
+  if ! false; then
+    true
+  else
+    false
+  fi
+
+.. rubric:: Bugs
+
+Complex statements do not work, e.g. [, [[ and ((, etc...
+  For example, you should use
+
+.. code-block:: bash
+
+    [ ! -e /test ]
+
+|  instead of
+
+.. code-block:: bash
+
+    not [ -e /test ]
+
+|  In cases where this is not easily worked around, you can use
+
+.. code-block:: bash
+
+    not_s '[ -e /test ]'
+
+.. seealso::
+  :func:`not_s`
+
+.. function:: not_s
+
+:Arguments: ``$1`` - Command/statement in a single string
+:Output: Return Value:
+
+            * ``0`` - On non-zero return code evaluation
+            * ``1`` - On zero return code
+
+Returns true only when the string version of command fails
+
+Since ``!`` is ignored by "set -e", use :func:`not` instead. This is just a helper to make unittests look nice and not need extra ifs everywhere.
+
+.. rubric:: Example
+
+.. code-block:: bash
+
+  x=test
+  y=t.st
+  not_s '[[ $x =~ $y ]]' # <-- notice single quotes.
+
+  # Note, in this simple case, it can be replaced with
+  not assert_regex_eq "${x}" "${y}"
+  # But not all cases can be easily simplified, and will require not_s
+
+While the single quotes aren't necessary, they handle the more complicated situations more easily.
 
 .. note::
   Uses eval
+
+.. seealso::
+  :func:`not`
 
