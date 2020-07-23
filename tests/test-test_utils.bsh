@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 
-. "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
+source "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
+source "$(dirname "${BASH_SOURCE[0]}")/test_utils.bsh"
 VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
-. "$(dirname "${BASH_SOURCE[0]}")/test_utils.bsh"
-. "${VSI_COMMON_DIR}/linux/compat.bsh"
-
+source "${VSI_COMMON_DIR}/linux/compat.bsh"
 NL=$'\n'
 
 function common_check_array_test()
@@ -58,58 +57,58 @@ function common_check_array_test()
   [[ $(${1} a2 11 22 2>&1) = *"${ans}"* ]] || false
 }
 
-begin_test "Test check array"
+begin_test "Assert array values"
 (
   setup_test
 
-  common_check_array_test check_a
+  common_check_array_test assert_array_values
 )
 end_test
 
-begin_test "Test regex check array"
+begin_test "Assert array regex values"
 (
   setup_test
-  common_check_array_test check_ra '~'
+  common_check_array_test assert_array_regex_values '~'
 
   a2=(11 22 33)
 
-  check_ra a2 1+ '^[0-9]+$' 3
-  check_ra a2 2* . '^33$'
-  not check_ra a2 1+ '^[0-9]+$' 4 &> /dev/null
+  assert_array_regex_values a2 1+ '^[0-9]+$' 3
+  assert_array_regex_values a2 2* . '^33$'
+  not assert_array_regex_values a2 1+ '^[0-9]+$' 4 &> /dev/null
   ans="${ans0}Element 2 (a2[2]) is different:"
   ans+=$'\n33 !=~ 4'
   ans+=$'\ndeclare -a a2='"${bq}"'([0]="11" [1]="22" [2]="33")'"${bq}"
-  [[ $(check_ra a2 1+ '^[0-9]+$' 4 2>&1) = *"${ans}"* ]] || false
+  [[ $(assert_array_regex_values a2 1+ '^[0-9]+$' 4 2>&1) = *"${ans}"* ]] || false
 )
 end_test
 
-begin_test "Test contiguous array"
+begin_test "Assert contiguous array"
 (
   setup_test
   a1=(1 2 3)
-  contiguous_a a1
+  assert_array_contiguous a1
 
   unset a1[0]
-  not contiguous_a a1
+  not assert_array_contiguous a1
 
   a1=(1 2 3)
   unset a1[1]
-  not contiguous_a a1
+  not assert_array_contiguous a1
   a1+=(4)
-  not contiguous_a a1
+  not assert_array_contiguous a1
 
   a1=(1 2 3)
   unset a1[2]
-  contiguous_a a1
+  assert_array_contiguous a1
   unset a1[1]
-  contiguous_a a1
+  assert_array_contiguous a1
   a1+=(4)
-  contiguous_a a1
+  assert_array_contiguous a1
   unset a1[1]
   unset a1[0]
-  contiguous_a a1
+  assert_array_contiguous a1
   a1+=(4)
-  contiguous_a a1
+  assert_array_contiguous a1
 )
 end_test
 
@@ -122,7 +121,7 @@ function ans()
   echo "${4}${HIGHLIGHT_C}${5}${NC}${6}"
 }
 
-begin_test "Test assert strings eq"
+begin_test "Assert strings equal"
 (
   setup_test
 
@@ -155,7 +154,7 @@ begin_test "Test assert strings eq"
 )
 end_test
 
-begin_test "Test assert ANSI strings eq"
+begin_test "Assert ANSI strings eq"
 (
   setup_test
 
@@ -171,7 +170,7 @@ begin_test "Test assert ANSI strings eq"
 )
 end_test
 
-begin_test "Test assert contains"
+begin_test "Assert contains"
 (
   setup_test
 
@@ -223,21 +222,55 @@ begin_test "Assert regex equals"
   a='!@#$%^&*()_+`~-=[]{};":'"'"',./<>?\| = '
   b='^!@#\$%\^&\*\(\)_\+`~-=\[\]\{\};":'"'"',./<>\?\\\| = '
 
-  assert_re_eq "${a}" "${b}"
-  assert_re_eq "${a}foo" "${b}"
-  not assert_re_eq "${a}" "${b}foo"
+  assert_regex_eq "${a}" "${b}"
+  assert_regex_eq "${a}foo" "${b}"
+  not assert_regex_eq "${a}" "${b}foo"
 
   c="${b}$"
-  assert_re_eq "${a}" "${c}"
-  not assert_re_eq "${a}foo" "${c}"
-  not assert_re_eq "${a}" "${c}foo"
+  assert_regex_eq "${a}" "${c}"
+  not assert_regex_eq "${a}foo" "${c}"
+  not assert_regex_eq "${a}" "${c}foo"
 
   # White spaces
   a=$'foo\tbar\n'
-  assert_re_eq "${a}" "^foo.bar.$"
-  assert_re_eq "${a}" $'^foo\tbar\n$'
-  assert_re_eq "${a}" "foo.bar"
-  not assert_re_eq "${a}" "^foo.bar$"
+  assert_regex_eq "${a}" "^foo.bar.$"
+  assert_regex_eq "${a}" $'^foo\tbar\n$'
+  assert_regex_eq "${a}" "foo.bar"
+  not assert_regex_eq "${a}" "^foo.bar$"
+)
+end_test
+
+begin_test "Assert arrays eq"
+(
+  setup_test
+
+  a=()
+  b=''
+  not assert_array_eq a b
+  a=('')
+  # These may look "similar", but b is not an array, but still "passes"
+  assert_array_eq a b
+  assert_array_eq b a
+
+  b=()
+  not assert_array_eq a b
+  a=()
+  assert_array_eq a b
+
+  a=(11 22 33)
+  b=(11 22 33)
+
+  assert_array_eq a b
+  b[2]=32
+  not assert_array_eq a b
+  not assert_array_eq b a
+  b[3]=33
+  unset b[2]
+
+  # The values are the same
+  assert_array_values b "${a[@]}"
+  not assert_array_eq a b
+  not assert_array_eq b a
 )
 end_test
 
