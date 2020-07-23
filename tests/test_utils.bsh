@@ -85,7 +85,9 @@ function assert_array_values()
 #**
 # .. function:: assert_array_regex_values
 #
-# Regex version of :func:`assert_array_values`
+# Regex version of :func:`assert_array_values`.
+#
+# Only the values (RHS) may contain a bash regex.
 #**
 function assert_array_regex_values()
 {
@@ -133,13 +135,13 @@ function assert_array_regex_values()
 #**
 # .. function:: assert_array_contiguous
 #
+# Check array values are contiguous for unit tests
+#
 # :Arguments: ``$1`` - Array name to test
 # :Output: Return Value:
 #
 #             * ``0`` - Array is contiguous
 #             * ``1`` - Array is not contiguous
-#
-# Check array values are contiguous for unit tests
 #
 # .. note::
 #   Uses eval
@@ -153,6 +155,17 @@ function assert_array_contiguous()
   # assert_array_values will set -xv
 }
 
+#**
+# .. function:: assert_array_eq
+#
+# Checks if two arrays are identical, including their indicies. Also works on associative arrays.
+#
+# :Arguments: * ``$1`` - Array name
+#             * ``$2`` - Second array name
+# :Output: Return Value:
+#
+#             *  Same return values as :func:`assert_array_values`
+#**
 function assert_array_eq()
 {
   set +xv
@@ -165,6 +178,16 @@ function assert_array_eq()
   assert_array_values "${1}" ${!__assert_array_eq_2+"${!__assert_array_eq_2}"}
 }
 
+#**
+# .. function:: assert_str_eq
+#
+# Checks if two strings are equal
+#
+# :Arguments: * ``$1`` - First string
+#             * ``$2`` - Second string
+#
+# On failure, will print out the strings, coloring from the first diff to the last diff, to emphasize where the string is different.
+#**
 function assert_str_eq
 {
   set +xv
@@ -208,6 +231,40 @@ function assert_str_eq
   set -xv
 }
 
+#**
+# .. function:: assert_ansi_str_eq
+#
+# Version os :func:`assert_str_eq` where ANSI codes are stripped, and thus don't count against a string matching
+#
+# :Arguments:
+#**
+function assert_ansi_str_eq()
+{
+  set +xv
+  local str1="$(strip_ansi "${1}")"
+  local str2="$(strip_ansi "${2}")"
+
+  assert_str_eq "${str1}" "${str2}"
+  # assert_str_eq will set -xv
+  return $?
+}
+
+#**
+# .. function:: assert_test
+#
+# Asserts that a test is true. The only real advantage to using this is a formatted error output.
+#
+# :Arguments: ``$1``... - Arguments to ``test`` aka ``[ ]``
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
+#   assert_test 4 = 4
+#   not assert_test 4 = 5
+#   assert_test -z "${EMPTY_STRING}"
+#   assert_test -d "${some dir}"
+#**
 function assert_test()
 {
   set +xv
@@ -223,17 +280,16 @@ function assert_test()
   fi
 }
 
-function assert_ansi_str_eq()
-{
-  set +xv
-  local str1="$(strip_ansi "${1}")"
-  local str2="$(strip_ansi "${2}")"
-
-  assert_str_eq "${str1}" "${str2}"
-  # assert_str_eq will set -xv
-  return $?
-}
-
+#**
+# .. function:: assert_sub_str
+#
+# Asserts that a string is contained in another string.
+#
+# :Arguments: * ``$1`` - The string
+#             * ``$2`` - The substring being checked for
+#
+# Equivalently checking ``[[ ${str} = *"${substr}"* ]] || false``, with formatted error output
+#**
 function assert_sub_str()
 {
   set +xv
@@ -254,6 +310,16 @@ function assert_sub_str()
   fi
 }
 
+#**
+# .. function:: assert_starts_with
+#
+# Asserts that a string starts with the second string
+#
+# :Arguments: * ``$1`` - The string
+#             * ``$2`` - The prefix being checked for
+#
+# Equivalently checking ``[[ ${str} = "${substr}"* ]] || false``, with formatted error output
+#**
 function assert_starts_with()
 {
   set +xv
@@ -274,6 +340,16 @@ function assert_starts_with()
   fi
 }
 
+#**
+# .. function:: assert_starts_with
+#
+# Asserts that a string ends with the second string
+#
+# :Arguments: * ``$1`` - The string
+#             * ``$2`` - The suffix being checked for
+#
+# Equivalently checking ``[[ ${str} = *"${substr}" ]] || false``, with formatted error output
+#**
 function assert_ends_with()
 {
   set +xv
@@ -294,6 +370,26 @@ function assert_ends_with()
   fi
 }
 
+#**
+# .. function:: assert_regex_eq
+#
+# Asserts that a string matches a regex
+#
+# :Arguments: * ``$1`` - The string being checked
+#             * ``$2`` - A regex string
+#
+# Equivalently checking ``[[ ${str} =~ ${substr} ]] || false``, with formatted error output
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
+#   assert_regex_eq "foo" 'o'
+#   not assert_regex_eq "foo" '^o'
+#   assert_regex_eq "foo" 'o$'
+#   assert_regex_eq "foo" '^foo$'
+#   assert_regex_eq 'a[]' '^a\[\]$'
+#**
 function assert_regex_eq()
 {
   set +xv
@@ -400,6 +496,10 @@ not()
 #   x=test
 #   y=t.st
 #   not_s '[[ $x =~ $y ]]' # <-- notice single quotes.
+#
+#   # Note, in this simple case, it can be replaced with
+#   not assert_regex_eq "${x}" "${y}"
+#   # But not all cases can be easily simplified, and will require not_s
 #
 # While the single quotes aren't necessary, they handle the more complicated situations more easily.
 #
