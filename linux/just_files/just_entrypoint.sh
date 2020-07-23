@@ -56,7 +56,7 @@ set -eu
 # .. code-block:: dockerfile
 #
 #    ENTRYPOINT ["/usr/local/bin/tini", "--", "/usr/bin/env",
-#                "bash", "/vsi/linux/just_entrypoint.sh",
+#                "bash", "/vsi/linux/just_files/just_entrypoint.sh",
 #                "bash", "/my_entrypoint.sh"]
 #
 #    CMD some_command
@@ -102,7 +102,7 @@ function load_just_settings()
 
   MIFS="${JUST_SETTINGS_SEPARATOR-///}" split_s JUST_SETTINGSS ${JUST_SETTINGS+"${JUST_SETTINGS}"}
   for just_settings in ${JUST_SETTINGSS[@]+"${JUST_SETTINGSS[@]}"}; do
-    source "${VSI_COMMON_DIR}/linux/just_env" "${just_settings}"
+    source "${VSI_COMMON_DIR}/linux/just_files/just_env" "${just_settings}"
   done
 }
 
@@ -135,7 +135,7 @@ if [ "${ALREADY_RUN_ONCE+set}" != "set" ]; then
     # add other advanced J.U.S.T. features
     JUST_DOCKER_ENTRYPOINT_CHOWN_DIRS="${JUST_DOCKER_ENTRYPOINT_CHOWN_DIRS-${JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES-}}" \
     JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS="${JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS-${JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES-}}" \
-    /usr/bin/env bash "${VSI_COMMON_DIR}/linux/just_entrypoint_functions"
+    /usr/bin/env bash "${VSI_COMMON_DIR}/linux/just_files/just_entrypoint_functions"
   )
   # Rerun entrypoint as user now, (skipping the root part via ALREADY_RUN_ONCE)
   ALREADY_RUN_ONCE=1 exec gosu ${DOCKER_USERNAME} /usr/bin/env bash "${file}" ${@+"${@}"}
@@ -156,7 +156,7 @@ fi
 load_just_settings
 
 # Remove _DOCKER variables and undo // expansion
-source "${VSI_COMMON_DIR}/linux/just_entrypoint_user_functions.bsh"
+source "${VSI_COMMON_DIR}/linux/just_files/just_entrypoint_user_functions.bsh"
 if [ -n "${JUST_PROJECT_PREFIX+set}" ]; then
   # Remove duplicate ${JUST_PROJECT_PREFIX}_*_DOCKER variables
   filter_docker_variables
@@ -177,7 +177,7 @@ done
 unset shell
 
 if [ "${run_just}" = "1" ]; then
-  exec /vsi/linux/just "${@}"
+  exec "${VSI_COMMON_DIR}/linux/just" "${@}"
 else
   exec "${@}"
 fi

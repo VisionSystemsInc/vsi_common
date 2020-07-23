@@ -1,10 +1,10 @@
 #!/usr/bin/env false bash
 
 if [ -z ${VSI_COMMON_DIR+set} ]; then
-  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)"
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.."; pwd)"
 fi
 
-source "${VSI_COMMON_DIR}/linux/just_common.bsh"
+source "${VSI_COMMON_DIR}/linux/just_files/just_common.bsh"
 source "${VSI_COMMON_DIR}/linux/isin"
 source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
 source "${VSI_COMMON_DIR}/linux/elements.bsh"
@@ -55,7 +55,7 @@ _just()
   # 1. Initial files: just_functions.bsh
   local JUST_HELP_FILES=(${JUST_HELP_FILES+"${JUST_HELP_FILES[@]}"})
   if [ "${JUST_HELP_FILES+set}" != "set" ]; then
-    JUST_HELP_FILES=("${VSI_COMMON_DIR}/linux/just_functions.bsh")
+    JUST_HELP_FILES=("${VSI_COMMON_DIR}/linux/just_files/just_functions.bsh")
   fi
 
   # 2. Find Justfile, load it, and copy the JUST_HELP_FILES array
