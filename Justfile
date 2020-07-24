@@ -43,15 +43,6 @@ function caseify()
       extra_args=$#
       ;;
 
-    test_docker) # Run tests in docker image. Useful for running in specific bash version ($1)
-      local version="${1-5.0}"
-      local JUST_IGNORE_EXIT_CODES=123
-      shift 1
-      extra_args=1
-      Just-docker-compose run "bash_test_${version}" ${@+"${@}"}
-      extra_args+=$#
-      ;;
-
     build_oses) # Build images for other OSes
       local os
       for os in ${VSI_COMMON_TEST_OSES[@]+"${VSI_COMMON_TEST_OSES[@]}"}; do
@@ -147,7 +138,7 @@ function caseify()
       fi
       ;;
     test_bash) # Run command (like bash) in the contain for a specific version of bash ($1)
-      local bash_version="${1}"
+      local bash_version="${1-5.0}"
       local JUST_IGNORE_EXIT_CODES=123
       extra_args=$#
       shift 1

@@ -1,4 +1,10 @@
 ARG OS
+ARG DOCKER_COMPOSE_VERSION=1.26.2
+
+FROM docker/compose:alpine-${DOCKER_COMPOSE_VERSION} as docker-compose_musl
+FROM docker/compose:debian-${DOCKER_COMPOSE_VERSION} as docker-compose_glib
+FROM vsiri/recipe:docker as docker
+FROM vsiri/recipe:docker-compose as docker-compose
 
 # FROM busybox:latest as wget
 
@@ -17,7 +23,8 @@ RUN set -euxv; \
           # cmp for unit tests
           diffutils \
           # find and xargs for run tests/dir_tools (and maybe more?)
-          findutils; \
+          findutils \
+          git; \
     elif command -v apt-get; then \
       apt-get update; \
       DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
@@ -28,7 +35,8 @@ RUN set -euxv; \
              # column for unit tests
              bsdmainutils \
              # xxd for unit tests
-             vim; \
+             vim \
+             git; \
     elif command -v zypper; then \
       zypper --gpg-auto-import-keys --non-interactive install -y \
              # column for unit tests
@@ -38,7 +46,8 @@ RUN set -euxv; \
              # nm for lwhich
              binutils \
              # xxd for unit tests
-             vim; \
+             vim \
+             git; \
     elif command -v apk; then \
       apk add --no-cache \
           bash \
@@ -51,21 +60,24 @@ RUN set -euxv; \
           # Better xargs command because ?
           findutils \
           # nm
-          binutils; \
+          binutils \
+          git; \
     elif command -v slackpkg; then \
       slackpkg update; \
       # Is there a "right" way to do this?
                              # xxd for unit tests
       yes | slackpkg install vim \
                              # nm for lwhich
-                             binutils; \
+                             binutils \
+                             git; \
     elif command -v emerge; then \
       emerge --sync; \
       # xxd Test dependencies
-      emerge vim; \
+      emerge vim \
+             git; \
     elif command -v pacman; then \
       # Test dependencies
-      pacman -S vim binutils diffutils; \
+      pacman -S vim binutils diffutils git; \
     elif command -v busybox; then \
       # if ! command -v wget; then \
       #   export PATH="/musl:${PATH}"; \
@@ -77,7 +89,7 @@ RUN set -euxv; \
                             # Test dependencies
       /opt/bin/opkg install bash column binutils \
                             # just dependencies
-                            gawk sed; \
+                            gawk sed git; \
       ln -s /opt/bin/gawk /opt/bin/awk; \
     elif [ -f /etc/os-release ]; then \
       source /etc/os-release; \
@@ -88,11 +100,18 @@ RUN set -euxv; \
               # xxd for unit tests
               vim \
               # nm for lwhich
-              binutils; \
+              binutils \
+              git; \
       fi; \
     fi
 
 SHELL ["/usr/bin/env", "bash", "-euxvc"]
+
+COPY --from=docker /usr/local /usr/local
+COPY --from=docker-compose /usr/local /usr/local
+COPY --from=docker-compose_musl /usr/local/bin/docker-compose /usr/local/bin/docker-compose_musl
+COPY --from=docker-compose_glib /usr/local/bin/docker-compose /usr/local/bin/docker-compose_glib
+RUN shopt -s nullglob; for patch in /usr/local/share/just/container_build_patch/*; do "${patch}"; done
 
 ENV JUSTFILE=/vsi/Justfile
 
