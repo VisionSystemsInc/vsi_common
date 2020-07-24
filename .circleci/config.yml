@@ -33,7 +33,7 @@ commands:
             tar c . | docker run -i --rm -v /root/repo:/src -w /src alpine:3.11 tar x
 
 jobs:
-  compile_docs_and_common_source:
+  compile_docs_and_int_tests:
     <<: *container_config
 
     steps:
@@ -43,10 +43,10 @@ jobs:
       - dependencies_and_smuggle
 
       - run:
-          name: Run integration tests common_source
+          name: Run integration tests
           command: |
             . setup.env
-            just test int common_source
+            just test int
 
       - run:
           name: Generate docs
@@ -59,6 +59,28 @@ jobs:
       - persist_to_workspace:
           root: docs/_build
           paths: html
+
+  run_other_os_tests:
+    <<: *container_config
+    parallelism: 3
+    steps:
+      - checkout
+      - submodule_checkout
+      - setup_remote_docker
+      - dependencies_and_smuggle
+      - run:
+        name: Run test on other OSes Versions
+        command: |
+          # install the circleci cli
+          source setup.env
+          source vsi_common.env
+          docker login -u "${DOCKER_USER}" -p "${DOCKER_PASS}"
+          VSI_COMMON_TEST_OSES=($(IFS=$'\n'; echo "${VSI_COMMON_TEST_OSES[*]}" | circleci tests split))
+          just build recipes-auto docker/bash_test.Dockerfile
+          for os in "${VSI_COMMON_TEST_OSES[@]}"; do \
+            just build bash "${os}"
+            just test docker "${os}" all tests
+          done
 
   run_bash_tests:
     <<: *container_config
@@ -73,16 +95,16 @@ jobs:
           command: |
             # install the circleci cli
             source setup.env
+            source vsi_common.env
             docker login -u "${DOCKER_USER}" -p "${DOCKER_PASS}"
-            versions="3.2 4.0 4.1 4.2 4.3 4.4 5.0"
-            versions=($(echo "${versions}" | tr ' ' '\n' | circleci tests split))
+            VSI_COMMON_BASH_TEST_VERSIONS=($(IFS=$'\n'; echo "${VSI_COMMON_BASH_TEST_VERSIONS[*]}" | circleci tests split))
             export TESTLIB_SKIP_TESTS="Distribution name for"
             # This was actually slower:
             # if [ "${CIRCLE_BRANCH}" != "master" ]; then
             #   export JUST_DOCKER_COMPOSE_PUSH=0
             # fi
             just build recipes-auto docker/bash_test.Dockerfile
-            for version in "${versions[@]}"; do \
+            for version in "${VSI_COMMON_BASH_TEST_VERSIONS[@]}"; do \
               # This was actually slower:
               # just ci load "${version}"
               just build bash "${version}"
@@ -133,10 +155,11 @@ workflows:
   vsi_common:
     jobs:
       - run_bash_tests
-      - compile_docs_and_common_source
+      - run_other_os_tests
+      - compile_docs_and_int_tests
       - deploy_docs:
           requires:
-            - compile_docs_and_common_source
+            - compile_docs_and_int_tests
           filters:
             branches:
               only:

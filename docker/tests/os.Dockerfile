@@ -96,7 +96,6 @@ SHELL ["/usr/bin/env", "bash", "-euxvc"]
 
 ENV JUSTFILE=/vsi/Justfile
 
-CMD set +xv; \
-    cd /vsi; \
-    source setup.env; \
-    just test
+ENTRYPOINT ["/usr/bin/env", "bash", "-c", "cd /vsi; source setup.env; \"${@}\"", "bash"]
+
+CMD just test

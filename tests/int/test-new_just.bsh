@@ -14,23 +14,25 @@ function setup()
 {
   local container_name
 
-  # If this failed, then the docker server is on another host. TESTDIR is a
-  # random name so there's practically no possibility of a false positive
-  if container_name=$(docker create --mount "type=bind,source=${TESTDIR},destination=${JUST_PATH_ESC}/src" alpine:3.8); then
-    docker_is_local=1
-    docker rm "${container_name}" &> /dev/null
-  else
-    docker_is_local=0
+  if command -v docker &> /dev/null; then
+    # If this failed, then the docker server is on another host. TESTDIR is a
+    # random name so there's practically no possibility of a false positive
+    if container_name=$(docker create --mount "type=bind,source=${TESTDIR},destination=${JUST_PATH_ESC}/src" alpine:3.8); then
+      docker_is_local=1
+      docker rm "${container_name}" &> /dev/null
+    else
+      docker_is_local=0
 
-    # No need to rm, because it failed to be created
-    tmp_volume="$(docker volume create)"
+      # No need to rm, because it failed to be created
+      tmp_volume="$(docker volume create)"
+    fi
   fi
   JUST_PATH_ESC="$(. ${VSI_COMMON_DIR}/linux/common_source.sh; echo "${VSI_PATH_ESC}")"
 }
 
 function teardown()
 {
-  if [[ ${docker_is_local} == 0 ]]; then
+  if [[ ${docker_is_local-} == 0 ]]; then
     docker volume rm "${tmp_volume}" &> /dev/null
   fi
 }

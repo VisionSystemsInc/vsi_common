@@ -53,29 +53,41 @@ function caseify()
       ;;
 
     build_oses) # Build images for other OSes
-      local VSI_COMMON_TEST_OS
-      local VSI_COMMON_TEST_OS_TAG_NAME
-      for VSI_COMMON_TEST_OS in ${VSI_COMMON_TEST_OSES[@]+"${VSI_COMMON_TEST_OSES[@]}"}; do
-        export VSI_COMMON_TEST_OS
-        # sanitize tag name
-        VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS//:/_}
-        VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS_TAG_NAME////_}
-        export VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS_TAG_NAME//@/_}
-        Just-docker-compose build os
+      local os
+      for os in ${VSI_COMMON_TEST_OSES[@]+"${VSI_COMMON_TEST_OSES[@]}"}; do
+        justifty build os "${os}"
       done
       ;;
-    test_oses) # Run test in docker image on specific os
-      local VSI_COMMON_TEST_OS
-      local VSI_COMMON_TEST_OS_TAG_NAME
-      local JUST_IGNORE_EXIT_CODES=123
-      for VSI_COMMON_TEST_OS in ${VSI_COMMON_TEST_OSES[@]+"${VSI_COMMON_TEST_OSES[@]}"}; do
-        export VSI_COMMON_TEST_OS
-        # sanitize tag name
-        VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS//:/_}
-        VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS_TAG_NAME////_}
-        export VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS_TAG_NAME//@/_}
-        Just-docker-compose run os ${@+"${@}"}
+    build_os) # Build images for other OSes, $1 - base OS image name
+      local VSI_COMMON_TEST_OS="${1}"
+      export VSI_COMMON_TEST_OS
+
+      # sanitize tag name
+      local VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS//:/_}
+      VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS_TAG_NAME////_}
+      export VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS_TAG_NAME//@/_}
+
+      Just-docker-compose build os
+      extra_args=1
+      ;;
+    test_oses) # Run test in docker image on OSes
+      local os
+      for os in ${VSI_COMMON_TEST_OSES[@]+"${VSI_COMMON_TEST_OSES[@]}"}; do
+        justifty test os "${os}"
       done
+      ;;
+    test_os) # Run test in docker images on specific OS, $1 - base OS image name
+      local JUST_IGNORE_EXIT_CODES=123
+      local VSI_COMMON_TEST_OS="${1}"
+      export VSI_COMMON_TEST_OS
+      shift 1
+      extra_args=1
+
+      # sanitize tag name
+      local VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS//:/_}
+      VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS_TAG_NAME////_}
+      export VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS_TAG_NAME//@/_}
+      Just-docker-compose run os ${@+"${@}"}
       extra_args+=$#
       ;;
     ci_load) # Load ci
