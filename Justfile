@@ -176,6 +176,7 @@ function caseify()
 
     pull_bash) # Pull bash image
       Docker pull "${VSI_COMMON_DOCKER_REPO}:bash_test_${1}"
+      extra_args=1
       ;;
 
     bashcov_vsi) # Run bashcov on vsi_common
