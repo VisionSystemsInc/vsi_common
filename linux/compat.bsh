@@ -4,11 +4,37 @@ if [[ $- != *i* ]]; then
   source_once &> /dev/null && return 0
 fi
 
+#*# linux/compat.bsh
+
+#**
+# =======================
+# Compatibility Variables
+# =======================
+#
+# .. default-domain:: bash
+#
+# .. file:: compat.bsh
+#
+# A collection of variables to help cope with the differences between different operating systems and versions.
+#**
+
+#**
+# .. function:: load_vsi_compat
+#
+# Typically, this does not need to be called directly. :func:`load_vsi_compat` is run automatically when :file:`compat.bsh` is sourced. However, if you need to reload the variables, e.g. :envvar:`VSI_SED_COMPAT` is set and you want to get the forced compatibility flags, then you could call :func:`load_vsi_compat`, but this would be extremely rare.
+#**
 function load_vsi_compat()
 {
-  #######
-  # Sed #
-  #######
+  #**
+  # Sed flags
+  # =========
+  #
+  # While most flags between GNU and BSD (macos) sed are fairly compatible, a few create issues in corner cases.
+  #
+  # .. envvar:: VSI_SED_COMPAT
+  #
+  #   Force ``bsd`` or ``gnu`` mode when loading the ``sed`` flags
+  #**
 
   if [ -z "${VSI_SED_COMPAT-}" ]; then
     local VSI_SED_COMPAT
@@ -20,12 +46,45 @@ function load_vsi_compat()
       VSI_SED_COMPAT=bsd
     fi
   fi
+
+  #**
+  # .. variable:: sed_flag_rE
+  #
+  # Flag to enable extended regex support in sed. The GNU flag is ``-r``, while the BSD flag is ``-E``. macos does not support ``-r`` and GNU sed prior to 4.2 does not accept ``-E``. Using this variable should always yield the correct flag.
+  #
+  # .. rubric:: Example
+  #
+  # .. code-block:: bash
+  #
+  #   sed -${sed_flag_rE} 's|foo(.*)|bar\1.|'
+  #   # Notice no quotes above
+  #**
   # Needed for CentOS 6 running sed 4.1.5
   if [ "${VSI_SED_COMPAT-}" = "gnu" ]; then
     sed_flag_rE='r'
   else
     sed_flag_rE='E'
   fi
+
+  #**
+  # .. variable:: sed_flag_i
+  #
+  # When using inplace replacement on sed, the macos version requires an argument to the ``-i`` flag, the extension added to the output file. The GNU version does not support this. Using this flag will perform an inplace replacement with no added extension. The :var:`sed_flag_i must come last when combined with other flags (see example below).
+  #
+  # .. rubric:: Example
+  #
+  # .. code-block:: bash
+  #
+  #   sed -${sed_flag_i} 's|foo|bar|' some_file.txt
+  #   # You cannot put quotes around sed_flag_i, or else it will not work on macos
+  #
+  #   # Not ok
+  #   sed -${sed_flag_i}n ...
+  #   # This is ok
+  #   sed -n${sed_flag_i} ...
+  #   # Also ok
+  #   sed -${sed_flag_i} -n ...
+  #**
 
   # Handle macos BSD version
   if [[ ${OSTYPE-} = darwin* ]]; then
@@ -34,11 +93,11 @@ function load_vsi_compat()
     sed_flag_i='i'
   fi
 
-  ########
-  # Bash #
-  ########
 
   #**
+  # Bash
+  # ====
+  #
   # The following variables will help cope with the difference in bash versions, as seamlessly as possible.
   #
   # .. variable: bash_declare_array_quote
