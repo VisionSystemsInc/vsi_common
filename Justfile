@@ -92,6 +92,11 @@ function caseify()
       done
       ;;
 
+    pull_os) # Pull image for os - $1
+      docker pull "${VSI_COMMON_DOCKER_REPO}:os_$(sanitize_tag_name "${1}")"
+      extra_args=1
+      ;;
+
     ci_load) # Load ci
       justify docker-compose_ci-load "${VSI_COMMON_DIR}/docker-compose.yml" "bash_test_${1}"
       extra_args=1
