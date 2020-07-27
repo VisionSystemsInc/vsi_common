@@ -33,7 +33,7 @@ commands:
             tar c . | docker run -i --rm -v /root/repo:/src -w /src alpine:3.11 tar x
 
 jobs:
-  compile_docs_and_int_tests:
+  compile_docs:
     <<: *container_config
 
     steps:
@@ -41,12 +41,6 @@ jobs:
       - submodule_checkout
       - setup_remote_docker
       - dependencies_and_smuggle
-
-      - run:
-          name: Run integration tests
-          command: |
-            . setup.env
-            just test int
 
       - run:
           name: Generate docs
@@ -104,11 +98,12 @@ jobs:
             # if [ "${CIRCLE_BRANCH}" != "master" ]; then
             #   export JUST_DOCKER_COMPOSE_PUSH=0
             # fi
-            just build recipes-auto docker/tests/bash_test.Dockerfile
+            # just build recipes-auto docker/tests/bash_test.Dockerfile
             for version in "${VSI_COMMON_BASH_TEST_VERSIONS[@]}"; do \
               # This was actually slower:
               # just ci load "${version}"
-              just build bash "${version}"
+              # just build bash "${version}"
+              just pull bash "${version}"
               just test bash "${version}" all tests
             done
 
@@ -157,10 +152,10 @@ workflows:
     jobs:
       - run_bash_tests
       - run_other_os_tests
-      - compile_docs_and_int_tests
+      - compile_docs
       - deploy_docs:
           requires:
-            - compile_docs_and_int_tests
+            - compile_docs
           filters:
             branches:
               only:

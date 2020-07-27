@@ -161,6 +161,23 @@ function caseify()
       VSI_COMMON_BASH_TEST_VERSION="${bash_version}" Just-docker-compose run bash_test ${@+"${@}"}
       ;;
 
+    push_bash) # Push bash images
+      local version
+
+      if [ $# -gt 0 ]; then
+        Docker push "${VSI_COMMON_DOCKER_REPO}:bash_test_${1}"
+        extra_args=1
+      else
+        for version in 3.2 4.0 4.1 4.2 4.3 4.4 5.0; do
+          Docker push "${VSI_COMMON_DOCKER_REPO}:bash_test_${version}"
+        done
+      fi
+      ;;
+
+    pull_bash) # Pull bash image
+      Docker pull "${VSI_COMMON_DOCKER_REPO}:bash_test_${1}"
+      ;;
+
     bashcov_vsi) # Run bashcov on vsi_common
       local int_tests=(./tests/int/test-*.bsh)
       remove_element_a int_tests ./tests/int/test-common_source.bsh
