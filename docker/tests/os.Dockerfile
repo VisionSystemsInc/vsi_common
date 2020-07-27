@@ -24,7 +24,7 @@ RUN set -euxv; \
           diffutils \
           # find and xargs for run tests/dir_tools (and maybe more?)
           findutils \
-          git; \
+          git ca-certificates; \
     elif command -v apt-get; then \
       apt-get update; \
       DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
@@ -36,7 +36,7 @@ RUN set -euxv; \
              bsdmainutils \
              # xxd for unit tests
              vim \
-             git; \
+             git ca-certificates; \
     elif command -v zypper; then \
       zypper --gpg-auto-import-keys --non-interactive install -y \
              # column for unit tests
@@ -47,7 +47,7 @@ RUN set -euxv; \
              binutils \
              # xxd for unit tests
              vim \
-             git; \
+             git ca-certificates; \
     elif command -v apk; then \
       apk add --no-cache \
           bash \
@@ -61,7 +61,9 @@ RUN set -euxv; \
           findutils \
           # nm
           binutils \
-          git; \
+          # A realpath that works with non-existing files.
+          coreutils \
+          git ca-certificates; \
     elif command -v slackpkg; then \
       slackpkg update; \
       # Is there a "right" way to do this?
@@ -69,15 +71,15 @@ RUN set -euxv; \
       yes | slackpkg install vim \
                              # nm for lwhich
                              binutils \
-                             git; \
+                             git ca-certificates; \
     elif command -v emerge; then \
-      emerge --sync; \
+      emerge --sync --quiet; \
       # xxd Test dependencies
       emerge vim \
-             git; \
+             dev-vcs/git ca-certificates; \
     elif command -v pacman; then \
       # Test dependencies
-      pacman -S vim binutils diffutils git; \
+      pacman --noconfirm -S vim binutils diffutils git ca-certificates; \
     elif command -v busybox; then \
       # if ! command -v wget; then \
       #   export PATH="/musl:${PATH}"; \
@@ -89,7 +91,7 @@ RUN set -euxv; \
                             # Test dependencies
       /opt/bin/opkg install bash column binutils \
                             # just dependencies
-                            gawk sed git; \
+                            gawk sed git ca-certificates; \
       ln -s /opt/bin/gawk /opt/bin/awk; \
     elif [ -f /etc/os-release ]; then \
       source /etc/os-release; \

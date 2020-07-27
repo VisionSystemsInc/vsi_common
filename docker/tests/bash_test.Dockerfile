@@ -45,5 +45,5 @@ COPY --from=docker /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=docker-compose /usr/local/bin/docker-compose /usr/local/bin/docker-compose
 # COPY --from=vsi /vsi /vsi
 
-ENTRYPOINT ["/usr/local/bin/tini", "--", "/usr/bin/env", "bash", "/vsi/linux/just_entrypoint.sh"]
+ENTRYPOINT ["/usr/local/bin/tini", "--", "/usr/bin/env", "bash", "/vsi/linux/just_files/just_entrypoint.sh"]
 CMD ["test"]
