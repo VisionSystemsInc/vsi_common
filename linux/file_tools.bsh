@@ -58,6 +58,7 @@ fi
 # .. seealso::
 #   :func:`open_fd`, :func:`close_fd`
 #**
+# https://stackoverflow.com/a/41603891/4166604
 function find_open_fd()
 {
   if [ "${1-}" != "_fd" ]; then
@@ -69,24 +70,24 @@ function find_open_fd()
 
   _fd_max="$(ulimit -n)"
 
-  if [ -d /proc/$$/fd ]; then
-    # ~2.5 times faster, but requires the /proc system
-    for ((_fd=${START_FD-10}; _fd<"${_fd_max}"; _fd++)); do
-      if [ ! -e "/proc/$$/fd/$_fd" ]; then
-        # declare and set won't work here, its better than eval and doesn't export
-        read "${1-fd}" <<< "${_fd}"
-        return 0
-      fi
-    done
-  else
-    for ((_fd=${START_FD-10}; _fd<"${_fd_max}"; _fd++)); do
-      if ! : 2>/dev/null >&${_fd}; then
-        # declare and set won't work here, its better than eval and doesn't export
-        read "${1-fd}" <<< "${_fd}"
-        return 0
-      fi
-    done
-  fi
+  # Don't do this, less reliable. Currently test "Find and use available fd in
+  # bash 3.2 using pipe" fails if you use this method, but don't use that to
+  # justify using this method. It's just not safe!
+  # # ~2.5 times faster, but requires the /proc system
+  # for ((_fd=${START_FD-10}; _fd<"${_fd_max}"; _fd++)); do
+  #   if [ ! -e "/proc/${BASHPID}/fd/$_fd" ]; then
+  #     # declare and set won't work here, its better than eval and doesn't export
+  #     read "${1-fd}" <<< "${_fd}"
+  #     return 0
+  #   fi
+  # done
+  for ((_fd=${START_FD-10}; _fd<"${_fd_max}"; _fd++)); do
+    if ! : 2>/dev/null >&${_fd}; then
+      # declare and set won't work here, its better than eval and doesn't export
+      read "${1-fd}" <<< "${_fd}"
+      return 0
+    fi
+  done
   return 1
 }
 
