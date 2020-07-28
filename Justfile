@@ -17,6 +17,7 @@ source "${VSI_COMMON_DIR}/linux/just_files/just_test_functions.bsh"
 # Load vsi_test_env
 source "${VSI_COMMON_DIR}/docker/tests/bash_test.Justfile"
 source "${VSI_COMMON_DIR}/linux/elements.bsh"
+source "${VSI_COMMON_DIR}/linux/findin"
 
 cd "${VSI_COMMON_DIR}"
 
@@ -84,6 +85,23 @@ function caseify()
       export VSI_COMMON_TEST_OS_TAG_NAME
       Just-docker-compose run os ${@+"${@}"}
       extra_args+=$#
+      ;;
+    test_os-common-source) # Run VSI Common source test - $1 name of image to check
+      local ans
+      extra_args=1
+      ans="$(findin "${1}" "${VSI_COMMON_TEST_OSES[@]}")"
+      ans="${VSI_COMMON_TEST_OSES_ANS[ans]}"
+      local x="$(docker run --rm -v ${VSI_COMMON_DIR}:/vsi "${1}" \
+                   sh -euc ". /vsi/linux/common_source.sh;
+                            echo \$VSI_DISTRO - \$VSI_DISTRO_VERSION, \
+                                 \$VSI_DISTRO_LIKE - \$VSI_DISTRO_VERSION_LIKE, \
+                                 \$VSI_DISTRO_CORE - \$VSI_DISTRO_VERSION_CORE \$VSI_MUSL")"
+      if [ "${x}" = "${ans}" ]; then
+        echo "${1} passed"
+      else
+        echo "${x} != ${ans}"
+        return 1
+      fi
       ;;
     push_oses) # Push os images
       local os
