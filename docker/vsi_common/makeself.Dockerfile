@@ -41,6 +41,6 @@ COPY --from=gosu /usr/local /usr/local
 RUN chmod u+s /usr/local/bin/gosu
 COPY --from=vsi /vsi /vsi
 
-ENTRYPOINT ["/usr/local/bin/tini", "--", "/usr/bin/env", "bash", "/vsi/linux/just_entrypoint.sh"]
+ENTRYPOINT ["/usr/local/bin/tini", "--", "/usr/bin/env", "bash", "/vsi/linux/just_files/just_entrypoint.sh"]
 
 CMD ["makeself"]

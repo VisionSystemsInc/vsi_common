@@ -8,12 +8,12 @@ fi
 if [ -z ${VSI_COMMON_DIR+set} ]; then
   VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)"
 fi
-source "${VSI_COMMON_DIR}/linux/just_env" "${VSI_COMMON_DIR}/vsi_common.env"
+source "${VSI_COMMON_DIR}/linux/just_files/just_env" "${VSI_COMMON_DIR}/vsi_common.env"
 
-source "${VSI_COMMON_DIR}/linux/just_docker_functions.bsh"
-source "${VSI_COMMON_DIR}/linux/just_sphinx_functions.bsh"
-source "${VSI_COMMON_DIR}/linux/just_bashcov_functions.bsh"
-source "${VSI_COMMON_DIR}/linux/just_test_functions.bsh"
+source "${VSI_COMMON_DIR}/linux/just_files/just_docker_functions.bsh"
+source "${VSI_COMMON_DIR}/linux/just_files/just_sphinx_functions.bsh"
+source "${VSI_COMMON_DIR}/linux/just_files/just_bashcov_functions.bsh"
+source "${VSI_COMMON_DIR}/linux/just_files/just_test_functions.bsh"
 # Load vsi_test_env
 source "${VSI_COMMON_DIR}/docker/tests/bash_test.Justfile"
 source "${VSI_COMMON_DIR}/linux/elements.bsh"
