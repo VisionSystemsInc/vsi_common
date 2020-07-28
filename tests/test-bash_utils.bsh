@@ -9,6 +9,13 @@ source "${TESTLIB_DIR}/test_utils.bsh"
 source "${VSI_COMMON_DIR}/linux/bash_utils.bsh"
 source "${VSI_COMMON_DIR}/linux/string_tools.bsh"
 
+function clean_trace()
+{
+  if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -lt "41" ]; then
+    set +xv
+  fi
+}
+
 begin_test "Print stack trace"
 (
   setup_test
@@ -24,11 +31,11 @@ begin_test "Print stack trace"
 
   nl=$'\n'
 
-  tb="$(bar 2>&1)"
+  tb="$(clean_trace; bar 2>&1)"
   assert_starts_with "${tb}" "Call stack"
   assert_regex_eq "${tb}" "${nl}"'1\. bar\(\) *:[0-9]* *'"$(regex_escape "${BASH_SOURCE[0]}")"
 
-  tb="$(foo 2>&1)"
+  tb="$(clean_trace; set +xv; foo 2>&1)"
   assert_starts_with "${tb}" "Call stack"
   assert_regex_eq "${tb}" "${nl}"'1\. bar\(\) *:[0-9]* *'"$(regex_escape "${BASH_SOURCE[0]}")"
   assert_regex_eq "${tb}" "${nl}"'2\. foo\(\) *:[0-9]* *'"$(regex_escape "${BASH_SOURCE[0]}")"
