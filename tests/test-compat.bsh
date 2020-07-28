@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+
+
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
+
+source "${VSI_COMMON_DIR}/tests/testlib.bsh"
+source "${TESTLIB_DIR}/test_utils.bsh"
+source "${VSI_COMMON_DIR}/linux/compat.bsh"
+
+begin_test "Sed flag"
+(
+  setup_test
+
+  unset sed VSI_SED_COMPAT
+  OSTYPE=darwin14 load_vsi_compat
+  [ "${sed_flag_rE}" = "E" ]
+  [ "${sed_flag_i}" = "i ''" ]
+  unset OSTYPE
+
+  function sed()
+  {
+    echo "sed (GNU sed) 4.5" # stdout
+  }
+  unset VSI_SED_COMPAT
+  load_vsi_compat
+  [ "${sed_flag_rE}" = "r" ]
+
+
+  function sed()
+  {
+    return 1
+  }
+  unset VSI_SED_COMPAT
+  load_vsi_compat
+  [ "${sed_flag_rE}" = "E" ]
+
+  # Test manual override
+  VSI_SED_COMPAT=gnu
+  load_vsi_compat
+  [ "${sed_flag_rE}" = "r" ]
+  [ "${sed_flag_i}" = "i" ]
+
+  VSI_SED_COMPAT=bsd
+  load_vsi_compat
+  [ "${sed_flag_rE}" = "E" ]
+  [ "${sed_flag_i}" = "i" ]
+)
+end_test
+
+begin_test "Bash flag"
+(
+  setup_test
+
+  # This one can't be mocked, so test it by using it. CI will test all versions
+  # of bash, and thus test this
+  x=(foo bar)
+  assert_str_eq "$(declare -p x)" "declare -a x=${bash_declare_array_quote}([0]=\"foo\" [1]=\"bar\")${bash_declare_array_quote}"
+)
+end_test

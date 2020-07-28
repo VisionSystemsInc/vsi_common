@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
+
+source "${VSI_COMMON_DIR}/tests/testlib.bsh"
+source "${TESTLIB_DIR}/test_utils.bsh"
+source "${VSI_COMMON_DIR}/linux/bash_utils.bsh"
+source "${VSI_COMMON_DIR}/linux/string_tools.bsh"
+
+begin_test "Print stack trace"
+(
+  setup_test
+
+  function foo()
+  {
+    bar
+  }
+  function bar()
+  {
+    print_bash_stack
+  }
+
+  nl=$'\n'
+
+  tb="$(bar 2>&1)"
+  assert_starts_with "${tb}" "Call stack${nl}----------${nl}"
+  assert_regex_eq "${tb}" "${nl}"'1\. bar\(\) *:[0-9]* *'"$(regex_escape "${BASH_SOURCE[0]}")"
+
+  tb="$(foo 2>&1)"
+  assert_starts_with "${tb}" "Call stack${nl}----------${nl}"
+  assert_regex_eq "${tb}" "${nl}"'1\. bar\(\) *:[0-9]* *'"$(regex_escape "${BASH_SOURCE[0]}")"
+  assert_regex_eq "${tb}" "${nl}"'2\. foo\(\) *:[0-9]* *'"$(regex_escape "${BASH_SOURCE[0]}")"
+)
+end_test
