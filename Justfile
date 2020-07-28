@@ -92,7 +92,7 @@ function caseify()
       ans="$(findin "${1}" "${VSI_COMMON_TEST_OSES[@]}")"
       ans="${VSI_COMMON_TEST_OSES_ANS[ans]}"
       local image="${VSI_COMMON_DOCKER_REPO}:os_$(sanitize_tag_name "${1}")"
-      
+
       local x="$(docker run --rm -v ${VSI_COMMON_DIR}:/vsi "${image}" \
                    sh -euc ". /vsi/linux/common_source.sh;
                             echo \$VSI_DISTRO - \$VSI_DISTRO_VERSION, \

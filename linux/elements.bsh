@@ -616,6 +616,32 @@ else
   }
 fi
 
+if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "44" ]; then
+  function is_associative_array()
+  {
+    # Yes, this works with namereffing too, without having to iterate!
+    if [[ ${!1@a} = *A* ]]; then
+      return 0
+    fi
+    return 1
+  }
+else
+  function is_associative_array()
+  {
+    local signature="$(declare -p "${1}" 2>/dev/null)"
+
+    # Handle Bash 4.3 namereffing https://stackoverflow.com/a/42877229/4166604
+    local regex='^declare -[[:alpha:]]*n[[:alpha:]]* [^=]+=\"([^\"]+)\"$'
+    while [[ ${signature} =~ ${regex} ]]; do
+      signature="$(declare -p ${BASH_REMATCH[1]})"
+    done
+
+    # Check if is array
+    regex='^declare -[[:alpha:]]*A[[:alpha:]]* '
+    [[ ${signature} =~ ${regex} ]]
+  }
+fi
+
 #**
 # .. function:: to_array
 #
@@ -905,4 +931,99 @@ function all_variables_to_array()
       add_elements_a "${2}" "${!indirect}"
     fi
   done
+}
+
+function serialize_array()
+{
+  local _indexes
+  local _index
+  local _value
+
+  eval "_indexes=(\"\${!${1}[@]}\")"
+
+  if is_array "${1}"; then
+    echo -n 'a'
+    for _index in "${_indexes[@]}"; do
+      _value="${1}[${_index}]"
+      _value="${!_value}"
+      echo -n "${_index} ${#_value} ${_value}"
+    done
+  elif is_associative_array "${1}"; then
+    echo -n 'A'
+    for _index in "${_indexes[@]}"; do
+      _value="${1}[${_index}]"
+      _value="${!_value}"
+      echo -n "${#_index} ${_index}${#_value} ${_value}"
+    done
+  else
+    echo "Unknown type ${1}" >&2
+    return 2
+  fi
+}
+
+function deserialize_array()
+{
+  local -i _str_index=1
+  local _length _array_index
+
+  if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge 42 ]; then
+    if [ "${2::1}" = "a" ]; then
+      if ! is_array "${1}"; then
+        declare -ga "${1}=()"
+      fi
+    elif [ "${2::1}" = "A" ]; then
+      if ! is_associative_array "${1}"; then
+        declare -gA "${1}=()"
+      fi
+    else
+      echo "Unrecognized type ${2::1}" >&2
+      return 2
+    fi
+  else
+    # There is no work around in bash 4.0 and 4.1. Detect if it wasn't set in the calling function scope
+    if [ "${2::1}" = "a" ]; then
+      if ! is_array "${1}"; then
+        eval "${1}=()"
+      fi
+    elif [ "${2::1}" = "A" ]; then
+      if ! is_associative_array "${1}"; then
+        echo "Older versions of Bash must declare ${1} as an associative array in the calling function" >&2
+        return 2
+      fi
+    else
+      echo "Unrecognized type ${2::1}" >&2
+      return 2
+    fi
+  fi
+
+  if [ "${2::1}" = "a" ]; then
+    while (( _str_index < ${#2} )); do
+      read -d ' ' _array_index <<< "${2:_str_index}"
+      _str_index+=${#_array_index}+1
+
+      read -d ' ' _length <<< "${2:_str_index}"
+      _str_index+=${#_length}+1
+
+      # Don't use <<< here, it inserts a \n at the end (bash "feature")
+      IFS= read -r -d '' "${1}[${_array_index}]" < <(echo -n "${2:_str_index:_length}") || :
+      _str_index+=${_length}
+    done
+  else
+    while (( _str_index < ${#2} )); do
+      # Length of array index, but reuse variable name
+      read -d ' ' _array_index <<< "${2:_str_index}"
+      _str_index+=${#_array_index}+1
+
+      # Don't use <<< here, it inserts a \n at the end (bash "feature")
+      IFS= read -r -d '' _array_index < <(echo -n "${2:_str_index:_array_index}") || :
+      _str_index+=${#_array_index}
+
+      read -d ' ' _length <<< "${2:_str_index}"
+      _str_index+=${#_length}+1
+
+      # Don't use <<< here, it inserts a \n at the end (bash "feature")
+      IFS= read -r -d '' "${1}[${_array_index}]" < <(echo -n "${2:_str_index:_length}") || :
+      _str_index+=${_length}
+    done
+  fi
 }
