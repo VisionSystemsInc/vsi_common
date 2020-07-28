@@ -54,30 +54,7 @@ jobs:
           root: docs/_build
           paths: html
 
-  run_other_os_tests:
-    <<: *container_config
-    parallelism: 3
-    steps:
-      - checkout
-      - submodule_checkout
-      - setup_remote_docker
-      - dependencies_and_smuggle
-      - run:
-          name: Run test on other OSes Versions
-          command: |
-            # install the circleci cli
-            source setup.env
-            source linux/just_files/just_env vsi_common.env
-            docker login -u "${DOCKER_USER}" -p "${DOCKER_PASS}"
-            VSI_COMMON_TEST_OSES=($(IFS=$'\n'; echo "${VSI_COMMON_TEST_OSES[*]}" | circleci tests split))
-            # just build recipes-auto docker/tests/os.Dockerfile
-            for os in "${VSI_COMMON_TEST_OSES[@]}"; do \
-              # just build os "${os}"
-              just pull os "${os}"
-              just test os "${os}" just test # -- test int
-            done
-
-  run_bash_tests:
+  run_bash_and_os_tests:
     <<: *container_config
     parallelism: 3
     steps:
@@ -87,24 +64,38 @@ jobs:
       - dependencies_and_smuggle
       - run:
           name: Run test on Bash Versions
+          # Using CI load here was slower, so just pull image that are manually
+          # pushed to dockerhub
           command: |
-            # install the circleci cli
+            # Load just stuff
             source setup.env
             source linux/just_files/just_env vsi_common.env
+            # Docker login
             docker login -u "${DOCKER_USER}" -p "${DOCKER_PASS}"
-            VSI_COMMON_BASH_TEST_VERSIONS=($(IFS=$'\n'; echo "${VSI_COMMON_BASH_TEST_VERSIONS[*]}" | circleci tests split))
-            export TESTLIB_SKIP_TESTS="Distribution name for"
-            # This was actually slower:
-            # if [ "${CIRCLE_BRANCH}" != "master" ]; then
-            #   export JUST_DOCKER_COMPOSE_PUSH=0
-            # fi
-            # just build recipes-auto docker/tests/bash_test.Dockerfile
-            for version in "${VSI_COMMON_BASH_TEST_VERSIONS[@]}"; do \
-              # This was actually slower:
-              # just ci load "${version}"
-              # just build bash "${version}"
-              just pull bash "${version}"
-              just test bash "${version}" all tests
+            # Add two lists together
+            tests=()
+            for (( i=0; i<${#VSI_COMMON_BASH_TEST_VERSIONS[@]}; i++ ))
+            {
+              tests+=(bash_${VSI_COMMON_BASH_TEST_VERSIONS[i]})
+            }
+            for (( i=0; i<${#VSI_COMMON_TEST_OSES[@]}; i++ ))
+            {
+              tests+=(os_${VSI_COMMON_TEST_OSES[i]})
+            }
+            # Split by parallelism
+            tests=($(IFS=$'\n'; echo "${tests[*]}" | circleci tests split))
+            # Run tests
+            for t in "${tests[@]}"; do \
+              if [[ ${t} = os_* ]]; then
+                just pull os "${t#os_}"
+                just test os "${t#os_}" just test # -- test int
+              elif [[ ${t} = bash_* ]]; then
+                just pull bash "${t#bash_}"
+                just test bash "${t#bash_}" all tests
+              else
+                echo "Something went wrong"
+                exit 3
+              fi
             done
 
   deploy_docs:
@@ -150,8 +141,7 @@ jobs:
 workflows:
   vsi_common:
     jobs:
-      - run_bash_tests
-      - run_other_os_tests
+      - run_bash_and_os_tests
       - compile_docs
       - deploy_docs:
           requires:
