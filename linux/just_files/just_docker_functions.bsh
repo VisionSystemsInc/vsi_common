@@ -183,14 +183,12 @@ function _dynamic_docker-compose_restore_recipes()
 # docker-compose_restore_from_cache helper function
 # stdin - docker-compose file
 # stdout - patched docker-compose file
-# fid 3 out - docker-compose override file
+# fid 3 out - docker-compose override file, 3 unless set by override_fd
 # arguments - Services to use cache
 function _dynamic_docker-compose_add_cache_from()
 {
-  # local file="${1}"
-  # local override="${2}"
-  # shift 2
   local main_service="${1}"
+  local override_fd=${override_fd-3}
   local i
 
   # Anchor the main stage
@@ -226,8 +224,8 @@ function _dynamic_docker-compose_add_cache_from()
     done
   }
 
-  echo     "version: '${docker_compose_version}'" >&3
-  echo     "services:" >&3
+  echo     "version: '${docker_compose_version}'" >&${override_fd}
+  echo     "services:" >&${override_fd}
   for stage_name in ${stage_names[@]+"${stage_names[@]}"}; do
     # Service patch for 2
     echo   "  ${1}_auto_gen_${stage_name}:"
@@ -235,10 +233,10 @@ function _dynamic_docker-compose_add_cache_from()
     echo   "    image: ${JUST_DOCKER_COMPOSE_CACHE_REPO}:${1}_${stage_name}"
 
     # Service addition for 3
-    echo   "  ${1}_auto_gen_${stage_name}:" >&3
-    echo   "    build:" >&3
-    echo   "      target: ${stage_name}" >&3
-    _print_cache_froms >&3
+    echo   "  ${1}_auto_gen_${stage_name}:" >&${override_fd}
+    echo   "    build:" >&${override_fd}
+    echo   "      target: ${stage_name}" >&${override_fd}
+    _print_cache_froms >&${override_fd}
          # https://stackoverflow.com/a/26141656/4166604
   done | sed "${i}"'r/dev/stdin' <(echo "${compose_content}")
 
@@ -249,9 +247,9 @@ function _dynamic_docker-compose_add_cache_from()
   while (( $# )); do
     # By adding an override file, any special build flags will be included,
     # such as build args, etc...
-    echo   "  ${1}:" >&3
-    echo   "    build:" >&3
-    _print_cache_froms >&3
+    echo   "  ${1}:" >&${override_fd}
+    echo   "    build:" >&${override_fd}
+    _print_cache_froms >&${override_fd}
 
     shift 1
   done

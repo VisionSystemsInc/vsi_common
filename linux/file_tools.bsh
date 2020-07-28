@@ -21,8 +21,8 @@ fi
 #**
 # .. function:: find_open_fd
 #
-# :Arguments: * [``name``] - Variable name to return available file descriptor. Default: ``fd`` Variable's name should not be _fd or _fd_var
-#             * {``START_FD``} - The first fd to start checking. Default: ``3``
+# :Arguments: * [``name``] - Variable name to return available file descriptor. Default: ``fd``
+#             * {``START_FD``} - The first fd to start checking. Default: ``10``
 # :Output: {``name``} - Value of next unused file descriptor
 #
 # Find the first open file descriptor
@@ -38,7 +38,7 @@ fi
 #     read -u${fd} some_var
 #     exec {fd}>&-
 #
-# is better.
+# is better and ~100x faster.
 #
 # .. rubric:: Example
 #
@@ -60,16 +60,33 @@ fi
 #**
 function find_open_fd()
 {
-  local _fd
-  local _fd_var="${1-fd}"
+  if [ "${1-}" != "_fd" ]; then
+    local _fd
+  fi
+  if [ "${1-}" != "_fd_max" ]; then
+    local _fd_max
+  fi
 
-  for ((_fd=${START_FD-3}; _fd<$(ulimit -n); _fd++)); do
-    if ! : 2>/dev/null >&${_fd}; then
-      # declare and set won't work here, its better than eval and doesn't export
-      read "${_fd_var}" <<< "${_fd}"
-      return 0
-    fi
-  done
+  _fd_max="$(ulimit -n)"
+
+  if [ -d /proc/$$/fd ]; then
+    # ~2.5 times faster, but requires the /proc system
+    for ((_fd=${START_FD-10}; _fd<"${_fd_max}"; _fd++)); do
+      if [ ! -e "/proc/$$/fd/$_fd" ]; then
+        # declare and set won't work here, its better than eval and doesn't export
+        read "${1-fd}" <<< "${_fd}"
+        return 0
+      fi
+    done
+  else
+    for ((_fd=${START_FD-10}; _fd<"${_fd_max}"; _fd++)); do
+      if ! : 2>/dev/null >&${_fd}; then
+        # declare and set won't work here, its better than eval and doesn't export
+        read "${1-fd}" <<< "${_fd}"
+        return 0
+      fi
+    done
+  fi
   return 1
 }
 
