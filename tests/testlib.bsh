@@ -314,10 +314,10 @@ trap_chain "atexit" EXIT
 
 if [ -z "${TESTLIB_PS4+set}" ]; then
   if declare -p BASH_SOURCE &> /dev/null; then
-    PS4=$'+${BASH_SOURCE[0]##*/}:${LINENO}${FUNCNAME[0]:+:${FUNCNAME[0]}()}\t'
+    PS4=$'+\x1b[0m${BASH_SOURCE[0]##*/}:${LINENO}${FUNCNAME[0]:+:${FUNCNAME[0]}()}\t'
   else # Else sh probably
     # Not as accurate, but better than nothing
-    PS4=$'+${0##*/}:${LINENO})\t'
+    PS4=$'+\x1b[0m${0##*/}:${LINENO})\t'
   fi
 else
   PS4="${TESTLIB_PS4}"
@@ -326,7 +326,6 @@ fi
 # Common code for begin tests
 _begin_common_test ()
 {
-  local fd
   TESTDIR="${TRASHDIR}/test${tests}"
   mkdir -p "${TESTDIR}"
   pushd "$TESTDIR" &> /dev/null
@@ -382,7 +381,17 @@ _begin_common_test ()
     esac
     xtrace="${TESTDIR}/xtrace"
     if [ "${TESTLIB_REDIRECT_OUTPUT}" -ge "1" ]; then
-      exec {BASH_XTRACEFD}>"${xtrace}"
+      if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -le "42" ]; then
+        # Weird bug in bash 4.1 and 4.2
+        # https://github.com/cylc/cylc-flow/pull/3572#pullrequestreview-398453037
+        local fd
+        find_open_fd fd
+        eval "exec ${fd}>\"${xtrace}\""
+        # This needs to be set after opening the file, to avoid an error message
+        BASH_XTRACEFD="${fd}"
+      else
+        exec {BASH_XTRACEFD}>"${xtrace}"
+      fi
     fi
   else
     if [ "${TESTLIB_REDIRECT_OUTPUT}" -ge "3" ]; then
