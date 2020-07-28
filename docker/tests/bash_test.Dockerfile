@@ -1,5 +1,5 @@
 ARG BASH_VERSION=5.0
-ARG DOCKER_COMPOSE_VERSION=1.25.0-rc4
+ARG DOCKER_COMPOSE_VERSION=1.26.2
 FROM vsiri/recipe:gosu as gosu
 FROM vsiri/recipe:tini-musl as tini
 FROM vsiri/recipe:jq as jq

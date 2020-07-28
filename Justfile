@@ -20,6 +20,13 @@ source "${VSI_COMMON_DIR}/linux/elements.bsh"
 
 cd "${VSI_COMMON_DIR}"
 
+function sanitize_tag_name()
+{
+  local tag_name="${1//:/_}"
+  tag_name=${tag_name////_}
+  echo "${tag_name//@/_}"
+}
+
 function caseify()
 {
   local just_arg=$1
@@ -43,41 +50,53 @@ function caseify()
       extra_args=$#
       ;;
 
-    test_docker) # Run tests in docker image. Useful for running in specific bash version ($1)
-      local version="${1-5.0}"
+    build_oses) # Build images for other OSes
+      local os
+      for os in ${VSI_COMMON_TEST_OSES[@]+"${VSI_COMMON_TEST_OSES[@]}"}; do
+        justify build os "${os}"
+      done
+      ;;
+    build_os) # Build images for other OSes, $1 - base OS image name
+      local VSI_COMMON_TEST_OS="${1}"
+      export VSI_COMMON_TEST_OS
+
+      local VSI_COMMON_TEST_OS_TAG_NAME="$(sanitize_tag_name "${VSI_COMMON_TEST_OS}")"
+      export VSI_COMMON_TEST_OS_TAG_NAME
+
+      Just-docker-compose build os
+      extra_args=1
+      ;;
+    test_oses) # Run test in docker image on OSes
+      local os
+      for os in ${VSI_COMMON_TEST_OSES[@]+"${VSI_COMMON_TEST_OSES[@]}"}; do
+        echo "Testing ${os}" >&2
+        justify test os "${os}"
+      done
+      ;;
+    test_os) # Run test in docker images on specific OS, $1 - base OS image name
       local JUST_IGNORE_EXIT_CODES=123
+      local VSI_COMMON_TEST_OS="${1}"
+      export VSI_COMMON_TEST_OS
       shift 1
       extra_args=1
-      Just-docker-compose run "bash_test_${version}" ${@+"${@}"}
+
+      local VSI_COMMON_TEST_OS_TAG_NAME="$(sanitize_tag_name "${VSI_COMMON_TEST_OS}")"
+      export VSI_COMMON_TEST_OS_TAG_NAME
+      Just-docker-compose run os ${@+"${@}"}
       extra_args+=$#
+      ;;
+    push_oses) # Push os images
+      local os
+      for os in ${VSI_COMMON_TEST_OSES[@]+"${VSI_COMMON_TEST_OSES[@]}"}; do
+        docker push "${VSI_COMMON_DOCKER_REPO}:os_$(sanitize_tag_name "${os}")"
+      done
       ;;
 
-    build_oses) # Build images for other OSes
-      local VSI_COMMON_TEST_OS
-      local VSI_COMMON_TEST_OS_TAG_NAME
-      for VSI_COMMON_TEST_OS in ${VSI_COMMON_TEST_OSES[@]+"${VSI_COMMON_TEST_OSES[@]}"}; do
-        export VSI_COMMON_TEST_OS
-        # sanitize tag name
-        VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS//:/_}
-        VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS_TAG_NAME////_}
-        export VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS_TAG_NAME//@/_}
-        Just-docker-compose build os
-      done
+    pull_os) # Pull image for os - $1
+      docker pull "${VSI_COMMON_DOCKER_REPO}:os_$(sanitize_tag_name "${1}")"
+      extra_args=1
       ;;
-    test_oses) # Run test in docker image on specific os
-      local VSI_COMMON_TEST_OS
-      local VSI_COMMON_TEST_OS_TAG_NAME
-      local JUST_IGNORE_EXIT_CODES=123
-      for VSI_COMMON_TEST_OS in ${VSI_COMMON_TEST_OSES[@]+"${VSI_COMMON_TEST_OSES[@]}"}; do
-        export VSI_COMMON_TEST_OS
-        # sanitize tag name
-        VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS//:/_}
-        VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS_TAG_NAME////_}
-        export VSI_COMMON_TEST_OS_TAG_NAME=${VSI_COMMON_TEST_OS_TAG_NAME//@/_}
-        Just-docker-compose run os ${@+"${@}"}
-      done
-      extra_args+=$#
-      ;;
+
     ci_load) # Load ci
       justify docker-compose_ci-load "${VSI_COMMON_DIR}/docker-compose.yml" "bash_test_${1}"
       extra_args=1
@@ -126,20 +145,38 @@ function caseify()
       local version
 
       if [ $# -gt 0 ]; then
-        Just-docker-compose build "bash_test_${1}"
+        VSI_COMMON_BASH_TEST_VERSION="${1}" Just-docker-compose build bash_test
         extra_args=1
       else
         for version in 3.2 4.0 4.1 4.2 4.3 4.4 5.0; do
-          Just-docker-compose build "bash_test_${version}"
+          VSI_COMMON_BASH_TEST_VERSION="${version}" Just-docker-compose build bash_test
         done
       fi
       ;;
     test_bash) # Run command (like bash) in the contain for a specific version of bash ($1)
-      local bash_version="${1}"
+      local bash_version="${1-5.0}"
       local JUST_IGNORE_EXIT_CODES=123
       extra_args=$#
       shift 1
-      Just-docker-compose run "bash_test_${bash_version}" ${@+"${@}"}
+      VSI_COMMON_BASH_TEST_VERSION="${bash_version}" Just-docker-compose run bash_test ${@+"${@}"}
+      ;;
+
+    push_bash) # Push bash images
+      local version
+
+      if [ $# -gt 0 ]; then
+        Docker push "${VSI_COMMON_DOCKER_REPO}:bash_test_${1}"
+        extra_args=1
+      else
+        for version in 3.2 4.0 4.1 4.2 4.3 4.4 5.0; do
+          Docker push "${VSI_COMMON_DOCKER_REPO}:bash_test_${version}"
+        done
+      fi
+      ;;
+
+    pull_bash) # Pull bash image
+      Docker pull "${VSI_COMMON_DOCKER_REPO}:bash_test_${1}"
+      extra_args=1
       ;;
 
     bashcov_vsi) # Run bashcov on vsi_common
