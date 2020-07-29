@@ -72,7 +72,7 @@ In order to use these directories, all you have to do is
 * Adding files
   * Python
 
-    * Add files in the python directory. If it's a new effort, try and add it to the vsi package. If it is a large library and you don't have time to convert everything now, you can add it to the python dir in its own directoy, and add a .pth file for it. Do NOT add .py file in the main python dir
+    * Add files in the python directory. If it's a new effort, try and add it to the vsi package. If it is a large library and you don't have time to convert everything now, you can add it to the python dir in its own directory, and add a .pth file for it. Do NOT add .py file in the main python dir
 
   * Script
 
