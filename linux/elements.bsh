@@ -590,57 +590,59 @@ function join_a_out()
 #
 # Determines if ``$1`` is an array or not. If it is not defined, still returns ``1``
 #**
-if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "44" ]; then
-  function is_array()
-  {
+function is_array()
+{
+  if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "44" ]; then
     # Yes, this works with namereffing too, without having to iterate!
     if [[ ${!1@a} = *a* ]]; then
       return 0
     fi
-    return 1
-  }
-else
-  function is_array()
-  {
-    local signature="$(declare -p "${1}" 2>/dev/null)"
+  fi
 
-    # Handle Bash 4.3 namereffing https://stackoverflow.com/a/42877229/4166604
-    local regex='^declare -[[:alpha:]]*n[[:alpha:]]* [^=]+=\"([^\"]+)\"$'
-    while [[ ${signature} =~ ${regex} ]]; do
-      signature="$(declare -p ${BASH_REMATCH[1]})"
-    done
+  # Still need to use the compatible method in bash 4.4 or newer, because it
+  # does not work on "declared but unset" arrays
+  local signature="$(declare -p "${1}" 2>/dev/null)"
 
-    # Check if is array
-    regex='^declare -[[:alpha:]]*a[[:alpha:]]* '
-    [[ ${signature} =~ ${regex} ]]
-  }
-fi
+  # Handle Bash 4.3 namereffing https://stackoverflow.com/a/42877229/4166604
+  local regex='^declare -[[:alpha:]]*n[[:alpha:]]* [^=]+=\"([^\"]+)\"$'
+  while [[ ${signature} =~ ${regex} ]]; do
+    signature="$(declare -p ${BASH_REMATCH[1]})"
+  done
 
-if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "44" ]; then
-  function is_associative_array()
-  {
+  # Check if is an array
+  regex='^declare -[[:alpha:]]*a[[:alpha:]]* '
+  if [[ ${signature} =~ ${regex} ]]; then
+    return 0
+  fi
+  return 1
+}
+
+function is_associative_array()
+{
+  if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "44" ]; then
     # Yes, this works with namereffing too, without having to iterate!
     if [[ ${!1@a} = *A* ]]; then
       return 0
     fi
-    return 1
-  }
-else
-  function is_associative_array()
-  {
-    local signature="$(declare -p "${1}" 2>/dev/null)"
+  fi
 
-    # Handle Bash 4.3 namereffing https://stackoverflow.com/a/42877229/4166604
-    local regex='^declare -[[:alpha:]]*n[[:alpha:]]* [^=]+=\"([^\"]+)\"$'
-    while [[ ${signature} =~ ${regex} ]]; do
-      signature="$(declare -p ${BASH_REMATCH[1]})"
-    done
+  # Still need to use the compatible method in bash 4.4 or newer, because it
+  # does not work on "declared but unset" arrays
+  local signature="$(declare -p "${1}" 2>/dev/null)"
 
-    # Check if is array
-    regex='^declare -[[:alpha:]]*A[[:alpha:]]* '
-    [[ ${signature} =~ ${regex} ]]
-  }
-fi
+  # Handle Bash 4.3 namereffing https://stackoverflow.com/a/42877229/4166604
+  local regex='^declare -[[:alpha:]]*n[[:alpha:]]* [^=]+=\"([^\"]+)\"$'
+  while [[ ${signature} =~ ${regex} ]]; do
+    signature="$(declare -p ${BASH_REMATCH[1]})"
+  done
+
+  # Check if is an associative array
+  regex='^declare -[[:alpha:]]*A[[:alpha:]]* '
+  if [[ ${signature} =~ ${regex} ]]; then
+    return 0
+  fi
+  return 1
+}
 
 #**
 # .. function:: to_array
@@ -933,97 +935,170 @@ function all_variables_to_array()
   done
 }
 
+#**
+# .. function:: serialize_array
+#
+# Serializes an array (or associative array in bash 4 or newer) into a single string
+#
+# :Arguments: ``$1`` - Name of array
+# :Output: *stdout* - The serialized string representing the array
+#
+# Handles any array, all special characters without issue, for both key and value, except ``NULL`` which isn't allowed in any bash variable anyways. However, the results will not differentiate between an unset array and an empty array.
+#
+# An array is converted to a string using the following schema
+#
+# .. code-block :: none
+#
+#   Array
+#   "a" + (index0 + " " + length_of_value0 + " " + value0) + (index1 + ...
+#   Associative Array
+#   "A" + (length_of_key0 + " " + key0 + length_of_value0 + " " + value0) + ...
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
+#   x=(11 22 33)
+#   unset x[1]
+#   y="$(serialize_array x)"
+#   # "a0 2 112 2 33"
+#
+#   deserialize_array x2 "${y}"
+#   # x and x2 are identical
+#
+# .. seealso::
+#   :func:`deserialize_array`
+#**
 function serialize_array()
 {
-  local _indexes
-  local _index
-  local _value
+  local __serialize_array_indexes
+  local __serialize_array_index
+  local __serialize_array_value
 
-  eval "_indexes=(\"\${!${1}[@]}\")"
+  # No known way to get indexes by indirection without eval.
+  eval "__serialize_array_indexes=(\"\${!${1}[@]}\")"
 
   if is_array "${1}"; then
     echo -n 'a'
-    for _index in "${_indexes[@]}"; do
-      _value="${1}[${_index}]"
-      _value="${!_value}"
-      echo -n "${_index} ${#_value} ${_value}"
+    for __serialize_array_index in "${__serialize_array_indexes[@]}"; do
+      __serialize_array_value="${1}[${__serialize_array_index}]"
+      __serialize_array_value="${!__serialize_array_value}"
+      echo -n "${__serialize_array_index} ${#__serialize_array_value} ${__serialize_array_value}"
     done
   elif is_associative_array "${1}"; then
     echo -n 'A'
-    for _index in "${_indexes[@]}"; do
-      _value="${1}[${_index}]"
-      _value="${!_value}"
-      echo -n "${#_index} ${_index}${#_value} ${_value}"
+    for __serialize_array_index in "${__serialize_array_indexes[@]}"; do
+      __serialize_array_value="${1}[${__serialize_array_index}]"
+      __serialize_array_value="${!__serialize_array_value}"
+      echo -n "${#__serialize_array_index} ${__serialize_array_index}${#__serialize_array_value} ${__serialize_array_value}"
     done
   else
-    echo "Unknown type ${1}" >&2
+    echo "Unknown type for ${1}" >&2
     return 2
   fi
 }
 
+#**
+# .. function:: deserialize_array
+#
+# Convert a serialized array (string) into an array or associative array.
+#
+# :Arguments: - ``$1`` - Output variable name
+#             - ``$2`` - Serialized string
+#
+# If you do not declare the output variable before calling :func:`deserialize_array`, it will attempt to create it. This works pretty well for indexed arrays, but associative arrays are trickier. On bash 4.2 or newer, it will create it as a global variable if it is not already defined as an associative array. This makes controlling the scope difficult and does not work in older versions of bash. It's best to define the variable before calling, if possible.
+#
+# .. seealso::
+#   :func:`serialize_array`
+#**
 function deserialize_array()
 {
-  local -i _str_index=1
-  local _length _array_index
+  local -i __deserialize_array_str_index=1
+  local __deserialize_array_length __deserialize_array_array_index
 
-  if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge 42 ]; then
-    if [ "${2::1}" = "a" ]; then
-      if ! is_array "${1}"; then
-        declare -ga "${1}=()"
-      fi
-    elif [ "${2::1}" = "A" ]; then
-      if ! is_associative_array "${1}"; then
-        declare -gA "${1}=()"
-      fi
-    else
-      echo "Unrecognized type ${2::1}" >&2
-      return 2
+  if [ "${2::1}" = "a" ]; then
+    # An associative array variable can't make be made an array
+    if is_associative_array "${1}"; then
+      unset "${1}"
     fi
-  else
-    # There is no work around in bash 4.0 and 4.1. Detect if it wasn't set in the calling function scope
-    if [ "${2::1}" = "a" ]; then
-      if ! is_array "${1}"; then
-        eval "${1}=()"
-      fi
-    elif [ "${2::1}" = "A" ]; then
-      if ! is_associative_array "${1}"; then
+    clear_a "${1}"
+  elif [ "${2::1}" = "A" ]; then
+    # An associative array variable can't make be made an array
+    if is_array "${1}"; then
+      unset "${1}"
+    fi
+    if ! is_associative_array "${1}"; then
+      if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge 42 ]; then
+        unset "${1}" # Prevent local shadowing
+        declare -gA "${1}=()"
+      else
         echo "Older versions of Bash must declare ${1} as an associative array in the calling function" >&2
         return 2
       fi
-    else
-      echo "Unrecognized type ${2::1}" >&2
-      return 2
+    fi
+  else
+    echo "Unrecognized type: ${2::1}" >&2
+    return 2
+  fi
+
+  if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "43" ]; then
+    if [ "${1}" != "array" ]; then
+      local -n array="${1}"
     fi
   fi
 
   if [ "${2::1}" = "a" ]; then
-    while (( _str_index < ${#2} )); do
-      read -d ' ' _array_index <<< "${2:_str_index}"
-      _str_index+=${#_array_index}+1
+    while (( __deserialize_array_str_index < ${#2} )); do
+      # Using a string index and splicing is faster than constantly copying a
+      # spliced version of $2 `str="${str:length}"`
 
-      read -d ' ' _length <<< "${2:_str_index}"
-      _str_index+=${#_length}+1
+      # This splicing and %% can't be combined into one call, so do it in two
+      # calls. Pick at most 20 characters, bash 5.0 array indexes appears to be
+      # a signed 64 bit number (19 digits)
+      __deserialize_array_array_index="${2:__deserialize_array_str_index:20}"
+      __deserialize_array_array_index="${__deserialize_array_array_index%% *}"
+      __deserialize_array_str_index+=${#__deserialize_array_array_index}+1
 
-      # Don't use <<< here, it inserts a \n at the end (bash "feature")
-      IFS= read -r -d '' "${1}[${_array_index}]" < <(echo -n "${2:_str_index:_length}") || :
-      _str_index+=${_length}
+      __deserialize_array_length="${2:__deserialize_array_str_index:20}"
+      __deserialize_array_length="${__deserialize_array_length%% *}"
+      __deserialize_array_str_index+=${#__deserialize_array_length}+1
+
+      if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "43" ]; then
+        array["${__deserialize_array_array_index}"]="${2:__deserialize_array_str_index:__deserialize_array_length}"
+      else
+        # 60x Faster, but it's eval :(
+        # eval "${1}[${__deserialize_array_array_index}]="'"${2:__deserialize_array_str_index:__deserialize_array_length}"'
+        # Don't use <<< here, it inserts a \n at the end (bash "feature")
+        IFS= read -r -d '' "${1}[${__deserialize_array_array_index}]" < <(echo -n "${2:__deserialize_array_str_index:__deserialize_array_length}") || :
+      fi
+      __deserialize_array_str_index+=${__deserialize_array_length}
     done
   else
-    while (( _str_index < ${#2} )); do
+    while (( __deserialize_array_str_index < ${#2} )); do
       # Length of array index, but reuse variable name
-      read -d ' ' _array_index <<< "${2:_str_index}"
-      _str_index+=${#_array_index}+1
+      # Length of key shouldn't exceed 64 bit number (20 digits)
+      __deserialize_array_array_index="${2:__deserialize_array_str_index:20}"
+      __deserialize_array_array_index="${__deserialize_array_array_index%% *}"
+      __deserialize_array_str_index+=${#__deserialize_array_array_index}+1
 
-      # Don't use <<< here, it inserts a \n at the end (bash "feature")
-      IFS= read -r -d '' _array_index < <(echo -n "${2:_str_index:_array_index}") || :
-      _str_index+=${#_array_index}
+      # Get array key
+      __deserialize_array_array_index="${2:__deserialize_array_str_index:__deserialize_array_array_index}"
+      __deserialize_array_str_index+=${#__deserialize_array_array_index}
 
-      read -d ' ' _length <<< "${2:_str_index}"
-      _str_index+=${#_length}+1
+      # Length shouldn't exceed 64 bit number (20 digits)
+      __deserialize_array_length="${2:__deserialize_array_str_index:20}"
+      __deserialize_array_length="${__deserialize_array_length%% *}"
+      __deserialize_array_str_index+=${#__deserialize_array_length}+1
 
-      # Don't use <<< here, it inserts a \n at the end (bash "feature")
-      IFS= read -r -d '' "${1}[${_array_index}]" < <(echo -n "${2:_str_index:_length}") || :
-      _str_index+=${_length}
+      if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "43" ]; then
+        array["${__deserialize_array_array_index}"]="${2:__deserialize_array_str_index:__deserialize_array_length}"
+      else
+        # 60x Faster, but it's eval :(
+        # eval "${1}[${__deserialize_array_array_index}]="'"${2:__deserialize_array_str_index:__deserialize_array_length}"'
+        # Don't use <<< here, it inserts a \n at the end (bash "feature")
+        IFS= read -r -d '' "${1}[${__deserialize_array_array_index}]" < <(echo -n "${2:__deserialize_array_str_index:__deserialize_array_length}") || :
+      fi
+      __deserialize_array_str_index+=${__deserialize_array_length}
     done
   fi
 }

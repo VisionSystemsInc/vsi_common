@@ -904,6 +904,41 @@ begin_test "Is array"
   is_array bar2
   is_array bar3
   not is_array foo
+
+  # Test declared but unset
+  declare -a duck
+  is_array duck
+)
+end_test
+
+[ "${BASH_VERSINFO[0]}" -ge "4" ] || skip_next_test
+begin_test "Is associative array"
+(
+  setup_test
+
+  foo="ok"
+  var_name=("ok")
+  declare -ra bar2=("doe")
+  declare bar3=()
+  declare -A bar4
+  declare -A bar5=()
+  declare -A bar6
+  bar6[foo]=stuff
+  declare -rA bar7=([foo]=stuff)
+
+  not is_associative_array var_name
+  not is_associative_array bar2
+  not is_associative_array bar3
+  not is_associative_array foo
+
+  not is_array bar4
+  is_associative_array bar4
+  not is_array bar5
+  is_associative_array bar5
+  not is_array bar6
+  is_associative_array bar6
+  not is_array bar7
+  is_associative_array bar7
 )
 end_test
 
@@ -1204,6 +1239,17 @@ begin_test "Serialize array"
 (
   setup_test
 
+  declare -i i
+  declare -i j=5
+  k=stuff
+  not serialize_array i
+  not serialize_array j
+  not serialize_array k
+
+  declare -a w
+  ans='a'
+  assert_str_eq "$(serialize_array w)" "${ans}"
+
   x=()
   ans='a'
   assert_str_eq "$(serialize_array x)" "${ans}"
@@ -1226,19 +1272,31 @@ end_test
 begin_test "Serialize associative array"
 (
   setup_test
-  declare -A x=()
+  declare -A x
   assert_str_eq "$(serialize_array x)" "A"
+
+  declare -A y=()
+  assert_str_eq "$(serialize_array y)" "A"
 
   x[foo]=bar
   x[$'foo\tbar']=$'oh\nno'
   x[car]=
-  # For some reason the order is reversed *shrugs*
-  if [ "${BASH_VERSINFO[0]}" -ge 5 ]; then
-    ans=$'A3 foo3 bar3 car0 7 foo\tbar5 oh\nno'
-  else
-    ans=$'A7 foo\tbar5 oh\nno3 car0 3 foo3 bar'
-  fi
-  assert_str_eq "$(serialize_array x)" "${ans}"
+
+  ans="$(serialize_array x)"
+
+  # Order varies from bash to bash, so just make sure the contents are there,
+  # and nothing else
+  [ "${ans::1}" = "A" ]
+
+  ans1="3 foo3 bar"
+  ans2="3 car0 "
+  ans3=$'7 foo\tbar5 oh\nno'
+
+  assert_sub_str "${ans:1}" "${ans1}"
+  assert_sub_str "${ans:1}" "${ans2}"
+  assert_sub_str "${ans:1}" "${ans3}"
+
+  [ "${#ans}" = "$((1+${#ans1}+${#ans2}+${#ans3}))" ]
 )
 end_test
 
@@ -1260,6 +1318,28 @@ begin_test "Deserialize array"
   unset ans[1]
   deserialize_array z $'a0 7 foo bar2 4 \n\\t\t3 1 "'
   assert_array_eq z ans
+
+  # Scope
+  x1=15
+  z1=12
+
+  function foo()
+  {
+    local x1=()
+    local y1=(11 22)
+    deserialize_array x1 'a0 2 111 2 22'
+    assert_array_eq x1 y1
+
+    deserialize_array z1 'a0 2 111 2 22'
+
+    deserialize_array q1 'a0 2 111 2 22'
+  }
+
+  foo
+  w1=(11 22)
+  assert_array_eq w1 z1
+  assert_array_eq q1 z1
+  [ "${x1}" = "15" ]
 )
 end_test
 
@@ -1267,6 +1347,7 @@ end_test
 begin_test "Deserialize associative array"
 (
   setup_test
+  declare -A x
   deserialize_array x $'A3 foo3 bar3 car0 7 foo\tbar5 oh\nno'
 
   [ "${x[foo]}" = "bar" ]
@@ -1274,5 +1355,37 @@ begin_test "Deserialize associative array"
   [ "${x[$'foo\tbar']}" = $'oh\nno' ]
   y=("${!x[@]}")
   [ "${#y[@]}" = 3 ]
+
+  # scope
+  x1=15
+  z1=(16 17)
+
+  function foo()
+  {
+    local -A x1
+    local y1=foo
+    deserialize_array x1 "A3 foo3 bar"
+    if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge 42 ]; then
+      deserialize_array y1 "A3 foo3 bar"
+      deserialize_array z1 "A3 foo3 bar"
+    else
+      not deserialize_array y1 "A3 foo3 bar"
+      not deserialize_array z1 "A3 foo3 bar"
+    fi
+    [ "${x1[foo]}" == "bar" ]
+
+    local -A x2=()
+    deserialize_array x2 'a0 2 111 2 22'
+  }
+
+  foo
+  # y1 was local, but got unset. This is known behavior
+  if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge 42 ]; then
+    [ "${y1[foo]}" == "bar" ]
+    [ "${z1[foo]}" == "bar" ]
+  fi
+  # x2 was local, but due to being set as an associative array, is now global
+  ans2=(11 22)
+  assert_array_eq ans2 x2
 )
 end_test

@@ -116,6 +116,7 @@ function caseify()
       done
 
       if [ -n "${DOCS_PRECOMPILE_SCRIPT:+set}" ]; then
+        echo "Running Pre-compile script ${DOCS_PRECOMPILE_SCRIPT}" >&2
         "${DOCS_PRECOMPILE_SCRIPT}"
       fi
 
