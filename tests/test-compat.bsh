@@ -19,6 +19,11 @@ begin_test "Sed flag"
   [ "${sed_flag_i}" = "i ''" ]
   unset OSTYPE
 
+  OS=Windows_NT load_vsi_compat
+  [ "${sed_flag_rE}" = "r" ]
+  [ "${sed_flag_i}" = "i" ]
+  unset OS
+
   function sed()
   {
     echo "sed (GNU sed) 4.5" # stdout
@@ -49,13 +54,82 @@ begin_test "Sed flag"
 )
 end_test
 
+# The rest of these compatibility tests are performed by actually using the flags
+# to see if the test passes or fails, instead of mocking. CI will test all versions,
+# and thus thoroughly test this
+
+begin_test "Date flag"
+(
+  setup_test
+
+  if [ "${date_supports_nanoseconds}" = "0" ]; then
+    assert_regex_eq "$(date +%N)" '^[0-9]{9}$'
+  else
+    not assert_regex_eq "$(date +%N)" '^[0-9]{9}$'
+  fi
+)
+end_test
+
 begin_test "Bash flag"
 (
   setup_test
 
-  # This one can't be mocked, so test it by using it. CI will test all versions
-  # of bash, and thus test this
   x=(foo bar)
   assert_str_eq "$(declare -p x)" "declare -a x=${bash_declare_array_quote}([0]=\"foo\" [1]=\"bar\")${bash_declare_array_quote}"
+
+  if [ "${bash_variable_parameter_transformation}" = "0" ]; then
+    assert_regex_eq "${BASH_VERSINFO@a}" '^[ar]*$'
+  fi
+
+  if [ "${bash_variable_name_reffing}" = "0" ]; then
+    declare -n y=x
+  else
+    not declare -n y=x
+  fi
+
+  z=(11 22)
+  if [ "${bash_printf_array_assignment}" = "0" ]; then
+    printf -v z[2] '%s' 33
+    assert_array_values z 11 22 33
+  else
+    not printf -v z[2] '%s' 33
+  fi
+
+  if [ "${bash_associative_array}" = "0" ]; then
+    declare -A foo
+    foo[var]=15
+  else
+    not declare -A foo
+  fi
+
+  d=$'foo\tbar'
+  re='\t'
+  if [ "${bash_regex_special_characters_non_literal}" = "0" ]; then
+    assert_regex_eq "${d}" "${re}"
+  else
+    not assert_regex_eq "${d}" "${re}"
+  fi
+
+  arr=(11 22 33 44)
+  ans1=(33 44)
+  ans2=("33 44")
+  OLD_IFS="${IFS}"
+  IFS=x
+  arr2=("${arr[@]:2}")
+  if [ "${bash_bug_ifs_array_slice_expansion}" = "0" ]; then
+    assert_array_eq arr2 ans2
+  else
+    assert_array_eq arr2 ans1
+  fi
+  IFS="${OLD_IFS}"
+)
+end_test
+
+[ "${bash_variable_parameter_transformation}" = "1" ] || skip_next_test
+begin_required_fail_test "Fail bash parameter transformation"
+(
+  setup_test
+  begin_fail_zone
+  echo "${BASH_VERSINFO@a}"
 )
 end_test

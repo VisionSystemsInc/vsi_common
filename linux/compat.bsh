@@ -40,7 +40,7 @@ function load_vsi_compat()
     local VSI_SED_COMPAT
     if [[ ${OSTYPE-} = darwin* ]]; then
       VSI_SED_COMPAT=bsd
-    elif [[ $(sed --version) = *GNU* ]]; then
+    elif [ "${OS-}" = "Windows_NT" ] || [[ $(sed --version) = *GNU* ]]; then
       VSI_SED_COMPAT=gnu
     else
       VSI_SED_COMPAT=bsd
@@ -93,6 +93,24 @@ function load_vsi_compat()
     sed_flag_i='i'
   fi
 
+  #**
+  # Date
+  # ====
+  #
+  # The following variables will help cope with the difference in the ``date`` command, as seamlessly as possible.
+  #
+  # .. variable:: date_supports_nanoseconds
+  #
+  # Non-GNU versions of ``date`` do not support the nanosecond sequence for a date format (e.g. BSD and busybox).
+  #
+  # :Value: * ``0`` - Supports nanosecond precision ``%N``
+  #         * ``1`` - Does not support nanoseconds
+  #**
+  if [ "${OS-}" = "Windows_NT" ] || [[ $(date +%N) =~ ^[0-9]+$ ]]; then
+    date_supports_nanoseconds=0
+  else
+    date_supports_nanoseconds=1
+  fi
 
   #**
   # Bash
@@ -100,17 +118,114 @@ function load_vsi_compat()
   #
   # The following variables will help cope with the difference in bash versions, as seamlessly as possible.
   #
-  # .. variable: bash_declare_array_quote
+  # .. variable:: bash_declare_array_quote
   #
   # In bash version 4.3 and older, ``declare -p`` of an array adds an extra ``'`` around the array. This variable stores the state of that variable
   #
   # :Value: * ``(null)`` - Bash 4.4 or newer
   #         * ``'`` - Bash 4.3 or older
+  #
+  # .. variable:: bash_variable_parameter_transformation
+  #
+  # Does bash support Parameter Transformations, e.g. ``${var@a}``
+  #
+  # :Value: * ``0`` - Bash does support parameter transformations (Bash 4.4 or newer)
+  #         * ``1`` - Bash does not support parameter transformations
   #**
-  if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -gt "43" ]; then
+  if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "44" ]; then
     bash_declare_array_quote=""
+    bash_variable_parameter_transformation=0
   else
     bash_declare_array_quote="'"
+    bash_variable_parameter_transformation=1
+  fi
+
+  #**
+  # .. variable:: bash_variable_name_reffing
+  #
+  # Do bash variables support name reffing
+  #
+  # :Value: * ``0`` - Bash does support name reffing (Bash 4.3 or newer)
+  #         * ``1`` - Bash does not support name reffing
+  #**
+  if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "43" ]; then
+    bash_variable_name_reffing=0
+  else
+    bash_variable_name_reffing=1
+  fi
+
+  #**
+  # .. variable:: bash_printf_array_assignment
+  #
+  # Does ``printf -v`` support storing to array variables
+  #
+  # :Value: * ``0`` - ``printf`` does support storing to arrays (Bash 4.1 or newer)
+  #         * ``1`` - ``printf`` only supports storying to non-array variables
+  #**
+  if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "41" ]; then
+    bash_printf_array_assignment=0
+  else
+    bash_printf_array_assignment=1
+  fi
+
+  #**
+  # .. variable:: bash_associative_array
+  #
+  # Does bash have associative arrays
+  #
+  # :Value: * ``0`` Bash does have associative arrays (4.0 or newer)
+  #         * ``1`` Bash does not have associative arrays (3.2)
+  #**
+  if [ "${BASH_VERSINFO[0]}" -ge "4" ]; then
+    bash_associative_array=0
+  else
+    bash_associative_array=1
+  fi
+
+  #**
+  # .. variable:: bash_regex_special_characters_non_literal
+  #
+  # Most instances of bash require special characters to be literal in regular expressions (e.g. ``$'\n'``). However, on operating systems such as alpine, a special character will be matched based in it's non-literal form (e.g. ``"\n"``). This has nothing to do with the version of bash, but rather how it was compiled (regex might come from g++ implementation).
+  #
+  # :var:`bash_regex_special_characters_non_literal` will be set if the non-literal form works. Currently, the literal form always appears to work.
+  #
+  # :Value: * ``0`` - Non literal form works (e.g. ``"\t")
+  #         * ``1`` - Non literal form does not work
+  #**
+  local x=$'foo\nbar'
+  local re='\n'
+  if [[ ${x} =~ ${re} ]]; then
+    bash_regex_special_characters_non_literal=0
+  else
+    bash_regex_special_characters_non_literal=1
+  fi
+
+  #**
+  # .. variable:: bash_bug_ifs_array_slice_expansion
+  #
+  # In some versions of bash (3.2 is the only known version), ``@`` expanding an array and slicing it when IFS is not space, will fail to expand into multiple arguments.
+  #
+  # :Value: * ``0`` - Bug present
+  #         * ``1`` - Not bugged
+  #
+  # .. rubric:: Example
+  #
+  # .. code-block:: bash
+  #
+  #   $ x=(11 22 33 44)
+  #   $ IFS=x
+  #   $ z=("${x[@]:2}")
+  #   # @ expansion should be unaffected by IFS, unlike * expansion
+  #   declare -a z='([0]="33 44")'       # Wrong
+  #   declare -a z='([0]="33" [1]="44")' # Right
+  #**
+  local x=(11 22 33 44)
+  local IFS=x
+  local z=("${x[@]:2}")
+  if [ "${z[0]}" = "33 44" ]; then
+    bash_bug_ifs_array_slice_expansion=0
+  else
+    bash_bug_ifs_array_slice_expansion=1
   fi
 }
 
