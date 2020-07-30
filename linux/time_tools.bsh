@@ -56,8 +56,17 @@ get_time_seconds()
 # :Uses: perl
 #
 # macOS function similar to linux timeout
+#
+# .. rubric:: Bugs
+#
+# Since this uses SIGALRM, bash will print out "Alarm clock: 14" to indicate SIGALRM (14) has been raised. This could cause unexpected text in stderr if you are parsing it.
+#
+# .. seealso::
+#
+#    https://www.cyberciti.biz/faq/shell-scripting-run-command-under-alarmclock/
 #**
 if [[ ${OSTYPE-} = darwin* ]]; then
+  # https://perldoc.perl.org/functions/alarm.html
   function timeout()
   {
     perl -e 'use warnings;
@@ -101,31 +110,41 @@ if [[ ${OSTYPE-} = darwin* ]]; then
   }
 fi
 
-#**
-# .. rubric:: Bugs
-#
-# Since this uses SIGALRM, bash will print out "Alarm clock: 14" to indicate SIGALRM (14) has been raised. This could cause unexpected text in stderr if you are parsing it.
-#
-# .. rubric:: Author
-#
-# https://perldoc.perl.org/functions/alarm.html
-#
-# .. seealso::
-#
-#    https://www.cyberciti.biz/faq/shell-scripting-run-command-under-alarmclock/
-#**
-
-
 if [[ ! $(date +%N) =~ ^[0-9]+$ ]]; then
   _tictoc_cmd="date +%s000000000"
 else
   _tictoc_cmd="date +%s%N"
 fi
 
+#**
+# .. function:: tic
+#
+# Part of a tic/toc functionality to easily take time measurements.
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
+#   $ tic
+#   $ sleep 1.3
+#   $ toc_ms
+#   1302 ms
+#
+# .. seealso::
+#  :func:`toc`, :func:`toc_ms`, :func:`toc_ns`
+#**
 function tic()
 {
   _time0="$($_tictoc_cmd)"
 }
+
+#**
+# .. function:: toc
+#
+# Prints the time passed since calling :function:`toc` in seconds (rounded).
+#
+# Also stores the number of seconds passed in ``toc_time``
+#**
 function toc()
 {
   # Make it round
@@ -138,6 +157,18 @@ function toc()
   fi
   echo "${toc_time} s"
 }
+
+#**
+# .. function:: toc_ms
+#
+# Prints the time passed since calling :function:`toc` in milliseconds (rounded).
+#
+# Also stores the number of milliseconds passed in ``toc_time``
+#
+# .. note::
+#
+#   Older ``date`` commands that don't support nanoseconds, will not be more accurate than a second.
+#**
 function toc_ms()
 {
   toc_time=$(($($_tictoc_cmd)-_time0+500000))
@@ -150,6 +181,17 @@ function toc_ms()
   echo "${toc_time} ms"
 }
 
+#**
+# .. function:: toc_ns
+#
+# Prints the time passed since calling :function:`toc` in nanoseconds.
+#
+# Also stores the number of nanoseconds passed in ``toc_time``
+#
+# .. note::
+#
+#   Older ``date`` commands that don't support nanoseconds, will not be more accurate than a second.
+#**
 function toc_ns()
 {
   toc_time=$(($($_tictoc_cmd)-_time0))
