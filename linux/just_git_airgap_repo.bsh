@@ -721,15 +721,30 @@ if [ "${git_version_arr[0]}" -ge 2 ] && [ "${git_version_arr[1]}" -ge 9 ]; then
     local up_path="${2-}"
 
     # In git v2.9.0, this command can replace all of this work
-    # This resolves based on remote.origin.url unfortunately
+    # This resolves based on remote.${remote_name}.url unfortunately, where
+    # remote_name is the default remote of the current branch, if set,
+    # otherwise origin
     ${GIT} submodule--helper resolve-relative-url "${gitmodules_url}" "${up_path}"
   }
 else
   function submodule-helper-resolve-relative-url()
   {
     local gitmodules_url="${1}"
-    local up_path="${2-}" # Guaranteed to have a trailing slash
-    local remote_url="$(${GIT} config remote.origin.url)"
+    local up_path="${2-}" # Guaranteed by git to have a trailing slash
+
+    # Get the default remote of current branch
+    # based on https://github.com/git/git/blob/v2.16.0/git-parse-remote.sh#L9
+    local curr_branch
+    local curr_branch_rv=0
+    curr_branch=$(${GIT} symbolic-ref -q HEAD) || curr_branch_rv=$?
+    if [ "${curr_branch_rv}" -eq 0 ]; then
+      curr_branch="${curr_branch#refs/heads/}"
+      local remote_name="$(${GIT} config --get "branch.$curr_branch.remote")"
+    else
+      local remote_name="origin"
+    fi
+
+    local remote_url="$(${GIT} config remote.${remote_name}.url)"
 
     # Work in an automatically deleting temporary directory
     local temp_repo
