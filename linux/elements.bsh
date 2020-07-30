@@ -614,6 +614,26 @@ function is_array()
   if [[ ${signature} =~ ${regex} ]]; then
     return 0
   fi
+
+  # Bash 4.3 has a specific bug in which "declare -p var" of an unset declared array
+  # says "bash: declare: y: not found", however, "declare -p" still lists the var.
+  # Unfortunately, Bash 4.3 does not escape newline characters, so a false positive
+  # is possible if you grep "declare -p" for "declare -p var". Fortunately, single quotes
+  # are escaped, and arrays in bash 4.3 start with "'(", which can't be faked.
+  # Example:
+  # $ x=($'foo\ndeclare -a x='"'("); declare -p x
+  # declare -a x='([0]="foo
+  # declare -a x='\''(")' <== See, impossible to make '(
+  # So in bash 4.3, so one more check of declare -p looking for the array
+  # declaration
+
+  if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" = "43" ]; then
+    regex='(^|\n)declare -[[:alpha:]]*a[[:alpha:]]* '"${1}='\\("
+    if [[ $(declare -p) =~ ${regex} ]]; then
+      return 0
+    fi
+  fi
+
   return 1
 }
 
@@ -650,6 +670,14 @@ function is_associative_array()
   if [[ ${signature} =~ ${regex} ]]; then
     return 0
   fi
+
+  if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" = "43" ]; then
+    regex='(^|\n)declare -[[:alpha:]]*A[[:alpha:]]* '"${1}='\\("
+    if [[ $(declare -p) =~ ${regex} ]]; then
+      return 0
+    fi
+  fi
+
   return 1
 }
 
