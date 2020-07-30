@@ -594,24 +594,26 @@ function is_array()
 {
   if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "44" ]; then
     # Yes, this works with namereffing too, without having to iterate!
-    if [[ ${!1@a} = *a* ]]; then
+    if [[ ${!1@a} = *${__is_a_type-a}* ]]; then
       return 0
     fi
   fi
 
   # Still need to use the compatible method in bash 4.4 or newer, because it
   # does not work on "declared but unset" arrays
-  local signature="$(declare -p "${1}" 2>/dev/null)"
+  local __is_a_signature="$(declare -p "${1}" 2>/dev/null)"
+  local __is_a_name="${1}"
 
   # Handle Bash 4.3 namereffing https://stackoverflow.com/a/42877229/4166604
   local regex='^declare -[[:alpha:]]*n[[:alpha:]]* [^=]+=\"([^\"]+)\"$'
-  while [[ ${signature} =~ ${regex} ]]; do
-    signature="$(declare -p ${BASH_REMATCH[1]})"
+  while [[ ${__is_a_signature} =~ ${regex} ]]; do
+    __is_a_name="${BASH_REMATCH[1]}"
+    __is_a_signature="$(declare -p "${__is_a_name}" || :)"
   done
 
   # Check if is an array
-  regex='^declare -[[:alpha:]]*a[[:alpha:]]* '
-  if [[ ${signature} =~ ${regex} ]]; then
+  regex='^declare -[[:alpha:]]*'"${__is_a_type-a}"'[[:alpha:]]* '
+  if [[ ${__is_a_signature} =~ ${regex} ]]; then
     return 0
   fi
 
@@ -624,11 +626,13 @@ function is_array()
   # $ x=($'foo\ndeclare -a x='"'("); declare -p x
   # declare -a x='([0]="foo
   # declare -a x='\''(")' <== See, impossible to make '(
-  # So in bash 4.3, so one more check of declare -p looking for the array
+  # In bash 4.3, do one more check of declare -p looking for the array
   # declaration
 
   if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" = "43" ]; then
-    regex='(^|\n)declare -[[:alpha:]]*a[[:alpha:]]* '"${1}='\\("
+    # The newline has to be literal in glibc bash. Alpine bash allows "\n", but
+    # the rest do not
+    regex=$'(^|\n)declare -[[:alpha:]]*'"${__is_a_type-a}"'[[:alpha:]]* '"${__is_a_name}='\\("
     if [[ $(declare -p) =~ ${regex} ]]; then
       return 0
     fi
@@ -648,37 +652,7 @@ function is_array()
 #**
 function is_associative_array()
 {
-  if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "44" ]; then
-    # Yes, this works with namereffing too, without having to iterate!
-    if [[ ${!1@a} = *A* ]]; then
-      return 0
-    fi
-  fi
-
-  # Still need to use the compatible method in bash 4.4 or newer, because it
-  # does not work on "declared but unset" arrays
-  local signature="$(declare -p "${1}" 2>/dev/null)"
-
-  # Handle Bash 4.3 namereffing https://stackoverflow.com/a/42877229/4166604
-  local regex='^declare -[[:alpha:]]*n[[:alpha:]]* [^=]+=\"([^\"]+)\"$'
-  while [[ ${signature} =~ ${regex} ]]; do
-    signature="$(declare -p ${BASH_REMATCH[1]})"
-  done
-
-  # Check if is an associative array
-  regex='^declare -[[:alpha:]]*A[[:alpha:]]* '
-  if [[ ${signature} =~ ${regex} ]]; then
-    return 0
-  fi
-
-  if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" = "43" ]; then
-    regex='(^|\n)declare -[[:alpha:]]*A[[:alpha:]]* '"${1}='\\("
-    if [[ $(declare -p) =~ ${regex} ]]; then
-      return 0
-    fi
-  fi
-
-  return 1
+  __is_a_type=A is_array ${@+"${@}"}
 }
 
 #**
