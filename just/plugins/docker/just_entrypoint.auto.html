@@ -261,7 +261,100 @@
 </pre></div>
 </div>
 <p>If a project needs to customize the behavior more than is possible, the developer is encouraged to copy the original file into their project, customize it, add it to the image, and call that entrypoint instead of the one in vsi_common.</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">set</span> -eu
+
+: <span class="si">${</span><span class="nv">VSI_COMMON_DIR</span><span class="p">=/vsi</span><span class="si">}</span>
+: <span class="si">${</span><span class="nv">DOCKER_USERNAME</span><span class="p">=user</span><span class="si">}</span>
+
+<span class="k">if</span> <span class="o">[</span> ! -f <span class="s2">&quot;/.dockerenv&quot;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+  <span class="nb">export</span> <span class="nv">ALREADY_RUN_ONCE</span><span class="o">=</span><span class="m">1</span>
+<span class="k">fi</span>
+
+<span class="k">function</span> load_just_settings<span class="o">()</span>
+<span class="o">{</span>
+  <span class="nb">source</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">VSI_COMMON_DIR</span><span class="si">}</span><span class="s2">/linux/elements.bsh&quot;</span>
+  <span class="nb">local</span> JUST_SETTINGSS
+  <span class="nb">local</span> just_settings
+
+  <span class="nv">MIFS</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">JUST_SETTINGS_SEPARATOR</span><span class="p">-///</span><span class="si">}</span><span class="s2">&quot;</span> split_s JUST_SETTINGSS <span class="si">${</span><span class="nv">JUST_SETTINGS</span><span class="p">+</span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">JUST_SETTINGS</span><span class="si">}</span><span class="s2">&quot;</span><span class="si">}</span>
+  <span class="k">for</span> just_settings in <span class="si">${</span><span class="nv">JUST_SETTINGSS</span><span class="p">[@]+</span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">JUST_SETTINGSS</span><span class="p">[@]</span><span class="si">}</span><span class="s2">&quot;</span><span class="si">}</span><span class="p">;</span> <span class="k">do</span>
+    <span class="nb">source</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">VSI_COMMON_DIR</span><span class="si">}</span><span class="s2">/linux/just_files/just_env&quot;</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">just_settings</span><span class="si">}</span><span class="s2">&quot;</span>
+  <span class="k">done</span>
+<span class="o">}</span>
+
+<span class="k">if</span> <span class="o">[</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">ALREADY_RUN_ONCE</span><span class="p">+set</span><span class="si">}</span><span class="s2">&quot;</span> !<span class="o">=</span> <span class="s2">&quot;set&quot;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+
+  <span class="k">if</span> <span class="o">[</span> -n <span class="s2">&quot;</span><span class="si">${</span><span class="nv">BASH_SOURCE</span><span class="p">+set</span><span class="si">}</span><span class="s2">&quot;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+    <span class="nv">file</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">BASH_SOURCE</span><span class="p">[0]</span><span class="si">}</span><span class="s2">&quot;</span>
+  <span class="k">else</span>
+    <span class="nv">file</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">0</span><span class="si">}</span><span class="s2">&quot;</span> <span class="c1"># sh compatibility</span>
+  <span class="k">fi</span>
+
+  <span class="o">(</span>
+    <span class="c1"># TODO: This will not source local.env if the src directory were on an nfs</span>
+    <span class="c1"># Not sure ADDing the local files in the Dockerfile is the &quot;right&quot; solution</span>
+    load_just_settings
+
+    <span class="c1"># Sorted: https://serverfault.com/a/122743/321910</span>
+    <span class="k">for</span> patch in <span class="s2">&quot;</span><span class="si">${</span><span class="nv">JUST_ROOT_PATCH_DIR</span><span class="p">-/usr/local/share/just/root_run_patch</span><span class="si">}</span><span class="s2">&quot;</span>/*<span class="p">;</span> <span class="k">do</span>
+      <span class="k">if</span> <span class="o">[</span> -x <span class="s2">&quot;</span><span class="si">${</span><span class="nv">patch</span><span class="si">}</span><span class="s2">&quot;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+        <span class="s2">&quot;</span><span class="si">${</span><span class="nv">patch</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="c1"># https://www.endpoint.com/blog/2016/12/12/bash-loop-wildcards-nullglob-failglob</span>
+            <span class="c1"># check -e incase glob doesn&#39;t expand</span>
+      <span class="k">elif</span> <span class="o">[</span> -e <span class="s2">&quot;</span><span class="si">${</span><span class="nv">patch</span><span class="si">}</span><span class="s2">&quot;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+        <span class="nb">source</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">patch</span><span class="si">}</span><span class="s2">&quot;</span>
+      <span class="k">fi</span>
+    <span class="k">done</span>
+
+    <span class="c1"># Create the user and associated groups and handle nfs symlinks</span>
+    <span class="c1"># Setup the container to be more friendly to non-root users and</span>
+    <span class="c1"># add other advanced J.U.S.T. features</span>
+    <span class="nv">JUST_DOCKER_ENTRYPOINT_CHOWN_DIRS</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">JUST_DOCKER_ENTRYPOINT_CHOWN_DIRS</span><span class="p">-</span><span class="si">${</span><span class="nv">JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES</span><span class="p">-</span><span class="si">}}</span><span class="s2">&quot;</span> <span class="se">\</span>
+    <span class="nv">JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS</span><span class="p">-</span><span class="si">${</span><span class="nv">JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES</span><span class="p">-</span><span class="si">}}</span><span class="s2">&quot;</span> <span class="se">\</span>
+    /usr/bin/env bash <span class="s2">&quot;</span><span class="si">${</span><span class="nv">VSI_COMMON_DIR</span><span class="si">}</span><span class="s2">/linux/just_files/just_entrypoint_functions&quot;</span>
+  <span class="o">)</span>
+  <span class="c1"># Rerun entrypoint as user now, (skipping the root part via ALREADY_RUN_ONCE)</span>
+  <span class="nv">ALREADY_RUN_ONCE</span><span class="o">=</span><span class="m">1</span> <span class="nb">exec</span> gosu <span class="si">${</span><span class="nv">DOCKER_USERNAME</span><span class="si">}</span> /usr/bin/env bash <span class="s2">&quot;</span><span class="si">${</span><span class="nv">file</span><span class="si">}</span><span class="s2">&quot;</span> <span class="si">${</span><span class="p">@+</span><span class="s2">&quot;</span><span class="si">${</span><span class="p">@</span><span class="si">}</span><span class="s2">&quot;</span><span class="si">}</span>
+<span class="k">fi</span>
+
+<span class="k">function</span> sudo<span class="o">()</span>
+<span class="o">{</span>
+  gosu root <span class="si">${</span><span class="p">@+</span><span class="s2">&quot;</span><span class="si">${</span><span class="p">@</span><span class="si">}</span><span class="s2">&quot;</span><span class="si">}</span>
+<span class="o">}</span>
+<span class="nb">export</span> -f sudo
+
+<span class="k">if</span> <span class="o">[</span> -n <span class="s2">&quot;</span><span class="si">${</span><span class="nv">JUSTFILE</span><span class="p">:+set</span><span class="si">}</span><span class="s2">&quot;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+  <span class="nv">run_just</span><span class="o">=</span><span class="m">1</span>
+<span class="k">else</span>
+  <span class="nv">run_just</span><span class="o">=</span><span class="m">0</span>
+<span class="k">fi</span>
+
+load_just_settings
+
+<span class="nb">source</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">VSI_COMMON_DIR</span><span class="si">}</span><span class="s2">/linux/just_files/just_entrypoint_user_functions.bsh&quot;</span>
+<span class="k">if</span> <span class="o">[</span> -n <span class="s2">&quot;</span><span class="si">${</span><span class="nv">JUST_PROJECT_PREFIX</span><span class="p">+set</span><span class="si">}</span><span class="s2">&quot;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+  <span class="c1"># Remove duplicate ${JUST_PROJECT_PREFIX}_*_DOCKER variables</span>
+  filter_docker_variables
+<span class="k">fi</span>
+docker_convert_paths
+
+<span class="k">for</span> patch in <span class="s2">&quot;</span><span class="si">${</span><span class="nv">JUST_USER_PATCH_DIR</span><span class="p">-/usr/local/share/just/user_run_patch</span><span class="si">}</span><span class="s2">&quot;</span>/*<span class="p">;</span> <span class="k">do</span>
+  <span class="k">if</span> <span class="o">[</span> -x <span class="s2">&quot;</span><span class="si">${</span><span class="nv">patch</span><span class="si">}</span><span class="s2">&quot;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+    <span class="s2">&quot;</span><span class="si">${</span><span class="nv">patch</span><span class="si">}</span><span class="s2">&quot;</span>
+          <span class="c1"># https://www.endpoint.com/blog/2016/12/12/bash-loop-wildcards-nullglob-failglob</span>
+          <span class="c1"># check -e incase glob doesn&#39;t expand</span>
+  <span class="k">elif</span> <span class="o">[</span> -e <span class="s2">&quot;</span><span class="si">${</span><span class="nv">patch</span><span class="si">}</span><span class="s2">&quot;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+    <span class="nb">source</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">patch</span><span class="si">}</span><span class="s2">&quot;</span>
+  <span class="k">fi</span>
+<span class="k">done</span>
+
+<span class="nb">unset</span> shell
+
+<span class="k">if</span> <span class="o">[</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">run_just</span><span class="si">}</span><span class="s2">&quot;</span> <span class="o">=</span> <span class="s2">&quot;1&quot;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+  <span class="nb">exec</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">VSI_COMMON_DIR</span><span class="si">}</span><span class="s2">/linux/just&quot;</span> <span class="s2">&quot;</span><span class="si">${</span><span class="p">@</span><span class="si">}</span><span class="s2">&quot;</span>
+<span class="k">else</span>
+  <span class="nb">exec</span> <span class="s2">&quot;</span><span class="si">${</span><span class="p">@</span><span class="si">}</span><span class="s2">&quot;</span>
+<span class="k">fi</span>
 </pre></div>
 </div>
 <dl class="field-list simple">

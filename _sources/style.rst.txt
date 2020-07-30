@@ -12,13 +12,13 @@ Bash
 
   .. code-block:: bash
 
-      for x in $(ls); do
-        :
-      done
+     for x in $(ls); do
+       :
+     done
 
-      while check_something; do
-        :
-      done
+     while check_something; do
+       :
+     done
 
 We like to use `>&` for file descriptors (numbers), and `&>` for filenames
 
@@ -26,43 +26,44 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
 
   .. code-block:: bash
 
-      echo hi 1>&2 # No extra spaces, as bash doesn't allow that
+     echo hi 1>&2 # No extra spaces, as bash doesn't allow that
+     echo bye >&2 # No extra spaces
 
 * Closing an open file
 
   .. code-block:: bash
 
-      exec 3>&-
+     exec 3>&-
 
-      exec 3&>- # WRONG style. This is dealing with descriptors
+     exec 3&>- # WRONG style. This is dealing with descriptors
 
 * Redirecting to a file
 
   .. code-block:: bash
 
-      run_some_command &> /dev/null # Spaces added around &>
+     run_some_command &> /dev/null # Spaces added around &>
 
-      run_some_command >& /dev/null # WRONG style. This is dealing with filenames
+     run_some_command >& /dev/null # WRONG style. This is dealing with filenames
 
 * Checking to see if a variable exists
 
   .. code-block:: bash
 
-      if [ -z "${variable+set}" ]; then # If not set
-        do_something
-      fi
+     if [ -z "${variable+set}" ]; then # If not set
+       do_something
+     fi
 
-      if [ -n "${variable+set}" ]; then # If set
-        do_something
-      fi
+     if [ -n "${variable+set}" ]; then # If set
+       do_something
+     fi
 
-      if [ -z "${variable:+set}" ]; then # If not set OR set to null
-        do_something
-      fi
+     if [ -z "${variable:+set}" ]; then # If not set OR set to null
+       do_something
+     fi
 
-      if [ -n "${variable:+set}" ]; then # If set AND not null
-        do_something
-      fi
+     if [ -n "${variable:+set}" ]; then # If set AND not null
+       do_something
+     fi
 
 * Scripting file naming and shebangs
 
@@ -70,11 +71,11 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
 
     .. code:: bash
 
-        #!/usr/bin/env false bash
+       #!/usr/bin/env false bash
 
-        if [[ $- != *i* ]]; then
-          source_once &> /dev/null && return 0
-        fi
+       if [[ $- != *i* ]]; then
+         source_once &> /dev/null && return 0
+       fi
 
     * ``false`` signifies this file is for sourcing only. The ``bash`` at the end of the line tricks most editors into parsing the file as bash.
 
@@ -86,7 +87,7 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
 
     .. code:: bash
 
-        #!/usr/bin/env bash
+       #!/usr/bin/env bash
 
   * Files that can be sourced or executed should follow the same rules as executable scripts in addition to:
 
@@ -98,10 +99,10 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
 
       .. code:: bash
 
-          if [ "${BASH_SOURCE[0]}" = "${0}" ] || [ "$(basename "${BASH_SOURCE[0]}")" = "${0}" ]; then
-            the_main_function_name "${@}"
-            exit $?
-          fi
+         if [ "${BASH_SOURCE[0]}" = "${0}" ] || [ "$(basename "${BASH_SOURCE[0]}")" = "${0}" ]; then
+           the_main_function_name "${@}"
+           exit $?
+         fi
 
       * This will only execute ``the_main_function_name`` when the script is being called, not sourced.
 
