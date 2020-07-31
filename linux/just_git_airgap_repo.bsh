@@ -241,10 +241,6 @@ function submodule_summary()
   IFS="${OLD_IFS}"
 }
 
-# 'git push --recurse-submodules=check' (available in git 1.8.0) will check for unpushed commits in a submodule for its current committed state in the parent project
-# RE 'git config push.recurseSubmodules check' (available in git 2.7.0)
-# RE This only seems to work if it is used with a set of outgoing commits that contains a change to a submodule. And, despite its name, it does not seem to recurse into submodules
-
 #**
 # .. function:: make_remote_urls_pushable
 #
@@ -399,7 +395,7 @@ function get_submodule_urls_recursively()
 #
 # :Argument: ``$1`` - The top-level repository name (e.g., vsi_common)
 #
-# :Parameter: ``ASSOCIATIVE_REPO_MAP`` - Set to a value to create the repo map as an associative-array, ``repos``, as opposed to two partitioned arrays (which is bash 3.2 compatible): ``repo_urls`` and ``repo_paths``. (Default: unset; i.e., partitioned)
+# :Parameters: [``ASSOCIATIVE_REPO_MAP``] - Set to a value to create the repo map as an associative-array, ``repos``, as opposed to two partitioned arrays (which is bash 3.2 compatible): ``repo_urls`` and ``repo_paths``. (Default: unset; i.e., partitioned)
 #
 # :Output: *stdout* - The contents of the repo_map.env file. For example,
 #
@@ -702,97 +698,95 @@ function print_git_airgap_submodule_update()
 }
 
 #**
-# .. function:: submodule-helper-resolve-relative-url
+# .. function:: submodule-helper-relative-url
 #
-# "git submodule--helper resolve-relative-url" bash port
+# Essentially "git submodule--helper relative-url" (if it existed)
 #
-# Reproduces what ``git submodule-helper resolve-relative-url`` does. Not all versions of git are modern enough to have this feature.
+# Resolve a submodule's relative URL based on the parent URL. This function works by creating a dummy git repository and submodule and then running ``git submodule init`` (which runs a process similar to ``git submodule sync``), after which, the resolved URL can be queried with ``git config submodule.submod.url``. We do this to avoid modifying the existing repository's git configuration (e.g., ``git config submodule.docker/recipes.url``).
 #
-# :Arguments: ``$1`` - URL to be expanded
+# :Arguments: * ``$1`` - URL of the parent repository; e.g., ``git config remote.origin.url``
+#             * ``$2`` - A submodule's relative URL to be expanded (can be a relative URL or path); e.g., ``git config -f .gitmodules submodule.docker/recipes.url``
+#             * ``$3`` - Up path: path from the submodule to the parent repository; e.g., ``../../``. Must have a trailing slash
 #
-# :Output: *stdout* - Expanded URL
+# :Output: *stdout* - Resolved URL
+#
+# .. note::
+#
+#   This is essentially a bash port of the function `relative_url() <https://github.com/git/git/blob/v2.16.0/builtin/submodule--helper.c#L117>`_ (called from `resolve_relative_url() <https://github.com/git/git/blob/v2.16.0/builtin/submodule--helper.c#L180>`_ via `cmd_sync() <https://github.com/git/git/blob/v2.16.0/git-submodule.sh#L1014>`_, aka ``git submodule-helper resolve-relative-url``. ``git submodule-helper resolve-relative-url``, which is only available in git 2.9 and after, resolves relative URLs based on the remote url, ``git config remote.${remote_name}.url``, where remote_name is the default remote of the current branch, if set; otherwise origin.
 #**
 
-if meet_requirements "$(git_version)" ">=2.9"; then
-  function submodule-helper-resolve-relative-url()
-  {
-    local gitmodules_url="${1}"
-    local up_path="${2-}"
+function submodule-helper-relative-url()
+{
+  local remote_url="${1}"
+  local gitmodules_url="${2}"
+  local up_path="${3-}" # Guaranteed by git to have a trailing slash
 
-    # In git v2.9.0, this command can replace all of this work
-    # This resolves based on remote.${remote_name}.url unfortunately, where
-    # remote_name is the default remote of the current branch, if set,
-    # otherwise origin
-    ${GIT} submodule--helper resolve-relative-url "${gitmodules_url}" "${up_path}"
-  }
-else
-  function submodule-helper-resolve-relative-url()
-  {
-    local gitmodules_url="${1}"
-    local up_path="${2-}" # Guaranteed by git to have a trailing slash
+  # Work in an automatically deleting temporary directory
+  local temp_repo
+  make_temp_path temp_repo -d
+  pushd "${temp_repo}" 1>/dev/null
+    # Fake out a git repo and submodule. I need to know the URL tracked by
+    # the .gitmodules file (because that is what is used when cloning the
+    # repo). However, I can't use git config -f .gitmodules because the
+    # path can (annoyingly) be a relative URL (either to a web address or
+    # filesystem path) and I can't figure out any other way to expand it
+    # other then running git submodule sync (or init if not already).
+    # However, this will also "synchronize the submodules' remote URL
+    # configuration setting to the value specified in .gitmodules". That is
+    # to say, it updates the value in .git/config as well as the value in
+    # .git/modules/docker/recipes/config, which is a problem we've run into
+    # before: issue #186
+    # RE In git v2.9.0, git submodule--helper resolve-relative-url, was
+    # added to do this, but relative URLs exist as far back as v1.8.3
+    # RE Actually, it seems the behavior of
+    #   git submodule--helper resolve-relative-url
+    # is less sophisticated than I expected (basically just a norm_path if
+    # the host & rpath of the URL could be extracted easily. While
+    # parser.bsh:parse_url exists, it doesn't handle the various URL formats
+    # supported by git: e.g., ssh://git@, git@, etc.)
+    ${GIT} init 1>/dev/null
+    ${GIT} config remote.origin.url "${remote_url}"
+    uwecho "[submodule \"submod\"]
+              path = submod
+              url = ${gitmodules_url}" > .gitmodules
 
-    # Get the default remote of current branch
-    # based on https://github.com/git/git/blob/v2.16.0/git-parse-remote.sh#L9
-    local curr_branch
-    local curr_branch_rv=0
-    curr_branch=$(${GIT} symbolic-ref -q HEAD) || curr_branch_rv=$?
-    local remote_name
-    if [ "${curr_branch_rv}" -eq 0 ]; then
-      curr_branch="${curr_branch#refs/heads/}"
-      remote_name="$(${GIT} config --get "branch.$curr_branch.remote")"
-    else
-      remote_name="origin"
-    fi
+    # from https://stackoverflow.com/a/37378302
+    ${GIT} update-index --add --cacheinfo 160000 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa submod 1>/dev/null
+    ${GIT} submodule init submod 2>/dev/null
 
-    local remote_url="$(${GIT} config remote.${remote_name}.url)"
+    submodule_url="${up_path}$(${GIT} config submodule.submod.url)"
+    echo "${submodule_url}"
+  popd 1>/dev/null
+}
 
-    # Work in an automatically deleting temporary directory
-    local temp_repo
-    make_temp_path temp_repo -d
-    pushd "${temp_repo}" 1>/dev/null
-      # Fake out a git repo and submodule. I need to know the URL tracked by
-      # the .gitmodules file (because that is what is used when cloning the
-      # repo). However, I can't use git config -f .gitmodules because the
-      # path can (annoyingly) be a relative URL (either to a web address or
-      # filesystem path) and I can't figure out any other way to expand it
-      # other then running git submodule sync (or init if not already).
-      # However, this will also "synchronize the submodules' remote URL
-      # configuration setting to the value specified in .gitmodules". That is
-      # to say, it updates the value in .git/config as well as the value in
-      # .git/modules/docker/recipes/config, which is a problem we've run into
-      # before: issue #186
-      # RE In git v2.9.0, git submodule--helper resolve-relative-url, was
-      # added to do this, but relative URLs exist as far back as v1.8.3
-      # RE Actually, it seems the behavior of
-      #   git submodule--helper resolve-relative-url
-      # is less sophisticated than I expected (basically just a norm_path if
-      # the host & rpath of the URL could be extracted easily. While
-      # parser.bsh:parse_url exists, it doesn't handle the various URL formats
-      # supported by git; e.g., ssh://git@, git@, etc.)
-      ${GIT} init 1>/dev/null
-      ${GIT} config remote.origin.url "${remote_url}"
-      uwecho "[submodule \"submod\"]
-                path = submod
-                url = ${gitmodules_url}" > .gitmodules
-
-      # from https://stackoverflow.com/a/37378302
-      ${GIT} update-index --add --cacheinfo 160000 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa submod 1>/dev/null
-      ${GIT} submodule init submod 1>/dev/null
-
-      submodule_url="${up_path}$(${GIT} config submodule.submod.url)"
-      echo "${submodule_url}"
-    popd 1>/dev/null
-  }
-fi
-
-# Test each submodule to see if the SHA tracked by its parent repository has
-# been pushed to the remote URL tracked by the parent repository.
+#**
+# .. function:: git_push_check_recursive_submodules
 #
-# NOTE Creates the just_upstream remote just like, and using the same procedure
-# as, just_git_functions.bsh:safe_git_submodule_update
+# Ensure all submodules have pushed the necessary changes to their public repo
+#
+# Check each submodule (recursively) to see if the SHA tracked by its parent repository has been pushed to the URL tracked by the parent repository (per its .gitmodules file).
+#
+# :Arguments: ``1`` - The top-level repository remote-name. Default: origin
+# :Parameters: - [``JUST_GIT_UPSTREAM``] - The submodule remote-name. When updating the remote URL, use this remote. Default: ``just_upstream``
+#
+# :Output: Return 0 if, for each submodule (recursively), the changes tracked by the parent repository have been made public; otherwise, return 1
+#
+# .. note::
+#
+#   Creates the just_upstream remote just like, and using the same procedure as, :func:`just_git_functions.bsh safe_git_submodule_update`; however, importantly, it does not try to update the submodule to the expected SHA.
+#
+# .. note::
+#
+#   C.f. ``git push --recurse-submodules=check`` (available in git 1.8.0) will check for unpushed commits in a submodule for its current committed state in the parent project. However, this only seems to work if it is used with a set of outgoing commits that contains a change to a submodule. And, despite its name, it does not seem to recurse into submodules.
+#**
+
+# REVIEW After all of this, it might have been better to refactor
+# just_git_functions.bsh:safe_git_submodule_update to sync and then update
 function git_push_check_recursive_submodules()
 {
   local remote_name="${1-origin}"
+
+  local JUST_GIT_UPSTREAM="${JUST_GIT_UPSTREAM-just_upstream}"
 
   local OLD_IFS="${IFS}"
   IFS=$'\n'
@@ -801,79 +795,70 @@ function git_push_check_recursive_submodules()
   #local tracked_shas=($(${GIT} submodule foreach --quiet 'echo "${prefix-"${displaypath}"}" ${sha1}'))
   IFS="${OLD_IFS}"
 
-  if [ -z "${unpushed_tracked_commit+x}" ]; then
+  if [ -z "${is_tracked_change_private+x}" ]; then
     local recursive_index=0 # HACKY
-    local unpushed_tracked_commit=0
+    local is_tracked_change_private=0
   else
     local recursive_index=$((recursive_index+1))
   fi
 
-  for sm_key in ${submodule_keys[@]+"${submodule_keys[@]}"}; do
-    local sm_path="$(${GIT} config -f .gitmodules ${sm_key}.path)"
+  local sm_key
+  for sm_key in ${submodule_keys+"${submodule_keys[@]}"}; do
+    local sm_path="$(${GIT} config -f .gitmodules "${sm_key}".path)"
     local sm_name="${sm_key#submodule.}"
     # Remove trailing slash
     sm_path="${sm_path%/}"
     local tracked_sha="$(${GIT} submodule status --cached "${sm_path}" | cut -c2- | awk '{print $1}')"
     local submodule_url="$(${GIT} config -f "${PWD}"/.gitmodules "${sm_key}".url)"
     # URLs/paths relative to the CWD must either start with ./ or ../
-    # according to git. This is how git:v2.16.0:git-submodule.sh checks for
-    # this
+    # according to git. This is how git-submodule.sh checks for this:
+    # https://github.com/git/git/blob/v2.16.0/git-submodule.sh#L1059
     if [[ "${submodule_url}" == "./"* ]] || [[ "${submodule_url}" == "../"* ]]; then
-      # Ugh; all this work to to get the submodule's URL resolved without
-      # actually running sync (which modifies the repo), and here I am
-      # modifying the repo
-      # ALTERNATIVELY The other version of submodule-helper-resolve-relative-url
-      # could support a remote name
-      # ALTERNATIVELY Just use origin and fixup the submodule_url after
-      if [ "${recursive_index}" -eq 0 ] && [ "${remote_name}" != "origin" ]; then
-        local origin_url="$(${GIT} config remote.origin.url)"
-        local desired_url="$(${GIT} config remote."${remote_name}".url)"
-        ${GIT} remote set-url "${remote_name}" "${desired_url}" "${origin_url}"
-      fi
-
-      # from https://github.com/git/git/blob/v2.16.0/git-submodule.sh#L1060
+      # based on https://github.com/git/git/blob/v2.16.0/git-submodule.sh#L1060
       # rewrite foo/bar as ../.. to find path from
       # submodule work tree to superproject work tree
-      up_path="$(printf '%s\n' "$sm_path" | sed "s/[^/][^/]*/../g")"
+      local up_path="$(printf '%s\n' "$sm_path" | sed "s/[^/][^/]*/../g")"
       # guarantee a trailing /
       up_path=${up_path%/}/
+      local remote_url="$(${GIT} config remote."${remote_name}".url)"
       # path from submodule work tree to submodule origin repo
-      sub_origin_url="$(submodule-helper-resolve-relative-url "${submodule_url}" "${up_path}")"
-      submodule_url="${sub_origin_url}"
+      sub_origin_url="$(submodule-helper-relative-url "${remote_url}" "${submodule_url}" "${up_path}")"
+      # path from superproject work tree to submodule origin repo
+      #super_config_url=$(submodule-helper-relative-url "${remote_url}" "${submodule_url}")
 
-      # Reset the origin's URL to its original value
-      if [ "${recursive_index}" -eq 0 ] && [ "${remote_name}" != "origin" ]; then
-        ${GIT} remote set-url "${remote_name}" "${origin_url}" "${desired_url}"
-      fi
+      # No need to run git config submodule."${sm_name}".url "${super_config_url}"
+
+      submodule_url="${sub_origin_url}"
     fi
 
     pushd "${sm_path}" &>/dev/null
       # See just_git_functions.bsh:safe_git_submodule_update:
       # This is my equivalent to "git submodule sync". It uses a specific remote
       # that it not one of the defaults to handle issue #186
-      ${GIT} remote add "${JUST_GIT_UPSTREAM-just_upstream}" "${submodule_url}" &> /dev/null || \
-        ${GIT} remote set-url "${JUST_GIT_UPSTREAM-just_upstream}" "${submodule_url}"
+      ${GIT} remote add "${JUST_GIT_UPSTREAM}" "${submodule_url}" &> /dev/null || \
+        ${GIT} remote set-url "${JUST_GIT_UPSTREAM}" "${submodule_url}"
 
-      ${GIT} fetch "${JUST_GIT_UPSTREAM-just_upstream}"
+      ${GIT} fetch "${JUST_GIT_UPSTREAM}"
 
       # git branch -r --contains SHA will show a list of remote/branch refs
       # that contain a SHA. If no remote/branch refs are returned, this means
       # the commit has not been pushed
-      if [ "$(${GIT} branch -r --contains "${tracked_sha}" | grep "^  ${JUST_GIT_UPSTREAM-just_upstream}")" = "" ]; then
+      if [ "$(${GIT} branch -r --contains "${tracked_sha}" | grep "^  ${JUST_GIT_UPSTREAM}")" = "" ]; then
         echo "WARNING The commit tracked by the parent repository of the"
         echo "submodule, '${sm_name}', has not been pushed to the"
         echo "remote URL tracked by the parent repository:"
         echo "  ${submodule_url}"
         echo
-        unpushed_tracked_commit=1
+        is_tracked_change_private=1
       fi
 
-      git_push_check_recursive_submodules
+      # Depth-first traversal
+      git_push_check_recursive_submodules "${JUST_GIT_UPSTREAM}"
     popd &>/dev/null
   done
 
   if [ "${recursive_index}" -eq 0 ]; then
-    return ${unpushed_tracked_commit}
+    return ${is_tracked_change_private}
   fi
 }
 
