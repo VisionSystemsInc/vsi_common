@@ -5,6 +5,8 @@ if [[ $- != *i* ]]; then
   source_once &> /dev/null && return 0
 fi
 
+source "${VSI_COMMON_DIR}/linux/compat.bsh"
+
 #*# linux/elements
 
 #**
@@ -48,7 +50,7 @@ source "${VSI_COMMON_DIR}/linux/isin"
 #   # Is like executing
 #   # my_array_name=(11 "2 2" 33)
 #**
-if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "43" ]; then
+if [ "${bash_feature_declare_name_reffing}" = "0" ]; then
   function dynamic_set_a()
   {
     # This way the user may use the names x
@@ -94,7 +96,7 @@ fi
 #    # Is like executing
 #    # my_array_name='11 "2 2" 33'
 #**
-if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "43" ]; then
+if [ "${bash_feature_declare_name_reffing}" = "0" ]; then
   function dynamic_set()
   {
     # This way the user may use the names x
@@ -123,7 +125,7 @@ fi
 # .. note::
 #   Still uses eval on older versions of bash, but makes sure the variable name appears valid
 #**
-if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "43" ]; then
+if [ "${bash_feature_declare_name_reffing}" = "0" ]; then
   function clear_a()
   {
     if [ "${1}" != "x" ]; then
@@ -592,14 +594,14 @@ function join_a_out()
 #**
 function is_array()
 {
-  if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "44" ]; then
+  if [ "${bash_feature_parameter_transformation}" = "0" ]; then
     # Yes, this works with namereffing too, without having to iterate!
     if [[ ${!1@a} = *${__is_a_type-a}* ]]; then
       return 0
     fi
   fi
 
-  # Still need to use the compatible method in bash 4.4 or newer, because it
+  # Still need to use the compatible method in bash 4.4 or newer because it
   # does not work on "declared but unset" arrays
   local __is_a_signature="$(declare -p "${1}" 2>/dev/null)"
   local __is_a_name="${1}"
@@ -629,7 +631,7 @@ function is_array()
   # In bash 4.3, do one more check of declare -p looking for the array
   # declaration
 
-  if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" = "43" ]; then
+  if [ "${bash_bug_declare_fails_local_declared_unset_variable}" = "0" ]; then
     # The newline has to be literal in glibc bash. Alpine bash allows "\n", but
     # the rest do not
     regex=$'(^|\n)declare -[[:alpha:]]*'"${__is_a_type-a}"'[[:alpha:]]* '"${__is_a_name}='\\("
@@ -844,7 +846,7 @@ function _subtract_array()
 #
 # Converts an array to a set of variables, starting with the prefix ``${2}_`` numbered from 1 to N in sequential order, even if there are holes in the array.
 #**
-if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "43" ]; then
+if [ "${bash_feature_declare_name_reffing}" = "0" ]; then
   function array_to_variables()
   {
     # Handle name collision
@@ -1039,7 +1041,7 @@ function deserialize_array()
       unset "${1}"
     fi
     if ! is_associative_array "${1}"; then
-      if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge 42 ]; then
+      if [ "${bash_feature_declare_global}" = "0" ]; then
         unset "${1}" # Prevent local shadowing
         declare -gA "${1}=()"
       else
@@ -1052,7 +1054,7 @@ function deserialize_array()
     return 2
   fi
 
-  if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "43" ]; then
+  if [ "${bash_feature_declare_name_reffing}" = "0" ]; then
     if [ "${1}" != "array" ]; then
       local -n array="${1}"
     fi
@@ -1074,7 +1076,7 @@ function deserialize_array()
       __deserialize_array_length="${__deserialize_array_length%% *}"
       __deserialize_array_str_index+=${#__deserialize_array_length}+1
 
-      if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "43" ]; then
+      if [ "${bash_feature_declare_name_reffing}" = "0" ]; then
         array["${__deserialize_array_array_index}"]="${2:__deserialize_array_str_index:__deserialize_array_length}"
       else
         # 60x Faster, but it's eval :(
@@ -1101,7 +1103,7 @@ function deserialize_array()
       __deserialize_array_length="${__deserialize_array_length%% *}"
       __deserialize_array_str_index+=${#__deserialize_array_length}+1
 
-      if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "43" ]; then
+      if [ "${bash_feature_declare_name_reffing}" = "0" ]; then
         array["${__deserialize_array_array_index}"]="${2:__deserialize_array_str_index:__deserialize_array_length}"
       else
         # 60x Faster, but it's eval :(

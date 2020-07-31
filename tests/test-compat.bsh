@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 
-
 if [ -z ${VSI_COMMON_DIR+set} ]; then
   VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 fi
@@ -62,7 +61,7 @@ begin_test "Date flag"
 (
   setup_test
 
-  if [ "${date_supports_nanoseconds}" = "0" ]; then
+  if [ "${date_feature_nanoseconds}" = "0" ]; then
     assert_regex_eq "$(date +%N)" '^[0-9]{9}$'
   else
     not assert_regex_eq "$(date +%N)" '^[0-9]{9}$'
@@ -74,58 +73,121 @@ begin_test "Bash flag"
 (
   setup_test
 
-  x=(foo bar)
-  assert_str_eq "$(declare -p x)" "declare -a x=${bash_declare_array_quote}([0]=\"foo\" [1]=\"bar\")${bash_declare_array_quote}"
+  x1=(foo bar)
+  assert_str_eq "$(declare -p x1)" "declare -a x1=${bash_declare_array_quote}([0]=\"foo\" [1]=\"bar\")${bash_declare_array_quote}"
 
-  if [ "${bash_variable_parameter_transformation}" = "0" ]; then
+  if [ "${bash_feature_parameter_transformation}" = "0" ]; then
     assert_regex_eq "${BASH_VERSINFO@a}" '^[ar]*$'
   fi
 
-  if [ "${bash_variable_name_reffing}" = "0" ]; then
-    declare -n y=x
+  if [ "${bash_feature_declare_name_reffing}" = "0" ]; then
+    declare -n y2=x1
   else
-    not declare -n y=x
+    not declare -n y2=x1
   fi
 
-  z=(11 22)
-  if [ "${bash_printf_array_assignment}" = "0" ]; then
-    printf -v z[2] '%s' 33
-    assert_array_values z 11 22 33
+  z3=(11 22)
+  if [ "${bash_feature_printf_array_assignment}" = "0" ]; then
+    printf -v z3[2] '%s' 33
+    assert_array_values z3 11 22 33
   else
-    not printf -v z[2] '%s' 33
+    not printf -v z3[2] '%s' 33
   fi
 
-  if [ "${bash_associative_array}" = "0" ]; then
-    declare -A foo
-    foo[var]=15
+  if [ "${bash_feature_associative_array}" = "0" ]; then
+    declare -A foo4
+    foo4[var]=15
   else
-    not declare -A foo
+    not declare -A foo4
   fi
 
-  d=$'foo\tbar'
-  re='\t'
+  d5=$'foo\tbar'
+  re5='\t'
   if [ "${bash_regex_special_characters_non_literal}" = "0" ]; then
-    assert_regex_eq "${d}" "${re}"
+    assert_regex_eq "${d5}" "${re5}"
   else
-    not assert_regex_eq "${d}" "${re}"
+    not assert_regex_eq "${d5}" "${re5}"
   fi
 
-  arr=(11 22 33 44)
-  ans1=(33 44)
-  ans2=("33 44")
+  arr6=(11 22 33 44)
+  ans1_6=(33 44)
+  ans2_6=("33 44")
   OLD_IFS="${IFS}"
   IFS=x
-  arr2=("${arr[@]:2}")
+  arr2_6=("${arr6[@]:2}")
   if [ "${bash_bug_ifs_array_slice_expansion}" = "0" ]; then
-    assert_array_eq arr2 ans2
+    assert_array_eq arr2_6 ans2_6
   else
-    assert_array_eq arr2 ans1
+    assert_array_eq arr2_6 ans1_6
   fi
   IFS="${OLD_IFS}"
+
+  declare -a some_var7
+  if [ "${bash_bug_declare_fails_local_declared_unset_variable}" = "0" ]; then
+    not declare -p some_var7
+  else
+    declare -p some_var7
+  fi
+
+  if [ "${bash_feature_declare_global}" = "0" ]; then
+    declare -g foo8
+  else
+    not declare -g foo8
+  fi
+
+  if [ "${bash_feature_allocate_file_descriptor}" = "0" ]; then
+    (exec {x9}>&2) 2>/dev/null
+  else
+    not_s '(exec {x}>&1) 1>/dev/null'
+  fi
+
+  function foo_10()
+  {
+    :
+  }
+  ans_10='foo_10 *\(\) *
+\{ *
+ *: *
+\} *'
+
+  if [ "${bash_feature_declare_print_function}" = "0" ]; then
+    declare -pf foo_10
+    assert_regex_eq "$(declare -pf foo_10)" "${ans_10}"
+  else
+    not declare -pf foo_10
+  fi
+
+  export x_11=12
+  function foo_11()
+  {
+    local x_11
+    declare -p x_11 || :
+    compgen -A export x_11
+    bash -c "declare -p x_11 || :"
+  }
+
+  nl=$'\n'
+  ans_11=
+  if [ "${bash_bug_declare_fails_local_declared_unset_variable}" = "1" ]; then
+    ans_11="declare -x x_11${bash_declared_unset_value}${nl}"
+  fi
+  ans_11+=$'x_11'
+  if [ "${bash_bug_local_shadow_exported_variable}" = "1" ]; then
+    ans_11+="${nl}declare -x x_11=\"12\""
+  fi
+
+  # This bug won't manifest when the function is directly called via $(), use a file proxy
+  assert_str_eq "$("${TESTLIB_DIR}/aux_compat_1.bsh")" "${ans_11}"
+
+  if [ "${bash_bug_substitute_empty_funcname}" = "0" ]; then
+    [ " ""${FUNCNAME[@]+FOO}" = " FOO" ]
+  else
+    [ " ""${FUNCNAME[@]+FOO}" != " FOO" ]
+  fi
 )
 end_test
 
-[ "${bash_variable_parameter_transformation}" = "1" ] || skip_next_test
+[ "${bash_feature_parameter_transformation}" = "1" ] || skip_next_test
 begin_required_fail_test "Fail bash parameter transformation"
 (
   setup_test
