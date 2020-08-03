@@ -168,6 +168,13 @@ function git_tracking_branches()
   #
   # git remote show origin actually queries the remote; however, it doesn't
   # provide the same level of tracking detail
+  #
+  # Finally,
+  #   remote="$(git config --get branch."${branch}".remote)" and
+  #   tracking="$(git config --get branch."${branch}".merge | cut -d'/' -f3-)"
+  # can be combined to provide the local-tracking branch, and then
+  # git show-ref refs/remotes/$"{remote}/${tracking}"
+  # can be used to see if the remote-tracking branch has been pruned
 
   just_git_tracking_branches=()
   just_git_remote_tracking_branches=()
@@ -342,7 +349,7 @@ function toplevel()
 #
 # Get what git refers to as the displaypath of the submodule: the relative path from the current working directory to the root of the containing repository and then to each submodule. This path is defined by the git-specified environment variable displaypath (or prefix depending on git version).
 #
-# :Output: *stdout* - ; e.g., docker/recipes
+# :Output: *stdout* - The displaypath to each submodule (recursively); e.g., docker/recipes
 #
 # .. note::
 #
@@ -350,7 +357,7 @@ function toplevel()
 #
 #     ``git config submodule.docker/recipes.path``
 #
-#   which looks up the (sm_)path using the submodule's name (which here is the same as the sm_path...) in the parent repository's git config file (if set), and
+#   which looks up the (sm_)path using the submodule's name (which here is the same as the sm_path...although that does not have to be the case) in the parent repository's git config file (if set), and
 #
 #     ``git config -f .gitmodules submodule.docker/recipes.path``
 #
@@ -358,7 +365,7 @@ function toplevel()
 #
 # If path is set, ``git submodule sync`` will sync up these two sources-of-truth using the default remote of the current branch, if set; otherwise origin.
 #
-# Note: The submodule's name does not have to be the same as its path (sm_path). Admittedly though, by themselves, these are not very useful; :func:`git_mirror get_submodule_names` uses ``git config --name-only --get-regexp '^submodule\..*\.url$' | sed 's|.url$||'`` to first query the submodule names and then lookup their paths.
+# Admittedly, by themselves, these commands not very useful. :func:`git_mirror get_submodule_names` uses ``git config --name-only --get-regexp '^submodule\..*\.url$' | sed 's|.url$||'`` to first query the submodule names and then lookup their paths.
 #
 # .. note::
 #
@@ -380,7 +387,7 @@ function get_submodule_paths_recursively()
   # in the Justfile.
   # displaypath is built-up from sm_path by ``git submodule foreach`` as it
   # iterates through the submodules using ``git submodule--helper list``, which
-  # queries info from .git/index:
+  # queries info from .git/index; see
   # https://github.com/git/git/blob/v2.16.0/git-submodule.sh#L304
   # Alternatively, add JUST_PROJECT_DIR to just or use :func:`toplevel`
   # Similarly, passing 'echo "${toplevel}/${sm_path}"' as the sh command to
@@ -396,12 +403,12 @@ function get_submodule_paths_recursively()
 #**
 # .. function:: get_submodule_urls_recursively
 #
-# Get all submodule URL
+# Get all submodule URLs
 #
 # Get the (first) URL for each submodule (recursively) from its .git/**/config file (e.g., .git/modules/docker/recipes/config) for the specified remote (origin by default). Note: Since git 1.8, a remote can have multiple associated URLs (and pushurls).
 #
-# :Arguments: [``$1``] - The name of a remote. Note: this same remote must be set in all submodules. Default: origin
-# :Output: *stdout* - The relative URL of each submodule (recursively); e.g., https://github.com/VisionSystemsInc/docker_recipes.git
+# :Arguments: [``$1``] - The name of a remote. Note: this same remote must exist in all submodules. Default: origin
+# :Output: *stdout* - The URL of each submodule (recursively); e.g., https://github.com/VisionSystemsInc/docker_recipes.git
 #
 # .. note::
 #
@@ -718,16 +725,19 @@ function add_import-repo_just_project()
 
 function print_git_airgap_submodule_update()
 {
-  # Reconfigure and update a submodule
-  #
-  # ARGUMENTS: $1 - A relative path (from the top-level repo) to a submodule
-  # PARAMETERS: repo_paths - The (relative) path from the top-level repository
-  #                          to each submodule (recursively)
-  #             repo_urls - The respective url for each submodule (recursively)
-  #
   # NOTE Do not use vsi_common functionality in this function! It is saved to
   # repo_map.env and sourced in setup.env
-  uwecho 'function git_airgap_submodule_update()
+  uwecho '#**
+          # .. function:: git_airgap_submodule_update
+          #
+          # Reconfigure and update a submodule
+          #
+          # :Arguments: ``$1`` - A relative path (from the top-level repo) to a submodule
+          # :Parameters: ``repo_paths`` - The (relative) path from the top-level repository
+          #                          to each submodule (recursively)
+          #              ``repo_urls`` - The respective url for each submodule (recursively)
+          #**
+          function git_airgap_submodule_update()
           (
             set -eu # fail fast
 
