@@ -44,6 +44,7 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 # Note however, that a project that uses vsi_common as a submodule must add support in the setup.env file to initialize and update the vsi_common submodule before this target can be called.
 #
 # .. seealso::
+#
 #   :file:`git_mirror`: :func:`git_mirror_main`, :func:`git_push_main`, and :func:`git_clone_main`
 #**
 
@@ -64,6 +65,7 @@ source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
 # All :func:`relocate_git_defaultify` targets will be skipped if the value of :envvar:`GIT` is not found or empty.
 #
 # .. note::
+#
 #   When using the GIT env variable in this file, do not surround it with quotes as you normally would. Although this prevents using a path to ``git`` with a space in it, in exchange, it may be possible (eventually) to enable a dry-run-ish capability if GIT is set to ``echo git``.
 #**
 
@@ -92,8 +94,8 @@ source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
 # List all commits on branches that have not been pushed to a remote. This is a set operation: it lists all the commits from a branch in the DAG except those reachable by a remote-tracking branch. It does not require an *associated* remote-tracking branch
 #
 # REVIEW What order should these go in
-# :Arguments: - ``1`` - A branch's name to filter by; e.g., master. If unset, then don't filter
-#             - ``2`` - A name of a remote to filter by; e.g., origin. If unset, then don't filter
+# :Arguments: - [``$1``] - A branch's name to filter by; e.g., master. If unset, then don't filter
+#             - [``$2``] - A name of a remote to filter by; e.g., origin. If unset, then don't filter
 #
 # :Output: - ``*stdout*`` - Print all unpushed commits for tracking branches to stdout
 #**
@@ -114,13 +116,14 @@ function log_unpushed_commits()
 #
 # Find remote- and corresponding local-tracking branches
 #
-# :Arguments: - ``1`` - A name of a remote to filter by; e.g., origin. If unset, then don't filter
+# :Arguments: - [``$1``] - A name of a remote to filter by; e.g., origin. If unset, then don't filter
 #
 # :Output: - ``just_git_tracking_branches`` - An array of local-tracking branch names
 #          - ``just_git_remote_tracking_branches`` - A corresponding array of remote-tracking branch names
 #
 # .. note::
-#    - A branch that you create locally and then push to a remote is not configured as a local-tracking branch by default. You must use the -u flag with ``git push`` or ``git branch``.
+#
+#   - A branch that you create locally and then push to a remote is not configured as a local-tracking branch by default. You must use the -u flag with ``git push`` or ``git branch``.
 #   - A branch cannot track multiple remotes.
 #   - Requires git >= 1.9.0
 #**
@@ -182,12 +185,14 @@ function git_tracking_branches()
 # List all unpushed commits for a tracking branches to stdout
 #
 # REVIEW What order should these go in
-# :Arguments: - ``1`` - A local-tracking branch's name to filter by; e.g., master. If unset, then don't filter by branch name
-#             - ``2`` - A name of a remote to filter by; e.g., origin. If unset, then don't filter
+# :Arguments: - [``$1``] - A local-tracking branch's name to filter by; e.g., master. If unset, then don't filter by branch name
+#             - [``$2``] - A name of a remote to filter by; e.g., origin. If unset, then don't filter
 #
 # :Output: - ``*stdout*`` - Print all unpushed commits for tracking branches to stdout
 #
-# .. note:: A branch cannot track multiple remotes.
+# .. note::
+#
+#   A branch cannot track multiple remotes.
 #**
 
 function log_outgoing_commits()
@@ -226,11 +231,12 @@ function log_outgoing_commits()
 #
 # :Output: - ``*stdout*`` - Each submodule's differences in terms of commits
 #
-# .. seealso:: https://git-scm.com/docs/git-diff#Documentation/git-diff.txt---submoduleltformatgt
+# .. seealso::
 #
-# TODO Support iterating through all submodules
+#   https://git-scm.com/docs/git-diff#Documentation/git-diff.txt---submoduleltformatgt
 #**
 
+# TODO Support iterating through all submodules
 function submodule_summary()
 {
   local OLD_IFS="${IFS}"
@@ -248,10 +254,11 @@ function submodule_summary()
 #
 # Query the git repository's remotes; if the URL of the remote is specified using the the https:// protocol, convert it to the ssh transfer protocol (git@..) to make pushing changes to the remote server easier. Assume a very basic url format: https://git-server.com/co/project.git without port, query, or fragment sections. Warn if these exist
 #
-# :Arguments: - ``1`` - A name of a remote to filter by; e.g., origin. If unset, then don't filter
+# :Arguments: - [``$1``] - A name of a remote to filter by; e.g., origin. If unset, then don't filter
 #
 # .. note::
-#  This does not change the submodule's tracked URL, i.e., the URL in the .gitmodules file, only the url in .git/config
+#
+#   This does not change the submodule's tracked URL, i.e., the URL in the .gitmodules file, only the url in .git/config
 #**
 
 function make_remote_urls_pushable()
@@ -328,25 +335,40 @@ function toplevel()
    real_path "$(${GIT} rev-parse --git-dir)" | awk -F '/.git' '{print $1}'
 }
 
-# Get the (relative) path from the top-level repository to the submodule
+#**
+# .. function:: get_submodule_paths_recursively
 #
-# NOTE The submodules must have been checked out recursively (which is obviously
-# not the case in a bare/mirror repo)
+# Get the displaypath to each submodule
 #
-# REVIEW I'm not sure how displaypath is set (git submodule foreach refers
-# to both the .gitmodules file and the .git file in the submodule, but the
-# actual list of submodule paths is enumerated from somewhere else; perhaps
-# .git/index)
-# RE Alternatively, the path for the submodule can be queried with git config
-# (although, by itself, not recursively):
-#   git config submodule.docker/recipes.path
-# which reads the path in the config file (if set), and
-#   git config -f .gitmodules submodule.docker/recipes.path
-# which reads what is in the .gitmodules file
-# RE if path is set, git submodule sync will sync up these two sources-of-truth
-# RE cf. just_git_functions:submodule-helper-list and
-# git_mirror:get_submodule_names; although these are not recursive, they both
-# are used to recurse manually through all the submodules
+# Get what git refers to as the displaypath of the submodule: the relative path from the current working directory to the root of the containing repository and then to each submodule. This path is defined by the git-specified environment variable displaypath (or prefix depending on git version).
+#
+# :Output: *stdout* - ; e.g., docker/recipes
+#
+# .. note::
+#
+#   Alternatively, the path (aka sm_path) for the submodule can be queried with ``git config`` (although, by itself, not recursively):
+#
+#     ``git config submodule.docker/recipes.path``
+#
+#   which looks up the (sm_)path using the submodule's name (which here is the same as the sm_path...) in the parent repository's git config file (if set), and
+#
+#     ``git config -f .gitmodules submodule.docker/recipes.path``
+#
+#   which reads what is in the parent repository's .gitmodules file.
+#
+# If path is set, ``git submodule sync`` will sync up these two sources-of-truth using the default remote of the current branch, if set; otherwise origin.
+#
+# Note: The submodule's name does not have to be the same as its path (sm_path). Admittedly though, by themselves, these are not very useful; :func:`git_mirror get_submodule_names` uses ``git config --name-only --get-regexp '^submodule\..*\.url$' | sed 's|.url$||'`` to first query the submodule names and then lookup their paths.
+#
+# .. note::
+#
+#   The submodules must have been checked out recursively (which is obviously not the case in a bare/mirror repo)
+#
+# .. seealso::
+#
+#   :func:`just_git_functions submodule-helper-list` and :func:`git_mirror get_submodule_names`; although these are not recursive, they both are used to recurse manually through all the submodules
+#**
+
 function get_submodule_paths_recursively()
 {
   local OLD_IFS="${IFS}"
@@ -356,6 +378,10 @@ function get_submodule_paths_recursively()
   # NOTE prefix/displaypath only provides the expected path if this command is
   # run from the root of the top-level repository. Fortunately, that is the case
   # in the Justfile.
+  # displaypath is built-up from sm_path by ``git submodule foreach`` as it
+  # iterates through the submodules using ``git submodule--helper list``, which
+  # queries info from .git/index:
+  # https://github.com/git/git/blob/v2.16.0/git-submodule.sh#L304
   # Alternatively, add JUST_PROJECT_DIR to just or use :func:`toplevel`
   # Similarly, passing 'echo "${toplevel}/${sm_path}"' as the sh command to
   # git submodule foreach will print the absolute path of all the submodules
@@ -367,28 +393,45 @@ function get_submodule_paths_recursively()
   IFS="${OLD_IFS}"
 }
 
-# Get all submodule urls
+#**
+# .. function:: get_submodule_urls_recursively
 #
-# NOTE The submodules must have been checked out recursively (which is obviously
-# not the case in a bare/mirror repo)
+# Get all submodule URL
 #
-# REVIEW This gets the url for the submodule from its .git/**/config file, e.g.,
-# .git/modules/docker/recipes/config.
-# RE Alternatively, the url for the submodule can be queried with git config
-# (although, by itself, not recursively)
-#   git config submodule.docker/recipes.url
-# which reads the url in the config file, and
-#   git config -f .gitmodules submodule.docker/recipes.url
-# which reads what is in the .gitmodules file
-# RE git submodule sync will sync up these two sources-of-truth
+# Get the (first) URL for each submodule (recursively) from its .git/**/config file (e.g., .git/modules/docker/recipes/config) for the specified remote (origin by default). Note: Since git 1.8, a remote can have multiple associated URLs (and pushurls).
+#
+# :Arguments: [``$1``] - The name of a remote. Note: this same remote must be set in all submodules. Default: origin
+# :Output: *stdout* - The relative URL of each submodule (recursively); e.g., https://github.com/VisionSystemsInc/docker_recipes.git
+#
+# .. note::
+#
+#   Alternatively, the URL for the submodule can be queried with ``git config`` (although, by itself, not recursively):
+#
+#     ``git config submodule.docker/recipes.url``
+#
+#   which looks up the URL in the parent repository's git config file, and
+#
+#     ``git config -f .gitmodules submodule.docker/recipes.url``
+#
+#   which reads what is in the parent repository's .gitmodules file. ``git submodule sync`` will sync up these two sources-of-truth using the default remote of the current branch, if set; otherwise origin.
+#
+# .. note::
+#
+#   The submodules must have been checked out recursively (which is obviously not the case in a bare/mirror repo)
+#**
+
 function get_submodule_urls_recursively()
 {
+  local remote_name="${1-origin}"
+
   # REVIEW Should i unset GIT_DIR?
   ${GIT} submodule foreach --quiet --recursive \
-      "export GIT; bash -euc 'echo \"\$(${GIT} config --get remote.origin.url)\"'"
+      "export GIT; bash -euc 'echo \"\$(${GIT} config --get remote."${remote_name}".url)\"'"
 }
 
 #**
+# .. function:: create_repo_map
+#
 # Create the contents of the repo_map.env file
 #
 # Create the repository mapping such that, once the JUST_GIT_AIRGAP_MIRROR_URL environment variable is defined, it can be sourced by :func:`git_push_main` and :func:`git_clone_main` in :file:`git_mirror`.
@@ -401,23 +444,29 @@ function get_submodule_urls_recursively()
 #
 # .. code-block:: bash
 #
-# The urls are specified with the env variable :envvar:`JUST_GIT_AIRGAP_MIRROR_URL`, which must be set to the mirrored repositories' new location on the air-gapped git server. Delay setting this variable until the archive has been moved to the destination in case the information must be controlled
-# JUST_GIT_AIRGAP_MIRROR_URL=
+#   # The urls are specified with the env variable :envvar:`JUST_GIT_AIRGAP_MIRROR_URL`,
+#   # which must be set to the mirrored repositories' new location on the
+#   # air-gapped git server. Delay setting this variable until the archive has
+#   # been moved to the destination in case the information must be controlled
+#   JUST_GIT_AIRGAP_MIRROR_URL=
 #
-# repo_paths=(
-#   ./
-#   ./docker/recipes
-# )
-# repo_urls=(
-#   "${JUST_GIT_AIRGAP_MIRROR_URL}/vsi_common.git"
-#   "${JUST_GIT_AIRGAP_MIRROR_URL}/recipes.git"
-# )
+#   repo_paths=(
+#     ./
+#     ./docker/recipes
+#   )
+#   repo_urls=(
+#     "${JUST_GIT_AIRGAP_MIRROR_URL}/vsi_common.git"
+#     "${JUST_GIT_AIRGAP_MIRROR_URL}/recipes.git"
+#   )
 #
-# If :envvar:`JUST_GIT_AIRGAP_MIRROR_URL` was set to https://git-server/projectA, for example, these urls would expand to,
-#   https://git-server/projectA/vsi_common.git and
-#   https://git-server/projectA/recipes.git
+#   # If, for example, :envvar:`JUST_GIT_AIRGAP_MIRROR_URL` was set to
+#   # https://git-server/projectA, these urls would expand to:
+#   #   https://git-server/projectA/vsi_common.git and
+#   #   https://git-server/projectA/recipes.git
 #
-# .. note:: The user can override this function if it does not suit her needs
+# .. note::
+#
+#   The user can override this function if it does not suit her needs
 #**
 
 function create_repo_map()
@@ -494,11 +543,17 @@ function create_repo_map()
   print_git_airgap_submodule_update
 }
 
-# Given a repo_map like the one produced by :func:`create_repo_map`, make an
-# orphan commit in the repo (on a branch named __just_git_mirror_info_file by
-# default) to a file named repo_map.env. An intermediate product of this
-# function is a shallow clone of the current repo to a directory called
-# __just_git_clone, which is removed at the end of the function
+#**
+# .. function:: orphan_commit_repo_map
+#
+# Orphan commit the repo_map.env file
+#
+# Given a repo_map like the one produced by :func:`create_repo_map`, make an orphan commit in the repository (on a branch named __just_git_mirror_info_file by default) to a file named repo_map.env. An intermediate product of this function is a shallow clone of the current repo to a directory called __just_git_clone, which is removed at the end of the function.
+#
+# :Arguments: - ``$1`` - The contents of the repo_map.env file; i.e., the file that maps between the submodule's path and its new URL
+#             - [``$2``] - The name of the branch on which to make the orphan commit. Default: __just_git_mirror_info_file
+#**
+
 function orphan_commit_repo_map
 {
   repo_map="${1}"
@@ -553,7 +608,18 @@ function orphan_commit_repo_map
   #${GIT} checkout "${current_branch}" # This could be expensive
 }
 
-# Creates a simple README.md, Justfile, and setup.env in the prep_dir
+#**
+# .. function:: add_import-repo_just_project
+#
+# Create a simple just project in the prep_dir
+#
+# This function creates a simple just project (a README.md, setup.env, and Justfile that includes this plugin) in the air-gapped mirror (the prep_dir) created by the `git_export-repo` just target. This just project can be used to push (aka import) the mirrored repositories to their respective air-gapped git server by using the git_import-repo just target.
+#
+# :Arguments: ``$1`` - The output directory (prep_dir) that caches the mirrored repositories and archive to be transferred
+#
+# :Output: ``${1}/{README.md,setup.env,Justfile}``
+#**
+
 function add_import-repo_just_project()
 {
   # Need the abs path because we change directories when copying vsi_common
@@ -570,7 +636,7 @@ function add_import-repo_just_project()
 
             just:just_git_airgap_repo:git_export-repo
 
-          To push them to their respective air-gapped git servers, simply:
+          To push them to their respective air-gapped git server, simply:
 
           1. Edit repo_map.env to set the required environment variable (or,
              if necessary, update repo_map.env as needed)
@@ -705,8 +771,8 @@ function print_git_airgap_submodule_update()
 # Resolve a submodule's relative URL based on the parent URL. This function works by creating a dummy git repository and submodule and then running ``git submodule init`` (which runs a process similar to ``git submodule sync``), after which, the resolved URL can be queried with ``git config submodule.submod.url``. We do this to avoid modifying the existing repository's git configuration (e.g., ``git config submodule.docker/recipes.url``).
 #
 # :Arguments: * ``$1`` - URL of the parent repository; e.g., ``git config remote.origin.url``
-#             * ``$2`` - A submodule's relative URL to be expanded (can be a relative URL or path); e.g., ``git config -f .gitmodules submodule.docker/recipes.url``
-#             * ``$3`` - Up path: path from the submodule to the parent repository; e.g., ``../../``. Must have a trailing slash
+#             * ``$2`` - A submodule's relative URL---typically from the .gitmodules file; e.g., ``git config -f .gitmodules submodule.docker/recipes.url``
+#             * [``$3``] - Up path: path from the submodule to the parent repository; e.g., ``../../``. Must have a trailing slash
 #
 # :Output: *stdout* - Resolved URL
 #
@@ -766,7 +832,7 @@ function submodule-helper-relative-url()
 #
 # Check each submodule (recursively) to see if the SHA tracked by its parent repository has been pushed to the URL tracked by the parent repository (per its .gitmodules file).
 #
-# :Arguments: ``1`` - The top-level repository remote-name. Default: origin
+# :Arguments: [``$1``] - The top-level repository remote-name. Default: origin
 # :Parameters: - [``JUST_GIT_UPSTREAM``] - The submodule remote-name. When updating the remote URL, use this remote. Default: ``just_upstream``
 #
 # :Output: Return 0 if, for each submodule (recursively), the changes tracked by the parent repository have been made public; otherwise, return 1
@@ -777,7 +843,7 @@ function submodule-helper-relative-url()
 #
 # .. note::
 #
-#   C.f. ``git push --recurse-submodules=check`` (available in git 1.8.0) will check for unpushed commits in a submodule for its current committed state in the parent project. However, this only seems to work if it is used with a set of outgoing commits that contains a change to a submodule. And, despite its name, it does not seem to recurse into submodules.
+#   Cf. ``git push --recurse-submodules=check`` (available since git 1.8.0) will check for unpushed commits in a submodule for its current committed state in the parent project. However, this only seems to work if it is used with a set of outgoing commits that contains a change to a submodule. And, despite its name, it does not seem to recurse into submodules.
 #**
 
 # REVIEW After all of this, it might have been better to refactor
@@ -1365,9 +1431,8 @@ function relocate_git_defaultify()
 
       repo_map="$(cat repo_map.env)"
 
-      # Now that the repo_urls have been expanded, update the repo_map.env file
-      # in the orphan branch so that they are correct going forward; e.g., during
-      # git_clone-airgap-repo
+      # Orphan commit the repo_map.env file so it is available going forward;
+      # e.g., during git_clone-airgap-repo
       pushd "${main_dir}" &>/dev/null
         orphan_commit_repo_map "${repo_map}"
       popd &>/dev/null
