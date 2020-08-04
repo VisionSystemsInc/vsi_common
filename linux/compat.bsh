@@ -4,6 +4,13 @@ if [[ $- != *i* ]]; then
   source_once &> /dev/null && return 0
 fi
 
+# compat should avoid souring other files because it is used everywhere and we'd
+# like to avoid and potential circular source or time delays, without "having" to
+# use circular source or source once.
+
+# This file needs to be unnoticeably fast on Windows, which means no forks,
+# no ``/$() calls, etc...
+
 #*# linux/compat.bsh
 
 #**
@@ -131,13 +138,22 @@ function load_vsi_compat()
   #
   # :Value: * ``0`` - Bash does support parameter transformations (Bash 4.4 or newer)
   #         * ``1`` - Bash does not support parameter transformations
+  #
+  # .. variable:: bash_feature_declare_array_escape_special_characters
+  #
+  # Starting in bash 4.4, ``declare -p`` of an array, will escape special characters such as tab (``\t``) and newline (``\n``)
+  #
+  # :Value: * ``0`` - Declare will escape special characters for arrays
+  #         * ``1`` - Declare uses literal versions of special characters, but still escapes quotes as ``\"``
   #**
   if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "44" ]; then
     bash_declare_array_quote=""
     bash_feature_parameter_transformation=0
+    bash_feature_declare_array_escape_special_characters=0
   else
     bash_declare_array_quote="'"
     bash_feature_parameter_transformation=1
+    bash_feature_declare_array_escape_special_characters=1
   fi
 
   #**
@@ -191,6 +207,16 @@ function load_vsi_compat()
     bash_bug_local_shadow_exported_variable=0
   fi
 
+  # TODO: Cannot reliable replicate this, table for now
+  # .. variable:: bash_strict_posix_functions
+  # Bash 4.2 and older is stricter when it comes to exported functions that are not POSIX compliant, when running with the ``--posix`` flag. Workaround, unexport functions that would cause an issue.
+  # # My notes say 4.2, by unit tests say 5.1?!
+  # if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "51" ]; then
+  #   bash_strict_posix_functions=1
+  # else
+  #   bash_strict_posix_functions=0
+  # fi
+
   #**
   # .. variable:: bash_feature_declare_global
   #
@@ -240,11 +266,55 @@ function load_vsi_compat()
   #
   # :Value: * ``0`` Bash does have associative arrays (4.0 or newer)
   #         * ``1`` Bash does not have associative arrays (3.2)
+  #
+  # .. variable:: bash_feature_bashpid
+  #
+  # Does bash have a ``BASHPID`` variable. This is more accurate than ``$$`` when it comes to subshells.
+  #
+  # :Value: * ``0`` Bash sets ``BASHPID``
+  #         * ``1`` Only ``$$`` is set, see :func:`signal_tools.bash set_bashpid`
+  #
+  # .. variable:: bash_feature_case_modification
+  #
+  # Does bash support ``${x^}/${x^^}/${x,}/${x,,}`` parameter substitution
+  #
+  # :Value: * ``0`` Bash supports case modification
+  #         * ``1`` Bash does not supports case modification
+  #
+  # .. seealso::
+  #    :func:`string_tools.bsh lowercase`, :func:`string_tools.bsh uppercase`
+  #
+  # .. variable:: bash_bug_bash_env_process_substitution
+  #
+  # In bash 3.2, using process substitution for the BASH_ENV env variable does not work as expected. (Perhaps the file is read twice, and since it is a stream, it cannot seek to the beginning.) Work around is to write to a temporary file instead.
+  #
+  # :Value: * ``0`` - ``BASH_ENV`` does not support process substitution
+  #         * ``1`` - ``BASH_ENV`` works normally
   #**
   if [ "${BASH_VERSINFO[0]}" -ge "4" ]; then
     bash_feature_associative_array=0
+    bash_feature_case_modification=0
+    bash_feature_bashpid=0
+    bash_bug_bash_env_process_substitution=1
   else
     bash_feature_associative_array=1
+    bash_feature_case_modification=1
+    bash_feature_bashpid=1
+    bash_bug_bash_env_process_substitution=0
+  fi
+
+  #**
+  # .. variable:: bash_feature_bashpid_read_only
+  #
+  # The ``BASHPID`` variable is only only protected as read only in bash 4. Bash 5 releases this restriction (but does not release the restriction for any other read only variable)
+  #
+  # :Value: * ``0`` ``BASHPID`` is read only
+  #         * ``1`` ``BASHPID`` is not read only
+  #**
+  if [ "${BASH_VERSINFO[0]}" = "4" ]; then
+    bash_feature_bashpid_read_only=0
+  else
+    bash_feature_bashpid_read_only=1
   fi
 
   #**
@@ -297,6 +367,27 @@ function load_vsi_compat()
   #    fi
   #
   #    # How to detect if variable is unset but declared
+  #
+  # .. note::
+  #
+  #    In Bash 3.2, ``declare -p var`` doesn't look the same as ``declare -p``
+  #
+  # Detecting declared unset variables
+  # ----------------------------------
+  # Unfortunately, there is no fool proof way to detect a declared unset variable. The ``${var+set}`` parameter substitution will let you know if a a variable is unset, and using if :var:`bash_bug_declare_fails_local_declared_unset_variable`/:var:`bash_bug_declare_fails_global_declared_unset_variable` is ``1``, then ``declare -p var_name`` will let you know it is declared. If ``0``, then you have to fall back on ``declare -p`` and match the regex ``$'(^|\n)declare -- '"${var_name}${bash_declared_unset_value}"$'(\n|$)'`` to determine if it was declared. Unfortunately, in Bash 4.3 it is possible for another variable to be set and match the regex, and there is no way around this ambiguity. However, it is highly unlikely to happen by accident.
+  #
+  # .. rubric:: Bash 4.3 Example
+  #
+  # .. code-block:: bash
+  #
+  #    $ declare x_15
+  #    $ x_13=$'foo\ndeclare -- x_14\nbar'
+  #    $ declare -p | grep x_15
+  #    declare -- x_15
+  #    $ declare -p | grep x_14
+  #    declare -- x_14
+  #    $ compgen -A variables x_1
+  #    x_13
   #**
 
   local y
@@ -306,10 +397,13 @@ function load_vsi_compat()
     bash_bug_declare_fails_local_declared_unset_variable=0
   fi
 
-  if declare -p bash_bug_declare_fails_global_declared_unset_variable &> /dev/null; then
-    bash_bug_declare_fails_global_declared_unset_variable=1
-  else
-    bash_bug_declare_fails_global_declared_unset_variable=0
+  # Since this is a sensitive test, only have it run once, to try and guarantee the results are in main scope
+  if [ -z "${bash_bug_declare_fails_global_declared_unset_variable+set}" ]; then
+    if declare -p bash_bug_declare_fails_global_declared_unset_variable &> /dev/null; then
+      bash_bug_declare_fails_global_declared_unset_variable=1
+    else
+      bash_bug_declare_fails_global_declared_unset_variable=0
+    fi
   fi
 
   #**
@@ -356,14 +450,17 @@ function load_vsi_compat()
   fi
 }
 
-# Can't do this sanity check on bash 4.3 or 4.4. Oh well
-if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" != "43" ] && [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" != "44" ]; then
-  if [ "0"${FUNCNAME[@]+"${#FUNCNAME[@]}"} -ne 0 ]; then
-    echo "bash_bug_declare_fails_global_declared_unset_variable will not be accurate unless ${BASH_SOURCE[0]} is sourced from global scope" >&2
+# Since this is a sensitive test, only have it run once, to try and guarantee the results are in main scope
+if [ -z "${bash_bug_declare_fails_global_declared_unset_variable+set}" ]; then
+  # Can't do this sanity check on bash 4.3 or 4.4. Oh well (See bash_bug_substitute_empty_funcname)
+  if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" != "43" ] && [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" != "44" ]; then
+    if [ "0"${FUNCNAME[@]+"${#FUNCNAME[@]}"} -ne 0 ]; then
+      echo "WARNING: bash_bug_declare_fails_global_declared_unset_variable will not be accurate unless ${BASH_SOURCE[0]} is sourced from global scope" >&2
+    fi
   fi
-fi
 
-declare bash_bug_declare_fails_global_declared_unset_variable
+  declare bash_bug_declare_fails_global_declared_unset_variable
+fi
 
 # The purpose of this file is to set all these flag. Make it a function to help
 # encapsulate in new_just
