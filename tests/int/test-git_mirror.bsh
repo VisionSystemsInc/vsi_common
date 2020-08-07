@@ -3,6 +3,7 @@
 . "$(dirname "${BASH_SOURCE[0]}")/../testlib.bsh"
 VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.."; pwd)"
 
+. "${VSI_COMMON_DIR}/linux/requirements.bsh"
 . "${VSI_COMMON_DIR}/linux/git_mirror"
 
 # These tests chain together, so no point in continuing after one breaks
@@ -81,6 +82,13 @@ git -c lfs.customtransfer.lfs-folder.path="'"${TRASHDIR}/lfs-folderstore-${os}/l
   mkdir -p "${MIRROR_DIR}/lfs/lfs/objects"
 
   CLONE_DIR="${TRASHDIR}/clone"
+
+  ARCHIVE_DIR="${TRASHDIR}/archive"
+  mkdir -p "${ARCHIVE_DIR}"
+  pushd "${ARCHIVE_DIR}" &> /dev/null
+    mkdir subdir
+    touch readme archive.tgz subdir/archive.tgz subdir/readme1
+  popd &> /dev/null
 }
 
 begin_test "Part 1 - Setup test repo"
@@ -261,3 +269,43 @@ begin_test "Part 6 - Cloning from mirror"
   [[ -e "${CLONE_DIR}/.git/modules/lfs/lfs/objects/98/ea/98ea6e4f216f2fb4b69fff9b3a44842c38686ca685f3f55dc48c5d3fb1107be4" ]]
 )
 end_test
+
+tar_version_info # Sets tar_version and tar_vendor
+if [ "${tar_vendor}" == "GNU" ] || \
+  ([ "${tar_vendor}" == "BSD" ] && meet_requirements "${tar_version}" ">=3"); then
+  # Verify archive_mirrors only excludes .tgz files in the root directory
+  begin_test "Part 7 - Archive mirrors"
+  (
+    setup_test
+
+    archive_mirrors "${ARCHIVE_DIR}"
+
+    PREP_FILE=("${ARCHIVE_DIR}/"transfer_*.tgz)
+    [[ "${#PREP_FILE[@]}" -eq 1 ]]
+
+    # Ensure all "${ARCHIVE_DIR}"/*.tgz files are excluded but any .tgz files
+    # in subdirectories are not
+    arr=(subdir/ readme subdir/archive.tgz subdir/readme1)
+    [[ "$(printf "%s\n" "${arr[@]}")" == "$(tar ztf "${PREP_FILE[0]}")" ]]
+  )
+  end_test
+else
+  # Older versions of BSD tar, like like 2.8.3, don't support the
+  # --strip-components flag on extraction; therefore, they are expected to fail;
+  # that is ok in this case because our archives should be datetime stamped and
+  # the subdirectories are all git mirrors, so the chance of a name collision
+  # is very unlikely
+  begin_expected_fail_test "Part 7 - Archive mirrors"
+  (
+    setup_test
+
+    archive_mirrors "${ARCHIVE_DIR}"
+
+    PREP_FILE=("${ARCHIVE_DIR}/"transfer_*.tgz)
+    [[ "${#PREP_FILE[@]}" -eq 1 ]]
+
+    arr=(subdir/ readme subdir/archive.tgz subdir/readme1)
+    [[ "$(printf "%s\n" "${arr[@]}")" == "$(tar ztf "${PREP_FILE[0]}")" ]]
+  )
+  end_test
+fi
