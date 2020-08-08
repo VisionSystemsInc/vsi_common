@@ -23,7 +23,7 @@ function setup()
   export GIT_AUTHOR_EMAIL='foo.bar@example.com'
 
   BUILD_REPO="${TRASHDIR}/build_repo"
-  PRETEND_REPO="${TRASHDIR}/pretend_repo"
+  PRETEND_REPO="${TRASHDIR}/pretend_repo" # bare repo
 
   if [ "${OS-}" = "Windows_NT" ]; then
     DIFFICULT_NAME='diff  i cult'
@@ -159,6 +159,14 @@ begin_test "Part 1 - Setup test repo"
 
   # Main Repo
 
+  # ./main is cloned from "${PRETEND_REPO}" (actually main is mirrored to
+  #   "${PRETEND_REPO}", but conceptually, this is what is happening)
+  # ./lfs is cloned from "${PRETEND_REPO}_lfs"; mirrored to "${MIRROR_DIR}/lfs"
+  # ./"${DIFFICULT_NAME}" is cloned from "${PRETEND_REPO}_sub"; mirrored to
+  #   "${MIRROR_DIR}/${DIFFICULT_NAME}"
+  # ./"${DIFFICULT_NAME}/a_sub_sub_module" is cloned from
+  #   "${PRETEND_REPO}_sub_sub"; mirrored to "${MIRROR_DIR}/recipes"
+
   mkdir -p "${BUILD_REPO}"
   pushd "${BUILD_REPO}" &> /dev/null
     git init
@@ -176,7 +184,7 @@ begin_test "Part 1 - Setup test repo"
     # git submodule add https://github.com/visionsystemsinc/vsi_common $'  foo\tar\n'
     # This will.
     # git mv $'  diff  i \t cult' $' \n diff  i \t cult'
-    # However, at random this give permission denied errors, good thing I don't need it...
+    # However, at random this gives permission denied errors, good thing I don't need it...
 
     git commit -m "Added submodules"
   popd &> /dev/null
@@ -189,7 +197,7 @@ begin_test "Part 1 - Setup test repo"
     # git push origin --mirror
   popd &> /dev/null
 
-  # read -p "Press any key to continues" >&${stdout-1}
+  # read -p "Press any key to continue" >&${stdout-1}
 )
 end_test
 
@@ -205,19 +213,10 @@ end_test
 
 PREP_FILE=("${TRASHDIR}/pretend_repo_prep/"transfer_*.tgz)
 
-begin_test "Part 3 - Update a prepped mirror"
+begin_test "Part 3 - Simulating transfer"
 (
   setup_test
 
-  pushd "${TRASHDIR}" &> /dev/null
-    git_mirror_main "${TRASHDIR}/pretend_repo_prep"
-  popd &> /dev/null
-)
-end_test
-
-begin_test "Part 4 - Simulating transfer"
-(
-  setup_test
   mkdir -p "${TRANSFER_DIR}"
   pushd "${TRANSFER_DIR}" &> /dev/null
     tar zxf "${PREP_FILE[0]}"
@@ -225,7 +224,7 @@ begin_test "Part 4 - Simulating transfer"
 )
 end_test
 
-begin_test "Part 5 - Pushing to mirror"
+begin_test "Part 4 - Pushing to mirror"
 (
   setup_test
 
@@ -240,7 +239,7 @@ begin_test "Part 5 - Pushing to mirror"
 )
 end_test
 
-begin_test "Part 6 - Cloning from mirror"
+begin_test "Part 5 - Cloning from mirror"
 (
   setup_test
 
@@ -259,6 +258,7 @@ begin_test "Part 6 - Cloning from mirror"
   LFS_DIR="${MIRROR_DIR}/lfs/lfs/objects" GIT="${TRASHDIR}/git2" git_clone_main "${TRANSFER_DIR}/info.env" "${CLONE_DIR}"
 
   # Tests
+  [[ -f "${CLONE_DIR}/readme" ]]
   [[ -f "${CLONE_DIR}/${DIFFICULT_NAME}/readme_sub" ]]
   [[ -f "${CLONE_DIR}/${DIFFICULT_NAME}/a_sub_sub_module/readme_sub_sub" ]]
   [[ $(shasum256 ${CLONE_DIR}/lfs/readme1.bin | awk '{print $1}') == abc6fd595fc079d3114d4b71a4d84b1d1d0f79df1e70f8813212f2a65d8916df ]]
@@ -309,3 +309,41 @@ else
   )
   end_test
 fi
+
+begin_test "Part 6 - Update a repo and the prepped mirror"
+(
+  setup_test
+
+  # Add a file to the main repo
+  pushd "${BUILD_REPO}" &> /dev/null
+    touch newfile
+    git add newfile
+    git commit -m "add a file"
+    git push "${PRETEND_REPO}" master
+  popd &> /dev/null
+
+  # Update the prepped mirror
+  pushd "${TRASHDIR}" &> /dev/null
+    LFS_DIR="${PRETEND_REPO}_lfs/lfs/objects" GIT="${TRASHDIR}/git2" git_mirror_main "${PRETEND_REPO}"
+  popd &> /dev/null
+
+  PREP_FILE="$(shopt -s nullglob; ls -rt "${TRASHDIR}"/pretend_repo_prep/transfer_*.tgz | tail -n1)"
+
+  # Simulate the transfer
+  pushd "${TRANSFER_DIR}" &> /dev/null
+    tar zxf "${PREP_FILE}"
+  popd &> /dev/null
+
+  # Push to mirror
+  LFS_DIR="${MIRROR_DIR}/lfs/lfs/objects" GIT="${TRASHDIR}/git2" git_push_main "${TRANSFER_DIR}/info.env" "${TRANSFER_DIR}"
+
+  # Pull changes
+  pushd "${CLONE_DIR}" &> /dev/null
+    git pull
+    git submodule update --init --recursive
+  popd &> /dev/null
+
+  # Tests
+  [[ -f "${CLONE_DIR}/newfile" ]]
+)
+end_test
