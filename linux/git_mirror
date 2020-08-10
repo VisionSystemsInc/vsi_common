@@ -206,7 +206,7 @@ function clone_submodules()
 
     # Search for existing prepped mirror
     # https://stackoverflow.com/a/52657447/4166604
-    prepped_submodule_path="$(echo "${GIT_MIRROR_PREP_DIR}"/*/"${full_relative_path}/config")"
+    prepped_submodule_path="$(shopt -s nullglob; echo "${GIT_MIRROR_PREP_DIR}"/*/"${full_relative_path}/config")"
     # If I already have this submodule, use it
     if [[ -f ${prepped_submodule_path} ]]; then
       prepped_submodule_path="$(dirname "${prepped_submodule_path}")"
@@ -244,7 +244,7 @@ function clone_submodules()
     if [[ -z ${base_submodule_path} ]]; then
       prepped_submodule_path="${GIT_MIRROR_PREP_DIR}/${MAIN_DIR}"
     else
-      prepped_submodule_path="$(dirname "$(echo "${GIT_MIRROR_PREP_DIR}"/*/"${base_submodule_path}/config")")"
+      prepped_submodule_path="$(dirname "$(shopt -s nullglob; echo "${GIT_MIRROR_PREP_DIR}"/*/"${base_submodule_path}/config")")"
     fi
 
     local lfs_dir="$(${GIT} rev-parse --git-dir)/lfs"
@@ -418,6 +418,7 @@ function git_mirror_repos()
 
   # Does the directory look like a PREP_DIR
   if [ -f "${1}/"*"/config" ]; then
+    # Don't need nullglob here because the directory exists
     pushd "$(dirname "${1}/"*"/config")" &> /dev/null
       GIT_MIRROR_PREP_DIR="$(dirname "${PWD}")"
       GIT_MIRROR_MAIN_REPO="$(${GIT} config --get remote.origin.url)"
@@ -687,7 +688,7 @@ function git_push_main()
   local main_repo_url="$(_git_mirror_get_url .)"
   local repo_path
   pushd "${2}" &> /dev/null
-    repo_path="$(dirname "$(ls */config)")"
+    repo_path="$(shopt -s nullglob; dirname */config)"
     next_section "Pushing main repo '${repo_path}' to '${main_repo_url}'"
     pushd "${repo_path}" &> /dev/null
       # It seems some repositories can be malformed (vxl...). In this case,
@@ -720,7 +721,7 @@ function git_push_main()
         continue
       fi
 
-      repo_path="$(dirname */"${repo_paths[$index]}/config")"
+      repo_path="$(shopt -s nullglob; dirname */"${repo_paths[$index]}/config")"
 
       next_section "Pushing submodule repo '${repo_path}' to ${repo_urls[$index]}"
       if [[ -d ${repo_path} ]]; then
