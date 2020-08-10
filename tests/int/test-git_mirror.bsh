@@ -259,6 +259,7 @@ begin_test "Part 5 - Cloning from mirror"
 
   # Tests
   [[ -f "${CLONE_DIR}/readme" ]]
+  git -C "${CLONE_DIR}" show-ref --verify --quiet refs/tags/original_commit
   [[ -f "${CLONE_DIR}/${DIFFICULT_NAME}/readme_sub" ]]
   [[ -f "${CLONE_DIR}/${DIFFICULT_NAME}/a_sub_sub_module/readme_sub_sub" ]]
   [[ $(shasum256 ${CLONE_DIR}/lfs/readme1.bin | awk '{print $1}') == abc6fd595fc079d3114d4b71a4d84b1d1d0f79df1e70f8813212f2a65d8916df ]]
@@ -274,7 +275,7 @@ tar_version_info # Sets tar_version and tar_vendor
 if [ "${tar_vendor}" == "GNU" ] || \
   ([ "${tar_vendor}" == "BSD" ] && meet_requirements "${tar_version}" ">=3"); then
   # Verify archive_mirrors only excludes .tgz files in the root directory
-  begin_test "Part 7 - Archive mirrors"
+  begin_test "Part 6 - Archive mirrors"
   (
     setup_test
 
@@ -295,7 +296,7 @@ else
   # that is ok in this case because our archives should be datetime stamped and
   # the subdirectories are all git mirrors, so the chance of a name collision
   # is very unlikely
-  begin_expected_fail_test "Part 7 - Archive mirrors"
+  begin_expected_fail_test "Part 6 - Archive mirrors"
   (
     setup_test
 
@@ -310,7 +311,7 @@ else
   end_test
 fi
 
-begin_test "Part 6 - Update a repo and the prepped mirror"
+begin_test "Part 7 - Update a repo and the prepped mirror"
 (
   setup_test
 
@@ -322,11 +323,23 @@ begin_test "Part 6 - Update a repo and the prepped mirror"
     git push "${PRETEND_REPO}" master
   popd &> /dev/null
 
+  # Add a branch to the air-gapped main repo
+  pushd "${CLONE_DIR}" &> /dev/null
+    current_branch="$(git rev-parse --abbrev-ref HEAD)"
+    git checkout -b new_branch
+    touch branch_file
+    git add branch_file
+    git commit -m "add a new file on this branch"
+    git push origin new_branch
+    git checkout "${current_branch}"
+  popd &> /dev/null
+
   # Update the prepped mirror
   pushd "${TRASHDIR}" &> /dev/null
     LFS_DIR="${PRETEND_REPO}_lfs/lfs/objects" GIT="${TRASHDIR}/git2" git_mirror_main "${PRETEND_REPO}"
   popd &> /dev/null
 
+  # REVIEW select the incremental backup if it exists
   PREP_FILE="$(shopt -s nullglob; ls -rt "${TRASHDIR}"/pretend_repo_prep/transfer_*.tgz | tail -n1)"
 
   # Simulate the transfer
@@ -345,5 +358,6 @@ begin_test "Part 6 - Update a repo and the prepped mirror"
 
   # Tests
   [[ -f "${CLONE_DIR}/newfile" ]]
+  git -C "${MIRROR_DIR}"/main show-ref --verify --quiet refs/heads/new_branch
 )
 end_test
