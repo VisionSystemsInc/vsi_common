@@ -691,19 +691,20 @@ function git_push_main()
     repo_path="$(shopt -s nullglob; dirname */config)"
     next_section "Pushing main repo '${repo_path}' to '${main_repo_url}'"
     pushd "${repo_path}" &> /dev/null
-      # It seems some repositories can be malformed (vxl...). In this case,
-      # there is a ref called refs/remotes/... which is the pattern for the ref
-      # of a remote branch. However, a mirror should not have any remote
-      # branches. This causes an error, "deny updating a hidden ref:", when
-      # pushing to a gitlab server. For now, only filter out refs/remotes
-      local ref
+      # It seems mirrored repositories (vxl, pytorch) can include refs/remotes/
+      # I'm not sure how/why these are created; this is the pattern for the ref
+      # of a remote branch in a clone. Setting up a remote-tracking branch,
+      # specifying the remote & branch name manually during a git push or
+      # creating a push refspec basically all do the same thing: they map local
+      # refs (refs/heads) to remote refs (refs/remotes). Therefore, the mirror
+      # should not have any remote refs. In any case, these cause an error,
+      # "deny updating a hidden ref:", when pushing to a gitlab server. For now,
+      # only filter out refs/remotes
+      #
+      # Push to the mirror (git push --mirror will remove deleted refs)
       # Spaces are not allowed in a refname
-      for ref in $(${GIT} for-each-ref --format='%(refname)' | grep '^refs/remotes' || :); do
-        ${GIT} update-ref -d "${ref}"
-      done
-
-      # Push to the mirror
-      ${GIT} push --mirror "${main_repo_url}"
+      ${GIT} for-each-ref --format='%(refname)' | grep -v '^refs/remotes' | \
+          xargs ${GIT} push "${main_repo_url}"
 
       if git_mirror_has_lfs; then
         next_section "Pushing lfs objects for ${repo_path}"
@@ -726,15 +727,10 @@ function git_push_main()
       next_section "Pushing submodule repo '${repo_path}' to ${repo_urls[$index]}"
       if [[ -d ${repo_path} ]]; then
         pushd "${repo_path}" &> /dev/null
-          # Filter out malformed refs (see above)
-          local ref
+          # Push to the mirror (see above)
           # Spaces are not allowed in a refname
-          for ref in $(${GIT} for-each-ref --format='%(refname)' | grep '^refs/remotes' || :); do
-            ${GIT} update-ref -d "${ref}"
-          done
-
-          # Push to the mirror
-          ${GIT} push --mirror "${repo_urls[$index]}"
+          ${GIT} for-each-ref --format='%(refname)' | grep -v '^refs/remotes' | \
+              xargs ${GIT} push "${repo_urls[$index]}"
           if git_mirror_has_lfs; then
             next_section "Pushing lfs objects for ${repo_path}"
             ${GIT} remote add mirror "${repo_urls[$index]}" 2>/dev/null || ${GIT} remote set-url mirror "${repo_urls[$index]}"
