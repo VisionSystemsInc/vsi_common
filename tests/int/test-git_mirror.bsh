@@ -159,13 +159,14 @@ begin_test "Part 1 - Setup test repo"
 
   # Main Repo
 
-  # ./main is cloned from "${PRETEND_REPO}" (actually main is mirrored to
-  #   "${PRETEND_REPO}", but conceptually, this is what is happening)
-  # ./lfs is cloned from "${PRETEND_REPO}_lfs"; mirrored to "${MIRROR_DIR}/lfs"
-  # ./"${DIFFICULT_NAME}" is cloned from "${PRETEND_REPO}_sub"; mirrored to
-  #   "${MIRROR_DIR}/${DIFFICULT_NAME}"
-  # ./"${DIFFICULT_NAME}/a_sub_sub_module" is cloned from
-  #   "${PRETEND_REPO}_sub_sub"; mirrored to "${MIRROR_DIR}/recipes"
+  # repo                                     URL                        mirrored to
+  # ./                                       "${PRETEND_REPO}"          "${MIRROR_DIR}/main"
+  # ./lfs                                    "${PRETEND_REPO}_lfs"      "${MIRROR_DIR}/lfs"
+  # ./"${DIFFICULT_NAME}"                    "${PRETEND_REPO}_sub"      "${MIRROR_DIR}/${DIFFICULT_NAME}"
+  # ./"${DIFFICULT_NAME}/a_sub_sub_module"   "${PRETEND_REPO}_sub_sub"  "${MIRROR_DIR}/recipes"
+  #
+  # NOTE each repo is created in a respective ${BUILD_REPO}"_* repo and mirror
+  # pushed to "${PRETEND_REPO}"_*
 
   mkdir -p "${BUILD_REPO}"
   pushd "${BUILD_REPO}" &> /dev/null
@@ -201,6 +202,47 @@ begin_test "Part 1 - Setup test repo"
 )
 end_test
 
+# NOTE this test could be a unit test, but there is another test later that
+# depends on the existence of the prep dir
+begin_test "Argument parsing"
+(
+  setup_test
+
+  # This is the first function to run after the arguments are parsed and these
+  # env variables are set
+  function mkdir()
+  {
+    if [ "${GIT_MIRROR_PREP_DIR}" = "${PRETEND_REPO}_prep" ]; then
+      echo pass
+    else
+      echo fail
+    fi
+    exit 0 # short circuit
+  }
+
+  pushd "${TRASHDIR}" &> /dev/null
+    [[ "$(LFS_DIR="${PRETEND_REPO}_lfs/lfs/objects" GIT="${TRASHDIR}/git2" git_mirror_repos "${PRETEND_REPO}")" = "pass" ]]
+  popd &> /dev/null
+
+
+  function mkdir()
+  {
+    # PREP_DIR must be an absolute path (otherwise git lfs hangs for some reason)
+    if [ "${GIT_MIRROR_PREP_DIR}" = "${TRASHDIR}/output_prep" ]; then
+      echo pass
+    else
+      echo fail
+    fi
+    exit 0 # short circuit
+  }
+
+  pushd "${TRASHDIR}" &> /dev/null
+    [[ "$(LFS_DIR="${PRETEND_REPO}_lfs/lfs/objects" GIT="${TRASHDIR}/git2" git_mirror_repos "${PRETEND_REPO}" some_branch "${TRASHDIR}"/output_prep)" = "pass" ]]
+    [[ "$(LFS_DIR="${PRETEND_REPO}_lfs/lfs/objects" GIT="${TRASHDIR}/git2" git_mirror_repos "${PRETEND_REPO}" some_branch output_prep)" = "pass" ]]
+  popd &> /dev/null
+)
+end_test
+
 begin_test "Part 2 - Initial mirror"
 (
   setup_test
@@ -211,9 +253,34 @@ begin_test "Part 2 - Initial mirror"
 )
 end_test
 
-PREP_FILE=("${TRASHDIR}/pretend_repo_prep/"transfer_*.tgz)
+PREP_FILE=("${PRETEND_REPO}_prep"/transfer_*.tgz)
 
-begin_test "Part 3 - Simulating transfer"
+begin_test "Part 3 - Argument parsing based on existing prep dir"
+(
+  setup_test
+
+  [[ -d "${PRETEND_REPO}_prep" ]] # run from an existing prep_dir
+
+  function mkdir()
+  {
+    if [ "${GIT_MIRROR_PREP_DIR}" = "${PRETEND_REPO}_prep" ] && \
+       [ "${GIT_MIRROR_MAIN_REPO}" = "${PRETEND_REPO}" ]; then
+      echo pass
+    else
+      echo fail
+    fi
+    exit 0 # short circuit
+  }
+
+  pushd "${TRASHDIR}" &> /dev/null
+    [[ "$(LFS_DIR="${PRETEND_REPO}_lfs/lfs/objects" GIT="${TRASHDIR}/git2" git_mirror_repos "${PRETEND_REPO}_prep")" = "pass" ]]
+    [[ "$(LFS_DIR="${PRETEND_REPO}_lfs/lfs/objects" GIT="${TRASHDIR}/git2" git_mirror_repos "$(basename "${PRETEND_REPO}_prep")")" = "pass" ]]
+  popd &> /dev/null
+
+)
+end_test
+
+begin_test "Part 4 - Simulating transfer"
 (
   setup_test
 
@@ -224,7 +291,7 @@ begin_test "Part 3 - Simulating transfer"
 )
 end_test
 
-begin_test "Part 4 - Pushing to mirror"
+begin_test "Part 5 - Pushing to mirror"
 (
   setup_test
 
@@ -239,7 +306,7 @@ begin_test "Part 4 - Pushing to mirror"
 )
 end_test
 
-begin_test "Part 5 - Cloning from mirror"
+begin_test "Part 6 - Cloning from mirror"
 (
   setup_test
 
@@ -275,7 +342,7 @@ tar_version_info # Sets tar_version and tar_vendor
 if [ "${tar_vendor}" == "GNU" ] || \
   ([ "${tar_vendor}" == "BSD" ] && meet_requirements "${tar_version}" ">=3"); then
   # Verify archive_mirrors only excludes .tgz files in the root directory
-  begin_test "Part 6 - Archive mirrors"
+  begin_test "Part 7 - Archive mirrors"
   (
     setup_test
 
@@ -296,7 +363,7 @@ else
   # that is ok in this case because our archives should be datetime stamped and
   # the subdirectories are all git mirrors, so the chance of a name collision
   # is very unlikely
-  begin_expected_fail_test "Part 6 - Archive mirrors"
+  begin_expected_fail_test "Part 7 - Archive mirrors"
   (
     setup_test
 
@@ -311,7 +378,7 @@ else
   end_test
 fi
 
-begin_test "Part 7 - Update a repo and the prepped mirror"
+begin_test "Part 8 - Update a repo and the prepped mirror"
 (
   setup_test
 
@@ -340,7 +407,7 @@ begin_test "Part 7 - Update a repo and the prepped mirror"
   popd &> /dev/null
 
   # REVIEW select the incremental backup if it exists
-  PREP_FILE="$(shopt -s nullglob; ls -rt "${TRASHDIR}"/pretend_repo_prep/transfer_*.tgz | tail -n1)"
+  PREP_FILE="$(shopt -s nullglob; ls -rt "${PRETEND_REPO}_prep"/transfer_*.tgz | tail -n1)"
 
   # Simulate the transfer
   pushd "${TRANSFER_DIR}" &> /dev/null
