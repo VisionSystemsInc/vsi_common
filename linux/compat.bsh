@@ -285,25 +285,37 @@ function load_vsi_compat()
   #
   # .. seealso::
   #    :func:`string_tools.bsh lowercase`, :func:`string_tools.bsh uppercase`
-  #
-  # .. variable:: bash_bug_bash_env_process_substitution
-  #
-  # In bash 3.2, using process substitution for the BASH_ENV env variable does not work as expected. (Perhaps the file is read twice, and since it is a stream, it cannot seek to the beginning.) Work around is to write to a temporary file instead.
-  #
-  # :Value: * ``0`` - ``BASH_ENV`` does not support process substitution
-  #         * ``1`` - ``BASH_ENV`` works normally
   #**
   if [ "${BASH_VERSINFO[0]}" -ge "4" ]; then
     bash_feature_associative_array=0
     bash_feature_case_modification=0
     bash_feature_bashpid=0
-    bash_bug_bash_env_process_substitution=1
   else
     bash_feature_associative_array=1
     bash_feature_case_modification=1
     bash_feature_bashpid=1
-    bash_bug_bash_env_process_substitution=0
   fi
+
+  #**
+  # .. function:: bash_bug_bash_env_process_substitution
+  #
+  # With most bash 3.2's, using process substitution for the BASH_ENV env variable does not work as expected. (Perhaps the file is read twice, and since it is a stream, it cannot seek to the beginning.) Work around is to write to a temporary file instead. Some bash 3.2 do support this. Since this is expensive to test (one fork, which is only expensive in windows), it is not evaluated into a variable on load. Instead, this is a function that is called. The result is cached so that is does not need to be tested again. The feature has less to do with the exact version of bash, and how it is compiled or patched.
+  #
+  # :Return Value: * ``0`` - ``BASH_ENV`` does not support process substitution
+  #                * ``1`` - ``BASH_ENV`` works normally
+  #**
+  function bash_bug_bash_env_process_substitution()
+  {
+    if [ -z "${__bash_bug_bash_env_process_substitution+set}" ]; then
+      if [ "$(BASH_ENV=<(echo echo 0) bash -c :)" = "0" ]; then
+        __bash_bug_bash_env_process_substitution=1
+      else
+        __bash_bug_bash_env_process_substitution=0
+      fi
+    fi
+
+    return "${__bash_bug_bash_env_process_substitution}"
+  }
 
   #**
   # .. variable:: bash_feature_bashpid_read_only
