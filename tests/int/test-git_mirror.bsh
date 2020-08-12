@@ -41,13 +41,15 @@ repos[.]="${MIRROR_DIR}/main"
 repos[lfs]="${MIRROR_DIR}/lfs"
 repos['${DIFFICULT_NAME}']="${MIRROR_DIR}"/'${DIFFICULT_NAME}'
 repos['${DIFFICULT_NAME}/a_sub_sub_module']="${MIRROR_DIR}/recipes"
+repos['duplicate_sub_module']="${MIRROR_DIR}/recipes"
 EOF
   else
     cat - << EOF > "${TRANSFER_DIR}/info.env"
-repo_paths=('.' lfs '${DIFFICULT_NAME}' '${DIFFICULT_NAME}/a_sub_sub_module')
+repo_paths=('.' lfs '${DIFFICULT_NAME}' '${DIFFICULT_NAME}/a_sub_sub_module' 'duplicate_sub_module')
 repo_urls=("${MIRROR_DIR}/main"
            "${MIRROR_DIR}/lfs"
            "${MIRROR_DIR}"/'${DIFFICULT_NAME}'
+           "${MIRROR_DIR}/recipes"
            "${MIRROR_DIR}/recipes")
 EOF
   fi
@@ -103,6 +105,10 @@ begin_test "Part 1 - Setup test repo"
     touch readme_sub_sub
     git add readme_sub_sub
     git commit -m "Initial commit"
+
+    touch another_file
+    git add another_file
+    git commit -m "Second commit"
   popd &> /dev/null
   mkdir -p "${PRETEND_REPO}_sub_sub"
   pushd "${PRETEND_REPO}_sub_sub" &> /dev/null
@@ -165,6 +171,7 @@ begin_test "Part 1 - Setup test repo"
   # ./lfs ("lfs files")                      "${PRETEND_REPO}_lfs"      "${MIRROR_DIR}/lfs"
   # ./"${DIFFICULT_NAME}"                    "${PRETEND_REPO}_sub"      "${MIRROR_DIR}/${DIFFICULT_NAME}"
   # ./"${DIFFICULT_NAME}/a_sub_sub_module"   "${PRETEND_REPO}_sub_sub"  "${MIRROR_DIR}/recipes"
+  # ./"duplicate_sub_module"                 "${PRETEND_REPO}_sub_sub"  "${MIRROR_DIR}/recipes"
   #
   # NOTE each repo is created in a respective ${BUILD_REPO}"_* repo and mirror
   # pushed to "${PRETEND_REPO}"_*
@@ -179,6 +186,7 @@ begin_test "Part 1 - Setup test repo"
 
     # LFS_DIR="${PRETEND_REPO}_lfs/lfs/objects" "${TRASHDIR}/git2" submodule add "${PRETEND_REPO}_lfs" "lfs"
     GIT_LFS_SKIP_SMUDGE=1 git submodule add --name "lfs files" "${PRETEND_REPO}_lfs" "lfs"
+
     git submodule add "${PRETEND_REPO}_sub" "${DIFFICULT_NAME}"
     # Git itself can't handle newlines, although the config file actually can
     # escape them. This is a PURE git bug, plain and simple.
@@ -187,6 +195,14 @@ begin_test "Part 1 - Setup test repo"
     # This will.
     # git mv $'  diff  i \t cult' $' \n diff  i \t cult'
     # However, at random this gives permission denied errors, good thing I don't need it...
+
+    # Include a submodule twice (sometimes this happens, e.g., with pybind11)
+    # REVIEW Is this a worthwhile test
+    git submodule add "${PRETEND_REPO}_sub_sub" "duplicate_sub_module"
+    pushd duplicate_sub_module &> /dev/null
+      git checkout HEAD~1
+    popd &> /dev/null
+    git add duplicate_sub_module
 
     git commit -m "Added submodules"
   popd &> /dev/null
@@ -332,12 +348,15 @@ begin_test "Part 6 - Cloning from mirror"
   git -C "${CLONE_DIR}" show-ref --verify --quiet refs/tags/original_commit
   [[ -f "${CLONE_DIR}/${DIFFICULT_NAME}/readme_sub" ]]
   [[ -f "${CLONE_DIR}/${DIFFICULT_NAME}/a_sub_sub_module/readme_sub_sub" ]]
+  [[ -f "${CLONE_DIR}/${DIFFICULT_NAME}/a_sub_sub_module/another_file" ]]
   [[ $(shasum256 ${CLONE_DIR}/lfs/readme1.bin | awk '{print $1}') == abc6fd595fc079d3114d4b71a4d84b1d1d0f79df1e70f8813212f2a65d8916df ]]
   # This file shouldn't exist yet
   [[ ! -e "${CLONE_DIR}/.git/modules/lfs files/lfs/objects/98/ea/98ea6e4f216f2fb4b69fff9b3a44842c38686ca685f3f55dc48c5d3fb1107be4" ]]
   cd "${CLONE_DIR}/lfs"
   LFS_DIR="${MIRROR_DIR}/lfs/lfs/objects" "${TRASHDIR}/git2" lfs fetch --all
   [[ -e "${CLONE_DIR}/.git/modules/lfs files/lfs/objects/98/ea/98ea6e4f216f2fb4b69fff9b3a44842c38686ca685f3f55dc48c5d3fb1107be4" ]]
+  [[ -f "${CLONE_DIR}/${duplicate_sub_module}/readme_sub_sub" ]]
+  [[ ! -f "${CLONE_DIR}/${duplicate_sub_module}/another_file" ]]
 )
 end_test
 
