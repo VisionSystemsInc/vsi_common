@@ -4,8 +4,8 @@ if [[ $- != *i* ]]; then
   source_once &> /dev/null && return 0
 fi
 
-# compat should avoid souring other files because it is used everywhere and we'd
-# like to avoid and potential circular source or time delays, without "having" to
+# compat should avoid sourcing other files because it is used everywhere and we'd
+# like to avoid any potential circular source or time delays, without "having" to
 # use circular source or source once.
 
 # This file needs to be unnoticeably fast on Windows, which means no forks,
@@ -125,7 +125,7 @@ function load_vsi_compat()
   #
   # The following variables will help cope with the difference in bash versions, as seamlessly as possible.
   #
-  # .. variable:: bash_declare_array_quote
+  # .. variable:: bash_behavior_declare_array_quote
   #
   # In bash version 4.3 and older, ``declare -p`` of an array adds an extra ``'`` around the array. This variable stores the state of that variable
   #
@@ -147,15 +147,15 @@ function load_vsi_compat()
   #         * ``1`` - Declare uses literal versions of special characters, but still escapes quotes as ``\"``
   #**
   if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "44" ]; then
-    bash_declare_array_quote=""
+    bash_behavior_declare_array_quote=""
     bash_feature_parameter_transformation=0
     bash_feature_declare_array_escape_special_characters=0
-    bash_empty_array_unbound=1
+    bash_behavior_empty_array_unbound=1
   else
-    bash_declare_array_quote="'"
+    bash_behavior_declare_array_quote="'"
     bash_feature_parameter_transformation=1
     bash_feature_declare_array_escape_special_characters=1
-    bash_empty_array_unbound=0
+    bash_behavior_empty_array_unbound=0
   fi
 
   #**
@@ -210,13 +210,13 @@ function load_vsi_compat()
   fi
 
   # TODO: Cannot reliable replicate this, table for now
-  # .. variable:: bash_strict_posix_functions
+  # .. variable:: bash_behavior_strict_posix_functions
   # Bash 4.2 and older is stricter when it comes to exported functions that are not POSIX compliant, when running with the ``--posix`` flag. Workaround, unexport functions that would cause an issue.
   # # My notes say 4.2, by unit tests say 5.1?!
   # if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "51" ]; then
-  #   bash_strict_posix_functions=1
+  #   bash_behavior_strict_posix_functions=1
   # else
-  #   bash_strict_posix_functions=0
+  #   bash_behavior_strict_posix_functions=0
   # fi
 
   #**
@@ -229,10 +229,10 @@ function load_vsi_compat()
   #**
   if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "42" ]; then
     bash_feature_declare_global=0
-    bash_declared_unset_value='' # Documented below
+    bash_bug_declared_unset_value='' # Documented below
   else
     bash_feature_declare_global=1
-    bash_declared_unset_value='=""' # Documented below
+    bash_bug_declared_unset_value='=""' # Documented below
   fi
 
   #**
@@ -332,11 +332,11 @@ function load_vsi_compat()
   fi
 
   #**
-  # .. variable:: bash_regex_special_characters_non_literal
+  # .. variable:: bash_behavior_regex_special_characters_non_literal
   #
   # Most instances of bash require special characters to be literal in regular expressions (e.g. ``$'\n'``). However, on operating systems such as alpine, a special character will be matched based in its non-literal form (e.g. ``"\n"``). This has nothing to do with the version of bash, but rather how it was compiled (regex might come from g++'s implementation).
   #
-  # :var:`bash_regex_special_characters_non_literal` will be set if the non-literal form works. Currently, the literal form always appears to work.
+  # :var:`bash_behavior_regex_special_characters_non_literal` will be set if the non-literal form works. Currently, the literal form always appears to work.
   #
   # :Value: * ``0`` - Non literal form works (e.g. ``"\t")
   #         * ``1`` - Non literal form does not work
@@ -344,9 +344,9 @@ function load_vsi_compat()
   local x=$'foo\nbar'
   local re='\n'
   if [[ ${x} =~ ${re} ]]; then
-    bash_regex_special_characters_non_literal=0
+    bash_behavior_regex_special_characters_non_literal=0
   else
-    bash_regex_special_characters_non_literal=1
+    bash_behavior_regex_special_characters_non_literal=1
   fi
 
   #**
@@ -380,9 +380,9 @@ function load_vsi_compat()
   # :Value: * ``0`` - Has declare fails bug
   #         * ``1`` - Does not have the declare fails bug
   #
-  # .. variable:: bash_declared_unset_value
+  # .. variable:: bash_bug_declared_unset_value
   #
-  # Bash 3.2 through 4.1 has a confusion behavior where unset declared variables appear to be set to null ``""`` instead of unset, in the output of ``declare -p``. However these versions of bash do indeed have an "unset by declared state", it just can't be queried using the output of ``declare -p``.
+  # Bash 3.2 through 4.1 has a confusing behavior where unset declared variables appear to be set to null ``""`` instead of unset, in the output of ``declare -p``. However these versions of bash do indeed have an "unset but declared state", it just can't be queried using the output of ``declare -p``.
   #
   # :Value: * ``=""`` - The characters seen after ``declare varname``
   #         * **(null)**
@@ -393,10 +393,10 @@ function load_vsi_compat()
   #
   #    declare x
   #    if declare -p x &> /dev/null; then
-  #      assert_str_eq "$(declare -p x)" "declare -p x${bash_declared_unset_value}"
+  #      assert_str_eq "$(declare -p x)" "declare -p x${bash_bug_declared_unset_value}"
   #    fi
   #
-  #    # How to detect if variable is unset but declared
+  #    # How to detect if variable is unset but declared?
   #
   # .. note::
   #
@@ -404,7 +404,7 @@ function load_vsi_compat()
   #
   # Detecting declared unset variables
   # ----------------------------------
-  # Unfortunately, there is no fool proof way to detect a declared unset variable. The ``${var+set}`` parameter substitution will let you know if a a variable is unset, and using if :var:`bash_bug_declare_fails_local_declared_unset_variable`/:var:`bash_bug_declare_fails_global_declared_unset_variable` is ``1``, then ``declare -p var_name`` will let you know it is declared. If ``0``, then you have to fall back on ``declare -p`` and match the regex ``$'(^|\n)declare -- '"${var_name}${bash_declared_unset_value}"$'(\n|$)'`` to determine if it was declared. Unfortunately, in Bash 4.3 it is possible for another variable to be set and match the regex, and there is no way around this ambiguity. However, it is highly unlikely to happen by accident.
+  # Unfortunately, there is no fool proof simple way to detect a declared unset variable. The ``${var+set}`` parameter substitution will let you know if a a variable is unset, and using if :var:`bash_bug_declare_fails_local_declared_unset_variable`/:var:`bash_bug_declare_fails_global_declared_unset_variable` is ``1``, then ``declare -p var_name`` will let you know it is declared. If either of those bugs are set to ``0``, then you have to fall back on ``declare -p`` and match the regex ``$'(^|\n)declare -- '"${var_name}${bash_bug_declared_unset_value}"$'(\n|$)'`` to determine if it was declared. Unfortunately, in Bash 4.3 it is possible for another variable to be set and match the regex, and there is no way around this ambiguity. This is highly unlikely to happen by accident, but can be worked around using some sed (specific to bash 4.3's ``declare -p`` output)
   #
   # .. rubric:: Bash 4.3 Example
   #
@@ -418,6 +418,17 @@ function load_vsi_compat()
   #    declare -- x_14
   #    $ compgen -A variables x_1
   #    x_13
+  #    $ declare -p | sed -E ':combine
+  #                           $bdone
+  #                           N
+  #                           bcombine
+  #                           :done
+  #                           # Remove all escaped quotes
+  #                           s|\\"||g
+  #                           # Remove all values, so everything looks like a null value (and is guaranteed to be one line now)
+  #                           s|"[^"]*"|""|g' | grep x_
+  #    declare -- x_13=""
+  #    declare -- x_15
   #**
 
   local y
