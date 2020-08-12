@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+
+. "$(dirname "${BASH_SOURCE[0]}")/../testlib.bsh"
+VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.."; pwd)"
+
+. "${VSI_COMMON_DIR}/linux/requirements.bsh"
+. "${VSI_COMMON_DIR}/linux/just_git_airgap_repo.bsh"
+
+# These tests chain together, so no point in continuing after one breaks
+TESTLIB_STOP_AFTER_FAILS=1
+unset TESTLIB_SKIP_TESTS TESTLIB_RUN_SINGLE_TEST
+
+if ! git lfs &> /dev/null; then
+  TESTLIB_SKIP_TESTS='.*'
+fi
+
+function setup()
+{
+  # Easier way to take care of committers on vanilla install
+  export GIT_COMMITTER_NAME='Foo Bar'
+  export GIT_AUTHOR_NAME='Foo Bar'
+  export GIT_COMMITTER_EMAIL='foo.bar@example.com'
+  export GIT_AUTHOR_EMAIL='foo.bar@example.com'
+
+  BUILD_REPO="${TRASHDIR}/build_repo"
+  PRETEND_URL="${TRASHDIR}/pretend_repo" # bare repo
+
+  if [ "${OS-}" = "Windows_NT" ]; then
+    DIFFICULT_NAME='a  sub mod'
+  else
+    DIFFICULT_NAME=$'a  sub \t mod'
+  fi
+
+  TRANSFER_DIR="${TRASHDIR}/transfer"
+  MIRROR_DIR="${TRASHDIR}/mirror"
+
+  mkdir -p "${TRANSFER_DIR}"
+
+  CLONE_DIR="${TRASHDIR}/clone"
+}
+
+begin_test "Part 1 - Setup test repo"
+(
+  setup_test
+
+  # Sub sub module
+  mkdir -p "${BUILD_REPO}_sub_sub"
+  # REVIEW should git be git2?
+  pushd "${BUILD_REPO}_sub_sub" &> /dev/null
+    git init .
+    touch readme_sub_sub
+    git add readme_sub_sub
+    git commit -m "Initial commit"
+
+    touch another_file
+    git add another_file
+    git commit -m "Second commit"
+  popd &> /dev/null
+  mkdir -p "${PRETEND_URL}_sub_sub"
+  pushd "${PRETEND_URL}_sub_sub" &> /dev/null
+    # This only works right, because all branches appear to be "topic" branches,
+    # so a push --mirror (once) will do what I want. Doesn't work well with more
+    # complexities like lfs
+    git clone --mirror "${BUILD_REPO}_sub_sub" .
+    # git init --bare .
+    # cd "${BUILD_REPO}_sub_sub"
+    # git remote add origin "${PRETEND_URL}_sub_sub"
+    # git push origin --mirror
+  popd &> /dev/null
+
+  # Sub module
+  mkdir -p "${BUILD_REPO}_sub"
+  pushd "${BUILD_REPO}_sub" &> /dev/null
+    git init .
+    touch readme_sub
+    git add readme_sub
+    git submodule add "${PRETEND_URL}_sub_sub" "a_sub_sub_mod"
+    git commit -m "Initial commit"
+  popd &> /dev/null
+  mkdir -p "${PRETEND_URL}_sub"
+  pushd "${PRETEND_URL}_sub" &> /dev/null
+    git clone --mirror "${BUILD_REPO}_sub" .
+    # git init --bare .
+    # cd "${BUILD_REPO}_sub"
+    # git remote add origin "${PRETEND_URL}_sub"
+    # git push origin --mirror
+  popd &> /dev/null
+
+  # Main Repo
+
+  # sm_path (sm_name, if different)      URL                          mirrored to
+  # ./                                   "${PRETEND_URL}              "${MIRROR_DIR}/pretend_url.git"
+  # ./"${DIFFICULT_NAME}"                "${PRETEND_URL}_sub"         "${MIRROR_DIR}/pretend_url_sub.git"
+  # ./"${DIFFICULT_NAME}/a_sub_sub_mod"  "${PRETEND_URL}_sub_sub"     "${MIRROR_DIR}/pretend_url_sub_sub.git"
+  # ./vsi_common                         "${VSI_COMMON_DIR}"          "${MIRROR_DIR}/vsi_common.git"
+  # ./vsi_common/recipes                 "${VSI_COMMON_DIR}/recipes"  "${MIRROR_DIR}/recipes.git"
+  # ./"a_sub_sub_mod" ("as sub mod")     "${PRETEND_URL}_sub_sub"     "${MIRROR_DIR}/pretend_url_sub_sub.git"
+  #
+  # NOTE each repo is created in a respective ${BUILD_REPO}"_* repo and mirror
+  # pushed to "${PRETEND_URL}"_*
+
+  mkdir -p "${BUILD_REPO}"
+  pushd "${BUILD_REPO}" &> /dev/null
+    git init
+    touch readme
+    git add readme
+    git commit -m "Initial commit"
+
+    git submodule add "${VSI_COMMON_DIR}" vsi_common # local clone
+    git submodule add "${PRETEND_URL}_sub" "${DIFFICULT_NAME}"
+    # Git itself can't handle newlines, although the config file actually can
+    # escape them. This is a PURE git bug, plain and simple.
+    # This won't actually create a newline in the name, it just ignores it
+    # git submodule add https://github.com/visionsystemsinc/vsi_common $'  foo\tar\n'
+    # This will.
+    # git mv $'  diff  i \t cult' $' \n diff  i \t cult'
+    # However, at random this gives permission denied errors, good thing I don't need it...
+
+    # Include a submodule twice (sometimes this happens, e.g., with pybind11)
+    git submodule add --name "as sub mod" "${PRETEND_URL}_sub_sub" "a_sub_sub_mod"
+    pushd a_sub_sub_mod &> /dev/null
+      git checkout HEAD~1
+    popd &> /dev/null
+    git add a_sub_sub_mod
+
+    git commit -m "Added submodules"
+  popd &> /dev/null
+  mkdir -p "${PRETEND_URL}"
+  pushd "${PRETEND_URL}" &> /dev/null
+    git clone --mirror "${BUILD_REPO}" .
+    # git init --bare .
+    # cd "${BUILD_REPO}"
+    # git remote add origin "${PRETEND_URL}"
+    # git push origin --mirror
+  popd &> /dev/null
+
+  # read -p "Press any key to continue" >&${stdout-1}
+)
+end_test
+
+# UNIT TEST test the guided target
+
+# TEST 1 test the git functionality based on a single repo with a number of commits/branches (this functionality fits better in just_git_functions)
+# TEST 2 just git export-repo, move archive, import-repo, clone-submodules-recursively
+# TEST 3 test git_push_check_recursive_submodules (most complicated)
