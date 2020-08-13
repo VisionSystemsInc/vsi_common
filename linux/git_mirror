@@ -597,6 +597,18 @@ function _git_mirror_load_info()
   fi
 }
 
+function _git_mirror_get_index_for_path()
+{
+  local index="$(findin "${1}" "${repo_paths[@]}")"
+  if [ "${index}" -ge 0 ]; then
+    echo "${index}"
+    return 0
+  else
+    echo "Error: no entry found for: ${1}" >&2
+    return 1
+  fi
+}
+
 function _git_mirror_get_url()
 {
   local index="$(findin "${1}" "${repo_paths[@]}")"
@@ -683,50 +695,38 @@ function git_push_main()
     exit 1
   fi
 
-  _git_mirror_load_info "${1}"
-  local main_repo_url="$(_git_mirror_get_url .)"
+  _git_mirror_load_info "${1}" # Sets repo_paths and repo_urls
+  local index="$(_git_mirror_get_index_for_path .)"
+  # Ensure the main repo is first in this list
+  repo_urls=("${repo_urls[$index]}" "${repo_urls[@]::$index}" "${repo_urls[@]:$((index+1))}")
+  repo_paths=("${repo_paths[$index]}" "${repo_paths[@]::$index}" "${repo_paths[@]:$((index+1))}")
+
   local repo_path
   pushd "${2}" &> /dev/null
-    repo_path="$(shopt -s nullglob; dirname */config)"
-    next_section "Pushing main repo '${repo_path}' to '${main_repo_url}'"
-    pushd "${repo_path}" &> /dev/null
-      # It seems mirrored repositories (vxl, pytorch) can include refs/remotes/
-      # I'm not sure how/why these are created; this is the pattern for the ref
-      # of a remote branch in a clone. Setting up a remote-tracking branch,
-      # specifying the remote & branch name manually during a git push or
-      # creating a push refspec basically all do the same thing: they map local
-      # refs (refs/heads) to remote refs (refs/remotes). Therefore, the mirror
-      # should not have any remote refs. In any case, these cause an error,
-      # "deny updating a hidden ref:", when pushing to a gitlab server. For now,
-      # only filter out refs/remotes
-      #
-      # Push to the mirror (git push --mirror will remove deleted refs)
-      # Spaces are not allowed in a refname
-      ${GIT} for-each-ref --format='%(refname)' | grep -v -e '^refs/remotes' -e '^refs/stash' | \
-          xargs ${GIT} push "${main_repo_url}"
-
-      if git_mirror_has_lfs; then
-        next_section "Pushing lfs objects for ${repo_path}"
-        ${GIT} remote add mirror "${main_repo_url}" 2>/dev/null || ${GIT} remote set-url mirror "${main_repo_url}"
-        ${GIT} lfs push mirror --all || :
-        # Does not work on file systems, only with real lfs servers
-      fi
-    popd &> /dev/null
-
     local index
-    # Loop through the remaining repos
+    # Loop through the repos
     for index in ${repo_paths[@]+"${!repo_paths[@]}"}; do
-      # Skip this since we are done with it
+
       if [ "${repo_paths[$index]}" = "." ]; then
-        continue
+        repo_path="$(shopt -s nullglob; dirname */config)"
+        next_section "Pushing main repo '${repo_path}' to '${repo_urls[$index]}'"
+      else
+        repo_path="$(shopt -s nullglob; dirname */"${repo_paths[$index]}/config")"
+        next_section "Pushing submodule repo '${repo_path}' to '${repo_urls[$index]}'"
       fi
-
-      repo_path="$(shopt -s nullglob; dirname */"${repo_paths[$index]}/config")"
-
-      next_section "Pushing submodule repo '${repo_path}' to ${repo_urls[$index]}"
       if [[ -d ${repo_path} ]]; then
         pushd "${repo_path}" &> /dev/null
-          # Push to the mirror (see above)
+          # It seems mirrored repositories (vxl, pytorch) can include refs/remotes/
+          # I'm not sure how/why these are created; this is the pattern for the ref
+          # of a remote branch in a clone. Setting up a remote-tracking branch,
+          # specifying the remote & branch name manually during a git push or
+          # creating a push refspec basically all do the same thing: they map local
+          # refs (refs/heads) to remote refs (refs/remotes). Therefore, the mirror
+          # should not have any remote refs. In any case, these cause an error,
+          # "deny updating a hidden ref:", when pushing to a gitlab server. For now,
+          # only filter out refs/remotes
+          #
+          # Push to the mirror (git push --mirror will remove deleted refs)
           # Spaces are not allowed in a refname
           ${GIT} for-each-ref --format='%(refname)' | grep -v -e '^refs/remotes' -e '^refs/stash' | \
               xargs ${GIT} push "${repo_urls[$index]}"
