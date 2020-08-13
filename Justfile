@@ -168,7 +168,7 @@ function caseify()
         VSI_COMMON_BASH_TEST_VERSION="${1}" Just-docker-compose build bash_test
         extra_args=1
       else
-        for version in 3.2 4.0 4.1 4.2 4.3 4.4 5.0; do
+        for version in ${VSI_COMMON_BASH_TEST_VERSIONS[@]+"${VSI_COMMON_BASH_TEST_VERSIONS[@]}"}; do
           VSI_COMMON_BASH_TEST_VERSION="${version}" Just-docker-compose build bash_test
         done
       fi
@@ -181,6 +181,58 @@ function caseify()
       VSI_COMMON_BASH_TEST_VERSION="${bash_version}" Just-docker-compose run bash_test ${@+"${@}"}
       ;;
 
+    background_start) # Start bash dockers in background
+      local DOCKER_COMPOSE_EXTRA_RUN_ARGS
+      local name
+      if [ $# -gt 0 ]; then
+        name="${COMPOSE_PROJECT_NAME}_bash_bg_${1}"
+        if Docker inspect --type container "${name}" &> /dev/null; then
+          Docker rm -f "${name}"
+        fi
+        DOCKER_COMPOSE_EXTRA_RUN_ARGS=(-d --name "${name}")
+        VSI_COMMON_BASH_TEST_VERSION="${1}" Just-docker-compose run bash_test bash
+        extra_args=1
+      else
+        local version
+        for version in ${VSI_COMMON_BASH_TEST_VERSIONS[@]+"${VSI_COMMON_BASH_TEST_VERSIONS[@]}"}; do
+          name="${COMPOSE_PROJECT_NAME}_bash_bg_${version}"
+          if Docker inspect --type container "${name}" &> /dev/null; then
+            Docker rm -f "${name}"
+          fi
+          DOCKER_COMPOSE_EXTRA_RUN_ARGS=(-d --name "${name}")
+          VSI_COMMON_BASH_TEST_VERSION="${version}" Just-docker-compose run bash_test bash
+        done
+      fi
+      ;;
+    background_stop) # Stop background bashes
+      local name
+      if [ $# -gt 0 ]; then
+        name="${COMPOSE_PROJECT_NAME}_bash_bg_${1}"
+        if Docker inspect --type container "${name}" &> /dev/null; then
+          Docker rm -f "${name}"
+        fi
+        extra_args=1
+      else
+        local version
+        for version in ${VSI_COMMON_BASH_TEST_VERSIONS[@]+"${VSI_COMMON_BASH_TEST_VERSIONS[@]}"}; do
+          name="${COMPOSE_PROJECT_NAME}_bash_bg_${version}"
+          if Docker inspect --type container "${name}" &> /dev/null; then
+            Docker rm -f "${name}"
+          fi
+        done
+      fi
+      ;;
+    background_exec) # Run command in background bashes
+      local name
+      local names=($(docker ps --format '{{.Names}}' | grep "^${COMPOSE_PROJECT_NAME}_bash_bg_"))
+
+      for name in ${names[@]+"${names[@]}"}; do
+        echo "Bash ${name}" >&2
+        Docker exec -it "${name}" ${@+"${@}"}
+      done
+      extra_args=$#
+      ;;
+
     push_bash) # Push bash images
       local version
 
@@ -188,7 +240,7 @@ function caseify()
         Docker push "${VSI_COMMON_DOCKER_REPO}:bash_test_${1}"
         extra_args=1
       else
-        for version in 3.2 4.0 4.1 4.2 4.3 4.4 5.0; do
+        for version in ${VSI_COMMON_BASH_TEST_VERSIONS[@]+"${VSI_COMMON_BASH_TEST_VERSIONS[@]}"}; do
           Docker push "${VSI_COMMON_DOCKER_REPO}:bash_test_${version}"
         done
       fi
