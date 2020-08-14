@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# TODO Disable any gitconfig settings
 
 . "$(dirname "${BASH_SOURCE[0]}")/../testlib.bsh"
 VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.."; pwd)"
@@ -134,7 +135,7 @@ begin_test "Part 4 - Pushing to mirror"
 )
 end_test
 
-begin_test "Part 6 - Cloning from mirror"
+begin_test "Part 5 - Cloning from mirror"
 (
   setup_test
 
@@ -157,8 +158,159 @@ begin_test "Part 6 - Cloning from mirror"
 )
 end_test
 
+begin_test "Part 6 - Check for unpushed tracked commits in submodules"
+(
+  setup_test
+
+  ##################################
+  #              SETUP             #
+  ##################################
+
+  BUILD_REPO1="${TESTDIR}"/build_repo
+  PRETEND_URL1="${TESTDIR}/git/pretend_repo" # bare repo
+  if [ "${OS-}" = "Windows_NT" ]; then
+    DIFFICULT_PATH1='diff  i cult'
+  else
+    DIFFICULT_PATH1=$'diff  i \t cult'
+  fi
+  DIFFICULT_NAME1='difficult submod'
+
+
+  # Sub sub module
+  mkdir -p "${BUILD_REPO1}_sub_sub"
+  pushd "${BUILD_REPO1}_sub_sub" &> /dev/null
+    git init .
+    touch readme_sub_sub
+    git add readme_sub_sub
+    git commit -m "Initial commit"
+  popd &> /dev/null
+  mkdir -p "${PRETEND_URL1}_sub_sub"
+  pushd "${PRETEND_URL1}_sub_sub" &> /dev/null
+    # This only works right, because all branches appear to be "topic" branches,
+    # so a push --mirror (once) will do what I want. Doesn't work well with more
+    # complexities like lfs
+    git clone --mirror "${BUILD_REPO1}_sub_sub" .
+    # git init --bare .
+    # cd "${BUILD_REPO1}_sub_sub"
+    # git remote add origin "${PRETEND_URL1}_sub_sub"
+    # git push origin --mirror
+  popd &> /dev/null
+
+  # Sub module
+  mkdir -p "${BUILD_REPO1}_sub"
+  pushd "${BUILD_REPO1}_sub" &> /dev/null
+    git init .
+    touch readme_sub
+    git add readme_sub
+    git submodule add "${PRETEND_URL1}_sub_sub" "a_sub_sub_module"
+    git commit -m "Initial commit"
+  popd &> /dev/null
+  mkdir -p "${PRETEND_URL1}_sub"
+  pushd "${PRETEND_URL1}_sub" &> /dev/null
+    git clone --mirror "${BUILD_REPO1}_sub" .
+    # git init --bare .
+    # cd "${BUILD_REPO1}_sub"
+    # git remote add origin "${PRETEND_URL1}_sub"
+    # git push origin --mirror
+  popd &> /dev/null
+
+  # Main Repo
+
+  # sm_path (sm_name, if different)                URL
+  # ./                                             "${PRETEND_URL1}"
+  # ./"${DIFFICULT_PATH1}" ("${DIFFICULT_NAME1}")  "${PRETEND_URL1}_sub"
+  # ./"${DIFFICULT_PATH1}/a_sub_sub_module"        "${PRETEND_URL1}_sub_sub"
+  #
+  # NOTE each repo is created in a respective ${BUILD_REPO1}"_* repo and mirror
+  # pushed to "${PRETEND_URL1}"_*
+
+  mkdir -p "${PRETEND_URL1}"
+  pushd "${PRETEND_URL1}" &> /dev/null
+    git init --bare .
+  popd &> /dev/null
+  mkdir -p "${BUILD_REPO1}"
+  pushd "${BUILD_REPO1}" &> /dev/null
+    git init
+    touch readme
+    git add readme
+    git commit -m "Initial commit"
+    git remote add origin "${PRETEND_URL1}"
+    git push origin master
+
+    git submodule add --name "${DIFFICULT_NAME1}" "${PRETEND_URL1}_sub" "${DIFFICULT_PATH1}"
+    # Git itself can't handle newlines, although the config file actually can
+    # escape them. This is a PURE git bug, plain and simple.
+    # This won't actually create a newline in the name, it just ignores it
+    # git submodule add https://github.com/visionsystemsinc/vsi_common $'  foo\tar\n'
+    # This will.
+    # git mv $'  diff  i \t cult' $' \n diff  i \t cult'
+    # However, at random this gives permission denied errors, good thing I don't need it...
+    git submodule update --init --recursive
+    git commit -m "Added submodules"
+
+    pushd "${DIFFICULT_PATH1}" &> /dev/null
+      pushd a_sub_sub_module &> /dev/null
+        git checkout master
+        touch a_sub_sub_file
+        git add a_sub_sub_file
+        git commit -m "Second commit"
+      popd &> /dev/null
+
+      git add a_sub_sub_module
+      git commit -m "update (sub) sub module"
+    popd &> /dev/null
+
+    git add "${DIFFICULT_PATH1}"
+    git commit -m "Updated submodules"
+  popd &> /dev/null
+
+  #################################
+  #              TEST             #
+  #################################
+
+  expected1="WARNING The commit tracked by the parent repository of the
+submodule, '${DIFFICULT_NAME1}', has not been pushed to the
+remote URL tracked by the parent repository:
+  ${PRETEND_URL1}_sub
+
+WARNING The commit tracked by the parent repository of the
+submodule, 'a_sub_sub_module', has not been pushed to the
+remote URL tracked by the parent repository:
+  ${PRETEND_URL1}_sub_sub" # NOTE there is actually a trailing newline here...
+
+  expected2="WARNING The commit tracked by the parent repository of the
+submodule, 'a_sub_sub_module', has not been pushed to the
+remote URL tracked by the parent repository:
+  ${PRETEND_URL1}_sub_sub" # NOTE there is actually a trailing newline here...
+
+  pushd "${BUILD_REPO1}" &> /dev/null
+    rv=0
+    output="$(git_push_check_recursive_submodules)" || rv=$?
+    [ "${rv}" -eq 1 ] && [ "${output}" = "${expected1}" ]
+
+    # Push the changes to the submodule
+    pushd "${DIFFICULT_PATH1}" &> /dev/null
+      git push origin master
+    popd &> /dev/null
+    rv=0
+    output="$(git_push_check_recursive_submodules)" || rv=$?
+    [ "${rv}" -eq 1 ] && [ "${output}" = "${expected2}" ]
+
+    # Push the changes to the sub submodule
+    pushd "${DIFFICULT_PATH1}"/a_sub_sub_module &> /dev/null
+      git push origin master
+    popd &> /dev/null
+    rv=0
+    output="$(git_push_check_recursive_submodules)" || rv=$?
+    [ "${rv}" -eq 0 ] && [ "${output}" = "" ]
+
+    # FIXME We are not testing whether the top-level repo has
+    # unpushed changes for a given remote & branch
+  popd &> /dev/null
+)
+end_test
+
 # UNIT TEST test the guided target
 
 # TEST 1 test the git functionality based on a single repo with a number of commits/branches
-# TEST 2 just git export-repo, move archive, import-repo, clone-submodules-recursively
-# TEST 3 test git_push_check_recursive_submodules (most complicated)
+# TEST 3 test git_push_check_recursive_submodules
