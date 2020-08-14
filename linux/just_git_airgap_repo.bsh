@@ -840,43 +840,27 @@ function submodule-helper-relative-url()
 }
 
 #**
-# .. function:: git_push_check_recursive_submodules
+# .. function:: git_sync_submodules_recursively
 #
-# Ensure all submodules have pushed the necessary changes to their public repo
+# git submodule sync but using a specific remote (``just_upstream`` by default)
 #
-# Check each submodule (recursively) to see if the SHA tracked by its parent repository has been pushed to the URL tracked by the parent repository (per its .gitmodules file).
+# Like git submodule sync, synchronize the URL configuration setting of each submodule (recursively) to the value specified in .gitmodules; however, instead of overwriting the default remote (origin), update the remote specified by JUST_GIT_UPSTREAM (``just_upstream`` by default).
 #
 # :Arguments: [``$1``] - The top-level repository remote-name. Default: origin
 # :Parameters: - [``JUST_GIT_UPSTREAM``] - The submodule remote-name. When updating the remote URL, use this remote. Default: ``just_upstream``
 #
-# :Output: Return 0 if, for each submodule (recursively), the changes tracked by the parent repository have been made public; otherwise, return 1
-#
 # .. note::
 #
 #   Creates the just_upstream remote just like, and using the same procedure as, :func:`just_git_functions.bsh safe_git_submodule_update`; however, importantly, it does not try to update the submodule to the expected SHA.
-#
-# .. note::
-#
-#   Cf. ``git push --recurse-submodules=check`` (available since git 1.8.0) will check for unpushed commits in a submodule for its current committed state in the parent project. However, this only seems to work if it is used with a set of outgoing commits that contains a change to a submodule. And, despite its name, it does not seem to recurse into submodules.
 #**
 
-# REVIEW After all of this, it might have been better to refactor
-# just_git_functions.bsh:safe_git_submodule_update to sync and then update
-# TODO At least can refactor this into sync and check
-function git_push_check_recursive_submodules()
-{
-  local recursive_index=-1 # HACKY
-  local is_tracked_change_private=0
-  _git_push_check_recursive_submodules ${@+"${@}"}
-}
-
-function _git_push_check_recursive_submodules()
+# REVIEW just_git_functions.bsh:safe_git_submodule_update is broken. Use this
+# function instead
+function git_sync_submodules_recursively()
 {
   local remote_name="${1-origin}"
 
   local JUST_GIT_UPSTREAM="${JUST_GIT_UPSTREAM-just_upstream}"
-
-  local recursive_index=$((recursive_index+1))
 
   local OLD_IFS="${IFS}"
   IFS=$'\n'
@@ -891,7 +875,6 @@ function _git_push_check_recursive_submodules()
     local sm_name="${sm_key#submodule.}"
     # Remove trailing slash
     sm_path="${sm_path%/}"
-    local tracked_sha="$(${GIT} submodule status --cached "${sm_path}" | cut -c2- | awk '{print $1}')"
     local submodule_url="$(${GIT} config -f "${PWD}"/.gitmodules "${sm_key}".url)"
     # URLs/paths relative to the CWD must either start with ./ or ../
     # according to git. This is how git-submodule.sh checks for this:
@@ -920,7 +903,64 @@ function _git_push_check_recursive_submodules()
       # that it not one of the defaults to handle issue #186
       ${GIT} remote add "${JUST_GIT_UPSTREAM}" "${submodule_url}" &> /dev/null || \
         ${GIT} remote set-url "${JUST_GIT_UPSTREAM}" "${submodule_url}"
+      # Depth-first traversal
+      git_sync_submodules_recursively "${JUST_GIT_UPSTREAM}"
+    popd &>/dev/null
+  done
+}
 
+#**
+# .. function:: recursively_check_submodules_are_public
+#
+# Ensure all submodules have pushed the necessary changes to their public repo
+#
+# Check each submodule (recursively) to see if the SHA tracked by its parent repository has been pushed to the URL tracked by the parent repository (per its .gitmodules file). Must be run from the root of a repository.
+#
+# :Parameters: - [``JUST_GIT_UPSTREAM``] - The submodule remote-name. When fetching a remote URL, use this remote. Default: ``just_upstream``
+#
+# :Output: Return 0 if, for each submodule (recursively), the changes tracked by the parent repository have been made public; otherwise, return 1
+#
+# .. note::
+#
+#   Creates a JUST_GIT_UPSTREAM remote. See :func:`git_sync_submodules_recursively`.
+#
+# .. note::
+#
+#   Cf. ``git push --recurse-submodules=check`` (available since git 1.8.0) will check for unpushed commits in a submodule for its current committed state in the parent project. However, this only seems to work if it is used with a set of outgoing commits that contains a change to a submodule. And, despite its name, it does not seem to recurse into submodules.
+#**
+
+function recursively_check_submodules_are_public()
+{
+  git_sync_submodules_recursively ${@+"${@}"}
+
+  local recursive_index=-1 # HACKY
+  local is_tracked_change_private=0
+  _recursively_check_submodules_are_public
+}
+
+function _recursively_check_submodules_are_public()
+{
+  local JUST_GIT_UPSTREAM="${JUST_GIT_UPSTREAM-just_upstream}"
+
+  local recursive_index=$((recursive_index+1))
+
+  local OLD_IFS="${IFS}"
+  IFS=$'\n'
+  # More robust than just_git_functions.bsh:submodule-helper-list
+  local submodule_keys=($(get_submodule_names))
+  #local tracked_shas=($(${GIT} submodule foreach --quiet 'echo "${prefix-"${displaypath}"}" ${sha1}'))
+  IFS="${OLD_IFS}"
+
+  local sm_key
+  for sm_key in ${submodule_keys+"${submodule_keys[@]}"}; do
+    local sm_path="$(${GIT} config -f .gitmodules "${sm_key}".path)"
+    local sm_name="${sm_key#submodule.}"
+    # Remove trailing slash
+    sm_path="${sm_path%/}"
+    local tracked_sha="$(${GIT} submodule status --cached "${sm_path}" | cut -c2- | awk '{print $1}')"
+    local submodule_url="$(${GIT} config -f "${PWD}"/.gitmodules "${sm_key}".url)"
+
+    pushd "${sm_path}" &>/dev/null
       ${GIT} fetch "${JUST_GIT_UPSTREAM}"
 
       # git branch -r --contains SHA will show a list of remote/branch refs
@@ -936,7 +976,7 @@ function _git_push_check_recursive_submodules()
       fi
 
       # Depth-first traversal
-      _git_push_check_recursive_submodules "${JUST_GIT_UPSTREAM}"
+      _recursively_check_submodules_are_public "${JUST_GIT_UPSTREAM}"
     popd &>/dev/null
   done
 
@@ -1286,7 +1326,7 @@ function relocate_git_defaultify()
       #   does not have the correct path component) - dry-run should fail
 
       # TODO Swap out git push --dry-run --recurse-submodules=check for
-      # git_push_check_recursive_submodules
+      # recursively_check_submodules_are_public
 
       # Is check_remote set by a flag
       if [ -z "${check_remote+x}" ]; then
@@ -1409,6 +1449,8 @@ function relocate_git_defaultify()
 
       # ASSUMPTION We are currently in the project's root directory; this is
       # normally the case with just
+
+      # REVIEW If no arguments are specified, choose origin's remote URL
 
       # just cd's into the project's root directory, which will make
       # prep_dir/output_dir relative to that, not the user's CWD
