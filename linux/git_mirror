@@ -597,18 +597,6 @@ function _git_mirror_load_info()
   fi
 }
 
-function _git_mirror_get_index_for_path()
-{
-  local index="$(findin "${1}" "${repo_paths[@]}")"
-  if [ "${index}" -ge 0 ]; then
-    echo "${index}"
-    return 0
-  else
-    echo "Error: no entry found for: ${1}" >&2
-    return 1
-  fi
-}
-
 function _git_mirror_get_url()
 {
   local index="$(findin "${1}" "${repo_paths[@]}")"
@@ -696,29 +684,20 @@ function git_push_main()
   fi
 
   _git_mirror_load_info "${1}" # Sets repo_paths and repo_urls
-  local index="$(_git_mirror_get_index_for_path .)"
-  # Ensure the main repo is first in this list
-  repo_urls=("${repo_urls[$index]}" "${repo_urls[@]::$index}" "${repo_urls[@]:$((index+1))}")
-  repo_paths=("${repo_paths[$index]}" "${repo_paths[@]::$index}" "${repo_paths[@]:$((index+1))}")
 
-  local repo_path
   pushd "${2}" &> /dev/null
     local index
     # Loop through the repos
     for index in ${repo_paths[@]+"${!repo_paths[@]}"}; do
 
-      if [ "${repo_paths[$index]}" = "." ]; then
-        repo_path="$(shopt -s nullglob; dirname */config)"
-        next_section "Pushing main repo '${repo_path}' to '${repo_urls[$index]}'"
-      else
-        repo_path="$(shopt -s nullglob; dirname */"${repo_paths[$index]}/config")"
-        next_section "Pushing submodule repo '${repo_path}' to '${repo_urls[$index]}'"
-      fi
+      local repo_path
+      repo_path="$(shopt -s nullglob; dirname */"${repo_paths[$index]}/config")"
+      next_section "Pushing repo '${repo_path}' to '${repo_urls[$index]}'"
       if [[ -d ${repo_path} ]]; then
         pushd "${repo_path}" &> /dev/null
           # It seems mirrored repositories (vxl, pytorch) can include refs/remotes/
-          # I'm not sure how/why these are created; this is the pattern for the ref
-          # of a remote branch in a clone. Setting up a remote-tracking branch,
+          # I'm not sure how/why these are created---this is the pattern for the
+          # ref of a remote branch in a clone. Setting up a remote-tracking branch,
           # specifying the remote & branch name manually during a git push or
           # creating a push refspec basically all do the same thing: they map local
           # refs (refs/heads) to remote refs (refs/remotes). Therefore, the mirror
