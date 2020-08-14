@@ -38,7 +38,8 @@ if [ -d /proc ]; then
   [[ ${proc_data} =~ ${pattern} ]]
   ppid="${BASH_REMATCH[1]}"
 
-  # This could result in "-bash" on WSL 1... I don't know why, how, nor where else that would likely happen. csh often appears as "-sh".
+  # https://superuser.com/a/278865
+  # Don't use cmdline, a login shell could result in "-bash" on WSL 1... csh often appears as "-sh" which is just confusing.
   # IFS= read -r -d '' parent_name < "/proc/${ppid}/cmdline"
 
   # This method consistently gives the expected result
@@ -49,6 +50,10 @@ if [ -d /proc ]; then
 elif command -v ps &> /dev/null; then
   ppid="$(ps -p $$ -o ppid=)"
   parent_name="$(ps -p "${ppid}" -o comm=)"
+  # https://superuser.com/a/278865
+  if [ "${parent_name:0:1}" = "-" ]; then
+    parent_name="${parent_name:1}"
+  fi
 else
   # Can't determine parent shell, so assume everything is ok
   exit 0

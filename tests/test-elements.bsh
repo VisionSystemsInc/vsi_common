@@ -7,6 +7,7 @@ fi
 source "${VSI_COMMON_DIR}/tests/testlib.bsh"
 source "${TESTLIB_DIR}/test_utils.bsh"
 source "${VSI_COMMON_DIR}/linux/elements.bsh"
+source "${VSI_COMMON_DIR}/linux/compat.bsh"
 
 begin_test "Dynamic set array"
 (
@@ -39,6 +40,36 @@ begin_test "Dynamic set array"
   dynamic_set_a z aa bb
   assert_array_values z aa bb
   assert_array_contiguous z
+
+  # unset variable
+  dynamic_set_a foo
+  [ "${#foo[@]}" = "0" ]
+
+  # set to empty string
+  dynamic_set_a bar ''
+  assert_array_values bar ""
+  assert_array_contiguous bar
+)
+end_test
+
+[ "${bash_feature_declare_name_reffing}" = "0" ] || skip_next_test
+begin_test "Dynamic set array with name ref"
+(
+  setup_test
+
+  declare -n x=y
+  y=(11 "2  2")
+  dynamic_set_a z "${x[@]}"
+  assert_array_eq z y
+
+  empty=()
+  unset y
+  # This test became more pointless, not sure what I'm testing that an broken
+  # name ref change trigger nounset? That test doesn't belong here. That an empty
+  # array works? That's nothing to do with nameref. Oh well. The "${x[@]+" is only
+  # need in bash 4.3
+  dynamic_set_a z ${x[@]+"${x[@]}"}
+  assert_array_eq z empty
 )
 end_test
 
@@ -60,6 +91,14 @@ begin_test "Dynamic set variable"
   # Normal value
   unset z
   dynamic_set z
+  [ -n "${z+set}" ]
+  not compgen -e -X '!z' # not exported
+
+  # Empty string value
+  declare -p z
+  unset z
+  dynamic_set z ''
+  declare -p z
   [ -n "${z+set}" ]
   not compgen -e -X '!z' # not exported
 
@@ -905,7 +944,7 @@ begin_test "Is array"
   is_array bar3
   not is_array foo
 
-  # Test declared but unset
+  # Test declared but unassigned
   declare -a duck
   is_array duck
 

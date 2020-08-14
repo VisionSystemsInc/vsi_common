@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 
-
 if [ -z ${VSI_COMMON_DIR+set} ]; then
   VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 fi
@@ -62,7 +61,7 @@ begin_test "Date flag"
 (
   setup_test
 
-  if [ "${date_supports_nanoseconds}" = "0" ]; then
+  if [ "${date_feature_nanoseconds}" = "0" ]; then
     assert_regex_eq "$(date +%N)" '^[0-9]{9}$'
   else
     not assert_regex_eq "$(date +%N)" '^[0-9]{9}$'
@@ -70,66 +69,301 @@ begin_test "Date flag"
 )
 end_test
 
-begin_test "Bash flag"
+begin_test "Bash flags"
 (
   setup_test
 
-  x=(foo bar)
-  assert_str_eq "$(declare -p x)" "declare -a x=${bash_declare_array_quote}([0]=\"foo\" [1]=\"bar\")${bash_declare_array_quote}"
+  ### bash_behavior_declare_array_quote
+  x1=(foo bar)
+  assert_str_eq "$(declare -p x1)" "declare -a x1=${bash_behavior_declare_array_quote}([0]=\"foo\" [1]=\"bar\")${bash_behavior_declare_array_quote}"
 
-  if [ "${bash_variable_parameter_transformation}" = "0" ]; then
+  ### bash_feature_parameter_transformation part 1
+  if [ "${bash_feature_parameter_transformation}" = "0" ]; then
     assert_regex_eq "${BASH_VERSINFO@a}" '^[ar]*$'
   fi
 
-  if [ "${bash_variable_name_reffing}" = "0" ]; then
-    declare -n y=x
+  ### bash_feature_declare_name_reffing
+  if [ "${bash_feature_declare_name_reffing}" = "0" ]; then
+    declare -n y2=x1
   else
-    not declare -n y=x
+    not declare -n y2=x1
   fi
 
-  z=(11 22)
-  if [ "${bash_printf_array_assignment}" = "0" ]; then
-    printf -v z[2] '%s' 33
-    assert_array_values z 11 22 33
+  ### bash_feature_printf_array_assignment
+  z3=(11 22)
+  if [ "${bash_feature_printf_array_assignment}" = "0" ]; then
+    printf -v z3[2] '%s' 33
+    assert_array_values z3 11 22 33
   else
-    not printf -v z[2] '%s' 33
+    not printf -v z3[2] '%s' 33
   fi
 
-  if [ "${bash_associative_array}" = "0" ]; then
-    declare -A foo
-    foo[var]=15
+  ### bash_feature_associative_array
+  if [ "${bash_feature_associative_array}" = "0" ]; then
+    declare -A foo4
+    foo4[var]=15
   else
-    not declare -A foo
+    not declare -A foo4
   fi
 
-  d=$'foo\tbar'
-  re='\t'
-  if [ "${bash_regex_special_characters_non_literal}" = "0" ]; then
-    assert_regex_eq "${d}" "${re}"
+  ### bash_behavior_regex_special_characters_non_literal
+  d5=$'foo\tbar'
+  re5='\t'
+  if [ "${bash_behavior_regex_special_characters_non_literal}" = "0" ]; then
+    assert_regex_eq "${d5}" "${re5}"
   else
-    not assert_regex_eq "${d}" "${re}"
+    not assert_regex_eq "${d5}" "${re5}"
   fi
 
-  arr=(11 22 33 44)
-  ans1=(33 44)
-  ans2=("33 44")
+  ### bash_bug_ifs_array_slice_expansion
+  arr6=(11 22 33 44)
+  ans1_6=(33 44)
+  ans2_6=("33 44")
   OLD_IFS="${IFS}"
   IFS=x
-  arr2=("${arr[@]:2}")
+  arr2_6=("${arr6[@]:2}")
   if [ "${bash_bug_ifs_array_slice_expansion}" = "0" ]; then
-    assert_array_eq arr2 ans2
+    assert_array_eq arr2_6 ans2_6
   else
-    assert_array_eq arr2 ans1
+    assert_array_eq arr2_6 ans1_6
   fi
   IFS="${OLD_IFS}"
+
+  ### bash_bug_declare_fails_local_declared_unset_variable
+  declare -a some_var7
+  if [ "${bash_bug_declare_fails_local_declared_unset_variable}" = "0" ]; then
+    not declare -p some_var7
+  else
+    declare -p some_var7
+  fi
+
+  ### bash_feature_declare_global
+  if [ "${bash_feature_declare_global}" = "0" ]; then
+    declare -g foo8
+  else
+    not declare -g foo8
+  fi
+
+  ### bash_feature_allocate_file_descriptor
+  if [ "${bash_feature_allocate_file_descriptor}" = "0" ]; then
+    (exec {x9}>&2) 2>/dev/null
+  else
+    not_s '(exec {x}>&1) 1>/dev/null'
+  fi
+
+  ### bash_feature_declare_print_function
+  function foo_10()
+  {
+    :
+  }
+  ans_10='foo_10 *\(\) *
+\{ *
+ *: *
+\} *'
+
+  if [ "${bash_feature_declare_print_function}" = "0" ]; then
+    declare -pf foo_10
+    assert_regex_eq "$(declare -pf foo_10)" "${ans_10}"
+  else
+    not declare -pf foo_10
+  fi
+
+  ### bash_bug_local_shadow_exported_variable
+  export x_11=12
+  function foo_11()
+  {
+    local x_11
+    declare -p x_11 || :
+    compgen -A export x_11
+    bash -c "declare -p x_11 || :"
+  }
+
+  nl=$'\n'
+  ans_11=
+  if [ "${bash_bug_declare_fails_local_declared_unset_variable}" = "1" ]; then
+    ans_11="declare -x x_11${bash_bug_declared_unset_value}${nl}"
+  fi
+  ans_11+=$'x_11'
+  if [ "${bash_bug_local_shadow_exported_variable}" = "1" ]; then
+    ans_11+="${nl}declare -x x_11=\"12\""
+  fi
+
+  # This bug won't manifest when the function is directly called via $(), use a file proxy
+  assert_str_eq "$("${TESTLIB_DIR}/aux_compat_1.bsh")" "${ans_11}"
+
+  ### bash_bug_substitute_empty_funcname
+  if [ "${bash_bug_substitute_empty_funcname}" = "0" ]; then
+    [ " ""${FUNCNAME[@]+FOO}" = " FOO" ]
+  else
+    [ " ""${FUNCNAME[@]+FOO}" != " FOO" ]
+  fi
+
+  ### bash_bug_declare_fails_local_declared_unset_variable
+  function foo_12()
+  {
+    local x_12
+    if [ "${bash_bug_declare_fails_local_declared_unset_variable}" = "0" ]; then
+      not declare -p x_12
+    else
+      declare -p x_12
+    fi
+  }
+  foo_12
+
+  ### bash_bug_declare_fails_global_declared_unset_variable
+  declare x_13
+  if [ "${bash_bug_declare_fails_global_declared_unset_variable}" = "0" ]; then
+    not declare -p x_13
+  else
+    declare -p x_13
+  fi
+
+  ### bash_bug_declared_unset_value
+  function foo_14()
+  {
+    local x_14
+    if [ "${bash_bug_declare_fails_local_declared_unset_variable}" = "0" ]; then
+      re_14="(^|${nl})declare -- x_14${bash_bug_declared_unset_value}(${nl}|$)"
+      assert_regex_eq "$(declare -p)" "${re_14}"
+    else
+      re_14="^declare -- x_14${bash_bug_declared_unset_value}$"
+      assert_regex_eq "$(declare -p x_14)" "${re_14}"
+    fi
+  }
+
+  foo_14
+
+
+  ### bash_feature_declare_array_escape_special_characters
+  x_15=($'foo\tbar')
+  tab=$'\t'
+  if [ "${bash_feature_declare_array_escape_special_characters}" = "0" ]; then
+    [ "$(declare -p x_15)" = "declare -a x_15=${bash_behavior_declare_array_quote}([0]=$'foo\tbar')${bash_behavior_declare_array_quote}" ]
+  else
+    [ "$(declare -p x_15)" = "declare -a x_15=${bash_behavior_declare_array_quote}([0]=\"foo${tab}bar\")${bash_behavior_declare_array_quote}" ]
+  fi
+
+  ### bash_feature_bashpid
+  if [ "${bash_feature_bashpid}" = "0" ]; then
+    declare -p BASHPID
+  else
+    # signal_tools sets bashpid, unset it for bash 3.2
+    if [ "${BASH_VERSINFO[0]}" = "3" ]; then
+      unset BASHPID
+    fi
+    not declare -p BASHPID
+  fi
+
+  ### bash_feature_bashpid_read_only
+  if [ "${bash_feature_bashpid_read_only}" = "0" ]; then
+    not unset BASHPID
+  else
+    unset BASHPID
+  fi
+
+  ### bash_feature_case_modification part 1
+  x_16="aBcD"
+  if [ "${bash_feature_case_modification}" = "0" ]; then
+    [ "${x_16^^}" = "ABCD" ]
+  fi
+
+  ### bash_bug_bash_env_process_substitution
+  if bash_bug_bash_env_process_substitution; then
+    [ "$(BASH_ENV=<(echo echo hi) bash -c :)" = "" ]
+  else
+    [ "$(BASH_ENV=<(echo echo hi) bash -c :)" = "hi" ]
+  fi
+
+  # Test the caching feature
+  __bash_bug_bash_env_process_substitution=0
+  function bash()
+  {
+    echo 0
+  }
+  bash_bug_bash_env_process_substitution
+  unset __bash_bug_bash_env_process_substitution
+  not bash_bug_bash_env_process_substitution
+  function bash()
+  {
+    :
+  }
+  not bash_bug_bash_env_process_substitution
+  unset __bash_bug_bash_env_process_substitution
+  bash_bug_bash_env_process_substitution
+
+  # Cleanup
+  unset __bash_bug_bash_env_process_substitution
+  unset bash
+
+#   # TODO: Can't replicate, table for now
+#   ### bash_behavior_strict_posix_functions
+#   function foo_17()
+#   {
+#     local re='^[a-z][a-z]$'
+#     x="$(cat <(echo ok))"
+#     if [[ ${x} =~ ${re} ]]; then
+#       echo yes
+#     else
+#       echo no
+#     fi
+#   }
+#   echo 000 >&2
+#   export -f foo_17
+#   # 3.2 failed, 4.0-4.2 pass, 4.3-5.0 failed 5.1 passed
+
+#   # echo 111 >&2
+#   # if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "51" ]; then
+#   #   [ "$(bash --posix -euc "foo_17" || :)" = "yes" ]
+#   # else
+#   #   [ "$(bash --posix -euc "foo_17" || :)" = "" ]
+#   # fi
+
+# echo 222 >&2
+#   if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "42" ]; then
+#     [ "$(bash --posix -c : 2>&1 || :)" = "1" ]
+#   else
+#     [ "$(bash --posix -c : 2>&1 || :)" = "1" ]
+#   fi
+# echo 333 >&2
+
+  ### bash_behavior_empty_array_unbound
+  x_17=()
+  y_17="$(echo "${x_17[@]}bound")" || :
+  if [ "${bash_behavior_empty_array_unbound}" = "0" ]; then
+    [ "${y_17}" = "" ]
+  else
+    [ "${y_17}" = "bound" ]
+  fi
+
+  d_18=''
+  re_18=''
+  ### bash_bug_regex_empty_string
+  if [ "${bash_bug_regex_empty_string}" = 0 ]; then
+    [[ ! ${d_18} =~ ${re_18} ]] || false
+  else
+    [[ ${d_18} =~ ${re_18} ]] || false
+  fi
+
 )
 end_test
 
-[ "${bash_variable_parameter_transformation}" = "1" ] || skip_next_test
+### bash_feature_parameter_transformation part 2
+[ "${bash_feature_parameter_transformation}" = "1" ] || skip_next_test
 begin_required_fail_test "Fail bash parameter transformation"
 (
   setup_test
   begin_fail_zone
   echo "${BASH_VERSINFO@a}"
+)
+end_test
+
+### bash_feature_case_modification part 2
+[ "${bash_feature_case_modification}" = "1" ] || skip_next_test
+begin_required_fail_test "Fail bash case modification"
+(
+  setup_test
+  x_16="aBcD"
+  begin_fail_zone
+  echo "${x_16^^}"
 )
 end_test
