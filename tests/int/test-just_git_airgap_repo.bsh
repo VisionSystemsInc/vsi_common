@@ -22,21 +22,21 @@ function setup()
   export GIT_COMMITTER_EMAIL='foo.bar@example.com'
   export GIT_AUTHOR_EMAIL='foo.bar@example.com'
 
-  VSI_COMMON_URL="${TRASHDIR}/orig/VisionSystemsInc/vsi_common.git" # bare repo
-  RECIPES_URL="${TRASHDIR}/orig/VisionSystemsInc/docker_recipes.git" # bare repo
-  PRETEND_URL="${TRASHDIR}/orig/pretend_repo.git" # bare repo
+  VSI_COMMON_URL="${TRASHDIR}/git/VisionSystemsInc/vsi_common.git" # bare repo
+  RECIPES_URL="${TRASHDIR}/git/VisionSystemsInc/docker_recipes.git" # bare repo
+  PRETEND_URL="${TRASHDIR}/git/pretend_repo.git" # bare repo
   BUILD_REPO="${TRASHDIR}/build"
   PREP_DIR="${TRASHDIR}/pretend_prep"
   TRANSFER_DIR="${TRASHDIR}/transfer"
-  MIRROR_DIR="${TRASHDIR}/mirror"
-  CLONE_DIR="${TRASHDIR}/clone"
+  AIRGAP_MIRROR_DIR="${TRASHDIR}/airgap/mirror"
+  AIRGAP_CLONE_DIR="${TRASHDIR}/airgap/clone"
 
   mkdir -p "${VSI_COMMON_URL}"
   mkdir -p "${RECIPES_URL}"
   mkdir -p "${PRETEND_URL}"
   mkdir -p "${BUILD_REPO}"
   mkdir -p "${TRANSFER_DIR}"
-  mkdir -p "${CLONE_DIR}"
+  mkdir -p "${AIRGAP_CLONE_DIR}"
 }
 
 begin_test "Part 1 - Setup test repo"
@@ -118,8 +118,8 @@ begin_test "Part 4 - Pushing to mirror"
   setup_test
 
   for d in pretend_repo.git vsi_common.git recipes.git; do
-    mkdir -p "${MIRROR_DIR}/${d}"
-    pushd "${MIRROR_DIR}/${d}" &> /dev/null
+    mkdir -p "${AIRGAP_MIRROR_DIR}/${d}"
+    pushd "${AIRGAP_MIRROR_DIR}/${d}" &> /dev/null
       git init --bare
     popd &> /dev/null
   done
@@ -128,7 +128,7 @@ begin_test "Part 4 - Pushing to mirror"
     source setup.env # Sets VSI_COMMON_DIR to "${TRANSFER_DIR}"/.vsi_common
     source "${VSI_COMMON_DIR}/linux/just_git_airgap_repo.bsh"
     # TODO use compat.bsh flag
-    sed -i '' -e 's|^JUST_GIT_AIRGAP_MIRROR_URL=$|JUST_GIT_AIRGAP_MIRROR_URL="'"${MIRROR_DIR}"'"|' repo_map.env
+    sed -i '' -e 's|^JUST_GIT_AIRGAP_MIRROR_URL=$|JUST_GIT_AIRGAP_MIRROR_URL="'"${AIRGAP_MIRROR_DIR}"'"|' repo_map.env
     JUST_WORKING_DIR="${PWD}" relocate_git_defaultify git_import-repo
   popd &> /dev/null
 )
@@ -138,22 +138,22 @@ begin_test "Part 6 - Cloning from mirror"
 (
   setup_test
 
-  pushd "${CLONE_DIR}" &> /dev/null
-    git clone "${MIRROR_DIR}"/pretend_repo.git .
+  pushd "${AIRGAP_CLONE_DIR}" &> /dev/null
+    git clone "${AIRGAP_MIRROR_DIR}"/pretend_repo.git .
 
     # per just_git_airgap_repo:print_git_airgap_submodule_update
     source /dev/stdin <<< "$(git show origin/__just_git_mirror_info_file:repo_map.env 2>/dev/null)"
     git_airgap_submodule_update vsi_common
 
-    source "${CLONE_DIR}/vsi_common/linux/just_git_airgap_repo.bsh"
+    source "${AIRGAP_CLONE_DIR}/vsi_common/linux/just_git_airgap_repo.bsh"
 
     JUST_WORKING_DIR="${PWD}" relocate_git_defaultify git_clone-airgap-repo
   popd &> /dev/null
 
   # NOTE Unfortunately, the main repo is dealt with separately from submodules.
   # Be sure to test both
-  [[ "$(git -C "${CLONE_DIR}" rev-parse HEAD)" == "$(git -C "${VSI_COMMON_REPO}" rev-parse HEAD)" ]]
-  [[ "$(git -C "${CLONE_DIR}"/docker/recipes rev-parse HEAD)" == "$(git -C "${VSI_COMMON_REPO}"/docker/recipes rev-parse HEAD)" ]]
+  [[ "$(git -C "${AIRGAP_CLONE_DIR}" rev-parse HEAD)" == "$(git -C "${VSI_COMMON_REPO}" rev-parse HEAD)" ]]
+  [[ "$(git -C "${AIRGAP_CLONE_DIR}"/docker/recipes rev-parse HEAD)" == "$(git -C "${VSI_COMMON_REPO}"/docker/recipes rev-parse HEAD)" ]]
 )
 end_test
 
