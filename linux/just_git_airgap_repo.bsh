@@ -862,11 +862,21 @@ function submodule-helper-relative-url()
 
 # REVIEW After all of this, it might have been better to refactor
 # just_git_functions.bsh:safe_git_submodule_update to sync and then update
+# TODO At least can refactor this into sync and check
 function git_push_check_recursive_submodules()
+{
+  local recursive_index=-1 # HACKY
+  local is_tracked_change_private=0
+  _git_push_check_recursive_submodules ${@+"${@}"}
+}
+
+function _git_push_check_recursive_submodules()
 {
   local remote_name="${1-origin}"
 
   local JUST_GIT_UPSTREAM="${JUST_GIT_UPSTREAM-just_upstream}"
+
+  local recursive_index=$((recursive_index+1))
 
   local OLD_IFS="${IFS}"
   IFS=$'\n'
@@ -874,13 +884,6 @@ function git_push_check_recursive_submodules()
   local submodule_keys=($(get_submodule_names))
   #local tracked_shas=($(${GIT} submodule foreach --quiet 'echo "${prefix-"${displaypath}"}" ${sha1}'))
   IFS="${OLD_IFS}"
-
-  if [ -z "${is_tracked_change_private+x}" ]; then
-    local recursive_index=0 # HACKY
-    local is_tracked_change_private=0
-  else
-    local recursive_index=$((recursive_index+1))
-  fi
 
   local sm_key
   for sm_key in ${submodule_keys+"${submodule_keys[@]}"}; do
@@ -933,7 +936,7 @@ function git_push_check_recursive_submodules()
       fi
 
       # Depth-first traversal
-      git_push_check_recursive_submodules "${JUST_GIT_UPSTREAM}"
+      _git_push_check_recursive_submodules "${JUST_GIT_UPSTREAM}"
     popd &>/dev/null
   done
 
