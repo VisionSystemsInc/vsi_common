@@ -497,4 +497,90 @@ begin_test "git functionality"
 )
 end_test
 
+begin_test "make remote pushable"
+(
+  setup_test
+
+  ##################################
+  #              SETUP             #
+  ##################################
+
+  BUILD_REPO3="${TESTDIR}"/build_repo
+  PRETEND_URL3="${TESTDIR}/git/pretend_repo" # bare repo
+  if [ "${OS-}" = "Windows_NT" ]; then
+    DIFFICULT_PATH3='diff  i cult'
+  else
+    DIFFICULT_PATH3=$'diff  i \t cult'
+  fi
+  DIFFICULT_NAME3='difficult submod'
+
+  # Sub module
+  mkdir -p "${BUILD_REPO3}_sub"
+  pushd "${BUILD_REPO3}_sub" &> /dev/null
+    git init .
+    touch readme_sub
+    git add readme_sub
+    git commit -m "Initial commit"
+  popd &> /dev/null
+  mkdir -p "${PRETEND_URL3}_sub"
+  pushd "${PRETEND_URL3}_sub" &> /dev/null
+    git clone --mirror "${BUILD_REPO3}_sub" .
+    # git init --bare .
+    # cd "${BUILD_REPO3}_sub"
+    # git remote add origin "${PRETEND_URL3}_sub"
+    # git push origin --mirror
+  popd &> /dev/null
+
+  # Main repo
+  mkdir -p "${BUILD_REPO3}"
+  pushd "${BUILD_REPO3}" &> /dev/null
+    git init .
+    touch readme
+    git add readme
+    git commit -m "Initial commit"
+
+    git submodule add --name "${DIFFICULT_NAME3}" "${PRETEND_URL3}_sub" "${DIFFICULT_PATH3}"
+    git submodule update --init --recursive
+    git commit -m "Added submodules"
+
+    git remote add origin https://git-server.org/company/arepo.git
+    git remote add upstream https://git1-server.org/company/arepo1.git
+    git remote set-url --add upstream https://git2-server.org/company/arepo1.git
+    git remote add pushconfig https://git3-server.org/company/arepo1.git
+    git remote set-url --push pushconfig git@git3-server.org/company/arepo1.git
+
+    pushd "${DIFFICULT_PATH3}" &> /dev/null
+      git remote set-url origin https://git-server.org/company/asubmod.git
+      git remote add sm_upstream https://git1-server.org/company/asubmod1.git
+    popd &> /dev/null
+  popd &> /dev/null
+
+  #################################
+  #              TEST             #
+  #################################
+
+  pushd "${BUILD_REPO3}" &> /dev/null
+    make_remote_url_pushable origin
+    make_remote_url_pushable upstream
+
+    [ "$(git config --get remote.origin.url)" = "https://git-server.org/company/arepo.git" ]
+    [ "$(git config --get remote.upstream.url)" = "https://git2-server.org/company/arepo1.git" ]
+    # do nothing if a pushurl is configured
+    [ "$(git config --get remote.pushconfig.url)" = "https://git3-server.org/company/arepo1.git" ]
+    [ "$(git config --get remote.pushconfig.pushurl)" = "git@git3-server.org/company/arepo1.git" ]
+
+    pushd "${DIFFICULT_PATH3}" &> /dev/null
+      make_remote_url_pushable origin
+      make_remote_url_pushable sm_upstream
+
+      [ "$(git config --get remote.origin.url)" = "https://git-server.org/company/asubmod.git" ]
+      [ "$(git config --get remote.sm_upstream.url)" = "https://git1-server.org/company/asubmod1.git" ]
+    popd &> /dev/null
+
+    # ensure the submodule's configured path is not changed
+    [ "$(git config --get submodule."${DIFFICULT_NAME3}".url)" = "${PRETEND_URL3}_sub" ]
+  popd &> /dev/null
+)
+end_test
+
 # UNIT TEST test the guided target
