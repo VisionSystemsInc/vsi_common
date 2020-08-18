@@ -112,7 +112,7 @@ function log_unpushed_commits()
 }
 
 #**
-# .. function:: git_tracking_branches
+# .. function:: get_tracking_branches
 #
 # Find remote- and corresponding local-tracking branches
 #
@@ -128,7 +128,8 @@ function log_unpushed_commits()
 #   - Requires git >= 1.9.0
 #**
 
-function git_tracking_branches()
+# REVIEW Should this support getting the tracking branch of a specific branch
+function get_tracking_branches()
 {
   # REVIEW Could support multiple named remotes with a for loop
   local remote_name="${1-}"
@@ -175,6 +176,8 @@ function git_tracking_branches()
   # can be combined to provide the local-tracking branch, and then
   # git show-ref refs/remotes/"${remote}/${tracking}"
   # can be used to see if the remote-tracking branch has been pruned
+  # RE git show-rev will error if the branch doesn't exist or has been pruned;
+  # although unfortunately, it is same error code in both cases
 
   just_git_tracking_branches=()
   just_git_remote_tracking_branches=()
@@ -189,7 +192,7 @@ function git_tracking_branches()
 #**
 # .. function:: log_outgoing_commits
 #
-# List all unpushed commits for a tracking branches to stdout
+# List all unpushed commits for tracking branches to stdout
 #
 # REVIEW What order should these go in
 # :Arguments: - [``$1``] - A local-tracking branch's name to filter by; e.g., master. If unset, then don't filter by branch name
@@ -210,8 +213,9 @@ function log_outgoing_commits()
   local tracking_branches
   if [ $# -eq 0 ]; then
     local just_git_tracking_branches
-    git_tracking_branches "${remote_name}" # Sets just_git_tracking_branches
-    tracking_branches=("${just_git_tracking_branches[@]}")
+    local just_git_remote_tracking_branches
+    get_tracking_branches "${remote_name}" # Sets just_git_[remote_]tracking_branches
+    tracking_branches=(${just_git_tracking_branches+"${just_git_tracking_branches[@]}"})
   else
     tracking_branches=("${1}")
   fi
@@ -219,13 +223,13 @@ function log_outgoing_commits()
   # This will list only the outgoing commits for a local-tracking branch
   local tracking_branch
   local commits=()
-  for tracking_branch in "${tracking_branches[@]}"; do
+  for tracking_branch in ${tracking_branches+"${tracking_branches[@]}"}; do
     commits+=("$(${GIT} log --decorate --graph --format=short --color=always \
         "${tracking_branch}"@{upstream}.."${tracking_branch}")")
   done
   local OLD_IFS="${IFS}"
   IFS=$'\n'
-  echo "${commits[*]}"
+  echo ${commits+"${commits[*]}"}
   IFS="${OLD_IFS}"
 }
 
