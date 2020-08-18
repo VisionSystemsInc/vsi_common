@@ -304,8 +304,9 @@ remote URL tracked by the parent repository:
     output="$(recursively_check_submodules_are_public)" || rv=$?
     [ "${rv}" -eq 0 ] && [ "${output}" = "" ]
 
-    # FIXME We are not testing whether the top-level repo has
-    # unpushed changes for a given remote & branch
+    # NOTE We are not testing whether whether the top-level repo has unpushed
+    # changes for a given remote & branch. log_unpushed_commits is used to
+    # test for this; see the next section, git functionality
   popd &> /dev/null
 
   # A repo with no submodules
@@ -317,7 +318,172 @@ remote URL tracked by the parent repository:
 )
 end_test
 
-# UNIT TEST test the guided target
+begin_test "git functionality"
+(
+  setup_test
 
-# TEST 1 test the git functionality based on a single repo with a number of commits/branches
-# TEST 3 test recursively_check_submodules_are_public
+  ##################################
+  #              SETUP             #
+  ##################################
+
+  # git log --pretty=format:"| %s%d" --graph --all
+  # * | Ninth commit (nontracking_branchpoint)
+  # | * | Eighth commit (tracking_branch_ahead)
+  # | * | Seventh commit (nontracking_branch_ahead)
+  # | * | Sixth commit (origin/checkpoint, checkpoint)
+  # |/
+  # | * | Tenth commit (HEAD -> tracking_branchpoint)
+  # |/
+  # * | Fourth commit (origin/master, origin/tracking_branch_equal,
+  #                    origin/tracking_branch_ahead,
+  #                    master, tracking_branch_equal, nontracking_branch_equal)
+  # * | Third commit (tracking_branch_behind)
+  # * | Second commit (nontracking_branch_behind)
+  # * | First commit (remote_tracking_branch_deleted)
+  # * | Initial commit
+  #
+  # git branch -vv
+  #   checkpoint                     Sixth commit
+  #   master                         [origin/master] Fourth commit
+  #   nontracking_branch_ahead       Seventh commit
+  #   nontracking_branch_behind      Second commit
+  #   nontracking_branch_equal       Fourth commit
+  #   nontracking_branchpoint        Ninth commit
+  #   remote_tracking_branch_deleted [origin/remote_tracking_branch_deleted: gone] First commit
+  # * tracking_branch_ahead          [origin/tracking_branch_ahead: ahead 3] Eighth commit
+  #   tracking_branch_behind         [origin/master: behind 1] Third commit
+  #   tracking_branch_equal          [origin/tracking_branch_equal] Fourth commit
+  #   tracking_branchpoint           [origin/master: ahead 1] Tenth commit
+
+  BUILD_REPO2="${TESTDIR}"/build_repo
+  PRETEND_URL2="${TESTDIR}/git/pretend_repo" # bare repo
+
+  # Main repo
+  mkdir -p "${PRETEND_URL2}"
+  pushd "${PRETEND_URL2}" &> /dev/null
+    git init --bare .
+  popd &> /dev/null
+  mkdir -p "${BUILD_REPO2}"
+  pushd "${BUILD_REPO2}" &> /dev/null
+    git init .
+    touch readme
+    git add readme
+    git commit -m "Initial commit"
+    git remote add origin "${PRETEND_URL2}"
+    git push origin master # master is not tracking origin/master
+
+    # no outgoing commits - no tracking branches
+    [ "$(log_outgoing_commits)" = "" ] # eats whitespace
+
+    echo "1" >> readme
+    git add readme
+    git commit -m "First commit"
+
+    git checkout -b remote_tracking_branch_deleted
+    git push -u origin remote_tracking_branch_deleted
+    git push origin --delete remote_tracking_branch_deleted
+    git checkout master
+
+    echo "2" >> readme
+    git add readme
+    git commit -m "Second commit"
+    git branch nontracking_branch_behind
+
+    echo "3" >> readme
+    git add readme
+    git commit -m "Third commit"
+    git branch tracking_branch_behind
+    git branch tracking_branch_behind -u origin/master
+
+    echo "4" >> readme
+    git add readme
+    git commit -m "Fourth commit"
+    git branch nontracking_branch_equal
+    git branch tracking_branch_equal
+    git push -u origin tracking_branch_equal
+
+    git branch master -u origin/master
+    git push origin master
+    # make a remote-tracking branch, origin/tracking_branch_ahead, at
+    # origin/master
+    git push origin origin/master:refs/heads/tracking_branch_ahead
+
+    git checkout -b checkpoint
+    echo "6" >> readme
+    git add readme
+    git commit -m "Sixth commit"
+    git push origin checkpoint # non-tracking branch
+
+    echo "7" >> readme
+    git checkout -b nontracking_branch_ahead
+    git add readme
+    git commit -m "Seventh commit"
+
+    echo "8" >> readme
+    git checkout -b tracking_branch_ahead
+    git branch tracking_branch_ahead -u origin/tracking_branch_ahead
+    git add readme
+    git commit -m "Eighth commit"
+
+    git checkout master
+    git checkout -b nontracking_branchpoint
+    echo "9" >> readme
+    git add readme
+    git commit -m "Ninth commit"
+
+    echo "10" >> readme
+    git add readme
+    git commit -m "Tenth commit"
+
+    git checkout master
+    git checkout -b tracking_branchpoint
+    git branch tracking_branchpoint -u origin/master
+    echo "11" >> readme
+    git add readme
+    git commit -m "Eleventh commit"
+  popd &> /dev/null
+
+  #################################
+  #              TEST             #
+  #################################
+
+  pushd "${BUILD_REPO2}" &> /dev/null
+    # nothing unpushed - branch (non-tracking) behind origin/master
+    [ "$(log_unpushed_commits nontracking_branch_behind origin)" = "" ]
+
+    # no outgoing commits - tracking_branch is behind its tracked branch, origin/master (a differently named branch)
+    [ "$(log_outgoing_commits tracking_branch_behind origin)" = "" ]
+
+    # nothing unpushed - branch (non-tracking) equal to origin/master
+    [ "$(log_unpushed_commits nontracking_branch_equal origin)" = "" ]
+
+    # no outgoing commits - tracking_branch is equal to its tracked branch, origin/master (a differently named branch)
+    [ "$(log_outgoing_commits tracking_branch_equal origin)" = "" ]
+
+    # unpushed commits - branch (non-tracking) ahead of origin/master
+    [ "$(log_unpushed_commits nontracking_branch_ahead origin | grep '^*' | wc -l | tr -d ' ')" = "1" ]
+
+    # outgoing commits - tracking_branch is ahead of its tracked branch, origin/master (a differently named branch)
+    [ "$(log_unpushed_commits tracking_branch_ahead origin | grep '^*' | wc -l | tr -d ' ')" = "2" ]
+    [ "$(log_outgoing_commits tracking_branch_ahead origin | grep '^*' | wc -l | tr -d ' ')" = "3" ]
+
+    # all unpushed commits
+    [ "$(log_unpushed_commits | grep '^*' | wc -l | tr -d ' ')" = "5" ]
+
+    # all outgoing commits
+    [ "$(log_outgoing_commits | grep '^*' | wc -l | tr -d ' ')" = "4" ]
+
+    # list local tracking branches and their corresponding remote branch
+    # NOTE remote_tracking_branch_deleted is a tracking branch, but the remote-
+    # tracking branch has been deleted
+    get_tracking_branches
+    output='declare -a just_git_tracking_branches='"'"'([0]="master" [1]="tracking_branch_ahead" [2]="tracking_branch_behind" [3]="tracking_branch_equal" [4]="tracking_branchpoint")'"'"''
+    [ "$(declare -p just_git_tracking_branches)" = "${output}" ]
+
+    output='declare -a just_git_remote_tracking_branches='"'"'([0]="origin/master" [1]="origin/tracking_branch_ahead" [2]="origin/master" [3]="origin/tracking_branch_equal" [4]="origin/master")'"'"''
+    [ "$(declare -p just_git_remote_tracking_branches)" = "${output}" ]
+  popd &> /dev/null
+)
+end_test
+
+# UNIT TEST test the guided target
