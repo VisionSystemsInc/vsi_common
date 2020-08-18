@@ -220,52 +220,51 @@ function log_outgoing_commits()
 }
 
 #**
-# .. function:: make_remote_urls_pushable
+# .. function:: make_remote_url_pushable
 #
 # Change the remote url of a git repo to use the git@ syntax instead of https
 #
-# Query the git repository's remotes; if the URL of the remote is specified using the the https:// protocol, convert it to the ssh transfer protocol (git@..) to make pushing changes to the remote server easier. Assume a very basic url format: https://git-server.com/co/project.git without port, query, or fragment sections. Warn if these exist
+# In a git repository (or submodule), if the (first) URL of the remote is specified using the the https:// protocol, convert it to the ssh transfer protocol (git@..) to make pushing changes to the remote server easier. Assume a very basic url format: https://git-server.com/co/project.git without port, query, or fragment sections. Warn if these exist. Do nothing if a pushurl is already configured
 #
-# :Arguments: - [``$1``] - A name of a remote to filter by; e.g., origin. If unset, then don't filter
+# :Arguments: - [``$1``] - The name of a remote to convert. Default: origin
 #
 # .. note::
 #
-#   This does not change the submodule's tracked URL, i.e., the URL in the .gitmodules file, only the url in .git/config
+#   This does not change a submodule's tracked URL (i.e., the URL in the .gitmodules file) nor a submodule's URL (i.e., .git/config:submodule), only the URL of the remote in .git/**/config (e.g., .git/modules/docker/recipes/config:remote)
 #**
 
-function make_remote_urls_pushable()
+function make_remote_url_pushable()
 {
-  local specified_remote_name="${1-}"
+  local remote_name="${1-origin}"
 
-  local remote
-  ${GIT} remote -v | grep '(push)$' | while read remote;
-  do
-    local remote_name
-    local remote_url
-    read -r remote_name remote_url <<< "$(echo "${remote}" | awk '{print $1 " " $2}')"
-    if [ -n "${specified_remote_name}" ] && \
-       [ "${specified_remote_name}" != "${remote_name}" ]; then
-      continue
-    fi
+  # Don't do anything if a pushurl is already configured
+  if ${GIT} config --get remote."${remote_name}".pushurl &> /dev/null; then
+    echo "Skipping: pushurl already configured"
+    return
+  fi
 
-    local remote_git_url_rv=0
-    local remote_git_url
-    # local foo="$(bar)" || rv=$? does not work as one line in bash 4.2 or older. Ues two lines
-    remote_git_url="$(_https_to_git_protocol "${remote_url}")" || remote_git_url_rv=$?
-    if [ "${remote_git_url_rv}" == "0" ]; then
-      # NOTE since git 1.8, a remote (e.g., origin) can have multiple associated
-      # pushurls (see .git/config)
-      # RE providing the old url (remote_url) will update the correct url
-      ${GIT} remote set-url "${remote_name}" --push "${remote_git_url}" "${remote_url}"
-    else # See if URL is already in the expected format
-      # This is very simple; basically undo the simple transform done here.
-      # Perhaps one day we will have a git remote url parser in parser.bsh
-      local remote_https_url="$(echo "${remote_url}" | sed -e 's#^git@#https://#' -e 's#:#/#3')"
-      if ! parse_url "${remote_https_url}"; then
-        echo "WARNING URL is non-standard. Skipping ${remote_url}"
-      fi
+  local remote_url="$(${GIT} config --get remote."${remote_name}".url)"
+
+  local remote_git_url_rv=0
+  local remote_git_url
+  # local foo="$(bar)" || rv=$? does not work as one line in bash 4.2 or older. Ues two lines
+  remote_git_url="$(_https_to_git_protocol "${remote_url}")" || remote_git_url_rv=$?
+  if [ "${remote_git_url_rv}" == "0" ]; then
+    # NOTE since git 1.8, a remote (e.g., origin) can have multiple associated
+    # pushurls (see .git/config)
+    # RE providing the old url (remote_url) will update the correct url
+    #${GIT} remote set-url "${remote_name}" --push "${remote_git_url}" "${remote_url}"
+    # RE If a pushurl is configured, this function returns early; therefore,
+    # assume a pushurl is not configured
+    ${GIT} remote set-url "${remote_name}" --push "${remote_git_url}"
+  else # See if URL is already in the expected format
+    # This is very simple; basically undo the simple transform done here.
+    # Perhaps one day we will have a git remote url parser in parser.bsh
+    local remote_https_url="$(echo "${remote_url}" | sed -e 's#^git@#https://#' -e 's#:#/#3')"
+    if ! parse_url "${remote_https_url}"; then
+      echo "WARNING URL is non-standard. Skipping ${remote_url}"
     fi
-  done
+  fi
 }
 
 function _https_to_git_protocol()
@@ -1540,15 +1539,14 @@ function relocate_git_defaultify()
       ;;
 
     # TODO Move to just_git_functions
-    git_make-remote-urls-pushable) # Change the remote urls to use the git@ \
+    git_make-remote-url-pushable) # Change the remote urls to use the git@ \
                                    # syntax instead of https
       if ! command -v ${GIT} >& /dev/null; then
         echo "Git not found, skipping remote url conversion" >&2
         return 0
       fi
 
-      # TODO Support iterating through all submodules
-      make_remote_urls_pushable
+      make_remote_url_pushable
       ;;
 
     *)
