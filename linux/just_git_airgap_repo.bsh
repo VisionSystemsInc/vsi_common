@@ -111,7 +111,6 @@ function log_unpushed_commits()
 #
 #   - A branch that you create locally and then push to a remote is not configured as a local-tracking branch by default. You must use the -u flag with ``git push`` or ``git branch``.
 #   - A branch cannot track multiple remotes.
-#   - Requires git >= 1.9.0
 #**
 
 # REVIEW Should this support getting the tracking branch of a specific branch
@@ -122,26 +121,36 @@ function get_tracking_branches()
 
   local OLD_IFS="${IFS}"
   IFS=$'\n'
-  # E.g., upstream:short=origin/master, refname=refs/heads/master and
-  # upstream:track=[gone] if the remote-tracking branch has been pruned
-  # NOTE %(upstream:track) requires git >= 1.9.0
-  # NOTE No quotes around subshell to create array
-  local tracking_branches=($( \
-      ${GIT} for-each-ref --format='%(upstream:short) %(refname) %(upstream:track)' refs/heads | \
-      # Discard lines in which upstream is unset, i.e., those with a leading space
-      # RE this seems brittle
-      # Also trim whitespace at the end of each line
-      # TODO Switch to string_tools.bsh:rtrim
-      grep -v '^ ' | grep -v '\[gone\]$' | grep "^${remote_name}" | sed 's/[[:space:]]+$//' || :))
+  local branches=($(${GIT} for-each-ref --format='%(refname:short)' refs/heads))
   IFS="${OLD_IFS}"
+
+  just_git_tracking_branches=()
+  just_git_remote_tracking_branches=()
+  local branch
+  for branch in ${branches+"${branches[@]}"}; do
+    local remote_branch_rv=0
+    local remote_branch
+    # git rev-parse will error if the branch doesn't exist or has been pruned;
+    # although unfortunately, it is same error code in both cases. The stderr
+    # could be parsed to differentiate...
+    remote_branch="$(${GIT} rev-parse --abbrev-ref "${branch}"@{upstream} 2> /dev/null)" || remote_branch_rv=$?
+    if [ "${remote_branch_rv}" -ne 0 ]; then
+      continue
+    fi
+    if [ -n "${remote_name}" ] && [[ "${remote_branch}" != "${remote_name}/"* ]]; then
+      continue
+    fi
+    just_git_tracking_branches+=("${branch}")
+    just_git_remote_tracking_branches+=("${remote_branch}")
+  done
   #
-  # Similarly: git rev-parse --abbrev-ref branch@{upstream} will also give the
-  # tracking branch. This can be combined with
-  #   git for-each-ref --format='%(refname:short)' refs/heads
-  # which lists all local branches.
-  # RE git rev-parse will error if the branch doesn't exist or has been pruned;
-  # although unfortunately, it is same error code in both cases. The stderr
-  # could be parsed to differentiate...
+  # Alternatively,
+  #   git for-each-ref --format='%(upstream:short) %(refname) %(upstream:track)' refs/heads
+  # where, for example, upstream:short=origin/master, refname=refs/heads/master
+  # and upstream:track=[ahead 3] or [gone] if the remote-tracking branch has
+  # been pruned. upstream:short is a blank space (' ') if upstream is unset,
+  # i.e., there is no remote-tracking branch setup
+  # NOTE %(upstream:track) requires git >= 1.9.0
   #
   # Alternatively: git branch -vv provides the same tracking information as
   # upstream:track, even in git 1.8.3
@@ -164,15 +173,6 @@ function get_tracking_branches()
   # can be used to see if the remote-tracking branch has been pruned
   # RE git show-rev will error if the branch doesn't exist or has been pruned;
   # although unfortunately, it is same error code in both cases
-
-  just_git_tracking_branches=()
-  just_git_remote_tracking_branches=()
-  for tracking_branch in ${tracking_branches+"${tracking_branches[@]}"}; do
-    local branch="$(echo "${tracking_branch}" | awk '{print $2}')"
-    # Strip refs/heads prefix from the remoteref
-    just_git_tracking_branches+=("${branch/refs\/heads\//}")
-    just_git_remote_tracking_branches+=("$(echo "${tracking_branch}" | awk '{print $1}')")
-  done
 }
 
 #**
