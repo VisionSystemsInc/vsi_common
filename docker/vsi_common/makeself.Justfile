@@ -43,7 +43,7 @@ function caseify()
       /makeself/makeself.sh \
           --header /makeself/makeself-header_just.sh \
           --noprogress --nomd5 --nocrc --nox11 --keep-umask \
-          --tar-extra "--show-transformed --transform s|^\./|./${vsi_common_rel}/| ${include_unit_tests} ${vsi_common_exlcudes}" \
+          --tar-extra "--show-transformed --transform s|^\./|./${vsi_common_rel}/| ${include_unit_tests} ${vsi_common_excludes}" \
           "${VSI_COMMON_DIR}" "/dist/${MAKESELF_NAME-just}" "${MAKESELF_LABEL-just_label}" "./${vsi_common_rel}/freeze/just_wrapper"
       # You can't put quotes in tar-extra apparently, it'll screw things up.
 
