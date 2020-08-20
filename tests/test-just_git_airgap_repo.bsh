@@ -21,6 +21,8 @@ function git()
     "for-each-ref"*)
       echo "${git_branch}"
       ;;
+    "log"*)
+      echo "${git_log}"
   esac
 }
 
@@ -46,7 +48,14 @@ function picker()
 
 function ask_question()
 {
-  printf -v "$2" '%i' "${ask_return}"
+  case "$1" in
+    "Do you want to ensure all local changes"*)
+      printf -v "$2" '%i' "${ask_check}"
+      ;;
+    "Continue?")
+      printf -v "$2" '%i' "${ask_continue}"
+      ;;
+  esac
 }
 
 function justify()
@@ -55,6 +64,10 @@ function justify()
   echo "${@}"
 }
 
+function recursively_check_submodules_are_public()
+{
+  return "${check_sm_return}"
+}
 
 begin_test "Test guided repository export"
 (
@@ -93,13 +106,22 @@ begin_test "Test guided repository export"
     printf -v "$5" '%s' "${read_data}"
   }
 
-  # specify remote, branch and output dir
+  # specify remote, branch and output dir; don't check submodules for unpushed commits
   git_remote="origin"
   git_origin_url="https://server1.org/repo.git"
   git_branch="master"
   result="https://server1.org/repo.git master output_prep"
   [ "$(JUST_WORKING_DIR="${PWD}" relocate_git_defaultify git_export-repo-guided --remote-name origin --branch master --no-check-remote --output-dir output_prep | tail -n1)" = "${result}" ]
   [ "$(JUST_WORKING_DIR="${PWD}" relocate_git_defaultify git_export-repo-guided -r origin -b master --no-check-remote --output-dir output_prep | tail -n1)" = "${result}" ]
+
+  # specify remote, branch and output dir; no unpushed submodule commits
+  git_remote="origin"
+  git_origin_url="https://server1.org/repo.git"
+  git_branch="master"
+  check_sm_return=0 # submodules have all been pushed
+  git_log=""
+  result="https://server1.org/repo.git master output_prep"
+  [ "$(JUST_WORKING_DIR="${PWD}" relocate_git_defaultify git_export-repo-guided --remote-name origin --branch master --check-remote --output-dir output_prep | tail -n1)" = "${result}" ]
 
   # provide invalid remote
   picker_create=1 # create a new mirror
@@ -120,10 +142,57 @@ begin_test "Test guided repository export"
   git_remote="origin"
   git_origin_url="https://server1.org/repo.git"
   git_branch="master"
-  ask_return=0 # check for unpushed commits
+  ask_check=0 # don't check for unpushed commits
   read_data="output_prep"
   result="https://server1.org/repo.git master output_prep"
   [ "$(JUST_WORKING_DIR="${PWD}" relocate_git_defaultify git_export-repo-guided | tail -n1)" = "${result}" ]
+
+  # single remote, single url, single branch; no unpushed submodule commits
+  picker_create=1 # create a new mirror
+  git_remote="origin"
+  git_origin_url="https://server1.org/repo.git"
+  git_branch="master"
+  ask_check=1 # check for unpushed commits
+  check_sm_return=0 # submodules have all been pushed
+  git_log="" # top-level repo has been pushed
+  read_data="output_prep"
+  result="https://server1.org/repo.git master output_prep"
+  [ "$(JUST_WORKING_DIR="${PWD}" relocate_git_defaultify git_export-repo-guided | tail -n1)" = "${result}" ]
+
+  # single remote, single url, single branch; unpushed submodule commits (continue anyway)
+  picker_create=1 # create a new mirror
+  git_remote="origin"
+  git_origin_url="https://server1.org/repo.git"
+  git_branch="master"
+  ask_check=1 # check for unpushed commits
+  check_sm_return=1 # submodules have not all been pushed
+  git_log="" # top-level repo has been pushed
+  ask_continue=1 # continue even though there are unpushed commits
+  read_data="output_prep"
+  result="https://server1.org/repo.git master output_prep"
+  [ "$(JUST_WORKING_DIR="${PWD}" not relocate_git_defaultify git_export-repo-guided | tail -n1)" = "${result}" ]
+
+  # single remote, single url, single branch; unpushed submodule commits (don't continue)
+  picker_create=1 # create a new mirror
+  git_remote="origin"
+  git_origin_url="https://server1.org/repo.git"
+  git_branch="master"
+  ask_check=1 # check for unpushed commits
+  check_sm_return=1 # submodules have not all been pushed
+  git_log="" # top-level repo has been pushed
+  ask_continue=0 # don't continue even though there are unpushed commits
+  [[ "$(JUST_WORKING_DIR="${PWD}" relocate_git_defaultify git_export-repo-guided | tail -n3)" = "WARNING There are unpushed changes"* ]]
+
+  # single remote, single url, single branch; unpushed repository commits (don't continue)
+  picker_create=1 # create a new mirror
+  git_remote="origin"
+  git_origin_url="https://server1.org/repo.git"
+  git_branch="master"
+  ask_check=1 # check for unpushed commits
+  check_sm_return=0 # submodules have all been pushed
+  git_log="There are 2 unpushed commits"
+  ask_continue=0 # don't continue even though there are unpushed commits
+  [[ "$(JUST_WORKING_DIR="${PWD}" not relocate_git_defaultify git_export-repo-guided | tail -n3)" = "WARNING There are unpushed changes"* ]]
 
   # multiple remotes, single url (per remote), single branch
   picker_create=1 # create a new mirror
@@ -132,7 +201,7 @@ begin_test "Test guided repository export"
   git_upstream_url="https://upstream1.org/repo.git"
   git_branch="master"
   picker_remote=2 # choose a remote & url
-  ask_return=0 # check for unpushed commits
+  ask_check=0 # don't check for unpushed commits
   read_data="output_prep"
   result="https://upstream1.org/repo.git master output_prep"
   [ "$(JUST_WORKING_DIR="${PWD}" relocate_git_defaultify git_export-repo-guided | tail -n1)" = "${result}" ]
@@ -143,7 +212,7 @@ begin_test "Test guided repository export"
   git_origin_url="$(printf "https://server2.org/repo.git\nhttps://server2.org/repo.git\nhttps://server1.org/repo.git\nhttps://server2.org/repo.git")"
   git_branch="master"
   picker_remote=2 # choose a remote & url
-  ask_return=0 # check for unpushed commits
+  ask_check=0 # don't check for unpushed commits
   read_data="output_prep"
   result="https://server1.org/repo.git master output_prep"
   [ "$(JUST_WORKING_DIR="${PWD}" relocate_git_defaultify git_export-repo-guided | tail -n1)" = "${result}" ]
@@ -154,7 +223,7 @@ begin_test "Test guided repository export"
   git_origin_url="https://server1.org/repo.git"
   git_branch="$(printf "master\nnew_branch")"
   picker_branch=2 # choose a branch
-  ask_return=0 # check for unpushed commits
+  ask_check=0 # don't check for unpushed commits
   read_data="output_prep"
   result="https://server1.org/repo.git new_branch output_prep"
   [ "$(JUST_WORKING_DIR="${PWD}" relocate_git_defaultify git_export-repo-guided | tail -n1)" = "${result}" ]
@@ -165,7 +234,7 @@ begin_test "Test guided repository export"
   picker_create=2 # start from a prep_dir
   git_origin_url="https://server1.org/repo.git"
   git_branch="master"
-  ask_return=0 # check for unpushed commits
+  ask_check=0 # don't check for unpushed commits
   result="https://server1.org/repo.git master output_prep"
   [ "$(JUST_WORKING_DIR="${PWD}" relocate_git_defaultify git_export-repo-guided --prep-dir=output_prep | tail -n1)" = "${result}" ]
   [ "$(JUST_WORKING_DIR="${PWD}" relocate_git_defaultify git_export-repo-guided -p=output_prep | tail -n1)" = "${result}" ]
@@ -178,7 +247,7 @@ begin_test "Test guided repository export"
   picker_create=2 # start from a prep_dir
   git_origin_url="https://server1.org/repo.git"
   git_branch="master"
-  ask_return=0 # check for unpushed commits
+  ask_check=0 # don't check for unpushed commits
   read_data="../../output_prep"
   result="https://server1.org/repo.git master ../../output_prep"
   pushd "${TESTDIR}" &> /dev/null
