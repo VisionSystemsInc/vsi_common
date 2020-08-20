@@ -15,7 +15,7 @@ if ! git lfs &> /dev/null; then
   TESTLIB_SKIP_TESTS='.*'
 fi
 
-function setup()
+function setup_variables()
 {
   # Easier way to take care of committers on vanilla install
   export GIT_COMMITTER_NAME='Foo Bar'
@@ -40,127 +40,127 @@ function setup()
   mkdir -p "${AIRGAP_CLONE_DIR}"
 }
 
+begin_test "Part 1 - Setup test repo"
 (
+  setup_test
+  setup_variables
 
-  begin_test "Part 1 - Setup test repo"
-  (
-    setup_test
+  # Create faux-urls for the repo and its submodules
+  pushd "${VSI_COMMON_URL}" &> /dev/null
+    # This only works right, because all branches appear to be "topic" branches,
+    # so a push --mirror (once) will do what I want. Doesn't work well with more
+    # complexities like lfs
+    git clone --mirror "${VSI_COMMON_DIR}" . # This is the real VSI_COMMON_DIR
+  popd &> /dev/null
 
-    # Create faux-urls for the repo and its submodules
-    pushd "${VSI_COMMON_URL}" &> /dev/null
-      # This only works right, because all branches appear to be "topic" branches,
-      # so a push --mirror (once) will do what I want. Doesn't work well with more
-      # complexities like lfs
-      git clone --mirror "${VSI_COMMON_DIR}" . # This is the real VSI_COMMON_DIR
+  # In this case, it is lucky that the recipes submodule is stored as a relative
+  # URL; otherwise, we'd have to modify the parent project
+  pushd "${RECIPES_URL}" &> /dev/null
+    # This only works right, because all branches appear to be "topic" branches,
+    # so a push --mirror (once) will do what I want. Doesn't work well with more
+    # complexities like lfs
+    git clone --mirror "${VSI_COMMON_DIR}"/docker/recipes .
+  popd &> /dev/null
+
+  # Main repo
+  mkdir -p "${BUILD_REPO}"
+  pushd "${BUILD_REPO}" &> /dev/null
+    git init
+    touch readme
+    git add readme
+    git commit -m "Initial commit"
+
+    git submodule add "${VSI_COMMON_URL}" vsi_common
+    pushd vsi_common &> /dev/null
+      git submodule update --init --recursive
+      # TODO remove once this branch is merged into master
+      # RE actually, it seems we are already on this branch
+      git checkout sgrichar_git_airgap
     popd &> /dev/null
+    git add vsi_common
 
-    # In this case, it is lucky that the recipes submodule is stored as a relative
-    # URL; otherwise, we'd have to modify the parent project
-    pushd "${RECIPES_URL}" &> /dev/null
-      # This only works right, because all branches appear to be "topic" branches,
-      # so a push --mirror (once) will do what I want. Doesn't work well with more
-      # complexities like lfs
-      git clone --mirror "${VSI_COMMON_DIR}"/docker/recipes .
-    popd &> /dev/null
+    git commit -m "Added submodules"
+  popd &> /dev/null
+  mkdir -p "${PRETEND_URL}"
+  pushd "${PRETEND_URL}" &> /dev/null
+    git clone --mirror "${BUILD_REPO}" .
+  popd &> /dev/null
+)
+end_test
 
-    # Main repo
-    mkdir -p "${BUILD_REPO}"
-    pushd "${BUILD_REPO}" &> /dev/null
-      git init
-      touch readme
-      git add readme
-      git commit -m "Initial commit"
+begin_test "Part 2 - Initial mirror"
+(
+  setup_test
+  setup_variables
 
-      git submodule add "${VSI_COMMON_URL}" vsi_common
-      pushd vsi_common &> /dev/null
-        git submodule update --init --recursive
-        # TODO remove once this branch is merged into master
-        # RE actually, it seems we are already on this branch
-        git checkout sgrichar_git_airgap
-      popd &> /dev/null
-      git add vsi_common
+  pushd "${BUILD_REPO}" &> /dev/null
+    . "${BUILD_REPO}/vsi_common/linux/just_git_airgap_repo.bsh"
+    # FIXME omitting JUST_VERSION did not cause this test to fail, even though
+    # it results in an unbound variable
+    VSI_COMMON_DIR="${BUILD_REPO}"/vsi_common JUST_VERSION=1.0 JUST_WORKING_DIR="${PWD}" \
+        relocate_git_defaultify git_export-repo "${PRETEND_URL}" master "${PREP_DIR}"
+  popd &> /dev/null
+)
+end_test
 
-      git commit -m "Added submodules"
-    popd &> /dev/null
-    mkdir -p "${PRETEND_URL}"
-    pushd "${PRETEND_URL}" &> /dev/null
-      git clone --mirror "${BUILD_REPO}" .
-    popd &> /dev/null
-  )
-  end_test
+begin_test "Part 3 - Simulating transfer"
+(
+  setup_test
+  setup_variables
 
-  begin_test "Part 2 - Initial mirror"
-  (
-    setup_test
-
-    pushd "${BUILD_REPO}" &> /dev/null
-      . "${BUILD_REPO}/vsi_common/linux/just_git_airgap_repo.bsh"
-      # FIXME omitting JUST_VERSION did not cause this test to fail, even though
-      # it results in an unbound variable
-      VSI_COMMON_DIR="${BUILD_REPO}"/vsi_common JUST_VERSION=1.0 JUST_WORKING_DIR="${PWD}" \
-          relocate_git_defaultify git_export-repo "${PRETEND_URL}" master "${PREP_DIR}"
-    popd &> /dev/null
-  )
-  end_test
-
-  # REVIEW why is this not in Part 3
   PREP_FILE=("${PREP_DIR}"/transfer_*.tgz)
 
-  begin_test "Part 3 - Simulating transfer"
-  (
-    setup_test
-
-    pushd "${TRANSFER_DIR}" &> /dev/null
-      tar zxf "${PREP_FILE[0]}"
-    popd &> /dev/null
-  )
-  end_test
-
-  begin_test "Part 4 - Pushing to mirror"
-  (
-    setup_test
-
-    for d in pretend_repo.git vsi_common.git recipes.git; do
-      mkdir -p "${AIRGAP_MIRROR_DIR}/${d}"
-      pushd "${AIRGAP_MIRROR_DIR}/${d}" &> /dev/null
-        git init --bare
-      popd &> /dev/null
-    done
-
-    pushd "${TRANSFER_DIR}" &> /dev/null
-      source setup.env # Sets VSI_COMMON_DIR to "${TRANSFER_DIR}"/.vsi_common
-      source "${VSI_COMMON_DIR}/linux/just_git_airgap_repo.bsh"
-      # TODO use compat.bsh flag
-      sed -i '' -e 's|^JUST_GIT_AIRGAP_MIRROR_URL=$|JUST_GIT_AIRGAP_MIRROR_URL="'"${AIRGAP_MIRROR_DIR}"'"|' repo_map.env
-      JUST_WORKING_DIR="${PWD}" relocate_git_defaultify git_import-repo
-    popd &> /dev/null
-  )
-  end_test
-
-  begin_test "Part 5 - Cloning from mirror"
-  (
-    setup_test
-
-    pushd "${AIRGAP_CLONE_DIR}" &> /dev/null
-      git clone "${AIRGAP_MIRROR_DIR}"/pretend_repo.git .
-
-      # per just_git_airgap_repo:print_git_airgap_submodule_update
-      source /dev/stdin <<< "$(git show origin/__just_git_mirror_info_file:repo_map.env 2>/dev/null)"
-      git_airgap_submodule_update vsi_common
-
-      source "${AIRGAP_CLONE_DIR}/vsi_common/linux/just_git_airgap_repo.bsh"
-
-      JUST_WORKING_DIR="${PWD}" relocate_git_defaultify git_clone-airgap-repo
-    popd &> /dev/null
-
-    # NOTE Unfortunately, the main repo is dealt with separately from submodules.
-    # Be sure to test both
-    [[ "$(git -C "${AIRGAP_CLONE_DIR}" rev-parse HEAD)" == "$(git -C "${VSI_COMMON_REPO}" rev-parse HEAD)" ]]
-    [[ "$(git -C "${AIRGAP_CLONE_DIR}"/docker/recipes rev-parse HEAD)" == "$(git -C "${VSI_COMMON_REPO}"/docker/recipes rev-parse HEAD)" ]]
-  )
-  end_test
-
+  pushd "${TRANSFER_DIR}" &> /dev/null
+    tar zxf "${PREP_FILE[0]}"
+  popd &> /dev/null
 )
+end_test
+
+begin_test "Part 4 - Pushing to mirror"
+(
+  setup_test
+  setup_variables
+
+  for d in pretend_repo.git vsi_common.git recipes.git; do
+    mkdir -p "${AIRGAP_MIRROR_DIR}/${d}"
+    pushd "${AIRGAP_MIRROR_DIR}/${d}" &> /dev/null
+      git init --bare
+    popd &> /dev/null
+  done
+
+  pushd "${TRANSFER_DIR}" &> /dev/null
+    source setup.env # Sets VSI_COMMON_DIR to "${TRANSFER_DIR}"/.vsi_common
+    source "${VSI_COMMON_DIR}/linux/just_git_airgap_repo.bsh"
+    # TODO use compat.bsh flag
+    sed -i '' -e 's|^JUST_GIT_AIRGAP_MIRROR_URL=$|JUST_GIT_AIRGAP_MIRROR_URL="'"${AIRGAP_MIRROR_DIR}"'"|' repo_map.env
+    JUST_WORKING_DIR="${PWD}" relocate_git_defaultify git_import-repo
+  popd &> /dev/null
+)
+end_test
+
+begin_test "Part 5 - Cloning from mirror"
+(
+  setup_test
+  setup_variables
+
+  pushd "${AIRGAP_CLONE_DIR}" &> /dev/null
+    git clone "${AIRGAP_MIRROR_DIR}"/pretend_repo.git .
+
+    # per just_git_airgap_repo:print_git_airgap_submodule_update
+    source /dev/stdin <<< "$(git show origin/__just_git_mirror_info_file:repo_map.env 2>/dev/null)"
+    git_airgap_submodule_update vsi_common
+
+    source "${AIRGAP_CLONE_DIR}/vsi_common/linux/just_git_airgap_repo.bsh"
+
+    JUST_WORKING_DIR="${PWD}" relocate_git_defaultify git_clone-airgap-repo
+  popd &> /dev/null
+
+  # NOTE Unfortunately, the main repo is dealt with separately from submodules.
+  # Be sure to test both
+  [[ "$(git -C "${AIRGAP_CLONE_DIR}" rev-parse HEAD)" == "$(git -C "${VSI_COMMON_REPO}" rev-parse HEAD)" ]]
+  [[ "$(git -C "${AIRGAP_CLONE_DIR}"/docker/recipes rev-parse HEAD)" == "$(git -C "${VSI_COMMON_REPO}"/docker/recipes rev-parse HEAD)" ]]
+)
+end_test
 
 begin_test "Check for unpushed tracked commits in submodules"
 (
