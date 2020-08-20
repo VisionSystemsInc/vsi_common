@@ -1083,12 +1083,7 @@ function relocate_git_defaultify()
             shift 2
             ;;
           # NOTE Supporting remote_url is somewhat hard because the remote_name
-          # must be looked up somehow because I use it to lookup pushurls in
-          # the event that you want to check that all commits have been pushed
-          # to the remote
-          # RE I could add a flag for both url and pushurl (used during the
-          # check-remote step), which are distinct iff both are provided,
-          # otherwise they are the same. In that case, remote_name isn't needed.
+          # must be looked up somehow
           #-u|--url)
           #  ;;
           # The directory to which the repo has previously been
@@ -1301,28 +1296,6 @@ function relocate_git_defaultify()
       fi
 
 
-      # Unit Tests
-      # all commits have been pushed - should succeed
-      # a commit has not been pushed - should fail
-      # a submodule has commits that have not been pushed - should fail
-      # a sub-submodule has commits that have not been pushed - should fail,
-      #     although i think it will succeed unfortunately
-      #
-      # variations:
-      # a single https url in .git/config - should convert it to the git@ and
-      #     offer both as pushurls
-      # multiple https urls in .git/config - should convert them to the git@
-      #     syntax and offer all as pushurls
-      # duplicate https urls in .git/config - should convert them to the git@
-      #     syntax and offer the unique list as pushurls
-      # a single pushurl (https or git@) - should pick it automatically
-      # multiple pushurls - should ask to pick
-      # a single pushurl that is misconfigured somehow (gi@ instead of git@; it
-      #   does not have the correct path component) - dry-run should fail
-
-      # TODO Swap out git push --dry-run --recurse-submodules=check for
-      # recursively_check_submodules_are_public
-
       # Is check_remote set by a flag
       if [ -z "${check_remote+x}" ]; then
         ask_question "Do you want to ensure all local changes have been pushed to '${remote_name}'" \
@@ -1330,86 +1303,27 @@ function relocate_git_defaultify()
         echo
       fi
       if [ "${check_remote}" == "1" ]; then
-        local OLD_IFS="${IFS}"
-        IFS=$'\n'
-        local push_urls
-        local push_urls_rv=0
-        # List urls configured for git push (i.e., the pushurls, if configured,
-        # in the .git/config:[remote] section)
-        # NOTE since git 1.8, a remote (e.g., origin) can have multiple
-        # associated pushurls
-        # No quotes around subshell to create array (although IFS must be correct)
-        push_urls=($(${GIT} config --get-all remote."${remote_name}".pushurl)) || push_urls_rv=$?
-        # If no pushurl is configured, get the urls (which would be used as the
-        # pushurls)
-        if [ "${push_urls_rv}" -ne 0 ]; then
-          # No quotes around subshell to create array (although IFS must be correct)
-          push_urls=($(${GIT} config --get-all remote."${remote_name}".url))
-
-          local push_url
-          local git_push_url
-          local to_add=()
-          # Try converting these to the git@ syntax and offering them as
-          # additional options in the set of pushurls
-          for push_url in "${push_urls[@]}"; do
-            local git_push_url_rv=0
-            git_push_url="$(trap -- ERR; _https_to_git_protocol "${push_url}")" || git_push_url_rv=$?
-            if [ "${git_push_url_rv}" -eq 0 ]; then
-              to_add+=("${git_push_url}")
-            fi
-          done
-          push_urls+=(${to_add+"${to_add[@]}"})
-        fi
-        # Make the list unique, preserving order
-        # https://stackoverflow.com/a/31038481
-        # https://stackoverflow.com/a/17562858
-        push_urls=($(printf "%s\n" "${push_urls[@]}" | awk '!a[$0]++'))
-        IFS="${OLD_IFS}"
-
-        local push_url
-        # Either a single url (which cannot be converted to the git@ syntax) or
-        # a single pushurl is configured
-        if [ "${#push_urls[@]}" -eq 1 ]; then
-          push_url="${push_urls[0]}"
-        # Not only is a pushurl configured, but there are multiple of them
-        # (which is prob rare)
-        else
-          # REVIEW no flag to set this var; add a --force flag to select the
-          # first pushurl
-          local picked
-          echo "Please choose which remote (push) url you would like to use:"
-          picker "${push_urls[@]}" || picked=$?
-          echo
-          push_url="${push_urls[picked-1]}"
-        fi
-
-        # Connecting to the URL is required when creating the mirror, so this
-        # is ok
-        local dryrun_test_rv=0
-        local dryrun_test
-        # FIXME This does not check sub-submodules. If the submodule, but not
-        # one of its submodules, has been pushed to the remote, it passes
+        local sm_status_rv=0
+        local sm_status
+        # Calls git fetch; connecting to the URL is required when creating the
+        # mirror, so this is ok
         # local foo="$(bar)" || rv=$? does not work as one line in bash 4.2 or older. Ues two lines
-        dryrun_test="$(${GIT} push --dry-run --recurse-submodules=check "${push_url}" "${branch}" 2>&1)" || \
-            dryrun_test_rv=$?
-        if [ "${dryrun_test_rv}" != "0" ]; then
-          echo "${dryrun_test}"
-          exit 1
+        sm_status="$(recursively_check_submodules_are_public "${remote_name}")" || \
+            sm_status_rv=$?
+        if [ "${sm_status_rv}" -ne 0 ]; then
+          echo "${sm_status}"
+          echo
         fi
-        if [ "${dryrun_test}" == "Everything up-to-date" ]; then
-          echo "Everything up-to-date"
+        # No need to call git fetch in the top-level repository
+        unpushed_commits="$(log_unpushed_commits "${branch}" "${remote_name}")"
+        if [ "${unpushed_commits}" != "" ]; then
+          echo "WARNING In this repo, ${unpushed_commits/There are/there are}"
           echo
-        else
-          # REVIEW unpushed commits in the top-level repo can be ignored, but a
-          # submodule with changes that have not been pushed, which are being
-          # tracked by this branch, probably should not be
-          # RE Why is it ok to ignore unpushed commits on $branch in the top-
-          # level repo?
-          echo "${dryrun_test}"
-          echo
-          echo "WARNING there are unpushed changes on branch, '${branch}'. You may"
-          echo "want to ensure all changes to this repository and its submodules"
-          echo "have been pushed to the remote server."
+        fi
+        if [ "${sm_status_rv}" -ne 0 ] || [ "${unpushed_commits}" != "" ]; then
+          echo "WARNING There are unpushed changes. You may want to ensure all"
+          echo "changes to this repository and its submodules have been pushed"
+          echo "to their respective remote servers."
           ask_question "Continue?" response n
           [ "$response" == "0" ] && exit 1
         fi
