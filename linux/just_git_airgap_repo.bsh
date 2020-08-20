@@ -94,7 +94,28 @@ function log_unpushed_commits()
 
   local commits="$(${GIT} log --decorate --graph --format=short --color=always \
       "${branch}" --not --remotes="${remote_name}")"
-  echo "${commits}"
+
+  _log_commits_helper "unpushed" "${commits}"
+}
+
+function _log_commits_helper()
+{
+  local label="${1}"
+  local commits="${2}"
+
+  if [ "${commits}" != "" ]; then
+    local ncommits="$(echo "${commits}" | grep -o '^\*' | wc -l | tr -d '[:space:]')"
+    if [ "${ncommits}" -eq 0 ]; then
+      : # pass
+    elif [ "${ncommits}" -eq 1 ]; then
+      echo "There is ${ncommits} "${label}" commit:"
+      echo
+    elif [ "${ncommits}" -gt 1 ]; then
+      echo "There are ${ncommits} "${label}" commits:"
+      echo
+    fi
+    echo "${commits}"
+  fi
 }
 
 #**
@@ -215,8 +236,10 @@ function log_outgoing_commits()
   done
   local OLD_IFS="${IFS}"
   IFS=$'\n'
-  echo ${commits+"${commits[*]}"}
+  commits=${commits+"${commits[*]}"}
   IFS="${OLD_IFS}"
+
+  _log_commits_helper "outgoing" "${commits}"
 }
 
 #**
@@ -1495,8 +1518,6 @@ function relocate_git_defaultify()
       git_clone_main "${repo_map_file}" ./
       ;;
 
-    # TODO Generalize to support log_outgoing_commits too
-    # TODO Support filtering by branches/remotes
     # TODO Move to just_git_functions
     git_unpushed-commits) # List unpushed commits on a branch
       if ! command -v ${GIT} >& /dev/null; then
@@ -1504,20 +1525,17 @@ function relocate_git_defaultify()
         return 0
       fi
 
-      local commits="$(log_unpushed_commits)"
-      if [ "${commits}" != "" ]; then
-        local ncommits="$(echo "${commits}" | grep -o '^\*' | wc -l | tr -d '[:space:]')"
-        if [ "${ncommits}" -eq 0 ]; then
-          : # pass
-        elif [ "${ncommits}" -eq 1 ]; then
-          echo "There is ${ncommits} unpushed commit:"
-          echo
-        elif [ "${ncommits}" -gt 1 ]; then
-          echo "There are ${ncommits} unpushed commits:"
-          echo
-        fi
-        echo "${commits}"
+      log_unpushed_commits ${@"${@}"}
+      ;;
+
+    # TODO Move to just_git_functions
+    git_outgoing-commits) # List outgoing commits on a branch
+      if ! command -v ${GIT} >& /dev/null; then
+        echo "Git not found, skipping listing of outgoing commits" >&2
+        return 0
       fi
+
+      log_outgoing_commits ${@"${@}"}
       ;;
 
     # TODO Move to just_git_functions
