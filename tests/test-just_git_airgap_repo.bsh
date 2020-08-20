@@ -1,0 +1,228 @@
+#!/usr/bin/env bash
+
+. "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
+. "$(dirname "${BASH_SOURCE[0]}")/test_utils.bsh"
+
+VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+. "${VSI_COMMON_DIR}/linux/just_git_airgap_repo.bsh"
+
+function git()
+{
+  case "$@" in
+    remote)
+      echo "${git_remote}"
+      ;;
+    "config --get-all remote.origin.url"|"config --get remote.origin.url")
+      echo "${git_origin_url}"
+      ;;
+    "config --get-all remote.upstream.url")
+      echo "${git_upstream_url}"
+      ;;
+    "for-each-ref"*)
+      echo "${git_branch}"
+      ;;
+  esac
+}
+
+function cd()
+{
+  :
+}
+
+function picker()
+{
+  case "$1" in
+    "Create a new mirror"*)
+      return "${picker_create}"
+      ;;
+    "origin"*)
+      return "${picker_remote}"
+      ;;
+    "master"*)
+      return "${picker_branch}"
+      ;;
+  esac
+}
+
+function ask_question()
+{
+  printf -v "$2" '%i' "${ask_return}"
+}
+
+function justify()
+{
+  shift 1
+  echo "${@}"
+}
+
+
+begin_test "Test guided repository export"
+(
+  setup_test
+
+  [ "$(relocate_git_defaultify git_export-repo-guided --prep-dir prep_dir --remote-name origin)" = \
+    "Only one of --prep-dir and --remote-name can be given" ]
+
+  [ "$(relocate_git_defaultify git_export-repo-guided --prep-dir prep_dir --output-dir output)" = \
+    "Only one of --prep_dir and --output_dir can be given" ]
+
+  # no remotes
+  git_remote=""
+  result="$(printf "This repository has no remotes. Please push the repo to a\ngit server and try again.")"
+  [ "$(relocate_git_defaultify git_export-repo-guided | tail -n2)" = "${result}" ]
+
+  # single remote, no urls
+  picker_create=1 # create a new mirror
+  git_remote="origin"
+  git_origin_url=""
+  result="$(printf "ERROR This repository is misconfigured: it has no urls for remote 'origin'.\nPlease fix!")"
+  [ "$(relocate_git_defaultify git_export-repo-guided | tail -n2)" = "${result}" ]
+
+  # single remote, single url, no branches
+  picker_create=1 # create a new mirror
+  git_remote="origin"
+  git_origin_url="https://server1.org/repo.git"
+  git_branch=""
+  result="$(printf "ERROR This repository is misconfigured: it has no branches.\nPlease fix!")"
+  [ "$(relocate_git_defaultify git_export-repo-guided | tail -n2)" = "${result}" ]
+
+  # read must be used by just somewhere; mocking this in the global namespace
+  # causes problems
+  function read()
+  {
+    printf -v "$5" '%s' "${read_data}"
+  }
+
+  # specify remote, branch and output dir
+  git_remote="origin"
+  git_origin_url="https://server1.org/repo.git"
+  git_branch="master"
+  result="https://server1.org/repo.git master output_prep"
+  [ "$(JUST_WORKING_DIR="${PWD}" relocate_git_defaultify git_export-repo-guided --remote-name origin --branch master --no-check-remote --output-dir output_prep | tail -n1)" = "${result}" ]
+  [ "$(JUST_WORKING_DIR="${PWD}" relocate_git_defaultify git_export-repo-guided -r origin -b master --no-check-remote --output-dir output_prep | tail -n1)" = "${result}" ]
+
+  # provide invalid remote
+  picker_create=1 # create a new mirror
+  git_remote="origin"
+  result="ERROR Unknown git remote provided with flag --remote-name: bad_remote"
+  [ "$(JUST_WORKING_DIR="${PWD}" relocate_git_defaultify git_export-repo-guided --remote-name bad_remote | tail -n1)" = "${result}" ]
+
+  # single remote, single url, provide invalid branch
+  picker_create=1 # create a new mirror
+  git_remote="origin"
+  git_origin_url="https://server1.org/repo.git"
+  git_branch="master"
+  result="ERROR Unknown git branch provided with flag --branch: bad_branch"
+  [ "$(JUST_WORKING_DIR="${PWD}" relocate_git_defaultify git_export-repo-guided --branch bad_branch | tail -n1)" = "${result}" ]
+
+  # single remote, single url, single branch
+  picker_create=1 # create a new mirror
+  git_remote="origin"
+  git_origin_url="https://server1.org/repo.git"
+  git_branch="master"
+  ask_return=0 # check for unpushed commits
+  read_data="output_prep"
+  result="https://server1.org/repo.git master output_prep"
+  [ "$(JUST_WORKING_DIR="${PWD}" relocate_git_defaultify git_export-repo-guided | tail -n1)" = "${result}" ]
+
+  # multiple remotes, single url (per remote), single branch
+  picker_create=1 # create a new mirror
+  git_remote="$(printf "origin\nupstream")"
+  git_origin_url="https://server1.org/repo.git"
+  git_upstream_url="https://upstream1.org/repo.git"
+  git_branch="master"
+  picker_remote=2 # choose a remote & url
+  ask_return=0 # check for unpushed commits
+  read_data="output_prep"
+  result="https://upstream1.org/repo.git master output_prep"
+  [ "$(JUST_WORKING_DIR="${PWD}" relocate_git_defaultify git_export-repo-guided | tail -n1)" = "${result}" ]
+
+  # single remote, multiple and duplicate urls, single branch
+  picker_create=1 # create a new mirror
+  git_remote="origin"
+  git_origin_url="$(printf "https://server2.org/repo.git\nhttps://server2.org/repo.git\nhttps://server1.org/repo.git\nhttps://server2.org/repo.git")"
+  git_branch="master"
+  picker_remote=2 # choose a remote & url
+  ask_return=0 # check for unpushed commits
+  read_data="output_prep"
+  result="https://server1.org/repo.git master output_prep"
+  [ "$(JUST_WORKING_DIR="${PWD}" relocate_git_defaultify git_export-repo-guided | tail -n1)" = "${result}" ]
+
+  # single remote, single url, multiple branches
+  picker_create=1 # create a new mirror
+  git_remote="origin"
+  git_origin_url="https://server1.org/repo.git"
+  git_branch="$(printf "master\nnew_branch")"
+  picker_branch=2 # choose a branch
+  ask_return=0 # check for unpushed commits
+  read_data="output_prep"
+  result="https://server1.org/repo.git new_branch output_prep"
+  [ "$(JUST_WORKING_DIR="${PWD}" relocate_git_defaultify git_export-repo-guided | tail -n1)" = "${result}" ]
+
+  # specify prep_dir (assuming the PWD equals the repo's root), single branch
+  mkdir -p "${TESTDIR}/output_prep/repo"
+  touch "${TESTDIR}/output_prep/repo/config"
+  picker_create=2 # start from a prep_dir
+  git_origin_url="https://server1.org/repo.git"
+  git_branch="master"
+  ask_return=0 # check for unpushed commits
+  result="https://server1.org/repo.git master output_prep"
+  [ "$(JUST_WORKING_DIR="${PWD}" relocate_git_defaultify git_export-repo-guided --prep-dir=output_prep | tail -n1)" = "${result}" ]
+  [ "$(JUST_WORKING_DIR="${PWD}" relocate_git_defaultify git_export-repo-guided -p=output_prep | tail -n1)" = "${result}" ]
+
+  # prep_dir (assuming the PWD does not equal the repo's root), single branch
+  CWD="${TESTDIR}/repo/subdir"
+  mkdir -p "${CWD}"
+  mkdir -p "${TESTDIR}/output_prep/repo"
+  touch "${TESTDIR}/output_prep/repo/config"
+  picker_create=2 # start from a prep_dir
+  git_origin_url="https://server1.org/repo.git"
+  git_branch="master"
+  ask_return=0 # check for unpushed commits
+  read_data="../../output_prep"
+  result="https://server1.org/repo.git master ../../output_prep"
+  pushd "${TESTDIR}" &> /dev/null
+    [ "$(JUST_WORKING_DIR="${CWD}" relocate_git_defaultify git_export-repo-guided | tail -n1)" = "${result}" ]
+  popd &> /dev/null
+)
+end_test
+
+begin_test "Argument parsing"
+(
+  setup_test
+
+  # This is the first function to run after the arguments are parsed
+  function git_mirror_repos()
+  {
+    if [ "${@}" = "${result}" ]; then
+      echo pass
+    else
+      echo fail
+    fi
+    exit 0 # short circuit
+  }
+
+  git_origin_url="https://server1.org/repo.git"
+  result="https://server1.org/repo.git"
+  [ "$(JUST_WORKING_DIR="${PWD}" relocate_git_defaultify git_export-repo)" = "pass" ]
+
+
+  # This is the first function to run after the arguments are parsed
+  function git_mirror_repos()
+  {
+    if [ "${PWD}" = "${CWD}" ]; then
+      echo pass
+    else
+      echo fail
+    fi
+    exit 0 # short circuit
+  }
+
+  CWD="${TESTDIR}/repo/subdir"
+  mkdir -p "${CWD}"
+  mkdir -p "${TESTDIR}/output_prep/repo"
+  pushd "${TESTDIR}/repo" &> /dev/null
+    [ "$(JUST_WORKING_DIR="${CWD}" relocate_git_defaultify git_export-repo)" = "pass" ]
+  popd &> /dev/null
+)
+end_test
