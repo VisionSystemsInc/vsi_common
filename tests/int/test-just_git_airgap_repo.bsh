@@ -6,6 +6,7 @@ VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.."; pwd)"
 
 . "${VSI_COMMON_DIR}/linux/requirements.bsh"
 . "${VSI_COMMON_DIR}/linux/just_git_airgap_repo.bsh"
+. "${VSI_COMMON_DIR}/linux/real_path"
 
 # These tests chain together, so no point in continuing after one breaks
 TESTLIB_STOP_AFTER_FAILS=1
@@ -256,8 +257,9 @@ begin_test "Check for unpushed tracked commits in submodules"
     pushd "${DIFFICULT_PATH}" &> /dev/null
       pushd a_sub_sub_module &> /dev/null
         git checkout master
-        touch a_sub_sub_file
-        git add a_sub_sub_file
+        mkdir subdir
+        touch subdir/a_sub_sub_file
+        git add subdir/a_sub_sub_file
         git commit -m "Second commit"
       popd &> /dev/null
 
@@ -320,14 +322,21 @@ remote URL tracked by the parent repository:
     [ "${output}" = "" ]
 
     # NOTE We are not testing whether whether the top-level repo has unpushed
-    # changes for a given remote & branch. log_unpushed_commits is used to
-    # test for this; see the next section, git functionality
+    # changes for a given remote & branch; log_unpushed_commits is used to
+    # test for this. See the next section, git functionality
   popd &> /dev/null
 
   # A repo with no submodules
   pushd "${BUILD_REPO}_sub_sub" &> /dev/null
     output="$(recursively_check_submodules_are_public)"
     [ "${output}" = "" ]
+  popd &> /dev/null
+
+
+  # Also test toplevel
+  pushd "${BUILD_REPO}/${DIFFICULT_PATH}"/a_sub_sub_module/subdir &> /dev/null
+    ans="$(real_path "${BUILD_REPO}")"
+    [ "$(toplevel)" = "${ans}" ]
   popd &> /dev/null
 )
 end_test
