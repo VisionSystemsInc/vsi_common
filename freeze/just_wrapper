@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+
+set -eu
+
+# Check the location of the just executable, then CWD for local.env files, and
+# load them in that order.
+for check_dir in "${ARCHIVE_DIR}" "${USER_PWD}"; do
+  if [ -f "${check_dir}/local.env" ]; then
+    set -a
+    source "${check_dir}/local.env"
+    set +a
+  fi
+done
+
+if [ -n "${VSI_COMMON_DIR+set}" ] && [ ! -d "${VSI_COMMON_DIR}" ]; then
+  echo "ERROR: the environment variable VSI_COMMON_DIR is set to a directory that does not exist;"
+  echo "       please either unset or correct it"
+  exit 1
+fi
+
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(dirname "${BASH_SOURCE[0]}")/.."
+fi
+source "${VSI_COMMON_DIR}/env.bsh"
+
+# Just Run On Deployment EnvirOnment - This is specific for a just executable
+# with a just project embedded. JUST_FROZEN is for any just executable
+export JUST_RODEO=1
+
+# This came from juste, so probably right
+if [ "${OS-}" = "Windows_NT" ]; then
+  if [ "${JUST_FROZEN-}" = "1" ] || [ "${JUST_IS_TTY-}" = "1" ]; then
+    export JUST_FROZEN=1
+    exec just ${@+"${@}"}
+  else
+    export JUST_FROZEN=1
+
+    stdin_name="$(powershell -NoProfile -InputFormat None -ExecutionPolicy Bypass -Command "${VSI_COMMON_DIR}/windows/get_stdin_name.ps1")"
+
+    if [ "${stdin_name}" = "None" ] || [[ ${stdin_name} != *-from-master ]]; then
+      # Even though a pipe isn't a TTY, I don't need a TTY, to mock the system
+      # by saying it is a tty
+      JUST_IS_TTY=1 exec just ${@+"${@}"}
+    else
+      . "${VSI_COMMON_DIR}/linux/just_files/just_functions.bsh"
+      export JUST_IS_TTY=1
+      JUST_PTY="${JUST_PTY-winpty}"
+      if [ "${JUST_PTY}" != "powershell" ] && command -v "${JUST_PTY}" &> /dev/null; then
+        ${JUST_PTY} bash "$0" ${@+"${@}"}
+        exec ${JUST_PTY} bash --rcfile "${VSI_COMMON_DIR}/.winbashrc"
+      else
+        exec start powershell "cmd /c color 07; bash \"$0\" ${@}; bash --rcfile \"${VSI_COMMON_DIR}/.winbashrc\""
+      fi
+    fi
+  fi
+else
+  export JUST_FROZEN=1
+  exec just ${@+"${@}"}
+fi

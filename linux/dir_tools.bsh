@@ -4,8 +4,13 @@ if [[ $- != *i* ]]; then
   source_once &> /dev/null && return 0
 fi
 
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
+
 source "${VSI_COMMON_DIR}/linux/signal_tools.bsh"
 source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
+source "${VSI_COMMON_DIR}/linux/compat.bsh"
 
 #*# linux/dir_tools
 
@@ -134,7 +139,7 @@ _make_temp_path_cleanup()
   local temp_path
   for temp_path in ${_VSI_TEMP_PATHS+"${_VSI_TEMP_PATHS[@]}"}; do
     if [ -d "${temp_path}" ]; then
-      if [[ ${OSTYPE-} = darwin* ]]; then
+      if [[ ${OSTYPE-} = darwin* ]] || ! command -v find &> /dev/null; then
         # :nocov_mac:
         rm -rf "${temp_path}"
         # :nocov_mac:
@@ -329,7 +334,7 @@ function get_mktemp_dir()
 {
   local tmp
 
-  if [[ ${OSTYPE} = darwin* ]]; then
+  if [[ ${OSTYPE-} = darwin* ]]; then
     tmp="${_CS_DARWIN_USER_TEMP_DIR-${TMPDIR-/tmp}}"
   else
     tmp="${TMPDIR-/tmp}"
@@ -439,10 +444,7 @@ function relative_path()
   for (( j=${#start[@]}-i; j>0; j--)); do
     ans+=('..')
   done
-  if [ "${BASH_VERSINFO[0]}" -lt 4 ]; then
-    # Bash 3.2 bug
-    # (x=(11 22 33 44); IFS=x; y=1; z=("${x[@]:y+1}"); declare -p z)
-    # has one space delimited element, not two nor IFS delimited
+  if [ "${bash_bug_ifs_array_slice_expansion}" = "0" ]; then
     for (( j=i+1; j<=${#path[@]}; j++ )); do
       ans+=(${path[@]+"${path[@]:j:1}"})
     done

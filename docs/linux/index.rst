@@ -9,3 +9,4 @@ Linux Utilities
    :glob:
 
    *.auto
+   python_scripts/modules

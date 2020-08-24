@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 
-. "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
+
+source "${VSI_COMMON_DIR}/tests/testlib.bsh"
 
 # This is in another file so that they can fail for real, and the summary
 # file is used to verify the right number of failures. If you add a failing
@@ -29,5 +33,79 @@ begin_required_fail_test "Test failed required fail"
   setup_test
 
   echo "Not failing when I should pass ${@+${@}}"
+)
+end_test
+
+begin_expected_fail_test "Test expected to fail, but it succeeds. But no fail zone setup"
+(
+  setup_test
+
+  true
+)
+end_test
+
+begin_expected_fail_test "Test expected to fail, but it fails outside fail zone"
+(
+  setup_test
+
+  begin_fail_zone
+  true
+  end_fail_zone
+
+  false
+
+  begin_fail_zone
+  false
+)
+end_test
+
+begin_expected_fail_test "Test expected to fail, but succeeds"
+(
+  setup_test
+
+  begin_fail_zone
+  true
+)
+end_test
+
+begin_expected_fail_test "Test expected to fail, but succeeds in the fail zone"
+(
+  setup_test
+
+  begin_fail_zone
+  true
+  end_fail_zone
+
+  true
+)
+end_test
+
+begin_required_fail_test "Test required to fail, but it succeeds. But no fail zone setup"
+(
+  setup_test
+
+  true
+)
+end_test
+
+begin_required_fail_test "Test required to fail, but succeeds"
+(
+  setup_test
+
+  begin_fail_zone
+  true
+)
+end_test
+
+begin_test "Test required to fail, but fails outside the fail zone"
+(
+  setup_test
+
+  begin_fail_zone
+  true
+  end_fail_zone
+
+  false
+  begin_fail_zone
 )
 end_test

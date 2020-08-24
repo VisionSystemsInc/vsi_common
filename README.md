@@ -1,8 +1,8 @@
 # VSI Common
 
-|Linux|Windows|macos|
-|--|--|--|
-|[![CircleCI](https://circleci.com/gh/VisionSystemsInc/vsi_common.svg?style=shield)](https://circleci.com/gh/VisionSystemsInc/vsi_common)|[![Build status](https://ci.appveyor.com/api/projects/status/3a3hd3m41clxd5gw/branch/master?svg=true)](https://ci.appveyor.com/project/andyneff/vsi-common/branch/master)|[![Build Status](https://travis-ci.org/VisionSystemsInc/vsi_common.svg?branch=master)](https://travis-ci.org/VisionSystemsInc/vsi_common)|
+|Linux|Windows|macos|docs|
+|--|--|--|--|
+|[![CircleCI](https://circleci.com/gh/VisionSystemsInc/vsi_common.svg?style=shield)](https://circleci.com/gh/VisionSystemsInc/vsi_common)|[![Build status](https://ci.appveyor.com/api/projects/status/3a3hd3m41clxd5gw/branch/master?svg=true)](https://ci.appveyor.com/project/andyneff/vsi-common/branch/master)|[![Build Status](https://travis-ci.org/VisionSystemsInc/vsi_common.svg?branch=master)](https://travis-ci.org/VisionSystemsInc/vsi_common)|[![Docs](https://img.shields.io/circleci/build/gh/VisionSystemsInc/vsi_common/master?label=docs)](https://visionsystemsinc.github.io/vsi_common)|
 
 In order to use these directories, all you have to do is
 
@@ -72,7 +72,7 @@ In order to use these directories, all you have to do is
 * Adding files
   * Python
 
-    * Add files in the python directory. If it's a new effort, try and add it to the vsi package. If it is a large library and you don't have time to convert everything now, you can add it to the python dir in its own directoy, and add a .pth file for it. Do NOT add .py file in the main python dir
+    * Add files in the python directory. If it's a new effort, try and add it to the vsi package. If it is a large library and you don't have time to convert everything now, you can add it to the python dir in its own directory, and add a .pth file for it. Do NOT add .py file in the main python dir
 
   * Script
 
@@ -129,7 +129,7 @@ In order to use these directories, all you have to do is
     * Write tests for your modules using the unittest
     * Tests should be stored separately in files names "test_*.py"
 
-      ```
+      ```python
       import unittest
       class MyTestClass(unittest.TestCase):
         def test_something(self): #This function MUST start with "test_"
@@ -155,15 +155,14 @@ In order to use these directories, all you have to do is
 
 Documentation uses sphinx. To compile documentation, run
 
-```
+```bash
 just docs
 just docs view
 ```
 
 Sphinx documentation can be embedded in any source file. There must be a `#*#` comment stating the filename and any `#` comments surrounded with `#**` will be added to sphinx documentation
 
-```
-
+```bash
 # This documentation path will become:
 #   {VSI_COMMON_DIR}/docs/example/readme.auto.rst
 # Other files will refer to is the document with .auto. in the name
@@ -178,9 +177,15 @@ Sphinx documentation can be embedded in any source file. There must be a `#*#` c
 #     You can not run the script and download in one call, you must call new_just as a file, not a pipe stream. ``
 #**
 
-# These lines are not
-# No #** at the beginnig of this line
+# This line is not documentation
+# No #** at the beginning of this line
 ```
+
+#### Documentation FAQ
+
+1. Why is there an `bash:env` directive, when `envvar` already exists?
+
+    - They are both for documenting environment variables, `bash:env` should be used for locally scoped variables, that only affect that one file, while `envvar` might affect many files.
 
 ### Who do I talk to? ###
 

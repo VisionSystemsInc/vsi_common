@@ -1,0 +1,54 @@
+#!/usr/bin/env false bash
+
+if [[ $- != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
+#*# linux/web_tools
+
+#**
+# =========
+# Web Tools
+# =========
+#
+# .. default-domain:: bash
+#
+# .. file:: web_tools.bsh
+#
+# Tools to help interface with the internet
+#**
+
+#**
+# .. function:: download_to_stdout
+#
+# Download a file from the internet and output stream to stdout
+#
+# :Arguments: ``$1`` - URL to downloa
+# :Output: ``stdout`` - Binary stream of the url
+#
+# Tries to download a file via various methods, in order:
+#
+# 1. ``wget`` using ``wget -q``
+# 2. ``curl`` using ``curl -fsSL``
+# 3. ``python`` using the ``urllib2`` or ``urllib`` library
+# 4. ``ruby`` using the ``open-uri`` library
+# 5. ``perl`` using the ``LWP::Simple`` library
+#**
+function download_to_stdout()
+{
+  if command -v wget &> /dev/null; then
+    wget "${1}" -qO -
+  elif command -v curl &> /dev/null; then
+    curl -fsSL "${1}"
+  elif command -v python &> /dev/null; then
+    python -c $'try:\n import urllib2 as u\nexcept:\n import urllib.request as u\nimport os; os.write(1,u.urlopen("'"${1}\").read())"
+  elif command -v ruby &> /dev/null; then
+    ruby -e "require 'open-uri'; URI.open('${1}', 'rb') do |read_file|; \$stdout.write(read_file.read); end"
+  elif command -v perl &> /dev/null; then
+    # Not all Perls have LWP installed
+    perl -MLWP::Simple -e "getprint '${1}'"
+  else
+    echo "Cannot download a file" >&2
+    exit 2
+  fi
+}

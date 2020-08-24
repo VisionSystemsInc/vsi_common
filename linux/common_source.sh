@@ -333,11 +333,6 @@ if [ -f /etc/os-release ]; then
                 elif [ "${ID_LIKE+set}" = "set" ] && [ "${ID_LIKE}" != "${ID_LIKE%% *}" ]; then
                   ID_CORE=${ID_LIKE#* }
                   ID_LIKE=${ID_LIKE%% *}
-                # Scientific Linux doesn't capture itself for some reason
-                elif [ "${NAME-}" = "Scientific Linux" ]; then
-                  ID_CORE="${ID_LIKE}"
-                  ID_LIKE="${ID}"
-                  ID=scientific
                 fi
 
                 # Some distros like mint store the like version here
@@ -378,11 +373,7 @@ if [ -f /etc/os-release ]; then
 # Older redhats don't have os-release. Read it here
 elif [ -f /etc/redhat-release ]; then
   read VSI_DISTRO < /etc/redhat-release
-  if [[ ${VSI_DISTRO} =~ "Scientific Linux" ]]; then
-    VSI_DISTRO_VERSION="${VSI_DISTRO#* * * }"
-  else
-    VSI_DISTRO_VERSION="${VSI_DISTRO#* * }"
-  fi
+  VSI_DISTRO_VERSION="${VSI_DISTRO#* * }"
 
   # Remove all but the first part (the version)
   VSI_DISTRO_VERSION="${VSI_DISTRO_VERSION%% *}"
@@ -419,7 +410,7 @@ elif [ -f /etc/slackware-version ]; then
 # Special case for arch linux
 elif [ -f /etc/arch-release ]; then
   VSI_DISTRO=arch
-  VSI_DISTRO_VERSION='?'
+  VSI_DISTRO_VERSION=''
 
 # Special case for clearlinux
 elif [ -f /usr/share/clear/version ]; then
@@ -439,18 +430,20 @@ else
 fi
 
 # Handle rhel intricacies
-if [ "${VSI_DISTRO}" = "centos" ] || [ "${VSI_DISTRO}" = "scientific" ] || \
+if [ "${VSI_DISTRO}" = "centos" ] || \
    [ "${VSI_DISTRO}" = "rhel" ]; then
   VSI_DISTRO_CORE=fedora
 
+  # https://access.redhat.com/support/policy/updates/errata
   case "${VSI_DISTRO_VERSION}" in
-    4*) VSI_DISTRO_VERSION_CORE=3       ;; # Mostly EOL
-    5*) VSI_DISTRO_VERSION_CORE=6       ;; # Extended EOL
-    6*) VSI_DISTRO_VERSION_CORE="13 14" ;; # EOL Nov 30, 2020
+    4*) VSI_DISTRO_VERSION_CORE=3       ;; # Mostly EOL (ELS)
+    5*) VSI_DISTRO_VERSION_CORE=6       ;; # ELS
+    6*) VSI_DISTRO_VERSION_CORE="13 14" ;; # ELS Jun 30, 2020
     7*) VSI_DISTRO_VERSION_CORE=19      ;; # EOL Jun 30, 2024
+    8*) VSI_DISTRO_VERSION_CORE=28      ;; # EOL May 31, 2029
   esac
 
-  if [ "${VSI_DISTRO}" = "centos" ] || [ "${VSI_DISTRO}" = "scientific" ]; then
+  if [ "${VSI_DISTRO}" = "centos" ]; then
     : ${VSI_DISTRO_LIKE=rhel}
   elif [ "${VSI_DISTRO}" = "rhel" ]; then
     VSI_DISTRO_LIKE="${VSI_DISTRO_CORE}"
@@ -464,11 +457,12 @@ if [ "${VSI_DISTRO_CORE-}" = "debian" ]; then
   # turn codenames to numbers
   case "${VSI_DISTRO_VERSION_CORE-}" in
     squeeze)  VSI_DISTRO_VERSION_CORE=6  ;; # EOL Feb 29 2016
-    wheezy)   VSI_DISTRO_VERSION_CORE=7  ;; # EOL May 2018
-    jessie)   VSI_DISTRO_VERSION_CORE=8  ;; # EOL ~June 6 2020
+    wheezy)   VSI_DISTRO_VERSION_CORE=7  ;; # EEOL Dec 31 2019
+    jessie)   VSI_DISTRO_VERSION_CORE=8  ;; # EEOL ~June 6 2022
     stretch)  VSI_DISTRO_VERSION_CORE=9  ;; # EOL 2022
-    buster)   VSI_DISTRO_VERSION_CORE=10 ;; # Release ?
+    buster)   VSI_DISTRO_VERSION_CORE=10 ;; # EOL 2022
     bullseye) VSI_DISTRO_VERSION_CORE=11 ;; # Release ?
+    bookworm) VSI_DISTRO_VERSION_CORE=12 ;; # Release ?
   esac
 fi
 
@@ -487,8 +481,10 @@ if [ "${VSI_DISTRO_LIKE-}" = "ubuntu" ]; then
     artful)  VSI_DISTRO_VERSION_LIKE=17.10 ;; # EOL Jul 19, 2018
     bionic)  VSI_DISTRO_VERSION_LIKE=18.04 ;; # EOL Apr 2023, ESM Apr 2028
     cosmic)  VSI_DISTRO_VERSION_LIKE=18.10 ;; # EOL Jul 18, 2019
-    disco)   VSI_DISTRO_VERSION_LIKE=19.04 ;; # EOL Jan 2020
-    eoan)    VSI_DISTRO_VERSION_LIKE=19.10 ;; # Release Oct 2019
+    disco)   VSI_DISTRO_VERSION_LIKE=19.04 ;; # EOL Jan 23, 2020
+    eoan)    VSI_DISTRO_VERSION_LIKE=19.10 ;; # EOL Jul 17, 2020
+    focal)   VSI_DISTRO_VERSION_LIKE=20.04 ;; # EOL Apr 2030
+    groovy)  VSI_DISTRO_VERSION_LIKE=20.10 ;; # Release October 22, 2020 : EOL Jul 2021
   esac
 fi
 

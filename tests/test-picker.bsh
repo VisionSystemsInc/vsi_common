@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 
-. "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
 
-VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+source "${VSI_COMMON_DIR}/tests/testlib.bsh"
+source "${TESTLIB_DIR}/test_utils.bsh"
 
 begin_test "picker function"
 (
   setup_test
-  . "${VSI_COMMON_DIR}/linux/picker"
+  source "${VSI_COMMON_DIR}/linux/picker"
 
   [ "$(type -t picker)" = "function" ]
 
@@ -55,9 +58,13 @@ begin_test "picker CLI"
 
   # Test stdout looks right
   [ "$(picker Foo Bar Fruit <<< "2")" = "Bar" ]
+  [ "$(picker -d 2 Foo Bar Fruit <<< "")" = "Bar" ]
+  [ "$(picker --default 2 Foo Bar Fruit <<< "")" = "Bar" ]
   # Test stderr looks right
 # [ "$(picker Foo Bar Fruit <<< "2" 2>&1 >/dev/null)"                        = $'1) Foo\n2) Bar\n3) Fruit' ]
   [ "$(picker Foo Bar Fruit <<< "2" 2>&1 >/dev/null | xxd -p)" = "$(xxd -p <<< $'1) Foo\n2) Bar\n3) Fruit\n')" ]
+  [ "$(picker -d 2 Foo Bar Fruit <<< "" 2>&1 >/dev/null | xxd -p)" = "$(xxd -p <<< $'1) Foo\n2) Bar (*)\n3) Fruit\n')" ]
+  [ "$(picker --default 2 Foo Bar Fruit <<< "" 2>&1 >/dev/null | xxd -p)" = "$(xxd -p <<< $'1) Foo\n2) Bar (*)\n3) Fruit\n')" ]
 
   # Test padding
   p=1

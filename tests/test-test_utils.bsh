@@ -1,0 +1,334 @@
+#!/usr/bin/env bash
+
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
+
+source "${VSI_COMMON_DIR}/tests/testlib.bsh"
+source "${TESTLIB_DIR}/test_utils.bsh"
+source "${VSI_COMMON_DIR}/linux/compat.bsh"
+
+NL=$'\n'
+
+function common_check_array_test()
+{
+  a1=()
+  a2=(11 22 33)
+  a3=('')
+  ${1} a1
+  ${1} a2 11 22 33
+  ${1} a3 ''
+
+  bq="${bash_behavior_declare_array_quote}"
+
+  ans0="${ERR_C}ASSERT ERROR: Arrays differ${NC}${NL}Expected: "
+
+  not ${1} a1 "" &> /dev/null
+  ans="${ans0}a1=()"
+  ans+="${NL}Array had 1 too few values"
+  ans+="${NL}Actual: declare -a a1=${bq}()${bq}"
+  [[ $(${1} a1 "" 2>&1) = *${ans}* ]] || false
+
+  not ${1} a2 11 22 33 44 &> /dev/null
+  ans="${ans0}a2=(11 22 33)"
+  ans+=$'\nArray had 1 too few values'
+  ans+=$'\nActual: declare -a a2='"${bq}"'([0]="11" [1]="22" [2]="33")'"${bq}"
+  [[ $(${1} a2 11 22 33 44 2>&1) = *"${ans}"* ]] || false
+  # When ans has a literal " in it, do you have to put quotes around it in [[]]
+
+  not ${1} a2 22 33 &> /dev/null
+  ans="${ans0}Element 0 (a2[0]) is different:"
+  ans+=$'\n11 !='"${2-} 22"
+  ans+=$'\nActual: declare -a a2='"${bq}"'([0]="11" [1]="22" [2]="33")'"${bq}"
+  [[ $(${1} a2 22 33 2>&1) = *"${ans}"* ]] || false
+
+  not ${1} a2 11 33 &> /dev/null
+  ans="${ans0}Element 1 (a2[1]) is different:"
+  ans+=$'\n22 !='"${2-} 33"
+  ans+=$'\nActual: declare -a a2='"${bq}"'([0]="11" [1]="22" [2]="33")'"${bq}"
+  [[ $(${1} a2 11 33 2>&1) = *"${ans}"* ]] || false
+
+  not ${1} a2 11 22 &> /dev/null
+  ans="${ans0}a2=(11 22 33)"
+  ans+=$'\nArray had 1 too many values'
+  ans+=$'\nActual: declare -a a2='"${bq}"'([0]="11" [1]="22" [2]="33")'"${bq}"
+  [[ $(${1} a2 11 22 2>&1) = *"${ans}"* ]] || false
+
+  # Non contiguous case
+  unset a2[1]
+  not ${1} a2 11 22
+  ans="${ans0}Element 1 (a2[2]) is different:"
+  ans+=$'\n33 !='"${2-} 22"
+  ans+=$'\nActual: declare -a a2='"${bq}"'([0]="11" [2]="33")'"${bq}"
+  [[ $(${1} a2 11 22 2>&1) = *"${ans}"* ]] || false
+}
+
+begin_test "Assert array values"
+(
+  setup_test
+
+  common_check_array_test assert_array_values
+)
+end_test
+
+begin_test "Assert array regex values"
+(
+  setup_test
+  common_check_array_test assert_array_regex_values '~'
+
+  a2=(11 22 33)
+
+  assert_array_regex_values a2 1+ '^[0-9]+$' 3
+  assert_array_regex_values a2 2* . '^33$'
+  not assert_array_regex_values a2 1+ '^[0-9]+$' 4 &> /dev/null
+  ans="${ans0}Element 2 (a2[2]) is different:"
+  ans+=$'\n33 !=~ 4'
+  ans+=$'\nActual: declare -a a2='"${bq}"'([0]="11" [1]="22" [2]="33")'"${bq}"
+  [[ $(assert_array_regex_values a2 1+ '^[0-9]+$' 4 2>&1) = *"${ans}"* ]] || false
+)
+end_test
+
+begin_test "Assert contiguous array"
+(
+  setup_test
+  a1=(1 2 3)
+  assert_array_contiguous a1
+
+  unset a1[0]
+  not assert_array_contiguous a1
+
+  a1=(1 2 3)
+  unset a1[1]
+  not assert_array_contiguous a1
+  a1+=(4)
+  not assert_array_contiguous a1
+
+  a1=(1 2 3)
+  unset a1[2]
+  assert_array_contiguous a1
+  unset a1[1]
+  assert_array_contiguous a1
+  a1+=(4)
+  assert_array_contiguous a1
+  unset a1[1]
+  unset a1[0]
+  assert_array_contiguous a1
+  a1+=(4)
+  assert_array_contiguous a1
+)
+end_test
+
+function ans()
+{
+  echo "${ERR_C}ASSERT ERROR: Strings differ${NC}"
+  echo         "============================"
+  echo "${1}${HIGHLIGHT_C}${2}${NC}${3}"
+  echo "---------------------"
+  echo "${4}${HIGHLIGHT_C}${5}${NC}${6}"
+}
+
+begin_test "Assert strings equal"
+(
+  setup_test
+
+  assert_str_eq 1234567890 1234567890
+
+  # Make sure the rv is non-zero
+  not assert_str_eq 1234567890 1234566890 &> /dev/null
+  # Middles wrong
+  assert_sub_str "$(assert_str_eq 1234567890 1234566890 2>&1)"   "$(ans 123456   7  890      123456   6  890)"
+  assert_sub_str "$(assert_str_eq 1234567890 1234576890 2>&1)"   "$(ans 12345    67 890      12345    76 890)"
+  assert_sub_str "$(assert_str_eq 1234567890 12345890 2>&1)"     "$(ans 12345    67 890      12345    "" 890)"
+  assert_sub_str "$(assert_str_eq 12345890   1234567890 2>&1)"   "$(ans 12345    "" 890      12345    67 890)"
+  assert_sub_str "$(assert_str_eq 1234555890 123455567890 2>&1)" "$(ans 1234555  "" 890      1234555  67 890)"
+  assert_sub_str "$(assert_str_eq 1234567890 1@34567890 2>&1)"   "$(ans 1        2  34567890 1        @  34567890)"
+  assert_sub_str "$(assert_str_eq 1234567890 12345678^0 2>&1)"   "$(ans 12345678 9  0        12345678 ^  0)"
+
+  # Beginning wrong
+  assert_sub_str "$(assert_str_eq abcdef ABCdef 2>&1)" "$(ans "" abc def   "" ABC def)"
+  assert_sub_str "$(assert_str_eq abcdef Abcdef 2>&1)" "$(ans "" a   bcdef "" A   bcdef)"
+  assert_sub_str "$(assert_str_eq abcdef bcdef 2>&1)"  "$(ans "" a   bcdef "" ""  bcdef)"
+  assert_sub_str "$(assert_str_eq bcdef  abcdef 2>&1)" "$(ans "" ""  bcdef "" a   bcdef)"
+  # End wrong
+  assert_sub_str "$(assert_str_eq uvwxyz uvwXYZ 2>&1)" "$(ans uvw   xyz "" uvw   XYZ "")"
+  assert_sub_str "$(assert_str_eq uvwxyz uvwxyZ 2>&1)" "$(ans uvwxy z   "" uvwxy Z   "")"
+  assert_sub_str "$(assert_str_eq uvwxyz uvwxy 2>&1)"  "$(ans uvwxy z   "" uvwxy ""  "")"
+  assert_sub_str "$(assert_str_eq uvwxy  uvwxyz 2>&1)" "$(ans uvwxy ""  "" uvwxy z   "")"
+
+  # Corner case due to malformed for loop (, instead of &&)
+  assert_sub_str "$(assert_str_eq 167890ab 167767890ab 2>&1)" "$(ans 167 "" 890ab 167 767 890ab)"
+)
+end_test
+
+begin_test "Assert ANSI strings eq"
+(
+  setup_test
+
+  CSI=$'\x1b[' ; : # This line will mess up the trace a little (it's a partial ANSI code) The ; : helps cope
+
+  # assert_str_eq would have failed
+  not assert_str_eq "Foo ${CSI}31mbar" "${CSI}21mFoo bar${CSI}0m"
+  # assert_ansi_str_eq
+  assert_ansi_str_eq "Foo ${CSI}31mbar" "${CSI}21mFoo bar${CSI}0m"
+
+  # The diff is ANSI free too
+  assert_sub_str "$(assert_ansi_str_eq "Foo ${CSI}31mBar" "${CSI}21mFoo bar${CSI}0m" 2>&1)" "$(ans "Foo " B ar "Foo " b ar)"
+)
+end_test
+
+begin_test "Assert contains"
+(
+  setup_test
+
+  not assert_sub_str Fool foo
+  assert_sub_str "" ""
+  assert_sub_str foo ""
+  assert_sub_str blah blah
+  assert_sub_str fool foo
+  assert_sub_str foobar bar
+  assert_sub_str 123456789 456
+
+  assert_starts_with "" ""
+  assert_starts_with foo ""
+  assert_starts_with blah blah
+  assert_starts_with fool foo
+  not assert_starts_with foobar bar
+  not assert_starts_with 123456789 456
+
+  assert_ends_with "" ""
+  assert_ends_with foo ""
+  assert_ends_with blah blah
+  not assert_ends_with fool foo
+  assert_ends_with foobar bar
+  not assert_ends_with 123456789 456
+)
+end_test
+
+begin_test "Assert test"
+(
+  setup_test
+
+  assert_test 1 = 1
+  not assert_test 1 = 2
+
+  assert_test -z ""
+  not assert_test -z " "
+  assert_test -n " "
+  not assert_test -n ""
+
+  assert_test 1 = 2 -o 3 -gt 0
+  not assert_test 1 = 2 -o 3 -lt 0
+)
+end_test
+
+begin_test "Assert regex equals"
+(
+  setup_test
+  # Symbols
+  a='!@#$%^&*()_+`~-=[]{};":'"'"',./<>?\| = '
+  b='^!@#\$%\^&\*\(\)_\+`~-=\[\]\{\};":'"'"',./<>\?\\\| = '
+
+  assert_regex_eq "${a}" "${b}"
+  assert_regex_eq "${a}foo" "${b}"
+  not assert_regex_eq "${a}" "${b}foo"
+
+  c="${b}$"
+  assert_regex_eq "${a}" "${c}"
+  not assert_regex_eq "${a}foo" "${c}"
+  not assert_regex_eq "${a}" "${c}foo"
+
+  # White spaces
+  a=$'foo\tbar\n'
+  assert_regex_eq "${a}" "^foo.bar.$"
+  assert_regex_eq "${a}" $'^foo\tbar\n$'
+  assert_regex_eq "${a}" "foo.bar"
+  not assert_regex_eq "${a}" "^foo.bar$"
+)
+end_test
+
+begin_test "Assert arrays eq"
+(
+  setup_test
+
+  a=()
+  b=''
+  not assert_array_eq a b
+  a=('')
+  # These may look "similar", but b is not an array, but still "passes"
+  assert_array_eq a b
+  assert_array_eq b a
+
+  b=()
+  not assert_array_eq a b
+  a=()
+  assert_array_eq a b
+
+  a=(11 22 33)
+  b=(11 22 33)
+
+  assert_array_eq a b
+  b[2]=32
+  not assert_array_eq a b
+  not assert_array_eq b a
+  b[3]=33
+  unset b[2]
+
+  # The values are the same
+  assert_array_values b "${a[@]}"
+  not assert_array_eq a b
+  not assert_array_eq b a
+)
+end_test
+
+[ "${BASH_VERSINFO[0]}" -ge 4 ] || skip_next_test
+begin_test "Test associative array eq"
+(
+  setup_test
+  declare -A foo
+  declare -A bar
+
+  assert_array_eq foo bar
+  foo[car]=boo
+  not assert_array_eq foo bar
+  bar[car]=bo
+  not assert_array_eq foo bar
+  bar[car]=boo
+  assert_array_eq foo bar
+)
+end_test
+
+begin_test "Test not"
+(
+  setup_test
+
+  not false
+
+  if not true; then
+    false
+  else
+    true
+  fi
+
+  not not true
+)
+end_test
+
+begin_test "Test not_s"
+(
+  setup_test
+
+  not_s "[[ 1 == 2 ]]"
+  not not_s "[[ 1 == 1 ]]"
+
+  not_s "(( 1+5 < 6 )) "
+
+  x=test
+  y='t.st'
+  not not_s '[[ $x =~ $y ]]'
+  x=toast
+  not_s '[[ $x =~ $y ]]'
+
+  not_s "not_s true"
+  not not_s "not_s false"
+)
+end_test

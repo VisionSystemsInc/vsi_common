@@ -28,12 +28,12 @@ RUN pipenv sync; \
     rm -rf "${PIPENV_PIPFILE}*" /tmp/pip*
 
 COPY --from=tini /usr/local /usr/local
-COPY --from=gosu /usr/local/bin/gosu /usr/local/bin/gosu
+COPY --from=gosu /usr/local /usr/local
 # Allow non-privileged to run gosu (remove this to take root away from user)
 RUN chmod u+s /usr/local/bin/gosu
 
 COPY --from=vsi /vsi /vsi
 
-ENTRYPOINT ["/usr/local/bin/tini", "--", "/usr/bin/env", "bash", "/vsi/linux/just_entrypoint.sh"]
+ENTRYPOINT ["/usr/local/bin/tini", "--", "/usr/bin/env", "bash", "/vsi/linux/just_files/just_entrypoint.sh"]
 
 CMD ["docs"]

@@ -14,6 +14,7 @@
 #
 import os
 import sys
+sys.path.insert(0, os.path.abspath('/src/linux'))
 sys.path.insert(0, os.path.abspath('/src/python'))
 
 # -- Project information -----------------------------------------------------
@@ -109,6 +110,7 @@ autodoc_mock_imports = [
     "boxm2_scene_adaptor",
     "vpgl_adaptor_boxm2_batch",
     "yaml",
+    "prompt_toolkit"
 ]
 
 nitpick_ignore = [

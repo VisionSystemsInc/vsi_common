@@ -1,0 +1,366 @@
+#!/usr/bin/env false bash
+
+if [[ $- != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
+source "${VSI_COMMON_DIR}/linux/command_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/elements.bsh"
+source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
+source "${VSI_COMMON_DIR}/linux/ask_question"
+
+#*# just/plugins/just_sphinx_functions
+
+JUST_DEFAULTIFY_FUNCTIONS+=(docs_defaultify)
+JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
+
+#**
+# .. default-domain:: bash
+#
+# .. _sphinx_docs_functions:
+#
+# ==============================
+# J.U.S.T. Sphinx Docs Functions
+# ==============================
+#
+# .. file:: just_sphinx_functions.bsh
+#
+# Plugin for building Sphinx docs for a just project
+#
+# This setup will allow you to use autodocs to auto generate documentation files. For some languages, this is not sufficient (such as bash). For these language, these docs functions will pull out specially comments and turn them into rst files, similar (yet simpler) to auto doc.
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#   :caption: this_example.sh
+#
+#   #!/usr/bin/env bash
+#
+#   do_some_stuff 1 2 3
+#   #*# dir_in_docs/this_example
+#   # The above specifies the location where the rst file will be written
+#   do_more_stuff 5 6 7
+#
+#   # The next line will start an rst section
+#   #**
+#   # =========
+#   # Section 1
+#   # =========
+#   #
+#   # Words that explain code does stuff
+#   #**
+#   # The above line stops the rst section
+#
+#   do_final_stuff 7 8 9
+#
+#   #**
+#   # =========
+#   # Section 2
+#   # =========
+#   #
+#   # More words.
+#
+#   # Explain things
+#   #
+#   # .. note::
+#   #   Be careful of newlines
+#   #**
+#
+#
+# .. code-block:: rst
+#   :caption: docs/dir_in_docs/this_example.auto.rst
+#
+#   =========
+#   Section 1
+#   =========
+#
+#   Words that explain code does stuff
+#
+#   =========
+#   Section 2
+#   =========
+#
+#   More words.
+#   Explain things
+#
+#   .. note::
+#     Be careful of newlines
+#
+# Notice that there is a blank is automatically inserted between "rst sections" for ease of use. However there is no newline after ``More Words.`` because the ``#`` character was not included on that blank line. This is done intentionally so that you can interleave lines of code in within a single "rst section".
+#
+# .. note::
+#   Currently only works for languages that use ``#`` for comments. However this could be made more general with a PR or two.
+#
+# In summary: This basic feature will allow you to embed rst with your source code to have code and documentation in one place.
+#**
+
+function _docs_serialize_dirs()
+{
+  local tmp="${1-}"
+  shift 1
+
+  set_optflag extglob
+  tmp="${tmp//\/+(\/)/\/}"
+  while [ $# -gt 0 ]; do
+    tmp+="//${1//\/+(\/)/\/}"
+    shift 1
+  done
+  reset_optflag extglob
+  echo "${tmp}"
+}
+
+function _sphinx_docker_compose()
+{
+  local DOCS_SOURCE_DIR="${JUST_PROJECT_PREFIX}_SPHINX_SRC_DIR"
+  export DOCS_SOURCE_DIR="${!DOCS_SOURCE_DIR:-${!id_project_cwd}}"
+  export DOCS_DIR="${docs_dir}"
+
+  local VSI_COMMON_UID="${JUST_PROJECT_PREFIX}_UID"
+  export VSI_COMMON_UID="${!VSI_COMMON_UID-1000}"
+  local VSI_COMMON_GIDS="${JUST_PROJECT_PREFIX}_GID"
+  export VSI_COMMON_GIDS="${!VSI_COMMON_GIDS-1000}"
+
+  local JUST_SETTINGSS
+  translate_just_settings "${DOCS_SOURCE_DIR}" /src
+  local JUST_SETTINGS
+  MIFS=/// join_a VSI_COMMON_JUST_SETTINGS ${JUST_SETTINGSS[@]+"${JUST_SETTINGSS[@]}"}
+  export VSI_COMMON_JUST_SETTINGS
+
+  Docker-compose \
+      -f "${VSI_COMMON_DIR}/docker/vsi_common/docker-compose.yml" ${@+"${@}"}
+}
+
+#**
+# --------------------
+# J.U.S.T. docs plugin
+# --------------------
+#
+# .. function:: docs_defaultify
+#
+# Plugin for building Sphinx docs in any just project
+#
+
+# .. envvar:: SPHINXOPTS
+#
+# :envvar:`SPHINXOPTS` is passed to make and is passed to ``sphinx-build`` as arguments
+#
+
+# .. envvar:: SPHINX_COMPILE_IMAGE
+#
+# The name of the docker image used for compiling sphinx docs. Default: ``vsiri/sphinxdocs:compile``. If you want to use your own customized image with your own dependencies installed, override the set :envvar:`SPHINX_COMPILE_IMAGE` in your :file:`local.env` file to the image you want to use, and do not run :cmd:`sphinx_build`, or else it will rebuild using that image name and overwrite it.
+#
+
+# .. envvar:: ${JUST_PROJECT_PREFIX}_SPHINX_DIR
+#
+# The location of the docs directory on the host.
+#
+# Default: ``${${JUST_PROJECT_PREFIX}_CWD}/docs``
+#
+# .. note::
+#   Must be set before running :cmd:`sphinx_setup`
+#
+
+# .. envvar:: ${JUST_PROJECT_PREFIX}_SPHINX_SRC_DIR
+#
+# The location of the source directory where files will be scanned for ``#**`` comments and auto generate rst files. This does not affect autodocs
+#
+# Default: ``${${JUST_PROJECT_PREFIX}_CWD}``
+#
+# Does not usually need to be changed.
+#
+
+# .. envvar:: ${JUST_PROJECT_PREFIX}_SPHINX_EXCLUDE_DIRS
+#
+# An array of directories that will be excluded when searching for ``#**`` comments, relative to source dir. This does not affect autodocs
+#
+# .. note::
+#   If using absolute paths, they will be in the docker filesystem, meaning the :envvar:`${JUST_PROJECT_PREFIX}_SPHINX_SRC_DIR` directory starts with ``/src``
+#
+# Default: ``(docs)``
+#
+
+# .. envvar:: ${JUST_PROJECT_PREFIX}_SPHINX_AUTODOC_DIRS
+#
+# An array of directories that will be processed as packages for autodoc.
+#
+# Default: ``()`` (relative to source dir)
+#
+
+# .. envvar:: ${JUST_PROJECT_PREFIX}_SPHINX_AUTODOC_OUTPUT_DIRS
+#
+#  An array of output directories that the processed package documentation will go. This array must be the same length as :envvar:`${JUST_PROJECT_PREFIX}_SPHINX_AUTODOC_DIRS`. The output files for autodoc should be thought of as transient files, and do not need to be checked into source control, and should be added to your ``.gitignore`` file.
+#
+#  Default: ``()`` (relative to docs dir)
+#
+
+# .. envvar:: ${JUST_PROJECT_PREFIX}_SPHINX_AUTODOC_EXCLUDE_DIRS
+#
+#  A list of directories that will be excluded when running autodoc on every package. Supports the same ``fnmatch`` behavior as ``sphinx-build``
+#
+#  Default: ``(*/tests)`` passed to ``sphinx-apidoc``. This is relative to the ``/docs`` directory, so it is usually easier to use an absolute path starting with ``/src`` to represent the repository root directory
+#
+# .. envvar:: ${JUST_PROJECT_PREFIX}_SPHINX_PRECOMPILE_SCRIPT
+#
+# An optional script that will be run after any parsing but before compiling the sphinx docs. This allows easy customization steps to be added into the existing chain, primarily to auto generate additional files used in documentation.
+#
+# ----------------
+# J.U.S.T. Targets
+# ----------------
+#
+# .. command:: sphinx
+#
+# A simple way to run all the steps needed to create documentation at once.
+#
+# #. :cmd:`sphinx_build`
+# #. If the ``docs`` directory doesn't exist yet, run :cmd:`sphinx_setup`
+# #. :cmd:`sphinx_compile`
+#
+
+# .. command:: sphinx_build
+#
+# Builds the default docker image for compiling sphinx documentation. By default, the image name used is :envvar:`SPHINX_COMPILE_IMAGE` or ``vsiri/sphinxdocs:compile`` if unset. If an image name other than the default is set, then :cmd:`sphinx_build` should not be used, instead use your own :file:`Justfile` targets to build the image.
+#
+
+# .. command:: sphinx_setup
+#
+# Runs ``sphinx-quickstart`` to setup a new sphinx projects. It is intended to have the build directory inside the source directory, so other configurations are not supported, although *may* work with some configuration.
+#
+# After running :cmd:`sphinx_setup`, the makefiles, ``conf.py``, ``index.rst``, and any other rst files should be ``git add`` to your repo. However, ``*.auto.rst`` files do not need to be added, as these are auto generated every time, and can safely be added to your ``.gitignore`` file
+#
+
+# .. command:: sphinx_compile
+#
+# Compiles the sphinx documentation into html using ``sphinx-build`` via ``make``
+#
+# :Arguments: * [``-n`` | ``--nit``] - Add ``-n`` to ``SPHINXOPTS`` for ``sphinx-build``
+#             * [``-E`` | ``--all``] - Adds ``-a`` and ``-E`` to ``SPHINXOPTS`` for ``sphinx-build``. This will force all files to be rebuilt
+#**
+function docs_defaultify()
+{
+  local id_project_cwd="${JUST_PROJECT_PREFIX}_CWD"
+  local docs_dir="${JUST_PROJECT_PREFIX}_SPHINX_DIR"
+  docs_dir="${!docs_dir:-${!id_project_cwd}/docs}"
+
+  arg=$1
+  shift 1
+  case $arg in
+    sphinx) # Guided "just" make sphinx documents happen (build => setup => compile)
+      justify sphinx build
+      if [ ! -d "${docs_dir}" ]; then
+        justify sphinx setup
+      fi
+      justify sphinx compile
+      ;;
+   sphinx_build) # Build the sphinx docker images
+      if [ "${SPHINX_COMPILE_IMAGE-vsiri/sphinxdocs:compile}" != "vsiri/sphinxdocs:compile" ]; then
+        source "${VSI_COMMON_DIR}/linux/colors.bsh"
+        echo "${RED}ERROR${NC}: You should use your own Justfile to build \"${SPHINX_COMPILE_IMAGE}\"" >&2
+        local JUST_IGNORE_EXIT_CODES=1
+        return 1
+      fi
+      justify build recipes-auto "${VSI_COMMON_DIR}/docker/vsi_common/sphinx.Dockerfile"
+      _sphinx_docker_compose build sphinx
+      ;;
+
+    sphinx_pipenv-update) # Update docs Pipenv file
+      # Create a new volume
+      local volume="$(docker volume create)"
+      local rv=0
+      # Shadow /venv so it copies it. This makes chowning thousands of times faster... or something like that.
+      # extra_sphinx_arguments=(-v "${volume}:/venv")
+      _sphinx_docker_compose run -v "${volume}:/venv" sphinx nopipenv bash -c "
+          echo 'Owning virtual env'
+          sudo chown -R user: /venv/*
+          pipenv lock" || rv=$?
+      docker volume rm "${volume}"
+      if [ "${rv}" != 0 ]; then return "${rv}"; fi
+      justify sphinx build
+      ;;
+
+    sphinx_setup) # Setup a new sphinx project
+      mkdir -p "${docs_dir}"
+      _sphinx_docker_compose run --rm \
+          sphinx bash -c "cd /docs; sphinx-quickstart"
+      ;;
+    sphinx_shell) # Enter the sphinx container
+      echo "Run 'just docs' to build to docs"
+      justify sphinx compile bash
+      ;;
+    sphinx_compile) # Compile sphinx documents
+      local nit_pick
+      local rebuild_all
+      parse_args extra_args -n nit_pick --nit nit_pick -E rebuild_all --all rebuild_all -- ${@+"${@}"}
+      shift "${extra_args}"
+
+      if [ "${nit_pick}" != "0" ]; then
+        export SPHINXOPTS="${SPHINXOPTS-} -n"
+      fi
+      if [ "${rebuild_all}" != "0" ]; then
+        export SPHINXOPTS="${SPHINXOPTS-} -E -a"
+      fi
+
+      local JUST_TEMP_ARRAY
+      set_array_default "${JUST_PROJECT_PREFIX}_SPHINX_EXCLUDE_DIRS" docs
+      set_array_default "${JUST_PROJECT_PREFIX}_SPHINX_AUTODOC_EXCLUDE_DIRS" \*/tests
+      set_array_default "${JUST_PROJECT_PREFIX}_SPHINX_AUTODOC_DIRS"
+      set_array_default "${JUST_PROJECT_PREFIX}_SPHINX_AUTODOC_OUTPUT_DIRS"
+
+      local exclude_dirs="${JUST_PROJECT_PREFIX}_SPHINX_EXCLUDE_DIRS[@]"
+      exclude_dirs=(${!exclude_dirs+"${!exclude_dirs}"})
+      local autodoc_exclude_dirs="${JUST_PROJECT_PREFIX}_SPHINX_AUTODOC_EXCLUDE_DIRS[@]"
+      autodoc_exclude_dirs=(${!autodoc_exclude_dirs+"${!autodoc_exclude_dirs}"})
+      local autodoc_dirs="${JUST_PROJECT_PREFIX}_SPHINX_AUTODOC_DIRS[@]"
+      autodoc_dirs=(${!autodoc_dirs+"${!autodoc_dirs}"})
+      local autodoc_output_dirs="${JUST_PROJECT_PREFIX}_SPHINX_AUTODOC_OUTPUT_DIRS[@]"
+      autodoc_output_dirs=(${!autodoc_output_dirs+"${!autodoc_output_dirs}"})
+
+      JUST_TEMP_ARRAY="${JUST_PROJECT_PREFIX}_SPHINX_PRECOMPILE_SCRIPT"
+      local precompile_script
+      if declare -p "${JUST_TEMP_ARRAY}" &> /dev/null; then
+        precompile_script="${!JUST_TEMP_ARRAY}"
+      fi
+
+      _sphinx_docker_compose run \
+          -e SPHINXOPTS \
+          -e DOCS_EXCLUDE_DIRS="$(_docs_serialize_dirs "${exclude_dirs[@]}")" \
+          -e DOCS_AUTODOC_EXCLUDE_DIRS="$(_docs_serialize_dirs "${autodoc_exclude_dirs[@]}")" \
+          -e DOCS_AUTODOC_DIRS="$(_docs_serialize_dirs "${autodoc_dirs[@]}")" \
+          -e DOCS_AUTODOC_OUTPUT_DIRS="$(_docs_serialize_dirs "${autodoc_output_dirs[@]}")" \
+          -e DOCS_PRECOMPILE_SCRIPT=${precompile_script+"${precompile_script}"} \
+          ${extra_sphinx_arguments[@]+"${extra_sphinx_arguments[@]}"} \
+          sphinx ${@+"${@}"}
+      extra_args+=$#
+      ;;
+    sphinx_view) # Open a web browser to the sphinx docs. First argument must contain the docs build directory
+      local html_file
+      html_file="$(find "${docs_dir}" -path \*html/index.html -print -quit)"
+      if [ -z "${html_file-}" ]; then
+        html_file=${docs_dir}
+      fi
+      open_web_browser "${html_file}"
+      ;;
+    sphinx_clean) # Cleans doc directory
+      local sphinx_clean="${sphinx_clean-}"
+      git clean -ndX "${docs_dir}"
+      ask_question "Would you like to delete these files?" sphinx_clean y
+      if [ "${sphinx_clean}" = "1" ]; then
+        git clean -fdX "${docs_dir}"
+      fi
+      ;;
+    *)
+      plugin_not_found=1
+      ;;
+  esac
+  return 0
+}
+
+#**
+# Advanced Debugging
+# ------------------
+#
+# To run any custom command (like ``bash``), in the docs docker environment, additional arguments can be given to the :cmd:`sphinx_compile` command, and that will be run instead of the docs script. For example:
+#
+# .. code-block:: bash
+#
+#   just docs compile bash``
+#**

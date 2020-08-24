@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 
-. "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
-. "$(dirname "${BASH_SOURCE[0]}")/test_utils.bsh"
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
 
-VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
-
-. "${VSI_COMMON_DIR}/linux/string_tools.bsh"
+source "${VSI_COMMON_DIR}/tests/testlib.bsh"
+source "${TESTLIB_DIR}/test_utils.bsh"
+source "${VSI_COMMON_DIR}/linux/string_tools.bsh"
 
 begin_test "String trim"
 (
@@ -292,5 +293,36 @@ begin_test "_Null dump"
   ans="${H}30${H}"
   out="$(_null_dump 0 x | xxd -p -c 100 | sed 's| *$||')"
   [ "${ans}" = "${out}" ]
+)
+end_test
+
+begin_test "Strip ANSI"
+(
+  setup_test
+
+  ESC=$'\x1b'
+  CSI="${ESC}["
+  BEL=$'\x07'
+
+  # Test flag not interfering
+  assert_str_eq "$(strip_ansi "-e hi foo")" "-e hi foo"
+
+  # CSI
+  assert_str_eq "$(strip_ansi "hi ${CSI}30mbar${CSI}0m foo")" "hi bar foo"
+  assert_str_eq "$(strip_ansi_stream <<< "hi ${CSI}30mbar${CSI}0m foo")" "hi bar foo"
+
+  # DCS, SOS, PM, and APC
+  assert_str_eq "$(strip_ansi "hi ${ESC}Pbar${ESC}\\foo")" "hi foo"
+  assert_str_eq "$(strip_ansi "hi ${ESC}Xbar${ESC}\\foo")" "hi foo"
+  assert_str_eq "$(strip_ansi "hi ${ESC}^bar${ESC}\\foo")" "hi foo"
+  assert_str_eq "$(strip_ansi "hi ${ESC}_bar${ESC}\\foo")" "hi foo"
+
+  # OSC
+  assert_str_eq "$(strip_ansi "hi ${ESC}]bar${ESC}\\foo")" "hi foo"
+  assert_str_eq "$(strip_ansi "hi ${ESC}]bar${ESC}\\foo")" "hi foo"
+  assert_str_eq "$(strip_ansi "hi ${ESC}]bar${BEL}\\foo")" "hi \foo"
+
+  # Misc
+  assert_str_eq "$(strip_ansi "hi ${ESC}@bar${ESC}\\foo")" "hi barfoo"
 )
 end_test

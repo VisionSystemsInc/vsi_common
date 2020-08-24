@@ -1,0 +1,406 @@
+#!/usr/bin/env bash
+
+if [[ $- != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.."; pwd)"
+fi
+
+source "${VSI_COMMON_DIR}/linux/mount_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
+source "${VSI_COMMON_DIR}/linux/elements.bsh"
+source "${VSI_COMMON_DIR}/linux/just_files/container_functions.bsh"
+
+source "${VSI_COMMON_DIR}/linux/circular_source.bsh"
+circular_source "${VSI_COMMON_DIR}/linux/just_files/docker_functions.bsh" || return 0
+
+#*# just/plugins/docker/docker_compose_override
+
+#**
+# =======================
+# Docker Compose Override
+# =======================
+#
+# .. default-domain:: bash
+#
+# .. file:: docker_compose_override
+#
+# Generates a supplementary ``docker-compose.yml`` file, utilized for some of the more advanced ``just`` features.
+#
+# :Arguments: See :func:`docker_compose_override generate_docker_compose_override`
+#
+# .. note::
+#   :file:`docker_compose_override` can be sourced so that individual functions can be called
+#
+# .. seealso::
+#
+#   :func:`docker_compose_override generate_docker_compose_override`
+#     The main docker compose override function
+#**
+
+#**
+# .. function:: _docker_compose_override_var_sub string
+#
+# :Arguments: * **1** - String of variable name, such as ``'${var}'``
+# :Output: *stdout* - Variable name
+# :Internal Use: Yes
+#
+# Unwraps a bash style basic variables name in a string. Assumes the string is a variable expression, so the first letter is assumed to be a $, and is not checked
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
+#     indirect=$(_docker_compose_override_var_sub '${foo}')
+#     # indirect=var
+#     indirect=$(_docker_compose_override_var_sub '$bar')
+#     # indirect=bar
+#
+# .. deprecated:: 0.0.4
+#**
+function _docker_compose_override_var_sub()
+{
+  # support ${var} notation
+  if [ "${1:1:1}" == "{" ]; then
+    echo ${1:2:${#1}-3}
+  else # support $var notation
+    echo ${1:1:${#1}-1}
+  fi
+}
+
+#**
+# .. function:: _env_echo
+#
+# :Arguments: * [**1 ...**] - arguments to echo
+# :Output: *stdout* - Yaml excerpt
+#          * ``new_environment`` - Value is **"1"** if :func:`_env_echo` has been called already
+#
+# Simple helper function for echoing environment variables in the ``docker-compose`` yaml file
+#
+# In docker-compose, the ``environment:`` section can only be added once, and can only be added if there is at least one environment variable set. In case there are none, nothing should be added. This helper only echoes ``environment:`` the first time it is called.
+#**
+function _env_echo()
+{
+  if [ "${new_environment-1}" == "1" ]; then
+    echo "    environment:"
+    new_environment=0
+  fi
+  echo "      - ${1}=${2}"
+}
+
+#**
+# .. function:: generate_docker_compose_override
+#
+# :Arguments: * **1** - Prefix used in many of the just features, such as ``${1}_.*_DOCKER/HOST`` variables, etc...
+#             * [**2 ...**] - List of services to process (see docker_compose_service_names)
+# :Output: *stdout* - The docker-compose override yaml file
+#
+# Create a docker override yaml file and extend the current docker-compose configuration with:
+#
+# * Volume features:
+#
+#   * Volumes can be added to the services listed in ``$2``...
+#
+#     * Volumes listed in ``${1}_VOLUMES`` are added to every service
+#     * Volumes in ``${1}_VOLUME_1``, ``${1}_VOLUME_2``, ... are added to every service
+#     * Volumes listed in ``${1}_<upper(service_name)>_VOLUMES`` are added only to that service.
+#     * Volumes listed in ``${1}_<upper(service_name)>_VOLUME_1``, ``${1}_<upper(service_name)>_VOLUME_2``, ... are added only to that service.
+#     * **Note**: If the yaml file uses anchors, this will not be reflected in this auto generated file. You will have to set the value of ``${1}_<upper(other_service_name)>_VOLUMES`` as well
+#
+# * Environment features:
+#
+#   * For volumes that couldn't be mounted in their expected locations (mostly due to nfs limitations), the variable ``JUST_DOCKER_ENTRYPOINT_LINKS`` is set to a colon delimited string (used by docker_entrypoints.bsh/docker_link_mounts).
+#   * Keep a ``//`` separated list of docker data volumes in ``JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES``.
+#   * Environment variables ``${1}_.*_HOST`` are added to the docker environment exactly as is.
+#   * Transparently swap environment variables as they are added to the docker environment (default):
+#
+#     * For every environment variable, ``${1}_.*_DOCKER``, and optionally its corresponding un-suffix'ed version ``${1}_.*``
+#
+#       * ``${1}_.*`` variable is copied as ``${1}_.*_HOST``
+#       * ``${1}_.*_DOCKER`` variable is copied as ``${1}_.*``
+#       * ``VIP_FOO=/opt/foo`` is copied to ``VIP_FOO_HOST=/opt/foo`` and ``VIP_FOO_DOCKER=/foo`` is copied to ``VIP_FOO=/foo``
+#
+#     * This is a transparency feature. Only ``_DOCKER`` variables should use the ``_DOCKER`` suffix.
+#
+#   * The transparency swap feature can be disabled by setting :var:`JUST_DISABLE_ENVIRONMENT_SWAP=1 <JUST_DISABLE_ENVIRONMENT_SWAP>`. In which case:
+#
+#     * For every environment variable ``${1}_.*_DOCKER``
+#
+#       * ``${1}_.*_DOCKER`` is copied exactly as is
+#       * ``${1}_.*`` is copied exactly as is if it exists
+#
+# .. var:: COMPOSE_VERSION
+#
+#   :Default: ``3.2``
+#   :Optional: True
+#
+#   Docker compose version used.
+#
+# .. var:: JUST_DISABLE_ENVIRONMENT_SWAP
+#
+#   :Default: ``0``
+#   :Optional: True
+#
+#   Disables the transparent variable swap feature.
+#
+# .. var:: EXPORT_DOCKER
+#
+#   :Default: ``0``
+#   :Optional: True
+#
+# Also exports the ``${1}_.*_DOCKER`` version of the variable when using the transparent environment variable swap feature (the swap effectively becomes a copy).
+#
+# .. var:: MOUNT_PREFIX
+#
+#   :Default: ``/host_mnt``
+#   :Optional: True
+#
+# Some mounted file systems will not allow subdirectories to be mounted by root, such as nfs with squash root turned on. In this case, generate_docker_compose_override will mount the root of an nfs mount point in a secondary location, and then symlink the subdirectory to its original mount point. This may be slightly less than ideal, but this is the best that can be done with these file systems. The :var:`MOUNT_PREFIX` is the secondary location where these mount points are mounted. Apps running in a container should use the expected mount point, not these secondary mount points.
+#
+# .. var:: DOCKER_COMPOSE_FILES
+#
+#   :Default: ``()``
+#   :Optional: True
+#
+# Array of docker-compose yaml files to parse for volumes
+#
+# .. note::
+#
+#   There is no way to use the ``_VOLUMES`` features from the CLI, as arrays cannot be exported. However the ``_VOLUME_1`` feature will work
+#
+# .. seealso::
+#
+#   :func:`just_entrypoint_functions docker_link_mounts`
+#     Uses ``JUST_DOCKER_ENTRYPOINT_LINKS``
+#**
+function generate_docker_compose_override()
+{
+  # loop vars
+  local volume
+  local service_index
+  local docker_compose_file
+
+  # override variables
+  local over_volumes
+  local just_docker_entrypoint_links
+  local just_docker_entrypoint_internal_volumes
+  local just_docker_entrypoint_internal_ro_volumes
+  local all_dynamic_internal_volumes=()
+
+  # indirect fun
+  local volumes_name
+  local indirect
+  local volumes_name_all
+  local indirect_all
+  local enumerated_volumes_all=()
+  local enumerated_volumes
+  local -i i=1
+
+  # misc
+  local host_mount_point
+  local volume_host
+  local volume_docker
+  local volume_flags
+  local compose_config
+
+  # parse-docker-compose-volumes/docker-compose-volumes vars
+  local DOCKER_VOLUME_LINES
+  local DOCKER_VOLUME_SOURCES
+  local DOCKER_VOLUME_TARGETS
+  local DOCKER_VOLUME_FLAGS
+  # _env_echo
+  local new_environment
+
+  # Argument parsing
+  local JUST_PROJECT_PREFIX=$1
+  shift 1
+
+  local services_name=(${@+"${@}"})
+  local services_upper=($(tr '[a-z][:punct:]' '[A-Z]_' <<< ${services_name[@]}))
+
+  # Save old IFS
+  local OLD_IFS="${IFS}"
+  local IFS="${IFS}"
+
+  # Run docker-compose config once for all files/services
+  compose_config=()
+  for docker_compose_file in ${DOCKER_COMPOSE_FILES+"${DOCKER_COMPOSE_FILES[@]}"}; do
+    compose_config+=("-f" "${docker_compose_file}")
+  done
+
+  # If there is at least one config, then run docker-compose config
+  if [ ${#compose_config[@]} -gt 0 ]; then
+    compose_config="$("${DOCKER_COMPOSE}" "${compose_config[@]}" config)"
+  else
+    # Else do not. This is a non-realistic scenario, but makes this more robust
+    compose_config=""
+  fi
+
+  # Parse enumerated_volumes_all
+  volumes_name_all="${JUST_PROJECT_PREFIX}_VOLUME_$i"
+  while declare -p "${volumes_name_all}" &> /dev/null; do
+    enumerated_volumes_all+=("${!volumes_name_all}")
+    i+=1
+    volumes_name_all="${JUST_PROJECT_PREFIX}_VOLUME_$i"
+  done
+  # Indirect fun
+  volumes_name_all="${JUST_PROJECT_PREFIX}_VOLUMES"
+  indirect_all="${volumes_name_all}[@]"
+
+  echo "version: '${COMPOSE_VERSION-3.2}'"
+  echo "services:"
+  for service_index in "${!services_name[@]}"; do
+    echo "  ${services_name[$service_index]}:"
+
+    # Clear list for this service
+    just_docker_entrypoint_links=()
+    just_docker_entrypoint_internal_volumes=()
+    just_docker_entrypoint_internal_ro_volumes=()
+    over_volumes=()
+
+    # Parse enumerate_volumes
+    enumerated_volumes=()
+    i=1
+    volumes_name="${JUST_PROJECT_PREFIX}_${services_upper[$service_index]}_VOLUME_$i"
+    while declare -p "${volumes_name}" &> /dev/null; do
+      enumerated_volumes+=("${!volumes_name}")
+      i+=1
+      volumes_name="${JUST_PROJECT_PREFIX}_${services_upper[$service_index]}_VOLUME_$i"
+    done
+    # Indirect fun
+    volumes_name="${JUST_PROJECT_PREFIX}_${services_upper[$service_index]}_VOLUMES"
+    indirect="${volumes_name}[@]"
+
+    parse-docker-compose-volumes ${services_name[$service_index]} <<< "${compose_config}"
+    docker-compose-volumes
+
+    # Get internal volumes of service
+    for volume in "${!DOCKER_VOLUME_SOURCES[@]}"; do
+      if is_internal_docker_volume "${DOCKER_VOLUME_SOURCES[$volume]}"; then
+        if [ "${DOCKER_VOLUME_FORMATS[$volume]}" == "short" ]; then
+          if is_readonly_docker_volume "${DOCKER_VOLUME_FLAGS[$volume]}"; then
+            just_docker_entrypoint_internal_ro_volumes+=("${DOCKER_VOLUME_TARGETS[${volume}]}")
+          else
+            just_docker_entrypoint_internal_volumes+=("${DOCKER_VOLUME_TARGETS[${volume}]}")
+          fi
+        else
+          if is_readonly_docker_compose_long_volume "${DOCKER_VOLUME_FLAGS[$volume]}"; then
+            just_docker_entrypoint_internal_ro_volumes+=("${DOCKER_VOLUME_TARGETS[${volume}]}")
+          else
+            just_docker_entrypoint_internal_volumes+=("${DOCKER_VOLUME_TARGETS[${volume}]}")
+          fi
+        fi
+      fi
+    done
+
+    # Dynamically add volumes
+    for volume in ${!volumes_name_all+"${!indirect_all}"} \
+                  ${!volumes_name+"${!indirect}"} \
+                  ${enumerated_volumes_all+"${enumerated_volumes_all[@]}"} \
+                  ${enumerated_volumes+"${enumerated_volumes[@]}"}; do
+
+      docker_parse_volume_string "$volume" # sets volume_host, volume_docker, and volume_flags
+
+      # If it doesn't exist, attempt to make it as this user. Better than root
+      docker_premkdir "${volume_host}"
+      # If it's a docker volume, track that too!
+      if is_internal_docker_volume "${volume_host}"; then
+        if is_readonly_docker_volume "${volume_flags}"; then
+          just_docker_entrypoint_internal_ro_volumes+=("${volume_docker}")
+        else
+          just_docker_entrypoint_internal_volumes+=("${volume_docker}")
+        fi
+        all_dynamic_internal_volumes+=("${volume_host}")
+      else # Else the volume is a path, get the real path
+        volume_host="$(real_path "${volume_host}")"
+      fi
+
+      # A trap is set on ERR in ./just that is printing to stderr in the event
+      # of a non-zero return value. There is no catching the return value to
+      # prevent this, nor redirecting to stderr. Instead, disable the trap
+      # inheritance.
+      unset_flag E
+      local mp_rv=0
+      host_mount_point="$(mount_point "${volume_host}" nfs nfs3 nfs4)" || mp_rv=$?
+      reset_flag E
+
+      # If the volume is not a docker volume
+      if [ "${volume_host:0:1}" = "/" ] &&
+         # If the mount point is nfs AND it isn't already the same as the mount
+         [ "${mp_rv}" -eq 0 ] && \
+         # In this edge case, the volume_host is exactly the mount point; don't
+         # do anything special for this case
+         [ "${host_mount_point}" != "${volume_host}" ]; then
+
+        # Add to the entrypoint list
+        just_docker_entrypoint_links+=("${MOUNT_PREFIX-/host_mnt}${volume_host}"
+                                       "${volume_docker}")
+        # Rewrite this volume
+        volume_host="${host_mount_point}"
+
+
+        volume_docker="${MOUNT_PREFIX-/host_mnt}${host_mount_point}"
+      fi
+
+      if [ "${OS-}" = "Windows_NT" ]; then
+        volume_host="$(cygpath -w "${volume_host}")"
+      fi
+
+      IFS=:
+      over_volumes+=("      - ${volume_host}:${volume_docker}${volume_flags}")
+      IFS="${OLD_IFS}"
+    done
+    # Remove duplicates (https://unix.stackexchange.com/q/159695) because
+    # docker-compose doesn't like them
+    IFS=$'\n'
+    over_volumes=($(awk '!count[$0]++' <<< ${over_volumes[@]+"${over_volumes[*]}"}))
+    if [ "${over_volumes+set}" == "set" ]; then
+      echo "    volumes:"
+      echo ${over_volumes+"${over_volumes[*]}"}
+    fi
+    IFS="${OLD_IFS}"
+
+    # Initialize _env_echo command"
+    new_environment=1
+
+    if [ -n "${just_docker_entrypoint_links+set}" ]; then
+      IFS=:
+      _env_echo JUST_DOCKER_ENTRYPOINT_LINKS "${just_docker_entrypoint_links[*]}"
+      IFS="${OLD_IFS}"
+    fi
+    if [ "${#just_docker_entrypoint_internal_volumes[@]}" -gt 0 ]; then
+      MIFS='//' join_a just_docker_entrypoint_internal_volumes "${just_docker_entrypoint_internal_volumes[@]}"
+      _env_echo JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES "${just_docker_entrypoint_internal_volumes}"
+    fi
+    if [ "${#just_docker_entrypoint_internal_ro_volumes[@]}" -gt 0 ]; then
+      MIFS='//' join_a just_docker_entrypoint_internal_ro_volumes "${just_docker_entrypoint_internal_ro_volumes[@]}"
+      _env_echo JUST_DOCKER_ENTRYPOINT_INTERNAL_RO_VOLUMES "${just_docker_entrypoint_internal_ro_volumes}"
+    fi
+
+    container_environment_override _env_echo
+  done
+
+  ###################
+  # volumes section #
+  ###################
+  IFS=$'\n'
+  # Make unique list
+  all_dynamic_internal_volumes=($(awk '!count[$0]++' <<< ${all_dynamic_internal_volumes[@]+"${all_dynamic_internal_volumes[*]}"}))
+  IFS="${OLD_IFS}"
+
+  # A space is needed for older bashes (an extra null "" works only in newer bashes)
+  if [ " ${all_dynamic_internal_volumes[@]+set}" = " set" ]; then
+    # Declare newly added volumes
+    echo "volumes:"
+    for volume in "${all_dynamic_internal_volumes[@]}"; do
+      echo "  ${volume}:"
+    done
+  fi
+}
+
+if [ "${BASH_SOURCE[0]}" = "${0}" ] || [ "$(basename "${BASH_SOURCE[0]}")" = "${0}" ]; then
+  set -eu
+  generate_docker_compose_override ${@+"${@}"}
+fi

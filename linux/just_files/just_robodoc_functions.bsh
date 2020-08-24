@@ -1,0 +1,71 @@
+#!/usr/bin/env false bash
+
+if [[ $- != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
+source "${VSI_COMMON_DIR}/linux/just_files/docker_functions.bsh"
+
+#*# just/plugins/just_robodoc_functions
+
+JUST_DEFAULTIFY_FUNCTIONS+=(robodoc_defaultify)
+JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
+
+#**
+# ==========================
+# J.U.S.T. Robodoc Functions
+# ==========================
+#
+# .. default-domain:: bash
+#
+# .. warning::
+#     This module is deprecated in favor of :ref:`sphinx_docs_functions`. Robodocs will not be updated and maybe removed in the future.
+#
+# .. file:: just_robodoc_functions.bsh
+#
+# :Arguments: * [``$1``] - Optional docker location of robodoc rc files, wrt /src dir. Default: ``/src/robodoc.rc``
+#             * ``SRC_DIR`` - Source directory. Default: ``$VSI_COMMON_DIR``
+#             * ``DOC_DIR`` - Document directory. Default: ``$VSI_COMMON_DIR/docs``
+#
+# ROBODoc plugin for just
+#
+# robodoc - target that will make robodoc documentation
+#**
+
+function robodoc_defaultify()
+{
+  arg=$1
+  shift 1
+  case $arg in
+    robodoc) # Generate robodoc documentation for project, using source dir \
+             # ${VSI_COMMON_DIR-$(pwd)} and documentation dir \
+             # ${VSI_DOC_DIR-${VSI_COMMON_DIR}/docs}. Takes 1 argument for the \
+             # robodoc rc file.
+      # Override the robodoc target in your Justfile and call __generate-robodoc
+      # if you need to set other parameters
+      justify __generate-robodoc ${@+"${@}"}
+      extra_args=$#
+      ;;
+    __generate-robodoc)
+      local SRC_DIR="${SRC_DIR-${VSI_COMMON_DIR}}"
+      local DOC_DIR="${DOC_DIR-${VSI_COMMON_DIR}/docs}"
+
+      if [ "${DRYRUN-}" != "" ]; then
+        echo -n "env SRC_DIR=\"${SRC_DIR}\" DOC_DIR=\"${DOC_DIR}\" "
+      fi
+
+      COMPOSE_FILE="${VSI_COMMON_DIR}/docker/vsi_common/docker-compose.yml" \
+      SRC_DIR="${SRC_DIR}" \
+      DOC_DIR="${DOC_DIR}" \
+      Just-docker-compose run \
+                          -e DOCKER_UID=$(id -u) \
+                          -e DOCKER_GID=$(id -g) \
+                          robodoc ${1+--rc} ${@+"${1}"}
+      extra_args=${@+1}
+      ;;
+    *)
+      plugin_not_found=1
+      ;;
+  esac
+  return 0
+}

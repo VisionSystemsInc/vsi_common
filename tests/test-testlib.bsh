@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 
-. "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
+
+source "${VSI_COMMON_DIR}/tests/testlib.bsh"
 
 begin_test "Test Success"
 (
@@ -16,6 +20,7 @@ begin_expected_fail_test "Test Expected Fail"
 
   echo "Failing test ${@+${@}}"
 
+  begin_fail_zone
   false
 )
 end_test
@@ -26,6 +31,7 @@ begin_required_fail_test "Test Required Fail"
 
   echo "Required fail test ${@+${@}}"
 
+  begin_fail_zone
   false
 )
 end_test
@@ -36,42 +42,6 @@ begin_test "Test Skipped Test"
   setup_test
 
   false
-)
-end_test
-
-begin_test "Test not"
-(
-  setup_test
-
-  not false
-
-  if not true; then
-    false
-  else
-    true
-  fi
-
-  not not true
-)
-end_test
-
-begin_test "Test not_s"
-(
-  setup_test
-
-  not_s "[[ 1 == 2 ]]"
-  not not_s "[[ 1 == 1 ]]"
-
-  not_s "(( 1+5 < 6 )) "
-
-  x=test
-  y='t.st'
-  not not_s '[[ $x =~ $y ]]'
-  x=toast
-  not_s '[[ $x =~ $y ]]'
-
-  not_s "not_s true"
-  not not_s "not_s false"
 )
 end_test
 
@@ -88,10 +58,11 @@ begin_test "Run actual failing tests"
 
   summary_file="${TESTDIR}/quiz-testlib.bsh"
 
-  # There should be three failures!
-  [ "$(awk '{print $2}' "${summary_file}")" -eq 3 ]
+  # There should be 8 failures and 2 unexpected successes!
+  [ "$(awk '{print $2" "$3}' "${summary_file}")" = "8 2" ]
 )
 end_test
+
 
 begin_test "Test TESTLIB_STOP_AFTER_FAILS"
 (
@@ -103,11 +74,26 @@ begin_test "Test TESTLIB_STOP_AFTER_FAILS"
   # Zero already tested above
 
   TESTLIB_STOP_AFTER_FAILS=1 TESTLIB_SUMMARY_DIR=${TESTDIR} "${THIS_TEST_DIR}/quiz-testlib.bsh" 2>&1 || :
-  # There should be 1 failure, 2 skips!
-  [ "$(awk '{print $2" "$5}' "${summary_file}")" = "1 2" ]
+  # There should be 1 failure, 9 skips
+  [ "$(awk '{print $2" "$6}' "${summary_file}")" = "1 9" ]
 
   TESTLIB_STOP_AFTER_FAILS=2 TESTLIB_SUMMARY_DIR=${TESTDIR} "${THIS_TEST_DIR}/quiz-testlib.bsh" 2>&1 || :
-  # There should be 2 failure, 1 skips!
-  [ "$(awk '{print $2" "$5}' "${summary_file}")" = "2 1" ]
+  # There should be 2 failure, 8 skips
+  [ "$(awk '{print $2" "$6}' "${summary_file}")" = "2 8" ]
+)
+end_test
+
+begin_expected_fail_test "Test expected to fail in a fail zone"
+(
+  setup_test
+
+  begin_fail_zone
+  true
+  end_fail_zone
+
+  true
+
+  begin_fail_zone
+  false
 )
 end_test

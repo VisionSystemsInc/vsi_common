@@ -1,5 +1,5 @@
 ARG BASH_VERSION=5.0
-ARG DOCKER_COMPOSE_VERSION=1.25.0-rc4
+ARG DOCKER_COMPOSE_VERSION=1.26.2
 FROM vsiri/recipe:gosu as gosu
 FROM vsiri/recipe:tini-musl as tini
 FROM vsiri/recipe:jq as jq
@@ -45,5 +45,5 @@ COPY --from=docker /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=docker-compose /usr/local/bin/docker-compose /usr/local/bin/docker-compose
 # COPY --from=vsi /vsi /vsi
 
-ENTRYPOINT ["/usr/local/bin/tini", "--", "/usr/bin/env", "bash", "/vsi/linux/just_entrypoint.sh"]
+ENTRYPOINT ["/usr/local/bin/tini", "--", "/usr/bin/env", "bash", "/vsi/linux/just_files/just_entrypoint.sh"]
 CMD ["test"]

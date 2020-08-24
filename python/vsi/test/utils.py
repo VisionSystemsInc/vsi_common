@@ -1,5 +1,6 @@
-from unittest import TestCase as TestCaseOriginal
+from unittest import mock, TestCase as TestCaseOriginal
 from unittest.util import safe_repr
+import tempfile
 from tempfile import (
   NamedTemporaryFile as NamedTemporaryFileOrig,
   TemporaryDirectory
@@ -11,7 +12,7 @@ import types
 
 class TestCase(TestCaseOriginal):
   '''
-  TestCase class for terra tests
+  TestCase class for common tests
 
   * Auto creates ``self.temp_dir``, a self deleting temporary directory for
     each test
@@ -23,7 +24,7 @@ class TestCase(TestCaseOriginal):
 
   .. code-block:: python
 
-      class TestSomething(terra.test.utils.TestCase):
+      class TestSomething(vsi.test.utils.TestCase):
         def setUp(self):
           self.patches.append(mock.patch.object(settings, '_wrapped', None))
           super().setUp()
@@ -140,7 +141,12 @@ def NamedTemporaryFileFactory(test_self):
   def NamedTemporaryFile(**kwargs):
     kwargs['dir'] = test_self.temp_dir.name
     rv = NamedTemporaryFileOrig(**kwargs)
-    # TODO: Change and document "temp_log_file"
-    test_self.temp_log_file = rv.name
     return rv
   return NamedTemporaryFile
+
+
+class TestNamedTemporaryFileCase(TestCase):
+  def setUp(self):
+    self.patches.append(mock.patch.object(tempfile, 'NamedTemporaryFile',
+                                          NamedTemporaryFileFactory(self)))
+    super().setUp()

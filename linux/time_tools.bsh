@@ -29,9 +29,12 @@ fi
 get_time_seconds()
 {
   # If this date doesn't support nanoseconds
-  if [ "$(date +%N)" == "N" ]; then
+  if [[ ! $(date +%N) =~ ^[0-9]+$ ]]; then
+    local python_cmd="import time; print('%0.9f' % time.time())"
     if command -v python &> /dev/null; then
-      python -c "import time; print('%0.9f' % time.time())"
+      python -c "${python_cmd}"
+    elif command -v python3 &> /dev/null; then
+      python3 -c "${python_cmd}"
     elif command -v ruby &> /dev/null; then
       ruby -e "print Time.now.to_f"
     # Add other elif commands here for other common languages. Perl needs a
@@ -53,8 +56,17 @@ get_time_seconds()
 # :Uses: perl
 #
 # macOS function similar to linux timeout
+#
+# .. rubric:: Bugs
+#
+# Since this uses SIGALRM, bash will print out "Alarm clock: 14" to indicate SIGALRM (14) has been raised. This could cause unexpected text in stderr if you are parsing it.
+#
+# .. seealso::
+#
+#    https://www.cyberciti.biz/faq/shell-scripting-run-command-under-alarmclock/
 #**
 if [[ ${OSTYPE-} = darwin* ]]; then
+  # https://perldoc.perl.org/functions/alarm.html
   function timeout()
   {
     perl -e 'use warnings;
@@ -98,44 +110,100 @@ if [[ ${OSTYPE-} = darwin* ]]; then
   }
 fi
 
-#**
-# .. rubric:: Bugs
-#
-# Since this uses SIGALRM, bash will print out "Alarm clock: 14" to indicate SIGALRM (14) has been raised. This could cause unexpected text in stderr if you are parsing it.
-#
-# .. rubric:: Author
-#
-# https://perldoc.perl.org/functions/alarm.html
-#
-# .. seealso::
-#
-#    https://www.cyberciti.biz/faq/shell-scripting-run-command-under-alarmclock/
-#**
-
-
-# TODO: variable indirection to form a "scope" like behavior. On bash 4 use aarray, on bash 3.2 use old style variables
-if [ "$(date +%N)" == "N" ]; then
-  _tictoc_cmd="date +%s000000000"
+if [[ ! $(date +%N) =~ ^[0-9]+$ ]]; then
+  if command -v perl &> /dev/null; then
+    # Another option on macOS/other perls
+    function _tictoc_fun()
+    { # The spaces in the argument means we have to wrap this in a function
+      # so that the _tictoc_cmd call works.
+      perl -e 'use Time::HiRes qw(gettimeofday);
+               ($s,$ms) = gettimeofday;
+               printf("%i%09i\n", $s, $ms*1000)';
+    }
+    _tictoc_cmd=_tictoc_fun
+  else
+    _tictoc_cmd="date +%s000000000"
+  fi
 else
   _tictoc_cmd="date +%s%N"
 fi
 
+#**
+# .. function:: tic
+#
+# Part of a tic/toc functionality to easily take time measurements.
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
+#   $ tic
+#   $ sleep 1.3
+#   $ toc_ms
+#   1302 ms
+#
+# .. seealso::
+#  :func:`toc`, :func:`toc_ms`, :func:`toc_ns`
+#**
 function tic()
 {
   _time0="$($_tictoc_cmd)"
 }
+
+#**
+# .. function:: toc
+#
+# Prints the time passed since calling :func:`toc` in seconds (rounded).
+#
+# Also stores the number of seconds passed in ``toc_time``
+#**
 function toc()
 {
-  toc_time=$(($($_tictoc_cmd)-_time0))
-  toc_time="${toc_time::${#toc_time}-9}"
+  # Make it round
+  toc_time=$(($($_tictoc_cmd)-_time0+500000000))
+  # If less than 1 s, make it 0, or else removing 9 digits doesn't work
+  if [ "${toc_time}" -lt "1000000000" ]; then
+    toc_time=0
+  else
+    toc_time="${toc_time::${#toc_time}-9}"
+  fi
   echo "${toc_time} s"
 }
+
+#**
+# .. function:: toc_ms
+#
+# Prints the time passed since calling :func:`toc` in milliseconds (rounded).
+#
+# Also stores the number of milliseconds passed in ``toc_time``
+#
+# .. note::
+#
+#   Older ``date`` commands that don't support nanoseconds, will not be more accurate than a second.
+#**
 function toc_ms()
 {
-  toc_time=$(($($_tictoc_cmd)-_time0))
-  toc_time="${toc_time::${#toc_time}-6}"
+  toc_time=$(($($_tictoc_cmd)-_time0+500000))
+  # If less than 1 ms, make it 0, or else removing 6 digits doesn't work
+  if [ "${toc_time}" -lt "1000000" ]; then
+    toc_time=0
+  else
+    toc_time="${toc_time::${#toc_time}-6}"
+  fi
   echo "${toc_time} ms"
 }
+
+#**
+# .. function:: toc_ns
+#
+# Prints the time passed since calling :func:`toc` in nanoseconds.
+#
+# Also stores the number of nanoseconds passed in ``toc_time``
+#
+# .. note::
+#
+#   Older ``date`` commands that don't support nanoseconds, will not be more accurate than a second.
+#**
 function toc_ns()
 {
   toc_time=$(($($_tictoc_cmd)-_time0))

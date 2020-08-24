@@ -1,33 +1,38 @@
 #!/usr/bin/env bash
 
-. "$(dirname "${BASH_SOURCE[0]}")/../testlib.bsh"
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
 
-VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.."; pwd)"
+source "${VSI_COMMON_DIR}/tests/testlib.bsh"
 source "${VSI_COMMON_DIR}/linux/uwecho.bsh"
-source "${VSI_COMMON_DIR}/linux/just_version.bsh"
+source "${VSI_COMMON_DIR}/linux/just_files/just_version.bsh"
+source "${VSI_COMMON_DIR}/linux/compat.bsh"
 export JUST_VERSION
 
 function setup()
 {
   local container_name
 
-  # If this failed, then the docker server is on another host. TESTDIR is a
-  # random name so there's practically no possibility of a false positive
-  if container_name=$(docker create --mount "type=bind,source=${TESTDIR},destination=${JUST_PATH_ESC}/src" alpine:3.8); then
-    docker_is_local=1
-    docker rm "${container_name}" &> /dev/null
-  else
-    docker_is_local=0
+  if command -v docker &> /dev/null; then
+    # If this failed, then the docker server is on another host. TESTDIR is a
+    # random name so there's practically no possibility of a false positive
+    if container_name=$(docker create --mount "type=bind,source=${TESTDIR},destination=${JUST_PATH_ESC}/src" alpine:3.8); then
+      docker_is_local=1
+      docker rm "${container_name}" &> /dev/null
+    else
+      docker_is_local=0
 
-    # No need to rm, because it failed to be created
-    tmp_volume="$(docker volume create)"
+      # No need to rm, because it failed to be created
+      tmp_volume="$(docker volume create)"
+    fi
   fi
   JUST_PATH_ESC="$(. ${VSI_COMMON_DIR}/linux/common_source.sh; echo "${VSI_PATH_ESC}")"
 }
 
 function teardown()
 {
-  if [[ ${docker_is_local} == 0 ]]; then
+  if [[ ${docker_is_local-} == 0 ]]; then
     docker volume rm "${tmp_volume}" &> /dev/null
   fi
 }
@@ -35,7 +40,7 @@ function teardown()
 begin_test "New Just with defaults"
 (
   setup_test
-  echo y | "${VSI_COMMON_DIR}/linux/new_just" --defaults --vsi
+  echo y | "${VSI_COMMON_DIR}/linux/just_files/new_just" --defaults --vsi
 
   mkdir -p "${TESTDIR}/external"
 
@@ -45,7 +50,7 @@ begin_test "New Just with defaults"
     ln -s ${VSI_COMMON_DIR} "${TESTDIR}/external/vsi_common"
   fi
 
-  project_name=$(basename "${TESTDIR}" | tr '[a-z]' '[A-Z]' | sed -E 's|[^A-Z0-9_]+||g')
+  project_name=$(basename "${TESTDIR}" | tr '[a-z]' '[A-Z]' | sed -${sed_flag_rE} 's|[^A-Z0-9_]+||g')
 
   [ "$(. setup.env; just --wrap bash -c 'echo $'"${project_name}"'_CWD')" = "${TESTDIR}" ]
 )
@@ -54,7 +59,7 @@ end_test
 begin_test "New Just"
 (
   setup_test
-  "${VSI_COMMON_DIR}/linux/new_just" --continue --vsi \
+  "${VSI_COMMON_DIR}/linux/just_files/new_just" --continue --vsi \
                                      --docker --pipenv --no-git \
                                      --prefix JTEST \
                                      --project-dir "${TESTDIR}" \
@@ -151,7 +156,7 @@ end_test
 begin_test "New Just no pipenv"
 (
   setup_test
-  "${VSI_COMMON_DIR}/linux/new_just" --defaults --continue --prefix JTEST --vsi --no-pipenv
+  "${VSI_COMMON_DIR}/linux/just_files/new_just" --defaults --continue --prefix JTEST --vsi --no-pipenv
 
   mkdir -p "${TESTDIR}/external"
 
@@ -206,7 +211,7 @@ begin_test "New Just no docker"
 (
   setup_test
 
-  "${VSI_COMMON_DIR}/linux/new_just" --continue --vsi \
+  "${VSI_COMMON_DIR}/linux/just_files/new_just" --continue --vsi \
                                      --no-docker --no-pipenv --no-git \
                                      --prefix JTEST \
                                      --project-dir "${TESTDIR}" \
@@ -276,7 +281,7 @@ begin_test "New just instructions test (git)"
 
   rv=0
   # Evaluate git commands
-  "${VSI_COMMON_DIR}/linux/new_just" --continue --vsi \
+  "${VSI_COMMON_DIR}/linux/just_files/new_just" --continue --vsi \
                                              --docker --pipenv --git \
                                              --prefix JTEST \
                                              --project-dir "${TESTDIR}" \
@@ -318,7 +323,7 @@ begin_test "New just docker test"
     tough_name="\""
   fi
 
-  "${VSI_COMMON_DIR}/linux/new_just" --continue --vsi --defaults \
+  "${VSI_COMMON_DIR}/linux/just_files/new_just" --continue --vsi --defaults \
                                      --justfile "j.u.s.t  f i'l${tough_name}e" \
                                      --setupfile "set u.p  f i'l${tough_name}e" \
                                      --project-name "je.  t e's${tough_name}t" \
@@ -359,6 +364,6 @@ begin_test "Make sure new_just works with curl"
   setup_test
 
   # Makes sure the cat line wasn't commented out
-  grep ^cat "${VSI_COMMON_DIR}/linux/new_just"
+  grep ^cat "${VSI_COMMON_DIR}/linux/just_files/new_just"
 )
 end_test

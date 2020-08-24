@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 
-. "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
-. "$(dirname "${BASH_SOURCE[0]}")/test_utils.bsh"
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
 
-VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
-. "${VSI_COMMON_DIR}/linux/colors.bsh"
+source "${VSI_COMMON_DIR}/tests/testlib.bsh"
+source "${TESTLIB_DIR}/test_utils.bsh"
+source "${VSI_COMMON_DIR}/linux/colors.bsh"
 
 [ ! -e "${VSI_COMMON_DIR}/docker/recipes/docker-compose.yml" ] && skip_next_test
 begin_test "build recipes"
@@ -16,13 +18,13 @@ begin_test "build recipes"
   echo "source_environment_files blah.env" > Justfile
   echo 'caseify(){ defaultify ${@+"${@}"}; }' >> Justfile
 
-  echo "${VSI_COMMON_DIR}/linux/just_docker_functions.bsh" > .justplugins
+  echo "${VSI_COMMON_DIR}/linux/just_files/just_docker_functions.bsh" > .justplugins
 
   [ "$(DRYRUN=echo just build recipes)" = "docker-compose -f ${VSI_COMMON_DIR}/docker/recipes/docker-compose.yml build" ]
 )
 end_test
 
-source "${VSI_COMMON_DIR}/linux/just_docker_functions.bsh"
+source "${VSI_COMMON_DIR}/linux/just_files/just_docker_functions.bsh"
 
 begin_test "docker-compose restore from cache"
 (
@@ -250,6 +252,10 @@ ${configv}"
   [ "$(cat tmp1)" = "${config}" ]
   ans2="$(mktmp2 foobar "- -" the/cache:final_foobar)"
   [ "$(cat tmp2)" = "${ans2}" ]
+
+  # Test override_fd
+  override_fd=4 _dynamic_docker-compose_add_cache_from foobar <<< "${config}" > "${TESTDIR}/tmp1" 4>"${TESTDIR}/tmp3"
+  [ "$(cat tmp3)" = "${ans2}" ]
 
   stage_names=(foo bar)
     _dynamic_docker-compose_add_cache_from foobar <<< "${config}" > "${TESTDIR}/tmp1" 3>"${TESTDIR}/tmp2"

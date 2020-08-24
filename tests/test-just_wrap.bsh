@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
 
-. "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
-. "$(dirname "${BASH_SOURCE[0]}")/test_utils.bsh"
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
 
-VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+source "${VSI_COMMON_DIR}/tests/testlib.bsh"
+source "${TESTLIB_DIR}/test_utils.bsh"
 
 # Helper function
 function setup_just_test()
 {
   echo 'TEST_LOCAL=2' > local.env
   echo 'JUST_PROJECT_PREFIX=TEST
-        JUST_VERSION='"$(source "${VSI_COMMON_DIR}/linux/just_version.bsh"; echo "${JUST_VERSION}")"'
+        JUST_VERSION='"$(source "${VSI_COMMON_DIR}/linux/just_files/just_version.bsh"; echo "${JUST_VERSION}")"'
         : ${TEST_VAR1=1}
         : ${TEST_LOCAL=0}
         : ${TEST_LOCAL2=0}
@@ -20,7 +22,7 @@ function setup_just_test()
   touch mywrap
   chmod 755 mywrap
 
-  echo 'source "${VSI_COMMON_DIR}/linux/just_env" "$(dirname "${BASH_SOURCE[0]}")"/project1.env' > Justfile
+  echo 'source "${VSI_COMMON_DIR}/linux/just_files/just_env" "$(dirname "${BASH_SOURCE[0]}")"/project1.env' > Justfile
 
   mkdir -p other_dir
 }
@@ -30,7 +32,7 @@ function check_values()
 {
   # Test the values are correct
   [ "${TEST_VAR1}" == "1" ]
-  check_a TEST_VAR2 11 22 33
+  assert_array_values TEST_VAR2 11 22 33
   [ "${TEST_LOCAL}" == "2" ]
   [ "${TEST_LOCAL2}" == "2:3" ]
   [ "${TEST_LOCAL3}" == "0" ]
@@ -40,7 +42,7 @@ function check_values()
 function test_wrap_call()
 (
   echo "#!/usr/bin/env bash
-        . '${VSI_COMMON_DIR}/linux/Just_wrap'"' ${@+"${@}"}' > "$1"
+        . '${VSI_COMMON_DIR}/linux/just_files/Just_wrap'"' ${@+"${@}"}' > "$1"
 
   # Call and copy the variables
   eval "$("$1" declare -p TEST_VAR1 TEST_VAR2 TEST_LOCAL TEST_LOCAL2 TEST_LOCAL3)"
@@ -52,7 +54,7 @@ function test_wrap_call()
 function test_unwrap_call()
 (
   # Call and copy the variables
-  eval "$("${VSI_COMMON_DIR}/linux/Just_wrap" declare -p TEST_VAR1 TEST_VAR2 TEST_LOCAL TEST_LOCAL2 TEST_LOCAL3)"
+  eval "$("${VSI_COMMON_DIR}/linux/just_files/Just_wrap" declare -p TEST_VAR1 TEST_VAR2 TEST_LOCAL TEST_LOCAL2 TEST_LOCAL3)"
   # Test values
   check_values
 )
@@ -83,8 +85,8 @@ begin_test "Test call and new shell modes"
     ./mywrap <<< ls | grep mywrap > /dev/null
     "${TESTDIR}/mywrap" <<< ls | grep mywrap > /dev/null
     # Same two tests, unwrapped version
-    "${VSI_COMMON_DIR}/linux/Just_wrap" ls | grep mywrap > /dev/null
-    "${VSI_COMMON_DIR}/linux/Just_wrap" <<< ls | grep mywrap > /dev/null
+    "${VSI_COMMON_DIR}/linux/just_files/Just_wrap" ls | grep mywrap > /dev/null
+    "${VSI_COMMON_DIR}/linux/just_files/Just_wrap" <<< ls | grep mywrap > /dev/null
   done
 
   # Test all in path
@@ -93,7 +95,7 @@ begin_test "Test call and new shell modes"
   PATH="$PATH:$(pwd)" mywrap <<< ls | grep mywrap > /dev/null
 
   # Same test, unwrapped
-  PATH="$PATH:${VSI_COMMON_DIR}/linux/" Just_wrap <<< ls | grep mywrap > /dev/null
+  PATH="$PATH:${VSI_COMMON_DIR}/linux/:${VSI_COMMON_DIR}/linux/just_files" Just_wrap <<< ls | grep mywrap > /dev/null
 
   # Same group of tests, in another directory
   cd other_dir
@@ -106,8 +108,8 @@ begin_test "Test call and new shell modes"
   ../mywrap <<< 'ls ..' | grep mywrap > /dev/null
   "${TESTDIR}/mywrap" <<< 'ls ..' | grep mywrap > /dev/null
 
-  "${VSI_COMMON_DIR}/linux/Just_wrap" ls .. | grep mywrap > /dev/null
-  "${VSI_COMMON_DIR}/linux/Just_wrap" <<< "ls .." | grep mywrap > /dev/null
+  "${VSI_COMMON_DIR}/linux/just_files/Just_wrap" ls .. | grep mywrap > /dev/null
+  "${VSI_COMMON_DIR}/linux/just_files/Just_wrap" <<< "ls .." | grep mywrap > /dev/null
 
   PATH="$PATH:$(cd ..; pwd)" test_wrap_call mywrap
   PATH="$PATH:$(cd ..; pwd)" mywrap <<< 'ls ..' | grep mywrap > /dev/null
@@ -121,12 +123,12 @@ begin_test "Wrap test exec mode"
 
   # Setup
   echo "#!/usr/bin/env bash
-        . '${VSI_COMMON_DIR}/linux/Just_wrap' "'${@+"${@}"}' > mywrap
+        . '${VSI_COMMON_DIR}/linux/just_files/Just_wrap' "'${@+"${@}"}' > mywrap
   chmod 755 mywrap
 
   # Run both echo and wrap in the same subshell, and store in array
   #x=($(echo $BASHPID; ./mywrap bash -c 'echo $PPID')) # Not macOS compatible
-  x=($(bash -c 'echo $PPID'; ./mywrap bash -c 'echo $PPID'))
+  x=("$(bash -c 'echo $PPID')" "$(./mywrap bash -c 'echo $PPID')")
 
   # Verify the parent and the subshell are the same pid
   [ "${x[0]}" == "${x[1]}" ]
@@ -139,8 +141,8 @@ begin_test "Unwrapped test exec mode"
 (
   setup_test
 
-  #y=($(echo $BASHPID; "${VSI_COMMON_DIR}/linux/Just_wrap" /dev/null bash -c 'echo $PPID'))
-  y=($(bash -c 'echo $PPID'; "${VSI_COMMON_DIR}/linux/Just_wrap" bash -c 'echo $PPID'))
+  #y=($(echo $BASHPID; "${VSI_COMMON_DIR}/linux/just_files/Just_wrap" /dev/null bash -c 'echo $PPID'))
+  y=("$(bash -c 'echo $PPID')" "$("${VSI_COMMON_DIR}/linux/just_files/Just_wrap" bash -c 'echo $PPID')")
   [ "${y[0]}" == "${y[1]}" ]
 )
 end_test
@@ -153,7 +155,7 @@ begin_test "Wrap test source"
   # Setup
   setup_just_test
   echo "#!/usr/bin/env bash
-        . '${VSI_COMMON_DIR}/linux/Just_wrap' "'${@+"${@}"}' > mywrap
+        . '${VSI_COMMON_DIR}/linux/just_files/Just_wrap' "'${@+"${@}"}' > mywrap
 
   # Normal source
   (
@@ -178,7 +180,7 @@ begin_test "Unwrapped test source"
   setup_just_test
 
   # Need to export some functions so that the bash full shell can finish
-  export -f check_values check_a
+  export -f check_values assert_array_values
   # Since this is an "unwrapped" test, I need to make sure that Just_wrap
   # doesn't think THIS file is the second layer wrapper! To do this, call a new
   # bash shell. Copy PS4 for nice error messages
@@ -186,17 +188,17 @@ begin_test "Unwrapped test source"
   # Uncomment these if there is a need to debug here.
   # set +xv
   # echo ------------------------------------ >&2
-  # if [ -z "${TESTLIB_NO_PS4+set}" ]; then
+  # if [ -z "${TESTLIB_PS4+set}" ]; then
   #   export PS4="$'+${0##*/}:${LINENO})\t'"
   # fi
   # and add x to euc
 
-  bash -euc ". '${VSI_COMMON_DIR}/linux/Just_wrap'
+  bash -euc ". '${VSI_COMMON_DIR}/linux/just_files/Just_wrap'
              check_values"
 
   (
     cd other_dir
-    bash -euc ". '${VSI_COMMON_DIR}/linux/Just_wrap'
+    bash -euc ". '${VSI_COMMON_DIR}/linux/just_files/Just_wrap'
                check_values"
   )
 )
@@ -209,8 +211,8 @@ begin_test "Unwrapped test run"
   setup_just_test
 
   # Need to export some functions so that the bash full shell can finish
-  export -f check_values check_a
-  bash -eu "${VSI_COMMON_DIR}/linux/Just_wrap" check_values
+  export -f check_values assert_array_values
+  bash -eu "${VSI_COMMON_DIR}/linux/just_files/Just_wrap" check_values
 )
 end_test
 
@@ -225,7 +227,7 @@ begin_test "Interactive just_wrap"
   setup_just_test
 
   echo "#!/usr/bin/env bash
-        . '${VSI_COMMON_DIR}/linux/Just_wrap' "'${@+"${@}"}' > mywrap
+        . '${VSI_COMMON_DIR}/linux/just_files/Just_wrap' "'${@+"${@}"}' > mywrap
   chmod 755 mywrap
 
   session="${TRASHDIR////}"
@@ -233,7 +235,7 @@ begin_test "Interactive just_wrap"
   screen -dmS "${session}"
   # Macos compatibility, needs a literal newline
   nl=$'\n'
-  screen -S "${session}" -p 0 -X stuff "Just_wrap${nl}declare -p TEST_LOCAL2 TEST_VAR2 > \"${TESTDIR}/output\"${nl}touch \"${TESTDIR}/sync\"${nl}"
+  screen -S "${session}" -p 0 -X stuff "${VSI_COMMON_DIR}/linux/just_files/Just_wrap${nl}declare -p TEST_LOCAL2 TEST_VAR2 > \"${TESTDIR}/output\"${nl}touch \"${TESTDIR}/sync\"${nl}"
 
   # Wait for five second for file to be created
   declare -i count=0
@@ -250,7 +252,7 @@ begin_test "Interactive just_wrap"
   source "${TESTDIR}/output"
   if [ "${BASH_VERSINFO[0]}" -ge "4" ]; then
     # Unexported functions and arrays don't work in bash 3.2
-    check_a TEST_VAR2 11 22 33
+    assert_array_values TEST_VAR2 11 22 33
   fi
   [ "${TEST_LOCAL2}" = "2:3" ]
 )

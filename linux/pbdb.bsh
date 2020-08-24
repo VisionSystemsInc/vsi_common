@@ -4,8 +4,6 @@ if [[ $- != *i* ]]; then
   source_once &> /dev/null && return 0
 fi
 
-#*# linux/pdbd
-
 if [ -z ${VSI_COMMON_DIR+set} ]; then
   VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 fi
@@ -16,6 +14,9 @@ source "${VSI_COMMON_DIR}/linux/colors.bsh"
 source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
 source "${VSI_COMMON_DIR}/linux/real_path"
 source "${VSI_COMMON_DIR}/linux/file_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/compat.bsh"
+
+#*# linux/pdbd
 
 #**
 # ==============================
@@ -100,7 +101,7 @@ declare _debug_stdout
 function set_trace()
 {
   # Copy stdout
-  if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "41" ]; then
+  if [ "${bash_feature_allocate_file_descriptor}" = "0" ]; then
     exec {_debug_stdout}>&1
   else
     find_open_fd _debug_stdout
@@ -315,7 +316,7 @@ function _trace_repl()
       fi
       for variable in "${variables[@]}"; do
         if [[ $(type -t "${variable}") = function ]]; then
-          if [[ ${BASH_VERSINFO[0]}${BASH_VERSINFO[1]} -ge 43 ]]; then
+          if [ "${bash_feature_declare_print_function}" = "0" ]; then
             declare -pf "${variable}"
           else
             type "${variable}"

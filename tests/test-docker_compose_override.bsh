@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 
-. "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
 
-VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
-. "${VSI_COMMON_DIR}/linux/docker_functions.bsh" # Need to be sourced for docker_compose_override
-. "${VSI_COMMON_DIR}/linux/docker_compose_override"
+source "${VSI_COMMON_DIR}/tests/testlib.bsh"
+source "${TESTLIB_DIR}/test_utils.bsh"
+source "${VSI_COMMON_DIR}/linux/just_files/docker_compose_override"
 
 function head()
 {
@@ -78,8 +80,8 @@ begin_test "CLI"
   # TEST_VOLUMES="/tmp:/temp:ro"
   # ans+="$(vol /tmp /temp:ro)"
   # don't redirect this, could hide errors
-  "${VSI_COMMON_DIR}/linux/docker_compose_override" PROJECT test1
-  [ "$("${VSI_COMMON_DIR}/linux/docker_compose_override" PROJECT test1)" = "${ans}" ]
+  "${VSI_COMMON_DIR}/linux/just_files/docker_compose_override" PROJECT test1
+  [ "$("${VSI_COMMON_DIR}/linux/just_files/docker_compose_override" PROJECT test1)" = "${ans}" ]
 )
 end_test
 
@@ -118,7 +120,7 @@ begin_test "Just docker compose dynamic volumes"
   if [ "${OS-}" = "Windows_NT" ]; then
     [ "${override}" = "${ans}$(environment)$(envi "JUST_HOST_WINDOWS=1")" ]
   else
-    [ "${override}" = "${ans}" ]
+    assert_str_eq "${override}" "${ans}"
   fi
 
   TEST_TEST1_VOLUMES=("${TESTDIR}/src:/source:rw")
@@ -127,7 +129,7 @@ begin_test "Just docker compose dynamic volumes"
   if [ "${OS-}" = "Windows_NT" ]; then
     [ "${override}" = "${ans}$(environment)$(envi "JUST_HOST_WINDOWS=1")" ]
   else
-    [ "${override}" = "${ans}" ]
+    assert_str_eq "${override}" "${ans}"
   fi
 
   TEST_VOLUME_1="${TESTDIR}/foo:/bar"
@@ -136,7 +138,7 @@ begin_test "Just docker compose dynamic volumes"
   if [ "${OS-}" = "Windows_NT" ]; then
     [ "${override}" = "${ans}$(environment)$(envi "JUST_HOST_WINDOWS=1")" ]
   else
-    [ "${override}" = "${ans}" ]
+    assert_str_eq "${override}" "${ans}"
   fi
 
   TEST_VOLUME_2="${TESTDIR}/foo2:/bar3"
@@ -145,7 +147,7 @@ begin_test "Just docker compose dynamic volumes"
   if [ "${OS-}" = "Windows_NT" ]; then
     [ "${override}" = "${ans}$(environment)$(envi "JUST_HOST_WINDOWS=1")" ]
   else
-    [ "${override}" = "${ans}" ]
+    assert_str_eq "${override}" "${ans}"
   fi
 
   TEST_TEST1_VOLUME_1="${TESTDIR}/bar:/foo"
@@ -154,7 +156,7 @@ begin_test "Just docker compose dynamic volumes"
   if [ "${OS-}" = "Windows_NT" ]; then
     [ "${override}" = "${ans}$(environment)$(envi "JUST_HOST_WINDOWS=1")" ]
   else
-    [ "${override}" = "${ans}" ]
+    assert_str_eq "${override}" "${ans}"
   fi
 
   TEST_TEST1_VOLUME_2="${TESTDIR}/bar2:/foo5"
@@ -163,7 +165,7 @@ begin_test "Just docker compose dynamic volumes"
   if [ "${OS-}" = "Windows_NT" ]; then
     [ "${override}" = "${ans}$(environment)$(envi "JUST_HOST_WINDOWS=1")" ]
   else
-    [ "${override}" = "${ans}" ]
+    assert_str_eq "${override}" "${ans}"
   fi
 )
 end_test
@@ -180,7 +182,7 @@ begin_test "Just docker compose dynamic environment"
   ans+="$(envi TEST_ONE=2)$(envi TEST_ONE_HOST=1)"
   override="$(TEST_ONE_HOST=1 TEST_ONE_DOCKER=2 \
               generate_docker_compose_override TEST test1)"
-  [ "${override}" = "${ans}" ]
+  assert_str_eq "${override}" "${ans}"
 
   # Test with JUST_DISABLE_ENVIRONMENT_SWAP
   ans="$(head)$(service test1)$(environment)"
@@ -190,7 +192,7 @@ begin_test "Just docker compose dynamic environment"
   ans+="$(envi TEST_ONE_DOCKER=2)$(envi TEST_ONE_HOST=1)"
   override="$(TEST_ONE_HOST=1 TEST_ONE_DOCKER=2 JUST_DISABLE_ENVIRONMENT_SWAP=1 \
               generate_docker_compose_override TEST test1)"
-  [ "${override}" = "${ans}" ]
+  assert_str_eq "${override}" "${ans}"
 
   # Ignores non-project variables
   ans="$(head)$(service test1)"
@@ -199,7 +201,7 @@ begin_test "Just docker compose dynamic environment"
   fi
   override="$(TEST_ONE_HOST=1 TEST_ONE_DOCKER=2 \
               generate_docker_compose_override TEST2 test1)"
-  [ "${override}" = "${ans}" ]
+  assert_str_eq "${override}" "${ans}"
 )
 end_test
 
@@ -247,8 +249,12 @@ begin_test "Generate docker-compose override"
   if [ "${OS-}" = "Windows_NT" ]; then
     ans+="$(envi "JUST_HOST_WINDOWS=1")"
   fi
+  ans+=$'\nvolumes:'
+  ans+=$'\n  vol1:'
+  ans+=$'\n  vol2:'
+  ans+=$'\n  vol3:'
 
-  [ "${override}" = "${ans}" ]
+  assert_str_eq "${override}" "${ans}"
 )
 end_test
 
@@ -262,7 +268,7 @@ setup_mock()
   {
     local last_arg=${!#}
 
-    if [[ ${last_arg} = "${TESTDIR}"* ]]; then
+    if [[ ${last_arg} = ${TESTDIR}* ]]; then
       echo "${linux_nfs} ${TESTDIR}/${last_arg:${#TESTDIR}+1:1}"
       return 0
     fi
@@ -304,7 +310,7 @@ begin_test "Generate docker-compose override on nfs"
     ans+="$(envi "JUST_HOST_WINDOWS=1")"
   fi
 
-  [ "${override}" = "${ans}" ]
+  assert_str_eq "${override}" "${ans}"
 )
 end_test
 
@@ -345,7 +351,8 @@ begin_expected_fail_test "Issue #7 Scenario 1"
     ans+="$(envi "JUST_HOST_WINDOWS=1")"
   fi
 
-  [ "${override}" = "${ans}" ]
+  begin_fail_zone
+  assert_str_eq "${override}" "${ans}"
 )
 end_test
 
@@ -370,7 +377,7 @@ begin_test "Issue #7 Scenario 2"
     ans+="$(envi "JUST_HOST_WINDOWS=1")"
   fi
 
-  [ "${override}" = "${ans}" ]
+  assert_str_eq "${override}" "${ans}"
 )
 end_test
 
@@ -396,7 +403,8 @@ begin_expected_fail_test "Issue #7 Scenario 3"
     ans+="$(envi "JUST_HOST_WINDOWS=1")"
   fi
 
-  [ "${override}" = "${ans}" ]
+  begin_fail_zone
+  assert_str_eq "${override}" "${ans}"
 )
 end_test
 

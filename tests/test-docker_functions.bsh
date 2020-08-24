@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 
-. "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
-. "$(dirname "${BASH_SOURCE[0]}")/test_utils.bsh"
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
 
-VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
-. "${VSI_COMMON_DIR}/linux/docker_functions.bsh"
-. "${VSI_COMMON_DIR}/linux/just_functions.bsh"
-. "${VSI_COMMON_DIR}/linux/elements.bsh"
+source "${VSI_COMMON_DIR}/tests/testlib.bsh"
+source "${TESTLIB_DIR}/test_utils.bsh"
+source "${VSI_COMMON_DIR}/linux/just_files/docker_functions.bsh"
+source "${VSI_COMMON_DIR}/linux/just_files/just_functions.bsh"
+source "${VSI_COMMON_DIR}/linux/elements.bsh"
 
 setup()
 {
@@ -200,12 +202,43 @@ end_test
 begin_test "Parse docker args"
 (
   setup_test
+
+  # Normal case
   parse-docker --config=blah.json -D -v run -v /foo:/bar debian:9 bash
-  a1=(--config=blah.json -D -v)
-  a2=(-v /foo:/bar debian:9 bash)
-  cmp_elements_a docker_args a1
+  assert_array_values docker_args --config=blah.json -D -v
   [ "${docker_command}" = "run" ]
-  cmp_elements_a docker_command_args a2
+  assert_array_values docker_command_args -v /foo:/bar debian:9 bash
+
+  # Test all args that take an argument
+  for arg in -H -l --config --context --host --log-level --tlscacert --tlscert --tlskey; do
+    parse-docker "${arg}" foobar
+    declare -p docker_args docker_command docker_command_args
+    assert_array_values docker_args "${arg}" foobar
+    [ "${docker_command-}" = "" ]
+    assert_array_values docker_command_args
+
+    # Test = notation
+    parse-docker "${arg}=foobar"
+    assert_array_values docker_args "${arg}=foobar"
+    [ "${docker_command-}" = "" ]
+    assert_array_values docker_command_args
+  done
+
+  # Test single letter combine notation too
+  for arg in -H -l; do
+    parse-docker "${arg}foobar"
+    assert_array_values docker_args "${arg}foobar"
+    [ "${docker_command-}" = "" ]
+    assert_array_values docker_command_args
+  done
+
+  # Test all flags
+  for arg in -v --version --tls -D --debug --tlsverify; do
+    parse-docker "${arg}"
+    assert_array_values docker_args "${arg}"
+    [ "${docker_command-}" = "" ]
+    assert_array_values docker_command_args
+  done
 )
 end_test
 
@@ -333,10 +366,10 @@ begin_test "docker compose volumes"
   targets=("/mnt" "/src" "/opt" "/src" "/tmp2")
   flags=("" "" "" "" "")
   formats=(short long short long long)
-  cmp_elements_a DOCKER_VOLUME_SOURCES sources
-  cmp_elements_a DOCKER_VOLUME_TARGETS targets
-  cmp_elements_a DOCKER_VOLUME_FLAGS flags
-  cmp_elements_a DOCKER_VOLUME_FORMATS formats
+  assert_array_values DOCKER_VOLUME_SOURCES "${sources[@]}"
+  assert_array_values DOCKER_VOLUME_TARGETS "${targets[@]}"
+  assert_array_values DOCKER_VOLUME_FLAGS "${flags[@]}"
+  assert_array_values DOCKER_VOLUME_FORMATS "${formats[@]}"
 
   DOCKER_VOLUME_LINES=("S/test1:/test2:ro"
                        "Stest3:/test4:Z"
@@ -364,6 +397,40 @@ begin_test "docker compose volumes"
 )
 end_test
 
+begin_test "docker compose volumes with missing fields"
+(
+  setup_test
+  sources=("/tmp" "/home/user/src" "test" "internal" "")
+  targets=("/mnt" "/src" "/opt" "/src" "/tmp2")
+  flags=(":ro" "" "" "" "")
+  formats=(short long short long long)
+
+  DOCKER_VOLUME_LINES_ORIG=("S/tmp:/mnt:ro"
+       "Lsource: /home/user/src" "ltarget: /src" "ltype: bind"
+       "Stest:/opt"
+       "Lsource: internal" "ltarget: /src" "ltype: volume"
+       "Ltarget: /tmp2" "ltype: tmpfs")
+
+  DOCKER_VOLUME_LINES=("${DOCKER_VOLUME_LINES_ORIG[@]}")
+  unset DOCKER_VOLUME_LINES[2]
+  docker-compose-volumes
+
+  assert_array_values DOCKER_VOLUME_SOURCES "${sources[@]}"
+  assert_array_values DOCKER_VOLUME_TARGETS "/mnt" "" "/opt" "/src" "/tmp2"
+  assert_array_values DOCKER_VOLUME_FLAGS "${flags[@]}"
+  assert_array_values DOCKER_VOLUME_FORMATS "${formats[@]}"
+
+  DOCKER_VOLUME_LINES[1]='Ltarget: /src'
+  docker-compose-volumes
+
+  assert_array_values DOCKER_VOLUME_SOURCES "/tmp" "" "test" "internal" ""
+  assert_array_values DOCKER_VOLUME_TARGETS "${targets[@]}"
+  assert_array_values DOCKER_VOLUME_FLAGS "${flags[@]}"
+  assert_array_values DOCKER_VOLUME_FORMATS "${formats[@]}"
+
+)
+end_test
+
 begin_test "Parse docker-compose args"
 (
   setup_test
@@ -371,13 +438,65 @@ begin_test "Parse docker-compose args"
   export JUSTFILE="${TESTDIR}/Justfile"
 
   parse-docker-compose run test
+  assert_array_values docker_compose_args
+  [ "${docker_compose_command}" = "run" ]
+  assert_array_values docker_compose_command_args test
+
+  # Test all args that take an argument
+  for arg in -f -p -H -c --file --project-name --host --context --log-level \
+             --tlscacert --tlscert --tlskey --project-directory --env-file; do
+    parse-docker-compose "${arg}" foobar
+    assert_array_values docker_compose_args "${arg}" foobar
+    [ "${docker_compose_command-}" = "" ]
+    assert_array_values docker_compose_command_args
+
+    # Test = notation
+    parse-docker-compose "${arg}=foobar"
+    assert_array_values docker_compose_args "${arg}=foobar"
+    [ "${docker_compose_command-}" = "" ]
+    assert_array_values docker_compose_command_args
+  done
+
+  # Test single letter combine notation too
+  for arg in -f -p -H -c; do
+    parse-docker-compose "${arg}foobar"
+    assert_array_values docker_compose_args "${arg}foobar"
+    [ "${docker_compose_command-}" = "" ]
+    assert_array_values docker_compose_command_args
+  done
+
+  # Test all flags
+  for arg in --no-ansi -v --verbose --tls --skip-hostname-check --tlsverify --compatibility; do
+    parse-docker-compose "${arg}"
+    assert_array_values docker_compose_args "${arg}"
+    [ "${docker_compose_command-}" = "" ]
+    assert_array_values docker_compose_command_args
+  done
 
   parse-docker-compose --no-ansi -H=blah.json --verbose run -v /foo:/bar debian bash
-  a1=(--no-ansi -H=blah.json --verbose)
-  a2=(-v /foo:/bar debian bash)
-  cmp_elements_a docker_compose_args a1
-  [ "${docker_compose_arguments}" = "run" ]
-  cmp_elements_a docker_compose_arguments_args a2
+  assert_array_values docker_compose_args --no-ansi -H=blah.json --verbose
+  [ "${docker_compose_command}" = "run" ]
+  assert_array_values docker_compose_command_args -v /foo:/bar debian bash
+)
+end_test
+
+begin_test "Parse docker compose project name"
+(
+  setup_test
+
+  parse-docker-compose --project-name foo
+  [ "${docker_compose_project_name}" = "foo" ]
+
+  parse-docker-compose --project-name foo run alpine
+  [ "${docker_compose_project_name}" = "foo" ]
+  parse-docker-compose -p bar run alpine
+  [ "${docker_compose_project_name}" = "bar" ]
+  parse-docker-compose -p foobar run alpine
+  [ "${docker_compose_project_name}" = "foobar" ]
+
+  # Make sure -p/--project-name wins
+  COMPOSE_PROJECT_NAME=foo parse-docker-compose -p bar run alpine
+  [ "${docker_compose_project_name}" = "bar" ]
 )
 end_test
 
@@ -582,6 +701,7 @@ begin_required_fail_test "Just docker compose required project prefix"
   unset JUST_PROJECT_PREFIX
   echo "${compose_file_hay}" > "${TESTDIR}/dc.yml"
   set -eu
+  begin_fail_zone
   Just-docker-compose -f "${TESTDIR}/dc.yml" run test_hay > /dev/null
 )
 end_test
@@ -641,16 +761,16 @@ begin_test "docker-compose list internal volumes"
 (
   setup_test
   docker-compose-list-internal-volumes <<< "${compose_file}"
-  check_a DOCKER_INTERNAL_VOLUMES test
+  assert_array_values DOCKER_INTERNAL_VOLUMES test
 
   unset DOCKER_INTERNAL_VOLUMES
   docker-compose-list-internal-volumes <<< "${compose_file_long}"
-  check_a DOCKER_INTERNAL_VOLUMES test
+  assert_array_values DOCKER_INTERNAL_VOLUMES test
 
   # None case
   unset DOCKER_INTERNAL_VOLUMES
   docker-compose-list-internal-volumes <<< ""
-  check_a DOCKER_INTERNAL_VOLUMES
+  assert_array_values DOCKER_INTERNAL_VOLUMES
 
   # Multiple case
 
@@ -663,7 +783,7 @@ begin_test "docker-compose list internal volumes"
   unset DOCKER_INTERNAL_VOLUMES
   docker-compose-list-internal-volumes <<< "${file_test}"
   declare -p DOCKER_INTERNAL_VOLUMES
-  check_a DOCKER_INTERNAL_VOLUMES test1 test2 test3
+  assert_array_values DOCKER_INTERNAL_VOLUMES test1 test2 test3
 
   file_test+="
 notvolumes:
@@ -671,7 +791,7 @@ notvolumes:
   unset DOCKER_INTERNAL_VOLUMES
   docker-compose-list-internal-volumes <<< "${file_test}"
   declare -p DOCKER_INTERNAL_VOLUMES
-  check_a DOCKER_INTERNAL_VOLUMES test1 test2 test3
+  assert_array_values DOCKER_INTERNAL_VOLUMES test1 test2 test3
 )
 end_test
 

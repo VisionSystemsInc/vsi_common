@@ -1,0 +1,214 @@
+#!/usr/bin/env false bash
+# Source this script for singularity specific helper functions for just or other
+
+if [[ $- != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.."; pwd)"
+fi
+
+source "${VSI_COMMON_DIR}/linux/string_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/command_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/elements.bsh"
+
+#*# just/plugins/singularity/singularity_functions
+
+#**
+# =====================
+# Singularity Functions
+# =====================
+#
+# .. default-domain:: bash
+#
+# .. file:: singularity_functions.bsh
+#
+# Set of functions to make using singularity easier
+#
+# .. envvar:: SINGULARITY
+#
+# Name/path of singularity executable
+#
+# Instead of hard-coding "singularity" everywhere, use the variable :envvar:`SINGULARITY` so that when the need comes, it is easier to switch which executable gets called.
+#**
+: ${SINGULARITY=singularity}
+
+#**
+# .. function:: Singularity
+#
+# :Arguments: ``$1``.. - Arguments to be sent to singularity command
+# :Parameters: * [``DRYRUN``] - Optional variable inserted at the beginning of all singularity commands. Useful for setting to "echo" or similar for dryrun mode
+#              * ``SINGULARITY_EXTRA_ARGS`` - Array of extra arguments inserted after singularity but before the singularity subcommand
+#              * ``SINGULARITY_EXTRA_{subcommand}_ARGS`` - Extra arguments inserted right after the singularity subcommand
+# :Output: Runs singularity command
+#
+# Helper function to execute the right singularity command, or just dryrun
+#
+# Instead of calling the singularity command directly, this Singularity function should
+# be called instead (for all dryrun-able activities. Simple commands like
+# inspect, ps, etc. don't make as much sense to dryrun, as the reset of the
+# script will never be executed, thus rendering dryrun useless.)
+#**
+function Singularity()
+{
+  local command_args
+  local subcommand
+  local subcommand_args
+
+  parse-generic ${@+"${@}"}
+
+  _Singularity
+  return $?
+}
+
+function _Singularity()
+{
+  local singularity_extra_command_args=()
+  local cmd=(${DRYRUN-} ${SINGULARITY})
+  local extra_args_var
+
+  compose_arguments "SINGULARITY_EXTRA_ARGS" "SINGULARITY_EXTRA_$(uppercase "${subcommand-none}")_ARGS"
+
+  if [ "${SINGULARITY_EXEC-0}" != "1" ] || [ "${DRYRUN-}" != "" ]; then
+    "${cmd[@]}"
+    return $?
+  else
+    exec "${cmd[@]}"
+  fi
+}
+
+#**
+# .. function:: singularity_env_pass
+#
+# Function that defines the action needed to pass an environment variable to singularity. For singularity, exported environment variables that are prefixed with ``SINGULARITYENV_`` are passed to the singularity container, with the prefix stripped. This is more connivent than the first method of creating a temporary file, and mounting it into the singularity metadata ``env`` directory.
+#
+# :Arguments: ``$1`` - Name of environment variable (without prefix)
+#             ``$2`` - The desired value of the environment variable
+#
+# .. seealso::
+#
+#    See :func:`container_functions.bsh container_environment_override`
+#        You can pass ``"singularity_env_pass"`` to :func:`container_functions.bsh container_environment_override` as an argument
+#**
+function singularity_env_pass()
+{
+  export "SINGULARITYENV_${1}"="${2}"
+}
+
+#**
+# .. envvar:: ${JUST_PROJECT_PREFIX}_SINGULAR_COMPOSE_FILES
+#
+# An array storing the singular-compose files to be loaded by :func:`singular_load_env`, populated by :cmd:`just_singularity_functions.bsh singular_defaultify singular-compose`
+#
+# .. function:: singular_load_env
+#
+# Loads the singular-compose variables into memory
+#
+# :Arguments: ``$1`` - Instance name
+# :Parameters: * [``${JUST_PROJECT_PREFIX}_SINGULAR_COMPOSE_FILES``] - Array storing the singular-compose files to be loaded. If empty, then see ``JUST_SINGULAR_COMPOSE_DIR``.
+#              * [``JUST_SINGULAR_COMPOSE_DIR``] - By default, if ``${JUST_PROJECT_PREFIX}_SINGULAR_COMPOSE_FILES`` is unset, the singular-compose files will initially be searched for in the ``JUSTFILE`` directory, and then up the parent dirs until / is hit. However, if you wish to the disable this behavior and start searching for a singular-compose file from the current directory where "just" is called, then set this var to an empty string. You can also set to a specific directory to start searching from within that directory.
+# :Outputs: * ``singular_volumes`` - The list of volumes to be bind mounted to the container
+#           * ``singular_flags`` - Extra flags that need to be passed to singularity to execute the container right
+#           * ``singular_environment`` - A key-value pair array of environment variables that need to be passed to the singularity container.
+#           * ``singular_image`` - The filename of the singularity image used.
+#           * ``singular_mount_points`` - List of mount points that need to be created when importing a docker image to singularity. This is only important for older systems that do not support overlayfs (like CentOS 6). Directories must end in ``/``, and files must not.
+#**
+function singular_load_env()
+{
+  local indirect="${JUST_PROJECT_PREFIX}_SINGULAR_COMPOSE_FILES"
+
+  if [ "$(array_length "${indirect}")" -le 0 ]; then
+    local file_matches
+    # This is one of the few times the directory you are in matters. To create
+    # an expected default behavior, switch to the JUSTFILE dir before searching
+    # for the docker-compose file.
+    pushd "${JUST_SINGULAR_COMPOSE_DIR-$(dirname "${JUSTFILE}")}" > /dev/null
+      parent_find_files singular-compose.env
+    popd > /dev/null
+
+    dynamic_set_a "${indirect}" ${file_matches+"${file_matches[@]}"}
+  fi
+
+  local compose_file
+  local instances
+  indirect="${indirect}[@]"
+  for compose_file in ${!indirect+"${!indirect}"}; do
+    source "${compose_file}"
+  done
+
+  if ! isin "${1}" "${instances[@]}"; then
+    echo "There is no instance \"${1}\". Make sure it is in the 'instances' array" >&2
+    echo "in your ${JUST_PROJECT_PREFIX}_SINGULAR_COMPOSE_FILES (${!indirect})" >&2
+    return 1
+  fi
+
+  local instance_upper="$(tr '[a-z][:punct:]' '[A-Z]_' <<< ${1})"
+
+  ######################
+  ### Handle volumes ###
+  ######################
+
+  get_array_from_environment singular_volumes "${JUST_PROJECT_PREFIX}" VOLUME "${instance_upper}"
+  # Prepend volumes list from compose file
+  indirect="${1}_volumes[@]"
+  singular_volumes=(${!indirect+"${!indirect}"} ${singular_volumes[@]+"${singular_volumes[@]}"})
+  local volume
+  for volume in ${singular_volumes[@]+"${singular_volumes[@]}"}; do
+    volume="${volume%%:*}"
+    if [ ! -e "${volume}" ]; then
+      echo "Auto creating directory: ${volume}" >&2
+      mkdir -p "${volume}"
+    fi
+  done
+
+  ####################################
+  ### Handle environment variables ###
+  ####################################
+
+  get_array_from_environment singular_environment "${JUST_PROJECT_PREFIX}" ENVIRONMENT "${instance_upper}"
+  indirect="${1}_environment[@]"
+  # Prepend environment list with values from compose file.
+  local temp=(${!indirect+"${!indirect}"} ${singular_environment[@]+"${singular_environment[@]}"})
+  local -i i
+  local s
+  singular_environment=()
+  # There are two possible syntaxes for environment variables. An array would
+  # have pairs of entries: key, value, key, value, etc. However, a non-array
+  # variable can only have one value: "key[space]value". This means that an
+  # array can also be a list of "key[space]value"s; this wasn't the original
+  # intent, but will work perfectly fine. In order to normalize these two
+  # syntaxes, the array needs to be scanned and all "key[space]value" entries
+  # need to be split into two entries
+  for (( i=0; i<${#temp[@]}; i++ )); do
+    if [[ ${temp[$i]} == *\ * ]]; then
+      # Split into two in environment array
+      singular_environment+=("${temp[$i]%% *}" "${temp[$i]#* }")
+    else
+      # Already split, just copy
+      singular_environment+=("${temp[$i]}" "${temp[$i+1]}")
+      i+=1
+    fi
+  done
+
+  ##########################
+  ### Handle other flags ###
+  ##########################
+
+  indirect="${1}_singular_flags[@]"
+  singular_flags=(${!indirect+"${!indirect}"})
+
+  ####################
+  ### Handle image ###
+  ####################
+
+  indirect="${1}_image[@]"
+  singular_image=(${!indirect+"${!indirect}"})
+
+  ###########################
+  ### Handle mount points ###
+  ###########################
+
+  indirect="${1}_mount_points[@]"
+  singular_mount_points=(${!indirect+"${!indirect}"})
+}

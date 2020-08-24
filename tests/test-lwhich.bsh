@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 
-. "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
-. "$(dirname "${BASH_SOURCE[0]}")/test_utils.bsh"
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
 
-VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
-#. "${VSI_COMMON_DIR}/linux/bin_utils.bsh"
+source "${VSI_COMMON_DIR}/tests/testlib.bsh"
+source "${TESTLIB_DIR}/test_utils.bsh"
+# source "${VSI_COMMON_DIR}/linux/bin_utils.bsh"
 
 test_lwhich()
 {
@@ -43,8 +45,8 @@ test_lwhich()
   fi
 }
 
-if [ -e /etc/ld.so.cache ]; then
-  if ${LDCONFIG-ldconfig} -p | grep x86-64 &> /dev/null; then
+if [ -e /etc/ld.so.cache ] || grep -q '/etc/ld\.so\.conf' "$(command -v ldconfig)" &> /dev/null; then
+  if ${LDCONFIG-ldconfig} -p | !grep x86-64 &> /dev/null; then
     skip_next_test
   fi
 elif [ "$(uname -m)" != "x86_64" ]; then
@@ -58,7 +60,7 @@ begin_test "lwhich 64"
 )
 end_test
 
-if [ -e /etc/ld.so.cache ]; then
+if [ -e /etc/ld.so.cache ] || grep -q '/etc/ld\.so\.conf' "$(command -v ldconfig)" &> /dev/null; then
   if [ "$(${LDCONFIG-ldconfig} -p | grep -v 'x86-64' | wc -l)" -lt "2" ]; then
     skip_next_test
   fi
@@ -73,17 +75,19 @@ begin_test "lwhich 32"
 )
 end_test
 
+if [ -e /etc/ld.so.cache ] || grep -q '/etc/ld\.so\.conf' "$(command -v ldconfig)" &> /dev/null; then
+  filename="$(${LDCONFIG-ldconfig} -p | tail -n 1 | awk -F ' => ' '{print $2}')"
+else
+  filename="$(find /lib /usr/local/lib /usr/lib /usr/bin -maxdepth 1 \( -name \*.so -o -name \*.dylib -o -name \*.dll \) -print -quit 2>/dev/null || :)"
+fi
+if [ "${filename}" = "" ]; then
+  skip_next_test
+fi
 begin_test "lwhich LD_LIBRARY_PATH"
 (
   setup_test
 
   source "${VSI_COMMON_DIR}/linux/bin_utils.bsh"
-
-  if [ -e /etc/ld.so.cache ]; then
-    filename="$(${LDCONFIG-ldconfig} -p | tail -n 1 | awk -F ' => ' '{print $2}')"
-  else
-    filename="$(find /lib /usr/local/lib /usr/lib /usr/bin -maxdepth 1 \( -name \*.so -o -name \*.dylib -o -name \*.dll \) -print -quit 2>/dev/null || :)"
-  fi
 
   answer="${TESTDIR}/libqwertyuiop.so"
   bits=($(object_bits "${filename}"))

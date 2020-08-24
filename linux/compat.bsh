@@ -1,0 +1,501 @@
+#!/usr/bin/env false bash
+
+if [[ $- != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
+# compat should avoid sourcing other files because it is used everywhere and we'd
+# like to avoid any potential circular source or time delays, without "having" to
+# use circular source or source once.
+
+# This file needs to be unnoticeably fast on Windows, which means no forks,
+# no ``/$() calls, etc...
+
+#*# linux/compat.bsh
+
+#**
+# =======================
+# Compatibility Variables
+# =======================
+#
+# .. default-domain:: bash
+#
+# .. file:: compat.bsh
+#
+# A collection of variables to help cope with the differences between different operating systems and versions.
+#**
+
+#**
+# .. function:: load_vsi_compat
+#
+# Typically, this does not need to be called directly. :func:`load_vsi_compat` is run automatically when :file:`compat.bsh` is sourced. However, if you need to reload the variables, e.g. :envvar:`VSI_SED_COMPAT` is set and you want to get the forced compatibility flags, then you could call :func:`load_vsi_compat`, but this would be extremely rare.
+#**
+function load_vsi_compat()
+{
+  #**
+  # Sed flags
+  # =========
+  #
+  # While most flags between GNU and BSD (macos) sed are fairly compatible, a few create issues in corner cases.
+  #
+  # .. envvar:: VSI_SED_COMPAT
+  #
+  #   Force ``bsd`` or ``gnu`` mode when loading the ``sed`` flags
+  #**
+
+  if [ -z "${VSI_SED_COMPAT-}" ]; then
+    local VSI_SED_COMPAT
+    if [[ ${OSTYPE-} = darwin* ]]; then
+      VSI_SED_COMPAT=bsd
+    elif [ "${OS-}" = "Windows_NT" ] || [[ $(sed --version) = *GNU* ]]; then
+      VSI_SED_COMPAT=gnu
+    else
+      VSI_SED_COMPAT=bsd
+    fi
+  fi
+
+  #**
+  # .. variable:: sed_flag_rE
+  #
+  # Flag to enable extended regex support in sed. The GNU flag is ``-r``, while the BSD flag is ``-E``. macos does not support ``-r`` and GNU sed prior to 4.2 does not accept ``-E``. Using this variable should always yield the correct flag.
+  #
+  # .. rubric:: Example
+  #
+  # .. code-block:: bash
+  #
+  #   sed -${sed_flag_rE} 's|foo(.*)|bar\1.|'
+  #   # Notice no quotes above
+  #**
+  # Needed for CentOS 6 running sed 4.1.5
+  if [ "${VSI_SED_COMPAT-}" = "gnu" ]; then
+    sed_flag_rE='r'
+  else
+    sed_flag_rE='E'
+  fi
+
+  #**
+  # .. variable:: sed_flag_i
+  #
+  # When using inplace replacement on sed, the macos version requires an argument to the ``-i`` flag, the extension added to the output file. The GNU version does not support this. Using this flag will perform an inplace replacement with no added extension. The :var:`sed_flag_i must come last when combined with other flags (see example below).
+  #
+  # .. rubric:: Example
+  #
+  # .. code-block:: bash
+  #
+  #   sed -${sed_flag_i} 's|foo|bar|' some_file.txt
+  #   # You cannot put quotes around sed_flag_i, or else it will not work on macos
+  #
+  #   # Not ok
+  #   sed -${sed_flag_i}n ...
+  #   # This is ok
+  #   sed -n${sed_flag_i} ...
+  #   # Also ok
+  #   sed -${sed_flag_i} -n ...
+  #**
+
+  # Handle macos BSD version
+  if [[ ${OSTYPE-} = darwin* ]]; then
+    sed_flag_i="i ''"
+  else
+    sed_flag_i='i'
+  fi
+
+  #**
+  # Date
+  # ====
+  #
+  # The following variables will help cope with the difference in the ``date`` command, as seamlessly as possible.
+  #
+  # .. variable:: date_feature_nanoseconds
+  #
+  # Non-GNU versions of ``date`` do not support the nanosecond sequence for a date format (e.g. BSD and busybox).
+  #
+  # :Value: * ``0`` - Supports nanosecond precision ``%N``
+  #         * ``1`` - Does not support nanoseconds
+  #**
+  if [ "${OS-}" = "Windows_NT" ] || [[ $(date +%N) =~ ^[0-9]+$ ]]; then
+    date_feature_nanoseconds=0
+  else
+    date_feature_nanoseconds=1
+  fi
+
+  #**
+  # Bash
+  # ====
+  #
+  # The following variables will help cope with the difference in bash versions, as seamlessly as possible.
+  #
+  # .. variable:: bash_behavior_declare_array_quote
+  #
+  # In bash version 4.3 and older, ``declare -p`` of an array adds an extra ``'`` around the array. This variable stores the state of that variable
+  #
+  # :Value: * **(null)** - Bash 4.4 or newer
+  #         * ``'`` - Bash 4.3 or older
+  #
+  # .. variable:: bash_feature_parameter_transformation
+  #
+  # Does bash support Parameter Transformations, e.g. ``${var@a}``
+  #
+  # :Value: * ``0`` - Bash does support parameter transformations (Bash 4.4 or newer)
+  #         * ``1`` - Bash does not support parameter transformations
+  #
+  # .. variable:: bash_feature_declare_array_escape_special_characters
+  #
+  # Starting in bash 4.4, ``declare -p`` of an array, will escape special characters such as tab (``\t``) and newline (``\n``)
+  #
+  # :Value: * ``0`` - Declare will escape special characters for arrays
+  #         * ``1`` - Declare uses literal versions of special characters, but still escapes quotes as ``\"``
+  #**
+
+  # Make life easier (and quicker after 6 uses)
+  local bash_major_version="${BASH_VERSINFO[0]}"
+  local bash_minor_version="${bash_major_version}${BASH_VERSINFO[1]}"
+
+  if [ "${bash_minor_version}" -ge "44" ]; then
+    bash_behavior_declare_array_quote=""
+    bash_feature_parameter_transformation=0
+    bash_feature_declare_array_escape_special_characters=0
+    bash_behavior_empty_array_unbound=1
+  else
+    bash_behavior_declare_array_quote="'"
+    bash_feature_parameter_transformation=1
+    bash_feature_declare_array_escape_special_characters=1
+    bash_behavior_empty_array_unbound=0
+  fi
+
+  #**
+  # .. variable:: bash_feature_declare_name_reffing
+  #
+  # Do bash variables support name reffing
+  #
+  # :Value: * ``0`` - Bash does support name reffing (Bash 4.3 or newer)
+  #         * ``1`` - Bash does not support name reffing
+  #
+  # .. variable:: bash_feature_declare_print_function
+  #
+  # Does ``declare`` support printing a function via ``declare -pf function_name``. Work around include: ``declare -F`` to list all functions and ``type function_name``, however the first line needs to be removed.
+  #
+  # :Value: * ``0`` - ``declare`` supports printing a function
+  #         * ``1`` - ``declare`` does not support printing a specific function.
+  #
+  # .. variable:: bash_bug_local_shadow_exported_variable
+  #
+  # In bash 4.2 and older, a local variable can shadow an exported variable, obscuring it from children processes. This is a confusing behavior that has to occasionally be corrected.
+  #
+  # :Value: * ``0`` - Local variables shadow exported variable in children processes
+  #         * ``1`` - Local variables do not shadow exported variable
+  #
+  # .. rubric:: Example
+  #
+  # .. code-block:: bash
+  #
+  #    export x=12
+  #    function foo()
+  #    {
+  #      local x
+  #      declare -p x        # in the x=11 case, this is 11?!
+  #      # export x          # Doesn't make a difference. x is already exported
+  #      compgen -A export x # compgen always sees x, shadowed or not.
+  #      bash -c "declare -p x"
+  #    }
+  #    foo
+  #    # x will be undefined when bash_bug_local_shadow_exported_variable is 0
+  #    # x will be 12 when bash_bug_local_shadow_exported_variable is 1
+  #    export -f foo; x=11 bash -c foo # Same result as above
+  #    x=13 foo # x is always 13 and in the bash child too. No explanation for this behavior
+  #**
+  if [ "${bash_minor_version}" -ge "43" ]; then
+    bash_feature_declare_name_reffing=0
+    bash_feature_declare_print_function=0
+    bash_bug_local_shadow_exported_variable=1
+  else
+    bash_feature_declare_name_reffing=1
+    bash_feature_declare_print_function=1
+    bash_bug_local_shadow_exported_variable=0
+  fi
+
+  # TODO: Cannot reliable replicate this, table for now
+  # .. variable:: bash_behavior_strict_posix_functions
+  # Bash 4.2 and older is stricter when it comes to exported functions that are not POSIX compliant, when running with the ``--posix`` flag. Workaround, unexport functions that would cause an issue.
+  # # My notes say 4.2, by unit tests say 5.1?!
+  # if [ "${bash_minor_version}" -ge "51" ]; then
+  #   bash_behavior_strict_posix_functions=1
+  # else
+  #   bash_behavior_strict_posix_functions=0
+  # fi
+
+  #**
+  # .. variable:: bash_feature_declare_global
+  #
+  # Does bash support declaring global variables with the ``declare`` command.
+  #
+  # :Value: * ``0`` - Bash supports ``declare -g``
+  #         * ``1`` - Bash does not support ``declare -g``
+  #**
+  if [ "${bash_minor_version}" -ge "42" ]; then
+    bash_feature_declare_global=0
+    bash_bug_declared_unset_value='' # Documented below
+  else
+    bash_feature_declare_global=1
+    bash_bug_declared_unset_value='=""' # Documented below
+  fi
+
+  #**
+  # .. variable:: bash_feature_printf_array_assignment
+  #
+  # Does ``printf -v`` support storing to array variables
+  #
+  # :Value: * ``0`` - ``printf`` does support storing to arrays (Bash 4.1 or newer)
+  #         * ``1`` - ``printf`` only supports storing to non-array variables
+  #
+  # .. variable:: bash_feature_allocate_file_descriptor
+  #
+  # Does ``exec {varname}>&1`` work.
+  #
+  # :Value: * ``0`` - ``exec`` can auto allocate an unused file descriptor
+  #         * ``1`` - File descriptors must be manually allocated.
+  #
+  # .. seealso::
+  #   :func:`file_tools.bash find_open_fd`
+  #**
+  if [ "${bash_minor_version}" -ge "41" ]; then
+    bash_feature_printf_array_assignment=0
+    bash_feature_allocate_file_descriptor=0
+  else
+    bash_feature_printf_array_assignment=1
+    bash_feature_allocate_file_descriptor=1
+  fi
+
+  #**
+  # .. variable:: bash_feature_associative_array
+  #
+  # Does bash have associative arrays
+  #
+  # :Value: * ``0`` Bash does have associative arrays (4.0 or newer)
+  #         * ``1`` Bash does not have associative arrays (3.2)
+  #
+  # .. variable:: bash_feature_bashpid
+  #
+  # Does bash have a ``BASHPID`` variable. This is more accurate than ``$$`` when it comes to subshells.
+  #
+  # :Value: * ``0`` Bash sets ``BASHPID``
+  #         * ``1`` Only ``$$`` is set, see :func:`signal_tools.bash set_bashpid`
+  #
+  # .. variable:: bash_feature_case_modification
+  #
+  # Does bash support ``${x^}/${x^^}/${x,}/${x,,}`` parameter substitution
+  #
+  # :Value: * ``0`` Bash supports case modification
+  #         * ``1`` Bash does not supports case modification
+  #
+  # .. seealso::
+  #    :func:`string_tools.bsh lowercase`, :func:`string_tools.bsh uppercase`
+  #**
+  if [ "${bash_major_version}" -ge "4" ]; then
+    bash_feature_associative_array=0
+    bash_feature_case_modification=0
+    bash_feature_bashpid=0
+  else
+    bash_feature_associative_array=1
+    bash_feature_case_modification=1
+    bash_feature_bashpid=1
+  fi
+
+  #**
+  # .. function:: bash_bug_bash_env_process_substitution
+  #
+  # With most bash 3.2's, using process substitution for the BASH_ENV env variable does not work as expected. (Perhaps the file is read twice, and since it is a stream, it cannot seek to the beginning.) Work around is to write to a temporary file instead. Some bash 3.2 do support this. Since this is expensive to test (one fork, which is only expensive in windows), it is not evaluated into a variable on load. Instead, this is a function that is called. The result is cached so that is does not need to be tested again. The feature has less to do with the exact version of bash, and how it is compiled or patched.
+  #
+  # :Return Value: * ``0`` - ``BASH_ENV`` does not support process substitution
+  #                * ``1`` - ``BASH_ENV`` works normally
+  #**
+  function bash_bug_bash_env_process_substitution()
+  {
+    if [ -z "${__bash_bug_bash_env_process_substitution+set}" ]; then
+      if [ "$(BASH_ENV=<(echo echo 0) bash -c :)" = "0" ]; then
+        __bash_bug_bash_env_process_substitution=1
+      else
+        __bash_bug_bash_env_process_substitution=0
+      fi
+    fi
+
+    return "${__bash_bug_bash_env_process_substitution}"
+  }
+
+  #**
+  # .. variable:: bash_feature_bashpid_read_only
+  #
+  # The ``BASHPID`` variable is only only protected as read only in bash 4. Bash 5 releases this restriction (but does not release the restriction for any other read only variable)
+  #
+  # :Value: * ``0`` ``BASHPID`` is read only
+  #         * ``1`` ``BASHPID`` is not read only
+  #**
+  if [ "${bash_major_version}" = "4" ]; then
+    bash_feature_bashpid_read_only=0
+  else
+    bash_feature_bashpid_read_only=1
+  fi
+
+  #**
+  # .. variable:: bash_behavior_regex_special_characters_non_literal
+  #
+  # Most instances of bash require special characters to be literal in regular expressions (e.g. ``$'\n'``). However, on operating systems such as alpine, a special character will be matched based in its non-literal form (e.g. ``"\n"``). This has nothing to do with the version of bash, but rather how it was compiled (regex might come from g++'s implementation).
+  #
+  # :var:`bash_behavior_regex_special_characters_non_literal` will be set if the non-literal form works. Currently, the literal form always appears to work.
+  #
+  # :Value: * ``0`` - Non literal form works (e.g. ``"\t")
+  #         * ``1`` - Non literal form does not work
+  #**
+  local x=$'foo\nbar'
+  local re='\n'
+  if [[ ${x} =~ ${re} ]]; then
+    bash_behavior_regex_special_characters_non_literal=0
+  else
+    bash_behavior_regex_special_characters_non_literal=1
+  fi
+
+  #**
+  # .. variable:: bash_bug_regex_null_string
+  #
+  # Most instances of bash allow a null string to be a valid regular expression, basically any string matches. However, on operating systems such as macOS, it fails to compile the regular expression, and does not match correctly, giving the opposite answer as all other operating systems. This has nothing to do with the version of bash, but rather how it was compiled (regex might come from g++'s implementation).
+  #
+  # :Value: * ``0`` - The null string for a pattern does not match correctly
+  #         * ``1`` - The null string for a pattern does match correctly
+  #**
+  x=''
+  re=''
+  if [[ ${x} =~ ${re} ]]; then
+    bash_bug_regex_empty_string=1
+  else
+    bash_bug_regex_empty_string=0
+  fi
+
+  #**
+  # .. variable:: bash_bug_declare_fails_local_declared_unset_variable
+  #
+  # Bash 4.3 has a bug where ``declare -p var`` fails if a local variable is declared, but unset. The workaround is to find the variable in ``declare -p``
+  #
+  # :Value: * ``0`` - Has declare fails bug
+  #         * ``1`` - Does not have the declare fails bug
+  #
+  # .. variable:: bash_bug_declare_fails_global_declared_unset_variable
+  #
+  # Bash 4.0 to 4.3 has a bug where ``declare -p var`` fails if a global variable is declared, but has no set value. The workaround is to find the variable in ``declare -p``
+  #
+  # :Value: * ``0`` - Has declare fails bug
+  #         * ``1`` - Does not have the declare fails bug
+  #
+  # .. variable:: bash_bug_declared_unset_value
+  #
+  # Bash 3.2 through 4.1 has a confusing behavior where unset declared variables appear to be set to null ``""`` instead of unset, in the output of ``declare -p``. However these versions of bash do indeed have an "unset but declared state", it just can't be queried using the output of ``declare -p``.
+  #
+  # :Value: * ``=""`` - The characters seen after ``declare varname``
+  #         * **(null)**
+  #
+  # .. rubric:: Example
+  #
+  # .. code-block:: bash
+  #
+  #    declare x
+  #    if declare -p x &> /dev/null; then
+  #      assert_str_eq "$(declare -p x)" "declare -p x${bash_bug_declared_unset_value}"
+  #    fi
+  #
+  #    # How to detect if variable is unset but declared?
+  #
+  # .. note::
+  #
+  #    In Bash 3.2, ``declare -p var`` doesn't look the same as ``declare -p``
+  #
+  # Detecting declared unset variables
+  # ----------------------------------
+  # Unfortunately, there is no fool proof simple way to detect a declared unset variable. The ``${var+set}`` parameter substitution will let you know if a a variable is unset, and using if :var:`bash_bug_declare_fails_local_declared_unset_variable`/:var:`bash_bug_declare_fails_global_declared_unset_variable` is ``1``, then ``declare -p var_name`` will let you know it is declared. If either of those bugs are set to ``0``, then you have to fall back on ``declare -p`` and match the regex ``$'(^|\n)declare -- '"${var_name}${bash_bug_declared_unset_value}"$'(\n|$)'`` to determine if it was declared. Unfortunately, in Bash 4.3 it is possible for another variable to be set to a value that can falsely match the regex. This is highly unlikely to happen by accident, but can be worked around using some sed (specific to bash 4.3's ``declare -p`` output)
+  #
+  # .. rubric:: Bash 4.3 Example
+  #
+  # .. code-block:: bash
+  #
+  #    $ declare x_15
+  #    $ x_13=$'foo\ndeclare -- x_14\nbar'
+  #    $ declare -p | grep x_15
+  #    declare -- x_15
+  #    $ declare -p | grep x_14
+  #    declare -- x_14
+  #    $ compgen -A variables x_1
+  #    x_13
+  #    $ declare -p | sed -E ':combine
+  #                           $bdone
+  #                           N
+  #                           bcombine
+  #                           :done
+  #                           # Remove all escaped quotes
+  #                           s|\\"||g
+  #                           # Remove all values, so everything looks like a null value (and is guaranteed to be one line now)
+  #                           s|"[^"]*"|""|g' | grep x_
+  #    declare -- x_13=""
+  #    declare -- x_15
+  #**
+
+  local y
+  if declare -p y &> /dev/null; then
+    bash_bug_declare_fails_local_declared_unset_variable=1
+  else
+    bash_bug_declare_fails_local_declared_unset_variable=0
+  fi
+
+  # Doing this through introspection was too sensitive, due to requiring that
+  # compat.bsh was sourced from global scope because of the uniqueness of this
+  # bug. So the known versions are just coded here instead
+  if [ "${bash_minor_version}" -ge "40" -a "${bash_minor_version}" -le "43" ]; then
+    bash_bug_declare_fails_global_declared_unset_variable=0
+  else
+    bash_bug_declare_fails_global_declared_unset_variable=1
+  fi
+
+  #**
+  # .. variable:: bash_bug_substitute_empty_funcname
+  #
+  # ``FUNCNAME`` is the only builtin array in bash that is likely to be declared but unset (when stack depth is zero). In bash 4.3 and 4.4, there is a bug where an using parameter expansion on ``FUNCNAME`` when unset will incorrectly expand (e.g. ``${FUNCNAME[@]+example}``). This could be due to funcname not really being empty in global scope, but just doesn't show up as populated until in its first function scope
+  #
+  # .. note::
+  #
+  #    Typing this into an interactive bash session will not show this bug. It has to be in a file that is sourced or run for this bug to show up.
+  #**
+  if [ "${bash_minor_version}" = "43" ] || [ "${bash_minor_version}" = "44" ]; then
+    bash_bug_substitute_empty_funcname=0
+  else
+    bash_bug_substitute_empty_funcname=1
+  fi
+
+  #**
+  # .. variable:: bash_bug_ifs_array_slice_expansion
+  #
+  # In some versions of bash (3.2 is the only known version), ``@`` expanding an array and slicing it when IFS is not space will fail to expand into multiple arguments.
+  #
+  # :Value: * ``0`` - Bug present
+  #         * ``1`` - Not bugged
+  #
+  # .. rubric:: Example
+  #
+  # .. code-block:: bash
+  #
+  #   $ x=(11 22 33 44)
+  #   $ IFS=x
+  #   $ z=("${x[@]:2}")
+  #   # @ expansion should be unaffected by IFS, unlike * expansion
+  #   declare -a z='([0]="33 44")'       # Wrong
+  #   declare -a z='([0]="33" [1]="44")' # Right
+  #**
+  local x=(11 22 33 44)
+  local IFS=x
+  local z=("${x[@]:2}")
+  if [ "${z[0]}" = "33 44" ]; then
+    bash_bug_ifs_array_slice_expansion=0
+  else
+    bash_bug_ifs_array_slice_expansion=1
+  fi
+}
+
+# The purpose of this file is to set all these flag. Make it a function to help
+# encapsulate in new_just
+load_vsi_compat

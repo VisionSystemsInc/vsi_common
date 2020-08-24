@@ -7,6 +7,7 @@ fi
 if [ -z ${VSI_COMMON_DIR+set} ]; then
   VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 fi
+
 source "${VSI_COMMON_DIR}/linux/string_tools.bsh"
 source "${VSI_COMMON_DIR}/linux/elements.bsh"
 source "${VSI_COMMON_DIR}/linux/findin"
@@ -240,7 +241,7 @@ function _compose_arguments()
 #      dynamic_set_a "${JUST_PROJECT_PREFIX}_SINGULAR_COMPOSE_FILES" "${compose_files[@]}"
 #    fi
 #
-# .. note:
+# .. note::
 #
 #    Variables are always overwritten, even if not used. A ``0`` for options without arguments, and an empty string for options that take arguments indicates the option was never used. However, arrays are always appended to.
 #
@@ -260,6 +261,7 @@ function parse_args()
   local __parse_args_used_arguments="${1}"
   shift 1
 
+  # Parse the arguments to be parsed
   while [ "${1}" != "--" ]; do
     if [ "${2:0:1}" = "+" ]; then
       __parse_args_store="${2:1}"
@@ -284,15 +286,15 @@ function parse_args()
   shift 1 # For the --
   dynamic_set "${__parse_args_used_arguments}" "${#}"
 
+  # Set default values
   for __parse_args_index in "${!__parse_args_storage[@]}"; do
     if [ "${__parse_args_is_array[$__parse_args_index]}" = "0" ]; then
       if [ "${__parse_args_arguments[$__parse_args_index]}" = "0" ]; then
         # It's a variable that with no arguments, set to 0
         dynamic_set "${__parse_args_storage[$__parse_args_index]}" 0
       # Unlike the counter and array, it's better to not set this by default
-      # It's impossible to tell unset (empty string) from set to empty string
-      # Actually, in bash 3.2, it sets it to an empty string, and 4.0 to 4.3,
-      # declare -p fails.
+      # It's impossible to tell unset (being set to an empty string here) from
+      # set to empty string prior to calling this function
       # else
       #   # It's a variable that with an arguments, set to ""
       #   dynamic_set "${__parse_args_storage[$__parse_args_index]}" ""
@@ -307,10 +309,30 @@ function parse_args()
     fi
   done
 
+  # Parse args
   while (( $# )); do
     __parse_args_index="$(findin "${1}" ${__parse_args_options[@]+"${__parse_args_options[@]}"})"
     # If there is no match, then we are done parsing!
     if [ "${__parse_args_index}" = "-1" ]; then
+      if [ "${1}" == "-h" -o "${1}" == "--help" ]; then
+        # consume one more arg
+        dynamic_set "${__parse_args_used_arguments}" $(( ${!__parse_args_used_arguments} + 1 ))
+        # Print help
+        echo "Command help:"
+        for __parse_args_index in "${!__parse_args_storage[@]}"; do
+          local arg="${__parse_args_storage[__parse_args_index]}"
+          echo -n "  ${__parse_args_options[__parse_args_index]} "
+          if [ "${__parse_args_arguments[__parse_args_index]}" == "0" ]; then
+            echo "a flag that can be called multiple times"
+          else
+            if [ "${__parse_args_is_array[__parse_args_index]}" == "0" ]; then
+              echo "{${arg}}"
+            else
+              echo "{${arg}} [${__parse_args_options[__parse_args_index]} {$arg} ...]"
+            fi
+          fi
+        done
+      fi
       break
     else
       # Variable

@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 
-. "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
-. "$(dirname "${BASH_SOURCE[0]}")/test_utils.bsh"
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
 
-VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
-. "${VSI_COMMON_DIR}/linux/mount_tools.bsh"
-. "${VSI_COMMON_DIR}/linux/file_tools.bsh"
+source "${VSI_COMMON_DIR}/tests/testlib.bsh"
+source "${TESTLIB_DIR}/test_utils.bsh"
+source "${VSI_COMMON_DIR}/linux/mount_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/file_tools.bsh"
 
 linux_nfs="\
 Filesystem                       1K-blocks        Used   Available Use% Mounted on
@@ -78,21 +80,21 @@ begin_test "Test mount point Linux args"
   args=()
   mount_point /mnt/test || :
   IFS='' read -u "${fd_r}" -t 1 -r line; args+=("${line}")
-  check_a args /mnt/test
+  assert_array_values args /mnt/test
 
   args=()
   mount_point /mnt/test brtfs || :
   for x in $(seq 3); do
     IFS='' read -u "${fd_r}" -t 1 -r line; args+=("${line}")
   done
-  check_a args -t brtfs /mnt/test
+  assert_array_values args -t brtfs /mnt/test
 
   args=()
   mount_point /mnt/test nfs nfs3 nfs4 || :
   for x in $(seq 7); do
     IFS='' read -u "${fd_r}" -t 1 -r line; args+=("${line}")
   done
-  check_a args -t nfs -t nfs3 -t nfs4 /mnt/test
+  assert_array_values args -t nfs -t nfs3 -t nfs4 /mnt/test
 
   close_fd "${fd_r}"
 )
@@ -114,22 +116,57 @@ begin_test "Test mount point macOS args"
   args=()
   mount_point /mnt/test || :
   IFS='' read -u "${fd_r}" -t 1 -r line; args+=("${line}")
-  check_a args /mnt/test
+  assert_array_values args /mnt/test
 
   args=()
   mount_point /mnt/test brtfs || :
   for x in $(seq 3); do
     IFS='' read -u "${fd_r}" -t 1 -r line; args+=("${line}")
   done
-  check_a args -T brtfs /mnt/test
+  assert_array_values args -T brtfs /mnt/test
 
   args=()
   mount_point /mnt/test nfs nfs3 nfs4 || :
   for x in $(seq 3); do
     IFS='' read -u "${fd_r}" -t 1 -r line; args+=("${line}")
   done
-  check_a args -T nfs,nfs3,nfs4 /mnt/test
+  assert_array_values args -T nfs,nfs3,nfs4 /mnt/test
 
   close_fd "${fd_r}"
+)
+end_test
+
+begin_test "Mount type"
+(
+  setup_test
+
+  function mount()
+  {
+    echo '/dev/sdc3 on / type btrfs (rw,relatime,seclabel,ssd,space_cache,subvolid=257,subvol=/root)'
+    echo '/dev/sdc3 on /opt type btrfs (rw,relatime,seclabel,ssd,space_cache,subvolid=259,subvol=/opt)'
+    echo '/dev/sdc1 on /boot type ext4 (rw,relatime,seclabel)'
+    echo '/dev/fuse on /run/user/1033/doc type fuse (rw,nosuid,nodev,relatime,user_id=1033,group_id=1000)'
+    echo 'sunrpc on /var/lib/nfs/rpc_pipefs type rpc_pipefs (rw,relatime)'
+  }
+
+  [ "$(mount_type /)" = "btrfs" ]
+  [ "$(mount_type /boot)" = "ext4" ]
+  [ "$(mount_type /opt)" = "btrfs" ]
+  [ "$(mount_type /run/user/1033/doc)" = "fuse" ]
+  [ "$(mount_type /var/lib/nfs/rpc_pipefs)" = "rpc_pipefs" ]
+)
+end_test
+
+begin_test "Is NFS"
+(
+  setup_test
+
+  not is_nfs ext4
+  not is_nfs not_nfs
+  not is_nfs fuse
+  is_nfs nfs
+  is_nfs nfs3
+  is_nfs nfs4
+  not is_nfs nfs5
 )
 end_test

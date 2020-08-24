@@ -33,7 +33,7 @@ commands:
             tar c . | docker run -i --rm -v /root/repo:/src -w /src alpine:3.11 tar x
 
 jobs:
-  compile_docs_and_common_source:
+  compile_docs:
     <<: *container_config
 
     steps:
@@ -41,12 +41,6 @@ jobs:
       - submodule_checkout
       - setup_remote_docker
       - dependencies_and_smuggle
-
-      - run:
-          name: Run integration tests common_source
-          command: |
-            . setup.env
-            just test int common_source
 
       - run:
           name: Generate docs
@@ -60,7 +54,7 @@ jobs:
           root: docs/_build
           paths: html
 
-  run_bash_tests:
+  run_bash_and_os_tests:
     <<: *container_config
     parallelism: 3
     steps:
@@ -70,23 +64,40 @@ jobs:
       - dependencies_and_smuggle
       - run:
           name: Run test on Bash Versions
+          # Using CI load here was slower, so just pull image that are manually
+          # pushed to dockerhub
           command: |
-            # install the circleci cli
+            # Load just stuff
             source setup.env
+            source linux/just_files/just_env vsi_common.env
+            # Docker login
             docker login -u "${DOCKER_USER}" -p "${DOCKER_PASS}"
-            versions="3.2 4.0 4.1 4.2 4.3 4.4 5.0"
-            versions=($(echo "${versions}" | tr ' ' '\n' | circleci tests split))
-            export TESTLIB_SKIP_TESTS="Distribution name for"
-            # This was actually slower:
-            # if [ "${CIRCLE_BRANCH}" != "master" ]; then
-            #   export JUST_DOCKER_COMPOSE_PUSH=0
-            # fi
-            just build recipes-auto docker/bash_test.Dockerfile
-            for version in "${versions[@]}"; do \
-              # This was actually slower:
-              # just ci load "${version}"
-              just build bash "${version}"
-              just test docker "${version}" all tests
+            # Add two lists together
+            tests=()
+            for (( i=0; i<${#VSI_COMMON_BASH_TEST_VERSIONS[@]}; i++ ))
+            {
+              tests+=(bash_${VSI_COMMON_BASH_TEST_VERSIONS[i]})
+            }
+            for (( i=0; i<${#VSI_COMMON_TEST_OSES[@]}; i++ ))
+            {
+              tests+=(os_${VSI_COMMON_TEST_OSES[i]})
+            }
+            # Split by parallelism
+            tests=($(IFS=$'\n'; echo "${tests[*]}" | circleci tests split))
+            # Run tests
+            for t in "${tests[@]}"; do \
+              echo "Testing ${t}"
+              if [[ ${t} = os_* ]]; then
+                just pull os "${t#os_}"
+                just test os "${t#os_}" just test -- test int
+                just test os-common-source "${t#os_}"
+              elif [[ ${t} = bash_* ]]; then
+                just pull bash "${t#bash_}"
+                just test bash "${t#bash_}" all tests
+              else
+                echo "Something went wrong"
+                exit 3
+              fi
             done
 
   deploy_docs:
@@ -99,7 +110,7 @@ jobs:
           name: Checkout gh-pages and update
           command: |
             # Load the functions new_just uses
-            source ./linux/new_just
+            source ./linux/just_files/new_just
 
             git checkout gh-pages || git checkout --orphan gh-pages
             git reset --hard # This is important if gh-pages was just created
@@ -108,13 +119,13 @@ jobs:
             touch .nojekyll
 
             # restore new_just file
-            git show "origin/${CIRCLE_BRANCH}:linux/new_just" > ./new_just
+            git show "origin/${CIRCLE_BRANCH}:linux/just_files/new_just" > ./new_just
             # patch the missing functions with copies from the sourced version above
             function_names=($(sed -nE 's|^ *function (.*)\(\)\{ :;}|\1|p' ./new_just))
 
             for function_name in "${function_names[@]}"; do
               declare -pf "${function_name}" | sed -i '/function '"${function_name}"'(){ :;}/{r /dev/stdin
-                                                                                              d}' ./new_just
+                                                                                              d;}' ./new_just
             done
 
             git add --all
@@ -132,11 +143,11 @@ jobs:
 workflows:
   vsi_common:
     jobs:
-      - run_bash_tests
-      - compile_docs_and_common_source
+      - run_bash_and_os_tests
+      - compile_docs
       - deploy_docs:
           requires:
-            - compile_docs_and_common_source
+            - compile_docs
           filters:
             branches:
               only:

@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 
-. "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
-. "$(dirname "${BASH_SOURCE[0]}")/test_utils.bsh"
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
 
-VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
-. "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
+source "${VSI_COMMON_DIR}/tests/testlib.bsh"
+source "${TESTLIB_DIR}/test_utils.bsh"
+source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
 
 begin_test "parent find files"
 (
@@ -19,40 +21,40 @@ begin_test "parent find files"
 
   pushd a/b/c/d/e/f > /dev/null
     parent_find_files test1
-    check_a file_matches "${TESTDIR}/a/b/test1"
+    assert_array_values file_matches "${TESTDIR}/a/b/test1"
     parent_find_files test1 test11 test12
-    check_a file_matches "${TESTDIR}/a/b/test1" "${TESTDIR}/a/b/test11"
+    assert_array_values file_matches "${TESTDIR}/a/b/test1" "${TESTDIR}/a/b/test11"
     parent_find_files test2
-    check_a file_matches "${TESTDIR}/a/b/c/d/e/f/test2"
+    assert_array_values file_matches "${TESTDIR}/a/b/c/d/e/f/test2"
     parent_find_files test3
-    check_a file_matches "${TESTDIR}/test3"
+    assert_array_values file_matches "${TESTDIR}/test3"
     parent_find_files test4
-    check_a file_matches
+    assert_array_values file_matches
   popd > /dev/null
 
   pushd a/b/c/d/e > /dev/null
     parent_find_files test1
-    check_a file_matches "${TESTDIR}/a/b/test1"
+    assert_array_values file_matches "${TESTDIR}/a/b/test1"
     parent_find_files test1 test11 test12
-    check_a file_matches "${TESTDIR}/a/b/test1" "${TESTDIR}/a/b/test11"
+    assert_array_values file_matches "${TESTDIR}/a/b/test1" "${TESTDIR}/a/b/test11"
     parent_find_files test2
-    check_a file_matches
+    assert_array_values file_matches
     parent_find_files test3
-    check_a file_matches "${TESTDIR}/test3"
+    assert_array_values file_matches "${TESTDIR}/test3"
     parent_find_files test4
-    check_a file_matches
+    assert_array_values file_matches
   popd > /dev/null
 
   parent_find_files test1
-  check_a file_matches
+  assert_array_values file_matches
   parent_find_files test1 test11 test12
-  check_a file_matches
+  assert_array_values file_matches
   parent_find_files test2
-  check_a file_matches
+  assert_array_values file_matches
   parent_find_files test3
-  check_a file_matches "${TESTDIR}/test3"
+  assert_array_values file_matches "${TESTDIR}/test3"
   parent_find_files test4
-  check_a file_matches
+  assert_array_values file_matches
 )
 end_test
 
@@ -180,25 +182,58 @@ begin_test "basename"
 )
 end_test
 
+begin_test "Is dir empty"
+(
+  setup_test
+
+  mkdir -p "${TESTDIR}/foo"
+  is_dir_empty "${TESTDIR}/foo"
+
+  mkdir -p "${TESTDIR}/foo/bar"
+  not is_dir_empty "${TESTDIR}/foo"
+  is_dir_empty "${TESTDIR}/foo/bar"
+
+  touch "${TESTDIR}/foo/bar/.car"
+  not is_dir_empty "${TESTDIR}/foo/bar"
+)
+end_test
+
+begin_test "Get temp dir"
+(
+  setup_test
+  unset OSTYPE TMPDIR _CS_DARWIN_USER_TEMP_DIR
+
+  [ "$(get_mktemp_dir)" = "/tmp" ]
+  [ "$(OSTYPE=darwin8 get_mktemp_dir)" = "/tmp" ]
+  TMPDIR=/foo
+  [ "$(get_mktemp_dir)" = "/foo" ]
+  [ "$(_CS_DARWIN_USER_TEMP_DIR=/bar get_mktemp_dir)" = "/foo" ]
+  OSTYPE=darwin8
+  [ "$(get_mktemp_dir)" = "/foo" ]
+  _CS_DARWIN_USER_TEMP_DIR=/bar
+  [ "$(get_mktemp_dir)" = "/bar" ]
+)
+end_test
+
 begin_test "common prefix"
 (
   setup_test
-  [[ $(common_prefix "/home/swenson/spam" "/home/swen/spam") = /home/swen ]]
-  [[ $(common_prefix "/home/swen/spam" "/home/swen/eggs") = /home/swen/ ]]
-  [[ $(common_prefix "/home/swen/spam" "/home/swen/spam") = /home/swen/spam ]]
-  [[ $(common_prefix "home/swenson/spam" "home/swen/spam") = home/swen ]]
-  [[ $(common_prefix "/home/swen/spam" "/home/swen/eggs") = /home/swen/ ]]
-  [[ $(common_prefix "/home/swen/spam" "/home/swen/spam") = /home/swen/spam ]]
+  [ "$(common_prefix "/home/swenson/spam" "/home/swen/spam")" = "/home/swen" ]
+  [ "$(common_prefix "/home/swen/spam" "/home/swen/eggs")" = "/home/swen/" ]
+  [ "$(common_prefix "/home/swen/spam" "/home/swen/spam")" = "/home/swen/spam" ]
+  [ "$(common_prefix "home/swenson/spam" "home/swen/spam")" = "home/swen" ]
+  [ "$(common_prefix "/home/swen/spam" "/home/swen/eggs")" = "/home/swen/" ]
+  [ "$(common_prefix "/home/swen/spam" "/home/swen/spam")" = "/home/swen/spam" ]
 
 
   testlist=('' 'abc' 'Xbcd' 'Xb' 'XY' 'abcd' 'aXc' 'abd' 'ab' 'aX' 'abcX')
   for s1 in "${testlist[@]}"; do
     for s2 in "${testlist[@]}"; do
       p="$(common_prefix "${s1}" "${s2}")"
-      [[ ${s1::${#p}} = ${p} ]]
-      [[ ${s2::${#p}} = ${p} ]]
-      if [[ ${s1} != ${s2} ]]; then
-        [[ ${s1::${#p}+1} != ${s2::${#p}+1} ]]
+      [ "${s1::${#p}}" = "${p}" ]
+      [ "${s2::${#p}}" = "${p}" ]
+      if [ "${s1}" != "${s2}" ]; then
+        [ "${s1::${#p}+1}" != "${s2::${#p}+1}" ]
       fi
     done
   done

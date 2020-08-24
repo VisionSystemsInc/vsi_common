@@ -1,0 +1,167 @@
+#!/usr/bin/env false bash
+
+if [[ $- != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
+source "${VSI_COMMON_DIR}/linux/colors.bsh"
+source "${VSI_COMMON_DIR}/linux/elements.bsh"
+source "${VSI_COMMON_DIR}/linux/command_tools.bsh"
+
+#*# just/plugins/just_bashcov_functions
+
+JUST_DEFAULTIFY_FUNCTIONS+=(bashcov_defaultify)
+JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
+
+#**
+# .. default-domain:: bash
+#
+# ================================
+# J.U.S.T. Bash Coverage Functions
+# ================================
+#
+# .. file:: just_bashcov_functions.bsh
+#
+# Plugin for running `bashcov <https://github.com/infertux/bashcov>`_ which uses `simplecov <https://github.com/colszowka/simplecov>`_ under the hood.
+#
+# -----------------------
+# J.U.S.T. bashcov plugin
+# -----------------------
+#
+# .. function:: bashcov_defaultify
+#
+# Plugin for running unit tests through bash coverage in any project
+#
+# .. envvar:: ${JUST_PROJECT_PREFIX}_BASHCOV_SOURCE_DIR
+#
+# The location of the source code directory on the host. The coverage results will be stored in a ``coverage`` subdirectory.
+#
+# .. rubric:: Bugs
+#
+# Changing the ``coverage_dir`` in the settings may not work.
+#
+# Default: ``${${JUST_PROJECT_PREFIX}_CWD}``
+#
+# .. envvar:: BASHCOV_IMAGE
+#
+# The image name used to run bashcov. If you want to use your own customized image with your own dependencies installed, override the set :envvar:`BASHCOV_IMAGE` in your :file:`local.env` file to the image you want to use, and do NOT run :cmd:`bashcov_build` or it will rebuild the bashconv image, tagging it with that image name.
+#
+# Default: ``vsiri/bashcov:latest``
+#
+# Bashcov can be configured with a ``.simplecov`` file in the the ``${JUST_PROJECT_PREFIX}_BASHCOV_SOURCE_DIR`` directory. See `simplecov <https://github.com/colszowka/simplecov>`_ for more information on configuring ``.simplecov``
+#
+# .. rubric:: Example
+#
+# .. code-block:: ruby
+#    :caption: .simplecov
+#
+#    SimpleCov.start do
+#      # Exclude the tests and docs dir from the coverage report
+#      add_filter "/tests/"
+#      add_filter "/docs/"
+#      # Customize the no coverage flag, default is nocov
+#      nocov_token "nocov"
+#    end
+#**
+
+function _bashcov_docker_compose()
+{
+  local VSI_COMMON_UID="${JUST_PROJECT_PREFIX}_UID"
+  export VSI_COMMON_UID="${!VSI_COMMON_UID-1000}"
+  local VSI_COMMON_GIDS="${JUST_PROJECT_PREFIX}_GID"
+  export VSI_COMMON_GIDS="${!VSI_COMMON_GIDS-1000}"
+
+  local JUST_SETTINGSS
+  translate_just_settings "${BASH_COV_SOURCE}" /src
+  local JUST_SETTINGS
+  MIFS=/// join_a VSI_COMMON_JUST_SETTINGS ${JUST_SETTINGSS[@]+"${JUST_SETTINGSS[@]}"}
+  export VSI_COMMON_JUST_SETTINGS
+
+  local COMPOSE_FILE="${VSI_COMMON_DIR}/docker/vsi_common/docker-compose.yml"
+  export COMPOSE_FILE
+
+  Just-docker-compose ${@+"${@}"}
+}
+
+function bashcov_defaultify()
+{
+  local id_project_cwd="${JUST_PROJECT_PREFIX}_CWD"
+
+  # Export variables for docker-compose file
+  local BASH_COV_SOURCE_DIR="${JUST_PROJECT_PREFIX}_BASHCOV_SOURCE_DIR"
+  export BASH_COV_SOURCE_DIR="${!BASH_COV_SOURCE_DIR:-${!id_project_cwd}}"
+
+  arg=$1
+  shift 1
+  case $arg in
+    #**
+    # .. command:: bashcov
+    #
+    # Run bashcov on a single command.
+    #
+    # :Arguments: ``$1``... - Arguments passed into bashcov call
+    #**
+    bashcov) # Make bashcov report
+      # This check works as long as no one has customized coverage_dir in the .simplecov file.
+      if [ -e "${BASH_COV_SOURCE_DIR}/coverage" ]; then
+        echo "${YELLOW}WARNING:${NC} ${BOLD}${BASH_COV_SOURCE_DIR}/coverage${NC} already exists" >&2
+      fi
+
+      _bashcov_docker_compose run bashcov bashcov ${@+"${@}"}
+      extra_args=$#
+      ;;
+    #**
+    # .. command:: bashcov_multiple
+    #
+    # Run multiple commands in bashcov in parallel. The results are all merged together and allows you to only rerun a single file at a time and update the aggregate result.
+    #
+    # :Arguments: ``$1``... - Arguments passed to bashcov, one argument per call.
+    #**
+    bashcov_multiple) # Run bashcov over multiple commands, each argument is executed \
+                      # separately. There is no way to pass an argument to any of the \
+                      # commands; use "just bashcov" for that.
+      _bashcov_docker_compose run bashcov multiple ${@+"${@}"}
+      extra_args=$#
+      ;;
+    #**
+    # .. command:: bashcov_resume
+    #
+    # Similar to :cmd:`bashcov_multiple`, except only executes each argument if it hasn't been run before. Useful for resuming a long run, the first time.
+    #
+    # :Arguments: ``$1``... - Arguments passed to bashcov, one argument per call.
+    #**
+    bashcov_resume) # Resume running bashcov multiple
+      _bashcov_docker_compose run bashcov resume ${@+"${@}"}
+      extra_args=$#
+      ;;
+    #**
+    # .. command:: bashcov_shell
+    #
+    # Enter the bashcov container; for debugging
+    #**
+    bashcov_shell) # Enter the bashcov container
+      _bashcov_docker_compose run bashcov bash
+      ;;
+    #**
+    # .. command:: bashcov_build
+    #
+    # Builds the bashcov image. This is done automatically the first time you run a bashcov container, but this will rebuild it if needed.
+    #**
+    bashcov_build) # Build bashcov docker image
+      justify build recipes-auto "${VSI_COMMON_DIR}/docker/vsi_common/bashcov.Dockerfile"
+      _bashcov_docker_compose build bashcov
+      ;;
+    #**
+    # .. command:: bashcov_open
+    #
+    # Opens the bashcov report in a web browser
+    #**
+    bashcov_open) # Opens the bashcov report in a web browser
+      open_web_browser "${BASH_COV_SOURCE_DIR}/coverage/index.html"
+      ;;
+    *)
+      plugin_not_found=1
+      ;;
+  esac
+  return 0
+}

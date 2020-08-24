@@ -1,18 +1,28 @@
 #!/usr/bin/env bash
 
-. "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
 
-VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+source "${VSI_COMMON_DIR}/tests/testlib.bsh"
+source "${TESTLIB_DIR}/test_utils.bsh"
 
 function common_test()
 {
   [ "$(type -t print_command)" = "$1" ]
 
-  [ "$(print_command)" = "" ]
-  [ "$(print_command foo %s bar)" = "foo %s bar" ]
-  [ "$(print_command 'azAZ0-9_.:/=@%^,+-')" = "azAZ0-9_.:/=@%^,+-" ]
-  [ "$(print_command '!' \* \$ \# \@ \(\) \{\} \[\] \;)" = "'!' '*' '$' '#' @ '()' '{}' '[]' ';'" ]
-  [ "$(print_command echo test "this'this" "f o  o")" = "echo test 'this'\"'\"'this' 'f o  o'" ]
+  assert_str_eq "$(print_command)" \
+            ""
+  assert_str_eq "$(print_command foo %s bar)" \
+            "foo %s bar"
+  assert_str_eq "$(print_command -n test -e foobar)" \
+            "-n test -e foobar"
+  assert_str_eq "$(print_command 'azAZ0-9_.:/=@%^,+-')" \
+            "azAZ0-9_.:/=@%^,+-"
+  assert_str_eq "$(print_command '!' \* \$ \# \@ \(\) \{\} \[\] \;)" \
+            "'!' '*' '$' '#' @ '()' '{}' '[]' ';'"
+  assert_str_eq "$(print_command echo test "this'this" "" "f o  o")" \
+            "echo test 'this'\''this' '' 'f o  o'"
 }
 
 begin_test "print_command CLI"
@@ -27,5 +37,70 @@ begin_test "print_command"
   setup_test
   . "${VSI_COMMON_DIR}/linux/print_command"
   common_test function
+)
+end_test
+
+begin_test "print_command_env"
+(
+  setup_test
+  . "${VSI_COMMON_DIR}/linux/print_command"
+
+  export A=3
+  export B=2
+  print_command_save_env
+
+  assert_str_eq "$(print_command_env foo)" \
+            "foo"
+  assert_str_eq "$(print_command_env foo "b a  r")" \
+            "foo 'b a  r'"
+  assert_str_eq "$(A=3 print_command_env foo)" \
+            "foo"
+  assert_str_eq "$(B=3 print_command_env foo)" \
+            "B=3 foo"
+  assert_str_eq "$(C="b a  r" print_command_env foo)" \
+            "C='b a  r' foo"
+  assert_str_eq "$(unset A; print_command_env foo)" \
+            "(unset A; foo)"
+  assert_str_eq "$(export B="f  o o"; unset A; D=15 C="b a  r" print_command_env foo)" \
+            "(unset A; B='f  o o' C='b a  r' D=15 foo)"
+
+  assert_str_eq "$(export C='!*$#@(){}[];'; print_command_env foo)" \
+            "C='!*\$#@(){}[];' foo"
+  assert_str_eq "$(export D="this'this" E="" F="f o  o"; print_command_env bar)" \
+            "D='this'\''this' E='' F='f o  o' bar"
+
+  # Test child process
+  export -f print_command_env
+  export -f quote_escape
+
+  assert_str_eq "$(B=15 bash -c "print_command_env foo bar")" \
+            "B=15 foo bar"
+
+  # Test cd
+  assert_str_eq "$(unset A; B=15 C="b a  r" bash -c "cd "${TRASHDIR}"; print_command_env foo bar")" \
+            "(cd ${TRASHDIR}; unset A; B=15 C='b a  r' foo bar)"
+)
+end_test
+
+begin_test "print_command_env locally shadowed variable"
+(
+  setup_test
+  . "${VSI_COMMON_DIR}/linux/print_command"
+
+  export x=15
+  print_command_save_env
+  function foo()
+  {
+    local x
+
+    value="$(print_command_env hi)"
+
+    if [ "${BASH_VERSINFO[0]}" = "4" -a "${BASH_VERSINFO[1]}" -lt "3" ] || [ "${BASH_VERSINFO[0]}" -lt "4" ]; then
+      assert_str_eq "${value}" "(unset x; hi)"
+    else
+      assert_str_eq "${value}" "hi"
+    fi
+  }
+  foo
 )
 end_test

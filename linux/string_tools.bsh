@@ -4,6 +4,12 @@ if [[ $- != *i* ]]; then
   source_once &> /dev/null && return 0
 fi
 
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
+
+source "${VSI_COMMON_DIR}/linux/compat.bsh"
+
 #*# linux/string_tools
 
 #**
@@ -313,7 +319,7 @@ function regex_escape_range()
 #
 # Converts a string to uppercase, using ``bash`` or ``tr``
 #**
-if [ ${BASH_VERSINFO[0]} -ge 4 ]; then
+if [ "${bash_feature_case_modification}" = "0" ]; then
   function uppercase()
   {
     echo "${1^^}"
@@ -333,7 +339,7 @@ fi
 #
 # Converts a string to lowercase, using ``bash`` or ``tr``
 #**
-if [ ${BASH_VERSINFO[0]} -ge 4 ]; then
+if [ "${bash_feature_case_modification}" = "0" ]; then
   function lowercase()
   {
     echo "${1,,}"
@@ -448,4 +454,44 @@ function _null_dump()
 
   # Mark the next line will not be the first line, so the logic works.
   _null_dump_first_line=0
+}
+
+#**
+# .. function:: strip_ansi
+#
+# Removes ANSI codes from a string
+#
+# :Arguments: * ``$1``... - Strings to be concatenated (space separated).
+# :Output: *stdout* - The ANSI Free string
+#
+# Removes any ANSI CSI, OSC, ST, DCS, SOS, PM, or APC codes. All other ANSI codes are removed assuming there are no data bytes. If any of the "other" codes do have data bytes, they will leak into the output.
+#
+# .. seealso::
+#   :func:`strip_ansi_stream`
+#**
+function strip_ansi()
+{
+  local IFS=' '
+
+  if [ "${1::1}" = "-" ]; then
+    # Printf is 1000 times slower in windows (fork cost), so only use it if
+    # you have to. The only time this is an issue, is if you use -e -E -n
+    printf '%s' "${*}" | strip_ansi_stream
+  else
+    echo -n "${*}" | strip_ansi_stream
+  fi
+}
+
+#**
+# .. function:: strip_ansi_stream
+#
+# Streaming version of :func:`strip_ansi`, using ``stdin``.
+#**
+# https://superuser.com/a/1570726/352118
+function strip_ansi_stream()
+{
+  sed -${sed_flag_rE}  $'s|\x1b\\[[0-\\?]*[ -/]*[@-~]||g;
+                         s|\x1b[PX^_][^\x1b]*\x1b\\\\||g;
+                         s:\x1b\\][^\x07]*(\x07|\x1b\\\\)::g;
+                         s|\x1b[@-_]||g'
 }

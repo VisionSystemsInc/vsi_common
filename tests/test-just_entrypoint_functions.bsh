@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 
-. "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
-. "$(dirname "${BASH_SOURCE[0]}")/test_utils.bsh"
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
 
-VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
-. "${VSI_COMMON_DIR}/linux/just_entrypoint_functions"
+source "${VSI_COMMON_DIR}/tests/testlib.bsh"
+source "${TESTLIB_DIR}/test_utils.bsh"
+source "${VSI_COMMON_DIR}/linux/just_files/just_entrypoint_functions"
 
 # Dummy function that shouldn't be needed, hence being false
 gosu()
@@ -52,8 +54,8 @@ begin_test "default setup user"
 
   read_file passwd mocked_passwd
   read_file group mocked_group
-  check_a mocked_passwd "user:x:1000:1000::/home/user:`which bash`" "${init_passwd[@]}"
-  check_a mocked_group "user:x:1000:" "${init_group[@]}"
+  assert_array_values mocked_passwd "user:x:1000:1000::/home/user:$(command -v bash)" "${init_passwd[@]}"
+  assert_array_values mocked_group "user:x:1000:" "${init_group[@]}"
   [ "$(cat mockout)" = $'mkdir -p /home/user\nchown 1000:1000 /home/user' ]
 )
 end_test
@@ -73,8 +75,8 @@ begin_test "custom setup user"
 
   read_file passwd mocked_passwd
   read_file group mocked_group
-  check_a mocked_passwd "foo:x:100:0::/nothome/foobar:`which bash`" "${init_passwd[@]}"
-  check_a mocked_group "bar:x:102:foo" "open:x:101:foo" "${init_group[0]}" "daemon:x:1:root,foo"
+  assert_array_values mocked_passwd "foo:x:100:0::/nothome/foobar:$(command -v bash)" "${init_passwd[@]}"
+  assert_array_values mocked_group "bar:x:102:foo" "open:x:101:foo" "${init_group[0]}" "daemon:x:1:root,foo"
   [ "$(cat mockout)" = $'mkdir -p /nothome/foobar\nchown 100:0 /nothome/foobar' ]
 )
 end_test
@@ -90,8 +92,8 @@ begin_test "setup user only"
 
   read_file passwd mocked_passwd
   read_file group mocked_group
-  check_a mocked_passwd "user:x:1000:1000::/home/user:`which bash`" "${init_passwd[@]}"
-  check_a mocked_group "${init_group[@]}"
+  assert_array_values mocked_passwd "user:x:1000:1000::/home/user:$(command -v bash)" "${init_passwd[@]}"
+  assert_array_values mocked_group "${init_group[@]}"
   [ "$(cat mockout)" = $'mkdir -p /home/user\nchown 1000:1000 /home/user' ]
 )
 end_test
@@ -107,8 +109,8 @@ begin_test "setup group only"
 
   read_file passwd mocked_passwd
   read_file group mocked_group
-  check_a mocked_passwd "${init_passwd[@]}"
-  check_a mocked_group "user:x:1000:" "${init_group[@]}"
+  assert_array_values mocked_passwd "${init_passwd[@]}"
+  assert_array_values mocked_group "user:x:1000:" "${init_group[@]}"
   [ ! -f mockout ]
 )
 end_test
@@ -127,7 +129,7 @@ begin_test "posix groups"
   docker_setup_user
 
   read_file group mocked_group
-  check_a mocked_group \
+  assert_array_values mocked_group \
           "group2:x:1005:user" \
           "group:x:1004:user" \
           "okdoe1:x:1003:user" \
@@ -153,7 +155,7 @@ begin_test "nonposix groups"
   docker_setup_user
 
   read_file group mocked_group
-  check_a mocked_group \
+  assert_array_values mocked_group \
           "@#$%^&:x:1005:user" \
           "@#$%^&*:x:1004:user" \
           "ok@#$%^&*doe:x:1003:user" \

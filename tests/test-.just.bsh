@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 
-. "$(dirname "${BASH_SOURCE[0]}")/testlib.bsh"
-. "$(dirname "${BASH_SOURCE[0]}")/test_utils.bsh"
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
 
-VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
-. "${VSI_COMMON_DIR}/linux/.just"
+source "${VSI_COMMON_DIR}/tests/testlib.bsh"
+source "${TESTLIB_DIR}/test_utils.bsh"
+source "${VSI_COMMON_DIR}/linux/just_files/.just"
+source "${VSI_COMMON_DIR}/linux/compat.bsh"
 
 begin_test "just tab complete"
 (
@@ -55,54 +58,54 @@ begin_test "just tab complete"
   COMP_WORDS=(just)
   _just just '' just
   # Manually parse defaultify targets, so I quit breaking this test
-  ans1=($(sed -En '/^ *-[a-z|-]+\) *#.*/{s:^ *(-[a-z|-]+)\) *#.*:\1:; s/\|/'$'\\\n/g; p;}' "${VSI_COMMON_DIR}/linux/just_functions.bsh"))
+  ans1=($(sed -${sed_flag_rE}n '/^ *-[a-z|-]+\) *#.*/{s:^ *(-[a-z|-]+)\) *#.*:\1:; s/\|/'$'\\\n/g; p;}' "${VSI_COMMON_DIR}/linux/just_files/just_functions.bsh"))
   ans=(a -a apple b cat d dog -flag foo -jump -ocean -rope -sea snake -water "${ans1[@]}")
   # Resort it because macOS sorts weird. I mean REALLY weird. Must be the locale
   ans=($(IFS=$'\n'; sort <<< "${ans[*]}"))
   sub_ans=(e read run stop)
-  check_a COMPREPLY "${ans[@]}" "${sub_ans[@]}"
+  assert_array_values COMPREPLY "${ans[@]}" "${sub_ans[@]}"
 
   # Simple case
   COMP_WORDS=(just f)
   _just just f just
-  check_a COMPREPLY foo
+  assert_array_values COMPREPLY foo
 
   COMP_WORDS=(just a)
   _just just a just
-  check_a COMPREPLY a apple
+  assert_array_values COMPREPLY a apple
 
   COMP_WORDS=(just c)
   _just just c just
-  check_a COMPREPLY cat
+  assert_array_values COMPREPLY cat
 
   COMP_WORDS=(just ap)
   _just just ap just
-  check_a COMPREPLY apple
+  assert_array_values COMPREPLY apple
 
   # Subcommand case
   COMP_WORDS=(just run)
   _just just "" run
-  check_a COMPREPLY car house garage
+  assert_array_values COMPREPLY car house garage
 
   COMP_WORDS=(just read qw)
   _just just qw read
-  check_a COMPREPLY qwe qwert qwerty qwebar
+  assert_array_values COMPREPLY qwe qwert qwerty qwebar
 
   # This is known problem
   # COMP_WORDS=(just stop)
   # _just just "" stop
-  # check_a COMPREPLY
+  # assert_array_values COMPREPLY
   # The * will evaluate to err Justfile out, and any other files in the CWD
 
   # Flag case
   COMP_WORDS=(just run car -s)
   _just just -s car
-  check_a COMPREPLY -sea
+  assert_array_values COMPREPLY -sea
 
   # Subsequent subcommand case
   COMP_WORDS=(just run car)
   _just just "" car
-  check_a COMPREPLY "${ans[@]}" car house garage "${sub_ans[@]}"
+  assert_array_values COMPREPLY "${ans[@]}" car house garage "${sub_ans[@]}"
 
   echo 'if [ "${3}" = "-jump" ]; then
           just_commands+=("rope")
@@ -112,11 +115,11 @@ begin_test "just tab complete"
   # Run with custom .just
   COMP_WORDS=(just run)
   _just just "" run
-  check_a COMPREPLY bus car house garage
+  assert_array_values COMPREPLY bus car house garage
 
   COMP_WORDS=(just -jump)
   _just just "" -jump
-  check_a COMPREPLY "${ans[@]}" rope "${sub_ans[@]}"
+  assert_array_values COMPREPLY "${ans[@]}" rope "${sub_ans[@]}"
 
 )
 end_test
