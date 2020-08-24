@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
+
+source "${VSI_COMMON_DIR}/tests/testlib.bsh"
+source "${VSI_COMMON_DIR}/linux/git_mirror"
+
+function setup()
+{
+  PRETEND_REPO="${TRASHDIR}/pretend_repo"
+
+  mkdir -p "${PRETEND_REPO}"
+  mkdir -p "${PRETEND_REPO}_prep"/main
+  mkdir -p output_prep/main
+  touch "${PRETEND_REPO}_prep"/main/config output_prep/main/config
+}
+
+function git()
+{
+  echo "${PRETEND_REPO}"
+}
+
+begin_test "Argument parsing"
+(
+  setup_test
+
+  # This is the first function to run after the arguments are parsed and these
+  # env variables are set
+  function mkdir()
+  {
+    if [ "${GIT_MIRROR_PREP_DIR}" = "${PRETEND_REPO}_prep" ]; then
+      echo pass
+    else
+      echo fail
+    fi
+    exit 0 # short circuit
+  }
+
+  pushd "${TRASHDIR}" &> /dev/null
+    [ "$(git_mirror_repos "${PRETEND_REPO}")" = "pass" ]
+  popd &> /dev/null
+
+
+  function mkdir()
+  {
+    # PREP_DIR must be an absolute path (otherwise git lfs hangs for some reason)
+    if [ "${GIT_MIRROR_PREP_DIR}" = "${TRASHDIR}/output_prep" ]; then
+      echo pass
+    else
+      echo fail
+    fi
+    exit 0 # short circuit
+  }
+
+  pushd "${TRASHDIR}" &> /dev/null
+    [ "$(git_mirror_repos "${PRETEND_REPO}" some_branch "${TRASHDIR}"/output_prep)" == "pass" ]
+    [ "$(git_mirror_repos "${PRETEND_REPO}" some_branch output_prep)" = "pass" ]
+  popd &> /dev/null
+)
+end_test
+
+begin_test "Argument parsing based on existing prep dir"
+(
+  setup_test
+
+  [ -d "${PRETEND_REPO}_prep" ] # run from an existing prep_dir
+
+  function mkdir()
+  {
+    if [ "${GIT_MIRROR_PREP_DIR}" = "${PRETEND_REPO}_prep" ] && \
+       [ "${GIT_MIRROR_MAIN_REPO}" = "${PRETEND_REPO}" ]; then
+      echo pass
+    else
+      echo fail
+    fi
+    exit 0 # short circuit
+  }
+
+  pushd "${TRASHDIR}" &> /dev/null
+    [ "$(git_mirror_repos "${PRETEND_REPO}_prep")" = "pass" ]
+    [ "$(git_mirror_repos "$(basename "${PRETEND_REPO}_prep")")" = "pass" ]
+  popd &> /dev/null
+)
+end_test
+
