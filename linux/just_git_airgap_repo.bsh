@@ -1062,6 +1062,8 @@ function relocate_git_defaultify()
         echo
       fi
 
+      JUST_IGNORE_EXIT_CODES=3
+
       local check_remote
       local remote_name
       local prep_dir
@@ -1090,7 +1092,7 @@ function relocate_git_defaultify()
             echo "                            [-r|--remote-name] [-p|--prep-dir]"
             echo "                            [-o|--output-dir] [-h|--help]"
             echo
-            exit 1
+            return 123
             ;;
           # The branch from which to identify the submodules
           -b|--branch)
@@ -1135,23 +1137,23 @@ function relocate_git_defaultify()
             ;;
           -*|--*)
             echo "Unknown flag: $1"
-            exit 1
+            return 123
             ;;
           *)
             echo "Positional arguments are not allowed: $1"
-            exit 1
+            return 123
             ;;
         esac
       done
       # Only prep_dir xor remote_name can be set
       if [ -n "${prep_dir+x}" ] && [ -n "${remote_name+x}" ]; then
         echo "Only one of --prep-dir and --remote-name can be given"
-        exit 1
+        return 123
       fi
       # Only prep_dir xor output_dir can be set
       if [ -n "${prep_dir+x}" ] && [ -n "${output_dir+x}" ]; then
         echo "Only one of --prep_dir and --output_dir can be given"
-        exit 1
+        return 123
       fi
 
 
@@ -1164,7 +1166,7 @@ function relocate_git_defaultify()
         # RE We won't worry about that use case now
         echo "This repository has no remotes. Please push the repo to a"
         echo "git server and try again."
-        exit 1
+        return 123
       fi
 
       local remote_names
@@ -1191,7 +1193,7 @@ function relocate_git_defaultify()
         # Validate remote_name is a git remote
         if ! isin "${remote_name}" "${valid_remote_names[@]}"; then
           echo "ERROR Unknown git remote provided with flag --remote-name: ${remote_name}"
-          exit 1
+          return 123
         fi
 
         remote_names=("${remote_name}")
@@ -1228,7 +1230,7 @@ function relocate_git_defaultify()
             # have an associated remote url
             echo "ERROR This repository is misconfigured: it has no urls for remote '${remote_name}'."
             echo "Please fix!"
-            exit 1
+            return 123
           fi
           associated_remote_urls+=("${remote_urls[@]}")
           local i
@@ -1238,7 +1240,7 @@ function relocate_git_defaultify()
         done
         if [ "${#associated_remote_names[@]}" -ne "${#associated_remote_urls[@]}" ]; then
           echo "ASSERT These two arrays are expected to have the same length"
-          exit 1
+          return 123
         fi
 
         if [ "${#associated_remote_urls[@]}" -eq 0 ]; then
@@ -1248,7 +1250,7 @@ function relocate_git_defaultify()
           # has at least 1 url (consequently, cannot test)
           echo "ERROR This repository is misconfigured: it has no remote urls."
           echo "Please fix!"
-          exit 1
+          return 123
         elif [ "${#associated_remote_urls[@]}" -eq 1 ]; then
           remote_name="${associated_remote_names[0]}"
           remote_url="${associated_remote_urls[0]}"
@@ -1292,7 +1294,7 @@ function relocate_git_defaultify()
           popd &> /dev/null
         else
           echo "ERROR ${prep_dir} does not look like a PREP_DIR"
-          exit 1
+          return 123
         fi
       fi
 
@@ -1302,7 +1304,7 @@ function relocate_git_defaultify()
       if [ "${#valid_branches[@]}" -eq 0 ]; then
         echo "ERROR This repository is misconfigured: it has no branches."
         echo "Please fix!"
-        exit 1
+        return 123
       fi
 
       local branch
@@ -1329,7 +1331,7 @@ function relocate_git_defaultify()
         # Validate branch is a git branch
         if ! isin "${branch}" "${valid_branches[@]}"; then
           echo "ERROR Unknown git branch provided with flag --branch: ${branch}"
-          exit 1
+          return 123
         fi
       fi
 
@@ -1363,7 +1365,7 @@ function relocate_git_defaultify()
           echo "changes to this repository and its submodules have been pushed"
           echo "to their respective remote servers."
           ask_question "Continue?" response n
-          [ "$response" == "0" ] && exit 1
+          [ "$response" == "0" ] && return 123
         fi
       fi
 
