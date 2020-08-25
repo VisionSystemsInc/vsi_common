@@ -109,7 +109,7 @@ GIT_VERSION="$(git_version)"
 #   get_submodule_names() # from within ./vsi_common/
 #   # submodule.docker/recipes
 #
-# .. rubric:: Note
+# .. note::
 #
 # Unlike ``git submodule foreach --quiet 'echo "${name}"'``, this function works for submodules that have been init'd but not updated
 #
@@ -344,17 +344,20 @@ function update_submodules()
 #
 # Downloads a mirror of a git repository and all of its submodules. The normal ``git clone --mirror`` command does not support submodules at all. This at least clones all the submodules available in the specified branch (master by default).
 #
-# The script creates a directory, ``{repo_name}_prep``, which will contain all of the repositories plus a single ``transfer_{date}.tgz`` archive file containing all the repositories, lfs objects, etc... Only this `tgz` file needs to be transferred to your destination.
+# The script creates a directory, referred to as a prep directory (or prep_dir), which will contain all of the repositories plus a single ``transfer_{date}.tgz`` archive file containing all the repositories, lfs objects, etc... Only this `tgz` file needs to be transferred to your destination.
 #
-# Subsequent calls to :func:`git_mirror_main` use the existing ``{repo_name}_prep`` directory as cache, updating faster than the last time.
+# Subsequent calls to :func:`git_mirror_main` can use the existing prep directory as cache, updating faster than the first time.
 #
-# Subsequent calls also create a second ``tgz`` file, ``transfer_{date1}_transfer_{date2}.tgz``. This is an incremental archive file. Instead of having to bring in an entire archive, only the incremental file is needed (plus the original full archive).
+# Subsequent calls also create a second ``tgz`` file, ``transfer_{date1}_transfer_{date2}.tgz`` (on supported platforms). This is an incremental archive file. Instead of having to bring in an entire archive, only the incremental file is needed (plus the original full archive).
 #
 # After you have moved the transfer archive to its destination, you can use :func:`git_push_main` to push these mirrored repositories to a new git server.
 #
-# :Arguments: * ``$1`` - URL of the main git repository. On subsequent calls to this function, the prep (cache) dir created by this function can be used in lue of the repository's URL
-#             * [``$2``] - The git branch from which to identify the submodules. Default: master
-# :Output: A directory, ``{repo_name}_prep``, which will contain all of the repositories plus a single ``transfer_{date}.tgz``
+# :Arguments: - ``$1`` - URL of the main git repository. On subsequent calls to this function, the prep (cache) dir created by this function can be used in lue of the repository's URL
+#             - [``$2``] - The git branch from which to identify the submodules. Default: master
+#             - [``$3``] - The path at which to create the prep directory; ``GIT_MIRROR_PREP_DIR`` will be set to this path. Default: ``${PWD}/{repo_name}_prep``
+# :Output: - A prep directory which will contain all of the repositories plus a single ``transfer_{date}.tgz``
+#          - ``GIT_MIRROR_PREP_DIR`` - The path to the prep directory
+#          - ``GIT_MIRROR_MAIN_REPO`` - The main repository's name. Based off of ``$1``; e.g., vsi_common.git if the URL is https://github.com/VisionSystemsInc/vsi_common.git
 #
 # .. rubric:: Example
 #
@@ -387,9 +390,9 @@ function update_submodules()
 #
 # tar zxf transfer_2020_03_02_14_24_12.tgz
 #
-# .. rubric:: Note
+# .. note::
 #
-# ``git_mirror_main`` does not mirror all submodules that have ever been part of the repo, only those from a specific branch/sha/tag you specify (master by default). This is because trying to mirror all submodules from the past could be very lengthy, and is very likely to include urls that do not exist anymore.
+# ``git_mirror_main`` does not mirror all submodules that have ever been part of the repo, only those from a specific branch/SHA/tag you specify (master by default). This is because trying to mirror all submodules from the past could be very lengthy, and is very likely to include urls that do not exist anymore.
 #
 # .. rubric:: Bugs
 #
@@ -402,9 +405,36 @@ function git_mirror_main()
   archive_mirrors "${GIT_MIRROR_PREP_DIR}"
 }
 
-# TODO: Add documentation
-# :Output: - ``GIT_MIRROR_PREP_DIR``
-#          - ``GIT_MIRROR_MAIN_REPO``
+#**
+# .. function:: git_mirror_repos
+#
+# Mirror the main repository and all submodules (recursively)
+#
+# Downloads a mirror of a git repository and all of its submodules. The normal ``git clone --mirror`` command does not support submodules at all. This at least clones all the submodules available in the specified branch (master by default).
+#
+# Creates a directory, referred to as a prep directory (or prep_dir), which will contain all of the repositories. Subsequent calls to :func:`git_mirror_repos` can use the existing prep directory as cache, updating faster than the first time.
+#
+# :Arguments: - ``$1`` - URL of the main git repository. On subsequent calls to this function, the prep (cache) directory created by this function can be used in lue of the repository's URL
+#             - [``$2``] - The git branch from which to identify the submodules. Default: master
+# REVIEW Perhaps this argument shouldn't exist; you should just be able to override GIT_MIRROR_PREP_DIR
+#             - [``$3``] - The path at which to create the the prep directory; ``GIT_MIRROR_PREP_DIR`` will be set to this path. Default: ``${PWD}/{repo_name}_prep``
+# :Output: - A prep directory which will contain all of the repositories
+#          - ``GIT_MIRROR_PREP_DIR`` - The path to the prep directory
+#          - ``GIT_MIRROR_MAIN_REPO`` - The main repository's name. Based off of ``$1``; e.g., vsi_common.git if the URL is https://github.com/VisionSystemsInc/vsi_common.git
+#
+# .. note::
+#
+# :func:`git_mirror_repos` does not mirror all submodules that have ever been part of the repo, only those from a specific branch/SHA/tag you specify (master by default). This is because trying to mirror all submodules from the past could be very lengthy, and is very likely to include urls that do not exist anymore.
+#
+# .. rubric:: Bugs
+#
+#   If the first argument is a local path to a git repository (as opposed to a URL or a path to an existing prep dir), it must be an absolute path.
+#
+# .. seealso::
+#
+#   :func:`git_mirror_main`
+#**
+
 function git_mirror_repos()
 {
   if [[ $# = 0 ]]; then
@@ -492,6 +522,25 @@ function git_mirror_repos()
   # Reset the color
   echo -n $'\e[0m'
 }
+
+#**
+# .. function:: archive_mirrors
+#
+# Create an archive of the mirrored repositories in a prep directory
+#
+# Creates a ``transfer_{date}.tgz`` archive file of the prep directory (prep_dir) created by :func:`git_mirror_repos`, which contains all of the repositories, lfs objects, etc... Only this `tgz` file needs to be transferred to your destination.
+#
+# Subsequent calls also create a second ``tgz`` file, ``transfer_{date1}_transfer_{date2}.tgz`` (on supported platforms). This is an incremental archive file. Instead of having to bring in an entire archive, only the incremental file is needed (plus the original full archive).
+#
+# After you have moved the transfer archive to its destination, you can use :func:`git_push_main` to push these mirrored repositories to a new git server.
+#
+# :Arguments: - ``$1`` - The prep (cache) directory created by :func:`git_mirror_repos`
+# :Output: A ``transfer_{date}.tgz`` archive file and, on subsequent calls, an incremental ``transfer_{date1}_transfer_{date2}.tgz``
+#
+# .. seealso::
+#
+#   :func:`git_mirror_main`
+#**
 
 function archive_mirrors()
 {
@@ -749,9 +798,9 @@ function usage()
   echo "  clone REPO_MAP_FILE [DIR]    3) Clone recursively from the new mirror" >&2
   echo >&2
   echo "Example REPO_MAP_FILE:" >&2
-  echo "  repos[.]='https://mygithub.com/foo/superproject.git'">&2
-  echo "  repos[external/submodule1]='https://mygithub.com/foo/submodule1.git'">&2
-  echo "  repos[external/submodule1/submodule2]='https://mygithub.com/foo/subsubmodule2.git'">&2
+  echo "  repos[.]='https://git-server.com/foo/superproject.git'">&2
+  echo "  repos[external/submodule1]='https://git-server.com/foo/submodule1.git'">&2
+  echo "  repos[external/submodule1/submodule2]='https://git-server.com/foo/subsubmodule2.git'">&2
 }
 
 if [ "${BASH_SOURCE[0]}" = "${0}" ] || [ "$(basename "${BASH_SOURCE[0]}")" = "${0}" ]; then
