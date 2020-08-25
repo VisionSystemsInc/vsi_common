@@ -19,6 +19,25 @@ fi
 #**
 
 #**
+# .. envvar:: JUST_URI_REGEX
+#
+# A (best-effort) regex to parse a URL
+#
+# The following regex is based on https://tools.ietf.org/html/rfc3986#appendix-B with additional sub-expressions to split authority into userinfo, host and port
+#
+# .. warning::
+#
+#   Parsing URLs 100% correctly is HARD. This is not that solution.
+#**
+
+JUST_URI_REGEX='^(([^:/?#]+):)?(//((([^:/?#]+)@)?([^:/?#]+)(:([0-9]+))?))?(/([^?#]*))(\?([^#]*))?(#(.*))?'
+#                  ||            |  |||            |         | |            | |        |  |        | |
+#                  |2 scheme     |  ||6 userinfo   7 host    | 9 port       | 11 rpath |  13 query | 15 fragment
+#                  1 scheme:     |  |5 userinfo@             8 :...         10 path    12 ?...     14 #...
+#                                |  4 authority
+#                                3 //...
+
+#**
 # .. function:: parse_url
 #
 # Parse a URL
@@ -51,23 +70,13 @@ function parse_url()
   arg="${1}"
 
   local URI_BASIC_REGEX='^(([^:/?#]+):)?(//((([^:/?#]+)@)?([^:/?#]+)(:([0-9]+))?))?$'
-  # Note: No quotes around URI_REGEX
+  # No quotes around URI_BASIC_REGEX
   if [[ "${arg}" =~ ${URI_BASIC_REGEX} ]]; then
     arg="${arg}/"
   fi
 
-  # Following regex is based on https://tools.ietf.org/html/rfc3986#appendix-B
-  # with additional sub-expressions to split authority into userinfo, host and
-  # port
-  local URI_REGEX='^(([^:/?#]+):)?(//((([^:/?#]+)@)?([^:/?#]+)(:([0-9]+))?))?(/([^?#]*))(\?([^#]*))?(#(.*))?'
-  #                  ||            |  |||            |         | |            | |        |  |        | |
-  #                  |2 scheme     |  ||6 userinfo   7 host    | 9 port       | 11 rpath |  13 query | 15 fragment
-  #                  1 scheme:     |  |5 userinfo@             8 :...         10 path    12 ?...     14 #...
-  #                                |  4 authority
-  #                                3 //...
-
-  # Note: No quotes around URI_REGEX
-  if [[ "${arg}" =~ ${URI_REGEX} ]]; then
+  # No quotes around JUST_URI_REGEX
+  if [[ "${arg}" =~ ${JUST_URI_REGEX} ]]; then
     just_url_parsed_scheme="${BASH_REMATCH[2]}"
     just_url_parsed_authority="${BASH_REMATCH[4]}"
     #just_url_parsed_user="${BASH_REMATCH[6]}"
