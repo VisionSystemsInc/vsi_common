@@ -668,7 +668,9 @@ function orphan_commit_repo_map
   # TODO Clone into an automatically deleting temporary directory; requires
   # mktemp_compat from dir_tools.bsh
   # RE This temp dir does not auto-delete
+  # RE Can use make_temp_path -d path/to/tmp.XXXXXX
   # NOTE Do not redirect stdout to /dev/null
+  # TODO Replace with dir_tools.bsh:is_dir_empty
   if [ -n "$(ls -A __just_git_clone 2>/dev/null || :)" ]; then
     echo "The temporary directory, ./__just_git_clone, already exists and is"
     echo "not empty. This script will delete it and continue."
@@ -1030,7 +1032,7 @@ function recursively_check_submodules_are_public()
 {
   git_sync_submodules_recursively ${@+"${@}"}
 
-  local recursive_index=-1 # HACKY
+  local recursive_index=-1
   local is_tracked_change_private=0
   _recursively_check_submodules_are_public
 }
@@ -1077,8 +1079,10 @@ function _recursively_check_submodules_are_public()
     popd &>/dev/null
   done
 
+  # Check all submodules before returning a (potential) failure code
+  # RE Alternatively, short circuit and return early
   if [ "${recursive_index}" -eq 0 ]; then
-    return ${is_tracked_change_private}
+    return "${is_tracked_change_private}"
   fi
 }
 
@@ -1432,6 +1436,7 @@ function relocate_git_defaultify()
         popd &>/dev/null
       fi
       # REVIEW Could test to ensure output_dir either doesn't exist or is empty
+      # (e.g., with dir_tools.bsh:is_dir_empty)
 
       justify git_export-repo "${remote_url}" "${branch}" "${output_dir}"
       ;;
