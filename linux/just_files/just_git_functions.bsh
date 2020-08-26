@@ -311,30 +311,46 @@ function safe_git_submodule_update()
 
 git_reattach_heads()
 {
-  local submodule_paths
-  if [ $# -eq 0 ]; then
-    local OLD_IFS="${IFS}"
-    IFS=$'\n'
-    submodule_paths=($(${GIT} submodule foreach --quiet --recursive 'echo ${prefix-${displaypath}}'))
-    IFS="${OLD_IFS}"
-  else
-    submodule_paths=("${@}")
-  fi
+  # git submodule foreach must be run from the top-level working tree in git 1.8
+  pushd "$(_up_path)" &> /dev/null
+    local submodule_paths
+    if [ $# -eq 0 ]; then
+      local OLD_IFS="${IFS}"
+      IFS=$'\n'
+      submodule_paths=($(${GIT} submodule foreach --quiet --recursive 'echo ${prefix-${displaypath}}'))
+      IFS="${OLD_IFS}"
+    else
+      submodule_paths=("${@}")
+    fi
 
-  local submodule_path
-  for submodule_path in "${submodule_paths[@]}"; do
-    echo "Entering '${submodule_path}'"
-    pushd "${submodule_path}" &>/dev/null
-      # If detached, get SHA & first branch name, and then reattach
-      if [ "$(${GIT} rev-parse --abbrev-ref --symbolic-full-name HEAD)" = "HEAD" ]; then
-        local current_sha="$(${GIT} rev-parse HEAD)"
-        local branch_name="$(${GIT} show-ref --heads | sed -n${sed_flag_rE} "/^${current_sha} .*/{ s|.*/(.*)|\1|; p; q;}")"
-        if [ "${branch_name}" != "" ]; then
-          ${GIT} checkout "${branch_name}"
+    local submodule_path
+    for submodule_path in "${submodule_paths[@]}"; do
+      echo "Entering '${submodule_path}'"
+      pushd "${submodule_path}" &>/dev/null
+        # If detached, get SHA & first branch name, and then reattach
+        if [ "$(${GIT} rev-parse --abbrev-ref --symbolic-full-name HEAD)" = "HEAD" ]; then
+          local current_sha="$(${GIT} rev-parse HEAD)"
+          local branch_name="$(${GIT} show-ref --heads | sed -n${sed_flag_rE} "/^${current_sha} .*/{ s|.*/(.*)|\1|; p; q;}")"
+          if [ "${branch_name}" != "" ]; then
+            ${GIT} checkout "${branch_name}"
+          fi
         fi
-      fi
-    popd &>/dev/null
-  done
+      popd &>/dev/null
+    done
+  popd &> /dev/null
+}
+
+function _up_path()
+{
+  # Relative path from the root of the current repository to the CWD
+  local prefix="$(git rev-parse --show-prefix)"
+  # Remove trailing slash
+  prefix="${prefix%/}"
+  # Based on https://github.com/git/git/blob/v2.16.0/git-submodule.sh#L1060
+  # Rewrite foo/bar as ../.. to find path from the CWD to the root of the
+  # current repository
+  local up_path="$(printf '%s\n' "${prefix}" | sed "s/[^/][^/]*/../g")"
+  echo "${up_path}"
 }
 
 #**
