@@ -132,6 +132,7 @@ function _log_commits_helper()
 # Find remote- and corresponding local-tracking branches
 #
 # :Arguments: - [``$1``] - A name of a remote to filter by; e.g., origin. If unset, then don't filter
+#             - [``$2``] - A local-tracking branch's name to filter by; e.g., master. If unset, then don't filter by branch name
 #
 # :Output: - ``just_git_tracking_branches`` - An array of local-tracking branch names
 #          - ``just_git_remote_tracking_branches`` - A corresponding array of remote-tracking branch names
@@ -142,16 +143,20 @@ function _log_commits_helper()
 #   - A branch cannot track multiple remotes.
 #**
 
-# REVIEW Should this support getting the tracking branch of a specific branch
 function get_tracking_branches()
 {
   # REVIEW Could support multiple named remotes with a for loop
   local remote_name="${1-}"
 
-  local OLD_IFS="${IFS}"
-  IFS=$'\n'
-  local branches=($(${GIT} for-each-ref --format='%(refname:short)' refs/heads))
-  IFS="${OLD_IFS}"
+  local branches
+  if [ $# -lt 2 ]; then
+    local OLD_IFS="${IFS}"
+    IFS=$'\n'
+    branches=($(${GIT} for-each-ref --format='%(refname:short)' refs/heads))
+    IFS="${OLD_IFS}"
+  else
+    branches=("${2}")
+  fi
 
   just_git_tracking_branches=()
   just_git_remote_tracking_branches=()
@@ -172,6 +177,10 @@ function get_tracking_branches()
     just_git_tracking_branches+=("${branch}")
     just_git_remote_tracking_branches+=("${remote_branch}")
   done
+  # If a branch was specified, then echo its respective tracking branch
+  if [ $# -eq 2 ]; then
+    echo "${just_git_remote_tracking_branches[0]}"
+  fi
   #
   # Alternatively,
   #   git for-each-ref --format='%(upstream:short) %(refname) %(upstream:track)' refs/heads
