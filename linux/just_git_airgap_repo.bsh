@@ -392,7 +392,7 @@ function submodule_summary()
 #
 # Get the displaypath to each submodule
 #
-# Get what git refers to as the displaypath of the submodule: the relative path from the current working directory to the root of the containing repository and then to each submodule. This path is defined by the git-specified environment variable displaypath (or prefix depending on git version).
+# Get what git refers to as the displaypath of the submodule: the relative path from the current working directory to the root of the containing repository and then to each submodule. This path is defined by the git-specified environment variable, displaypath (or prefix depending on git version).
 #
 # :Output: *stdout* - The displaypath to each submodule (recursively); e.g., docker/recipes
 #
@@ -408,9 +408,9 @@ function submodule_summary()
 #
 #   which reads what is in the parent repository's .gitmodules file.
 #
-# If path is set, ``git submodule sync`` will synchronize these two configurations using the primary source-of-truth, the .gitmodules file, and the default remote of the current branch, if set; otherwise origin. :func:`git_sync_submodules_recursively` will do the same but using the specified remote name.
-#
 # Admittedly, by themselves, these commands not very useful. :func:`git_mirror get_submodule_names` uses ``git config --name-only --get-regexp '^submodule\..*\.url$' | sed 's|.url$||'`` to first query the submodule names and then lookup their paths.
+#
+# If path is set, ``git submodule sync`` will synchronize these two configurations using the primary source-of-truth, the .gitmodules file, and the default remote of the current branch, if set; otherwise origin. :func:`git_sync_submodules_recursively` will do the same but using the specified remote.
 #
 # .. note::
 #
@@ -423,9 +423,22 @@ function submodule_summary()
 
 function get_submodule_paths_recursively()
 {
-  local OLD_IFS="${IFS}"
-  IFS=$'\n'
-  local submodule_path
+  # Relative path from the root of the current repository to the CWD
+  local relative_cwd="$(git rev-parse --show-prefix)"
+  # Remove trailing slash
+  relative_cwd="${relative_cwd%/}"
+  # Based on https://github.com/git/git/blob/v2.16.0/git-submodule.sh#L1060
+  # Rewrite foo/bar as ../.. to find path from the CWD to the root of the
+  # current repository
+  local up_path="$(printf '%s\n' "${relative_cwd}" | sed "s/[^/][^/]*/../g")"
+
+  local submodule_foreach_rv=0
+  pushd "${up_path}" &> /dev/null
+    # In git 1.8.3, git submodule foreach must be run in the top-level of the working tree
+    # git 1.8.3 does not support git -C
+    ${GIT} submodule foreach '[ -n "${prefix}" ]' &> /dev/null || submodule_foreach_rv=$?
+  popd &> /dev/null
+
   # At some point, prefix was deprecated and removed in favor of displaypath
   # NOTE prefix/displaypath only provides the expected path if this command is
   # run from the root of the top-level repository. Fortunately, that is the case
@@ -438,12 +451,27 @@ function get_submodule_paths_recursively()
   # https://github.com/git/git/blob/v2.16.0/git-submodule.sh#L304
   # Similarly, passing 'echo "${toplevel}/${sm_path}"' as the sh command to
   # git submodule foreach will print the absolute path of all the submodules
-  for submodule_path in $(${GIT} submodule foreach --quiet --recursive 'echo "${prefix-"${displaypath}"}"'); do
+  local OLD_IFS="${IFS}"
+  IFS=$'\n'
+  local submodule_paths
+  if [ "${submodule_foreach_rv}" -eq 0 ]; then
+    pushd "${up_path}" &> /dev/null
+      # In git 1.8.3, git submodule foreach must be run in the top-level of the working tree
+      # git 1.8.3 does not support git -C
+      submodule_paths=($(up_path="${up_path:+"${up_path}"/}" \
+          ${GIT} submodule foreach --quiet --recursive 'echo "${up_path}${prefix}"'))
+    popd &> /dev/null
+  else
+    submodule_paths=($(${GIT} submodule foreach --quiet --recursive 'echo "${displaypath}"'))
+  fi
+  IFS="${OLD_IFS}"
+  local submodule_path
+  for submodule_path in "${submodule_paths[@]}"; do
     # Remove trailing slashes because on some versions of git (1.8.3, 2.17.1),
     # prefix has a trailing slash
+    # RE It may be that prefix always has a trailing slash and displaypath does not
     echo "${submodule_path%/}"
   done
-  IFS="${OLD_IFS}"
 }
 
 #**
@@ -466,7 +494,7 @@ function get_submodule_paths_recursively()
 #
 #     ``git config -f .gitmodules submodule.docker/recipes.url``
 #
-#   which reads what is in the parent repository's .gitmodules file. ``git submodule sync`` will synchronize these two configurations using the primary source-of-truth, the .gitmodules file, and the default remote of the current branch, if set; otherwise origin. :func:`git_sync_submodules_recursively` will do the same but using the specified remote name.
+#   which reads what is in the parent repository's .gitmodules file. ``git submodule sync`` will synchronize these two configurations using the primary source-of-truth, the .gitmodules file, and the default remote of the current branch, if set; otherwise origin. :func:`git_sync_submodules_recursively` will do the same but using the specified remote.
 #
 # .. note::
 #
@@ -514,6 +542,7 @@ function get_submodule_urls_recursively()
 #
 #  If, for example, :envvar:`JUST_GIT_AIRGAP_MIRROR_URL` was set to
 #  https://git-server/projectA, these urls would expand to:
+#
 #    https://git-server/projectA/vsi_common.git and
 #    https://git-server/projectA/recipes.git
 #
@@ -620,7 +649,7 @@ function orphan_commit_repo_map
   #
   # TODO Clone into an automatically deleting temporary directory; requires
   # mktemp_compat from dir_tools.bsh
-  # RE this temp dir does not auto-delete
+  # RE This temp dir does not auto-delete
   # NOTE Do not redirect stdout to /dev/null
   if [ -n "$(ls -A __just_git_clone 2>/dev/null || :)" ]; then
     echo "The temporary directory, ./__just_git_clone, already exists and is"
@@ -930,7 +959,7 @@ function git_sync_submodules_recursively()
     # according to git. This is how git-submodule.sh checks for this:
     # https://github.com/git/git/blob/v2.16.0/git-submodule.sh#L1059
     if [[ "${submodule_url}" == "./"* ]] || [[ "${submodule_url}" == "../"* ]]; then
-      # based on https://github.com/git/git/blob/v2.16.0/git-submodule.sh#L1060
+      # Based on https://github.com/git/git/blob/v2.16.0/git-submodule.sh#L1060
       # rewrite foo/bar as ../.. to find path from
       # submodule work tree to superproject work tree
       local up_path="$(printf '%s\n' "$sm_path" | sed "s/[^/][^/]*/../g")"
