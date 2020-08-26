@@ -122,6 +122,18 @@ function caseify()
 
       exec pipenv run make SPHINXOPTS="${SPHINXOPTS-}" html
       ;;
+    intersphinx) # Show links from one intersphinx mapping
+      # https://www.sphinx-doc.org/en/master/usage/extensions/intersphinx.html#showing-all-links-of-an-intersphinx-mapping-file
+      cd /docs
+      INPUT="${1}"
+      URL="$(pipenv run python -c "import conf,posixpath; url=posixpath.join(conf.intersphinx_mapping['${INPUT}'][0], 'objects.inv'); print(url)" 2>/dev/null || echo "${INPUT}")"
+      echo "Fetch intersphinx mapping from <${URL}>..."
+      exec pipenv run python -m sphinx.ext.intersphinx "${URL}"
+      ;;
+    intersphinx-list) # List available intersphinx mapping
+      cd /docs
+      exec pipenv run python -c "import conf,json; print(json.dumps(conf.intersphinx_mapping, indent=2))"
+      ;;
     nopipenv) # Run command not in pipenv
       exec "${@}"
       ;;
