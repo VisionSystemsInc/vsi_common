@@ -258,7 +258,6 @@ fi
 #
 # :Arguments: ``$1`` - The project settings filename (e.g., vsi_common.env)
 #
-# REVIEW What does this do here
 # .. _source_environment_files:
 #
 # :Parameters: * [``JUST_LOCAL_SETTINGS``] - Path to the local settings file. Default: ${same_dir}/local.env
@@ -298,10 +297,9 @@ function source_environment_files()
 
   export JUST_SETTINGS
 
-  local JUST_LOCAL_SETTINGS
-  local JUST_LOCAL_SETTINGS_POST
-  # Sets JUST_LOCAL_SETTINGS and JUST_LOCAL_SETTINGS_POST
-  try_to_create_local_settings_file "${1}" || : # <== Fix for #84
+  local JUST_LOCAL_SETTINGS="${JUST_LOCAL_SETTINGS-}"
+  local JUST_LOCAL_SETTINGS_POST="${JUST_LOCAL_SETTINGS_POST-}"
+  try_to_create_local_settings_file "${1}" || :
 
   # if [ ! -e "${JUST_LOCAL_SETTINGS_POST}" ]; then
   #   echo "# Put local setting in this file" > "${JUST_LOCAL_SETTINGS_POST}"
@@ -381,14 +379,15 @@ function translate_just_settings()
 # :Return Value: * ``0`` - Settings file was created
 #                * ``1`` - Settings file was not created
 #
-# :Output: ``JUST_LOCAL_SETTINGS`` - Path to the local settings file. Default: ${same_dir}/local.env
-#          ``JUST_LOCAL_SETTINGS_POST`` - Path to the post local settings file. Default: ${same_dir}/local_post.env
+# :Output: [``JUST_LOCAL_SETTINGS``] - Path to the local settings file. Default: ${same_dir}/local.env
+#          [``JUST_LOCAL_SETTINGS_POST``] - Path to the post local settings file. Default: ${same_dir}/local_post.env
 #
 # Try to create the local.env settings file
 #
 # Create the local.env settings file if a) it does not already exist and b) it will be owned by the correct user.
 #**
 
+# REVIEW Revert these changes: aa99afe
 function try_to_create_local_settings_file()
 {
   local project_dir="$(dirname "${1}")"
@@ -396,7 +395,6 @@ function try_to_create_local_settings_file()
   JUST_LOCAL_SETTINGS_POST="${JUST_LOCAL_SETTINGS_POST:-${project_dir}/local_post.env}"
 
   if [ ! -e "${JUST_LOCAL_SETTINGS}" ]; then
-    local project_dir="$(dirname "${1}")"
     local project_file="$(basename "${1}")"
 
     local perm
@@ -421,7 +419,7 @@ function try_to_create_local_settings_file()
         echo "# NEVER commit this file. Tracked environment changes go in" >> "${JUST_LOCAL_SETTINGS}"
         echo "# \"${project_file}\" only" >> "${JUST_LOCAL_SETTINGS}"
         return 0
-      }
+      } || : # <== Fix for #84
     fi
   fi
   return 1
@@ -757,7 +755,6 @@ function print_help()
 
   pretty_print_help <<< "${parsed_help_subcommands%$'\n'}"
 }
-
 
 #**
 # .. function:: is_powershell
