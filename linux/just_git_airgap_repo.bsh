@@ -88,18 +88,17 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 #
 # List all commits on branches that have not been pushed to a remote. This is a set operation: it lists all the commits from a branch in the DAG except those reachable by a remote-tracking branch. It does not require an *associated* remote-tracking branch
 #
-# :Arguments: - [``$1``] - A branch's name to filter by; e.g., master. If unset, then don't filter
-#             - [``$2``] - A name of a remote to filter by; e.g., origin. If unset, then don't filter
+# :Arguments: - [``$1``] - A name of a remote to filter by; e.g., origin. If unset, then don't filter
+#             - [``$2``] - A branch's name to filter by; e.g., master. If unset, then don't filter
 #
 # :Output: - ``*stdout*`` - Print all unpushed commits for tracking branches to stdout
 #**
 
-# REVIEW What order should the arguments go in
 function log_unpushed_commits()
 {
   # NOTE Only supports passing in a single branch and named remote
-  local branch="${1---branches}"
-  local remote_name="${2-}"
+  local remote_name="${1-}"
+  local branch="${2---branches}"
 
   local commits="$(${GIT} log --decorate --graph --format=short --color=always \
       "${branch}" --not --remotes="${remote_name}")"
@@ -210,8 +209,8 @@ function get_tracking_branches()
 #
 # List all unpushed commits for tracking branches to stdout
 #
-# :Arguments: - [``$1``] - A local-tracking branch's name to filter by; e.g., master. If unset, then don't filter by branch name
-#             - [``$2``] - A name of a remote to filter by; e.g., origin. If unset, then don't filter
+# :Arguments: - [``$1``] - A name of a remote to filter by; e.g., origin. If unset, then don't filter
+#             - [``$2``] - A local-tracking branch's name to filter by; e.g., master. If unset, then don't filter by branch name
 #
 # :Output: - ``*stdout*`` - Print all unpushed commits for tracking branches to stdout
 #
@@ -220,20 +219,19 @@ function get_tracking_branches()
 #   A branch cannot track multiple remotes.
 #**
 
-# REVIEW What order should the arguments go in
 function log_outgoing_commits()
 {
   # NOTE Only supports passing in a single branch and named remote
-  local remote_name="${2-}"
+  local remote_name="${1-}"
 
   local tracking_branches
-  if [ $# -eq 0 ]; then
+  if [ $# -lt 2 ]; then
     local just_git_tracking_branches
     local just_git_remote_tracking_branches
     get_tracking_branches "${remote_name}" # Sets just_git_[remote_]tracking_branches
     tracking_branches=(${just_git_tracking_branches+"${just_git_tracking_branches[@]}"})
   else
-    tracking_branches=("${1}")
+    tracking_branches=("${2}")
   fi
 
   # This will list only the outgoing commits for a local-tracking branch
@@ -1345,7 +1343,7 @@ function relocate_git_defaultify()
           echo
         fi
         # No need to call git fetch in the top-level repository
-        unpushed_commits="$(log_unpushed_commits "${branch}" "${remote_name}")"
+        unpushed_commits="$(log_unpushed_commits "${remote_name}" "${branch}")"
         if [ "${unpushed_commits}" != "" ]; then
           echo "WARNING In this repo, ${unpushed_commits/There are/there are}"
           echo
