@@ -287,46 +287,40 @@ begin_test "Part 5 - Cloning from mirror"
 )
 end_test
 
+function begin_part_6_test()
+{
+  tar_version_info # Sets tar_version and tar_vendor
+  if [ "${tar_vendor}" == "GNU" ] || \
+    ([ "${tar_vendor}" == "BSD" ] && meet_requirements "${tar_version}" ">=3"); then
+    begin_test "${@}"
+  else
+    begin_required_fail_test "${@}"
+  fi
+}
+
+# Verify archive_mirrors only excludes .tgz files in the root directory
+#
+# NOTE This test is required to fail on older versions of BSD tar, like 2.8.3,
+# that don't support the --strip-components flag on extraction. This is ok in
+# this case because our archives should be datetime stamped and the
+# subdirectories are all git mirrors, so the chance of a name collision is
+# highly unlikely
 command -v "${GIT-git}" &> /dev/null || skip_next_test
-tar_version_info # Sets tar_version and tar_vendor
-if [ "${tar_vendor}" == "GNU" ] || \
-  ([ "${tar_vendor}" == "BSD" ] && meet_requirements "${tar_version}" ">=3"); then
-  # Verify archive_mirrors only excludes .tgz files in the root directory
-  begin_test "Part 6 - Archive prep_dir"
-  (
-    setup_test
+begin_part_6_test "Part 6 - Archive prep_dir"
+(
+  setup_test
 
-    archive_mirrors "${ARCHIVE_DIR}"
+  archive_mirrors "${ARCHIVE_DIR}"
 
-    PREP_FILE=("${ARCHIVE_DIR}/"transfer_*.tgz)
-    [ "${#PREP_FILE[@]}" -eq 1 ]
+  PREP_FILE=("${ARCHIVE_DIR}/"transfer_*.tgz)
+  [ "${#PREP_FILE[@]}" -eq 1 ]
 
-    # Ensure all "${ARCHIVE_DIR}"/*.tgz files are excluded but any .tgz files
-    # in subdirectories are not
-    ans=$'subdir/\nreadme\nsubdir/archive.tgz\nsubdir/readme1'
-    [ "$(tar ztf "${PREP_FILE[0]}")" = "${ans}" ]
-  )
-  end_test
-else
-  # Older versions of BSD tar, like like 2.8.3, don't support the
-  # --strip-components flag on extraction; therefore, they are expected to fail;
-  # that is ok in this case because our archives should be datetime stamped and
-  # the subdirectories are all git mirrors, so the chance of a name collision
-  # is very unlikely
-  begin_expected_fail_test "Part 6 - Archive prep_dir"
-  (
-    setup_test
-
-    archive_mirrors "${ARCHIVE_DIR}"
-
-    PREP_FILE=("${ARCHIVE_DIR}/"transfer_*.tgz)
-    [ "${#PREP_FILE[@]}" -eq 1 ]
-
-    ans=$'subdir/\nreadme\nsubdir/archive.tgz\nsubdir/readme1'
-    [ "$(tar ztf "${PREP_FILE[0]}")" == "${ans}" ]
-  )
-  end_test
-fi
+  # Ensure all "${ARCHIVE_DIR}"/*.tgz files are excluded but any .tgz files
+  # in subdirectories are not
+  ans=$'subdir/\nreadme\nsubdir/archive.tgz\nsubdir/readme1'
+  [ "$(tar ztf "${PREP_FILE[0]}")" = "${ans}" ]
+)
+end_test
 
 command -v "${GIT-git}" &> /dev/null || skip_next_test
 begin_test "Part 7 - Update a repo and the prepped mirror"
