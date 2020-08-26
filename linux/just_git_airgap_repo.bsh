@@ -648,7 +648,7 @@ function create_repo_map()
 #
 # Orphan commit the repo_map.env file
 #
-# Given a repository mapping like the one produced by :func:`create_repo_map`, make an orphan commit in the repository (on a branch named __just_git_mirror_info_file by default) to a file named repo_map.env. An intermediate product of this function is a shallow clone (which uses hardlinks by default) of the current repo to a directory called __just_git_clone, which is removed at the end of the function.
+# Given a repository mapping like the one produced by :func:`create_repo_map`, make an orphan commit in the repository (on a branch named __just_git_mirror_info_file by default) to a file named repo_map.env. An intermediate product of this function is a shallow clone (which uses hardlinks by default) of the current repo to a temporary directory, which is removed at the end of the function.
 #
 # :Arguments: - ``$1`` - The contents of the repo_map.env file; i.e., the file that maps between the submodule's path and its new URL
 #             - [``$2``] - The name of the branch on which to make the orphan commit. Default: __just_git_mirror_info_file
@@ -665,21 +665,10 @@ function orphan_commit_repo_map
   # 'git checkout' after committing to it.
   # NOTE Uses hard-links on linux
   #
-  # TODO Clone into an automatically deleting temporary directory; requires
-  # mktemp_compat from dir_tools.bsh
-  # RE This temp dir does not auto-delete
-  # RE Can use make_temp_path -d path/to/tmp.XXXXXX
-  # NOTE Do not redirect stdout to /dev/null
-  # TODO Replace with dir_tools.bsh:is_dir_empty
-  if [ -n "$(ls -A __just_git_clone 2>/dev/null || :)" ]; then
-    echo "The temporary directory, ./__just_git_clone, already exists and is"
-    echo "not empty. This script will delete it and continue."
-    ask_question "Is that ok?" answer_delete n
-    [ "$answer_delete" == "0" ] && return 1
-    rm -rf __just_git_clone
-  fi
-  ${GIT} clone --no-checkout . __just_git_clone
-  pushd __just_git_clone &>/dev/null
+  # Clone into an automatically deleting temporary directory
+  make_temp_path temp_repo -d just.XXXXXXXXXX
+  ${GIT} clone --no-checkout . "${temp_repo}"
+  pushd "${temp_repo}" &>/dev/null
     # Avoids checking out the files in the previously checked-out branch
     # and staging them for deletion when switching to a new (orphan) branch,
     # which then requires running 'git reset --hard' and/or 'git rm -rf .'
@@ -697,7 +686,6 @@ function orphan_commit_repo_map
            -m "the repo_map.env file needed by just:git_mirror that maps repo_paths to urls"
     ${GIT} push --force origin "${orphan_branch}"
   popd &>/dev/null
-  rm -rf __just_git_clone
   #
   # ALTERNATIVELY
   #current_branch="$(git rev-parse --abbrev-ref HEAD)"
