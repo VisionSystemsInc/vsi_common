@@ -344,8 +344,7 @@ function _https_to_git_protocol()
 #
 # Bash port of ``git rev-parse --show-superproject-working-tree``
 #
-# This is a bash port of ``git rev-parse --show-superproject-working-tree`` (available in git
-# 2.13.7 and later), which show the absolute path of the root of the superproject’s working tree.
+# This is a bash port of ``git rev-parse --show-superproject-working-tree`` (available in git 2.13.7 and later), which shows the absolute path to the root of the superproject’s working tree.
 #
 # .. note::
 #
@@ -398,19 +397,11 @@ function submodule_summary()
 #
 # .. note::
 #
-#   Alternatively, the path (aka sm_path) for the submodule can be queried with ``git config`` (although, by itself, not recursively):
+#   Submodule paths are not the same thing as submodule names.
 #
-#     ``git config submodule.docker/recipes.path``
+# .. note::
 #
-#   which looks up the (sm\_)path using the submodule's name (which here is the same as the sm_path...although that does not have to be the case) in the parent repository's git config file (if set), and
-#
-#     ``git config -f .gitmodules submodule.docker/recipes.path``
-#
-#   which reads what is in the parent repository's .gitmodules file.
-#
-# Admittedly, by themselves, these commands not very useful. :func:`git_mirror get_submodule_names` uses ``git config --name-only --get-regexp '^submodule\..*\.url$' | sed 's|.url$||'`` to first query the submodule names and then lookup their paths.
-#
-# If path is set, ``git submodule sync`` will synchronize these two configurations using the primary source-of-truth, the .gitmodules file, and the default remote of the current branch, if set; otherwise origin. :func:`git_sync_submodules_recursively` will do the same but using the specified remote.
+#    The ultimate source-of-truth of a submodule's path is in its .gitmodules file. If the path in this file is updated, then the repository's configuration will be out-of-date. ``git submodule sync`` will update the configuration using the .gitmodules file and the default remote of the current branch, if set; otherwise origin. :func:`git_sync_submodules_recursively` will do the same but using the specified remote.
 #
 # .. note::
 #
@@ -439,16 +430,9 @@ function get_submodule_paths_recursively()
     ${GIT} submodule foreach '[ -n "${prefix}" ]' &> /dev/null || submodule_foreach_rv=$?
   popd &> /dev/null
 
-  # At some point, prefix was deprecated and removed in favor of displaypath
-  #
-  # displaypath is built-up from sm_path by ``git submodule foreach`` as it
-  # iterates through the submodules using ``git submodule--helper list``, which
-  # queries info from .git/index; see
-  # https://github.com/git/git/blob/v2.16.0/git-submodule.sh#L304
-  # Similarly, passing 'echo "${toplevel}/${sm_path}"' as the sh command to
-  # git submodule foreach will print the absolute path of all the submodules
   local OLD_IFS="${IFS}"
   IFS=$'\n'
+  # At some point, prefix was deprecated and removed in favor of displaypath
   local submodule_paths
   if [ "${submodule_foreach_rv}" -eq 0 ]; then
     pushd "${up_path}" &> /dev/null
@@ -458,6 +442,10 @@ function get_submodule_paths_recursively()
           ${GIT} submodule foreach --quiet --recursive 'echo "${up_path}${prefix}"'))
     popd &> /dev/null
   else
+    # displaypath is built-up from sm_path by ``git submodule foreach`` as it
+    # iterates through the submodules using ``git submodule--helper list``,
+    # which queries info from .git/index; see
+    # https://github.com/git/git/blob/v2.16.0/git-submodule.sh#L304
     submodule_paths=($(${GIT} submodule foreach --quiet --recursive 'echo "${displaypath}"'))
   fi
   IFS="${OLD_IFS}"
@@ -468,6 +456,30 @@ function get_submodule_paths_recursively()
     # RE It may be that prefix always has a trailing slash and displaypath does not
     echo "${submodule_path%/}"
   done
+  #
+  # Similarly, git submodule foreach 'echo "${toplevel}/${sm_path}"' will print
+  # the absolute path to all the submodules. (As will passing 'echo "${PWD}"' as
+  # the sh command.)
+  #
+  # Alternatively, the path (aka sm_path) for the submodule can be queried with
+  # git config (although, by itself, not recursively):
+  #   git config submodule.docker/recipes.path
+  # which looks up the (sm\_)path using the submodule's name (which here is the
+  # same as the sm_path...although that does not have to be the case) in the
+  # parent repository's git config file (if set), and
+  #   git config -f .gitmodules submodule.docker/recipes.path
+  # which reads what is in the parent repository's .gitmodules file.
+  #
+  # Admittedly, by themselves, these commands not very useful.
+  # git_mirror:get_submodule_names uses
+  #   git config --name-only --get-regexp '^submodule\..*\.url$' | sed 's|.url$||'
+  # to first query the submodule names and then lookup their paths.
+  #
+  # If path is set, git submodule sync will synchronize these two configurations
+  # using the primary source-of-truth, the .gitmodules file, and the default
+  # remote of the current branch, if set; otherwise origin.
+  # git_sync_submodules_recursively will do the same but using the specified
+  # remote.
 }
 
 #**
@@ -482,15 +494,7 @@ function get_submodule_paths_recursively()
 #
 # .. note::
 #
-#   Alternatively, the URL for the submodule can be queried with ``git config`` (although, by itself, not recursively):
-#
-#     ``git config submodule.docker/recipes.url``
-#
-#   which looks up the URL in the parent repository's git config file, and
-#
-#     ``git config -f .gitmodules submodule.docker/recipes.url``
-#
-#   which reads what is in the parent repository's .gitmodules file. ``git submodule sync`` will synchronize these two configurations using the primary source-of-truth, the .gitmodules file, and the default remote of the current branch, if set; otherwise origin. :func:`git_sync_submodules_recursively` will do the same but using the specified remote.
+#    The ultimate source-of-truth of a submodule's URL is in its .gitmodules file. If the URL is updated in this file, then the repository's configuration will be out-of-date. ``git submodule sync`` will update the configuration using the .gitmodules file and the default remote of the current branch, if set; otherwise origin. :func:`git_sync_submodules_recursively` will do the same but using the specified remote name.
 #
 # .. note::
 #
@@ -504,6 +508,19 @@ function get_submodule_urls_recursively()
   # REVIEW Should i unset GIT_DIR?
   ${GIT} submodule foreach --quiet --recursive \
       "export GIT; bash -euc 'echo \"\$(${GIT} config --get remote."${remote_name}".url)\"'"
+  #
+  # Alternatively, the URL for the submodule can be queried with git config
+  # (although, by itself, not recursively):
+  #   git config submodule.docker/recipes.url
+  # which looks up the URL in the parent repository's git config file, and
+  #   git config -f .gitmodules submodule.docker/recipes.url
+  # which reads what is in the parent repository's .gitmodules file.
+  #
+  # git submodule sync will synchronize these two configurations using the
+  # primary source-of-truth, the .gitmodules file, and the default remote of
+  # the current branch, if set; otherwise origin.
+  # git_sync_submodules_recursively will do the same but using the specified
+  # remote.
 }
 
 #**
