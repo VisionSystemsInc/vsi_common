@@ -355,7 +355,7 @@ function update_submodules()
 #
 # :Arguments: - ``$1`` - URL of the main git repository. On subsequent calls to this function, the prep (cache) dir created by this function can be used in lue of the repository's URL
 #             - [``$2``] - The git branch from which to identify the submodules. Default: master
-#             - [``$3``] - The path at which to create the prep directory; ``GIT_MIRROR_PREP_DIR`` will be set to this path. Default: ``${PWD}/{repo_name}_prep``
+# :Parameters: [``GIT_MIRROR_PREP_DIR``] - The path at which to create the the prep directory; Default: ``${PWD}/{repo_name}_prep``
 # :Output: - A prep directory which will contain all of the repositories plus a single ``transfer_{date}.tgz``
 #          - ``GIT_MIRROR_PREP_DIR`` - The path to the prep directory
 #          - ``GIT_MIRROR_MAIN_REPO`` - The main repository's name. Based off of ``$1``; e.g., vsi_common.git if the URL is https://github.com/VisionSystemsInc/vsi_common.git
@@ -417,7 +417,7 @@ function git_mirror_main()
 #
 # :Arguments: - ``$1`` - URL of the main git repository. On subsequent calls to this function, the prep (cache) directory created by this function can be used in lue of the repository's URL
 #             - [``$2``] - The git branch from which to identify the submodules. Default: master
-#             - [``$3``] - The path at which to create the the prep directory; ``GIT_MIRROR_PREP_DIR`` will be set to this path. Default: ``${PWD}/{repo_name}_prep``
+# :Parameters: [``GIT_MIRROR_PREP_DIR``] - The path at which to create the the prep directory; Default: ``${PWD}/{repo_name}_prep``
 # :Output: - A prep directory which will contain all of the repositories
 #          - ``GIT_MIRROR_PREP_DIR`` - The path to the prep directory
 #          - ``GIT_MIRROR_MAIN_REPO`` - The main repository's name. Based off of ``$1``; e.g., vsi_common.git if the URL is https://github.com/VisionSystemsInc/vsi_common.git
@@ -439,28 +439,16 @@ function git_mirror_repos()
 {
   if [[ $# = 0 ]]; then
     echo "Usage:" >&2
-    # REVIEW Perhaps OUTPUT_PREP_DIR shouldn't exist; you should just be able
-    # to override GIT_MIRROR_PREP_DIR
-    echo "${BASH_SOURCE[0]} REPO_URL [BRANCH|SHA] [OUTPUT_PREP_DIR]" >&2
+    echo "${BASH_SOURCE[0]} REPO_URL [BRANCH|SHA]" >&2
     echo "${BASH_SOURCE[0]} EXISTING_PREP_DIR [BRANCH|SHA]" >&2
     exit 1
-  elif [[ $# = 3 ]]; then
-    if [ -d "${1}" ]; then
-      # Does the directory look like a PREP_DIR
-      if [ -f "${1}/"*"/config" ]; then
-        # REVIEW this isn't strictly necessary...
-        echo "If specifying the OUTPUT_PREP_DIR, the first argument must be the"
-            "REPO_URL, not an existing PREP_DIR"
-        exit 1
-      fi
-    fi
   fi
 
   # Does the directory look like a PREP_DIR
   if [ -f "${1}/"*"/config" ]; then
     # Don't need nullglob here because the directory exists
     pushd "$(dirname "${1}/"*"/config")" &> /dev/null
-      GIT_MIRROR_PREP_DIR="$(dirname "${PWD}")"
+      GIT_MIRROR_PREP_DIR="${GIT_MIRROR_PREP_DIR:-"$(dirname "${PWD}")"}"
       GIT_MIRROR_MAIN_REPO="$(${GIT} config --get remote.origin.url)"
     popd &> /dev/null
   else
@@ -471,16 +459,12 @@ function git_mirror_repos()
   local MAIN_DIR="$(basename "${GIT_MIRROR_MAIN_REPO}")"
   MAIN_DIR="${MAIN_DIR%.*}"
   if [ -z "${GIT_MIRROR_PREP_DIR:+x}" ]; then
-    if [ "${#@}" -lt 3 ]; then
-      GIT_MIRROR_PREP_DIR="${PWD}/${MAIN_DIR}_prep"
-    else
-      # Is absolute path
-      if [ "${3:0:1}" == "/" ]; then
-        GIT_MIRROR_PREP_DIR="${3}"
-      else
-        GIT_MIRROR_PREP_DIR="${PWD}/${3}"
-      fi
-    fi
+    GIT_MIRROR_PREP_DIR="${PWD}/${MAIN_DIR}_prep"
+  fi
+
+  # Make absolute path
+  if [ "${GIT_MIRROR_PREP_DIR:0:1}" != "/" ]; then
+    GIT_MIRROR_PREP_DIR="${PWD}/${GIT_MIRROR_PREP_DIR}"
   fi
 
   #########################
@@ -790,7 +774,7 @@ function usage()
 {
   echo "Usage: ${BASH_SOURCE[0]} mirror|push|clone [OPTIONS]" >&2
   echo >&2
-  echo "  mirror REPO_URL [BRANCH|SHA] [OUTPUT_PREP_DIR]" >&2
+  echo "  mirror REPO_URL [BRANCH|SHA]" >&2
   echo "                               1) Mirror the git repository and all of its" >&2
   echo "                                  submodules (on BRANCH) to an archive." >&2
   echo "  mirror PREP_DIR [BRANCH|SHA]    Subsequent mirrors can be based of the" >&2
