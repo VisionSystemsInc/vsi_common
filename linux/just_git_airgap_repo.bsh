@@ -343,17 +343,50 @@ function _https_to_git_protocol()
 # .. function:: git_project_root_dir
 #
 # Output the absolute path to the root of the top-level superproject’s working tree.
-#
-# .. rubric:: Bugs
-#
-# This won't work if the git-dir is separate. No idea how to detect that
 #**
 
 # TODO Replace usage of top-level with root-level or project root or something
+#
+# Unit tests: sub-sub-module, sub-sub-module/subdir. repo, repo/subdir. repo
+# created inside of another repo (not tracked or anything); same/subdir; a
+# a repo with a seperate git-dir
 function git_project_root_dir()
 {
-  dir="$(${GIT} rev-parse --git-dir | awk -F '/.git' '{print $1}')"
-  #
+  local last_git_dir="$(${GIT} rev-parse --git-dir)"
+  pushd "$(${GIT} rev-parse --show-toplevel 2> /dev/null)" &> /dev/null
+    local is_root=0
+    pushd ../ &> /dev/null
+      if ! ${GIT} rev-parse --show-toplevel &> /dev/null; then
+        is_root=1
+      else
+        local current_git_dir="$(${GIT} rev-parse --git-dir)"
+        if [ "${current_git_dir}" == ".git" ]; then
+          # REVIEW this may need to be real_path
+          # RE git rev-parse --git-dir says that it can print a relative path,
+          # but I can't get this to happen; even on git 1.8 with a separate git
+          # directory and a relative path in the .git file
+          current_git_dir="${PWD}"/.git
+        fi
+
+        # The submodule's configuration always seems to be within the repo's
+        # git-dir. If this is not always the case, we can query the .gitmodules
+        # file to verify that the current repo trackes the last submodule
+        if [[ "${last_git_dir}" == "${current_git_dir}"* ]]; then
+          git_project_root_dir
+        else
+          is_root=1
+        fi
+      fi
+    popd &> /dev/null
+    if [ "${is_root}" = "1" ]; then
+      echo "${PWD}"
+    fi
+  popd &> /dev/null
+
+  # git rev-parse --git-dir | awk -F '/.git' '{print $1}')"
+  #   The (usually) absolute path to the repository's .git directory or the
+  #   submodule's equivalent (e.g., .git/modules/docker/recipes); e.g., from
+  #   /src/vsi_common/linux, this command prints /src/vsi_common/.git
   # git rev-parse --show-toplevel
   #   The absolute path to the current repository/submodule work tree; e.g.,
   #   from /src/vsi_common/docker/recipes/hooks, this command prints
@@ -369,12 +402,6 @@ function git_project_root_dir()
   #   The absolute path to the superproject work tree of the current submodule;
   #   e.g., from /src/vsi_common/docker/recipes/hooks, this command prints
   #   /src/vsi_common
-
-  if [ "${dir}" = ".git" ]; then
-    echo "${PWD}"
-  else
-    echo "${dir}"
-  fi
 }
 
 #**
