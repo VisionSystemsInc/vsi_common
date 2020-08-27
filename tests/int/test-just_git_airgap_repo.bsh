@@ -376,21 +376,23 @@ begin_test "git functionality"
   #              SETUP             #
   ##################################
 
-  # git log --pretty=format:"| %s%d" --graph --all
-  # * | Ninth commit (nontracking_branchpoint)
-  # | * | Eighth commit (tracking_branch_ahead)
-  # | * | Seventh commit (nontracking_branch_ahead)
-  # | * | Sixth commit (origin/checkpoint, checkpoint)
+  # git log --pretty=format:"%s%d" --graph --all
+  # * Eleventh commit (HEAD -> tracking_branchpoint)
+  # * Tenth commit (master)
+  # *   Merge branch 'nontracking_merge'
+  # |\
+  # | * Branching commit (nontracking_merge)
+  # * | Ninth commit
   # |/
-  # | * | Tenth commit (HEAD -> tracking_branchpoint)
+  # | * Eighth commit (tracking_branch_ahead)
+  # | * Seventh commit (nontracking_branch_ahead)
+  # | * Sixth commit (origin/checkpoint, checkpoint)
   # |/
-  # * | Fourth commit (origin/master, origin/tracking_branch_equal,
-  #                    origin/tracking_branch_ahead,
-  #                    master, tracking_branch_equal, nontracking_branch_equal)
-  # * | Third commit (tracking_branch_behind)
-  # * | Second commit (nontracking_branch_behind)
-  # * | First commit (remote_tracking_branch_deleted)
-  # * | Initial commit
+  # * Fourth commit (origin/tracking_branch_equal, origin/tracking_branch_ahead, origin/master,   # tracking_branch_equal, nontracking_branch_equal)
+  # * Third commit (tracking_branch_behind)
+  # * Second commit (nontracking_branch_behind)
+  # * First commit (remote_tracking_branch_deleted)
+  # * Initial commit
   #
   # git branch -vv
   #   checkpoint                     Sixth commit
@@ -398,7 +400,7 @@ begin_test "git functionality"
   #   nontracking_branch_ahead       Seventh commit
   #   nontracking_branch_behind      Second commit
   #   nontracking_branch_equal       Fourth commit
-  #   nontracking_branchpoint        Ninth commit
+  #   nontracking_merge              Branching commit
   #   remote_tracking_branch_deleted [origin/remote_tracking_branch_deleted: gone] First commit
   # * tracking_branch_ahead          [origin/tracking_branch_ahead: ahead 3] Eighth commit
   #   tracking_branch_behind         [origin/master: behind 1] Third commit
@@ -477,10 +479,16 @@ begin_test "git functionality"
     git commit -m "Eighth commit"
 
     git checkout master
-    git checkout -b nontracking_branchpoint
-    echo "9" >> readme
+    git checkout -b nontracking_merge
+    echo "A" >> readme
     git add readme
+    git commit -m "Branching commit"
+
+    git checkout master
+    echo "9" >> a_file
+    git add a_file
     git commit -m "Ninth commit"
+    git merge nontracking_merge
 
     echo "10" >> readme
     git add readme
@@ -516,17 +524,20 @@ begin_test "git functionality"
     [ "${output}" = "" ]
 
     # unpushed commits - branch (non-tracking) ahead of origin/master
-    [ "$(log_unpushed_commits origin nontracking_branch_ahead | grep '^*' | wc -l | tr -d ' ')" = "1" ]
+    [[ "$(log_unpushed_commits origin nontracking_branch_ahead | head -n 1)" = *"1 unpushed"* ]] || false
 
     # outgoing commits - tracking_branch is ahead of its tracked branch, origin/master (a differently named branch)
-    [ "$(log_unpushed_commits origin tracking_branch_ahead | grep '^*' | wc -l | tr -d ' ')" = "2" ]
-    [ "$(log_outgoing_commits origin tracking_branch_ahead | grep '^*' | wc -l | tr -d ' ')" = "3" ]
+    [[ "$(log_unpushed_commits origin tracking_branch_ahead | head -n 1)" = *"2 unpushed"* ]] || false
+    [[ "$(log_outgoing_commits origin tracking_branch_ahead | head -n 1)" = *"3 outgoing"* ]] || false
 
     # all unpushed commits
-    [ "$(log_unpushed_commits | grep '^*' | wc -l | tr -d ' ')" = "5" ]
+    [[ "$(log_unpushed_commits | head -n 1)" = *"7 unpushed"* ]] || false
 
     # all outgoing commits
-    [ "$(log_outgoing_commits | grep '^*' | wc -l | tr -d ' ')" = "4" ]
+    # These logs don't always seem to organize themselves in the most compact
+    # possible manner; in this case, commits are repeated because branches that
+    # follow one-another are logged separately
+    [[ "$(log_outgoing_commits | head -n 1)" = *"12 outgoing"* ]] || false
 
     # list local tracking branches and their corresponding remote branch
     # NOTE remote_tracking_branch_deleted is a tracking branch, but the remote-
