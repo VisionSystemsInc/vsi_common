@@ -71,11 +71,17 @@ function submodule-helper-list()
   #   f
   # submodule.w     t  f.url=https://github.com/visionsystemsinc/vsi_common.git
 
+  # TODO replace with set_oflag noglob and reset_oflag noglob below
   local noglob=0
   if [[ ${SHELLOPTS} =~ (^|:)noglob(:|$) ]]; then
     noglob=1
   fi
   set -o noglob
+  # FIXME This doesn't actually handle names/sm_paths with tabs, let alone
+  # newlines as in the case mentioned above
+  # RE Have to get the submodule names like git_mirror:get_submodule_names does
+  #   git config --name-only --get-regexp '^submodule\..*\.url$'
+  # and use these keys to get the path/url as git_mirror:clone_submodules does
   submodule_names=($(awk '{print $1}' <<< "${submodule_data}" ))
   submodule_paths=($(awk '{print $2}' <<< "${submodule_data}" ))
   if [ "${noglob}" = "0" ]; then
@@ -223,6 +229,9 @@ function safe_git_submodule_update()
           continue
         fi
       fi
+      # REVIEW Should this use the -f .gitmodules flag since we haven't sync'd
+      # RE Unfortunately, .gitmodules can use relative URLs...
+      # RE See just_git_airgap_repo.bsh:submodule-helper-resolve-url
       submodule_url="$(${GIT} config submodule."$name".url)"
       if [ -z "${submodule_url}" ] || ( [ ! -d "$sm_path"/.git ] && [ ! -f "$sm_path"/.git ] ); then
         if ! [ "$(${GIT} config -f .gitmodules submodule.${name}.update)" == "none" ]; then
