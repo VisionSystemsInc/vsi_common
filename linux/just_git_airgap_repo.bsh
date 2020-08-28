@@ -344,52 +344,40 @@ function _https_to_git_protocol()
 }
 
 #**
-# .. function:: git_project_root_dir
+# .. function:: is_submodule
 #
-# Output the absolute path to the root of the topmost superproject’s working tree.
+# :Output: - Returns ``0`` if the PWD is in a submodule, ``1`` for it is not
 #**
 
-# Unit tests: sub-sub-module, sub-sub-module/subdir. repo, repo/subdir. repo
-# created inside of another repo (not tracked or anything); same/subdir; a
-# a repo with a seperate git-dir
-function git_project_root_dir()
+function is_submodule()
 {
   local toplevel="$(${GIT} rev-parse --show-toplevel 2> /dev/null)"
   # Strip trailing / (this may be guaranteed by --show-toplevel)
   toplevel="${toplevel%/}"
   local sm_basename="$(basename "${toplevel}")"
-  pushd "${toplevel}" &> /dev/null
-    local is_root=0
-    pushd ../ &> /dev/null
-      # Are we still in a git repo
-      local nextlevel_rv=0
-      local nextlevel
-      nextlevel="$(${GIT} rev-parse --show-toplevel 2> /dev/null)" || nextlevel_rv=$?
-      if [ "${nextlevel_rv}" -eq 0 ]; then
-        local prefix="$(${GIT} rev-parse --show-prefix)"
-        # Guarantee a trailing / or empty string (this may be guaranteed by
-        # --show-prefix)
-        prefix="${prefix:+"${prefix%/}/"}"
-        pushd "${nextlevel}" &> /dev/null
-          # In git 1.8.3, git submodule must be run in the toplevel of the
-          # working tree
-          # git 1.8.3 does not support git -C
-          if ${GIT} submodule foreach 'echo "${sm_path%/}"' | \
-              grep "${prefix}${sm_basename}" &> /dev/null; then
-            git_project_root_dir
-          else
-            is_root=1
-          fi
-        popd &> /dev/null
-      else
-        is_root=1
-      fi
-    popd &> /dev/null
-    if [ "${is_root}" = "1" ]; then
-      echo "${PWD}"
+  local is_submod=1
+  pushd "${toplevel}/../" &> /dev/null
+    # Are we still in a git repo
+    local superlevel="$(${GIT} rev-parse --show-toplevel 2> /dev/null)"
+    if [ -n "${superlevel:+set}" ]; then
+      local prefix="$(${GIT} rev-parse --show-prefix)"
+      # Guarantee a trailing / or empty string (this may be guaranteed by
+      # --show-prefix)
+      prefix="${prefix:+"${prefix%/}/"}"
+      pushd "${superlevel}" &> /dev/null
+        # In git 1.8.3, git submodule must be run in the toplevel of the
+        # working tree
+        # git 1.8.3 does not support git -C
+        # Strip trailing / (this may be guaranteed by sm_path)
+        # real_path may be necessary here
+        if ${GIT} submodule foreach 'echo "${sm_path%/}"' | \
+            grep "${prefix}${sm_basename}" &> /dev/null; then
+          is_submod=0
+        fi
+      popd &> /dev/null
     fi
   popd &> /dev/null
-
+  #
   # git rev-parse --git-dir | awk -F '/.git' '{print $1}')"
   #   The (usually) absolute path to the repository's .git directory or the
   #   submodule's equivalent (e.g., .git/modules/docker/recipes); e.g., from
@@ -409,6 +397,29 @@ function git_project_root_dir()
   #   The absolute path to the superproject work tree of the current submodule;
   #   e.g., from /src/vsi_common/docker/recipes/hooks, this command prints
   #   /src/vsi_common
+
+  return "${is_submod}"
+}
+
+#**
+# .. function:: git_project_root_dir
+#
+# :Output: ``*stdout*`` - The absolute path to the root of the topmost superproject’s working tree.
+#**
+
+# Unit tests: sub-sub-module, sub-sub-module/subdir. repo, repo/subdir. repo
+# created inside of another repo (not tracked or anything); same/subdir; a
+# a repo with a seperate git-dir
+function git_project_root_dir()
+{
+  local toplevel="$(${GIT} rev-parse --show-toplevel 2> /dev/null)"
+  if is_submodule; then
+    pushd "${toplevel}/../" &> /dev/null
+      git_project_root_dir
+    popd &> /dev/null
+  else
+    echo "${toplevel}"
+  fi
 }
 
 #**
