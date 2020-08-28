@@ -346,11 +346,9 @@ function _https_to_git_protocol()
 #**
 # .. function:: git_project_root_dir
 #
-# Output the absolute path to the root of the top-level superproject’s working tree.
+# Output the absolute path to the root of the topmost superproject’s working tree.
 #**
 
-# TODO Replace usage of top-level with root-level or project root or something
-#
 # Unit tests: sub-sub-module, sub-sub-module/subdir. repo, repo/subdir. repo
 # created inside of another repo (not tracked or anything); same/subdir; a
 # a repo with a seperate git-dir
@@ -373,7 +371,7 @@ function git_project_root_dir()
         # --show-prefix)
         prefix="${prefix:+"${prefix%/}/"}"
         pushd "${nextlevel}" &> /dev/null
-          # In git 1.8.3, git submodule must be run in the top-level of the
+          # In git 1.8.3, git submodule must be run in the toplevel of the
           # working tree
           # git 1.8.3 does not support git -C
           if ${GIT} submodule foreach 'echo "${sm_path%/}"' | \
@@ -476,7 +474,7 @@ function get_submodule_paths_recursively()
 
   local submodule_foreach_rv=0
   pushd "${up_path}" &> /dev/null
-    # In git 1.8.3, git submodule must be run in the top-level of the working tree
+    # In git 1.8.3, git submodule must be run in the toplevel of the working tree
     # git 1.8.3 does not support git -C
     ${GIT} submodule foreach '[ -n "${prefix}" ]' &> /dev/null || submodule_foreach_rv=$?
   popd &> /dev/null
@@ -487,7 +485,7 @@ function get_submodule_paths_recursively()
   local submodule_paths
   if [ "${submodule_foreach_rv}" -eq 0 ]; then
     pushd "${up_path}" &> /dev/null
-      # In git 1.8.3, git submodule must be run in the top-level of the working tree
+      # In git 1.8.3, git submodule must be run in the toplevel of the working tree
       # git 1.8.3 does not support git -C
       submodule_paths=($(up_path="${up_path}" \
           ${GIT} submodule foreach --quiet --recursive 'echo "${up_path}${prefix}"'))
@@ -545,7 +543,7 @@ function get_submodule_paths_recursively()
 #
 # .. note::
 #
-#    The ultimate source-of-truth of a submodule's URL is in its .gitmodules file. If the URL is updated in this file, then the repository's configuration will be out-of-date. ``git submodule sync`` will update the configuration using the .gitmodules file and the default remote of the current branch, if set; otherwise origin. :func:`git_sync_submodules_recursively` will do the same but using the specified remote name.
+#    The ultimate source-of-truth of a submodule's URL is in its .gitmodules file. If the URL is updated in this file, then the repository's configuration will be out-of-date. ``git submodule sync`` will update the configuration using the .gitmodules file and the default remote of the current branch, if set; otherwise origin. :func:`git_sync_submodules_recursively` will do the same but using the specified remote.
 #
 # .. note::
 #
@@ -583,7 +581,7 @@ function get_submodule_urls_recursively()
 #
 # Create the repository mapping such that, once the JUST_GIT_AIRGAP_MIRROR_URL environment variable is defined, it can be sourced by :func:`git_push_main` and :func:`git_clone_main` in :file:`git_mirror`.
 #
-# :Argument: ``$1`` - The top-level repository name (e.g., vsi_common)
+# :Argument: ``$1`` - The project's repository name (e.g., vsi_common)
 #
 # :Parameters: [``ASSOCIATIVE_REPO_MAP``] - Set to a value to create the repo map as an associative-array, ``repos``, as opposed to two partitioned arrays (which is bash 3.2 compatible): ``repo_urls`` and ``repo_paths``. (Default: unset; i.e., partitioned)
 #
@@ -625,11 +623,12 @@ function create_repo_map()
 
   local OLD_IFS="${IFS}"
   IFS=$'\n'
-  # The (relative) path from the top-level repository to each submodule (recursively)
+  # The (relative, i.e., display) path from the project repository to each
+  # submodule (recursively)
   # NOTE displaypath only provides the expected path if this command is run
-  # from the root of the top-level repository. Fortunately, that is the case in
+  # from the root of the project repository. Fortunately, that is the case in
   # the Justfile.
-  # Alternatively, add JUST_PROJECT_DIR to just or use :func:`git_project_root_dir`
+  # Alternatively, use JUST_USER_CWD or :func:`git_project_root_dir`
   #
   # No quotes around subshell to create array (although IFS must be correct)
   local repo_paths=("${repo_name}" $(get_submodule_paths_recursively))
@@ -643,7 +642,7 @@ function create_repo_map()
     # the entries will be quoted when printed to file
     repo_urls+=('${JUST_GIT_AIRGAP_MIRROR_URL}'/$(basename "${repo_path}")'.git')
   done
-  # Rename the top-level repo to '.'
+  # Rename the project repo to '.'
   repo_paths[0]='.'
 
   uwecho '# NOTE: This file is automatically created by
@@ -861,9 +860,10 @@ function print_git_airgap_submodule_update()
           #
           # Reconfigure and update a submodule
           #
-          # :Arguments: ``$1`` - A relative path (from the top-level repo) to a submodule
-          # :Parameters: ``repo_paths`` - The (relative) path from the top-level repository
-          #                          to each submodule (recursively)
+          # :Arguments: ``$1`` - A relative path (from the root of the project repository)
+          #                      to a submodule
+          # :Parameters: ``repo_paths`` - The (relative) path from the root of the project
+          #                               repository to each submodule (recursively)
           #              ``repo_urls`` - The respective url for each submodule (recursively)
           #*
           function git_airgap_submodule_update()
@@ -986,8 +986,8 @@ function submodule-helper-relative-url()
 #
 # Like ``git submodule sync``, synchronize the URL configuration setting of each submodule (recursively) to the value specified in .gitmodules; however, instead of overwriting the default remote (origin), update the remote specified by JUST_GIT_UPSTREAM (``just_upstream`` by default).
 #
-# :Arguments: [``$1``] - The top-level repository remote-name. Default: origin
-# :Parameters: - [``JUST_GIT_UPSTREAM``] - The submodule remote-name. When updating the remote URL, use this remote. Default: ``just_upstream``
+# :Arguments: [``$1``] - The project-repository's remote. Default: origin
+# :Parameters: - [``JUST_GIT_UPSTREAM``] - The submodules' remote to sync. When updating the URL in the submodules' configuration, use this remote. Default: ``just_upstream``
 #
 # .. note::
 #
@@ -1056,7 +1056,7 @@ function git_sync_submodules_recursively()
 #
 # Check each submodule (recursively) to see if the SHA tracked by its parent repository has been pushed to the URL tracked by the parent repository (per its .gitmodules file). Must be run from the root of a repository.
 #
-# :Parameters: - [``JUST_GIT_UPSTREAM``] - The submodule remote-name. When fetching a remote URL, use this remote. Default: ``just_upstream``
+# :Parameters: - [``JUST_GIT_UPSTREAM``] - The submodule's remote to sync. When fetching, use this remote's URL. Default: ``just_upstream``
 #
 # :Output: Return 0 if, for each submodule (recursively), the changes tracked by the parent repository have been made public; otherwise, return 1
 #
@@ -1445,7 +1445,7 @@ function relocate_git_defaultify()
           echo "${sm_status}"
           echo
         fi
-        # No need to call git fetch in the top-level repository
+        # No need to call git fetch in the project repository
         unpushed_commits="$(log_unpushed_commits "${remote_name}" "${branch}")"
         if [ "${unpushed_commits}" != "" ]; then
           echo "WARNING In this repo, ${unpushed_commits/There are/there are}"
@@ -1510,7 +1510,7 @@ function relocate_git_defaultify()
         git_mirror_repos "${args[@]}"
       popd &>/dev/null
 
-      # Find the name of the top-level repo according to the remote url
+      # Find the name of the project repository according to the remote url
       # This is how git_mirror_main computes this variable
       local repo_name="$(basename "${GIT_MIRROR_MAIN_REPO}")"
       repo_name="${repo_name%.*}"
