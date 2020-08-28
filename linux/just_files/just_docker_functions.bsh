@@ -296,26 +296,6 @@ function get_docker_recipes()
 #
 # Scans Dockerfiles for ``vsiri/recipe:`` images, and calls :cmd:`build_recipes` on the recipes discovered. Accepts multiple files and ``-`` for stdin
 #
-# .. command:: ci_load_recipes
-#
-# :Arguments: [``$1``]... - Recipe names to load
-#
-# Runs `ci_load.py` for specified docker recipes. Handles loading of both single and multi-stage recipes. Note recipes are not pushed back to the recipe cache (``ci_load.py --no-push ...``).
-#
-# .. command:: ci_load_recipes-auto
-#
-# :Arguments: ``$1``... - Dockerfiles to parse
-#
-# Scans Dockerfiles for ``vsiri/recipe:`` images, and calls :cmd:`ci_load_recipes` on the recipes discovered. Accepts multiple files and ``-`` for stdin
-#
-# .. command:: ci_load_services
-#
-# :Arguments: ``$1`` - Docker compose yaml file
-#             ``$2`` - Main docker-compose service
-#             [``$3``]... - Optional `ci_load.py` inputs
-#
-# Runs `ci_load.py` for specified docker services. Recipes are expected to be loaded prior to call via ``just ci load recipes-auto``.
-#
 # .. command:: log
 #
 # :Arguments: [``$1``]... - Service names
@@ -394,36 +374,6 @@ function docker_defaultify()
       if [ "${#recipes[@]}" != "0" ]; then
         justify build recipes "${recipes[@]}"
       fi
-      extra_args=$#
-      ;;
-    ci_load_recipes) # Load recipes from dockerhub cache
-      for recipe in ${@+"${@}"}; do
-        python3 "${VSI_COMMON_DIR}/linux/ci_load.py" \
-            --recipe-repo "IGNORE-RECIPE-REPO" \
-            --cache-repo "vsiri/ci_cache_recipes" \
-            --no-push \
-            "${VSI_COMMON_DIR}/docker/recipes/docker-compose.yml" \
-            "${recipe}"
-      done
-      extra_args=$#
-      ;;
-    ci_load_recipes-auto) # Load recipes used in specified Dockerfiles from \
-                          # dockerhub cache. "-" for stdin; multiple files \
-                          # (via wildcards) accepted
-      if [ "$#" = "0" ]; then
-        source "${VSI_COMMON_DIR}/linux/colors.bsh"
-        echo "${RED}ERROR:${NC} You must pass at least one argument to ci load recipes-auto" >&2
-        return 1
-      fi
-      local recipes=($(get_docker_recipes ${@+"${@}"}))
-      justify ci_load_recipes "${recipes[@]}"
-      extra_args=$#
-      ;;
-    ci_load_services) # Load services from dockerhub cache
-      python3 "${VSI_COMMON_DIR}/linux/ci_load.py" \
-          --recipe-repo "IGNORE-RECIPE-REPO" \
-          --cache-repo "vsiri/ci_cache" \
-          ${@+"${@}"}
       extra_args=$#
       ;;
     docker_clean) # Delete a docker volume. The next container to use this \
