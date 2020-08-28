@@ -189,6 +189,9 @@ begin_test "Check for unpushed tracked commits in submodules"
   fi
   DIFFICULT_NAME='difficult submod'
 
+  ENCLOSING_REPO="${TESTDIR}"/enclosing
+  SEPARATE_REPO="${ENCLOSING_REPO}"/separate
+  SEPARATE_GITDIR="${TESTDIR}"/seperate.git
 
   # Sub sub module
   mkdir -p "${BUILD_REPO}_sub_sub"
@@ -284,6 +287,33 @@ begin_test "Check for unpushed tracked commits in submodules"
     git commit -m "Updated submodules"
   popd &> /dev/null
 
+  # Create another repo hierarchy, similar to the first, but with a separate
+  # git dir and inside another git repo
+
+  mkdir -p "${ENCLOSING_REPO}"
+  pushd "${ENCLOSING_REPO}" &> /dev/null
+    git init .
+    touch readme
+    git add readme
+    git commit -m "Initial commit"
+  popd &> /dev/null
+
+  mkdir -p "${SEPARATE_REPO}"
+  pushd "${SEPARATE_REPO}" &> /dev/null
+    git init --separate-git-dir "${SEPARATE_GITDIR}" .
+    touch readme
+    mkdir subdir
+    touch subdir/a_file
+    git add readme subdir/a_file
+    git commit -m "Initial commit"
+
+    git submodule add --name "${DIFFICULT_NAME}" "${PRETEND_URL}_sub" "${DIFFICULT_PATH}"
+    git submodule update --init --recursive
+    git commit -m "Added submodules"
+    # doesn't actually have to be tracked by the repo
+    mkdir -p "${DIFFICULT_PATH}"/a_sub_sub_module/subdir
+  popd &> /dev/null
+
   #################################
   #              TEST             #
   #################################
@@ -363,7 +393,24 @@ remote URL tracked by the parent repository:
     # needed by macOS to deal with /var/... and /private/var/...
     [ "$(real_path "$(git_project_root_dir)")" = "${ans}" ]
   popd &> /dev/null
+  pushd "${BUILD_REPO}"/subdir &> /dev/null
+    # needed by macOS to deal with /var/... and /private/var/...
+    [ "$(real_path "$(git_project_root_dir)")" = "${ans}" ]
+  popd &> /dev/null
   pushd "${BUILD_REPO}/${DIFFICULT_PATH}"/a_sub_sub_module/subdir &> /dev/null
+    [ "$(real_path "$(git_project_root_dir)")" = "${ans}" ]
+  popd &> /dev/null
+
+  ans="$(real_path "${SEPARATE_REPO}")"
+  pushd "${SEPARATE_REPO}" &> /dev/null
+    # needed by macOS to deal with /var/... and /private/var/...
+    [ "$(real_path "$(git_project_root_dir)")" = "${ans}" ]
+  popd &> /dev/null
+  pushd "${SEPARATE_REPO}"/subdir &> /dev/null
+    # needed by macOS to deal with /var/... and /private/var/...
+    [ "$(real_path "$(git_project_root_dir)")" = "${ans}" ]
+  popd &> /dev/null
+  pushd "${SEPARATE_REPO}/${DIFFICULT_PATH}"/a_sub_sub_module/subdir &> /dev/null
     [ "$(real_path "$(git_project_root_dir)")" = "${ans}" ]
   popd &> /dev/null
 )
