@@ -476,9 +476,12 @@ function get_submodule_paths_recursively()
 {
   # Relative path from the CWD to the root of the current repository
   local up_path="$(${GIT} rev-parse --show-cdup)"
+  # Relative path from the root of the current repository to the CWD
+  local relative_cwd="$(${GIT} rev-parse --show-prefix)"
   # Guarantee a trailing / or empty string (this may be guaranteed by
   # --show-cdup)
   up_path="${up_path:+"${up_path%/}"/}"
+  relative_cwd="${relative_cwd:+"${relative_cwd%/}/"}"
 
   local submodule_foreach_rv=0
   pushd "${up_path}" &> /dev/null
@@ -495,8 +498,10 @@ function get_submodule_paths_recursively()
     pushd "${up_path}" &> /dev/null
       # In git 1.8.3, git submodule must be run in the toplevel of the working tree
       # git 1.8.3 does not support git -C
-      submodule_paths=($(up_path="${up_path}" \
-          ${GIT} submodule foreach --quiet --recursive 'echo "${up_path}${prefix}"'))
+      submodule_paths=($(up_path="${up_path}" relative_cwd="${relative_cwd}" \
+          ${GIT} submodule foreach --quiet --recursive \
+              'faux_displaypath="${up_path}${prefix}" && \
+               echo "${faux_displaypath//"${up_path}${relative_cwd}"/}"'))
     popd &> /dev/null
   else
     # displaypath is built-up from sm_path by ``git submodule foreach`` as it
@@ -507,7 +512,7 @@ function get_submodule_paths_recursively()
   fi
   IFS="${OLD_IFS}"
   local submodule_path
-  for submodule_path in "${submodule_paths[@]}"; do
+  for submodule_path in ${submodule_paths+"${submodule_paths[@]}"}; do
     # Remove trailing slashes because on some versions of git (1.8.3, 2.17.1),
     # prefix has a trailing slash
     # RE It may be that prefix always has a trailing slash and displaypath does not

@@ -183,9 +183,9 @@ begin_test "Check for unpushed tracked commits in submodules"
   BUILD_REPO="${TESTDIR}"/build_repo
   PRETEND_URL="${TESTDIR}/git/pretend_repo" # bare repo
   if [ "${OS-}" = "Windows_NT" ]; then
-    DIFFICULT_PATH='diff  i cult'
+    DIFFICULT_PATH='ext/diff  i cult'
   else
-    DIFFICULT_PATH=$'diff  i \t cult'
+    DIFFICULT_PATH=$'ext/diff  i \t cult'
   fi
   DIFFICULT_NAME='difficult submod'
 
@@ -329,9 +329,23 @@ begin_test "Check for unpushed tracked commits in submodules"
       [ "$(get_submodule_paths_recursively)" = "${ans}" ]
     popd &> /dev/null
 
+    # Test in a subdir that is in the path to the submodule (e.g., external and
+    # external/vsi_common)
+    [ "$(basename "${DIFFICULT_PATH}")" != "$(dirname "${DIFFICULT_PATH}")" ]
+    ans="$(printf "$(basename "${DIFFICULT_PATH}")\n$(basename "${DIFFICULT_PATH}")/a_sub_sub_module")"
+    pushd $(dirname "${DIFFICULT_PATH}") &> /dev/null
+      [ "$(get_submodule_paths_recursively)" = "${ans}" ]
+    popd &> /dev/null
+
     # Test in a submodule
     pushd "${DIFFICULT_PATH}" &> /dev/null
       [ "$(get_submodule_paths_recursively)" = "a_sub_sub_module" ]
+    popd &> /dev/null
+
+    # Test in a repo with no submodules
+    pushd "${DIFFICULT_PATH}/a_sub_sub_module" &> /dev/null
+      output="$(get_submodule_paths_recursively)"
+      [ "${output}" = "" ]
     popd &> /dev/null
 
     # Verify the listing of the submodule URLs
