@@ -169,12 +169,12 @@ function git_mirror_has_lfs()
 #
 # Mirror a submodule and all of its submodules (recursively)
 #
-# This is a helper function to :func:`git_mirror_main`. Create a mirror of each submodule in a git repository, recursively. Each mirror is stored according to its full relative path in the top-level repository in a unique temporary directory created in the GIT_MIRROR_PREP_DIR. Submodules of a submodule are processed recursively in a depth-first fashion.
+# This is a helper function to :func:`git_mirror_main`. Create a mirror of each submodule in a git repository, recursively. Each mirror is stored according to its full relative path in the project repository in a unique temporary directory created in the GIT_MIRROR_PREP_DIR. Submodules of a submodule are processed recursively in a depth-first fashion.
 #
 # WARNING: ``git submodule foreach`` runs commands via sh because git is weird; however I start bash and source this script for its vars and functions, so it's really bash again.
 #
-# :Arguments: ``GIT_MIRROR_PREP_DIR`` - The directory in which to mirror the submodules
-#             [``base_submodule_path``] - The (relative) path from the top-level repository to the submodule (i.e., ``git submodule foreach '$displaypath'`` assuming the CWD is the root of the top-level repository)
+# :Arguments: ``GIT_MIRROR_PREP_DIR`` - The directory in which to mirror the repositories
+#             [``base_submodule_path``] - The (relative) path from the project repository to the submodule (i.e., ``git submodule foreach '$displaypath'`` assuming the CWD is the root of the project repository)
 #
 # :Output: A mirrored submodule located at ``GIT_MIRROR_PREP_DIR/{temp_dir}/base_submodule_path``
 #**
@@ -307,7 +307,7 @@ function clone_submodules()
 # WARNING: ``git submodule foreach`` runs commands via sh because git is weird; however I start bash and source this script for its vars and functions, so it's really bash again.
 #
 # :Arguments: ``$1`` - A file specifying the mapping between each repository's original url and its mirror url
-#             [``base_submodule_path``] - The (relative) path from the top-level repository to the submodule
+#             [``base_submodule_path``] - The (relative) path from the project repository to the submodule
 # :Output: The recursively cloned submodule
 #**
 
@@ -354,7 +354,7 @@ function update_submodules()
 #
 # Downloads a mirror of a git repository and all of its submodules. The normal ``git clone --mirror`` command does not support submodules at all. This at least clones all the submodules available in the specified branch (master by default).
 #
-# The script creates a directory, referred to as a prep directory (or prep_dir), which will contain all of the repositories plus a single ``transfer_{date}.tgz`` archive file containing all the repositories, lfs objects, etc... Only this `tgz` file needs to be transferred to your destination.
+# The script creates a directory, referred to as a prep directory (or prep_dir), which will contain all of the mirrored repositories plus a single ``transfer_{date}.tgz`` archive file containing all of these repositories, lfs objects, etc... Only this `tgz` file needs to be transferred to your destination.
 #
 # Subsequent calls to :func:`git_mirror_main` can use the existing prep directory as cache, updating faster than the first time.
 #
@@ -364,10 +364,10 @@ function update_submodules()
 #
 # :Arguments: - ``$1`` - URL of the main git repository. On subsequent calls to this function, the prep (cache) dir created by this function can be used in lue of the repository's URL
 #             - [``$2``] - The git branch from which to identify the submodules. Default: master
-# :Parameters: [``GIT_MIRROR_PREP_DIR``] - The path at which to create the the prep directory; Default: ``${PWD}/{repo_name}_prep``
+# :Parameters: [``GIT_MIRROR_PREP_DIR``] - The output directory in which to mirror the repositories; Default: ``${PWD}/{repo_name}_prep``
 # :Output: - A prep directory which will contain all of the repositories plus a single ``transfer_{date}.tgz``
-#          - ``GIT_MIRROR_PREP_DIR`` - The path to the prep directory
-#          - ``GIT_MIRROR_MAIN_REPO`` - The main repository's name. Based off of ``$1``; e.g., vsi_common.git if the URL is https://github.com/VisionSystemsInc/vsi_common.git
+#          - ``GIT_MIRROR_PREP_DIR`` - The path to the mirrored repositories
+#          - ``GIT_MIRROR_MAIN_REPO`` - The main repository's name. Based off of ``$1``; e.g., vsi_common if the URL is https://github.com/VisionSystemsInc/vsi_common.git
 #
 # .. rubric:: Example
 #
@@ -422,14 +422,14 @@ function git_mirror_main()
 #
 # Downloads a mirror of a git repository and all of its submodules. The normal ``git clone --mirror`` command does not support submodules at all. This at least clones all the submodules available in the specified branch (master by default).
 #
-# Creates a directory, referred to as a prep directory (or prep_dir), which will contain all of the repositories. Subsequent calls to :func:`git_mirror_repos` can use the existing prep directory as cache, updating faster than the first time.
+# Creates a directory, referred to as a prep directory (or prep_dir), which will contain all of the mirrored repositories. Subsequent calls to :func:`git_mirror_repos` can use the existing prep directory as cache, updating faster than the first time.
 #
 # :Arguments: - ``$1`` - URL of the main git repository. On subsequent calls to this function, the prep (cache) directory created by this function can be used in lue of the repository's URL
 #             - [``$2``] - The git branch from which to identify the submodules. Default: master
-# :Parameters: [``GIT_MIRROR_PREP_DIR``] - The path at which to create the the prep directory; Default: ``${PWD}/{repo_name}_prep``
+# :Parameters: [``GIT_MIRROR_PREP_DIR``] - The output directory in which to mirror the repositories; Default: ``${PWD}/{repo_name}_prep``
 # :Output: - A prep directory which will contain all of the repositories
-#          - ``GIT_MIRROR_PREP_DIR`` - The path to the prep directory
-#          - ``GIT_MIRROR_MAIN_REPO`` - The main repository's name. Based off of ``$1``; e.g., vsi_common.git if the URL is https://github.com/VisionSystemsInc/vsi_common.git
+#          - ``GIT_MIRROR_PREP_DIR`` - The path to the mirrored repositories
+#          - ``GIT_MIRROR_MAIN_REPO`` - The main repository's name. Based off of ``$1``; e.g., vsi_common if the URL is https://github.com/VisionSystemsInc/vsi_common.git
 #
 # .. note::
 #
@@ -521,20 +521,14 @@ function git_mirror_repos()
 #**
 # .. function:: archive_mirrors
 #
-# Create an archive of the mirrored repositories in a prep directory
+# Create an in-place archive of a directory
 #
-# Creates a ``transfer_{date}.tgz`` archive file given a prep directory (prep_dir) created by :func:`git_mirror_repos`, which contains all of the repositories, lfs objects, etc... Only this `tgz` file needs to be transferred to your destination. This archive is created within the same prep_dir.
+# Create a ``transfer_{date}.tgz`` archive file of a directory. This archive is created within the same directory.
 #
-# Subsequent calls also create a second ``tgz`` file, ``transfer_{date1}_transfer_{date2}.tgz`` (on supported platforms). This is an incremental archive file. Instead of having to bring in an entire archive, only the incremental file is needed (plus the original full archive).
+# Subsequent calls also create a second ``tgz`` file, ``transfer_{date1}_transfer_{date2}.tgz`` (on supported platforms). This is an incremental archive file. Only the incremental file is needed (plus the original full archive).
 #
-# After you have moved the transfer archive to its destination, you can use :func:`git_push_main` to push these mirrored repositories to a new git server.
-#
-# :Arguments: - ``$1`` - The prep (cache) directory created by :func:`git_mirror_repos`
+# :Arguments: - ``$1`` - A directory to archive in-place
 # :Output: A ``transfer_{date}.tgz`` archive file and, on subsequent calls, an incremental ``transfer_{date1}_transfer_{date2}.tgz``
-#
-# .. seealso::
-#
-#   :func:`git_mirror_main`
 #**
 
 function archive_mirrors()
@@ -712,7 +706,7 @@ function git_clone_main()
 # However, because the urls for your mirrors will be different from the original repo urls in .gitmodules, and modifying the urls will change the git repo, which we do not want to do, you must create a file specifying the mapping between each repository's original url and its mirror url (remote). The main repo is referred to as ``.`` while the rest of the repos are referred to by the relative path with respect to the main repo (e.g. ``external/vsi_common``). These need to be stored in an associative array called ``repos``.
 #
 # :Arguments: ``$1`` - A file specifying the mapping between each repository's original url and its mirror url
-#             ``$2`` - The extracted prep dir from :func:`git_mirror_main`
+#             ``$2`` - The mirrored repositories (extracted from the archive) created by :func:`git_mirror_main`
 #
 # .. rubric:: Example
 #
