@@ -196,7 +196,7 @@ function _compose_arguments()
 #
 # :Arguments: * ``$1`` - Name of variable to store how many arguments were parsed
 #             * ``$2`` - Option string, like ``-o`` or ``--output``
-#             * ``$3`` - The name of the variable that will store the result of the argument if used. Can be prefixed with ``+`` for an array, and postfixed with a ``:`` for "has an argument
+#             * ``$3`` - Storage name: the name of the variable that will store the result of the argument if used. If suffix-less, treat the option as a flag without an associated argument and increment the storage for each occurrence of the flag. The storage can also be postfixed with ``!`` to instead decrement the storage. Alternatively, the storage name can also be postfixed with a ``:`` for an option-string that has a single argument or prefixed with ``+`` for an option-string that expects and an array.
 #             * [ ``$4...$N`` ] - Repeat ``$2`` and ``$3``
 #             * ``$N+1`` - Must be ``--`` to delineate the actual arguments are being passed in next
 #             * [``$N+2...``] - The argument to parse
@@ -208,10 +208,12 @@ function _compose_arguments()
 # #. Only parses until an argument is encountered that does not match an argument. This is useful for subcommand parsing
 # #. Can support any arguments option, even if they do not start with ``-``, but that is ill advised
 # #. Does not support combining multiple one letter arguments into one argument
-# #. Supports the ``:`` postfix notation for "has an argument", add it to the storage name, not the option string
+# #. Supports the ``:`` postfix notation for "has an argument"; add it to the storage name (not the option string)
 # #. Does not support the ``::`` notation for "maybe has an argument"
 # #. Supports a ``+`` prefix notation on the storage variable name meaning the storage is an array, and values are appended to it.
-# #. If options do not have an argument, then they are set to 0 if unset, and +1 for each time it is set
+# #. If options do not have an argument, then they are treated as a flag and set to 0 if unset and +1 for each time it is set.
+# #. Also supports the ``!`` postfix notation to decrement (instead of increment) the option-flag's storage name
+
 #
 # .. rubric:: Example
 #
@@ -219,26 +221,28 @@ function _compose_arguments()
 #    :caption: Here are two examples of using parse_args
 #
 #    local nit_pick
-#    local rebuild_all
-#    parse_args extra_args -n nit_pick --nit nit_pick -E rebuild_all --all rebuild_all -- ${@+"${@}"}
-#    shift "${extra_args}"
-#    if [ "${nit_pick}" != "0" ]; then
-#      export SPHINXOPTS="${SPHINXOPTS-} -n"
-#    fi
-#    if [ "${rebuild_all}" != "0" ]; then
-#      export SPHINXOPTS="${SPHINXOPTS-} -E -a"
-#    fi
-#
-#    # Sometimes you just need to add to extra_args because you already used it
-#    local compose_files=()
+#    local rebuild
+#    local include_files
 #    local args_parsed
-#    parse_args args_parsed -f +compose_files: --file +compose_files: -- ${@+"${@}"}
-#    extra_args+="${args_parsed}"
+#    parse_args args_parsed -n nit_pick --nit nit_pick \
+#                           --rebuild rebuild --no-rebuild rebuild! \
+#                           --include-files +include_files:
+#                           -- ${@+"${@}"}
 #    shift "${args_parsed}"
 #    ### Handle parsed arguments ###
-#    if [ "${#compose_files[@]}" != "0" ]; then
-#      local "${JUST_PROJECT_PREFIX}_SINGULAR_COMPOSE_FILES"
-#      dynamic_set_a "${JUST_PROJECT_PREFIX}_SINGULAR_COMPOSE_FILES" "${compose_files[@]}"
+#    if [ "${nit_pick}" != "0" ]; then
+#      echo "Be pedantic"
+#    fi
+#    if [ "${rebuild}" -gt 0 ]; then
+#      echo "Force full rebuild"
+#    elif [ "${rebuild}" -eq 0 ]; then
+#      echo "Incremental build"
+#    elif [ "${rebuild}" -lt 0 ]; then
+#      echo "Do not build"
+#    fi
+#    if [ "${#include_files[@]}" != "0" ]; then
+#      local "${JUST_PROJECT_PREFIX}_INCLUDE_FILES"
+#      dynamic_set_a "${JUST_PROJECT_PREFIX}_INCLUDE_FILES" "${include_files[@]}"
 #    fi
 #
 # .. note::
@@ -255,6 +259,7 @@ function parse_args()
   local __parse_args_storage=()
   local __parse_args_is_array=()
   local __parse_args_arguments=()
+  local __parse_args_decrement_flag=()
   local __parse_args_index
   local __parse_args_store
   local __parse_args_indirect
@@ -276,6 +281,14 @@ function parse_args()
       __parse_args_store="${__parse_args_store::${#__parse_args_store}-1}"
     else
       __parse_args_arguments+=(0)
+    fi
+
+    # REVIEW This may not pull its weight
+    if [ "${2: -1}" = "!" ]; then
+      __parse_args_store="${__parse_args_store::${#__parse_args_store}-1}"
+      __parse_args_decrement_flag+=(1)
+    else
+      __parse_args_decrement_flag+=(0)
     fi
 
     __parse_args_options+=("${1}")
@@ -342,7 +355,11 @@ function parse_args()
           shift 1
         else
           __parse_args_indirect=${__parse_args_storage[$__parse_args_index]}
-          dynamic_set "${__parse_args_indirect}" $((${!__parse_args_indirect}+1))
+          if [ "${__parse_args_decrement_flag[$__parse_args_index]}" = "1" ]; then
+            dynamic_set "${__parse_args_indirect}" $((${!__parse_args_indirect}-1))
+          else
+            dynamic_set "${__parse_args_indirect}" $((${!__parse_args_indirect}+1))
+          fi
         fi
       else # Array
         if [ "${__parse_args_arguments[$__parse_args_index]}" = "1" ]; then
