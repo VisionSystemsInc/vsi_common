@@ -77,6 +77,11 @@ class CiLoad:
 
     return os.path.normpath(dockerfile)
 
+  def cache_image(self, *extra_tags):
+    tags = [self.cache_version, self.main_service, *extra_tags]
+    cache_tag = '_'.join([t for t in tags if t])
+    return f'{self.cache_repo}:{cache_tag}'
+
   # 1 Write out pull file _dynamic_docker-compose_push_pull
   def write_push_pull_file(self):
     self.push_pull_file = tempfile.NamedTemporaryFile(mode='w')
@@ -85,14 +90,14 @@ class CiLoad:
     doc['version'] = '3.5'
     services = {}
     services[f'final_{self.main_service}'] = {'build': ".",
-        'image': f'{self.cache_repo}:final_{self.main_service}'}
+        'image': self.cache_image('final')}
     for stage in self.stages:
       services[f'stage_{stage}'] = {'build': '.',
-          'image': f'{self.cache_repo}:stage_{self.main_service}_{stage}'}
+          'image': self.cache_image('stage', stage)}
 
     for recipe in self.recipes:
       services[f'recipe_{recipe}'] = {'build': '.',
-          'image': f'{self.cache_repo}:recipe_{self.main_service}_{recipe}'}
+          'image': self.cache_image('recipe', recipe)}
 
     doc['services'] = services
 
@@ -121,7 +126,7 @@ class CiLoad:
       services[recipe] = {}
       services[recipe]['build'] = {}
       services[recipe]['build']['cache_from'] = \
-          [f'{self.cache_repo}:recipe_{self.main_service}_{recipe}',
+          [self.cache_image('recipe', recipe),
            f'{self.recipe_repo}:{recipe}']
 
     doc['services'] = services
@@ -140,7 +145,7 @@ class CiLoad:
 
       for recipe in self.recipes:
         Popen2([self.docker_exe, 'tag', f'{self.recipe_repo}:{recipe}',
-               f'{self.cache_repo}:recipe_{self.main_service}_{recipe}'])
+                self.cache_image('recipe', recipe)])
 
   def add_cache_from(self, cf):
     image = self.compose_yaml['services'][self.main_service].get('image')
@@ -151,11 +156,11 @@ class CiLoad:
       image = self.compose_yaml['services'][service].get('image')
       if image is not None:
         cf.append(image)
-    cf.append(f'{self.cache_repo}:final_{self.main_service}')
+    cf.append(self.cache_image('final'))
     for stage_from in self.stages:
-      cf.append(f'{self.cache_repo}:stage_{self.main_service}_{stage_from}')
+      cf.append(self.cache_image('stage', stage_from))
     for recipe in self.recipes:
-      cf.append(f'{self.cache_repo}:recipe_{self.main_service}_{recipe}')
+      cf.append(self.cache_image('recipe', recipe))
       cf.append(f'{self.recipe_repo}:{recipe}')
     return cf
 
@@ -171,7 +176,7 @@ class CiLoad:
         raise Exception(f'{stage_service_name} is already a service.')
       service = copy.deepcopy(self.compose_yaml['services'][self.main_service])
       # Set image name (for pushing)
-      service['image'] = f'{self.cache_repo}:stage_{self.main_service}_{stage}'
+      service['image'] = self.cache_image('stage', stage)
       # Set build target
       if 'build' not in service:
         service['build'] = {}
@@ -232,16 +237,16 @@ class CiLoad:
 
         target = yaml_content['services'][service]['build'].get('target', None)
         if target is None:
-          cmd += [f'{self.cache_repo}:final_{self.main_service}']
+          cmd += [self.cache_image('final')]
         else:
-          cmd += [f'{self.cache_repo}:stage_{self.main_service}_{target}']
+          cmd += [self.cache_image('stage', target)]
         cmd += [yaml_content['services'][service]['image']]
         Popen2(cmd)
 
     Popen2([self.docker_exe,
             'tag',
             main_image,
-            f'{self.cache_repo}:final_{self.main_service}'])
+            self.cache_image('final')])
 
   # 8 push
   def push_images(self):
@@ -261,6 +266,8 @@ class CiLoad:
        help='The compose project dir. Default: docker-compose.yml dir')
     aa('--cache-repo', type=str, default='vsiri/ci_cache',
        help='Docker repo for storing cache images')
+    aa('--cache-version', type=str, default=None,
+       help='Cache version')
     aa('--recipe-repo', type=str, default='vsiri/recipe',
        help='Repo recipes (ONBUILD) images are in')
     aa('--recipe-compose', type=str,
@@ -286,6 +293,7 @@ class CiLoad:
     self.main_service = args.main_service
     self.other_services = args.services
     self.cache_repo = args.cache_repo
+    self.cache_version = args.cache_version
     self.recipe_repo = args.recipe_repo
     self.recipe_compose = args.recipe_compose
     self.docker_compose_exe = args.docker_compose_exe
