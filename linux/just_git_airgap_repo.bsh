@@ -87,10 +87,10 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 #
 # List all unpushed commits to stdout
 #
-# List all commits on branches that have not been pushed to a remote. This is a set operation: it lists all the commits from a branch in the DAG except those reachable by a remote-tracking branch. It does not require an *associated* remote-tracking branch
+# List all commits on branches/tags that have not been pushed to a remote. This is a set operation: it lists all the commits from a branch in the DAG except those reachable by a remote-tracking branch. It does not require an *associated* remote-tracking branch
 #
 # :Arguments: - [``$1``] - A name of a remote to filter by; e.g., origin. If unset, then don't filter
-#             - [``$2``] - A branch's name to filter by; e.g., master. If unset, then don't filter
+#             - [``$2``] - A branch's/tag's name to filter by; e.g., master. If unset, then don't filter
 #
 # :Output: - ``*stdout*`` - Print all unpushed commits for tracking branches to stdout
 #**
@@ -99,10 +99,15 @@ function log_unpushed_commits()
 {
   # NOTE Only supports passing in a single branch and named remote
   local remote_name="${1-}"
-  local branch="${2---branches}"
+  local branch
+  if [ $# -lt 2 ]; then
+    branch=("--branches" "--tags")
+  else
+    branch="${2}"
+  fi
 
   local commits="$(${GIT} log --decorate --graph --format=short --color=always \
-      "${branch}" --not --remotes="${remote_name}")"
+      "${branch[@]}" --not --remotes="${remote_name}")"
 
   _log_commits_helper "unpushed" "${commits}"
 }
@@ -113,7 +118,7 @@ function _log_commits_helper()
   local commits="${2}"
 
   if [ "${commits}" != "" ]; then
-    # The log is colored... '\e[Xm' defines a color code; '\e[m' ends it
+    # If the log is colored... '\e[Xm' defines a color code; '\e[m' ends it
     local ncommits="$(echo "${commits}" | \
         grep -Eo -e '^(\| )*\*( \|)* +commit' \
                  -e '^(\e\[\d\dm\|\e\[m )*\*( \e\[\d\dm\|\e\[m)* +\e\[\d\dmcommit' | \
