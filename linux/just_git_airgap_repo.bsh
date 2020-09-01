@@ -15,6 +15,7 @@ source "${VSI_COMMON_DIR}/linux/parser.bsh"
 source "${VSI_COMMON_DIR}/linux/requirements.bsh"
 source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
 source "${VSI_COMMON_DIR}/linux/findin"
+source "${VSI_COMMON_DIR}/linux/command_tools.bsh"
 
 #*# just/plugins/just_git_airgap_repo
 
@@ -1178,81 +1179,46 @@ function relocate_git_defaultify()
       local branch
       local output_dir
       # In some versions of bash, these variables must explicitly be set to null
-      unset check_remote
       unset remote_name
       unset prep_dir
       unset branch
       unset output_dir
 
-      # REVIEW Switch to command_tools:parse_args
-      # RE Doesn't support help or die on unprocessed flags/positional arguments,
-      # so I'd have to have a while loop like this to deal with those anyway;
-      # Also have to handle the --no- variant manually
-      while (( $# )); do
-        # Convert arguments of the form -f=val to -f val and --flag=val to --flag val
-        # https://medium.com/@binaryphile/nice-one-elegant-in-its-simplicity-eee6b433bc90
-        if [[ $1 == -?=* ]] || [[ $1 == --*=* ]]; then
-          set -- "${1%%=*}" "${1#*=}" "${@:2}"
+      local parsed_args
+      local usage_help=0
+      # TODO Support --remote-url (but disallow also setting --check-remote)
+      parse_args parsed_args --help usage_help -h usage_help \
+          -b branch: --branch branch: \
+          -c check_remote --check-remote check_remote --no-check-remote check_remote! \
+          -r remote_name: --remote-name remote_name: -p prep_dir: --prep-dir prep_dir: \
+          -o output_dir: --output-dir output_dir: -- ${@+"${@}"}
+      shift "${parsed_args}"
+      if [ $# -gt 0 ]; then
+        if [[ "$1" = "-"* ]]; then
+          echo "Unknown flag: $1"
+        else
+          echo "Positional arguments are not allowed: $1"
         fi
-        case "$1" in
-          -h|--help)
-            echo "just git export-repo-guided [-b|--branch] [-c|--[no-]check-remote]"
-            echo "                            [-r|--remote-name] [-p|--prep-dir]"
-            echo "                            [-o|--output-dir] [-h|--help]"
-            echo
-            return 123
-            ;;
-          # The branch from which to identify the submodules
-          -b|--branch)
-            branch=$2
-            extra_args+=2
-            shift 2
-            ;;
-          # Check for unpushed commits
-          -c|--check-remote)
-            check_remote="1"
-            extra_args+=1
-            shift 1
-            ;;
-          # Don't check for unpushed commits
-          --no-check-remote)
-            check_remote="0"
-            extra_args+=1
-            shift 1
-            ;;
-          # Repository's remote name (e.g., origin)
-          -r|--remote-name)
-            remote_name=$2
-            extra_args+=2
-            shift 2
-            ;;
-          # NOTE Supporting remote_url is somewhat hard because the remote_name
-          # must be looked up somehow
-          #-u|--url)
-          #  ;;
-          # The directory to which the repo has previously been
-          # mirrored; it acts as a cache
-          -p|--prep-dir)
-            prep_dir=$2
-            extra_args+=2
-            shift 2
-            ;;
-          # The directory in which to mirror the repo
-          -o|--output-dir)
-            output_dir=$2
-            extra_args+=2
-            shift 2
-            ;;
-          -*|--*)
-            echo "Unknown flag: $1"
-            return 123
-            ;;
-          *)
-            echo "Positional arguments are not allowed: $1"
-            return 123
-            ;;
-        esac
-      done
+        return 123
+      fi
+
+      if [ "${usage_help}" != "0" ]; then
+        echo "just git export-repo-guided [-b|--branch] [-c|--[no-]check-remote]"
+        echo "                            [-r|--remote-name] [-p|--prep-dir]"
+        echo "                            [-o|--output-dir] [-h|--help]"
+        echo
+        echo "   -b, --branch         The branch on which to base the mirror; e.g., master"
+        echo "   -c, check-remote     Ensure that changes to a submodule that are tracked"
+        echo "   --no-check-remote    by its parent have been pushed to the submodule's URL"
+        echo "   -h, --help           Print this help"
+        echo "   -p, --prep-dir       The path to a previously mirrored repository"
+        echo "   -o, --output-dir     The output directory in which to mirror the repositories"
+        echo "   -r, --remote-name    The git remote (with associated URL) on which to base the"
+        echo "                        mirror; e.g., origin"
+        echo
+        exit 0
+      fi
+
       # Only prep_dir xor remote_name can be set
       if [ -n "${prep_dir+set}" ] && [ -n "${remote_name+set}" ]; then
         echo "Only one of --prep-dir and --remote-name can be given"
@@ -1431,7 +1397,7 @@ function relocate_git_defaultify()
           echo
           branch="${branches[picked-1]}"
         fi
-      elif [ -n "${branch+set}" ]; then
+      else
         # Validate branch is a git branch
         if ! isin "${branch}" "${valid_branches[@]}"; then
           echo "ERROR Unknown git branch provided with flag --branch: ${branch}"
@@ -1441,7 +1407,7 @@ function relocate_git_defaultify()
 
 
       # Is check_remote set by a flag
-      if [ -z "${check_remote+set}" ]; then
+      if [ "${check_remote}" == "0" ]; then
         ask_question "Do you want to ensure all local changes have been pushed to '${remote_name}'" \
             check_remote y
         echo
