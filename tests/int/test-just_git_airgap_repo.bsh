@@ -47,6 +47,10 @@ begin_test "Part 1 - Setup test repo"
   setup_test
   setup_variables
 
+  pushd "${VSI_COMMON_DIR}" &> /dev/null
+    VSI_COMMON_SHA="$(git rev-parse HEAD)"
+  popd &> /dev/null
+
   # Create faux-urls for the repo and its submodules
   # FIXME This is creating a faux-mirror from a (local) clone. Therefore, the
   # tracked commit must be exist on a local branch (because only local branches
@@ -60,6 +64,7 @@ begin_test "Part 1 - Setup test repo"
     # complexities like lfs
     # The mirror's HEAD will be at the SHA as the real VSI_COMMON_DIR under test
     git clone --mirror "${VSI_COMMON_DIR}" . # This is the real VSI_COMMON_DIR
+    [ "${VSI_COMMON_SHA}" = "$(git rev-parse HEAD)" ]
   popd &> /dev/null
 
   # In this case, it is lucky that the recipes submodule is stored as a relative
@@ -83,6 +88,7 @@ begin_test "Part 1 - Setup test repo"
     # checked out as the VSI_COMMON_DIR being tested
     git submodule add "${VSI_COMMON_URL}" vsi_common
     git submodule update --init --recursive
+    [ "${VSI_COMMON_SHA}" = "$(git submodule status vsi_common | awk '{print $1}')" ]
     git add vsi_common
 
     git commit -m "Added submodules"
@@ -101,7 +107,7 @@ begin_test "Part 2 - Initial mirror"
 
   pushd "${BUILD_REPO}" &> /dev/null
     . "${BUILD_REPO}/vsi_common/linux/just_git_airgap_repo.bsh"
-    # FIXME omitting JUST_VERSION did not cause this test to fail, even though
+    # FIXME: omitting JUST_VERSION did not cause this test to fail, even though
     # it results in an unbound variable
     GIT_MIRROR_PREP_DIR="${PREP_DIR}"
     VSI_COMMON_DIR="${BUILD_REPO}"/vsi_common JUST_VERSION=1.0 JUST_USER_CWD="${PWD}" \
