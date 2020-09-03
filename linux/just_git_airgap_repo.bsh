@@ -425,7 +425,7 @@ function git_project_root_dir()
 }
 
 #**
-# .. function:: submodule_summary
+# .. function:: recursive_submodule_summary
 #
 # Compare the expected commit of each submodule to its current working tree
 #
@@ -438,15 +438,28 @@ function git_project_root_dir()
 #   https://git-scm.com/docs/git-diff#Documentation/git-diff.txt---submoduleltformatgt
 #**
 
-# TODO Support iterating through all submodules
-function submodule_summary()
+function recursive_submodule_summary()
 {
+  echo "Entering ${PWD}"
+
   local OLD_IFS="${IFS}"
   IFS=$'\n'
-  for x in $(${GIT} config --name-only --file .gitmodules --get-regexp '^submodule\..*\.path$'); do
-    ${GIT} diff --submodule=log "$(${GIT} config --file .gitmodules --get "${x}")"
-  done
+  # More robust than just_git_functions.bsh:submodule-helper-list
+  # REVIEW Could use get_submodule_paths_recursively if it was not recursive
+  local submodule_keys=($(get_submodule_names))
   IFS="${OLD_IFS}"
+
+  local sm_key
+  for sm_key in ${submodule_keys+"${submodule_keys[@]}"}; do
+    local sm_path="$(${GIT} config --file .gitmodules --get "${sm_key}".path)"
+
+    ${GIT} diff --submodule=log "${sm_path}"
+
+    pushd "${sm_path}" &>/dev/null
+      # Depth-first traversal
+      submodule_summary
+    popd &>/dev/null
+  done
 }
 
 #**
