@@ -373,12 +373,18 @@ function is_submodule()
         # In git 1.8.3, git submodule must be run in the toplevel of the
         # working tree
         # git 1.8.3 does not support git -C
+        #
         # Strip trailing / (this may be guaranteed by sm_path)
-        # real_path may be necessary here
+        # real_path may be necessary to ensure the grep succeeds
         if ${GIT} submodule foreach 'echo "${sm_path%/}"' | \
             grep "${prefix}${sm_basename}" &> /dev/null; then
           is_submod=0
         fi
+        #
+        # Alternatively, use get_submodule_names and then git config to query
+        # the sm_path (as git_sync_submodules_recursively does)
+        # RE Shouldn't be necessary in this case, as the submodule should
+        # always be init'd and updated since we are recursing up through it
       popd &> /dev/null
     fi
   popd &> /dev/null
@@ -453,6 +459,7 @@ function recursive_submodule_summary()
   for sm_key in ${submodule_keys+"${submodule_keys[@]}"}; do
     local sm_path="$(${GIT} config --file .gitmodules --get "${sm_key}".path)"
 
+    # Cf. git submodule summary - doesn't show modified/staged content
     ${GIT} diff --submodule=log "${sm_path}"
 
     pushd "${sm_path}" &>/dev/null
@@ -481,7 +488,11 @@ function recursive_submodule_summary()
 #
 # .. note::
 #
-#   Because this function uses ``git submodule foreach``, it skips submodules that have been init'd but not updated. Cf. :func:`git_mirror get_submodule_names`. Likewise, it (or anything else) will not work in a bare/mirror repo.
+#   This function lists the path of each submodule in the same order as :func:`get_submodule_urls_recursively` lists its URL.
+#
+# .. note::
+#
+#   Because this function uses ``git submodule foreach``, it skips submodules that have been init'd but not updated. Cf. :func:`git_mirror get_submodule_names`, which will list submodules that have only been init'd (it non-recursively queries the current repository's submodule names from its configuration). However, neither this nor anything else will work in a bare/mirror repo.
 #
 # .. seealso::
 #
@@ -578,7 +589,12 @@ function get_submodule_paths_recursively()
 #
 # .. note::
 #
-#   Because this function uses ``git submodule foreach``, it skips submodules that have been init'd but not updated. Cf. :func:`git_mirror get_submodule_names`. Likewise, it (or anything else) will not work in a bare/mirror repo.
+#   This function lists the URL of each submodule in the same order as :func:`get_submodule_paths_recursively` list its path.
+#
+# .. note::
+#
+#   Because this function uses ``git submodule foreach``, it skips submodules that have been init'd but not updated. Cf. :func:`git_mirror get_submodule_names`, which will list submodules that have only been init'd (it non-recursively queries the current repository's submodule names from its configuration). However, neither this nor anything else will work in a bare/mirror repo.
+
 #**
 
 # REVIEW It would be easy to also do this non-recursively (simply don't add the
@@ -1026,8 +1042,6 @@ function submodule-helper-relative-url()
 #   Creates the just_upstream remote just like, and using the same procedure as, :func:`just_git_functions.bsh safe_git_submodule_update`; however, importantly, it does not try to update the submodule to the expected SHA.
 #**
 
-# REVIEW just_git_functions.bsh:safe_git_submodule_update is broken. Use this
-# function instead
 function git_sync_submodules_recursively()
 {
   local remote_name="${1-origin}"
@@ -1038,7 +1052,6 @@ function git_sync_submodules_recursively()
   IFS=$'\n'
   # More robust than just_git_functions.bsh:submodule-helper-list
   local submodule_keys=($(get_submodule_names))
-  #local tracked_shas=($(${GIT} submodule foreach --quiet 'echo "${prefix-"${displaypath}"}" ${sha1}'))
   IFS="${OLD_IFS}"
 
   local sm_key
@@ -1120,6 +1133,8 @@ function _check_submodules_are_pushed_recursively()
   IFS=$'\n'
   # More robust than just_git_functions.bsh:submodule-helper-list
   local submodule_keys=($(get_submodule_names))
+  # NOTE This command will actually skip a submodule that has been init'd but
+  # not updated
   #local tracked_shas=($(${GIT} submodule foreach --quiet 'echo "${prefix-"${displaypath}"}" ${sha1}'))
   IFS="${OLD_IFS}"
 
