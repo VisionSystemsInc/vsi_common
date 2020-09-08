@@ -68,7 +68,7 @@ class TaskTimer(object):
 
 
 class GenericTimer(object):
-  def __init__(self, msg, logging_func=None):
+  def __init__(self, msg, logging_func=print):
     self.msg = msg
     self.logging_func = logging_func
 
