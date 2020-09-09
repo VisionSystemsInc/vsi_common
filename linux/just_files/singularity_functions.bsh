@@ -35,6 +35,14 @@ source "${VSI_COMMON_DIR}/linux/elements.bsh"
 : ${SINGULARITY=singularity}
 
 #**
+# .. var:: SINGULARITY_INSTANCE_NAME_REGEX
+#
+# Regex to validate singularity instance names against
+#**
+# From https://git.io/JUc9w
+SINGULARITY_INSTANCE_NAME_REGEX='^[a-zA-Z0-9._-]+$'
+
+#**
 # .. function:: Singularity
 #
 # :Arguments: ``$1``.. - Arguments to be sent to singularity command
@@ -113,6 +121,7 @@ function singularity_env_pass()
 #           * ``singular_environment`` - A key-value pair array of environment variables that need to be passed to the singularity container.
 #           * ``singular_image`` - The filename of the singularity image used.
 #           * ``singular_mount_points`` - List of mount points that need to be created when importing a docker image to singularity. This is only important for older systems that do not support overlayfs (like CentOS 6). Directories must end in ``/``, and files must not.
+#           * ``singular_instance_name`` - The name of the singularity instance uses, including a unique hash for the project (Based off of username and path)
 #**
 function singular_load_env()
 {
@@ -171,7 +180,6 @@ function singular_load_env()
   # Prepend environment list with values from compose file.
   local temp=(${!indirect+"${!indirect}"} ${singular_environment[@]+"${singular_environment[@]}"})
   local -i i
-  local s
   singular_environment=()
   # There are two possible syntaxes for environment variables. An array would
   # have pairs of entries: key, value, key, value, etc. However, a non-array
@@ -211,4 +219,16 @@ function singular_load_env()
 
   indirect="${1}_mount_points[@]"
   singular_mount_points=(${!indirect+"${!indirect}"})
+
+  ############################
+  ### Handle instance name ###
+  ############################
+
+  indirect="${JUST_PROJECT_PREFIX}_CWD"
+  # checksum[0] has the checksum
+  local checksum=($(echo "$(id -u):${!indirect+${!indirect}}" | find_any_hash_func))
+
+  indirect="${1}_instance"
+  # Only take the first 12 characters
+  singular_instance_name=${!indirect+"${!indirect}-${checksum[0]::12}"}
 }
