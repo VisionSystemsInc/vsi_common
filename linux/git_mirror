@@ -62,6 +62,20 @@ GIT_MIRROR_SOURCE="$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)"/"$(basename "${B
 : ${GIT=git}
 
 #**
+# .. var:: TAR
+#
+# Name/path of tar executable
+#
+# Instead of hard-coding "tar" everywhere, use the variable :var:`TAR` so that when the need comes, it is easier to switch which executable gets called. Default is ``tar``.
+#
+# .. note::
+#
+#   When using the TAR env variable in this file, do not surround it with quotes as you normally would. Although this prevents using a path to ``tar`` with a space in it, in exchange, it may be possible (eventually) to enable a dry-run-ish capability if TAR is set to 'echo tar'.
+#**
+
+: ${TAR=tar}
+
+#**
 # .. function:: next_section
 #
 # Change the color of the text output to sdtout/stderr
@@ -549,7 +563,7 @@ function archive_mirrors()
   local temp_file
   make_temp_path temp_file
   local TAR_INCREMENTAL=1
-  tar -cf /dev/null -g "${temp_file}" /dev/null &> /dev/null || TAR_INCREMENTAL=0
+  ${TAR} -cf /dev/null -g "${temp_file}" /dev/null &> /dev/null || TAR_INCREMENTAL=0
 
   pushd "${prep_dir}" &> /dev/null
     next_section "Creating tar file..."
@@ -575,6 +589,7 @@ function archive_mirrors()
     local tar_vendor
     tar_version_info # Sets tar_version and tar_vendor
     local args=()
+    local CWD
     if [ "${tar_vendor}" == "BSD" ] && meet_requirements "${tar_version}" ">=3"; then
       CWD="${PWD}"
       # Because the archive is created with absolute paths, count how many path
@@ -586,7 +601,7 @@ function archive_mirrors()
     else
       # This will work properly on GNU tar, but on older versions of BSD tar,
       # like 2.8.3, this will suffer the problem of excluded file collisions
-      # mentioned above.
+      # mentioned above. Similarly, this cannot be ''
       # This is ok here because our archives are datetime stamped so a collision
       # is very unlikely
       CWD='.'
@@ -609,9 +624,9 @@ function archive_mirrors()
       # Get the last one, alphabetically speaking
       last_tar_file="$(ls "${prep_dir}"/transfer_*.snar 2>/dev/null | tail -n1)"
       last_tar_file="$(basename "${last_tar_file%.snar}")"
-      tar czf "${tar_file}.tgz" -g "${tar_file}.snar" "${args[@]}" "${CWD}"
+      ${TAR} czf "${tar_file}.tgz" -g "${tar_file}.snar" "${args[@]}" "${CWD}"
     else
-      tar czf "${tar_file}.tgz" "${args[@]}" "${CWD}"
+      ${TAR} czf "${tar_file}.tgz" "${args[@]}" "${CWD}"
     fi
 
     if [[ "${TAR_INCREMENTAL}" = "1" ]] && [[ ${last_tar_file} != "" ]]; then
@@ -620,7 +635,7 @@ function archive_mirrors()
       cp "${last_tar_file}.snar" "${last_tar_file}.l1.snar"
       # This snar file isn't actually used for anything because the next
       # incremental backup is created from the previous full backup
-      tar czf "${tar_file}_${last_tar_file}.tgz" -g "${last_tar_file}.l1.snar" "${args[@]}" "${CWD}"
+      ${TAR} czf "${tar_file}_${last_tar_file}.tgz" -g "${last_tar_file}.l1.snar" "${args[@]}" "${CWD}"
       next_section "Your new tar file is ready:"
       echo "${prep_dir}/${tar_file}.tgz"
       echo "and you have an incremental file:"
