@@ -333,138 +333,6 @@ def quaternion_to_matrix(q):
 
   return R
 
-def Euler_angles_to_matrix(angles, order=(0,1,2)):
-  """ Convert a rotation matrix to Euler angles (X,Y,Z) order
-
-      Parameters
-      ----------
-      angles : array_like
-        The Euler Angles
-      order : array_like
-        The Order
-      
-      Returns
-      -------
-      array_like
-        The Euler Angles
-
-      From Graphics Gems tog.acm.org/resources/GraphicsGems/gemsiv/euler_angle
-  """
-  parity_even=True
-  from_S=True
-  repeat=False
-  if not from_S:
-    # swap angle order
-    angles = (angles[2], angles[1], angles[0])
-
-  if not parity_even:
-    # negate angles
-    angles = (-angles[0], -angles[1], -angles[2])
-
-  ti = angles[0]
-  tj = angles[1]
-  th = angles[2]
-
-  ci = np.cos(ti)
-  cj = np.cos(tj)
-  ch = np.cos(th)
-
-  si = np.sin(ti)
-  sj = np.sin(tj)
-  sh = np.sin(th)
-
-  cc = ci*ch
-  cs = ci*sh
-  sc = si*ch
-  ss = si*sh
-
-  i,j,k = order
-
-  M = np.zeros((3,3))
-  if repeat:
-    M[i,i] = cj;     M[i,j] =  sj*si;    M[i,k] =  sj*ci
-    M[j,i] = sj*sh;  M[j,j] = -cj*ss+cc; M[j,k] = -cj*cs-sc
-    M[k,i] = -sj*ch; M[k,j] =  cj*sc+cs; M[k,k] =  cj*cc-ss
-  else:
-    M[i,i] = cj*ch; M[i,j] = sj*sc-cs; M[i,k] = sj*cc+ss
-    M[j,i] = cj*sh; M[j,j] = sj*ss+cc; M[j,k] = sj*cs-sc
-    M[k,i] = -sj;   M[k,j] = cj*si;    M[k,k] = cj*ci
-
-  return M
-
-
-def matrix_to_Euler_angles(M, order=(0,1,2)):
-  """ Convert a rotation matrix to Euler angles (X,Y,Z) order
-
-      Parameters
-      ----------
-      M : array_like
-        The Rotation Matrix
-      order : array_like
-
-      Returns
-      -------
-      array_like
-        The Euler Angles
-
-    From Graphics Gems tog.acm.org/resources/GraphicsGems/gemsiv/euler_angle
-  """
-  parity_even=True
-  from_S=True
-  repeat=False
-
-  i = order[0]
-  j = order[1]
-  k = order[2]
-  euler = np.zeros(3)
-  if repeat:
-    sy = np.sqrt(M[i,j]*M[i,j] + M[i,k]*M[i,k])
-    if sy > 1e-6:
-      euler[0] = np.arctan2(M[i,j], M[i,k])
-      euler[1] = np.arctan2(sy, M[i,i])
-      euler[2] = np.arctan2(M[j,i], -M[k,i])
-    else:
-      euler[0] = atan2(-M[j,k], M[j,j])
-      euler[1] = atan2(sy, M[i,i])
-      euler[2] = 0
-
-  else:
-    cy = np.sqrt(M[i,i]*M[i,i] + M[j,i]*M[j,i])
-    if cy > 1e-6:
-      euler[0] = np.arctan2(M[k,j], M[k,k])
-      euler[1] = np.arctan2(-M[k,i], cy)
-      euler[2] = np.arctan2(M[j,i], M[i,i])
-    else:
-      euler[0] = np.arctan2(-M[j,k], M[j,j])
-      euler[1] = np.arctan2(-M[k,i], cy)
-      euler[2] = 0
-
-  if not parity_even:
-    euler *= -1
-  if not from_S:
-    euler = np.array((euler[2], euler[1], euler[0]))
-  return euler
-
-
-def rotate_vector(v, axis, angle):
-  """ rotate the vector v around axis by angle radians
-
-      Parameters
-      ----------
-      v : array_like
-        The Vector
-      axis : array_like
-        The Axis
-      angle : float
-        The Angle Radians
-
-      Returns
-      -------
-      array_like
-  """
-  R = axis_angle_to_matrix(axis,angle)
-  return np.dot(R,v)
-
 
 def matrix_to_quaternion(rot):
   """ convert rotation matrix rot to quaternion
@@ -595,6 +463,56 @@ def matrix_to_Euler_angles(M, order='XYZ'):
       Angles are returned in the order of application.
   """
   return quaternion_to_Euler_angles(matrix_to_quaternion(M),order=order)
+
+
+def make_RT(R, T=None, pos=None):
+    """ Construct a 4x4 homogeneous rigid transform matrix.
+    Specify R and at most one of T, pos
+
+    Parameters
+    ----------
+    R : array_like
+      The rotation matrix
+    T : array_like (optional)
+      The translation vector
+    pos : array_like (optional)
+      The origin of the transformed coordinate system
+
+    Returns
+    -------
+    array_like
+      The 4x4 transformation matrix
+    """
+    assert (T is None) or (pos is None), "Specify at most one of T, pos"
+
+    if T is None:
+        if pos is None:
+            T = np.zeros(3)
+        else:
+            T = np.dot(-R, pos)
+
+    RT_3x4 = np.concatenate((R, T.reshape(3,1)), axis=1)
+    RT = np.concatenate((RT_3x4, np.zeros((1,4))), axis=0)
+    RT[3,3] = 1.0
+    return RT
+
+
+def invert_RT(RT):
+    """ Invert a 4x4 rigid transformation matrix
+
+    Parameters
+    ----------
+    RT : array_like
+        The 4x4 transformation matrix to invert
+
+    Returns
+    -------
+    array_like
+        The inverted 4x4 tranformation matrix
+    """
+    Rinv = RT[:3,:3].transpose()
+    Tinv = -np.dot(Rinv, RT[:3,3])
+    return make_RT(Rinv, T=Tinv)
 
 
 def rotate_vector(v, axis, angle):
@@ -804,7 +722,7 @@ class AxisAlignedBox(object):
     self.max_pt = np.array(max_pt)
 
     """ constructor
-    
+
         Parameters
         ----------
         min_pt : array_like
@@ -1028,7 +946,7 @@ def sample_unit_sphere(N):
 
 
 def stack_RT(R,T):
-  """ convert a rotation / translation combination to a homogenous transform 
+  """ convert a rotation / translation combination to a homogenous transform
 
       Parameters
       ----------
@@ -1096,7 +1014,7 @@ def volume_corners(vol_origin, vol_extent):
 
 def compute_2D_affine_xform(from_points, to_points):
   """ find H
-  
+
       Parameters
       ----------
       from_points : array_like
