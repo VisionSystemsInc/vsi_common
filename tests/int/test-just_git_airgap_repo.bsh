@@ -25,6 +25,34 @@ function setup()
   export GIT_AUTHOR_NAME='Foo Bar'
   export GIT_COMMITTER_EMAIL='foo.bar@example.com'
   export GIT_AUTHOR_EMAIL='foo.bar@example.com'
+
+  # Test if git supports difficult submodule paths
+  # TODO Add a flag to compat.bsh once we figure out which version of git
+  # difficult submodule names are supported in
+  git_supports_difficult_submodule_paths=0
+  GIT_TEST_REPO="${TRASHDIR}/setup/test"
+  SUBMODULE_REPO="${TRASHDIR}/setup/difficult"
+  SUBMODULE_URL="${TRASHDIR}/setup/git/difficult.git"
+  mkdir -p "${SUBMODULE_REPO}"
+  pushd "${SUBMODULE_REPO}" &> /dev/null
+    git init . &> /dev/null
+    touch readme_sub
+    git add readme_sub
+    git commit -m "initial commit" &> /dev/null
+  popd &> /dev/null
+  mkdir -p "${SUBMODULE_URL}"
+  pushd "${SUBMODULE_URL}" &> /dev/null
+    git clone --mirror "${SUBMODULE_REPO}" . &> /dev/null
+  popd &> /dev/null
+  mkdir -p "${GIT_TEST_REPO}"
+  pushd "${GIT_TEST_REPO}" &> /dev/null
+    git init . &> /dev/null
+    git submodule add "${SUBMODULE_URL}" $'diff  i \t cult' &> /dev/null
+    git commit -m "add submodule" &> /dev/null &> /dev/null
+    if [ "$(git submodule foreach 'echo "${name}"')" == "" ]; then
+      git_supports_difficult_submodule_paths=1 # git does not support difficult names
+    fi
+  popd &> /dev/null
 }
 
 function setup_variables()
@@ -191,7 +219,7 @@ begin_test "Check for unpushed tracked commits in submodules"
 
   BUILD_REPO="${TESTDIR}"/build_repo
   PRETEND_URL="${TESTDIR}/git/pretend_repo" # bare repo
-  if [ "${OS-}" = "Windows_NT" ]; then
+  if [ "${git_supports_difficult_submodule_paths}" -ne 0 ]; then
     DIFFICULT_PATH='ext/diff  i cult'
   else
     DIFFICULT_PATH=$'ext/diff  i \t cult'
@@ -658,7 +686,7 @@ begin_test "Make remote pushable"
 
   BUILD_REPO="${TESTDIR}"/build_repo
   PRETEND_URL="${TESTDIR}/git/pretend_repo" # bare repo
-  if [ "${OS-}" = "Windows_NT" ]; then
+  if [ "${git_supports_difficult_submodule_paths}" -ne 0 ]; then
     DIFFICULT_PATH='diff  i cult'
   else
     DIFFICULT_PATH=$'diff  i \t cult'
