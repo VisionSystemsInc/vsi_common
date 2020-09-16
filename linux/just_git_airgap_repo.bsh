@@ -747,7 +747,7 @@ function create_repo_map()
 #
 # Orphan commit the repo_map.env file
 #
-# Given a repository mapping like the one produced by :func:`create_repo_map`, make an orphan commit in the repository (on a branch named __just_git_mirror_info_file by default) to a file named repo_map.env. An intermediate product of this function is a shallow clone (which uses hardlinks by default) of the current repo to a temporary directory, which is removed at the end of the function.
+# Given a repository mapping like the one produced by :func:`create_repo_map`, make an orphan commit in the repository (on a branch named __just_git_mirror_info_file by default) to a file named repo_map.env.
 #
 # :Arguments: - ``$1`` - The contents of the repo_map.env file; i.e., the file that maps between the submodule's path and its new URL
 #             - [``$2``] - The name of the branch on which to make the orphan commit. Default: __just_git_mirror_info_file
@@ -758,23 +758,17 @@ function orphan_commit_repo_map
   repo_map="${1}"
   orphan_branch="${2-__just_git_mirror_info_file}"
 
-  # Clone (non-recursively) the repo in which to make the orphan commit.
-  # Supports starting in a bare repo. Also avoids possibly needing to run
-  # 'git reset --hard' after checking out the orphan branch followed by
-  # 'git checkout' after committing to it.
-  # NOTE Uses hard-links on linux
-  #
-  # Clone into an automatically deleting temporary directory
-  make_temp_path temp_repo -d just.XXXXXXXXXX
-  ${GIT} clone --no-checkout . "${temp_repo}"
+  local remote_local_url="$(git_project_root_dir)"
+  # Create an automatically deleting temporary directory
+  local temp_repo
+  make_temp_path temp_repo -d
+  # FIXME Clone the orphan branch from the mirror (if it exists)
+  # git clone --single-branch --branch "${orphan_branch}" "$(_git_mirror_get_url .)" "${temp_repo}"
+  # Alternatively, https://stackoverflow.com/a/7349740/1771778
   pushd "${temp_repo}" &>/dev/null
-    # Avoids checking out the files in the previously checked-out branch
-    # and staging them for deletion when switching to a new (orphan) branch,
-    # which then requires running 'git reset --hard' and/or 'git rm -rf .' I
-    # can't find a better way to do this
-    rm -f "$(${GIT} rev-parse --git-dir)"/refs/heads/*
-    ${GIT} checkout "${orphan_branch}" 2>/dev/null || \
-        ${GIT} checkout --orphan "${orphan_branch}"
+    ${GIT} init
+    ${GIT} remote add origin "${remote_local_url}"
+    ${GIT} checkout --orphan "${orphan_branch}"
 
     echo "${repo_map}" > repo_map.env
 
@@ -785,16 +779,6 @@ function orphan_commit_repo_map
            -m "the repo_map.env file needed by just:git_mirror that maps repo_paths to urls"
     ${GIT} push --force origin "${orphan_branch}"
   popd &>/dev/null
-  #
-  # ALTERNATIVELY
-  #current_branch="$(git rev-parse --abbrev-ref HEAD)"
-  #${GIT} checkout "${orphan_branch}" 2>/dev/null || \
-  #     ${GIT} checkout --orphan "${orphan_branch}"
-  #git reset --hard # This is important if "${orphan_branch}" was just created
-  #
-  #echo "${repo_map}" > repo_map.env
-  #
-  #${GIT} checkout "${current_branch}" # This could be expensive
 }
 
 #**
