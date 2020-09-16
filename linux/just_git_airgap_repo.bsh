@@ -477,8 +477,7 @@ function recursive_submodule_summary()
 
   local OLD_IFS="${IFS}"
   IFS=$'\n'
-  # REVIEW Could use get_submodule_displaypaths_recursively if it was not recursive
-  local submodule_keys=($(get_config_submodule_names))
+  local submodule_keys=($(get_submodule_displaypaths))
   IFS="${OLD_IFS}"
 
   local sm_key
@@ -496,12 +495,13 @@ function recursive_submodule_summary()
 }
 
 #**
-# .. function:: get_submodule_displaypaths_recursively
+# .. function:: get_submodule_displaypaths
 #
 # Get the displaypath to each submodule
 #
 # Get what git refers to as the displaypath of the submodule: the relative path from the current working directory to the root of the containing repository and then to each submodule. This path is defined by the git-specified environment variable, displaypath (or prefix depending on git version).
 #
+# :Parameters: [``RECURSIVE``] - Should the submodules be iterated through recursively. Default: unset
 # :Output: *stdout* - The displaypath to each submodule (recursively); e.g., docker/recipes
 #
 # .. note::
@@ -514,7 +514,7 @@ function recursive_submodule_summary()
 #
 # .. note::
 #
-#   This function lists the path of each submodule in the same order as :func:`get_submodule_urls_recursively` lists its URL.
+#   This function lists the path of each submodule in the same order as :func:`get_submodule_urls` lists its URL.
 #
 # .. note::
 #
@@ -525,13 +525,19 @@ function recursive_submodule_summary()
 #   :func:`just_git_functions submodule-helper-list` and :func:`git_mirror get_config_submodule_names`; although these are not recursive, they both are used to recurse manually through all the submodules
 #**
 
-# REVIEW Create get_submodule_names(_recursively). These three functions will
-# iterate through the submodules in the same order. However, this function
-# contrasts with git_mirror:get_config_submodule_names, which lists the
-# submodule names by querying the repository's configuration, but in a different
-# order
-function get_submodule_displaypaths_recursively()
+# REVIEW Create get_submodule_names. These three functions will iterate through
+# the submodules in the same order. However, this function contrasts with
+# git_mirror:get_config_submodule_names, which lists the submodule names by
+# querying the repository's configuration, but in a different order
+function get_submodule_displaypaths()
 {
+  local recursive_flag
+  if [ -n "${RECURSIVE+set}" ]; then
+    recursive_flag=("--recursive")
+  else
+    recursive_flag=()
+  fi
+
   # Relative path from the CWD to the root of the current repository
   local up_path="$(${GIT} rev-parse --show-cdup)"
   # Relative path from the root of the current repository to the CWD
@@ -557,7 +563,7 @@ function get_submodule_displaypaths_recursively()
       # In git 1.8.3, git submodule must be run in the toplevel of the working tree
       # git 1.8.3 does not support git -C
       submodule_paths=($(up_path="${up_path}" relative_cwd="${relative_cwd}" \
-          ${GIT} submodule foreach --quiet --recursive \
+          ${GIT} submodule foreach --quiet ${recursive_flag[@]+"${recursive_flag[@]}"} \
               'faux_displaypath="${up_path}${prefix}" && \
                echo "${faux_displaypath//"${up_path}${relative_cwd}"/}"'))
     popd &> /dev/null
@@ -566,7 +572,8 @@ function get_submodule_displaypaths_recursively()
     # iterates through the submodules using ``git submodule--helper list``,
     # which queries info from .git/index; see
     # https://github.com/git/git/blob/v2.16.0/git-submodule.sh#L304
-    submodule_paths=($(${GIT} submodule foreach --quiet --recursive 'echo "${displaypath}"'))
+    submodule_paths=($(${GIT} submodule foreach --quiet \
+        ${recursive_flag[@]+"${recursive_flag[@]}"} 'echo "${displaypath}"'))
   fi
   IFS="${OLD_IFS}"
   local submodule_path
@@ -603,13 +610,14 @@ function get_submodule_displaypaths_recursively()
 }
 
 #**
-# .. function:: get_submodule_urls_recursively
+# .. function:: get_submodule_urls
 #
 # Get all submodule URLs
 #
 # Get the (last) URL for each submodule (recursively) from its .git/\*\*/config file (e.g., .git/modules/docker/recipes/config) for the specified remote (origin by default). Note: Since git 1.8, a remote can have multiple associated URLs (and pushurls) (see .git/config).
 #
 # :Arguments: [``$1``] - The name of a remote. Note: this same remote must exist in all submodules. Default: origin
+# :Parameters: [``RECURSIVE``] - Should the submodules be iterated through recursively. Default: unset
 # :Output: *stdout* - The URL of each submodule (recursively); e.g., https://github.com/VisionSystemsInc/docker_recipes.git
 #
 # .. note::
@@ -618,7 +626,7 @@ function get_submodule_displaypaths_recursively()
 #
 # .. note::
 #
-#   This function lists the URL of each submodule in the same order as :func:`get_submodule_displaypaths_recursively` list its path.
+#   This function lists the URL of each submodule in the same order as :func:`get_submodule_displaypaths` list its path.
 #
 # .. note::
 #
@@ -626,16 +634,21 @@ function get_submodule_displaypaths_recursively()
 
 #**
 
-# REVIEW It would be easy to also do this non-recursively (simply don't add the
-# --recursive flag). Perhaps an env variable could be set to make this recursive
-function get_submodule_urls_recursively()
+function get_submodule_urls()
 {
   local remote_name="${1-origin}"
+
+  local recursive_flag
+  if [ -n "${RECURSIVE+set}" ]; then
+    recursive_flag=("--recursive")
+  else
+    recursive_flag=()
+  fi
 
   # git submodule foreach must be run from the top-level working tree in git 1.8
   pushd "$(${GIT} rev-parse --show-cdup)" &> /dev/null
     # REVIEW Should i unset GIT_DIR?
-    ${GIT} submodule foreach --quiet --recursive \
+    ${GIT} submodule foreach --quiet ${recursive_flag[@]+"${recursive_flag[@]}"} \
         "export GIT; bash -euc 'echo \"\$(${GIT} config --get remote."${remote_name}".url)\"'"
   popd &> /dev/null
   #
@@ -710,7 +723,7 @@ function create_repo_map()
   # Alternatively, use JUST_USER_CWD or :func:`git_project_root_dir`
   #
   # No quotes around subshell to create array (although IFS must be correct)
-  local repo_paths=("${repo_name}" $(get_submodule_displaypaths_recursively))
+  local repo_paths=("${repo_name}" $(RECURSIVE=0 get_submodule_displaypaths))
   IFS="${OLD_IFS}"
 
   local repo_path
