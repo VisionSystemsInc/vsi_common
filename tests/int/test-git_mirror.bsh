@@ -224,12 +224,11 @@ begin_test "Part 2 - Initial mirror"
 )
 end_test
 
-# REVIEW: why is this not in Part 3
-PREP_FILE=("${PRETEND_REPO}_prep"/transfer_*.tgz)
-
 begin_test "Part 3 - Simulating transfer"
 (
   setup_test
+
+  PREP_FILE=("${PRETEND_REPO}_prep"/transfer_*.tgz)
 
   pushd "${TRANSFER_DIR}" &> /dev/null
     tar zxf "${PREP_FILE[0]}"
@@ -338,18 +337,17 @@ function begin_archive_test()
 {
   tar_version_info # Sets tar_version and tar_vendor
   if [ "${tar_vendor}" == "GNU" ] || \
-    ([ "${tar_vendor}" == "BSD" ] && meet_requirements "${tar_version}" ">=3"); then
-    # ugh
-    if [ "${tar_vendor}" == "GNU" ]; then
-      ans=$'./\n./subdir/\n./readme\n./subdir/archive.tgz\n./subdir/readme1'
-    else
-      ans=$'subdir/\nreadme\nsubdir/archive.tgz\nsubdir/readme1'
-    fi
-
-    begin_test "${@}"
-  else # BSD <3
+    ([ "${tar_vendor}" == "BSD" ] && meet_requirements "${tar_version}" "<3"); then
     ans=$'./\n./subdir/\n./readme\n./subdir/archive.tgz\n./subdir/readme1'
-    begin_required_fail_test "${@}"
+    if [ "${tar_vendor}" == "GNU" ]; then
+      begin_test "${@}"
+    else
+      begin_required_fail_test "${@}"
+    fi
+  else # BSD >3
+    # It is unfortunate, but I can't figure out a way for these paths to match
+    ans=$'subdir/\nreadme\nsubdir/archive.tgz\nsubdir/readme1'
+    begin_test "${@}"
   fi
 }
 
@@ -360,7 +358,7 @@ function begin_archive_test()
 # this case because our archives should be datetime stamped and the
 # subdirectories are all git mirrors, so the chance of a name collision is
 # highly unlikely
-begin_archive_test "Archive prep_dir"
+begin_archive_test "Archive"
 (
   setup_test
 
