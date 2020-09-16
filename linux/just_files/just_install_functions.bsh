@@ -1,0 +1,431 @@
+#!/usr/bin/env false bash
+
+if [[ $- != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
+# dependencies
+source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/command_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/requirements.bsh"
+source "${VSI_COMMON_DIR}/linux/uwecho.bsh"
+source "${VSI_COMMON_DIR}/linux/web_tools.bsh"
+
+#*# just/plugins/just_install_functions
+
+JUST_DEFAULTIFY_FUNCTIONS+=(install_defaultify)
+JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
+
+#**
+# =============================
+# J.U.S.T. Install CI Functions
+# =============================
+#
+# .. default-domain:: bash
+#
+# .. file:: just_install_functions.bsh
+#
+# Install plugin for just. Installation routines are designed to be installed
+# to portable standalone locations, for example ``/your/path/python-3.7.9``.
+#**
+
+#**
+# .. function:: cmake-install
+#
+# Install CMake.
+#
+# :Arguments: * [``--dir {dir}``] - CMake install directory
+#             * [``--ver {ver}``] - CMake version for install (default=``${CMAKE_VERSION:-3.16.3}``)
+#
+# :Output: * cmake_exe - CMake executable
+#          * cmake_version - CMake version
+#          * cmake_extra_args - number of arguments consumed
+#**
+
+function cmake-install()
+{
+  local install_dir  # install directory
+  local cmake_ver="${CMAKE_VERSION:-3.16.3}"  # cmake version
+
+  parse_args cmake_extra_args \
+      --dir install_dir: \
+      --ver cmake_ver: \
+      -- ${@+"${@}"}
+
+  # directory check
+  if [ -z "${install_dir-}" ] ; then
+    echo "CMake install must specify --dir" >& 2
+    exit 1
+  fi
+
+  # download zip/tar
+  make_temp_path temp_dir -d
+  # temp_dir="$(mktemp -d)" && echo "temp_dir=${temp_dir}"
+
+  local cmake_id
+  local cmake_url="https://cmake.org/files/v${cmake_ver%.*}/"
+  if [ "${OS-}" = "Windows_NT" ]; then
+    cmake_id="cmake-${cmake_ver}-win64-x64"
+    cmake_url+="${cmake_id}.zip"
+  elif [[ ${OSTYPE-} = darwin* ]]; then
+    cmake_id="cmake-${cmake_ver}-Darwin-x86_64"
+    cmake_url+="${cmake_id}.tar.gz"
+  else
+    cmake_id="cmake-${cmake_ver}-Linux-x86_64"
+    cmake_url+="${cmake_id}.tar.gz"
+  fi
+
+  echo "Downloading cmake from <${cmake_url}>..."
+  local cmake_file="${temp_dir}/$(basename "${cmake_url}")"
+  download_to_stdout "${cmake_url}" > "${cmake_file}"
+
+  # create output directory
+  mkdir -p "${install_dir}"
+  install_dir="$(cd "${install_dir}"; pwd)"
+
+  # unzip or untar
+  echo "Extracting cmake archive..."
+  if [ "${OS-}" = "Windows_NT" ]; then
+    unzip -oq "${cmake_file}" -x "*/doc/**" -d "${install_dir}"
+  else
+    tar -xf "${cmake_file}" --exclude="doc" -C "${install_dir}"
+  fi
+
+  # executable
+  local CMAKE
+  if [ "${OS-}" = "Windows_NT" ]; then
+    CMAKE="${install_dir}/${cmake_id}/bin/cmake.exe"
+  else
+    CMAKE="${install_dir}/${cmake_id}/bin/cmake"
+  fi
+
+  # outputs: executable & version
+  cmake_exe="${CMAKE}"
+  cmake_version="$("${CMAKE}" --version | awk 'NR==1{print $3}')"
+  echo "CMake ${cmake_version} installed at \"${cmake_exe}\""
+
+  # Make sure python meets request
+  if ! meet_requirements "${cmake_version}" "==${cmake_ver}"; then
+    echo "CMake version ${cmake_version} is not the requested version ${cmake_ver}" >&2
+    exit 1
+  fi
+}
+
+
+#**
+# .. function:: conda-python-install
+#
+# Install python via conda.
+#
+# The conda executable is selected as per the following preference order:
+# * ``--conda``
+# * temporary conda installed from ``conda-installer``
+# * if ``--download``: temporary miniconda3 download
+# * else: system level conda if available, then temporary miniconda3 download
+#
+# :Arguments: * [``--dir {dir}``] - Python install directory
+#             * [``--ver {ver}``] - Python version for install (default=``${PYTHON_VERSION:-3.6.9}``)
+#             * [``--conda {CONDA}``] - Conda executable
+#             * [``--conda-installer {INSTALLER}``] - Conda installer
+#             * [``--download``] - Download miniconda
+#
+# :Output: * python_exe - Python executable
+#          * python_version - Python version
+#          * conda_python_extra_args - number of arguments consumed
+#          * python_activate - Bash file to mimic "conda activate"
+#
+#**
+
+function conda-python-install()
+{
+  local install_dir  # install directory
+  local python_ver="${PYTHON_VERSION:-3.6.9}"  # python version
+  local CONDA  # conda executable
+  local CONDA_INSTALLER  # conda installer
+  local prefer_download=0  # prefer conda download if no CONDA|CONDA_INSTALLER
+
+  parse_args conda_python_extra_args \
+      --dir install_dir: \
+      --ver python_ver: \
+      --conda CONDA: \
+      --conda-installer CONDA_INSTALLER: \
+      --download prefer_download \
+      -- ${@+"${@}"}
+
+  # directory check
+  if [ -z "${install_dir-}" ] ; then
+    echo "Conda python install must specify --dir" >& 2
+    exit 1
+  fi
+
+  # conda download & install requirements
+  local download_conda=0
+  local install_conda=0
+
+  if [ -n "${CONDA:+set}" ]; then
+    # use provided conda
+    :
+  elif [ -n "${CONDA_INSTALL:+set}" ]; then
+    # use provided conda installer
+    install_conda=1
+  elif [ "${prefer_download}" == "1" ]; then
+    # download is preferred
+    download_conda=1
+    install_conda=1
+  else
+    CONDA="$( ( (command -v conda3 || command -v conda || command -v conda2) | head -n 1) || :)"
+    if [ -n "${CONDA:+set}" ]; then
+      # use system conda
+      :
+    else
+      # otherwise default to download
+      download_conda=1
+      install_conda=1
+    fi
+  fi
+
+  # temporary conda directory
+  if [ "${install_conda}" = "1" ]; then
+    # make_temp_path temp_dir -d
+    temp_dir="$(mktemp -d)" && echo "temp_dir=${temp_dir}"
+  fi
+
+  # download conda
+  if [ "${download_conda}" = "1" ]; then
+    echo "Downloading miniconda..."
+
+    local conda_url
+    if [ "${OS-}" = "Windows_NT" ]; then
+      conda_url="https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe"
+    elif [[ ${OSTYPE-} = darwin* ]]; then
+      conda_url="https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-x86_64.sh"
+    else
+      conda_url="https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh"
+    fi
+
+    CONDA_INSTALLER="${temp_dir}/$(basename "${conda_url}")"
+    download_to_stdout "${conda_url}" > "${CONDA_INSTALLER}"
+  fi
+
+  # install conda
+  if [ "${install_conda}" = "1" ]; then
+    echo "Installing miniconda..."
+    local conda_dir="${temp_dir}/conda"
+    if [ "${OS-}" = "Windows_NT" ]; then
+      MSYS2_ARG_CONV_EXCL="*" "${CONDA_INSTALLER}" /NoRegistry=1 /InstallationType=JustMe /S /D="$(cygpath -aw "${conda_dir}")"
+      CONDA="${conda_dir}/_conda"
+      # CONDA="${conda_temp_dir}/conda/Scripts/conda"
+    else
+      bash "${CONDA_INSTALLER}" -b -p "${conda_dir}" -s
+      CONDA="${conda_dir}/bin/conda"
+    fi
+  fi
+
+  # create output directory
+  install_dir="${install_dir}/python-${python_ver}"
+  mkdir -p "${install_dir}"
+  install_dir="$(cd "${install_dir}"; pwd)"
+
+  # install python
+  echo "Installing python..."
+  "${CONDA}" create -y -p "${install_dir}" "python==${python_ver}"
+  local PYTHON
+  if [ "${OS-}" = "Windows_NT" ]; then
+    PYTHON="${install_dir}/python.exe"
+  else
+    PYTHON="${install_dir}/bin/python"
+  fi
+
+  # python activation - users may source this file to mimic conda
+  # activation, ensuring appropriate path setup for python functions
+  #
+  # Without sourcing this file, a subsequent call of 'just install pipenv'
+  # will likely fail with the error:
+  #   urllib.error.URLError: <urlopen error unknown url type: https>
+  # as python cannot find necessary libraries
+  if [ "${OS-}" = "Windows_NT" ]; then
+    python_activate="${install_dir}/_python_activate.bsh"
+    uwecho '#!/usr/bin/env bash
+            set -eu
+
+            # python directory (folder where this file resides)
+            this_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)"
+
+            # additional paths for python as per "conda activate"
+            # https://github.com/conda/conda/blob/master/conda/shell/condabin/_conda_activate.bat#L23
+            MORE_PATHS=(
+                "${this_dir}"
+                "${this_dir}/Library/mingw-w64/bin"
+                "${this_dir}/Library/usr/bin"
+                "${this_dir}/Library/bin"
+                "${this_dir}/Scripts"
+                "${this_dir}/bin"
+            )
+            MORE_PATH="$(IFS=':'; echo "${MORE_PATHS[*]}")"
+
+            # update path
+            PATH="${MORE_PATH}:${PATH}"
+            ' >> "${python_activate}"
+  fi
+
+  # output: python executable & version
+  # (note python may write --version to stderr)
+  python_exe="${PYTHON}"
+  python_version="$("${python_exe}" --version 2>&1 | awk '{print $2}')"
+  echo "Python ${python_version} installed at \"${python_exe}\""
+
+  if [ -n "${python_activate-}" ]; then
+    echo "Activate python environment via <source \"${python_activate}\""
+  fi
+
+  # Make sure python meets request
+  if ! meet_requirements "${python_version}" "==${python_ver}"; then
+    echo "Python version ${python_version} is not the requested version ${python_ver}" >&2
+    exit 1
+  fi
+}
+
+
+#**
+# .. function:: pipenv-install
+#
+# Install a virtualenv containing pipenv.
+#
+# :Arguments: * [``--dir {dir}``] - Pipenv install directory
+#             * [``--ver {ver}``] - Pipenv version for install (default=``${PIPENV_VERSION:-2018.11.26}``)
+#             * [``--python {PYTHON}``] - Python executable (default=(python3|python|python3))
+#
+# :Output: * pipenv_exe - Pipenv executable
+#          * pipenv_version - Pipenv version
+#          * pipenv_extra_args - number of arguments consumed
+#
+#**
+
+function pipenv-install()
+{
+  local install_dir  # install directory
+  local pipenv_ver="${PIPENV_VERSION:-2018.11.26}"  # pipenv version
+  local PYTHON  # python executable
+
+  parse_args pipenv_extra_args \
+      --dir install_dir: \
+      --ver pipenv_ver: \
+      --python PYTHON: \
+      -- ${@+"${@}"}
+
+  # check for pipenv directory
+  if [ -z "${install_dir}" ]; then
+    echo "Pipenv install must specify --dir" >& 2
+    exit 1
+  fi
+
+  # search for python if not specified
+  : ${PYTHON:="$( (command -v python3 || command -v python || command -v python2) | head -n 1)"}
+  if [ ! -f "${PYTHON}" ]; then
+    echo "Pipenv install cannot find python executable" >&2
+    exit 1
+  fi
+
+  # dtermine if a "_python_activate.bsh" file exists, as created by the
+  # function "conda-python-install"
+  local python_activate="$(dirname "${PYTHON}")/_python_activate.bsh"
+  if [ ! -f "${python_activate}" ]; then
+    python_activate=
+  fi
+
+  # create pipenv directory
+  install_dir="${install_dir}/pipenv-${pipenv_ver}"
+  mkdir -p "${install_dir}"
+  install_dir="$(cd "${install_dir}"; pwd)"
+
+  # pipenv install via 30_get-pipenv
+  # run in subshell, as sourced files are only needed temporarily
+  (
+    # "activate" python if created via the "conda-python-install" function
+    local python_activate="$(dirname "${PYTHON}")/_python_activate.bsh"
+    [ -f "${python_activate}" ] && source "${python_activate}"
+
+    # install via 30_get-pipenv
+    echo "Installing pipenv..."
+    source "${VSI_COMMON_DIR}/docker/recipes/30_get-pipenv"
+    PIPENV_PYTHON="${PYTHON}"
+    PIPENV_VERSION="${pipenv_ver}"
+    PIPENV_VIRTUALENV="${install_dir}"
+    install_pipenv
+  )
+
+  # pipenv executable
+  local PIPENV
+  if [ "${OS-}" = "Windows_NT" ]; then
+    PIPENV="${install_dir}/Scripts/pipenv"
+  else
+    PIPENV="${install_dir}/bin/pipenv"
+  fi
+
+  # outputs: pipenv executable & version
+  pipenv_exe="${PIPENV}"
+  pipenv_version="$("${PIPENV}" --version | awk '{print $3}' | sed 's|$\r||g' )"
+  echo "Pipenv ${pipenv_version} installed at \"${pipenv_exe}\""
+
+  # Make sure pipenv meets requirements
+  if ! meet_requirements "${pipenv_version}" "==${pipenv_ver}"; then
+    echo "Pipenv version ${pipenv_version} does not match request ${pipenv_ver}" >&2
+    exit 1
+  fi
+}
+
+
+#**
+# .. command:: install_cmake
+#
+# Install CMake
+#
+# .. seealso::
+#
+#   :func:`cmake-install`
+#
+
+# .. command:: install_conda-python
+#
+# Install python via conda
+#
+# .. seealso::
+#
+#   :func:`conda-python-install`
+#
+# .. command:: install_pipenv
+#
+
+# Install a virtualenv containing pipenv
+#
+# .. seealso::
+#
+#   :func:`pipenv-install`
+#
+
+#**
+
+function install_defaultify()
+{
+  arg=$1
+  shift 1
+  case $arg in
+
+    install_cmake) # Install CMake
+      cmake-install ${@+"${@}"}
+      extra_args=cmake_extra_args
+      ;;
+    install_conda-python) # Install python via conda
+      conda-python-install ${@+"${@}"}
+      extra_args=conda_python_extra_args
+      ;;
+    install_pipenv) # Install a virtualenv containing pipenv
+      pipenv-install ${@+"${@}"}
+      extra_args=pipenv_extra_args
+      ;;
+    *)
+      plugin_not_found=1
+      ;;
+
+  esac
+}
