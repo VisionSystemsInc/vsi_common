@@ -109,7 +109,7 @@ function next_section()
 GIT_VERSION="$(git_version)"
 
 #**
-# .. function:: get_submodule_names
+# .. function:: get_config_submodule_names
 #
 # Get list of initialized submodules, non-recursive
 #
@@ -121,24 +121,25 @@ GIT_VERSION="$(git_version)"
 #
 # .. code-block:: bash
 #
-#   get_submodule_names() # from within ./vsi_common/
+#   get_config_submodule_names() # from within ./vsi_common/
 #   # submodule.docker/recipes
 #
 # .. note::
 #
 #   Unlike ``git submodule foreach --quiet 'echo "${name}"'``, this function works for submodules that have been init'd but not updated
 #
-# Cf. just_git_functions.bsh:submodule-helper-list
+# .. seealso::
+#
+#   :func:`just_git_functions.bsh submodule-helper-list` and :func:`just_git_airgap_repo.bsh get_submodule_names`
 #**
 
-# If newer than 2.6
 if meet_requirements "${GIT_VERSION}" ">=2.6"; then
-  function get_submodule_names()
+  function get_config_submodule_names()
   {
     ${GIT} config --name-only --get-regexp '^submodule\..*\.url$' | sed 's|.url$||'
   }
 else
-  function get_submodule_names()
+  function get_config_submodule_names()
   {
     local names=()
     local line
@@ -203,7 +204,7 @@ function clone_submodules()
   # This does not work for init-only modules
   #   submodule_names=($(${GIT} submodule foreach --quiet 'echo "${name}"'))
   # This does
-  local submodule_names=($(get_submodule_names))
+  local submodule_names=($(get_config_submodule_names))
 
   local prepped_submodule_path
   local full_relative_path
@@ -308,7 +309,7 @@ function clone_submodules()
   # RE We would first have to do a recursive clone, but we are effectively
   # doing that here anyway, just manually
   # NOTE We list submodules two ways in this function: at the beginning with
-  # get_submodule_names (which uses git config and works with init-only
+  # get_config_submodule_names (which uses git config and works with init-only
   # submodules) and, here, with git submodule foreach (which does not).
   # NOTE We could make a similar change in update_submodules
   GIT_MIRROR_PREP_DIR="${GIT_MIRROR_PREP_DIR}" base_submodule_path="${base_submodule_path}" ${GIT} submodule foreach --quiet "export prefix displaypath; bash -euc 'unset GIT_DIR; source \"${GIT_MIRROR_SOURCE[0]}\"; clone_submodules'"
@@ -334,8 +335,8 @@ function clone_submodules()
 
 # REVIEW Make an update_submodule
 # RE Not obvious how to refactor it actually because git submodule init has to
-# be run before get_submodule_names
-# RE Could loop over repo_names instead of get_submodule_names
+# be run before get_config_submodule_names
+# RE Could loop over repo_names instead of get_config_submodule_names
 function update_submodules()
 {
   # Arrays aren't exported, reload
@@ -354,7 +355,7 @@ function update_submodules()
   # a sync
   ${GIT} submodule init
   local IFS=$'\n'
-  local submodule_names=($(get_submodule_names))
+  local submodule_names=($(get_config_submodule_names))
 
   for submodule_name in ${submodule_names[@]+"${submodule_names[@]}"}; do
     full_relative_path="${base_submodule_path}${base_submodule_path:+/}$(${GIT} config -f .gitmodules ${submodule_name}.path)"

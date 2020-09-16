@@ -381,8 +381,8 @@ function is_submodule()
           is_submod=0
         fi
         #
-        # Alternatively, use get_submodule_names and then git config to query
-        # the sm_path (as git_sync_submodules_recursively does)
+        # Alternatively, use get_config_submodule_names and then git config to
+        # query the sm_path (as git_sync_submodules_recursively does)
         # RE Shouldn't be necessary in this case, as the submodule should
         # always be init'd and updated since we are recursing up through it
       popd &> /dev/null
@@ -461,9 +461,8 @@ function recursive_submodule_summary()
 
   local OLD_IFS="${IFS}"
   IFS=$'\n'
-  # More robust than just_git_functions.bsh:submodule-helper-list
   # REVIEW Could use get_submodule_paths_recursively if it was not recursive
-  local submodule_keys=($(get_submodule_names))
+  local submodule_keys=($(get_config_submodule_names))
   IFS="${OLD_IFS}"
 
   local sm_key
@@ -503,15 +502,21 @@ function recursive_submodule_summary()
 #
 # .. note::
 #
-#   Because this function uses ``git submodule foreach``, it skips submodules that have been init'd but not updated. Cf. :func:`git_mirror get_submodule_names`, which will list submodules that have only been init'd (it non-recursively queries the current repository's submodule names from its configuration). However, neither this nor anything else will work in a bare/mirror repo.
+#   Because this function uses ``git submodule foreach``, it skips submodules that have been init'd but not updated. Cf. :func:`git_mirror get_config_submodule_names`, which will list submodules that have only been init'd (it non-recursively queries the current repository's submodule names from its configuration). However, neither this nor anything else will work in a bare/mirror repo.
 #
 # .. seealso::
 #
-#   :func:`just_git_functions submodule-helper-list` and :func:`git_mirror get_submodule_names`; although these are not recursive, they both are used to recurse manually through all the submodules
+#   :func:`just_git_functions submodule-helper-list` and :func:`git_mirror get_config_submodule_names`; although these are not recursive, they both are used to recurse manually through all the submodules
 #**
 
 # REVIEW It would be easy to also do this non-recursively (simply don't add the
 # --recursive flag). Perhaps an env variable could be set to make this recursive
+# REVIEW Rename get_submodule_displaypaths(_recursively)
+# REVIEW Create get_submodule_names(_recursively). These three functions will
+# iterate through the submodules in the same order. However, this function
+# contrasts with git_mirror:get_config_submodule_names, which lists the
+# submodule names by querying the repository's configuration, but in a different
+# order
 function get_submodule_paths_recursively()
 {
   # Relative path from the CWD to the root of the current repository
@@ -573,7 +578,7 @@ function get_submodule_paths_recursively()
   # which reads what is in the parent repository's .gitmodules file.
   #
   # Admittedly, by themselves, these commands not very useful.
-  # git_mirror:get_submodule_names uses
+  # git_mirror:get_config_submodule_names uses
   #   git config --name-only --get-regexp '^submodule\..*\.url$' | sed 's|.url$||'
   # to first query the submodule names and then lookup their paths.
   #
@@ -604,7 +609,7 @@ function get_submodule_paths_recursively()
 #
 # .. note::
 #
-#   Because this function uses ``git submodule foreach``, it skips submodules that have been init'd but not updated. Cf. :func:`git_mirror get_submodule_names`, which will list submodules that have only been init'd (it non-recursively queries the current repository's submodule names from its configuration). However, neither this nor anything else will work in a bare/mirror repo.
+#   Because this function uses ``git submodule foreach``, it skips submodules that have been init'd but not updated. Cf. :func:`git_mirror get_config_submodule_names`, which will list submodules that have only been init'd (it non-recursively queries the current repository's submodule names from its configuration). However, neither this nor anything else will work in a bare/mirror repo.
 
 #**
 
@@ -1044,8 +1049,7 @@ function git_sync_submodules_recursively()
 
   local OLD_IFS="${IFS}"
   IFS=$'\n'
-  # More robust than just_git_functions.bsh:submodule-helper-list
-  local submodule_keys=($(get_submodule_names))
+  local submodule_keys=($(get_config_submodule_names))
   IFS="${OLD_IFS}"
 
   local sm_key
@@ -1125,8 +1129,7 @@ function _check_submodules_are_pushed_recursively()
 
   local OLD_IFS="${IFS}"
   IFS=$'\n'
-  # More robust than just_git_functions.bsh:submodule-helper-list
-  local submodule_keys=($(get_submodule_names))
+  local submodule_keys=($(get_config_submodule_names))
   # NOTE This command will actually skip a submodule that has been init'd but
   # not updated
   #local tracked_shas=($(${GIT} submodule foreach --quiet 'echo "${prefix-"${displaypath}"}" ${sha1}'))
