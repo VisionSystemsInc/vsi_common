@@ -514,21 +514,17 @@ function recursive_submodule_summary()
 #
 # .. note::
 #
-#   This function lists the path of each submodule in the same order as :func:`get_submodule_urls` lists its URL.
+#   This function iterates through each submodule in the same order as :func:`get_submodule_urls` and :func:`get_submodule_names`.
 #
 # .. note::
 #
-#   Because this function uses ``git submodule foreach``, it skips submodules that have been init'd but not updated. Cf. :func:`git_mirror get_config_submodule_names`, which will list submodules that have only been init'd (it non-recursively queries the current repository's submodule names from its configuration). However, neither this nor anything else will work in a bare/mirror repo.
+#   Because this function uses ``git submodule foreach``, it skips submodules that have been init'd but not updated. Cf. :func:`git_mirror get_config_submodule_names`, which will (non-recursively) list submodules that have only been init'd.
 #
 # .. seealso::
 #
-#   :func:`just_git_functions submodule-helper-list` and :func:`git_mirror get_config_submodule_names`; although these are not recursive, they both are used to recurse manually through all the submodules
+#   :func:`get_submodule_urls` and :func:`get_submodule_names`
 #**
 
-# REVIEW Create get_submodule_names. These three functions will iterate through
-# the submodules in the same order. However, this function contrasts with
-# git_mirror:get_config_submodule_names, which lists the submodule names by
-# querying the repository's configuration, but in a different order
 function get_submodule_displaypaths()
 {
   local recursive_flag
@@ -626,12 +622,15 @@ function get_submodule_displaypaths()
 #
 # .. note::
 #
-#   This function lists the URL of each submodule in the same order as :func:`get_submodule_displaypaths` list its path.
+#   This function iterates through each submodule in the same order as :func:`get_submodule_displaypaths` and :func:`get_submodule_names`.
 #
 # .. note::
 #
-#   Because this function uses ``git submodule foreach``, it skips submodules that have been init'd but not updated. Cf. :func:`git_mirror get_config_submodule_names`, which will list submodules that have only been init'd (it non-recursively queries the current repository's submodule names from its configuration). However, neither this nor anything else will work in a bare/mirror repo.
-
+#   Because this function uses ``git submodule foreach``, it skips submodules that have been init'd but not updated. Cf. :func:`git_mirror get_config_submodule_names`, which will (non-recursively) list submodules that have only been init'd.
+#
+# .. seealso::
+#
+#   :func:`get_submodule_displaypaths` and :func:`get_submodule_names`
 #**
 
 function get_submodule_urls()
@@ -664,6 +663,57 @@ function get_submodule_urls()
   # the current branch, if set; otherwise origin.
   # git_sync_submodules_recursively will do the same but using the specified
   # remote.
+}
+
+#**
+# .. function:: get_submodule_names
+#
+# Get the name of each submodule
+#
+# Get the name of the submodule as defined in the .gitmodules file. This name is, by default, the same as the path to the submodule; however, this is not necessarily the case.
+#
+# :Parameters: [``RECURSIVE``] - Should the submodules be iterated through recursively. Default: unset
+# :Output: *stdout* - The name of each submodule (recursively); e.g., docker/recipes
+#
+# .. note::
+#
+#   Submodule names are not the same thing as submodule paths.
+#
+# .. note::
+#
+#    The ultimate source-of-truth of a submodule's name is in its .gitmodules file. If the name in this file is updated, then the repository's configuration will be out-of-date. ``git submodule sync`` will update the configuration using the .gitmodules file and the default remote of the current branch, if set; otherwise origin. :func:`git_sync_submodules_recursively` will do the same but using the specified remote.
+#
+# .. note::
+#
+#   This function iterates through each submodule in the same order as :func:`get_submodule_displaypaths` and :func:`get_submodule_urls`.
+#
+# .. note::
+#
+#   Because this function uses ``git submodule foreach``, it skips submodules that have been init'd but not updated. Cf. :func:`git_mirror get_config_submodule_names` and :func:`just_git_functions submodule-helper-list`, which will list submodules that have only been init'd (they query the current repository's submodule names from its configuration). Although these functions are not recursive, they both are used to recurse manually through all the submodules (albeit, in a different order than this function).
+#
+# .. seealso::
+#
+#   :func:`get_submodule_displaypaths` and :func:`get_submodule_urls`
+#**
+
+function get_submodule_names()
+{
+  local recursive_flag
+  if [ -n "${RECURSIVE+set}" ]; then
+    recursive_flag=("--recursive")
+  else
+    recursive_flag=()
+  fi
+
+  # git submodule foreach must be run from the top-level working tree in git 1.8
+  pushd "$(${GIT} rev-parse --show-cdup)" &> /dev/null
+    ${GIT} submodule foreach --quiet ${recursive_flag[@]+"${recursive_flag[@]}"} 'echo "${name}"'
+  popd &> /dev/null
+  #
+  # Alternatively, the URL for the submodule can be queried with git config
+  # (although, by itself, not recursively):
+  #   git config --name-only --get-regexp '^submodule\..*\.url$' | \
+  #       sed -e 's|.url$||' -e 's|^submodule.||'
 }
 
 #**
