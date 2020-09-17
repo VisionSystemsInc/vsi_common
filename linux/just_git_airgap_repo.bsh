@@ -514,15 +514,15 @@ function recursive_submodule_summary()
 #
 # .. note::
 #
-#   This function iterates through each submodule in the same order as :func:`get_submodule_urls` and :func:`get_submodule_names`.
+#   This function iterates through each submodule in the same order as :func:`get_submodule_urls`, :func:`get_submodule_names` and :func:`get_submodule_toplevels`
 #
 # .. note::
 #
-#   Because this function uses ``git submodule foreach``, it skips submodules that have been init'd but not updated. Cf. :func:`git_mirror get_config_submodule_names`, which will (non-recursively) list submodules that have only been init'd.
+#   Because this function uses ``git submodule foreach``, it skips submodules that have been init'd but not updated.
 #
 # .. seealso::
 #
-#   :func:`get_submodule_urls` and :func:`get_submodule_names`
+#   :func:`get_submodule_urls`
 #**
 
 function get_submodule_displaypaths()
@@ -622,7 +622,7 @@ function get_submodule_displaypaths()
 #
 # .. note::
 #
-#   This function iterates through each submodule in the same order as :func:`get_submodule_displaypaths` and :func:`get_submodule_names`.
+#   This function iterates through each submodule in the same order as :func:`get_submodule_displaypaths`, :func:`get_submodule_names` and :func:`get_submodule_toplevels`
 #
 # .. note::
 #
@@ -630,7 +630,7 @@ function get_submodule_displaypaths()
 #
 # .. seealso::
 #
-#   :func:`get_submodule_displaypaths` and :func:`get_submodule_names`
+#   :func:`get_submodule_displaypaths`
 #**
 
 function get_submodule_urls()
@@ -685,7 +685,7 @@ function get_submodule_urls()
 #
 # .. note::
 #
-#   This function iterates through each submodule in the same order as :func:`get_submodule_displaypaths` and :func:`get_submodule_urls`.
+#   This function iterates through each submodule in the same order as :func:`get_submodule_displaypaths`, :func:`get_submodule_urls` and :func:`get_submodule_toplevels`
 #
 # .. note::
 #
@@ -693,7 +693,7 @@ function get_submodule_urls()
 #
 # .. seealso::
 #
-#   :func:`get_submodule_displaypaths` and :func:`get_submodule_urls`
+#   :func:`get_submodule_toplevels`
 #**
 
 function get_submodule_names()
@@ -714,6 +714,46 @@ function get_submodule_names()
   # (although, by itself, not recursively):
   #   git config --name-only --get-regexp '^submodule\..*\.url$' | \
   #       sed -e 's|.url$||' -e 's|^submodule.||'
+}
+
+#**
+# .. function:: get_submodule_toplevels
+#
+# Get the path to the top-level directory of each submodule
+#
+# Get the path to what git refers to as the top-level directory of the submodule; i.e., the absolute path to the top-level of the immediate superproject. For example, the vsi_common repository has a submodule at ``docker/recipes``. If the repository is cloned in ``/src``, then the top-level directory for the submodule docker/recipes is ``/src/vsi_common``.
+#
+# This function, along with :func:`get_submodule_names`, could be used to, for example, cd to the top-level of each immediate superproject and then query the submodule's configuration using ``git config submodule.<name>.<key>``; e.g., ``git config submodule.docker/recipes.url``.
+#
+# :Parameters: [``RECURSIVE``] - Should the submodules be iterated through recursively. Default: unset
+# :Output: *stdout* - The top-level directory of each submodule (recursively); e.g., /src/vsi_common
+#
+# .. note::
+#
+#   This function iterates through each submodule in the same order as :func:`get_submodule_displaypath`, :func:`get_submodule_urls` and :func:`get_submodule_names`
+#
+# .. note::
+#
+#   Because this function uses ``git submodule foreach``, it skips submodules that have been init'd but not updated.
+#
+# .. seealso::
+#
+#   :func:`get_submodule_names`
+#**
+
+function get_submodule_toplevels()
+{
+  local recursive_flag
+  if [ -n "${RECURSIVE+set}" ]; then
+    recursive_flag=("--recursive")
+  else
+    recursive_flag=()
+  fi
+
+  # git submodule foreach must be run from the top-level working tree in git 1.8
+  pushd "$(${GIT} rev-parse --show-cdup)" &> /dev/null
+    ${GIT} submodule foreach --quiet ${recursive_flag[@]+"${recursive_flag[@]}"} 'echo "${toplevel}"'
+  popd &> /dev/null
 }
 
 #**
