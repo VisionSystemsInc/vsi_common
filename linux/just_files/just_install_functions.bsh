@@ -26,8 +26,18 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 # .. file:: just_install_functions.bsh
 #
 # Install plugin for just. Installation routines are designed to be installed
-# to portable standalone locations, for example ``/your/path/python-3.7.9``.
+# to isolated standalone locations, for example ``/your/path/python-3.7.9``.
 #**
+
+#**
+# .. envvar:: JUST_INSTALL_ACTIVATE_BASENAME
+#
+# File basename for utility activation. Users may source anactivation
+# file to create useful environment variables and add the utility to $PATH.
+#
+#**
+
+: ${JUST_INSTALL_ACTIVATE_BASENAME="just_activate.bsh"}
 
 #**
 # .. function:: cmake-install
@@ -40,6 +50,8 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 # :Output: * cmake_exe - CMake executable
 #          * cmake_version - CMake version
 #          * cmake_extra_args - number of arguments consumed
+#          * cmake_activate - Bash file to activate cmake environment
+#
 #**
 
 function cmake-install()
@@ -93,12 +105,13 @@ function cmake-install()
 
   # executable
   local cmake_dir="${install_dir}/${cmake_id}"
-  local CMAKE
+  local cmake_exe_footer
   if [ "${OS-}" = "Windows_NT" ]; then
-    CMAKE="${cmake_dir}/bin/cmake.exe"
+    cmake_exe_footer="bin/cmake.exe"
   else
-    CMAKE="${cmake_dir}/bin/cmake"
+    cmake_exe_footer="bin/cmake"
   fi
+  local CMAKE="${cmake_dir}/${cmake_exe_footer}"
 
   # outputs: executable & version
   cmake_exe="${CMAKE}"
@@ -110,6 +123,24 @@ function cmake-install()
     echo "CMake version ${cmake_version} is not the requested version ${cmake_ver}" >&2
     exit 1
   fi
+
+  # cmake activate
+  cmake_activate="${cmake_dir}/cmake_${JUST_INSTALL_ACTIVATE_BASENAME}"
+  uwecho '#!/usr/bin/env bash
+          set -eu
+
+          # folder where this file resides
+          CMAKE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)"
+          ' > "${cmake_activate}"
+  uwecho "
+          # executable & version
+          CMAKE_EXE=\"\${CMAKE_DIR}/${cmake_exe_footer}\"
+          CMAKE_VER=\"${cmake_version}\"
+          " >> "${cmake_activate}"
+  uwecho '
+          # update PATH
+          PATH="$(dirname "${CMAKE_EXE}"):${PATH}"
+          ' >> "${cmake_activate}"
 }
 
 
@@ -133,7 +164,7 @@ function cmake-install()
 # :Output: * python_exe - Python executable
 #          * python_version - Python version
 #          * conda_python_extra_args - number of arguments consumed
-#          * python_activate - Bash file to mimic "conda activate"
+#          * python_activate - Bash file to activate python environment
 #
 #**
 
@@ -229,44 +260,13 @@ function conda-python-install()
   # install python
   echo "Installing python..."
   "${CONDA}" create -y -p "${python_dir}" "python==${python_ver}"
-  local PYTHON
+  local python_exe_footer
   if [ "${OS-}" = "Windows_NT" ]; then
-    PYTHON="${python_dir}/python.exe"
+    python_exe_footer="python.exe"
   else
-    PYTHON="${python_dir}/bin/python"
+    python_exe_footer="bin/python"
   fi
-
-  # python activation - users may source this file to mimic conda
-  # activation, ensuring appropriate path setup for python functions
-  #
-  # Without sourcing this file, a subsequent call of 'just install pipenv'
-  # will likely fail with the error:
-  #   urllib.error.URLError: <urlopen error unknown url type: https>
-  # as python cannot find necessary libraries
-  if [ "${OS-}" = "Windows_NT" ]; then
-    python_activate="${python_dir}/_python_activate.bsh"
-    uwecho '#!/usr/bin/env bash
-            set -eu
-
-            # python directory (folder where this file resides)
-            this_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)"
-
-            # additional paths for python as per "conda activate"
-            # https://github.com/conda/conda/blob/master/conda/shell/condabin/_conda_activate.bat#L23
-            MORE_PATHS=(
-                "${this_dir}"
-                "${this_dir}/Library/mingw-w64/bin"
-                "${this_dir}/Library/usr/bin"
-                "${this_dir}/Library/bin"
-                "${this_dir}/Scripts"
-                "${this_dir}/bin"
-            )
-            MORE_PATH="$(IFS=':'; echo "${MORE_PATHS[*]}")"
-
-            # update path
-            PATH="${MORE_PATH}:${PATH}"
-            ' >> "${python_activate}"
-  fi
+  local PYTHON="${python_dir}/${python_exe_footer}"
 
   # output: python executable & version
   # (note python may write --version to stderr)
@@ -283,6 +283,47 @@ function conda-python-install()
     echo "Python version ${python_version} is not the requested version ${python_ver}" >&2
     exit 1
   fi
+
+
+  # python activation - users may source this file to mimic conda
+  # activation, ensuring appropriate path setup for python functions
+  #
+  # Without sourcing this file, a subsequent call of 'just install pipenv'
+  # may fail with errors such as:
+  #   urllib.error.URLError: <urlopen error unknown url type: https>
+  # as python cannot find necessary libraries
+  python_activate="${python_dir}/python_${JUST_INSTALL_ACTIVATE_BASENAME}"
+  uwecho '#!/usr/bin/env bash
+          set -eu
+
+          # folder where this file resides
+          PYTHON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)"
+          ' > "${python_activate}"
+  uwecho "
+          # executable & version
+          PYTHON_EXE=\"\${PYTHON_DIR}/${python_exe_footer}\"
+          PYTHON_VER=\"${python_version}\"
+          " >> "${python_activate}"
+
+  if [ "${OS-}" = "Windows_NT" ]; then
+    uwecho '
+            # additional paths for python as per "conda activate"
+            # https://github.com/conda/conda/blob/master/conda/shell/condabin/_conda_activate.bat#L23
+            MORE_PATHS=(
+                "${PYTHON_DIR}"
+                "${PYTHON_DIR}/Library/mingw-w64/bin"
+                "${PYTHON_DIR}/Library/usr/bin"
+                "${PYTHON_DIR}/Library/bin"
+                "${PYTHON_DIR}/Scripts"
+                "${PYTHON_DIR}/bin"
+            )
+            MORE_PATH="$(IFS=':'; echo "${MORE_PATHS[*]}")"
+
+            # update PATH
+            PATH="${MORE_PATH}:${PATH}"
+            ' >> "${python_activate}"
+  fi
+
 }
 
 
@@ -298,6 +339,7 @@ function conda-python-install()
 # :Output: * pipenv_exe - Pipenv executable
 #          * pipenv_version - Pipenv version
 #          * pipenv_extra_args - number of arguments consumed
+#          * pipenv_activate - Bash file to activate pipenv environment
 #
 #**
 
@@ -326,13 +368,6 @@ function pipenv-install()
     exit 1
   fi
 
-  # determine if a "_python_activate.bsh" file exists, as created by the
-  # function "conda-python-install"
-  local python_activate="$(dirname "${PYTHON}")/_python_activate.bsh"
-  if [ ! -f "${python_activate}" ]; then
-    python_activate=
-  fi
-
   # create pipenv directory
   pipenv_dir="${install_dir}/pipenv-${pipenv_ver}"
   mkdir -p "${pipenv_dir}"
@@ -342,7 +377,7 @@ function pipenv-install()
   # run in subshell, as sourced files are only needed temporarily
   (
     # "activate" python if created via the "conda-python-install" function
-    local python_activate="$(dirname "${PYTHON}")/_python_activate.bsh"
+    local python_activate="$(dirname "${PYTHON}")/python_${JUST_INSTALL_ACTIVATE_BASENAME}"
     [ -f "${python_activate}" ] && source "${python_activate}"
 
     # install via 30_get-pipenv
@@ -355,12 +390,13 @@ function pipenv-install()
   )
 
   # pipenv executable
-  local PIPENV
+  local pipenv_exe_footer
   if [ "${OS-}" = "Windows_NT" ]; then
-    PIPENV="${pipenv_dir}/Scripts/pipenv"
+    pipenv_exe_footer="Scripts/pipenv"
   else
-    PIPENV="${pipenv_dir}/bin/pipenv"
+    pipenv_exe_footer="bin/pipenv"
   fi
+  local PIPENV="${pipenv_dir}/${pipenv_exe_footer}"
 
   # outputs: pipenv executable & version
   pipenv_exe="${PIPENV}"
@@ -372,6 +408,24 @@ function pipenv-install()
     echo "Pipenv version ${pipenv_version} does not match request ${pipenv_ver}" >&2
     exit 1
   fi
+
+  # pipenv activate
+  pipenv_activate="${pipenv_dir}/pipenv_${JUST_INSTALL_ACTIVATE_BASENAME}"
+  uwecho '#!/usr/bin/env bash
+          set -eu
+
+          # folder where this file resides
+          PIPENV_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)"
+          ' > "${pipenv_activate}"
+  uwecho "
+          # executable & version
+          PIPENV_EXE=\"\${PIPENV_DIR}/${pipenv_exe_footer}\"
+          PIPENV_VER=\"${pipenv_version}\"
+          " >> "${pipenv_activate}"
+  uwecho '
+          # update PATH
+          PATH="$(dirname "${PIPENV_EXE}"):${PATH}"
+          ' >> "${pipenv_activate}"
 }
 
 
