@@ -92,11 +92,12 @@ function cmake-install()
   fi
 
   # executable
+  local cmake_dir="${install_dir}/${cmake_id}"
   local CMAKE
   if [ "${OS-}" = "Windows_NT" ]; then
-    CMAKE="${install_dir}/${cmake_id}/bin/cmake.exe"
+    CMAKE="${cmake_dir}/bin/cmake.exe"
   else
-    CMAKE="${install_dir}/${cmake_id}/bin/cmake"
+    CMAKE="${cmake_dir}/bin/cmake"
   fi
 
   # outputs: executable & version
@@ -184,10 +185,14 @@ function conda-python-install()
     fi
   fi
 
+  # create output directory
+  local python_dir="${install_dir}/python-${python_ver}"
+  mkdir -p "${python_dir}"
+  python_dir="$(cd "${python_dir}"; pwd)"
+
   # temporary conda directory
   if [ "${install_conda}" = "1" ]; then
-    # make_temp_path temp_dir -d
-    temp_dir="$(mktemp -d)" && echo "temp_dir=${temp_dir}"
+    make_temp_path temp_dir -d
   fi
 
   # download conda
@@ -221,19 +226,14 @@ function conda-python-install()
     fi
   fi
 
-  # create output directory
-  install_dir="${install_dir}/python-${python_ver}"
-  mkdir -p "${install_dir}"
-  install_dir="$(cd "${install_dir}"; pwd)"
-
   # install python
   echo "Installing python..."
-  "${CONDA}" create -y -p "${install_dir}" "python==${python_ver}"
+  "${CONDA}" create -y -p "${python_dir}" "python==${python_ver}"
   local PYTHON
   if [ "${OS-}" = "Windows_NT" ]; then
-    PYTHON="${install_dir}/python.exe"
+    PYTHON="${python_dir}/python.exe"
   else
-    PYTHON="${install_dir}/bin/python"
+    PYTHON="${python_dir}/bin/python"
   fi
 
   # python activation - users may source this file to mimic conda
@@ -244,7 +244,7 @@ function conda-python-install()
   #   urllib.error.URLError: <urlopen error unknown url type: https>
   # as python cannot find necessary libraries
   if [ "${OS-}" = "Windows_NT" ]; then
-    python_activate="${install_dir}/_python_activate.bsh"
+    python_activate="${python_dir}/_python_activate.bsh"
     uwecho '#!/usr/bin/env bash
             set -eu
 
@@ -326,7 +326,7 @@ function pipenv-install()
     exit 1
   fi
 
-  # dtermine if a "_python_activate.bsh" file exists, as created by the
+  # determine if a "_python_activate.bsh" file exists, as created by the
   # function "conda-python-install"
   local python_activate="$(dirname "${PYTHON}")/_python_activate.bsh"
   if [ ! -f "${python_activate}" ]; then
@@ -334,9 +334,9 @@ function pipenv-install()
   fi
 
   # create pipenv directory
-  install_dir="${install_dir}/pipenv-${pipenv_ver}"
-  mkdir -p "${install_dir}"
-  install_dir="$(cd "${install_dir}"; pwd)"
+  pipenv_dir="${install_dir}/pipenv-${pipenv_ver}"
+  mkdir -p "${pipenv_dir}"
+  pipenv_dir="$(cd "${pipenv_dir}"; pwd)"
 
   # pipenv install via 30_get-pipenv
   # run in subshell, as sourced files are only needed temporarily
@@ -350,16 +350,16 @@ function pipenv-install()
     source "${VSI_COMMON_DIR}/docker/recipes/30_get-pipenv"
     PIPENV_PYTHON="${PYTHON}"
     PIPENV_VERSION="${pipenv_ver}"
-    PIPENV_VIRTUALENV="${install_dir}"
+    PIPENV_VIRTUALENV="${pipenv_dir}"
     install_pipenv
   )
 
   # pipenv executable
   local PIPENV
   if [ "${OS-}" = "Windows_NT" ]; then
-    PIPENV="${install_dir}/Scripts/pipenv"
+    PIPENV="${pipenv_dir}/Scripts/pipenv"
   else
-    PIPENV="${install_dir}/bin/pipenv"
+    PIPENV="${pipenv_dir}/bin/pipenv"
   fi
 
   # outputs: pipenv executable & version
