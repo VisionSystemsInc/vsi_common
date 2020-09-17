@@ -436,21 +436,35 @@ function is_submodule()
 
 function git_project_root_dir()
 {
-  # Support running this command from a bare repo (no submodules to worry about)
-  if [ "$(${GIT} rev-parse --is-bare-repository)" = "true" ]; then
-    dir="$(${GIT} rev-parse --git-dir)"
+  # I'm not sure how to detect if the git directory is separate from it's work
+  # tree. Consequently, I can't necessarily find the project's root directory
+  # if we are inside the .git dir
+  if [ "$(${GIT} rev-parse --is-inside-git-dir)" == "true" ] && \
+     [ "$(${GIT} rev-parse --is-bare-repository)" == "false" ]; then
+    return 1
+  # In a bare repo (no submodules to worry about)
+  elif [ "$(${GIT} rev-parse --is-inside-git-dir)" == "true" ] && \
+       [ "$(${GIT} rev-parse --is-bare-repository)" == "true" ]; then
+    local dir="$(${GIT} rev-parse --git-dir)"
     if [ "${dir}" == "." ]; then
       echo "${PWD}"
     else
       echo "${dir}"
     fi
-    return
+  # In a work tree
+  elif [ "$(${GIT} rev-parse --is-inside-work-tree)" ]; then
+    _git_project_root_dir
+  else
+    return 1
   fi
+}
 
+function _git_project_root_dir()
+{
   local toplevel="$(${GIT} rev-parse --show-toplevel 2> /dev/null)"
   if is_submodule; then
     pushd "${toplevel}/../" &> /dev/null
-      git_project_root_dir
+      _git_project_root_dir
     popd &> /dev/null
   else
     echo "${toplevel}"
@@ -893,7 +907,7 @@ function orphan_commit_repo_map
   repo_map="${1}"
   orphan_branch="${2-__just_git_mirror_info_file}"
 
-  local remote_local_url="$(git_project_root_dir)"
+  local remote_local_url="$(git_project_root_dir)" # Alternatively, PWD
   # Create an automatically deleting temporary directory
   local temp_repo
   make_temp_path temp_repo -d
