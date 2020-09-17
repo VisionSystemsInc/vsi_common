@@ -405,13 +405,16 @@ begin_test "Check for unpushed tracked commits in submodules"
     [ "$(cd subdir && RECURSIVE=0 get_submodule_names)" = "${ans}" ]
 
     # Verify the listing of the submodule top-levels
-    [ "$(get_submodule_toplevels)" = "${BUILD_REPO}" ]
-    ans="$(printf "${BUILD_REPO}\n${BUILD_REPO}/${DIFFICULT_PATH}")"
-    [ "$(RECURSIVE=0 get_submodule_toplevels)" = "${ans}" ]
+    [ "$(real_path "$(get_submodule_toplevels)")" = "$(real_path "${BUILD_REPO}")" ]
+    [ "$(cd subdir && real_path "$(get_submodule_toplevels)")" = "$(real_path "${BUILD_REPO}")" ]
 
-    [ "$(cd subdir && get_submodule_toplevels)" = "${BUILD_REPO}" ]
-    ans="$(printf "${BUILD_REPO}\n${BUILD_REPO}/${DIFFICULT_PATH}")"
-    [ "$(cd subdir && RECURSIVE=0 get_submodule_toplevels)" = "${ans}" ]
+    expected=("$(real_path "${BUILD_REPO}")" "$(real_path "${BUILD_REPO}/${DIFFICULT_PATH}")")
+    ans="$(printf '%s\n' "${expected[@]}")"
+    output="$(RECURSIVE=0 get_submodule_toplevels | tr "\n" "\0" | xargs -0 -I {} -n 1 real_path {})"
+    [ "${output}" = "${ans}" ]
+    output="$(cd subdir && \
+        RECURSIVE=0 get_submodule_toplevels | tr "\n" "\0" | xargs -0 -I {} -n 1 real_path {})"
+    [ "${output}" = "${ans}" ]
   popd &> /dev/null
 
 
