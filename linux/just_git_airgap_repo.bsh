@@ -432,19 +432,36 @@ function is_submodule()
 # .. function:: git_project_root_dir
 #
 # :Output: ``*stdout*`` - The absolute path to the root of the topmost superproject’s working tree.
+#
+# .. rubric:: Example
+#
+# If the vsi_common repository is cloned (recursively) at ``/src``, and then :func:`git_project_root_dir` will output ``/src/vsi_common``. This is true regardless of where in the work-tree the function is run from, including from within submodules, sub-submodules, etc.
 #**
 
 function git_project_root_dir()
 {
-  # I'm not sure how to detect if the git directory is separate from it's work
-  # tree. Consequently, I can't necessarily find the project's root directory
-  # if we are inside the .git dir
-  if [ "$(${GIT} rev-parse --is-inside-git-dir)" == "true" ] && \
-     [ "$(${GIT} rev-parse --is-bare-repository)" == "false" ]; then
-    return 1
-  # In a bare repo (no submodules to worry about)
-  elif [ "$(${GIT} rev-parse --is-inside-git-dir)" == "true" ] && \
-       [ "$(${GIT} rev-parse --is-bare-repository)" == "true" ]; then
+  local toplevel="$(${GIT} rev-parse --show-toplevel 2> /dev/null)"
+  if is_submodule; then
+    pushd "${toplevel}/../" &> /dev/null
+      git_project_root_dir
+    popd &> /dev/null
+  else
+    echo "${toplevel}"
+  fi
+}
+
+#**
+# .. function:: git_project_git_dir
+#
+# :Output: ``*stdout*`` - The absolute path to the git directory of the topmost superproject.
+#
+# If the vsi_common repository is cloned (recursively) at ``/src``, and then :func:`git_project_git_dir` will output ``/src/vsi_common/.git``. This is true regardless of where in the work-tree the function is run from, including from within submodules, sub-submodules, etc.
+#**
+
+function git_project_git_dir()
+{
+  # In a bare repository or a .git directory
+  if [ "$(${GIT} rev-parse --is-inside-git-dir)" == "true" ]; then
     local dir="$(${GIT} rev-parse --git-dir)"
     if [ "${dir}" == "." ]; then
       echo "${PWD}"
@@ -453,22 +470,28 @@ function git_project_root_dir()
     fi
   # In a work tree
   elif [ "$(${GIT} rev-parse --is-inside-work-tree)" ]; then
-    _git_project_root_dir
+    project_dir="$(git_project_root_dir)"
+    pushd "${project_dir}" &> /dev/null
+      if [ -f .git ]; then
+        echo "$(real_path "$(cat .git | awk '{print $2}')")"
+      elif [ -d .git ]; then
+        echo "${PWD}/.git"
+      else
+        false # This should never happen
+      fi
+    popd &> /dev/null
   else
     return 1
   fi
-}
-
-function _git_project_root_dir()
-{
-  local toplevel="$(${GIT} rev-parse --show-toplevel 2> /dev/null)"
-  if is_submodule; then
-    pushd "${toplevel}/../" &> /dev/null
-      _git_project_root_dir
-    popd &> /dev/null
-  else
-    echo "${toplevel}"
-  fi
+  #
+  # In a bare repo
+  #   git rev-parse --is-inside-git-dir == true
+  #   git rev-parse --is-bare-repository == true
+  # In a .git dir
+  #   git rev-parse --is-inside-git-dir == true
+  #   git rev-parse --is-bare-repository == false
+  # In a work tree
+  #   git rev-parse --is-inside-work-tree == true
 }
 
 #**
@@ -907,7 +930,7 @@ function orphan_commit_repo_map
   repo_map="${1}"
   orphan_branch="${2-__just_git_mirror_info_file}"
 
-  local remote_local_url="$(git_project_root_dir)" # Alternatively, PWD
+  local remote_local_url="$(git_project_git_dir)" # Alternatively, PWD
   # Create an automatically deleting temporary directory
   local temp_repo
   make_temp_path temp_repo -d
