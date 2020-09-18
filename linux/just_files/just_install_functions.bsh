@@ -25,15 +25,13 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 #
 # .. file:: just_install_functions.bsh
 #
-# Install plugin for just. Installation routines are designed to be installed
-# to isolated standalone locations, for example ``/your/path/python-3.7.9``.
+# Install plugin for just. Installation routines are designed to be installed to isolated standalone locations, for example ``/your/path/python-3.7.9``.
 #**
 
 #**
 # .. envvar:: JUST_INSTALL_ACTIVATE_BASENAME
 #
-# File basename for utility activation. Users may source anactivation
-# file to create useful environment variables and add the utility to $PATH.
+# File basename for utility activation. Users may source anactivation file to create useful environment variables and add the utility to $PATH.
 #
 #**
 
@@ -67,7 +65,8 @@ function cmake-install()
   # directory check
   if [ -z "${install_dir-}" ] ; then
     echo "CMake install must specify --dir" >& 2
-    exit 1
+    local JUST_IGNORE_EXIT_CODES=1
+    return 1
   fi
 
   # download zip/tar
@@ -100,17 +99,12 @@ function cmake-install()
   if [ "${OS-}" = "Windows_NT" ]; then
     unzip -oq "${cmake_file}" -x "*/doc/**" -d "${install_dir}"
   else
-    tar -xf "${cmake_file}" --exclude="doc" -C "${install_dir}"
+    tar -xf "${cmake_file}" --exclude="*/doc" -C "${install_dir}"
   fi
 
   # executable
   local cmake_dir="${install_dir}/${cmake_id}"
-  local cmake_exe_footer
-  if [ "${OS-}" = "Windows_NT" ]; then
-    cmake_exe_footer="bin/cmake.exe"
-  else
-    cmake_exe_footer="bin/cmake"
-  fi
+  local cmake_exe_footer="/bin/cmake"
   local CMAKE="${cmake_dir}/${cmake_exe_footer}"
 
   # outputs: executable & version
@@ -121,7 +115,8 @@ function cmake-install()
   # Make sure python meets request
   if ! meet_requirements "${cmake_version}" "==${cmake_ver}"; then
     echo "CMake version ${cmake_version} is not the requested version ${cmake_ver}" >&2
-    exit 1
+    local JUST_IGNORE_EXIT_CODES=1
+    return 1
   fi
 
   # cmake activate
@@ -187,7 +182,8 @@ function conda-python-install()
   # directory check
   if [ -z "${install_dir-}" ] ; then
     echo "Conda python install must specify --dir" >& 2
-    exit 1
+    local JUST_IGNORE_EXIT_CODES=1
+    return 1
   fi
 
   # conda download & install requirements
@@ -230,13 +226,13 @@ function conda-python-install()
   if [ "${download_conda}" = "1" ]; then
     echo "Downloading miniconda..."
 
-    local conda_url
+    local conda_url="https://repo.anaconda.com/miniconda/"
     if [ "${OS-}" = "Windows_NT" ]; then
-      conda_url="https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe"
+      conda_url+="Miniconda3-latest-Windows-x86_64.exe"
     elif [[ ${OSTYPE-} = darwin* ]]; then
-      conda_url="https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-x86_64.sh"
+      conda_url+="Miniconda3-latest-MacOSX-x86_64.sh"
     else
-      conda_url="https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh"
+      conda_url+="Miniconda3-latest-Linux-x86_64.sh"
     fi
 
     CONDA_INSTALLER="${temp_dir}/$(basename "${conda_url}")"
@@ -264,7 +260,11 @@ function conda-python-install()
   if [ "${OS-}" = "Windows_NT" ]; then
     python_exe_footer="python.exe"
   else
-    python_exe_footer="bin/python"
+    if [ -f "${python_dir}/bin/python3" ]; then
+      python_exe_footer="bin/python3"
+    else
+      python_exe_footer="bin/python"
+    fi
   fi
   local PYTHON="${python_dir}/${python_exe_footer}"
 
@@ -281,7 +281,8 @@ function conda-python-install()
   # Make sure python meets request
   if ! meet_requirements "${python_version}" "==${python_ver}"; then
     echo "Python version ${python_version} is not the requested version ${python_ver}" >&2
-    exit 1
+    local JUST_IGNORE_EXIT_CODES=1
+    return 1
   fi
 
 
@@ -333,8 +334,8 @@ function conda-python-install()
 # Install a virtualenv containing pipenv.
 #
 # :Arguments: * [``--dir {dir}``] - Pipenv install directory
-#             * [``--ver {ver}``] - Pipenv version for install (default=``${PIPENV_VERSION:-2018.11.26}``)
-#             * [``--python {PYTHON}``] - Python executable (default=(python3|python|python3))
+#             * [``--ver {ver}``] - Pipenv version for install (default=``${PIPENV_VERSION:-2020.8.13}``)
+#             * [``--python {PYTHON}``] - Python executable (default=(python3|python|python2))
 #
 # :Output: * pipenv_exe - Pipenv executable
 #          * pipenv_version - Pipenv version
@@ -346,7 +347,7 @@ function conda-python-install()
 function pipenv-install()
 {
   local install_dir  # install directory
-  local pipenv_ver="${PIPENV_VERSION:-2018.11.26}"  # pipenv version
+  local pipenv_ver="${PIPENV_VERSION:-2020.8.13}"  # pipenv version
   local PYTHON  # python executable
 
   parse_args pipenv_extra_args \
@@ -358,14 +359,16 @@ function pipenv-install()
   # check for pipenv directory
   if [ -z "${install_dir}" ]; then
     echo "Pipenv install must specify --dir" >& 2
-    exit 1
+    local JUST_IGNORE_EXIT_CODES=1
+    return 1
   fi
 
   # search for python if not specified
   : ${PYTHON:="$( (command -v python3 || command -v python || command -v python2) | head -n 1)"}
   if [ ! -f "${PYTHON}" ]; then
     echo "Pipenv install cannot find python executable" >&2
-    exit 1
+    local JUST_IGNORE_EXIT_CODES=1
+    return 1
   fi
 
   # create pipenv directory
@@ -406,7 +409,8 @@ function pipenv-install()
   # Make sure pipenv meets requirements
   if ! meet_requirements "${pipenv_version}" "==${pipenv_ver}"; then
     echo "Pipenv version ${pipenv_version} does not match request ${pipenv_ver}" >&2
-    exit 1
+    local JUST_IGNORE_EXIT_CODES=1
+    return 1
   fi
 
   # pipenv activate
