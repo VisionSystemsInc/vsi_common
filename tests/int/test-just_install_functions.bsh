@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+
+# Note all just_install_functions.bsh test are currently enabled only for windows.  Tests currently fail on most linux test images, as the installed tools often rely on glibc and a valid download utility (e.g., wget).
+
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
+
+source "${VSI_COMMON_DIR}/tests/testlib.bsh"
+source "${VSI_COMMON_DIR}/linux/just_files/just_install_functions.bsh"
+
+# test cmake install
+[ "${OS-}" = "Windows_NT" ] || skip_next_test
+begin_test "cmake-install"
+(
+  setup_test
+
+  # environment
+  export TMPDIR="${TESTDIR}" # redirect mktemp commands to $TESTDIR
+  export JUST_INSTALL_ACTIVATE_BASENAME="test_just_activate.bsh"
+
+  # version info
+  CMAKE_VER="3.18.2"
+  CMAKE_VER_FULL=$'cmake version 3.18.2\n\nCMake suite maintained and supported by Kitware (kitware.com/cmake).'
+
+  # install
+  cmake-install \
+      --dir "${TESTDIR}" \
+      --ver "${CMAKE_VER}"
+
+  # output version
+  [ "${cmake_version}" = "${CMAKE_VER}" ]
+
+  # executable version
+  RESULT="$("${cmake_exe}" --version)"
+  [ "$RESULT" = "${CMAKE_VER_FULL}" ]
+
+  # activate version
+  RESULT="$(source "${cmake_activate}"; "${CMAKE_EXE}" --version)"
+  [ "$RESULT" = "${CMAKE_VER_FULL}" ]
+
+)
+end_test
+
+
+# test conda-python-install & pipenv-install
+# test in sequence according to typical usage - install oython then pipenv
+[ "${OS-}" = "Windows_NT" ] || skip_next_test
+begin_test "conda-python-install and pipenv-install"
+(
+  setup_test
+
+  # environment
+  export TMPDIR="${TESTDIR}" # redirect mktemp commands to $TESTDIR
+  export JUST_INSTALL_ACTIVATE_BASENAME="test_just_activate.bsh"
+
+  # --python--
+
+  # version info
+  PYTHON_VER="3.7.9"
+  PYTHON_VER_FULL="Python 3.7.9"
+
+  # install
+  conda-python-install \
+      --dir "${TESTDIR}" \
+      --ver "${PYTHON_VER}" \
+      --download
+
+  # output version
+  [ "${python_version}" = "${PYTHON_VER}" ]
+
+  # executable version
+  RESULT="$("${python_exe}" --version 2>&1)"
+  [ "$RESULT" = "${PYTHON_VER_FULL}" ]
+
+  # activate version
+  RESULT="$(source "${python_activate}"; "${PYTHON_EXE}" --version 2>&1)"
+  [ "$RESULT" = "${PYTHON_VER_FULL}" ]
+
+  # --pipenv--
+
+  # activate python environment
+  source "${python_activate}"
+
+  # version info
+  PIPENV_VER="2020.6.2"
+  PIPENV_VER_FULL=$'pipenv, version 2020.6.2\r'
+
+  # install
+  pipenv-install \
+      --dir "${TESTDIR}" \
+      --ver "${PIPENV_VER}" \
+      --python "${python_exe}"
+
+  # validate outputs
+  [ "${pipenv_version}" = "${PIPENV_VER}" ]
+
+  # executable version
+  RESULT="$("${pipenv_exe}" --version)"
+  printf "RESULT\n%q\n" "${RESULT}"
+  [ "$RESULT" = "${PIPENV_VER_FULL}" ]
+
+  # activate version
+  RESULT="$(source "${pipenv_activate}"; "${PIPENV_EXE}" --version)"
+  [ "$RESULT" = "${PIPENV_VER_FULL}" ]
+
+)
+end_test
