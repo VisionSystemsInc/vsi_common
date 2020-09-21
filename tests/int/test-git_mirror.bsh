@@ -51,7 +51,8 @@ function setup()
     git init . &> /dev/null
     git submodule add "${SUBMODULE_URL}" $'diff  i \t cult' &> /dev/null
     git commit -m "add submodule" &> /dev/null &> /dev/null
-    if [ "$(git submodule foreach 'echo "${name}"')" == "" ]; then
+    output="$(git submodule foreach 'echo "${name}"')"
+    if [ "${output}" == "" ]; then
       git_supports_difficult_submodule_paths=1 # git does not support difficult names
     fi
   popd &> /dev/null
@@ -320,17 +321,44 @@ begin_test "Part 6 - Update a repo and the prepped mirror"
     touch newfile
     git add newfile
     git commit -m "add a file"
+
+    # Add a file to a submodule and update the main repo
+    pushd "${DIFFICULT_NAME}" &> /dev/null
+      touch newfile_sub
+      git add newfile_sub
+      git commit -m "add a new file"
+      git push origin master
+    popd &> /dev/null
+    git add "${DIFFICULT_NAME}"
+    git commit -m "update submodule"
     git push "${PRETEND_URL}" master
+
+    # Add a commit to a submodule that is not tracked by the main repo
+    pushd "${DIFFICULT_NAME}" &> /dev/null
+      echo "1" >> newfile_sub
+      git add newfile_sub
+      git commit -m "update file"
+      git push origin master
+    popd &> /dev/null
+
+    # Add a branch to the main repo
+    current_branch="$(git rev-parse --abbrev-ref HEAD)"
+    git checkout -b a_branch
+    touch branchfile
+    git add branchfile
+    git commit -m "add a file on a branch"
+    git push "${PRETEND_URL}" a_branch
+    git checkout "${current_branch}"
   popd &> /dev/null
 
   # Add a branch to the air-gapped main repo
   pushd "${CLONE_DIR}" &> /dev/null
     current_branch="$(git rev-parse --abbrev-ref HEAD)"
-    git checkout -b new_branch
+    git checkout -b airgap_branch
     touch branch_file
     git add branch_file
     git commit -m "add a new file on this branch"
-    git push origin new_branch
+    git push origin airgap_branch
     git checkout "${current_branch}"
   popd &> /dev/null
 
@@ -361,9 +389,18 @@ begin_test "Part 6 - Update a repo and the prepped mirror"
 
   # Tests
   [ -f "${CLONE_DIR}/newfile" ]
+  [ -f "${CLONE_DIR}/${DIFFICULT_NAME}/newfile_sub" ]
+  output="$(cat "${CLONE_DIR}/${DIFFICULT_NAME}/newfile_sub")"
+  [ "${output}" == "" ]
   # git 1.8.3 does not support git -C
   pushd "${MIRROR_DIR}"/main &> /dev/null
-    git show-ref --verify --quiet refs/heads/new_branch
+    git show-ref --verify --quiet refs/heads/airgap_branch
+    git show-ref --verify --quiet refs/heads/a_branch
+  popd &> /dev/null
+  pushd "${MIRROR_DIR}/${DIFFICULT_NAME}" &> /dev/null
+    [ "$(git log -n1 --format="%s")" == "update file" ]
+    # alternatively
+    #[ "$(git show HEAD | git patch-id | awk '{print $1}')" == "bd6ba42dfd6bb1cacf02ec71f97292f25b58d0da" ]
   popd &> /dev/null
 )
 end_test
