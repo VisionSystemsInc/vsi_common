@@ -1,6 +1,13 @@
 version: 2.1
 
 # -----
+# CircleCI orbs
+# -----
+orbs:
+  win: circleci/windows@2.4.0
+
+
+# -----
 # generic yaml anchors (reusable by multiple projects)
 # -----
 x-stuff:
@@ -137,6 +144,30 @@ jobs:
               git push origin gh-pages
             fi
 
+  # test selected scripts for windows compatability
+  # note 'bash.exe -l' ensures correct operation of utilities like 'find'
+  run_windows_test:
+    executor:
+      name: win/default
+      shell: bash.exe -l
+    working_directory: "C:/Users/circleci/vsi"
+    steps:
+      - run: systeminfo
+      - checkout
+      - submodule_checkout
+
+      - run:
+          name: Run tests
+          command: |
+            source setup.env
+            just test
+
+      - run:
+          name: Run integration tests
+          command: |
+            source setup.env
+            just test int git_mirror
+
 # -----
 # CircleCI workflows
 # -----
@@ -144,6 +175,7 @@ workflows:
   vsi_common:
     jobs:
       - run_bash_and_os_tests
+      - run_windows_test
       - compile_docs
       - deploy_docs:
           requires:
