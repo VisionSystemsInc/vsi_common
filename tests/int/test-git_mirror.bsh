@@ -367,9 +367,12 @@ begin_test "Part 6 - Update a repo and the prepped mirror"
     LFS_DIR="${PRETEND_URL}_lfs/lfs/objects" GIT="${TRASHDIR}/git2" git_mirror_main "${PRETEND_URL}"
   popd &> /dev/null
 
-  # Select the incremental backup if it exists
-  PREP_FILE="$(ls -rt "${PRETEND_URL}_prep"/transfer_*_transfer_*.tgz 2> /dev/null | tail -n1)"
+  # Select the incremental backup if it exists (should be at most one)
+  PREP_FILE="$(shopt -s nullglob; echo "${PRETEND_URL}_prep"/transfer_*_transfer_*.tgz)"
   if [ -z "${PREP_FILE:+set}" ]; then
+    # List with 'ls -rt' because the archives are only datetime stamped out to
+    # seconds, so its not inconceivable two archives could be created within a
+    # single second
     PREP_FILE="$(ls -rt "${PRETEND_URL}_prep"/transfer_*.tgz | tail -n1)"
   fi
 
@@ -444,5 +447,17 @@ begin_archive_test "Archive"
   begin_fail_zone
   [ "$(tar ztf "${PREP_FILE[0]}")" = "${ans}" ]
   end_fail_zone
+
+  # Test incremental archive (if possible)
+  if [ -f "${PREP_FILE[0]%.tgz}.snar" ]; then
+    touch "${ARCHIVE_DIR}"/newfile
+
+    sleep 2 # the archives are only datetime stamped out to seconds
+    archive_mirrors "${ARCHIVE_DIR}"
+
+    PREP_FILE="$(shopt -s nullglob; echo "${ARCHIVE_DIR}"/transfer_*_transfer_*.tgz)"
+    ans=$'./\n./subdir/\n./newfile' # BSD tar does not appear to support incremental backups
+    [ "$(tar ztf "${PREP_FILE}")" = "${ans}" ]
+  fi
 )
 end_test
