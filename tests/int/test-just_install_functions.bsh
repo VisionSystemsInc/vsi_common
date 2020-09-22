@@ -1,16 +1,24 @@
 #!/usr/bin/env bash
 
-# Note all just_install_functions.bsh test are currently enabled only for windows.  Tests currently fail on most linux test images, as the installed tools often rely on glibc and a valid download utility (e.g., wget).
+#**
+# .. envvar:: VSI_FORCE_TEST_JUST_INSTALL_FUNCTIONS
+#
+# Force testing of functions in :file:`just_install_functions.bsh`.
+#
+#**
 
 if [ -z ${VSI_COMMON_DIR+set} ]; then
   VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 fi
 
 source "${VSI_COMMON_DIR}/tests/testlib.bsh"
+source "${VSI_COMMON_DIR}/linux/common_source.sh"
 source "${VSI_COMMON_DIR}/linux/just_files/just_install_functions.bsh"
 
+
 # test cmake install
-[ "${OS-}" = "Windows_NT" ] || skip_next_test
+# alpine musl won't run the cmake executable
+[ "${VSI_OS}" = "linux" ] && [ "${VSI_MUSL}" = "1" ] && [ -z "${VSI_FORCE_TEST_JUST_INSTALL_FUNCTIONS+set}" ] && skip_next_test
 begin_test "cmake-install"
 (
   setup_test
@@ -43,9 +51,9 @@ begin_test "cmake-install"
 end_test
 
 
-# test conda-python-install & pipenv-install
-# test in sequence according to typical usage - install python then pipenv
-[ "${OS-}" = "Windows_NT" ] || skip_next_test
+# test conda-python-install & pipenv-install: test in sequence according to typical usage - install python then pipenv
+# alpine musl won't run the miniconda executable
+[ "${VSI_OS}" = "linux" ] && [ "${VSI_MUSL}" = "1" ] && [ -z "${VSI_FORCE_INSTALL_FUNCTIONS_TEST+set}" ] && skip_next_test
 begin_test "conda-python-install and pipenv-install"
 (
   setup_test
@@ -58,7 +66,7 @@ begin_test "conda-python-install and pipenv-install"
 
   # version info
   PYTHON_VER="3.7.9"
-  PYTHON_VER_FULL="Python 3.7.9"
+  PYTHON_VER_FULL="Python ${PYTHON_VER}"
 
   # install
   conda-python-install \
@@ -84,7 +92,7 @@ begin_test "conda-python-install and pipenv-install"
 
   # version info
   PIPENV_VER="2020.6.2"
-  PIPENV_VER_FULL=$'pipenv, version 2020.6.2\r'
+  PIPENV_VER_FULL="pipenv, version ${PIPENV_VER}"
 
   # install
   pipenv-install \
@@ -96,12 +104,11 @@ begin_test "conda-python-install and pipenv-install"
   [ "${pipenv_version}" = "${PIPENV_VER}" ]
 
   # executable version
-  RESULT="$("${pipenv_exe}" --version)"
-  printf "RESULT\n%q\n" "${RESULT}"
+  RESULT="$("${pipenv_exe}" --version | sed 's|$\r||g')"
   [ "$RESULT" = "${PIPENV_VER_FULL}" ]
 
   # activate version
-  RESULT="$(source "${pipenv_activate}"; "${PIPENV_EXE}" --version)"
+  RESULT="$(source "${pipenv_activate}"; "${PIPENV_EXE}" --version | sed 's|$\r||g')"
   [ "$RESULT" = "${PIPENV_VER_FULL}" ]
 
 )
