@@ -970,25 +970,34 @@ function orphan_commit_repo_map
   local orphan_branch="${2-__just_git_mirror_info_file}"
 
   local remote_local_url="$(git_project_git_dir)" # Alternatively, PWD
+  local refs_mapping="$(${GIT} for-each-ref --format='%(refname) %(objectname)' refs/heads)"
+
   # Create an automatically deleting temporary directory
   local temp_repo
   make_temp_path temp_repo -d
-  # FIXME Clone the orphan branch from the mirror (if it exists)
-  # git clone --single-branch --branch "${orphan_branch}" "$(_git_mirror_get_url .)" "${temp_repo}"
-  # Alternatively, https://stackoverflow.com/a/7349740/1771778
   pushd "${temp_repo}" &>/dev/null
-    ${GIT} init
-    ${GIT} remote add origin "${remote_local_url}"
-    ${GIT} checkout --orphan "${orphan_branch}"
+    # source repo_map (in a bash 3.2 compatible way)
+    local main_url="$(source /dev/stdin <<< "${repo_map}"; _git_mirror_get_url .)"
+    # Clone the orphan branch from the mirror (if it exists)
+    # Alternatively, https://stackoverflow.com/a/7349740
+    if ${GIT} clone --single-branch --branch "${orphan_branch}" "${main_url}" . &> /dev/null; then
+      ${GIT} remote set-url origin "${remote_local_url}"
+      ${GIT} checkout "${orphan_branch}" &> /dev/null
+    else
+      ${GIT} init &> /dev/null
+      ${GIT} remote add origin "${remote_local_url}"
+      ${GIT} checkout --orphan "${orphan_branch}" &> /dev/null
+    fi
 
     echo "${repo_map}" > repo_map.env
 
+    local message="the repo_map.env file needed by just:git_mirror that maps repo_paths to urls"
     ${GIT} add repo_map.env
     ${GIT} -c "user.name=just git_export-repo" \
            -c "user.email=<just@export-repo.git>" commit \
            --allow-empty \
-           -m "the repo_map.env file needed by just:git_mirror that maps repo_paths to urls"
-    ${GIT} push --force origin "${orphan_branch}"
+           -m "$(printf "${message}\n\n${refs_mapping}")"
+    ${GIT} push --force origin "${orphan_branch}" &> /dev/null
   popd &>/dev/null
 }
 
