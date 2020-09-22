@@ -833,3 +833,23 @@ def nested_patch_inplace(obj, condition, patch, _spare_key = None):
     if condition(_spare_key, obj):
       return patch(_spare_key, obj)
     return obj
+
+def unwrap_wraps(func):
+  '''
+  Unwraps a wrapped function
+
+  Finds the originally wrapped function, using the :func:`functools.wraps`
+  pattern of storing in ``__wrapped__``
+  '''
+
+  is_method = inspect.ismethod(func)
+
+  try:
+    while func.__wrapped__:
+      func = func.__wrapped__
+      # It only takes one to be a method
+      if inspect.ismethod(func):
+        is_method = True
+  except AttributeError:
+    pass
+  return (func, is_method)
