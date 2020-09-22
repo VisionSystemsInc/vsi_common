@@ -7,6 +7,7 @@ fi
 source "${VSI_COMMON_DIR}/tests/testlib.bsh"
 command -v "${GIT-git}" &> /dev/null && source "${VSI_COMMON_DIR}/linux/git_mirror"
 source "${VSI_COMMON_DIR}/linux/requirements.bsh"
+source "${VSI_COMMON_DIR}/linux/compat.bsh"
 
 # These tests chain together, so no point in continuing after one breaks
 TESTLIB_STOP_AFTER_FAILS=1
@@ -29,35 +30,7 @@ function setup()
   PRETEND_URL="${TRASHDIR}/pretend_repo" # bare repo
 
   # Test if git supports difficult submodule paths
-  # TODO Add a flag to compat.bsh once we figure out which version of git
-  # difficult submodule names are supported in
-  git_supports_difficult_submodule_paths=0
-  GIT_TEST_REPO="${TRASHDIR}/setup/test"
-  SUBMODULE_REPO="${TRASHDIR}/setup/difficult"
-  SUBMODULE_URL="${TRASHDIR}/setup/git/difficult.git"
-  mkdir -p "${SUBMODULE_REPO}"
-  pushd "${SUBMODULE_REPO}" &> /dev/null
-    git init . &> /dev/null
-    touch readme_sub
-    git add readme_sub
-    git commit -m "initial commit" &> /dev/null
-  popd &> /dev/null
-  mkdir -p "${SUBMODULE_URL}"
-  pushd "${SUBMODULE_URL}" &> /dev/null
-    git clone --mirror "${SUBMODULE_REPO}" . &> /dev/null
-  popd &> /dev/null
-  mkdir -p "${GIT_TEST_REPO}"
-  pushd "${GIT_TEST_REPO}" &> /dev/null
-    git init . &> /dev/null
-    git submodule add "${SUBMODULE_URL}" $'diff  i \t cult' &> /dev/null
-    git commit -m "add submodule" &> /dev/null &> /dev/null
-    output="$(git submodule foreach 'echo "${name}"')"
-    if [ "${output}" = "" ]; then
-      git_supports_difficult_submodule_paths=1 # git does not support difficult names
-    fi
-  popd &> /dev/null
-
-  if [ "${git_supports_difficult_submodule_paths}" -ne 0 ]; then
+  if git_bug_submodule_path_with_tab; then
     DIFFICULT_NAME='diff  i cult'
   else
     DIFFICULT_NAME=$'diff  i \t cult'
