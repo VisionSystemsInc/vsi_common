@@ -497,6 +497,17 @@ function git_mirror_repos()
     GIT_MIRROR_PREP_DIR="${PWD}/${GIT_MIRROR_PREP_DIR}"
   fi
 
+  # 1. mirror clone (prep_dir)
+  # 2. clone repo from /prep to /tmp/clone
+  #    (in clone_submodules)
+  # 3. git submodule init in /tmp/clone
+  # 4. get_config_submodule_names - list submodules in /tmp/clone
+  # 5. mirror each submodule into prep_dir
+  # 6. change remote of each submodule in /tmp/clone to point to the prep'd mirror
+  # 7. git submodule update in /tmp/clone
+  # 8. repeat 3-7 for sub submodules
+  # 9. profit
+
   #########################
   # Get the super project #
   #########################
@@ -634,9 +645,14 @@ function archive_mirrors()
       next_section "Creating an incremental tar file too, based on ${last_tar_file}"
       args+=("--exclude" "${CWD}/${tar_file}_${last_tar_file}.tgz" \
              "--exclude" "${CWD}/${last_tar_file}.l1.snar")
+      # archive.snar-1 is more canonical than l1.snar [1]
       cp "${last_tar_file}.snar" "${last_tar_file}.l1.snar"
       # This snar file isn't actually used for anything because the next
       # incremental backup is created from the previous full backup
+      #
+      # NOTE tar uses timestamps to decide if a file has changed (this includes
+      # the access, modify and change times)
+      # [1] https://www.gnu.org/software/tar/manual/html_node/Incremental-Dumps.html
       ${TAR} czf "${tar_file}_${last_tar_file}.tgz" -g "${last_tar_file}.l1.snar" "${args[@]}" "${CWD}"
       next_section "Your new tar file is ready:"
       echo "${prep_dir}/${tar_file}.tgz"
