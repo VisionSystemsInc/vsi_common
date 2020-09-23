@@ -26,45 +26,92 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 #**
 # .. default-domain:: bash
 #
-# ===============================================
-# J.U.S.T. Git Mirror to an Air-gapped Repository
-# ===============================================
+# ===========================================
+# J.U.S.T. Mirror to an Air-gapped Repository
+# ===========================================
 #
 # .. file:: just_git_airgap_repo.bsh
 #
-# While creating a git mirror is as simple as ``git clone --mirror``, unfortunately this git command does not support git submodules or lfs. These functions help in creating and subsequently cloning a mirror of a project with submodules and/or git lfs.
+# While creating a git mirror is as simple as ``git clone --mirror``, unfortunately this command does not support git submodules or lfs. These functions help in creating and subsequently cloning a mirror of a project with submodules and/or git lfs.
 #
 # .. rubric:: Example
 #
-# Mirror a repository and push it to a new air-gaped git server:
+# Assume we have a project called simple_repo stored at ``https://git-server.com/projectA/simple_repo.git`` and vsi_common is a submodule of it.
 #
-# 1. ``just git export-repo https://github.com/visionsystemsinc/vsi_common.git master ~/vsi_common_prep`` - Mirror the repository and recursively create mirrors of all submodules currently in the master branch.
-# 2. Transfer ``vsi_common_prep/transfer_{date}.tgz`` to your destination.
-# 3. On the destination, create a directory, e.g., vsi_common_prep, and move the archive into it
-# 4. Extract the archive (the archive will extract directly into this directory)
+# This repository is recursively cloned to /src; it looks like
 #
-#   a) In vsi_common_prep, edit repo_map.env and set the JUST_GIT_AIRGAP_MIRROR_URL environment variable. For example,
+# .. code-block:: bash
 #
-#     - JUST_GIT_AIRGAP_MIRROR_URL=https://git-server.com/projectA
+#    /src/
+#      simple_repo/
+#        .gitmodules
+#        Justfile
+#        setup.env
+#        external/vsi_common/               # submodule
+#        external/vsi_common/docker/recipes # sub-submodule
 #
-# 5. If not already, initialize bare repositories on the air-gapped git server for vsi_common and its submodule, recipes. In this example, these should be located at
+# Before this repository can be mirrored (which is not the same thing as a clone) and pushed to a new air-gapped git server, first, a little setup is necessary. This is because, after the air-gapped repository is (shallow) cloned, the submodules must be re-configured before they can be updated (recursively). This is handled by the ``git_clone-airgap-repo`` ``just`` target. However, this obviously cannot be called until the vsi_common submodule is itself initialized and updated. To accomplish this, a small function, :func:`git_airgap_submodule_helper.bsh git_airgap_submodule_update`, is orphan committed to the air-gapped repository so that it is available for this task.
 #
-#   - https://git-server.com/projectA/vsi_common.git
-#   - https://git-server.com/projectA/recipes.git
+# As no ``just`` functions can be called yet, this function must be called in the file specified by :envvar:`JUST_SETUP_SCRIPT` (typically called setup.env). For example, the setup.env script, which typically looks like:
+#
+# .. code-block:: bash
+#
+#    export JUST_SETUP_SCRIPT="$(basename "${BASH_SOURCE[0]}")"
+#    source "$(dirname "${BASH_SOURCE[0]}")/external/vsi_common/env.bsh"
+#
+# would become:
+#
+# .. code-block:: bash
+#
+#    export JUST_SETUP_SCRIPT="$(basename "${BASH_SOURCE[0]}")"
+#    if [ ! -f "$(dirname "${BASH_SOURCE[0]}")/external/vsi_common/env.bsh" ]; then
+#      echo "'just' could not be loaded. Trying to setup the repository as an"
+#      echo "air-gapped repository"
+#      # source the contents of repo_map.env (in a bash 3.2 compatible way)
+#      source /dev/stdin <<< \
+#          "$(git show origin/__just_git_mirror_info_file:repo_map.env 2>/dev/null || :)"
+#      if ! declare -Fx git_airgap_submodule_update; then
+#        echo "ERROR the vsi_common submodule could not be found!"
+#        return 1
+#      fi
+#      git_airgap_submodule_update external/vsi_common
+#    fi
+#    source "$(dirname "${BASH_SOURCE[0]}")/external/vsi_common/env.bsh"
+#
+# This repository is now setup and can be mirrored and pushed to a new air-gapped git server:
+#
+# #. ``just git export-repo-guided`` - This target asks a series of questions and then mirrors the repository and its submodules (recursively). In this case, there is only a single remote, ``origin``, and a single branch, ``master``; these are chosen automatically. We will save the the mirrored repositories to the output directory, ``/mirrors``.
+#
+# .. note::
+#   The mirror is created from (the URL of) the remote---not directly from this clone itself.
+#
+# 2. Transfer ``/mirrors/transfer_{date}.tgz`` to your destination.
+# #. On the destination, create a directory, e.g., ``/airgap``, and move the archive into it
+# #. Extract the archive (the archive will extract directly into this directory)
+#
+#   a) In ``/airgap``, edit ``repo_map.env`` and set the :var:`JUST_GIT_AIRGAP_MIRROR_URL` environment variable. For example,
+#
+#     - ``JUST_GIT_AIRGAP_MIRROR_URL=https://git-airgap.com/projectA``
+#
+# 5. If not already, initialize bare repositories on the air-gapped git server for simple_repo and its submodules. In this example, these should be located at
+#
+#   - ``https://git-airgap.com/projectA/simple_repo.git``
+#   - ``https://git-airgap.com/projectA/vsi_common.git``
+#   - ``https://git-airgap.com/projectA/recipes.git``
 #
 # 6. ``source setup.env``
-# 7. ``just git import-repo`` - Push the mirrored repository and all submodules to a new git server as defined by repo_map.env
-# 8. Incremental updates can be pushed to the repositories using much the same process. See :file:`git_mirror_main`.
+# #. ``just git import-repo`` - Push the mirrored repository and all its submodules to the new git server as defined by repo_map.env
+# #. Incremental updates can be pushed to the repositories using much the same process.
 #
 # A developer can then run:
-# 1. ``git clone https://git-server.com/projectA/vsi_common.git``
-# 2. ``just git clone-airgap-repo`` - Clone submodules recursively from the new mirror
 #
-# Note however, that a project that uses vsi_common as a submodule must add support in the setup.env file to initialize and update the vsi_common submodule before this target can be called (see :func:`print_git_airgap_submodule_update`).
+# #. ``git clone https://git-airgap.com/projectA/simple_repo.git`` - Note: non-recursive
+# #. ``source setup.env``
+# #. ``just git clone-airgap-repo`` - Clone submodules recursively from the new mirror
 #
 # .. seealso::
 #
-#   :file:`git_mirror`: :func:`git_mirror_main`, :func:`git_push_main`, and :func:`git_clone_main`
+#   :func:`git_mirror git_mirror_main`, :func:`git_mirror git_push_main`, and :func:`git_mirror git_clone_main`
 #**
 
 #**
@@ -94,17 +141,23 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 #             - [``$2``] - A branch's/tag's name to filter by; e.g., master. If unset, then don't filter
 #
 # :Output: - ``*stdout*`` - Print all unpushed commits for tracking branches to stdout
+#
+# .. seealso::
+#
+#   :func:`log_outgoing_commits`
 #**
 
+# REVIEW Simply output the number of unpushed commits, not the graph of unpushed
+# commits; much easier with --format=%H
 function log_unpushed_commits()
 {
   # NOTE Only supports passing in a single branch and named remote
   local remote_name="${1-}"
-  local branch
+  local branch # actually, a commit-ish
   if [ $# -lt 2 ]; then
     branch=("--branches" "--tags")
   else
-    branch="${2}"
+    branch=("${2}")
   fi
 
   local commits="$(${GIT} log --decorate --graph --format=short --color=always \
@@ -149,13 +202,22 @@ function _log_commits_helper()
 #
 # .. note::
 #
+#   If any arguments are supplied, then the remote-tracking branch will be printed to ``*stdout*``, otherwise, the tracking branches and corresponding remote-tracking branches will be saved to the output variables, ``just_git_tracking_branches`` and ``just_git_remote_tracking_branches``.
+#
+# .. note::
+#
+#   A branch cannot track multiple remotes.
+#
+# .. note::
+#
 #   - A branch that you create locally and then push to a remote is not configured as a local-tracking branch by default. You must use the -u flag with ``git push`` or ``git branch``.
 #   - A branch cannot track multiple remotes.
 #**
 
 function get_tracking_branches()
 {
-  # REVIEW Could support multiple named remotes with a for loop
+  # Could support multiple named remotes with a for loop if remote_name(s) was
+  # a parameter
   local remote_name="${1-}"
 
   local branches
@@ -234,11 +296,13 @@ function get_tracking_branches()
 #
 # :Output: - ``*stdout*`` - Print all unpushed commits for tracking branches to stdout
 #
-# .. note::
+# .. seealso::
 #
-#   A branch cannot track multiple remotes.
+#   :func:`log_unpushed_commits`
 #**
 
+# REVIEW Simply output the number of outgoing commits, not the graph of outgoing
+# commits; much easier with --format=%H
 function log_outgoing_commits()
 {
   # NOTE Only supports passing in a single branch and named remote
@@ -274,7 +338,7 @@ function log_outgoing_commits()
 #
 # Change the remote url of a git repo to use the git@ syntax instead of https
 #
-# In a git repository (or submodule), if the (last) URL of the remote is specified using the the https:// protocol, convert it to the ssh transfer protocol (git@..) to make pushing changes to a private remote server easier. Assume a very basic url format: https://git-server.com/co/project.git without port, query, or fragment sections. Warn if these exist. Do nothing if a pushurl is already configured
+# In a git repository (or submodule), if the (last) URL of the remote is specified using the the ``https://`` protocol, convert it to the ssh transfer protocol (git@..) to make pushing changes to a private remote server easier. Assume a very basic url format: ``https://git-server.com/co/project.git`` without port, query, or fragment sections. Warn if these exist. Do nothing if a pushurl is already configured
 #
 # :Arguments: - [``$1``] - The name of a remote to convert. Default: origin
 #
@@ -324,22 +388,22 @@ function _http_to_git_protocol()
   # Be very conservative about which URLs will convert
   # NOTE If the git server has a non-standard port (which would not be the
   # same as https port), you have to do ssh://git@server:port/...
-  local just_url_parsed_scheme
-  local just_url_parsed_authority
-  local just_url_parsed_host
-  local just_url_parsed_port
-  local just_url_parsed_rpath
-  local just_url_parsed_query
-  local just_url_parsed_fragment
-  if parse_url "${remote_url}"; then # Sets just_url_parsed_host, just_url_parsed_rpath, etc.
-    if [ "${just_url_parsed_port}" != "" ] || \
-       [ "${just_url_parsed_query}" != "" ] || \
-       [ "${just_url_parsed_fragment}" != "" ]; then
+  local parsed_url_scheme
+  local parsed_url_authority
+  local parsed_url_host
+  local parsed_url_port
+  local parsed_url_rpath
+  local parsed_url_query
+  local parsed_url_fragment
+  if parse_url "${remote_url}"; then # Sets parsed_url_host, parsed_url_rpath, etc.
+    if [ "${parsed_url_port}" != "" ] || \
+       [ "${parsed_url_query}" != "" ] || \
+       [ "${parsed_url_fragment}" != "" ]; then
       echo "${remote_url}"
       return 1
-    elif [ "${just_url_parsed_scheme}" == "http" ] || \
-         [ "${just_url_parsed_scheme}" == "https" ]; then
-      local remote_git_url="git@${just_url_parsed_host}:${just_url_parsed_rpath}"
+    elif [ "${parsed_url_scheme}" == "http" ] || \
+         [ "${parsed_url_scheme}" == "https" ]; then
+      local remote_git_url="git@${parsed_url_host}:${parsed_url_rpath}"
       echo "${remote_git_url}"
     fi
   else
@@ -381,8 +445,8 @@ function is_submodule()
           is_submod=0
         fi
         #
-        # Alternatively, use get_submodule_names and then git config to query
-        # the sm_path (as git_sync_submodules_recursively does)
+        # Alternatively, use get_config_submodule_names and then git config to
+        # query the sm_path (as git_sync_submodules_recursively does)
         # RE Shouldn't be necessary in this case, as the submodule should
         # always be init'd and updated since we are recursing up through it
       popd &> /dev/null
@@ -416,6 +480,10 @@ function is_submodule()
 # .. function:: git_project_root_dir
 #
 # :Output: ``*stdout*`` - The absolute path to the root of the topmost superproject’s working tree.
+#
+# .. rubric:: Example
+#
+# If the vsi_common repository is cloned (recursively) at ``/src``, and then :func:`git_project_root_dir` will output ``/src/vsi_common``. This is true regardless of where in the work-tree the function is run from, including from within submodules, sub-submodules, etc.
 #**
 
 function git_project_root_dir()
@@ -428,6 +496,50 @@ function git_project_root_dir()
   else
     echo "${toplevel}"
   fi
+}
+
+#**
+# .. function:: git_project_git_dir
+#
+# :Output: ``*stdout*`` - The absolute path to the git directory of the topmost superproject.
+#
+# If the vsi_common repository is cloned (recursively) at ``/src``, and then :func:`git_project_git_dir` will output ``/src/vsi_common/.git``. This is true regardless of where in the work-tree the function is run from, including from within submodules, sub-submodules, etc.
+#**
+
+function git_project_git_dir()
+{
+  # In a bare repository or a .git directory
+  if [ "$(${GIT} rev-parse --is-inside-git-dir)" == "true" ]; then
+    local dir="$(${GIT} rev-parse --git-dir)"
+    if [ "${dir}" == "." ]; then
+      echo "${PWD}"
+    else
+      echo "${dir}"
+    fi
+  # In a work tree
+  elif [ "$(${GIT} rev-parse --is-inside-work-tree)" ]; then
+    local project_dir="$(git_project_root_dir)"
+    pushd "${project_dir}" &> /dev/null
+      if [ -f .git ]; then
+        echo "$(real_path "$(cat .git | awk '{print $2}')")"
+      elif [ -d .git ]; then
+        echo "${PWD}/.git"
+      else
+        false # This should never happen
+      fi
+    popd &> /dev/null
+  else
+    return 1
+  fi
+  #
+  # In a bare repo
+  #   git rev-parse --is-inside-git-dir == true
+  #   git rev-parse --is-bare-repository == true
+  # In a .git dir
+  #   git rev-parse --is-inside-git-dir == true
+  #   git rev-parse --is-bare-repository == false
+  # In a work tree
+  #   git rev-parse --is-inside-work-tree == true
 }
 
 #**
@@ -450,9 +562,7 @@ function recursive_submodule_summary()
 
   local OLD_IFS="${IFS}"
   IFS=$'\n'
-  # More robust than just_git_functions.bsh:submodule-helper-list
-  # REVIEW Could use get_submodule_paths_recursively if it was not recursive
-  local submodule_keys=($(get_submodule_names))
+  local submodule_keys=($(get_submodule_displaypaths))
   IFS="${OLD_IFS}"
 
   local sm_key
@@ -470,12 +580,13 @@ function recursive_submodule_summary()
 }
 
 #**
-# .. function:: get_submodule_paths_recursively
+# .. function:: get_submodule_displaypaths
 #
 # Get the displaypath to each submodule
 #
 # Get what git refers to as the displaypath of the submodule: the relative path from the current working directory to the root of the containing repository and then to each submodule. This path is defined by the git-specified environment variable, displaypath (or prefix depending on git version).
 #
+# :Parameters: [``RECURSIVE``] - Should the submodules be iterated through recursively. Default: unset
 # :Output: *stdout* - The displaypath to each submodule (recursively); e.g., docker/recipes
 #
 # .. note::
@@ -488,21 +599,24 @@ function recursive_submodule_summary()
 #
 # .. note::
 #
-#   This function lists the path of each submodule in the same order as :func:`get_submodule_urls_recursively` lists its URL.
+#   This function iterates through each submodule in the same order as :func:`get_submodule_urls`, :func:`get_submodule_names` and :func:`get_submodule_toplevels`
 #
 # .. note::
 #
-#   Because this function uses ``git submodule foreach``, it skips submodules that have been init'd but not updated. Cf. :func:`git_mirror get_submodule_names`, which will list submodules that have only been init'd (it non-recursively queries the current repository's submodule names from its configuration). However, neither this nor anything else will work in a bare/mirror repo.
+#   Because this function uses ``git submodule foreach``, it skips submodules that have been init'd but not updated.
 #
 # .. seealso::
 #
-#   :func:`just_git_functions submodule-helper-list` and :func:`git_mirror get_submodule_names`; although these are not recursive, they both are used to recurse manually through all the submodules
+#   :func:`get_submodule_urls`
 #**
 
-# REVIEW It would be easy to also do this non-recursively (simply don't add the
-# --recursive flag). Perhaps an env variable could be set to make this recursive
-function get_submodule_paths_recursively()
+function get_submodule_displaypaths()
 {
+  local recursive_flag=()
+  if [ -n "${RECURSIVE+set}" ]; then
+    recursive_flag=("--recursive")
+  fi
+
   # Relative path from the CWD to the root of the current repository
   local up_path="$(${GIT} rev-parse --show-cdup)"
   # Relative path from the root of the current repository to the CWD
@@ -528,7 +642,7 @@ function get_submodule_paths_recursively()
       # In git 1.8.3, git submodule must be run in the toplevel of the working tree
       # git 1.8.3 does not support git -C
       submodule_paths=($(up_path="${up_path}" relative_cwd="${relative_cwd}" \
-          ${GIT} submodule foreach --quiet --recursive \
+          ${GIT} submodule foreach --quiet ${recursive_flag[@]+"${recursive_flag[@]}"} \
               'faux_displaypath="${up_path}${prefix}" && \
                echo "${faux_displaypath//"${up_path}${relative_cwd}"/}"'))
     popd &> /dev/null
@@ -537,7 +651,8 @@ function get_submodule_paths_recursively()
     # iterates through the submodules using ``git submodule--helper list``,
     # which queries info from .git/index; see
     # https://github.com/git/git/blob/v2.16.0/git-submodule.sh#L304
-    submodule_paths=($(${GIT} submodule foreach --quiet --recursive 'echo "${displaypath}"'))
+    submodule_paths=($(${GIT} submodule foreach --quiet \
+        ${recursive_flag[@]+"${recursive_flag[@]}"} 'echo "${displaypath}"'))
   fi
   IFS="${OLD_IFS}"
   local submodule_path
@@ -562,7 +677,7 @@ function get_submodule_paths_recursively()
   # which reads what is in the parent repository's .gitmodules file.
   #
   # Admittedly, by themselves, these commands not very useful.
-  # git_mirror:get_submodule_names uses
+  # git_mirror:get_config_submodule_names uses
   #   git config --name-only --get-regexp '^submodule\..*\.url$' | sed 's|.url$||'
   # to first query the submodule names and then lookup their paths.
   #
@@ -574,13 +689,14 @@ function get_submodule_paths_recursively()
 }
 
 #**
-# .. function:: get_submodule_urls_recursively
+# .. function:: get_submodule_urls
 #
 # Get all submodule URLs
 #
 # Get the (last) URL for each submodule (recursively) from its .git/\*\*/config file (e.g., .git/modules/docker/recipes/config) for the specified remote (origin by default). Note: Since git 1.8, a remote can have multiple associated URLs (and pushurls) (see .git/config).
 #
 # :Arguments: [``$1``] - The name of a remote. Note: this same remote must exist in all submodules. Default: origin
+# :Parameters: [``RECURSIVE``] - Should the submodules be iterated through recursively. Default: unset
 # :Output: *stdout* - The URL of each submodule (recursively); e.g., https://github.com/VisionSystemsInc/docker_recipes.git
 #
 # .. note::
@@ -589,23 +705,32 @@ function get_submodule_paths_recursively()
 #
 # .. note::
 #
-#   This function lists the URL of each submodule in the same order as :func:`get_submodule_paths_recursively` list its path.
+#   This function iterates through each submodule in the same order as :func:`get_submodule_displaypaths`, :func:`get_submodule_names` and :func:`get_submodule_toplevels`
 #
 # .. note::
 #
-#   Because this function uses ``git submodule foreach``, it skips submodules that have been init'd but not updated. Cf. :func:`git_mirror get_submodule_names`, which will list submodules that have only been init'd (it non-recursively queries the current repository's submodule names from its configuration). However, neither this nor anything else will work in a bare/mirror repo.
-
+#   Because this function uses ``git submodule foreach``, it skips submodules that have been init'd but not updated. Cf. :func:`git_mirror get_config_submodule_names`, which will (non-recursively) list submodules that have only been init'd. The associated URL can then be queried for a given submodule name with ``git config --get submodule.<name>.url`` as :func:`git_mirror clone_submodules` does.
+#
+# .. seealso::
+#
+#   :func:`get_submodule_displaypaths`
 #**
 
-# REVIEW It would be easy to also do this non-recursively (simply don't add the
-# --recursive flag). Perhaps an env variable could be set to make this recursive
-function get_submodule_urls_recursively()
+function get_submodule_urls()
 {
   local remote_name="${1-origin}"
 
-  # REVIEW Should i unset GIT_DIR?
-  ${GIT} submodule foreach --quiet --recursive \
-      "export GIT; bash -euc 'echo \"\$(${GIT} config --get remote."${remote_name}".url)\"'"
+  local recursive_flag=()
+  if [ -n "${RECURSIVE+set}" ]; then
+    recursive_flag=("--recursive")
+  fi
+
+  # git submodule foreach must be run from the top-level working tree in git 1.8
+  pushd "$(${GIT} rev-parse --show-cdup)" &> /dev/null
+    # REVIEW Should i unset GIT_DIR?
+    ${GIT} submodule foreach --quiet ${recursive_flag[@]+"${recursive_flag[@]}"} \
+        "export GIT; bash -euc 'echo \"\$(${GIT} config --get remote."${remote_name}".url)\"'"
+  popd &> /dev/null
   #
   # Alternatively, the URL for the submodule can be queried with git config
   # (although, by itself, not recursively):
@@ -622,11 +747,98 @@ function get_submodule_urls_recursively()
 }
 
 #**
+# .. function:: get_submodule_names
+#
+# Get the name of each submodule
+#
+# Get the name of the submodule as defined in the .gitmodules file. This name is, by default, the same as the path to the submodule; however, this is not necessarily the case.
+#
+# :Parameters: [``RECURSIVE``] - Should the submodules be iterated through recursively. Default: unset
+# :Output: *stdout* - The name of each submodule (recursively); e.g., docker/recipes
+#
+# .. note::
+#
+#   Submodule names are not the same thing as submodule paths.
+#
+# .. note::
+#
+#    The ultimate source-of-truth of a submodule's name is in its .gitmodules file. If the name in this file is updated, then the repository's configuration will be out-of-date. ``git submodule sync`` will update the configuration using the .gitmodules file and the default remote of the current branch, if set; otherwise origin. :func:`git_sync_submodules_recursively` will do the same but using the specified remote.
+#
+# .. note::
+#
+#   This function iterates through each submodule in the same order as :func:`get_submodule_displaypaths`, :func:`get_submodule_urls` and :func:`get_submodule_toplevels`
+#
+# .. note::
+#
+#   Because this function uses ``git submodule foreach``, it skips submodules that have been init'd but not updated. Cf. :func:`git_mirror get_config_submodule_names` and :func:`just_git_functions.bsh submodule-helper-list`, which will list submodules that have only been init'd (they query the current repository's submodule names from its configuration). Although these functions are not recursive, they both are used to recurse manually through all the submodules (albeit, in a different order than this function).
+#
+# .. seealso::
+#
+#   :func:`get_submodule_toplevels`
+#**
+
+function get_submodule_names()
+{
+  local recursive_flag=()
+  if [ -n "${RECURSIVE+set}" ]; then
+    recursive_flag=("--recursive")
+  fi
+
+  # git submodule foreach must be run from the top-level working tree in git 1.8
+  pushd "$(${GIT} rev-parse --show-cdup)" &> /dev/null
+    ${GIT} submodule foreach --quiet ${recursive_flag[@]+"${recursive_flag[@]}"} 'echo "${name}"'
+  popd &> /dev/null
+  #
+  # Alternatively, the URL for the submodule can be queried with git config
+  # (although, by itself, not recursively):
+  #   git config --name-only --get-regexp '^submodule\..*\.url$' | \
+  #       sed -e 's|.url$||' -e 's|^submodule.||'
+}
+
+#**
+# .. function:: get_submodule_toplevels
+#
+# Get the path to the top-level directory of each submodule
+#
+# Get the path to what git refers to as the top-level directory of the submodule; i.e., the absolute path to the top-level of the immediate superproject. For example, the vsi_common repository has a submodule at ``docker/recipes``. If the repository is cloned in ``/src``, then the top-level directory for the submodule docker/recipes is ``/src/vsi_common``.
+#
+# This function, along with :func:`get_submodule_names`, could be used to, for example, cd to the top-level of each immediate superproject and then query the submodule's configuration using ``git config submodule.<name>.<key>``; e.g., ``git config submodule.docker/recipes.url``.
+#
+# :Parameters: [``RECURSIVE``] - Should the submodules be iterated through recursively. Default: unset
+# :Output: *stdout* - The top-level directory of each submodule (recursively); e.g., /src/vsi_common
+#
+# .. note::
+#
+#   This function iterates through each submodule in the same order as :func:`get_submodule_displaypaths`, :func:`get_submodule_urls` and :func:`get_submodule_names`
+#
+# .. note::
+#
+#   Because this function uses ``git submodule foreach``, it skips submodules that have been init'd but not updated.
+#
+# .. seealso::
+#
+#   :func:`get_submodule_names`
+#**
+
+function get_submodule_toplevels()
+{
+  local recursive_flag=()
+  if [ -n "${RECURSIVE+set}" ]; then
+    recursive_flag=("--recursive")
+  fi
+
+  # git submodule foreach must be run from the top-level working tree in git 1.8
+  pushd "$(${GIT} rev-parse --show-cdup)" &> /dev/null
+    ${GIT} submodule foreach --quiet ${recursive_flag[@]+"${recursive_flag[@]}"} 'echo "${toplevel}"'
+  popd &> /dev/null
+}
+
+#**
 # .. function:: create_repo_map
 #
 # Create the contents of the repo_map.env file
 #
-# Create the repository mapping such that, once the JUST_GIT_AIRGAP_MIRROR_URL environment variable is defined, it can be sourced by :func:`git_push_main` and :func:`git_clone_main` in :file:`git_mirror`.
+# Create the repository mapping such that, once the :var:`JUST_GIT_AIRGAP_MIRROR_URL` variable is defined, it can be sourced by :func:`git_mirror git_push_main` and :func:`git_mirror git_clone_main`.
 #
 # :Argument: ``$1`` - The project's repository name (e.g., vsi_common)
 #
@@ -636,7 +848,7 @@ function get_submodule_urls_recursively()
 #
 # .. code-block:: bash
 #
-#    # The urls are specified with the env variable :envvar:`JUST_GIT_AIRGAP_MIRROR_URL`,
+#    # The urls are specified with the variable JUST_GIT_AIRGAP_MIRROR_URL,
 #    # which must be set to the mirrored repositories' new location on the
 #    # air-gapped git server. Delay setting this variable until the archive has
 #    # been moved to the destination in case the information must be controlled
@@ -651,15 +863,18 @@ function get_submodule_urls_recursively()
 #      "${JUST_GIT_AIRGAP_MIRROR_URL}/recipes.git"
 #    )
 #
-#  If, for example, :envvar:`JUST_GIT_AIRGAP_MIRROR_URL` was set to
-#  https://git-server/projectA, these urls would expand to:
+# If, for example, :var:`JUST_GIT_AIRGAP_MIRROR_URL` was set to ``https://git-server/projectA``, these urls would expand to:
 #
-#     https://git-server/projectA/vsi_common.git and
-#     https://git-server/projectA/recipes.git
+#   - ``https://git-server/projectA/vsi_common.git``
+#   - ``https://git-server/projectA/recipes.git``
 #
 # .. note::
 #
 #   The user can override this function if it does not suit her needs
+#
+# .. var:: JUST_GIT_AIRGAP_MIRROR_URL
+#
+# A variable used in the repo_map.env file created by :func:`create_repo_map` to specify the mirrored repositories' new location on the air-gapped git server
 #**
 
 function create_repo_map()
@@ -678,7 +893,7 @@ function create_repo_map()
   # Alternatively, use JUST_USER_CWD or :func:`git_project_root_dir`
   #
   # No quotes around subshell to create array (although IFS must be correct)
-  local repo_paths=("${repo_name}" $(get_submodule_paths_recursively))
+  local repo_paths=("${repo_name}" $(RECURSIVE=0 get_submodule_displaypaths))
   IFS="${OLD_IFS}"
 
   local repo_path
@@ -722,7 +937,7 @@ function create_repo_map()
           '
 
   # Serialize the repository mapping such that it can be sourced by
-  # :func:`git_push_main` and :func:`git_clone_main` in :file:`git_mirror`.
+  # git_push_main and git_clone_main in git_mirror.
   if [ -n "${ASSOCIATIVE_REPO_MAP}" ]; then
     printf 'declare -A repos\n'
     for index in "${!repo_paths[@]}"; do
@@ -737,9 +952,12 @@ function create_repo_map()
     printf '  "%s"\n' "${repo_urls[@]}"
     printf ')\n'
   fi
-  printf '\n\n'
+  printf '\n\n\n\n'
 
-  print_git_airgap_submodule_update
+  (
+    source "${VSI_COMMON_DIR}"/linux/git_airgap_submodule_helper.bsh && \
+    declare -f git_airgap_submodule_update
+  )
 }
 
 #**
@@ -747,7 +965,7 @@ function create_repo_map()
 #
 # Orphan commit the repo_map.env file
 #
-# Given a repository mapping like the one produced by :func:`create_repo_map`, make an orphan commit in the repository (on a branch named __just_git_mirror_info_file by default) to a file named repo_map.env. An intermediate product of this function is a shallow clone (which uses hardlinks by default) of the current repo to a temporary directory, which is removed at the end of the function.
+# Given a repository mapping like the one produced by :func:`create_repo_map`, make an orphan commit in the repository (on a branch named __just_git_mirror_info_file by default) to a file named repo_map.env.
 #
 # :Arguments: - ``$1`` - The contents of the repo_map.env file; i.e., the file that maps between the submodule's path and its new URL
 #             - [``$2``] - The name of the branch on which to make the orphan commit. Default: __just_git_mirror_info_file
@@ -755,46 +973,43 @@ function create_repo_map()
 
 function orphan_commit_repo_map
 {
-  repo_map="${1}"
-  orphan_branch="${2-__just_git_mirror_info_file}"
+  local repo_map="${1}"
+  local orphan_branch="${2-__just_git_mirror_info_file}"
 
-  # Clone (non-recursively) the repo in which to make the orphan commit.
-  # Supports starting in a bare repo. Also avoids possibly needing to run
-  # 'git reset --hard' after checking out the orphan branch followed by
-  # 'git checkout' after committing to it.
-  # NOTE Uses hard-links on linux
-  #
-  # Clone into an automatically deleting temporary directory
-  make_temp_path temp_repo -d just.XXXXXXXXXX
-  ${GIT} clone --no-checkout . "${temp_repo}"
+  local remote_local_url="$(git_project_git_dir)" # Alternatively, PWD
+  local refs_mapping="$(${GIT} for-each-ref --format='%(refname) %(objectname)' refs/heads)"
+
+  # Create an automatically deleting temporary directory
+  local temp_repo
+  make_temp_path temp_repo -d
   pushd "${temp_repo}" &>/dev/null
-    # Avoids checking out the files in the previously checked-out branch
-    # and staging them for deletion when switching to a new (orphan) branch,
-    # which then requires running 'git reset --hard' and/or 'git rm -rf .' I
-    # can't find a better way to do this
-    rm -f "$(git rev-parse --git-dir)"/refs/heads/*
-    ${GIT} checkout "${orphan_branch}" 2>/dev/null || \
-        ${GIT} checkout --orphan "${orphan_branch}"
+    # source repo_map (in a bash 3.2 compatible way)
+    local main_url="$(source /dev/stdin <<< "${repo_map}"; _git_mirror_get_url .)"
+    # Clone the orphan branch from the mirror (if it exists)
+    # Alternatively, https://stackoverflow.com/a/7349740
+    if ${GIT} clone --single-branch --branch "${orphan_branch}" "${main_url}" . &> /dev/null; then
+      ${GIT} remote set-url origin "${remote_local_url}"
+      ${GIT} checkout "${orphan_branch}" &> /dev/null
+    else
+      # If trying to clone a single branch from a bare repo that has only
+      # been initialized, git 1.8 segaults, leaving behind an initialized
+      # .git directory
+      rm -rf .git
+      ${GIT} init &> /dev/null
+      ${GIT} remote add origin "${remote_local_url}"
+      ${GIT} checkout --orphan "${orphan_branch}" &> /dev/null
+    fi
 
     echo "${repo_map}" > repo_map.env
 
+    local message="the repo_map.env file needed by just:git_mirror that maps repo_paths to urls"
     ${GIT} add repo_map.env
     ${GIT} -c "user.name=just git_export-repo" \
            -c "user.email=<just@export-repo.git>" commit \
            --allow-empty \
-           -m "the repo_map.env file needed by just:git_mirror that maps repo_paths to urls"
-    ${GIT} push --force origin "${orphan_branch}"
+           -m "$(printf "${message}\n\n${refs_mapping}")"
+    ${GIT} push --force origin "${orphan_branch}" &> /dev/null
   popd &>/dev/null
-  #
-  # ALTERNATIVELY
-  #current_branch="$(git rev-parse --abbrev-ref HEAD)"
-  #${GIT} checkout "${orphan_branch}" 2>/dev/null || \
-  #     ${GIT} checkout --orphan "${orphan_branch}"
-  #git reset --hard # This is important if "${orphan_branch}" was just created
-  #
-  #echo "${repo_map}" > repo_map.env
-  #
-  #${GIT} checkout "${current_branch}" # This could be expensive
 }
 
 #**
@@ -802,7 +1017,7 @@ function orphan_commit_repo_map
 #
 # Create a simple just project in the prep_dir
 #
-# This function creates a simple just project (a README.md, setup.env, and Justfile that includes this plugin) in the air-gapped mirror cache (the prep_dir) created by the `git_export-repo` just target. This just project can be used to push (aka import) the mirrored repositories to their respective air-gapped git server by using the git_import-repo just target.
+# This function creates a simple just project (a README.md, setup.env, and Justfile that includes this plugin) in the air-gapped mirror cache (the prep_dir) created by the ``git_export-repo`` ``just`` target. This just project can be used to push (aka import) the mirrored repositories to their respective air-gapped git server by using the ``git_import-repo`` ``just`` target.
 #
 # :Arguments: ``$1`` - The output directory (prep_dir) that caches the mirrored repositories and archive to be transferred
 #
@@ -812,7 +1027,7 @@ function orphan_commit_repo_map
 function add_import-repo_just_project()
 {
   # Need the abs path because we change directories when copying vsi_common
-  prep_dir="$(real_path "${1}")"
+  local prep_dir="$(real_path "${1}")"
 
   # git archive external/vsi_common to ${prep_dir}/.vsi_common
   # does not include submodules, but that that's ok
@@ -854,99 +1069,6 @@ function add_import-repo_just_project()
           source "$(dirname "${BASH_SOURCE[0]}")/.vsi_common/env.bsh"
           unset JUSTFILE
           ' > "${prep_dir}"/setup.env
-}
-
-#**
-# .. function:: print_git_airgap_submodule_update
-#
-# Print a func to bootstrap ``just`` by cloning a relocated repository
-#
-# After (shallow) cloning the air-gapped repository, the submodules must be re-configured and initialized/updated (recursively). This is handled by the git_clone-airgap-repo just target. However, this is not possible without the vsi_common submodule, which must first be initialized and updated.
-#
-# This function prints a function, git_airgap_submodule_update, which is appended to repo_map.env and orphan committed in the git_import-repo just target. git_airgap_submodule_update follows the same steps as :func:`git_mirror:git_clone_main`.
-#
-# In order to call git_airgap_submodule_update, repo_map.env must be grabbed out of the orphan commit and then sourced. Obviously, no just functions can be called yet, so this must be done in the file specified by :envvar:`JUST_SETUP_SCRIPT` (typically called setup.env). For example, the setup.env script, which typically looks like:
-#
-# .. code-block:: bash
-#
-#    export JUST_SETUP_SCRIPT="$(basename "${BASH_SOURCE[0]}")"
-#    source "$(dirname "${BASH_SOURCE[0]}")/external/vsi_common/env.bsh"
-#
-# would become:
-#
-# .. code-block:: bash
-#
-#    export JUST_SETUP_SCRIPT="$(basename "${BASH_SOURCE[0]}")"
-#    if [ ! -f "$(dirname "${BASH_SOURCE[0]}")/external/vsi_common/env.bsh" ]; then
-#      echo "'just' could not be loaded. Trying to setup the repository as an"
-#      echo "air-gapped repository"
-#      # source the contents of repo_map.env (in a bash 3.2 compatible way)
-#      source /dev/stdin <<< \
-#          "$(git show origin/__just_git_mirror_info_file:repo_map.env 2>/dev/null || :)"
-#      if ! declare -Fx git_airgap_submodule_update; then
-#        echo "ERROR the vsi_common submodule could not be found!"
-#        return 1
-#      fi
-#      git_airgap_submodule_update external/vsi_common
-#    fi
-#    source "$(dirname "${BASH_SOURCE[0]}")/external/vsi_common/env.bsh"
-#
-# After the setup.env file has been sourced, it is possible to run ``just git clone-airgap-repos`` to recursively initialize and clone the submodules from their air-gapped mirrors
-#
-# TODO: This should be a git hook; however, the hook would still have to be added in the setup.env file
-#**
-
-function print_git_airgap_submodule_update()
-{
-  # NOTE Do not use vsi_common functionality in this function! It is saved to
-  # repo_map.env and sourced in setup.env
-  # REVIEW If I ever create it, replace with `declare -f update_submodule` from
-  # git_mirror
-  uwecho '#*
-          # .. function:: git_airgap_submodule_update
-          #
-          # Reconfigure and update a submodule
-          #
-          # :Arguments: ``$1`` - A relative path (from the root of the project repository)
-          #                      to a submodule
-          # :Parameters: ``repo_paths`` - The (relative) path from the root of the project
-          #                               repository to each submodule (recursively)
-          #              ``repo_urls`` - The respective url for each submodule (recursively)
-          #*
-          function git_airgap_submodule_update()
-          (
-            set -eu # fail fast
-
-            # Strip trailing slash
-            local submodule_path="${1%/}"
-
-            # Find submodule in the list
-            local repo_url
-            if declare -p repos &>/dev/null; then
-              repo_url="${repos["${submodule_path}"]}"
-              unset repos
-            else
-              local index
-              for index in "${!repo_paths[@]}"; do
-                if [ "${repo_paths[$index]}" = "${submodule_path}" ]; then
-                  repo_url="${repo_urls[$index]}"
-                  break
-                fi
-              done
-              unset repo_urls repo_paths
-            fi
-            if [ -z "${repo_url:+set}" ]; then
-              echo "ERROR submodule_path, ${submodule_path}, not found in repo_paths:"
-              for index in "${!repo_paths[@]}"; do echo "  ${repo_paths[$index]}"; done
-              return 1
-            fi
-
-            # This follows just:git_mirror:git_clone_main
-            git submodule init "${submodule_path}"
-            git config "submodule.${submodule_path}.url" "${repo_url}"
-            git submodule update "${submodule_path}"
-          )
-          '
 }
 
 #**
@@ -1050,8 +1172,7 @@ function git_sync_submodules_recursively()
 
   local OLD_IFS="${IFS}"
   IFS=$'\n'
-  # More robust than just_git_functions.bsh:submodule-helper-list
-  local submodule_keys=($(get_submodule_names))
+  local submodule_keys=($(get_config_submodule_names))
   IFS="${OLD_IFS}"
 
   local sm_key
@@ -1131,8 +1252,7 @@ function _check_submodules_are_pushed_recursively()
 
   local OLD_IFS="${IFS}"
   IFS=$'\n'
-  # More robust than just_git_functions.bsh:submodule-helper-list
-  local submodule_keys=($(get_submodule_names))
+  local submodule_keys=($(get_config_submodule_names))
   # NOTE This command will actually skip a submodule that has been init'd but
   # not updated
   #local tracked_shas=($(${GIT} submodule foreach --quiet 'echo "${prefix-"${displaypath}"}" ${sha1}'))
@@ -1182,7 +1302,7 @@ function _check_submodules_are_pushed_recursively()
 
 function relocate_git_defaultify()
 {
-  arg=$1
+  local arg=$1
   shift 1
   case $arg in
     # Create a mirror of a git repository (which is not the same thing as a
@@ -1214,7 +1334,7 @@ function relocate_git_defaultify()
 
       local parsed_args
       local usage_help=0
-      # TODO Support --remote-url (but disallow also setting --check-remote)
+      # REVIEW Support --remote-url (but disallow also setting --check-remote)
       parse_args parsed_args --help usage_help -h usage_help \
           -b branch: --branch branch: \
           -c check_remote --check-remote check_remote --no-check-remote check_remote! \
@@ -1244,7 +1364,7 @@ function relocate_git_defaultify()
         echo "   -r, --remote-name    The git remote (with associated URL) on which to base the"
         echo "                        mirror; e.g., origin"
         echo
-        exit 0
+        return 0
       fi
 
       # Only prep_dir xor remote_name can be set
@@ -1387,6 +1507,10 @@ function relocate_git_defaultify()
             # REVIEW I do this primarily because the the rest of this target
             # assumes it is operating on this repository.
             output_dir="${prep_dir}"
+            # In general, unset should NOT be used on local variables because it can
+            # (with sufficient nesting of scope) result in a loss of "local" status;
+            # however, because local and unset are in the same scope, we don't loose
+            # locality
             unset prep_dir
           popd &> /dev/null
         else

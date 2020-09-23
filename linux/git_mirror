@@ -92,14 +92,14 @@ GIT_MIRROR_SOURCE="$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)"/"$(basename "${B
 
 function next_section()
 {
-  if [[ -z ${COLOR_FILE+set} ]]; then
+  if [ -z "${COLOR_FILE+set}" ]; then
     make_temp_path COLOR_FILE
     export COLOR_FILE
   fi
   local COLORS=($'\e[32m' $'\e[33m' $'\e[34m' $'\e[35m' $'\e[36m' $'\e[0m')
   local -i COLOR_INDEX="$(cat "${COLOR_FILE}" || echo 0)"
   COLOR_INDEX+=1
-  if [[ ${COLOR_INDEX} -ge ${#COLORS[@]} ]]; then
+  if [ "${COLOR_INDEX}" -ge ${#COLORS[@]} ]; then
     COLOR_INDEX=0
   fi
   echo "${COLOR_INDEX}" > "${COLOR_FILE}"
@@ -109,7 +109,7 @@ function next_section()
 GIT_VERSION="$(git_version)"
 
 #**
-# .. function:: get_submodule_names
+# .. function:: get_config_submodule_names
 #
 # Get list of initialized submodules, non-recursive
 #
@@ -121,24 +121,25 @@ GIT_VERSION="$(git_version)"
 #
 # .. code-block:: bash
 #
-#   get_submodule_names() # from within ./vsi_common/
+#   get_config_submodule_names() # from within ./vsi_common/
 #   # submodule.docker/recipes
 #
 # .. note::
 #
 #   Unlike ``git submodule foreach --quiet 'echo "${name}"'``, this function works for submodules that have been init'd but not updated
 #
-# Cf. just_git_functions.bsh:submodule-helper-list
+# .. seealso::
+#
+#   :func:`just_git_functions.bsh submodule-helper-list` and :func:`just_git_airgap_repo.bsh get_submodule_names`
 #**
 
-# If newer than 2.6
 if meet_requirements "${GIT_VERSION}" ">=2.6"; then
-  function get_submodule_names()
+  function get_config_submodule_names()
   {
     ${GIT} config --name-only --get-regexp '^submodule\..*\.url$' | sed 's|.url$||'
   }
 else
-  function get_submodule_names()
+  function get_config_submodule_names()
   {
     local names=()
     local line
@@ -203,7 +204,7 @@ function clone_submodules()
   # This does not work for init-only modules
   #   submodule_names=($(${GIT} submodule foreach --quiet 'echo "${name}"'))
   # This does
-  local submodule_names=($(get_submodule_names))
+  local submodule_names=($(get_config_submodule_names))
 
   local prepped_submodule_path
   local full_relative_path
@@ -211,7 +212,7 @@ function clone_submodules()
 
   # I am currently in base_submodule_path of the local non-bare repo
   local base_submodule_path="${base_submodule_path-}${base_submodule_path:+/}${prefix-${displaypath-}}"
-  # Remove trailing slashes because on some versions of git (1.8.3, 2.17.1),
+  # Remove trailing slashes because on some versions of git (1.8.3, 2.17.1)
   # prefix has a trailing slash
   base_submodule_path="${base_submodule_path%/}"
 
@@ -308,7 +309,7 @@ function clone_submodules()
   # RE We would first have to do a recursive clone, but we are effectively
   # doing that here anyway, just manually
   # NOTE We list submodules two ways in this function: at the beginning with
-  # get_submodule_names (which uses git config and works with init-only
+  # get_config_submodule_names (which uses git config and works with init-only
   # submodules) and, here, with git submodule foreach (which does not).
   # NOTE We could make a similar change in update_submodules
   GIT_MIRROR_PREP_DIR="${GIT_MIRROR_PREP_DIR}" base_submodule_path="${base_submodule_path}" ${GIT} submodule foreach --quiet "export prefix displaypath; bash -euc 'unset GIT_DIR; source \"${GIT_MIRROR_SOURCE[0]}\"; clone_submodules'"
@@ -332,10 +333,6 @@ function clone_submodules()
 # :Output: The recursively cloned submodule
 #**
 
-# REVIEW Make an update_submodule
-# RE Not obvious how to refactor it actually because git submodule init has to
-# be run before get_submodule_names
-# RE Could loop over repo_names instead of get_submodule_names
 function update_submodules()
 {
   # Arrays aren't exported, reload
@@ -354,7 +351,7 @@ function update_submodules()
   # a sync
   ${GIT} submodule init
   local IFS=$'\n'
-  local submodule_names=($(get_submodule_names))
+  local submodule_names=($(get_config_submodule_names))
 
   for submodule_name in ${submodule_names[@]+"${submodule_names[@]}"}; do
     full_relative_path="${base_submodule_path}${base_submodule_path:+/}$(${GIT} config -f .gitmodules ${submodule_name}.path)"
@@ -470,7 +467,7 @@ function git_mirror_main()
 
 function git_mirror_repos()
 {
-  if [[ $# = 0 ]]; then
+  if [ $# -eq 0 ]; then
     echo "Usage:" >&2
     echo "${BASH_SOURCE[0]} REPO_URL [BRANCH|SHA]" >&2
     echo "${BASH_SOURCE[0]} EXISTING_PREP_DIR [BRANCH|SHA]" >&2
@@ -499,6 +496,17 @@ function git_mirror_repos()
   if [ "${GIT_MIRROR_PREP_DIR:0:1}" != "/" ]; then
     GIT_MIRROR_PREP_DIR="${PWD}/${GIT_MIRROR_PREP_DIR}"
   fi
+
+  # 1. mirror clone (prep_dir)
+  # 2. clone repo from /prep to /tmp/clone
+  #    (in clone_submodules)
+  # 3. git submodule init in /tmp/clone
+  # 4. get_config_submodule_names - list submodules in /tmp/clone
+  # 5. mirror each submodule into prep_dir
+  # 6. change remote of each submodule in /tmp/clone to point to the prep'd mirror
+  # 7. git submodule update in /tmp/clone
+  # 8. repeat 3-7 for sub submodules
+  # 9. profit
 
   #########################
   # Get the super project #
@@ -620,21 +628,31 @@ function archive_mirrors()
 
     # Create a full archive (and associated .snar file if possible)
     local last_tar_file
-    if [[ "${TAR_INCREMENTAL}" = "1" ]]; then
-      # Get the last one, alphabetically speaking
-      last_tar_file="$(ls "${prep_dir}"/transfer_*.snar 2>/dev/null | tail -n1)"
+    if [ "${TAR_INCREMENTAL}" = "1" ]; then
+      # Get the last one, alphabetically speaking (.l1.snar comes before .snar)
+      # per sort's man page:
+      # The locale specified by the environment affects sort order. Set LC_ALL=C
+      # to get the traditional sort order that uses native byte values.
+      # We need it in this order so that base directories come before subdirectories.
+      last_tar_file="$(LC_ALL=C ls "${prep_dir}"/transfer_*.snar 2>/dev/null | tail -n1)"
       last_tar_file="$(basename "${last_tar_file%.snar}")"
       ${TAR} czf "${tar_file}.tgz" -g "${tar_file}.snar" "${args[@]}" "${CWD}"
     else
       ${TAR} czf "${tar_file}.tgz" "${args[@]}" "${CWD}"
     fi
 
-    if [[ "${TAR_INCREMENTAL}" = "1" ]] && [[ ${last_tar_file} != "" ]]; then
+    if [ "${TAR_INCREMENTAL}" = "1" ] && [ "${last_tar_file}" != "" ]; then
       next_section "Creating an incremental tar file too, based on ${last_tar_file}"
-      args+=("--exclude" "${CWD}/${tar_file}_${last_tar_file}.tgz" "--exclude" "${CWD}/${last_tar_file}.snar")
+      args+=("--exclude" "${CWD}/${tar_file}_${last_tar_file}.tgz" \
+             "--exclude" "${CWD}/${last_tar_file}.l1.snar")
+      # archive.snar-1 is more canonical than l1.snar [1]
       cp "${last_tar_file}.snar" "${last_tar_file}.l1.snar"
       # This snar file isn't actually used for anything because the next
       # incremental backup is created from the previous full backup
+      #
+      # NOTE tar uses timestamps to decide if a file has changed (this includes
+      # the access, modify and change times)
+      # [1] https://www.gnu.org/software/tar/manual/html_node/Incremental-Dumps.html
       ${TAR} czf "${tar_file}_${last_tar_file}.tgz" -g "${last_tar_file}.l1.snar" "${args[@]}" "${CWD}"
       next_section "Your new tar file is ready:"
       echo "${prep_dir}/${tar_file}.tgz"
@@ -698,7 +716,7 @@ function _git_mirror_get_url()
 
 function git_clone_main()
 {
-  if [[ $# = 0 ]]; then
+  if [ $# -eq 0 ]; then
     echo "Usage:" >&2
     echo "${BASH_SOURCE[0]} REPO_MAP_FILE [DIR]" >&2
     exit 1
@@ -748,7 +766,7 @@ function git_clone_main()
 
 function git_push_main()
 {
-  if [[ $# = 0 ]]; then
+  if [ $# -eq 0 ]; then
     echo "Usage:" >&2
     echo "${BASH_SOURCE[0]} REPO_MAP_FILE PREP_DIR" >&2
     exit 1
@@ -764,7 +782,7 @@ function git_push_main()
       local repo_path
       repo_path="$(shopt -s nullglob; dirname */"${repo_paths[$index]}/config")"
       next_section "Pushing repo '${repo_path}' to '${repo_urls[$index]}'"
-      if [[ -d ${repo_path} ]]; then
+      if [ -d "${repo_path}" ]; then
         pushd "${repo_path}" &> /dev/null
           # It seems mirrored repositories (vxl, pytorch) can include refs/remotes/
           # I'm not sure how/why these are created---this is the pattern for the
