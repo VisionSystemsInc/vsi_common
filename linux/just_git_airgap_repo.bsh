@@ -50,7 +50,7 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 #        external/vsi_common/               # submodule
 #        external/vsi_common/docker/recipes # sub-submodule
 #
-# Before this repository can be mirrored (which is not the same thing as a clone) and pushed to a new air-gapped git server, first, a little setup is necessary. This is because, after the air-gapped repository is (shallow) cloned, the submodules must be re-configured before they can be updated (recursively). This is handled by the ``git_clone-airgap-repo`` ``just`` target. However, this obviously cannot be called until the vsi_common submodule is itself initialized and updated. To accomplish this, a small function, :func:`git_airgap_submodule_update`, is orphan committed to the air-gapped repository so that it is available for this task.
+# Before this repository can be mirrored (which is not the same thing as a clone) and pushed to a new air-gapped git server, first, a little setup is necessary. This is because, after the air-gapped repository is (shallow) cloned, the submodules must be re-configured before they can be updated (recursively). This is handled by the ``git_clone-airgap-repo`` ``just`` target. However, this obviously cannot be called until the vsi_common submodule is itself initialized and updated. To accomplish this, a small function, :func:`git_airgap_submodule_helper git_airgap_submodule_update`, is orphan committed to the air-gapped repository so that it is available for this task.
 #
 # As no ``just`` functions can be called yet, this function must be called in the file specified by :envvar:`JUST_SETUP_SCRIPT` (typically called setup.env). For example, the setup.env script, which typically looks like:
 #
@@ -89,7 +89,7 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 # #. On the destination, create a directory, e.g., ``/airgap``, and move the archive into it
 # #. Extract the archive (the archive will extract directly into this directory)
 #
-#   a) In ``/airgap``, edit ``repo_map.env`` and set the :envvar:`JUST_GIT_AIRGAP_MIRROR_URL` environment variable. For example,
+#   a) In ``/airgap``, edit ``repo_map.env`` and set the :var:`JUST_GIT_AIRGAP_MIRROR_URL` environment variable. For example,
 #
 #     - ``JUST_GIT_AIRGAP_MIRROR_URL=https://git-airgap.com/projectA``
 #
@@ -111,7 +111,7 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 #
 # .. seealso::
 #
-#   :file:`git_mirror`: :func:`git_mirror_main`, :func:`git_push_main`, and :func:`git_clone_main`
+#   :func:`git_mirror git_mirror_main`, :func:`git_mirror git_push_main`, and :func:`git_mirror git_clone_main`
 #**
 
 #**
@@ -809,7 +809,7 @@ function get_submodule_names()
 #
 # .. note::
 #
-#   This function iterates through each submodule in the same order as :func:`get_submodule_displaypath`, :func:`get_submodule_urls` and :func:`get_submodule_names`
+#   This function iterates through each submodule in the same order as :func:`get_submodule_displaypaths`, :func:`get_submodule_urls` and :func:`get_submodule_names`
 #
 # .. note::
 #
@@ -838,7 +838,7 @@ function get_submodule_toplevels()
 #
 # Create the contents of the repo_map.env file
 #
-# Create the repository mapping such that, once the JUST_GIT_AIRGAP_MIRROR_URL environment variable is defined, it can be sourced by :func:`git_push_main` and :func:`git_clone_main` in :file:`git_mirror`.
+# Create the repository mapping such that, once the :var:`JUST_GIT_AIRGAP_MIRROR_URL` variable is defined, it can be sourced by :func:`git_mirror git_push_main` and :func:`git_mirror git_clone_main`.
 #
 # :Argument: ``$1`` - The project's repository name (e.g., vsi_common)
 #
@@ -848,7 +848,7 @@ function get_submodule_toplevels()
 #
 # .. code-block:: bash
 #
-#    # The urls are specified with the env variable :envvar:`JUST_GIT_AIRGAP_MIRROR_URL`,
+#    # The urls are specified with the variable JUST_GIT_AIRGAP_MIRROR_URL,
 #    # which must be set to the mirrored repositories' new location on the
 #    # air-gapped git server. Delay setting this variable until the archive has
 #    # been moved to the destination in case the information must be controlled
@@ -871,6 +871,10 @@ function get_submodule_toplevels()
 # .. note::
 #
 #   The user can override this function if it does not suit her needs
+#
+# .. var:: JUST_GIT_AIRGAP_MIRROR_URL
+#
+# A variable used in the repo_map.env file created by :func:`create_repo_map` to specify the mirrored repositories' new location on the air-gapped git server
 #**
 
 function create_repo_map()
@@ -933,7 +937,7 @@ function create_repo_map()
           '
 
   # Serialize the repository mapping such that it can be sourced by
-  # :func:`git_push_main` and :func:`git_clone_main` in :file:`git_mirror`.
+  # git_push_main and git_clone_main in git_mirror.
   if [ -n "${ASSOCIATIVE_REPO_MAP}" ]; then
     printf 'declare -A repos\n'
     for index in "${!repo_paths[@]}"; do
