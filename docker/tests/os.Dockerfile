@@ -58,7 +58,7 @@ RUN set -euxv; \
       other='git curl'; \
       if [ -f /etc/os-release ] && [[ $(source /etc/os-release; echo "${ID} ${VERSION}") = sles\ 11.* ]]; then \
         zypper --gpg-auto-import-keys --non-interactive install -y \
-               http://opensource. .com/suse/11/git/x86_64/wandisco-git-suse-release-11-1.noarch.rpm; \
+               http://opensource.wandisco.com/suse/11/git/x86_64/wandisco-git-suse-release-11-1.noarch.rpm; \
         rpm --import http://opensource.wandisco.com/RPM-GPG-KEY-WANdisco; \
         # This must be done separate from other call, becuase the -f flag will
         # break util-linux
