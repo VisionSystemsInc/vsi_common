@@ -11,6 +11,23 @@ fi
 # This file needs to be unnoticeably fast on Windows, which means no forks,
 # no ``/$() calls, etc...
 
+# If a file need to source other files, and take a small amount of time to run,
+# use a function in the form of:
+#
+#   function {app}_{type}_{name}()
+#   {
+#     # Or use this line and get rid of the else
+#     # __{app}_{type}_{name}=0
+#     if [ -z "${__{app}_{type}_{name}+set}" ]; then
+#       if some test here; then
+#         __{app}_{type}_{name}=1
+#       else
+#         __{app}_{type}_{name}=0
+#       fi
+#     fi
+#     return "${__{app}_{type}_{name}}"
+#   }
+
 #*# linux/compat.bsh
 
 #**
@@ -494,6 +511,76 @@ function load_vsi_compat()
   else
     bash_bug_ifs_array_slice_expansion=1
   fi
+
+  #**
+  # Git
+  # ===
+  #
+  # The following variables will help cope with the difference in git versions as seamlessly as possible.
+  #
+  #**
+  # .. function:: git_bug_submodule_path_with_tab
+  #
+  # There is a bug in git, fixed in git 1.8.3.3, that caused many ``git submodule`` operations not to work on a submodule at a path whose name is not in ASCII.
+  #
+  # :Return Value: * ``0`` - ``git`` does not support non-ASCII submodule paths
+  #                * ``1`` - ``git`` works as expected
+  #**
+  function git_bug_submodule_path_with_tab()
+  {
+    if [ -z "${__git_bug_submodule_path_with_tab+set}" ]; then
+      if [ "${OS-}" = "Windows_NT" ]; then
+        __git_bug_submodule_path_with_tab=0
+      else
+        source "${VSI_COMMON_DIR}/linux/requirements.bsh"
+        if meet_requirements "$(git_version)" ">=1.8.3.3"; then
+          __git_bug_submodule_path_with_tab=1
+        else
+          __git_bug_submodule_path_with_tab=0
+        fi
+      fi
+    fi
+
+    return "${__git_bug_submodule_path_with_tab}"
+  }
+
+  #**
+  # .. function:: git_feature_support_tls
+  #
+  # Parts of git (e.g. git-remote-http) link to libcurl so the version of tls it can support depends on what is in the OS
+  #
+  # :Return Value: * ``0`` - Supports TLS Version 1.0
+  #                * ``1`` - Supports TLS Version 1.1
+  #                * ``2`` - Supports TLS Version 1.2
+  #                * ``3`` - Supports TLS Version 1.3 (Not testable yet)
+  #                * ``-1`` - Unable to determine
+  #
+  #**
+  function git_feature_support_tls()
+  {
+    if [ -z "${__git_feature_support_tls+set}" ]; then
+      __git_feature_support_tls=-1
+      # The expected results are
+      # fatal: unable to access 'https://tls-v1-1.badssl.com:1011/': Unknown SSL protocol error in connection to tls-v1-1.badssl.com:1011
+      # fatal: repository 'https://tls-v1-0.badssl.com:1010/' not found
+
+      # GIT_DIR= ignores being in vsi_common/tests, which will break if the supermodule is not mounted in
+
+      # Cannot be uncommented until https://github.com/chromium/badssl.com/issues/332
+      # if [[ $(GIT_DIR= git ls-remote -h https://tls-v1-3.badssl.com:1013/ 2>&1 > /dev/null) =~ repository.*\ not\ found ]; then
+      #   __git_feature_support_tls=3
+      # elif ...
+      if [[ $(GIT_DIR= git ls-remote -h https://tls-v1-2.badssl.com:1012/ 2>&1 > /dev/null) =~ repository.*\ not\ found ]]; then
+        __git_feature_support_tls=2
+      elif [[ $(GIT_DIR= git ls-remote -h https://tls-v1-1.badssl.com:1011/ 2>&1 > /dev/null) =~ repository.*\ not\ found ]]; then
+        __git_feature_support_tls=1
+      elif [[ $(GIT_DIR= git ls-remote -h https://tls-v1-0.badssl.com:1010/ 2>&1 > /dev/null) =~ repository.*\ not\ found ]]; then
+        __git_feature_support_tls=0
+      fi
+    fi
+
+    return "${__git_feature_support_tls}"
+  }
 }
 
 # The purpose of this file is to set all these flag. Make it a function to help

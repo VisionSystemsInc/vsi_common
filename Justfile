@@ -112,6 +112,13 @@ function caseify()
       done
       ;;
 
+    pull_oses) # Pull latest images for other OSes
+      local os
+      for os in ${VSI_COMMON_TEST_OSES[@]+"${VSI_COMMON_TEST_OSES[@]}"}; do
+        docker pull "${os}"
+      done
+      ;;
+
     pull_os) # Pull image for os - $1
       docker pull "${VSI_COMMON_DOCKER_REPO}:os_$(sanitize_tag_name "${1}")"
       extra_args=1
