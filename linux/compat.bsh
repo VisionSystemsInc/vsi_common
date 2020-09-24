@@ -59,16 +59,16 @@ function load_vsi_compat()
   #
   # Flag to enable extended regex support in sed. The GNU flag is ``-r``, while the BSD flag is ``-E``. macOS does not support ``-r`` and GNU sed prior to 4.2 does not accept ``-E``. Using this variable should always yield the correct flag.
   #
+  # .. note::
+  #
+  #   No quotes around the flag
+  #
   # .. rubric:: Example
   #
   # .. code-block:: bash
   #
   #   sed -${sed_flag_rE} 's|foo(.*)|bar\1.|'
   #   # Notice no quotes above
-  #
-  # .. note::
-  #
-  #   No quotes around the flag
   #**
   # Needed for CentOS 6 running sed 4.1.5
   if [ "${VSI_SED_COMPAT-}" = "gnu" ]; then
@@ -80,7 +80,11 @@ function load_vsi_compat()
   #**
   # .. variable:: sed_flag_i
   #
-  # When using inplace replacement on sed, the macOS version requires an argument to the ``-i`` flag, the extension added to the output file. The GNU version does not support this. Using this flag will perform an inplace replacement with no added extension. The :var:`sed_flag_i must come last when combined with other flags (see example below).
+  # When using inplace replacement on sed, the macOS version requires an argument to the ``-i`` flag, the extension added to the output file. The GNU version does not support this. Using this flag will perform an inplace replacement with no added extension. The :var:`sed_flag_i` must come last when combined with other flags (see example below).
+  #
+  # .. note::
+  #
+  #   No quotes around the flag
   #
   # .. rubric:: Example
   #
@@ -108,7 +112,7 @@ function load_vsi_compat()
   # Date
   # ====
   #
-  # The following variables will help cope with the difference in the ``date`` command, as seamlessly as possible.
+  # The following variables will help cope with the difference in the ``date`` command as seamlessly as possible.
   #
   # .. variable:: date_feature_nanoseconds
   #
@@ -127,7 +131,7 @@ function load_vsi_compat()
   # Bash
   # ====
   #
-  # The following variables will help cope with the difference in bash versions, as seamlessly as possible.
+  # The following variables will help cope with the difference in bash versions as seamlessly as possible.
   #
   # .. variable:: bash_behavior_declare_array_quote
   #
@@ -294,15 +298,44 @@ function load_vsi_compat()
   #
   # .. seealso::
   #    :func:`string_tools.bsh lowercase`, :func:`string_tools.bsh uppercase`
+  #
+  # .. variable:: bash_bug_unassigned_variable_set_to_null
+  #
+  # There is a bug, fixed in bash 4.0, that causes an unassigned variable to be set to null
+  #
+  # :Value: * ``0`` Bash has the bug
+  #         * ``1`` An unassigned variable works as expected
+  #
+  # .. rubric:: Example
+  #
+  # .. code-block:: bash
+  #
+  #     $ for x in 3.2 4.0 4.1 4.2 4.3 4.4 5.0; do
+  #         docker run -it --rm bash:${x} bash -c \
+  #           'function foo() { \
+  #              local y; \
+  #              echo "y=${y+y_set}"; \
+  #            }; \
+  #            foo; \
+  #            echo $?';
+  #       done
+  #     # In bash 3.2:
+  #     # y=y_set
+  #     # 0
+  #     # In bash >= 4:
+  #     # y=
+  #     # 0
   #**
   if [ "${bash_major_version}" -ge "4" ]; then
     bash_feature_associative_array=0
     bash_feature_case_modification=0
     bash_feature_bashpid=0
+    bash_bug_unassigned_variable_set_to_null=1
   else
     bash_feature_associative_array=1
     bash_feature_case_modification=1
     bash_feature_bashpid=1
+    bash_bug_unassigned_variable_set_to_null=0
   fi
 
   #**
@@ -325,6 +358,30 @@ function load_vsi_compat()
 
     return "${__bash_bug_bash_env_process_substitution}"
   }
+
+  #**
+  # .. function:: __bash_bug_at_expansion_null_ifs
+  #
+  # There is a bug, fixed in bash 4.4, that causes ${@+"${@}"} not to expand to multiple words when IFS is set to the empty string.
+  #
+  # :Return Value: * ``0`` - ``${@}`` does not expand as expected when the IFS is set to ''
+  #                * ``1`` - ``${@}`` expansion works as expected
+  #
+  # .. seealso::
+  #   https://tiswww.case.edu/php/chet/bash/CHANGES Section 'bash-4.4-rc1' Change w
+  #**
+  function __bash_bug_at_expansion_null_ifs()
+  {
+    case ${@+"${@}"} in
+      bashbug)
+        bash_bug_at_expansion_null_ifs=0
+        ;;
+      "bash bug")
+        bash_bug_at_expansion_null_ifs=1
+        ;;
+    esac
+  }
+  IFS="" __bash_bug_at_expansion_null_ifs bash bug
 
   #**
   # .. variable:: bash_feature_bashpid_read_only
@@ -499,6 +556,34 @@ function load_vsi_compat()
     bash_bug_ifs_array_slice_expansion=1
   fi
 }
+
+  #**
+  # Git
+  # ===
+  #
+  # The following variables will help cope with the difference in git versions as seamlessly as possible.
+  #
+  #**
+  # .. function:: git_bug_submodule_path_with_tab
+  #
+  # There is a bug in git, fixed in git 1.8.3.3, that caused many ``git submodule`` operations not to work on a submodule at a path whose name contains a tab (and presumably other characters).
+  #
+  # :Return Value: * ``0`` - ``git`` does not support submodule paths containing a tab
+  #                * ``1`` - ``git`` works as expected
+  #**
+  function git_bug_submodule_path_with_tab()
+  {
+    if [ -z "${__git_bug_submodule_path_with_tab+set}" ]; then
+      source "${VSI_COMMON_DIR}/linux/requirements.bsh"
+      if meet_requirements "$(git_version)" ">=1.8.3.3"; then
+        __git_bug_submodule_path_with_tab=1
+      else
+        __git_bug_submodule_path_with_tab=0
+      fi
+    fi
+
+    return "${__git_bug_submodule_path_with_tab}"
+  }
 
 # The purpose of this file is to set all these flag. Make it a function to help
 # encapsulate in new_just

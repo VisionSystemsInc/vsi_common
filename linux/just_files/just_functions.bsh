@@ -254,12 +254,10 @@ fi
 # 1. First, ${project_dir}/local.env. This file should never be added to version control. It should contain customizations for that particular install.
 # 2. Then, the project's settings env file. This file should ideally contain all the default values necessary to run without any local.env settings.
 # 3. Last, ${project_dir}/local_post.env. This file should never be added to version control. It is rarely used, except in situations where the value of a variable is based off of another variable. This is why it is loaded last.
-# REVIEW Is this feature still used?
 # 4. Any plugins that are identified, are also sourced
 #
 # :Arguments: ``$1`` - The project settings filename (e.g., vsi_common.env)
 #
-# REVIEW What does this do here
 # .. _source_environment_files:
 #
 # :Parameters: * [``JUST_LOCAL_SETTINGS``] - Path to the local settings file. Default: ${same_dir}/local.env
@@ -299,10 +297,9 @@ function source_environment_files()
 
   export JUST_SETTINGS
 
-  local JUST_LOCAL_SETTINGS
-  local JUST_LOCAL_SETTINGS_POST
-  # Sets JUST_LOCAL_SETTINGS and JUST_LOCAL_SETTINGS_POST
-  try_to_create_local_settings_file "${1}" || : # <== Fix for #84
+  local JUST_LOCAL_SETTINGS="${JUST_LOCAL_SETTINGS-}"
+  local JUST_LOCAL_SETTINGS_POST="${JUST_LOCAL_SETTINGS_POST-}"
+  create_local_settings_file "${1}" || :
 
   # if [ ! -e "${JUST_LOCAL_SETTINGS_POST}" ]; then
   #   echo "# Put local setting in this file" > "${JUST_LOCAL_SETTINGS_POST}"
@@ -348,31 +345,7 @@ function source_environment_files()
 }
 
 #**
-# .. function:: translate_just_settings
-#
-# Convert :envvar:`JUST_SETTINGS` to an array: ``JUST_SETTINGSS``, translating the paths to another filesystem
-#
-# :Arguments: - ``$1`` - Directory name to be translated from
-#             - ``$2`` - Directory name to translate to
-# :Output: ``JUST_SETTINGSS`` - Array of the translated paths
-#
-# Useful for translating :envvar:`JUST_SETTINGS` from host to a container.
-#
-# .. seealso::
-#   :func:`container_functions.bsh translate_path`
-#**
-function translate_just_settings()
-{
-  JUST_SETTINGSS=()
-  MIFS="${JUST_SETTINGS_SEPARATOR}" split_s JUST_SETTINGSS ${JUST_SETTINGS+"${JUST_SETTINGS}"}
-  local i
-  for i in ${JUST_SETTINGSS[@]+"${!JUST_SETTINGSS[@]}"}; do
-    JUST_SETTINGSS[i]="$(translate_path "${JUST_SETTINGSS[i]}" ${@+"${@}"})"
-  done
-}
-
-#**
-# .. function:: try_to_create_local_settings_file
+# .. function:: create_local_settings_file
 #
 # :Arguments: ``$1`` - Path to the settings file
 #
@@ -382,22 +355,22 @@ function translate_just_settings()
 # :Return Value: * ``0`` - Settings file was created
 #                * ``1`` - Settings file was not created
 #
-# :Output: ``JUST_LOCAL_SETTINGS`` - Path to the local settings file. Default: ${same_dir}/local.env
-#          ``JUST_LOCAL_SETTINGS_POST`` - Path to the post local settings file. Default: ${same_dir}/local_post.env
+# :Output: [``JUST_LOCAL_SETTINGS``] - Path to the local settings file. Default: ${same_dir}/local.env
+#          [``JUST_LOCAL_SETTINGS_POST``] - Path to the post local settings file. Default: ${same_dir}/local_post.env
 #
 # Try to create the local.env settings file
 #
 # Create the local.env settings file if a) it does not already exist and b) it will be owned by the correct user.
 #**
 
-function try_to_create_local_settings_file()
+# REVIEW Revert these changes: aa99afe
+function create_local_settings_file()
 {
   local project_dir="$(dirname "${1}")"
   JUST_LOCAL_SETTINGS="${JUST_LOCAL_SETTINGS:-${project_dir}/local.env}"
   JUST_LOCAL_SETTINGS_POST="${JUST_LOCAL_SETTINGS_POST:-${project_dir}/local_post.env}"
 
   if [ ! -e "${JUST_LOCAL_SETTINGS}" ]; then
-    local project_dir="$(dirname "${1}")"
     local project_file="$(basename "${1}")"
 
     local perm
@@ -422,10 +395,36 @@ function try_to_create_local_settings_file()
         echo "# NEVER commit this file. Tracked environment changes go in" >> "${JUST_LOCAL_SETTINGS}"
         echo "# \"${project_file}\" only" >> "${JUST_LOCAL_SETTINGS}"
         return 0
-      }
+      } || : # <== Fix for #84
     fi
   fi
+  # Settings file was not created: either it already existed or something else
+  # went wrong (e.g., no permissions)
   return 1
+}
+
+#**
+# .. function:: translate_just_settings
+#
+# Convert :envvar:`JUST_SETTINGS` to an array: ``JUST_SETTINGSS``, translating the paths to another filesystem
+#
+# :Arguments: - ``$1`` - Directory name to be translated from
+#             - ``$2`` - Directory name to translate to
+# :Output: ``JUST_SETTINGSS`` - Array of the translated paths
+#
+# Useful for translating :envvar:`JUST_SETTINGS` from host to a container.
+#
+# .. seealso::
+#   :func:`container_functions.bsh translate_path`
+#**
+function translate_just_settings()
+{
+  JUST_SETTINGSS=()
+  MIFS="${JUST_SETTINGS_SEPARATOR}" split_s JUST_SETTINGSS ${JUST_SETTINGS+"${JUST_SETTINGS}"}
+  local i
+  for i in ${JUST_SETTINGSS[@]+"${!JUST_SETTINGSS[@]}"}; do
+    JUST_SETTINGSS[i]="$(translate_path "${JUST_SETTINGSS[i]}" ${@+"${@}"})"
+  done
 }
 
 #**
@@ -758,7 +757,6 @@ function print_help()
 
   pretty_print_help <<< "${parsed_help_subcommands%$'\n'}"
 }
-
 
 #**
 # .. function:: is_powershell

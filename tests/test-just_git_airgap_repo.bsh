@@ -10,7 +10,7 @@ source "${VSI_COMMON_DIR}/linux/just_git_airgap_repo.bsh"
 function git()
 {
   case "$@" in
-    remote)
+    "remote")
       echo "${git_remote}"
       ;;
     "config --get-all remote.origin.url"|"config --get remote.origin.url")
@@ -62,10 +62,10 @@ function ask_question()
 function justify()
 {
   shift 1
-  echo "${@}"
+  echo "${@} ${GIT_MIRROR_PREP_DIR}"
 }
 
-function recursively_check_submodules_are_public()
+function check_submodules_are_pushed_recursively()
 {
   return "${check_sm_return}"
 }
@@ -107,13 +107,6 @@ begin_test "Test guided repository export"
   [ "$(relocate_git_defaultify git_export-repo-guided | tail -n2)" = "${result}" ]
   unset picker_create git_remote git_origin_url git_branch
 
-  # read must be used by just somewhere; mocking this in the global namespace
-  # causes problems
-  function read()
-  {
-    printf -v "$5" '%s' "${read_data}"
-  }
-
   # specify remote, branch and output dir; don't check submodules for unpushed commits
   git_remote="origin"
   git_origin_url="https://server1.org/repo.git"
@@ -148,6 +141,25 @@ begin_test "Test guided repository export"
   result="ERROR Unknown git branch provided with flag --branch: bad_branch"
   [ "$(relocate_git_defaultify git_export-repo-guided --branch bad_branch | tail -n1)" = "${result}" ]
   unset picker_create git_remote git_origin_url git_branch
+
+  # read is used by just; mocking this in the global namespace causes problems
+  function read()
+  {
+    # read sometimes sets IFS=''. This should not matter (as IFS only affects
+    # ${*}), however, there is a bug fixed in bash 4.4 that causes ${@+"${@}"}
+    # not to expand to multiple words when IFS is set to the empty string
+    # https://tiswww.case.edu/php/chet/bash/CHANGES Section bash-4.4-rc1.w
+    local IFS=$' \t\n'
+    case ${@+"$@"} in
+      # NOTE No quote around the string...
+      '-r -e -p Where is'*|"-r -e -p Note: keep"*)
+        printf -v "$5" '%s' "${read_data}"
+        ;;
+      *)
+        command read ${@+"${@}"}
+        ;;
+    esac
+  }
 
   # single remote, single url, single branch
   picker_create=1 # create a new mirror
@@ -261,8 +273,8 @@ begin_test "Test guided repository export"
   git_branch="master"
   ask_check=0 # don't check for unpushed commits
   result="https://server1.org/repo.git master output_prep"
-  [ "$(relocate_git_defaultify git_export-repo-guided --prep-dir=output_prep | tail -n1)" = "${result}" ]
-  [ "$(relocate_git_defaultify git_export-repo-guided -p=output_prep | tail -n1)" = "${result}" ]
+  [ "$(relocate_git_defaultify git_export-repo-guided --prep-dir output_prep | tail -n1)" = "${result}" ]
+  [ "$(relocate_git_defaultify git_export-repo-guided -p output_prep | tail -n1)" = "${result}" ]
   unset picker_create git_remote git_origin_url git_branch ask_check
 
   # prep_dir (assuming the PWD does not equal the repo's root), single branch

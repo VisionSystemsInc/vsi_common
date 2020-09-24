@@ -32,19 +32,19 @@ GIT_MIRROR_SOURCE="$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)"/"$(basename "${B
 #
 # Example usage:
 #
-# 1. ``git_mirror mirror https://github.com/visionsystemsinc/vsi_common.git master`` - Mirror the repository and recursively create mirrors of all submodules currently in the master branch.
-# 2. Transfer ``vsi_common_prep/transfer_{date}.tgz`` to your destination
-# 3. On the destination, create a directory, e.g., vsi_common_prep, and move the archive into it
-# 4. Extract the archive (the archive will extract directly into this directory)
-# 5. Write an ``info.env`` file:
+# #. ``git_mirror mirror https://github.com/visionsystemsinc/vsi_common.git master`` - Mirror the repository and recursively create mirrors of all submodules currently in the master branch.
+# #. Transfer ``vsi_common_prep/transfer_{date}.tgz`` to your destination
+# #. On the destination, create a directory, e.g., vsi_common_prep, and move the archive into it
+# #. Extract the archive (the archive will extract directly into this directory)
+# #. Write an ``info.env`` file:
 #
 # .. code-block:: bash
 #
-#     repos[.]=https://my_repo.com/foobar/vsi_common.git
-#     repos[docker/recipes]=https://my_repo.com/foobar/recipes.git
+#     repos[.]=https://git-server.com/foobar/vsi_common.git
+#     repos[docker/recipes]=https://git-server.com/foobar/recipes.git
 #
 # 6. ``git_mirror push ./info.env ./transfer_extracted_dir/`` - Push the mirrored repository and all submodules to a new git server as defined by info.env
-# 7. ``git_mirror clone ./info.env ./my_project_dir/`` - Clone recursively from the new mirror
+# #. ``git_mirror clone ./info.env ./my_project_dir/`` - Clone recursively from the new mirror
 #**
 
 #**
@@ -55,10 +55,25 @@ GIT_MIRROR_SOURCE="$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)"/"$(basename "${B
 # Instead of hard-coding "git" everywhere, use the variable :var:`GIT` so that when the need comes, it is easier to switch which executable gets called. Default is ``git``.
 #
 # .. note::
+#
 #   When using the GIT env variable in this file, do not surround it with quotes as you normally would. Although this prevents using a path to ``git`` with a space in it, in exchange, it may be possible (eventually) to enable a dry-run-ish capability if GIT is set to 'echo git'. However, this feature does not currently work and even in the future may not work very well because this script is constantly cloning and cd'ing to new repos.
 #**
 
 : ${GIT=git}
+
+#**
+# .. var:: TAR
+#
+# Name/path of tar executable
+#
+# Instead of hard-coding "tar" everywhere, use the variable :var:`TAR` so that when the need comes, it is easier to switch which executable gets called. Default is ``tar``.
+#
+# .. note::
+#
+#   When using the TAR env variable in this file, do not surround it with quotes as you normally would. Although this prevents using a path to ``tar`` with a space in it, in exchange, it may be possible (eventually) to enable a dry-run-ish capability if TAR is set to 'echo tar'.
+#**
+
+: ${TAR=tar}
 
 #**
 # .. function:: next_section
@@ -77,14 +92,14 @@ GIT_MIRROR_SOURCE="$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)"/"$(basename "${B
 
 function next_section()
 {
-  if [[ -z ${COLOR_FILE+set} ]]; then
+  if [ -z "${COLOR_FILE+set}" ]; then
     make_temp_path COLOR_FILE
     export COLOR_FILE
   fi
   local COLORS=($'\e[32m' $'\e[33m' $'\e[34m' $'\e[35m' $'\e[36m' $'\e[0m')
   local -i COLOR_INDEX="$(cat "${COLOR_FILE}" || echo 0)"
   COLOR_INDEX+=1
-  if [[ ${COLOR_INDEX} -ge ${#COLORS[@]} ]]; then
+  if [ "${COLOR_INDEX}" -ge ${#COLORS[@]} ]; then
     COLOR_INDEX=0
   fi
   echo "${COLOR_INDEX}" > "${COLOR_FILE}"
@@ -94,7 +109,7 @@ function next_section()
 GIT_VERSION="$(git_version)"
 
 #**
-# .. function:: get_submodule_names
+# .. function:: get_config_submodule_names
 #
 # Get list of initialized submodules, non-recursive
 #
@@ -106,24 +121,25 @@ GIT_VERSION="$(git_version)"
 #
 # .. code-block:: bash
 #
-#   get_submodule_names() # from within ./vsi_common/
+#   get_config_submodule_names() # from within ./vsi_common/
 #   # submodule.docker/recipes
 #
 # .. note::
 #
-# Unlike ``git submodule foreach --quiet 'echo "${name}"'``, this function works for submodules that have been init'd but not updated
+#   Unlike ``git submodule foreach --quiet 'echo "${name}"'``, this function works for submodules that have been init'd but not updated
 #
-# Cf. just_git_functions.bsh:submodule-helper-list
+# .. seealso::
+#
+#   :func:`just_git_functions.bsh submodule-helper-list` and :func:`just_git_airgap_repo.bsh get_submodule_names`
 #**
 
-# If newer than 2.6
 if meet_requirements "${GIT_VERSION}" ">=2.6"; then
-  function get_submodule_names()
+  function get_config_submodule_names()
   {
     ${GIT} config --name-only --get-regexp '^submodule\..*\.url$' | sed 's|.url$||'
   }
 else
-  function get_submodule_names()
+  function get_config_submodule_names()
   {
     local names=()
     local line
@@ -168,12 +184,12 @@ function git_mirror_has_lfs()
 #
 # Mirror a submodule and all of its submodules (recursively)
 #
-# This is a helper function to :func:`git_mirror_main`. Create a mirror of each submodule in a git repository, recursively. Each mirror is stored according to its full relative path in the top-level repository in a unique temporary directory created in the GIT_MIRROR_PREP_DIR. Submodules of a submodule are processed recursively in a depth-first fashion.
+# This is a helper function to :func:`git_mirror_main`. Create a mirror of each submodule in a git repository, recursively. Each mirror is stored according to its full relative path in the project repository in a unique temporary directory created in the GIT_MIRROR_PREP_DIR. Submodules of a submodule are processed recursively in a depth-first fashion.
 #
 # WARNING: ``git submodule foreach`` runs commands via sh because git is weird; however I start bash and source this script for its vars and functions, so it's really bash again.
 #
-# :Arguments: ``GIT_MIRROR_PREP_DIR`` - The directory in which to mirror the submodules
-#             [``base_submodule_path``] - The (relative) path from the top-level repository to the submodule (i.e., ``git submodule foreach '$displaypath'`` assuming the CWD is the root of the top-level repository)
+# :Arguments: ``GIT_MIRROR_PREP_DIR`` - The directory in which to mirror the repositories
+#             [``base_submodule_path``] - The (relative) path from the project repository to the submodule (i.e., ``git submodule foreach '$displaypath'`` assuming the CWD is the root of the project repository)
 #
 # :Output: A mirrored submodule located at ``GIT_MIRROR_PREP_DIR/{temp_dir}/base_submodule_path``
 #**
@@ -188,7 +204,7 @@ function clone_submodules()
   # This does not work for init-only modules
   #   submodule_names=($(${GIT} submodule foreach --quiet 'echo "${name}"'))
   # This does
-  local submodule_names=($(get_submodule_names))
+  local submodule_names=($(get_config_submodule_names))
 
   local prepped_submodule_path
   local full_relative_path
@@ -196,7 +212,7 @@ function clone_submodules()
 
   # I am currently in base_submodule_path of the local non-bare repo
   local base_submodule_path="${base_submodule_path-}${base_submodule_path:+/}${prefix-${displaypath-}}"
-  # Remove trailing slashes because on some versions of git (1.8.3, 2.17.1),
+  # Remove trailing slashes because on some versions of git (1.8.3, 2.17.1)
   # prefix has a trailing slash
   base_submodule_path="${base_submodule_path%/}"
 
@@ -212,7 +228,7 @@ function clone_submodules()
     # https://stackoverflow.com/a/52657447/4166604
     prepped_submodule_path="$(shopt -s nullglob; echo "${GIT_MIRROR_PREP_DIR}"/*/"${full_relative_path}/config")"
     # If I already have this submodule, use it
-    if [[ -f ${prepped_submodule_path} ]]; then
+    if [ -f "${prepped_submodule_path}" ]; then
       prepped_submodule_path="$(dirname "${prepped_submodule_path}")"
       # cd into the prepped mirror
       pushd "${prepped_submodule_path}" &> /dev/null
@@ -245,7 +261,7 @@ function clone_submodules()
   if git_mirror_has_lfs; then
     next_section "Fetching lfs objects for ${prefix-${displaypath-${GIT_MIRROR_MAIN_REPO}}}"
     # Determine this (sub)modules' prepared path
-    if [[ -z ${base_submodule_path} ]]; then
+    if [ -z "${base_submodule_path}" ]; then
       prepped_submodule_path="${GIT_MIRROR_PREP_DIR}/${MAIN_DIR}"
     else
       prepped_submodule_path="$(dirname "$(shopt -s nullglob; echo "${GIT_MIRROR_PREP_DIR}"/*/"${base_submodule_path}/config")")"
@@ -280,6 +296,22 @@ function clone_submodules()
   # And the recursion goes on... foreach runs in sh, so I'm forcing bash. I need
   # to pass the prefix/displaypath variables from git into the called function,
   # so export them.
+  #
+  # NOTE We already have the list of submodule names (via get_submodule_name),
+  # and their associated sm_paths (via git config). We could recurse through
+  # the submodules ourselves like just_git_functions:safe_git_submodule_update
+  # (which is called recursively via just_git_functions:_checkout_git_submodule)
+  # and just_git_airgap_repo.bsh:git_sync_submodules_recursively.
+  # This would avoid the complications involved with exporting the required
+  # variables, keeping track of base_submodule_path, re-sourcing this file (and
+  # the info.env in update_submodules), etc. needed because git submodule foreach
+  # runs in an sh subshell
+  # RE We would first have to do a recursive clone, but we are effectively
+  # doing that here anyway, just manually
+  # NOTE We list submodules two ways in this function: at the beginning with
+  # get_config_submodule_names (which uses git config and works with init-only
+  # submodules) and, here, with git submodule foreach (which does not).
+  # NOTE We could make a similar change in update_submodules
   GIT_MIRROR_PREP_DIR="${GIT_MIRROR_PREP_DIR}" base_submodule_path="${base_submodule_path}" ${GIT} submodule foreach --quiet "export prefix displaypath; bash -euc 'unset GIT_DIR; source \"${GIT_MIRROR_SOURCE[0]}\"; clone_submodules'"
   # The "unset GIT_DIR" is needed because somewhere between git 2.17 and 2.21,
   # git-submodule-foreach started setting the GIT_DIR; however, the logic here
@@ -297,15 +329,14 @@ function clone_submodules()
 # WARNING: ``git submodule foreach`` runs commands via sh because git is weird; however I start bash and source this script for its vars and functions, so it's really bash again.
 #
 # :Arguments: ``$1`` - A file specifying the mapping between each repository's original url and its mirror url
-#             [``base_submodule_path``] - The (relative) path from the top-level repository to the submodule
+#             [``base_submodule_path``] - The (relative) path from the project repository to the submodule
 # :Output: The recursively cloned submodule
 #**
 
-# REVIEW make an update_submodule
 function update_submodules()
 {
   # Arrays aren't exported, reload
-  _git_mirror_load_info "${1}"
+  _git_mirror_load_info "${1}" # Sets repo_paths and repo_urls
 
   local submodule_name
   local full_relative_path
@@ -320,7 +351,7 @@ function update_submodules()
   # a sync
   ${GIT} submodule init
   local IFS=$'\n'
-  local submodule_names=($(get_submodule_names))
+  local submodule_names=($(get_config_submodule_names))
 
   for submodule_name in ${submodule_names[@]+"${submodule_names[@]}"}; do
     full_relative_path="${base_submodule_path}${base_submodule_path:+/}$(${GIT} config -f .gitmodules ${submodule_name}.path)"
@@ -344,7 +375,7 @@ function update_submodules()
 #
 # Downloads a mirror of a git repository and all of its submodules. The normal ``git clone --mirror`` command does not support submodules at all. This at least clones all the submodules available in the specified branch (master by default).
 #
-# The script creates a directory, referred to as a prep directory (or prep_dir), which will contain all of the repositories plus a single ``transfer_{date}.tgz`` archive file containing all the repositories, lfs objects, etc... Only this `tgz` file needs to be transferred to your destination.
+# The script creates a directory, referred to as a prep directory (or prep_dir), which will contain all of the mirrored repositories plus a single ``transfer_{date}.tgz`` archive file containing all of these repositories, lfs objects, etc... Only this `tgz` file needs to be transferred to your destination.
 #
 # Subsequent calls to :func:`git_mirror_main` can use the existing prep directory as cache, updating faster than the first time.
 #
@@ -354,10 +385,10 @@ function update_submodules()
 #
 # :Arguments: - ``$1`` - URL of the main git repository. On subsequent calls to this function, the prep (cache) dir created by this function can be used in lue of the repository's URL
 #             - [``$2``] - The git branch from which to identify the submodules. Default: master
-#             - [``$3``] - The path at which to create the prep directory; ``GIT_MIRROR_PREP_DIR`` will be set to this path. Default: ``${PWD}/{repo_name}_prep``
+# :Parameters: [``GIT_MIRROR_PREP_DIR``] - The output directory in which to mirror the repositories; Default: ``${PWD}/{repo_name}_prep``
 # :Output: - A prep directory which will contain all of the repositories plus a single ``transfer_{date}.tgz``
-#          - ``GIT_MIRROR_PREP_DIR`` - The path to the prep directory
-#          - ``GIT_MIRROR_MAIN_REPO`` - The main repository's name. Based off of ``$1``; e.g., vsi_common.git if the URL is https://github.com/VisionSystemsInc/vsi_common.git
+#          - ``GIT_MIRROR_PREP_DIR`` - The path to the mirrored repositories
+#          - ``GIT_MIRROR_MAIN_REPO`` - The main repository's name. Based off of ``$1``; e.g., vsi_common if the URL is https://github.com/VisionSystemsInc/vsi_common.git
 #
 # .. rubric:: Example
 #
@@ -392,11 +423,11 @@ function update_submodules()
 #
 # .. note::
 #
-# ``git_mirror_main`` does not mirror all submodules that have ever been part of the repo, only those from a specific branch/SHA/tag you specify (master by default). This is because trying to mirror all submodules from the past could be very lengthy, and is very likely to include urls that do not exist anymore.
+#   ``git_mirror_main`` does not mirror all submodules that have ever been part of the repo, only those from a specific branch/SHA/tag you specify (master by default). This is because trying to mirror all submodules from the past could be very lengthy, and is very likely to include urls that do not exist anymore.
 #
 # .. rubric:: Bugs
 #
-#   If the first argument is a local path to a git repository (as opposed to a URL or a path to an existing prep dir), it must be an absolute path.
+# If the first argument is a local path to a git repository (as opposed to a URL or a path to an existing prep dir), it must be an absolute path.
 #**
 
 function git_mirror_main()
@@ -412,23 +443,22 @@ function git_mirror_main()
 #
 # Downloads a mirror of a git repository and all of its submodules. The normal ``git clone --mirror`` command does not support submodules at all. This at least clones all the submodules available in the specified branch (master by default).
 #
-# Creates a directory, referred to as a prep directory (or prep_dir), which will contain all of the repositories. Subsequent calls to :func:`git_mirror_repos` can use the existing prep directory as cache, updating faster than the first time.
+# Creates a directory, referred to as a prep directory (or prep_dir), which will contain all of the mirrored repositories. Subsequent calls to :func:`git_mirror_repos` can use the existing prep directory as cache, updating faster than the first time.
 #
 # :Arguments: - ``$1`` - URL of the main git repository. On subsequent calls to this function, the prep (cache) directory created by this function can be used in lue of the repository's URL
 #             - [``$2``] - The git branch from which to identify the submodules. Default: master
-# REVIEW Perhaps this argument shouldn't exist; you should just be able to override GIT_MIRROR_PREP_DIR
-#             - [``$3``] - The path at which to create the the prep directory; ``GIT_MIRROR_PREP_DIR`` will be set to this path. Default: ``${PWD}/{repo_name}_prep``
+# :Parameters: [``GIT_MIRROR_PREP_DIR``] - The output directory in which to mirror the repositories; Default: ``${PWD}/{repo_name}_prep``
 # :Output: - A prep directory which will contain all of the repositories
-#          - ``GIT_MIRROR_PREP_DIR`` - The path to the prep directory
-#          - ``GIT_MIRROR_MAIN_REPO`` - The main repository's name. Based off of ``$1``; e.g., vsi_common.git if the URL is https://github.com/VisionSystemsInc/vsi_common.git
+#          - ``GIT_MIRROR_PREP_DIR`` - The path to the mirrored repositories
+#          - ``GIT_MIRROR_MAIN_REPO`` - The main repository's name. Based off of ``$1``; e.g., vsi_common if the URL is https://github.com/VisionSystemsInc/vsi_common.git
 #
 # .. note::
 #
-# :func:`git_mirror_repos` does not mirror all submodules that have ever been part of the repo, only those from a specific branch/SHA/tag you specify (master by default). This is because trying to mirror all submodules from the past could be very lengthy, and is very likely to include urls that do not exist anymore.
+#   :func:`git_mirror_repos` does not mirror all submodules that have ever been part of the repo, only those from a specific branch/SHA/tag you specify (master by default). This is because trying to mirror all submodules from the past could be very lengthy, and is very likely to include urls that do not exist anymore.
 #
 # .. rubric:: Bugs
 #
-#   If the first argument is a local path to a git repository (as opposed to a URL or a path to an existing prep dir), it must be an absolute path.
+# If the first argument is a local path to a git repository (as opposed to a URL or a path to an existing prep dir), it must be an absolute path.
 #
 # .. seealso::
 #
@@ -437,28 +467,18 @@ function git_mirror_main()
 
 function git_mirror_repos()
 {
-  if [[ $# = 0 ]]; then
+  if [ $# -eq 0 ]; then
     echo "Usage:" >&2
-    echo "${BASH_SOURCE[0]} REPO_URL [BRANCH|SHA] [OUTPUT_PREP_DIR]" >&2
+    echo "${BASH_SOURCE[0]} REPO_URL [BRANCH|SHA]" >&2
     echo "${BASH_SOURCE[0]} EXISTING_PREP_DIR [BRANCH|SHA]" >&2
     exit 1
-  elif [[ $# = 3 ]]; then
-    if [ -d "${1}" ]; then
-      # Does the directory look like a PREP_DIR
-      if [ -f "${1}/"*"/config" ]; then
-        # REVIEW this isn't strictly necessary...
-        echo "If specifying the OUTPUT_PREP_DIR, the first argument must be the"
-            "REPO_URL, not an existing PREP_DIR"
-        exit 1
-      fi
-    fi
   fi
 
   # Does the directory look like a PREP_DIR
   if [ -f "${1}/"*"/config" ]; then
     # Don't need nullglob here because the directory exists
     pushd "$(dirname "${1}/"*"/config")" &> /dev/null
-      GIT_MIRROR_PREP_DIR="$(dirname "${PWD}")"
+      GIT_MIRROR_PREP_DIR="${GIT_MIRROR_PREP_DIR:-"$(dirname "${PWD}")"}"
       GIT_MIRROR_MAIN_REPO="$(${GIT} config --get remote.origin.url)"
     popd &> /dev/null
   else
@@ -469,17 +489,24 @@ function git_mirror_repos()
   local MAIN_DIR="$(basename "${GIT_MIRROR_MAIN_REPO}")"
   MAIN_DIR="${MAIN_DIR%.*}"
   if [ -z "${GIT_MIRROR_PREP_DIR:+x}" ]; then
-    if [ "${#@}" -lt 3 ]; then
-      GIT_MIRROR_PREP_DIR="${PWD}/${MAIN_DIR}_prep"
-    else
-      # Is absolute path
-      if [ "${3:0:1}" == "/" ]; then
-        GIT_MIRROR_PREP_DIR="${3}"
-      else
-        GIT_MIRROR_PREP_DIR="${PWD}/${3}"
-      fi
-    fi
+    GIT_MIRROR_PREP_DIR="${PWD}/${MAIN_DIR}_prep"
   fi
+
+  # Make absolute path
+  if [ "${GIT_MIRROR_PREP_DIR:0:1}" != "/" ]; then
+    GIT_MIRROR_PREP_DIR="${PWD}/${GIT_MIRROR_PREP_DIR}"
+  fi
+
+  # 1. mirror clone (prep_dir)
+  # 2. clone repo from /prep to /tmp/clone
+  #    (in clone_submodules)
+  # 3. git submodule init in /tmp/clone
+  # 4. get_config_submodule_names - list submodules in /tmp/clone
+  # 5. mirror each submodule into prep_dir
+  # 6. change remote of each submodule in /tmp/clone to point to the prep'd mirror
+  # 7. git submodule update in /tmp/clone
+  # 8. repeat 3-7 for sub submodules
+  # 9. profit
 
   #########################
   # Get the super project #
@@ -526,20 +553,14 @@ function git_mirror_repos()
 #**
 # .. function:: archive_mirrors
 #
-# Create an archive of the mirrored repositories in a prep directory
+# Create an in-place archive of a directory
 #
-# Creates a ``transfer_{date}.tgz`` archive file of the prep directory (prep_dir) created by :func:`git_mirror_repos`, which contains all of the repositories, lfs objects, etc... Only this `tgz` file needs to be transferred to your destination.
+# Create a ``transfer_{date}.tgz`` archive file of a directory. This archive is created within the same directory.
 #
-# Subsequent calls also create a second ``tgz`` file, ``transfer_{date1}_transfer_{date2}.tgz`` (on supported platforms). This is an incremental archive file. Instead of having to bring in an entire archive, only the incremental file is needed (plus the original full archive).
+# Subsequent calls also create a second ``tgz`` file, ``transfer_{date1}_transfer_{date2}.tgz`` (on supported platforms). This is an incremental archive file. Only the incremental file is needed (plus the original full archive).
 #
-# After you have moved the transfer archive to its destination, you can use :func:`git_push_main` to push these mirrored repositories to a new git server.
-#
-# :Arguments: - ``$1`` - The prep (cache) directory created by :func:`git_mirror_repos`
+# :Arguments: - ``$1`` - A directory to archive in-place
 # :Output: A ``transfer_{date}.tgz`` archive file and, on subsequent calls, an incremental ``transfer_{date1}_transfer_{date2}.tgz``
-#
-# .. seealso::
-#
-#   :func:`git_mirror_main`
 #**
 
 function archive_mirrors()
@@ -550,7 +571,7 @@ function archive_mirrors()
   local temp_file
   make_temp_path temp_file
   local TAR_INCREMENTAL=1
-  tar -cf /dev/null -g "${temp_file}" /dev/null &> /dev/null || TAR_INCREMENTAL=0
+  ${TAR} -cf /dev/null -g "${temp_file}" /dev/null &> /dev/null || TAR_INCREMENTAL=0
 
   pushd "${prep_dir}" &> /dev/null
     next_section "Creating tar file..."
@@ -576,6 +597,7 @@ function archive_mirrors()
     local tar_vendor
     tar_version_info # Sets tar_version and tar_vendor
     local args=()
+    local CWD
     if [ "${tar_vendor}" == "BSD" ] && meet_requirements "${tar_version}" ">=3"; then
       CWD="${PWD}"
       # Because the archive is created with absolute paths, count how many path
@@ -584,10 +606,10 @@ function archive_mirrors()
       local x="$(tr -d -c '/' <<< "${CWD}/")"
       local ncomponents="${#x}"
       args+=("--strip-components" "${ncomponents}")
-    else
+    else # GNU or BUSYBOX or BSD < 3
       # This will work properly on GNU tar, but on older versions of BSD tar,
       # like 2.8.3, this will suffer the problem of excluded file collisions
-      # mentioned above.
+      # mentioned above. Similarly, this cannot be ''
       # This is ok here because our archives are datetime stamped so a collision
       # is very unlikely
       CWD='.'
@@ -598,7 +620,10 @@ function archive_mirrors()
     IFS=$'\n'
     local existing_tar_files=($(ls "${CWD}"/{*.tgz,*.snar} 2>/dev/null || :))
     IFS="${OLD_IFS}"
-    args+=("--exclude" "${CWD}/${tar_file}.tgz" "--exclude" "${CWD}/${tar_file}.snar")
+    args+=("--exclude" "${CWD}/${tar_file}.tgz")
+    if [ "${TAR_INCREMENTAL}" = "1" ]; then
+      args+=("--exclude" "${CWD}/${tar_file}.snar")
+    fi
     local existing_tar_file
     for existing_tar_file in ${existing_tar_files[@]+"${existing_tar_files[@]}"}; do
       args+=("--exclude" "${existing_tar_file}")
@@ -606,22 +631,32 @@ function archive_mirrors()
 
     # Create a full archive (and associated .snar file if possible)
     local last_tar_file
-    if [[ ${TAR_INCREMENTAL} = 1 ]]; then
-      # Get the last one, alphabetically speaking
-      last_tar_file="$(ls "${prep_dir}"/transfer_*.snar 2>/dev/null | tail -n1)"
+    if [ "${TAR_INCREMENTAL}" = "1" ]; then
+      # Get the last one, alphabetically speaking (.l1.snar comes before .snar)
+      # per sort's man page:
+      # The locale specified by the environment affects sort order. Set LC_ALL=C
+      # to get the traditional sort order that uses native byte values.
+      # We need it in this order so that base directories come before subdirectories.
+      last_tar_file="$(LC_ALL=C ls "${prep_dir}"/transfer_*.snar 2>/dev/null | tail -n1)"
       last_tar_file="$(basename "${last_tar_file%.snar}")"
-      tar czf "${tar_file}.tgz" -g "${tar_file}.snar" "${args[@]}" "${CWD}"
+      ${TAR} czf "${tar_file}.tgz" -g "${tar_file}.snar" "${args[@]}" "${CWD}"
     else
-      tar czf "${tar_file}.tgz" "${args[@]}" "${CWD}"
+      ${TAR} czf "${tar_file}.tgz" "${args[@]}" "${CWD}"
     fi
 
-    if [[ ${TAR_INCREMENTAL} = 1 ]] && [[ ${last_tar_file} != "" ]]; then
+    if [ "${TAR_INCREMENTAL}" = "1" ] && [ "${last_tar_file}" != "" ]; then
       next_section "Creating an incremental tar file too, based on ${last_tar_file}"
-      args+=("--exclude" "${CWD}/${tar_file}_${last_tar_file}.tgz" "--exclude" "${CWD}/${last_tar_file}.snar")
+      args+=("--exclude" "${CWD}/${tar_file}_${last_tar_file}.tgz" \
+             "--exclude" "${CWD}/${last_tar_file}.l1.snar")
+      # archive.snar-1 is more canonical than l1.snar [1]
       cp "${last_tar_file}.snar" "${last_tar_file}.l1.snar"
       # This snar file isn't actually used for anything because the next
       # incremental backup is created from the previous full backup
-      tar czf "${tar_file}_${last_tar_file}.tgz" -g "${last_tar_file}.l1.snar" "${args[@]}" "${CWD}"
+      #
+      # NOTE tar uses timestamps to decide if a file has changed (this includes
+      # the access, modify and change times)
+      # [1] https://www.gnu.org/software/tar/manual/html_node/Incremental-Dumps.html
+      ${TAR} czf "${tar_file}_${last_tar_file}.tgz" -g "${last_tar_file}.l1.snar" "${args[@]}" "${CWD}"
       next_section "Your new tar file is ready:"
       echo "${prep_dir}/${tar_file}.tgz"
       echo "and you have an incremental file:"
@@ -684,7 +719,7 @@ function _git_mirror_get_url()
 
 function git_clone_main()
 {
-  if [[ $# = 0 ]]; then
+  if [ $# -eq 0 ]; then
     echo "Usage:" >&2
     echo "${BASH_SOURCE[0]} REPO_MAP_FILE [DIR]" >&2
     exit 1
@@ -710,30 +745,31 @@ function git_clone_main()
 #
 # After transferring the archive file created by :func:`git_mirror_main` to a prep directory on your destination and extracting the archive into it, this function pushes all the mirrored repositories in the extracted archive to your own mirrors on a new git server.
 #
-# .. note:: The mirrors must be initialized on the git server.
+# .. note::
+#
+#   The mirrors must be initialized on the git server.
 #
 # However, because the urls for your mirrors will be different from the original repo urls in .gitmodules, and modifying the urls will change the git repo, which we do not want to do, you must create a file specifying the mapping between each repository's original url and its mirror url (remote). The main repo is referred to as ``.`` while the rest of the repos are referred to by the relative path with respect to the main repo (e.g. ``external/vsi_common``). These need to be stored in an associative array called ``repos``.
 #
 # :Arguments: ``$1`` - A file specifying the mapping between each repository's original url and its mirror url
-#             ``$2`` - The extracted prep dir from :func:`git_mirror_main`
+#             ``$2`` - The mirrored repositories (extracted from the archive) created by :func:`git_mirror_main`
 #
 # .. rubric:: Example
 #
+# In this example, the main repo's mirror url is ``https://git-server.com/foobar/vsi_common.git``, and the submodule stored at ``./docker/recipes`` has the url ``https://git-server.com/foobar/recipes.git``. This file is also used by :func:`git_clone_main`. (Any valid git URL format can be used.)
+#
 # .. code-block:: bash
 #
-# REVIEW switch to the git@ syntax to make pushing easier
-# In this example, the main repo's mirror url is ``https://my_repo.com/foobar/vsi_common.git``, and the submodule stored at ``./docker/recipes`` has the url ``https://my_repo.com/foobar/recipes.git``. This file is also used by :func:`git_clone_main`.
-#
 # cat info.env
-# repos[.]=https://my_repo.com/foobar/vsi_common.git
-# repos[docker/recipes]=https://my_repo.com/foobar/recipes.git
+# repos[.]=https://git-server.com/foobar/vsi_common.git
+# repos[docker/recipes]=https://git-server.com/foobar/recipes.git
 #
 # git_push_main info.env vsi_common_prep
 #**
 
 function git_push_main()
 {
-  if [[ $# = 0 ]]; then
+  if [ $# -eq 0 ]; then
     echo "Usage:" >&2
     echo "${BASH_SOURCE[0]} REPO_MAP_FILE PREP_DIR" >&2
     exit 1
@@ -749,7 +785,7 @@ function git_push_main()
       local repo_path
       repo_path="$(shopt -s nullglob; dirname */"${repo_paths[$index]}/config")"
       next_section "Pushing repo '${repo_path}' to '${repo_urls[$index]}'"
-      if [[ -d ${repo_path} ]]; then
+      if [ -d "${repo_path}" ]; then
         pushd "${repo_path}" &> /dev/null
           # It seems mirrored repositories (vxl, pytorch) can include refs/remotes/
           # I'm not sure how/why these are created---this is the pattern for the
@@ -787,7 +823,7 @@ function usage()
 {
   echo "Usage: ${BASH_SOURCE[0]} mirror|push|clone [OPTIONS]" >&2
   echo >&2
-  echo "  mirror REPO_URL [BRANCH|SHA] [OUTPUT_PREP_DIR]" >&2
+  echo "  mirror REPO_URL [BRANCH|SHA]" >&2
   echo "                               1) Mirror the git repository and all of its" >&2
   echo "                                  submodules (on BRANCH) to an archive." >&2
   echo "  mirror PREP_DIR [BRANCH|SHA]    Subsequent mirrors can be based of the" >&2

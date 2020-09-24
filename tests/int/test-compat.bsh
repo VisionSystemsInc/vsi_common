@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
+
+source "${VSI_COMMON_DIR}/tests/testlib.bsh"
+command -v "${GIT-git}" &> /dev/null && source "${VSI_COMMON_DIR}/linux/compat.bsh"
+
+if ! command -v "${GIT-git}" &> /dev/null; then
+  TESTLIB_SKIP_TESTS='.*'
+fi
+
+function setup()
+{
+  # Easier way to take care of committers on vanilla install
+  export GIT_COMMITTER_NAME='Foo Bar'
+  export GIT_AUTHOR_NAME='Foo Bar'
+  export GIT_COMMITTER_EMAIL='foo.bar@example.com'
+  export GIT_AUTHOR_EMAIL='foo.bar@example.com'
+}
+
+function begin_submodule_path_test()
+{
+  if git_bug_submodule_path_with_tab; then
+    begin_required_fail_test "${@}"
+  else
+    begin_test "${@}"
+  fi
+}
+
+begin_submodule_path_test "non-ASCII submodule path"
+(
+  setup_test
+
+  GIT_TEST_REPO="${TRASHDIR}/test"
+  SUBMODULE_REPO="${TRASHDIR}/difficult"
+  SUBMODULE_URL="${TRASHDIR}/git/difficult.git"
+  DIFFICULT_PATH=$'diff  i \t cult'
+
+  # Sub module
+  mkdir -p "${SUBMODULE_REPO}"
+  pushd "${SUBMODULE_REPO}" &> /dev/null
+    git init .
+    touch readme_sub
+    git add readme_sub
+    git commit -m "initial commit"
+  popd &> /dev/null
+  mkdir -p "${SUBMODULE_URL}"
+  pushd "${SUBMODULE_URL}" &> /dev/null
+    git clone --mirror "${SUBMODULE_REPO}" .
+  popd &> /dev/null
+
+  # Main Repo
+  mkdir -p "${GIT_TEST_REPO}"
+  pushd "${GIT_TEST_REPO}" &> /dev/null
+    git init .
+    git submodule add "${SUBMODULE_URL}" "${DIFFICULT_PATH}"
+    git commit -m "add submodule"
+  popd &> /dev/null
+
+
+  # Test if git supports difficult submodule paths
+  pushd "${GIT_TEST_REPO}" &> /dev/null
+    output="$(git submodule foreach -q 'echo "${sm_path}"')"
+    begin_fail_zone
+    [ "${output}" = "${DIFFICULT_PATH}" ] # output="" when it fails
+    end_fail_zone
+  popd &> /dev/null
+)
+end_test
