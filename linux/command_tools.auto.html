@@ -99,6 +99,7 @@
 <li class="toctree-l2"><a class="reference internal" href="file_tools.auto.html">File Tools</a></li>
 <li class="toctree-l2"><a class="reference internal" href="findin.auto.html">Find In</a></li>
 <li class="toctree-l2"><a class="reference internal" href="findinpaths.auto.html">Find In Paths</a></li>
+<li class="toctree-l2"><a class="reference internal" href="git_airgap_submodule_helper.auto.html">Git Airgap Submodule Helper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="git_mirror.auto.html">Git Mirror</a></li>
 <li class="toctree-l2"><a class="reference internal" href="group_names.auto.html">Group Names</a></li>
 <li class="toctree-l2"><a class="reference internal" href="inisin.auto.html">In Is In</a></li>
@@ -106,6 +107,7 @@
 <li class="toctree-l2"><a class="reference internal" href="linux_accounts.auto.html">Linux Accounts</a></li>
 <li class="toctree-l2"><a class="reference internal" href="lwhich.auto.html">Lwhich</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mount_tools.auto.html">Mount Tools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="parser.auto.html">Parser</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pdbd.auto.html">PBDB - Primitive Bash Debugger</a></li>
 <li class="toctree-l2"><a class="reference internal" href="picker.auto.html">Picker</a></li>
 <li class="toctree-l2"><a class="reference internal" href="pipenv_functions.auto.html">Pipenv Functions</a></li>
@@ -209,16 +211,6 @@
 <dd></dd></dl>
 
 <p>Set of functions to make using parsing and composing commands easier</p>
-<dl class="field-list simple">
-<dt class="field-odd">Arguments</dt>
-<dd class="field-odd"><p><code class="docutils literal notranslate"><span class="pre">$1</span></code>… - The names of the files being searched for</p>
-</dd>
-<dt class="field-even">Return Value</dt>
-<dd class="field-even"><p>file_matches - array containing matches</p>
-</dd>
-</dl>
-<p>Find files by searching up the parent tree</p>
-<p>Searches for files to use. It starts by checking the current directory, and goes up. Just like git searches for a .git directory</p>
 <dl class="bash function">
 <dt id="function-command_tools.bsh get_array_from_environment">
 <code class="sig-name descname">get_array_from_environment</code><a class="headerlink" href="#function-command_tools.bsh get_array_from_environment" title="Permalink to this definition">¶</a></dt>
@@ -312,7 +304,7 @@ compose_arguments CMD_ARGS MAGIC_ARGS
 <dd class="field-odd"><ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">$1</span></code> - Name of variable to store how many arguments were parsed</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">$2</span></code> - Option string, like <code class="docutils literal notranslate"><span class="pre">-o</span></code> or <code class="docutils literal notranslate"><span class="pre">--output</span></code></p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">$3</span></code> - The name of the variable that will store the result of the argument if used. Can be prefixed with <code class="docutils literal notranslate"><span class="pre">+</span></code> for an array, and postfixed with a <code class="docutils literal notranslate"><span class="pre">:</span></code> for “has an argument</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">$3</span></code> - Storage name: the name of the variable that will store the result of the argument if used. If suffix-less, treat the option as a flag without an associated argument and increment the storage for each occurrence of the flag. The storage can also be postfixed with <code class="docutils literal notranslate"><span class="pre">!</span></code> to instead decrement the storage. Alternatively, the storage name can also be postfixed with a <code class="docutils literal notranslate"><span class="pre">:</span></code> for an option-string that has a single argument or prefixed with <code class="docutils literal notranslate"><span class="pre">+</span></code> for an option-string that expects and an array.</p></li>
 <li><p>[ <code class="docutils literal notranslate"><span class="pre">$4...$N</span></code> ] - Repeat <code class="docutils literal notranslate"><span class="pre">$2</span></code> and <code class="docutils literal notranslate"><span class="pre">$3</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">$N+1</span></code> - Must be <code class="docutils literal notranslate"><span class="pre">--</span></code> to delineate the actual arguments are being passed in next</p></li>
 <li><p>[<code class="docutils literal notranslate"><span class="pre">$N+2...</span></code>] - The argument to parse</p></li>
@@ -330,35 +322,38 @@ compose_arguments CMD_ARGS MAGIC_ARGS
 <li><p>Only parses until an argument is encountered that does not match an argument. This is useful for subcommand parsing</p></li>
 <li><p>Can support any arguments option, even if they do not start with <code class="docutils literal notranslate"><span class="pre">-</span></code>, but that is ill advised</p></li>
 <li><p>Does not support combining multiple one letter arguments into one argument</p></li>
-<li><p>Supports the <code class="docutils literal notranslate"><span class="pre">:</span></code> postfix notation for “has an argument”, add it to the storage name, not the option string</p></li>
+<li><p>Supports the <code class="docutils literal notranslate"><span class="pre">:</span></code> postfix notation for “has an argument”; add it to the storage name (not the option string)</p></li>
 <li><p>Does not support the <code class="docutils literal notranslate"><span class="pre">::</span></code> notation for “maybe has an argument”</p></li>
 <li><p>Supports a <code class="docutils literal notranslate"><span class="pre">+</span></code> prefix notation on the storage variable name meaning the storage is an array, and values are appended to it.</p></li>
-<li><p>If options do not have an argument, then they are set to 0 if unset, and +1 for each time it is set</p></li>
+<li><p>If options do not have an argument, then they are treated as a flag and set to 0 if unset and +1 for each time it is set.</p></li>
+<li><p>Also supports the <code class="docutils literal notranslate"><span class="pre">!</span></code> postfix notation to decrement (instead of increment) the option-flag’s storage name</p></li>
 </ol>
 <p class="rubric">Example</p>
 <div class="literal-block-wrapper docutils container" id="id1">
 <div class="code-block-caption"><span class="caption-text">Here are two examples of using parse_args</span><a class="headerlink" href="#id1" title="Permalink to this code">¶</a></div>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">local</span> nit_pick
-<span class="nb">local</span> rebuild_all
-parse_args extra_args -n nit_pick --nit nit_pick -E rebuild_all --all rebuild_all -- <span class="si">${</span><span class="p">@+</span><span class="s2">&quot;</span><span class="si">${</span><span class="p">@</span><span class="si">}</span><span class="s2">&quot;</span><span class="si">}</span>
-<span class="nb">shift</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">extra_args</span><span class="si">}</span><span class="s2">&quot;</span>
-<span class="k">if</span> <span class="o">[</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">nit_pick</span><span class="si">}</span><span class="s2">&quot;</span> !<span class="o">=</span> <span class="s2">&quot;0&quot;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
-  <span class="nb">export</span> <span class="nv">SPHINXOPTS</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">SPHINXOPTS</span><span class="p">-</span><span class="si">}</span><span class="s2"> -n&quot;</span>
-<span class="k">fi</span>
-<span class="k">if</span> <span class="o">[</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">rebuild_all</span><span class="si">}</span><span class="s2">&quot;</span> !<span class="o">=</span> <span class="s2">&quot;0&quot;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
-  <span class="nb">export</span> <span class="nv">SPHINXOPTS</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">SPHINXOPTS</span><span class="p">-</span><span class="si">}</span><span class="s2"> -E -a&quot;</span>
-<span class="k">fi</span>
-
-<span class="c1"># Sometimes you just need to add to extra_args because you already used it</span>
-<span class="nb">local</span> <span class="nv">compose_files</span><span class="o">=()</span>
+<span class="nb">local</span> rebuild
+<span class="nb">local</span> include_files
 <span class="nb">local</span> args_parsed
-parse_args args_parsed -f +compose_files: --file +compose_files: -- <span class="si">${</span><span class="p">@+</span><span class="s2">&quot;</span><span class="si">${</span><span class="p">@</span><span class="si">}</span><span class="s2">&quot;</span><span class="si">}</span>
-<span class="nv">extra_args</span><span class="o">+=</span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">args_parsed</span><span class="si">}</span><span class="s2">&quot;</span>
+parse_args args_parsed -n nit_pick --nit nit_pick <span class="se">\</span>
+                       --rebuild rebuild --no-rebuild rebuild! <span class="se">\</span>
+                       --include-files +include_files:
+                       -- <span class="si">${</span><span class="p">@+</span><span class="s2">&quot;</span><span class="si">${</span><span class="p">@</span><span class="si">}</span><span class="s2">&quot;</span><span class="si">}</span>
 <span class="nb">shift</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">args_parsed</span><span class="si">}</span><span class="s2">&quot;</span>
 <span class="c1">### Handle parsed arguments ###</span>
-<span class="k">if</span> <span class="o">[</span> <span class="s2">&quot;</span><span class="si">${#</span><span class="nv">compose_files</span><span class="p">[@]</span><span class="si">}</span><span class="s2">&quot;</span> !<span class="o">=</span> <span class="s2">&quot;0&quot;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
-  <span class="nb">local</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">JUST_PROJECT_PREFIX</span><span class="si">}</span><span class="s2">_SINGULAR_COMPOSE_FILES&quot;</span>
-  dynamic_set_a <span class="s2">&quot;</span><span class="si">${</span><span class="nv">JUST_PROJECT_PREFIX</span><span class="si">}</span><span class="s2">_SINGULAR_COMPOSE_FILES&quot;</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">compose_files</span><span class="p">[@]</span><span class="si">}</span><span class="s2">&quot;</span>
+<span class="k">if</span> <span class="o">[</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">nit_pick</span><span class="si">}</span><span class="s2">&quot;</span> !<span class="o">=</span> <span class="s2">&quot;0&quot;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+  <span class="nb">echo</span> <span class="s2">&quot;Be pedantic&quot;</span>
+<span class="k">fi</span>
+<span class="k">if</span> <span class="o">[</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">rebuild</span><span class="si">}</span><span class="s2">&quot;</span> -gt <span class="m">0</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+  <span class="nb">echo</span> <span class="s2">&quot;Force full rebuild&quot;</span>
+<span class="k">elif</span> <span class="o">[</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">rebuild</span><span class="si">}</span><span class="s2">&quot;</span> -eq <span class="m">0</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+  <span class="nb">echo</span> <span class="s2">&quot;Incremental build&quot;</span>
+<span class="k">elif</span> <span class="o">[</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">rebuild</span><span class="si">}</span><span class="s2">&quot;</span> -lt <span class="m">0</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+  <span class="nb">echo</span> <span class="s2">&quot;Do not build&quot;</span>
+<span class="k">fi</span>
+<span class="k">if</span> <span class="o">[</span> <span class="s2">&quot;</span><span class="si">${#</span><span class="nv">include_files</span><span class="p">[@]</span><span class="si">}</span><span class="s2">&quot;</span> !<span class="o">=</span> <span class="s2">&quot;0&quot;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+  <span class="nb">local</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">JUST_PROJECT_PREFIX</span><span class="si">}</span><span class="s2">_INCLUDE_FILES&quot;</span>
+  dynamic_set_a <span class="s2">&quot;</span><span class="si">${</span><span class="nv">JUST_PROJECT_PREFIX</span><span class="si">}</span><span class="s2">_INCLUDE_FILES&quot;</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">include_files</span><span class="p">[@]</span><span class="si">}</span><span class="s2">&quot;</span>
 <span class="k">fi</span>
 </pre></div>
 </div>

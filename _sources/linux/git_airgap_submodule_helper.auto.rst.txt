@@ -1,0 +1,56 @@
+===========================
+Git Airgap Submodule Helper
+===========================
+
+.. default-domain:: bash
+
+.. file:: git_airgap_submodule_helper.bsh
+
+This file contains a function to bootstrap ``just`` in a relocated repository.
+
+After (shallow) cloning the air-gapped repository, the submodules must be initialized and re-configured before they can be updated (recursively). This is handled by the ``git_clone-airgap-repo`` ``just`` target. However, this is not possible without the vsi_common submodule, which must first be initialized and updated itself.
+
+This function, :func:`git_airgap_submodule_update`, is appended to ``repo_map.env`` in the ``git_export-repo`` ``just`` target and then orphan committed to the air-gapped repository in the ``git_import-repo`` ``just`` target in :file:`just_git_airgap_repo.bsh`. :func:`git_airgap_submodule_update` follows the same steps as :func:`git_mirror update_submodules`.
+
+In order to call :func:`git_airgap_submodule_update`, repo_map.env must be grabbed out of the orphan commit and then sourced. Obviously, no ``just`` functions can be called yet, so this must be done in the file specified by :envvar:`JUST_SETUP_SCRIPT` (typically called setup.env). For example, the setup.env script, which typically looks like:
+
+.. code-block:: bash
+
+   export JUST_SETUP_SCRIPT="$(basename "${BASH_SOURCE[0]}")"
+   source "$(dirname "${BASH_SOURCE[0]}")/external/vsi_common/env.bsh"
+
+would become:
+
+.. code-block:: bash
+
+   export JUST_SETUP_SCRIPT="$(basename "${BASH_SOURCE[0]}")"
+   if [ ! -f "$(dirname "${BASH_SOURCE[0]}")/external/vsi_common/env.bsh" ]; then
+     echo "'just' could not be loaded. Trying to setup the repository as an"
+     echo "air-gapped repository"
+     # source the contents of repo_map.env (in a bash 3.2 compatible way)
+     source /dev/stdin <<< \
+         "$(git show origin/__just_git_mirror_info_file:repo_map.env 2>/dev/null || :)"
+     if ! declare -Fx git_airgap_submodule_update; then
+       echo "ERROR the vsi_common submodule could not be found!"
+       return 1
+     fi
+     git_airgap_submodule_update external/vsi_common
+   fi
+   source "$(dirname "${BASH_SOURCE[0]}")/external/vsi_common/env.bsh"
+
+After the ``setup.env`` file has been sourced, it is possible to run ``just git clone-airgap-repos`` to recursively initialize and clone the submodules from their air-gapped mirrors
+
+.. function:: git_airgap_submodule_update
+
+After cloning the air-gapped repository, reconfigure and update a submodule
+
+:Arguments: ``$1`` - A relative path (from the root of the project repository)
+                     to a submodule
+:Parameters: ``repos`` - An associative array mapping the (relative) path from the root of the project repository to each submodule to the respective URL for each submodule (recursively)
+             ``repo_paths`` - The (relative) path from the root of the project repository to each submodule (recursively)
+             ``repo_urls`` - The respective URL for each submodule (recursively)
+
+.. note::
+
+  Either ``repos`` xor (``repo_paths`` and ``repo_urls``) should be provided
+
