@@ -461,6 +461,9 @@ class ARGS:
 class KWARGS:
   pass
 
+# REVIEW When we no longer support python2, this function should be updated to
+# use the newer inspect.signature, Signature.bind() and
+# BoundArguments.apply_defaults() instead of inspect.getfullargspec
 def args_to_kwargs(function, args=tuple(), kwargs={}):
   '''returns a single dict of all the args and kwargs
 

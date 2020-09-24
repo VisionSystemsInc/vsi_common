@@ -7,6 +7,7 @@ fi
 source "${VSI_COMMON_DIR}/linux/ask_question"
 source "${VSI_COMMON_DIR}/linux/colors.bsh"
 source "${VSI_COMMON_DIR}/linux/compat.bsh"
+source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
 
 #*# just/plugins/just_git_functions
 
@@ -45,7 +46,7 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 #
 # "git submodule--helper list" bash port
 #
-# Reproduces what git submodule-helper-list does. Not all versions of git are modern enough to have this feature. Currently, the first three columns of information and --prefix are not reproduced because they are not needed.
+# Reproduces what ``git submodule--helper list`` does. Not all versions of git are modern enough to have this feature. Currently, the first three columns of information and --prefix are not reproduced because they are not needed.
 #
 # :Arguments: [``$1...``] - Glob expressions to be matched, just like '`git-submodule--helper`'
 #
@@ -68,16 +69,16 @@ function submodule-helper-list()
   #   f
   # submodule.w     t  f.url=https://github.com/visionsystemsinc/vsi_common.git
 
-  local noglob=0
-  if [[ ${SHELLOPTS} =~ (^|:)noglob(:|$) ]]; then
-    noglob=1
-  fi
-  set -o noglob
+  set_oflag noglob
+  # FIXME This doesn't actually handle names/sm_paths with tabs, let alone
+  # newlines as in the case mentioned above
+  # RE Get the submodule names like git_mirror:get_config_submodule_names
+  #   git config --name-only --get-regexp '^submodule\..*\.url$'
+  # and use these keys to get the path/url as git_mirror:clone_submodules does
+  # See also just_git_airgap_repo.bsh:git_sync_submodules_recursively
   submodule_names=($(awk '{print $1}' <<< "${submodule_data}" ))
   submodule_paths=($(awk '{print $2}' <<< "${submodule_data}" ))
-  if [ "${noglob}" = "0" ]; then
-    set +o noglob
-  fi
+  reset_oflag noglob
 
   # If there are any arguments, filter out unmatched submodules
   if (( $# )); then
@@ -141,7 +142,8 @@ function _checkout_git_submodule()
         popd &> /dev/null
       fi
     else
-      read -n1 -r -p "${3} Any key to continue." presskey
+      echo "${3}"
+      read -n1 -r -p "Press any key to continue." presskey
       echo
     fi
   else
@@ -152,7 +154,8 @@ function _checkout_git_submodule()
         popd &> /dev/null
       fi
     else
-      read -n1 -r -p "${3} Any key to continue." presskey
+      echo "${3}"
+      read -n1 -r -p "Press any key to continue." presskey
       echo
     fi
   fi
@@ -179,7 +182,7 @@ function _checkout_git_submodule()
 # very smart.
 # Update: It will at least tell you which repositories are behind now.
 #
-# :Arguments: [``$1..``] - Specify submodule paths to update. None defaults to all
+# :Arguments: [``$1...``] - Specify submodule paths to update. None defaults to all
 #
 # :Parameters: ``$show_summary_message`` - For internal use. Disables error summary messages
 #**
@@ -189,6 +192,13 @@ function safe_git_submodule_update()
   local i
   local show_summary_message=${show_summary_message-1}
   local presskey
+  if [ "${bash_bug_unassigned_variable_set_to_null}" -eq 0 ]; then
+    # In general, unset should NOT be used on local variables because it can
+    # (with sufficient nesting of scope) result in a loss of "local" status;
+    # however, because local and unset are in the same scope, we don't loose
+    # locality
+    unset presskey
+  fi
   local askcontinue
 
   pushd "$(pwd)" > /dev/null
@@ -215,6 +225,9 @@ function safe_git_submodule_update()
           continue
         fi
       fi
+      # REVIEW Should this use the -f .gitmodules flag since we haven't sync'd
+      # RE Unfortunately, .gitmodules can use relative URLs...
+      # RE See just_git_airgap_repo.bsh:submodule-helper-resolve-url
       submodule_url="$(${GIT} config submodule."$name".url)"
       if [ -z "${submodule_url}" ] || ( [ ! -d "$sm_path"/.git ] && [ ! -f "$sm_path"/.git ] ); then
         if ! [ "$(${GIT} config -f .gitmodules submodule.${name}.update)" == "none" ]; then
@@ -237,7 +250,8 @@ function safe_git_submodule_update()
         fi
         if ! ${GIT} diff --no-ext-diff --cached --quiet; then
           echo "Staged tracked files in ${sm_path}"
-          read -n1 -r -p "You need to commit/reset files and resolve any conflicts in the submodule: ${name}" presskey
+          echo "You need to commit/reset files and resolve any conflicts in the submodule: ${name}"
+          read -n1 -r -p "Any key to continue." presskey
           popd > /dev/null
           continue
         fi
@@ -285,7 +299,6 @@ function safe_git_submodule_update()
     if [ "${message_printed}" = "1" ]; then
       echo
       ask_question "Continue without fixing?" askcontinue n
-
       if [ "${askcontinue}" = "0" ]; then
         return 1
       fi
@@ -298,19 +311,40 @@ function safe_git_submodule_update()
 #
 # Reattach detached heads in submodules.
 #
+# :Arguments: - [``1...``] - A list of submodule paths; otherwise, all submodules will attempt to be re-attached (recursively). For example, docker/recipes
+#
 # Search recursively in the current working directory for all submodules with detached heads. For each, look through all named branches (in the form of refs/heads/branch_name) for one with a SHA that matches that of the detached head (if more than one, the first one is used). If no match found, i.e., empty string, then branch is left detached.
 #**
+
 git_reattach_heads()
 {
-  # If detached, get SHA & first branch name, and then reattach
-  ${GIT} submodule foreach --recursive '
-  if [ "$('${GIT}' rev-parse --abbrev-ref --symbolic-full-name HEAD)" = "HEAD" ]; then
-    current_sha="$('${GIT}' rev-parse HEAD)"
-    branch_name="$('${GIT}' show-ref --heads | sed -'"${sed_flag_rE}"'n "/^${current_sha} .*/{ s|.*/(.*)|\1|; p; q;}")"
-    if [ "${branch_name}" != "" ]; then
-      '${GIT}' checkout "${branch_name}"
+  # git submodule foreach must be run from the top-level working tree in git 1.8
+  pushd "$(${GIT} rev-parse --show-cdup)" &> /dev/null
+    local submodule_paths
+    if [ $# -eq 0 ]; then
+      local OLD_IFS="${IFS}"
+      IFS=$'\n'
+      submodule_paths=($(${GIT} submodule foreach --quiet --recursive 'echo ${prefix-${displaypath}}'))
+      IFS="${OLD_IFS}"
+    else
+      submodule_paths=("${@}")
     fi
-  fi'
+
+    local submodule_path
+    for submodule_path in "${submodule_paths[@]}"; do
+      echo "Entering '${submodule_path}'"
+      pushd "${submodule_path}" &>/dev/null
+        # If detached, get SHA & first branch name, and then reattach
+        if [ "$(${GIT} rev-parse --abbrev-ref --symbolic-full-name HEAD)" = "HEAD" ]; then
+          local current_sha="$(${GIT} rev-parse HEAD)"
+          local branch_name="$(${GIT} show-ref --heads | sed -n${sed_flag_rE} "/^${current_sha} .*/{ s|.*/(.*)|\1|; p; q;}")"
+          if [ "${branch_name}" != "" ]; then
+            ${GIT} checkout "${branch_name}"
+          fi
+        fi
+      popd &>/dev/null
+    done
+  popd &> /dev/null
 }
 
 #**
@@ -354,7 +388,7 @@ function git_defaultify()
         echo "Syncing submodules"
         # Run a safe git submodule sync and git submodule update
         safe_git_submodule_update ${@+"${@}"}
-        git_reattach_heads
+        git_reattach_heads ${@+"${@}"}
         JUST_GIT_SUBMODULE_SYNCED=1
       else
         echo "Already synced submodules earlier... (JUST_GIT_SUBMODULE_SYNCED=${JUST_GIT_SUBMODULE_SYNCED-})" >&2

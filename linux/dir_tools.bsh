@@ -9,7 +9,6 @@ if [ -z ${VSI_COMMON_DIR+set} ]; then
 fi
 
 source "${VSI_COMMON_DIR}/linux/signal_tools.bsh"
-source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
 source "${VSI_COMMON_DIR}/linux/compat.bsh"
 
 #*# linux/dir_tools
@@ -115,10 +114,11 @@ _VSI_TEMP_PATHS=()
 #     touch "${temp_dir}"/file2
 #     cat "${temp_dir}"/file2 # Success!
 #   ) # The temp_dir is deleted here
-
+#
 # .. note::
 #   This uses the EXIT, INT, and TERM traps. If you use these too, your traps will be automatically chained using :func:`signal_tools.bsh trap_chain`.
 #**
+# REVIEW rename to mktemp_deleting
 make_temp_path()
 {
   local _local_variable_name="${1}"
@@ -150,6 +150,30 @@ _make_temp_path_cleanup()
       rm -f "${temp_path}"
     fi
   done
+}
+
+#**
+# .. function:: mktemp_compat
+#
+# OS-compatible version of mktemp -p
+#
+# :Arguments: ``$1`` - The location in which to make the temporary directory
+# :Output: *stdout* - The path, ${1}/{a_temp_dir}, to the temporary directory
+#
+# Make a temporary directory in a specific location. This emulates the ``mktemp -p DIR`` behavior for OS's that don't support it (macOS)
+#**
+# REVIEW make a deleting version of this
+# RE or add support for this in make_temp_path
+# RE remove in favor of "mktemp -d path/to/tmp.XXXXXX"
+# REVIEW rename mktemp_at
+function mktemp_compat()
+{ # Stupid mac compatibility
+  local dir="${1}"
+  while [[ -e ${dir} ]]; do
+    dir="${1}/$(basename "$(mktemp -u)")"
+  done
+  mkdir -p "${dir}"
+  echo "${dir}"
 }
 
 #**
@@ -286,7 +310,8 @@ basename()
 # Checks to see if there is any files or directories in a given directory, other than ``.`` and ``..``.
 #
 # :Arguments: ``$1`` - The directory to search, must have permissions, or else it may give false results
-# :Returns: 0 for empty, 1 for not empty
+# :Return Value: * ``0`` - Empty
+#                * ``1`` - Not empty
 # :Uses: ``find`` to search the directory
 #
 # Searches a directory and stops as soon as something is found. You can write your own version of this to modify the conditions the ``find`` use. Other versions include ``find "${1}" -type f -printf '1\n' -quit`` which requires that a file specifically (not a directory) be in the tree somewhere. Add ``-maxdepth 1`` for saying a file must be in the initial directory, not the entire tree.

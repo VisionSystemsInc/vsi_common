@@ -24,6 +24,7 @@ source "${VSI_COMMON_DIR}/linux/compat.bsh"
 # .. file:: requirements.bsh
 #
 # A set of functions for determining the versions of specific programs, and if you meet the required versions
+#
 # .. function:: meet_requirements
 #
 # :Arguments: ``$1`` - Version you are checking
@@ -44,10 +45,10 @@ source "${VSI_COMMON_DIR}/linux/compat.bsh"
 #
 # .. code-block:: bash
 #
-#    meet_requirements 1.0.0 <2.0.0 >0.5.0
+#    meet_requirements 1.0.0 "<2.0.0" ">0.5.0"
 #    meet_requirements 1.0.0 =1
-#    meet_requirements 1.0.0 <2.0.0 >0.5.0 or >3.0.0
-#    meet_requirements 3.1.0 <2.0.0 >0.5.0 or >3.0.0
+#    meet_requirements 1.0.0 "<2.0.0" ">0.5.0" or ">3.0.0"
+#    meet_requirements 3.1.0 "<2.0.0" ">0.5.0" or ">3.0.0"
 #**
 function meet_requirements()
 {
@@ -142,6 +143,10 @@ function _meet_requirements()
 #
 # :Arguments: ``$1`` - LHS version
 #             ``$2`` - RHS version
+#
+# .. seealso::
+#
+#   :func:`meet_requirements`
 #**
 function version_eq()
 {
@@ -183,6 +188,10 @@ function version_eq()
 #
 # :Arguments: ``$1`` - LHS version
 #             ``$2`` - RHS version
+#
+# .. seealso::
+#
+#   :func:`meet_requirements`
 #**
 function version_lt()
 {
@@ -237,6 +246,10 @@ function version_lt()
 #
 # :Arguments: ``$1`` - LHS version
 #             ``$2`` - RHS version
+#
+# .. seealso::
+#
+#   :func:`meet_requirements`
 #**
 function version_gt()
 {
@@ -363,4 +376,33 @@ function docker_compose_version()
 function bash_version()
 {
   "${BASH-bash}" --version | sed -n${sed_flag_rE} 's|[^0-9]+([0-9.()]*).*|\1|;s|\((.*)\)|r\1|;p;q'
+}
+
+#**
+# .. function:: tar_version_info
+#
+# Sets the vendor and version number of ``tar``.
+#
+# :Parameters: [``TAR``] - The ``tar`` executable what will be called. Can be overwritten to call a different executable. Defaults to ``tar``.
+# :Output: - ``tar_vendor`` - The ``tar`` vendor (BSD or GNU)
+#          - ``tar_version`` - The ``tar`` version number
+#**
+function tar_version_info()
+{
+  local version_info="$("${TAR-tar}" --version)"
+  if [[ "${version_info}" == "tar (GNU tar)"* ]]; then
+    tar_version="$(echo "${version_info}" | awk 'NR==1{print $4}')"
+    tar_vendor="GNU"
+  # macOS
+  elif [[ "${version_info}" == "bsdtar"* ]]; then
+    tar_version="$(echo "${version_info}" | awk '{print $2}')"
+    tar_vendor="BSD"
+  # busybox
+  elif [[ "${version_info}" == "tar (busybox)"* ]]; then
+    tar_version="$(echo "${version_info}" | awk '{print $3}')"
+    tar_vendor="BUSYBOX"
+  else
+    tar_version="$(echo "${version_info}" | awk 'NR==1{print $NF}')"
+    tar_vendor="unknown"
+  fi
 }

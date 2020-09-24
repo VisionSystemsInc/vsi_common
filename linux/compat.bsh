@@ -53,7 +53,7 @@ function load_vsi_compat()
   # Sed flags
   # =========
   #
-  # While most flags between GNU and BSD (macos) sed are fairly compatible, a few create issues in corner cases.
+  # While most flags between GNU and BSD (macOS) sed are fairly compatible, a few create issues in corner cases.
   #
   # .. envvar:: VSI_SED_COMPAT
   #
@@ -74,7 +74,11 @@ function load_vsi_compat()
   #**
   # .. variable:: sed_flag_rE
   #
-  # Flag to enable extended regex support in sed. The GNU flag is ``-r``, while the BSD flag is ``-E``. macos does not support ``-r`` and GNU sed prior to 4.2 does not accept ``-E``. Using this variable should always yield the correct flag.
+  # Flag to enable extended regex support in sed. The GNU flag is ``-r``, while the BSD flag is ``-E``. macOS does not support ``-r`` and GNU sed prior to 4.2 does not accept ``-E``. Using this variable should always yield the correct flag.
+  #
+  # .. note::
+  #
+  #   No quotes around the flag
   #
   # .. rubric:: Example
   #
@@ -93,14 +97,18 @@ function load_vsi_compat()
   #**
   # .. variable:: sed_flag_i
   #
-  # When using inplace replacement on sed, the macos version requires an argument to the ``-i`` flag, the extension added to the output file. The GNU version does not support this. Using this flag will perform an inplace replacement with no added extension. The :var:`sed_flag_i must come last when combined with other flags (see example below).
+  # When using inplace replacement on sed, the macOS version requires an argument to the ``-i`` flag, the extension added to the output file. The GNU version does not support this. Using this flag will perform an inplace replacement with no added extension. The :var:`sed_flag_i` must come last when combined with other flags (see example below).
+  #
+  # .. note::
+  #
+  #   No quotes around the flag
   #
   # .. rubric:: Example
   #
   # .. code-block:: bash
   #
   #   sed -${sed_flag_i} 's|foo|bar|' some_file.txt
-  #   # You cannot put quotes around sed_flag_i, or else it will not work on macos
+  #   # You cannot put quotes around sed_flag_i, or else it will not work on macOS
   #
   #   # Not ok
   #   sed -${sed_flag_i}n ...
@@ -110,7 +118,7 @@ function load_vsi_compat()
   #   sed -${sed_flag_i} -n ...
   #**
 
-  # Handle macos BSD version
+  # Handle macOS BSD version
   if [[ ${OSTYPE-} = darwin* ]]; then
     sed_flag_i="i ''"
   else
@@ -121,7 +129,7 @@ function load_vsi_compat()
   # Date
   # ====
   #
-  # The following variables will help cope with the difference in the ``date`` command, as seamlessly as possible.
+  # The following variables will help cope with the difference in the ``date`` command as seamlessly as possible.
   #
   # .. variable:: date_feature_nanoseconds
   #
@@ -140,7 +148,7 @@ function load_vsi_compat()
   # Bash
   # ====
   #
-  # The following variables will help cope with the difference in bash versions, as seamlessly as possible.
+  # The following variables will help cope with the difference in bash versions as seamlessly as possible.
   #
   # .. variable:: bash_behavior_declare_array_quote
   #
@@ -307,15 +315,44 @@ function load_vsi_compat()
   #
   # .. seealso::
   #    :func:`string_tools.bsh lowercase`, :func:`string_tools.bsh uppercase`
+  #
+  # .. variable:: bash_bug_unassigned_variable_set_to_null
+  #
+  # There is a bug, fixed in bash 4.0, that causes an unassigned variable to be set to null
+  #
+  # :Value: * ``0`` Bash has the bug
+  #         * ``1`` An unassigned variable works as expected
+  #
+  # .. rubric:: Example
+  #
+  # .. code-block:: bash
+  #
+  #     $ for x in 3.2 4.0 4.1 4.2 4.3 4.4 5.0; do
+  #         docker run -it --rm bash:${x} bash -c \
+  #           'function foo() { \
+  #              local y; \
+  #              echo "y=${y+y_set}"; \
+  #            }; \
+  #            foo; \
+  #            echo $?';
+  #       done
+  #     # In bash 3.2:
+  #     # y=y_set
+  #     # 0
+  #     # In bash >= 4:
+  #     # y=
+  #     # 0
   #**
   if [ "${bash_major_version}" -ge "4" ]; then
     bash_feature_associative_array=0
     bash_feature_case_modification=0
     bash_feature_bashpid=0
+    bash_bug_unassigned_variable_set_to_null=1
   else
     bash_feature_associative_array=1
     bash_feature_case_modification=1
     bash_feature_bashpid=1
+    bash_bug_unassigned_variable_set_to_null=0
   fi
 
   #**
@@ -338,6 +375,30 @@ function load_vsi_compat()
 
     return "${__bash_bug_bash_env_process_substitution}"
   }
+
+  #**
+  # .. function:: __bash_bug_at_expansion_null_ifs
+  #
+  # There is a bug, fixed in bash 4.4, that causes ${@+"${@}"} not to expand to multiple words when IFS is set to the empty string.
+  #
+  # :Return Value: * ``0`` - ``${@}`` does not expand as expected when the IFS is set to ''
+  #                * ``1`` - ``${@}`` expansion works as expected
+  #
+  # .. seealso::
+  #   https://tiswww.case.edu/php/chet/bash/CHANGES Section 'bash-4.4-rc1' Change w
+  #**
+  function __bash_bug_at_expansion_null_ifs()
+  {
+    case ${@+"${@}"} in
+      bashbug)
+        bash_bug_at_expansion_null_ifs=0
+        ;;
+      "bash bug")
+        bash_bug_at_expansion_null_ifs=1
+        ;;
+    esac
+  }
+  IFS="" __bash_bug_at_expansion_null_ifs bash bug
 
   #**
   # .. variable:: bash_feature_bashpid_read_only
@@ -521,9 +582,9 @@ function load_vsi_compat()
   #**
   # .. function:: git_bug_submodule_path_with_tab
   #
-  # There is a bug in git, fixed in git 1.8.3.3, that caused many ``git submodule`` operations not to work on a submodule at a path whose name is not in ASCII.
+  # There is a bug in git, fixed in git 1.8.3.3, that caused many ``git submodule`` operations not to work on a submodule at a path whose name contains a tab (and presumably other characters).
   #
-  # :Return Value: * ``0`` - ``git`` does not support non-ASCII submodule paths
+  # :Return Value: * ``0`` - ``git`` does not support submodule paths containing a tab
   #                * ``1`` - ``git`` works as expected
   #**
   function git_bug_submodule_path_with_tab()
@@ -554,7 +615,6 @@ function load_vsi_compat()
   #                * ``2`` - Supports TLS Version 1.2
   #                * ``3`` - Supports TLS Version 1.3 (Not testable yet)
   #                * ``125`` - Unable to determine
-  #
   #**
   function git_feature_support_tls()
   {
@@ -569,14 +629,14 @@ function load_vsi_compat()
       # GIT_DIR= ignores being in vsi_common/tests, which will break if the supermodule is not mounted in
 
       # Cannot be uncommented until https://github.com/chromium/badssl.com/issues/332
-      # if [[ $(GIT_DIR= git ls-remote -h https://tls-v1-3.badssl.com:1013/ 2>&1 > /dev/null) =~ repository.*\ not\ found ]; then
+      # if [[ $(GIT_DIR= ${GIT-git} ls-remote -h https://tls-v1-3.badssl.com:1013/ 2>&1 > /dev/null) =~ repository.*\ not\ found ]; then
       #   __git_feature_support_tls=3
       # elif ...
-      if [[ $(GIT_DIR= git ls-remote -h https://tls-v1-2.badssl.com:1012/ 2>&1 > /dev/null) =~ repository.*\ not\ found ]]; then
+      if [[ $(GIT_DIR= ${GIT-git} ls-remote -h https://tls-v1-2.badssl.com:1012/ 2>&1 > /dev/null) =~ repository.*\ not\ found ]]; then
         __git_feature_support_tls=2
-      elif [[ $(GIT_DIR= git ls-remote -h https://tls-v1-1.badssl.com:1011/ 2>&1 > /dev/null) =~ repository.*\ not\ found ]]; then
+      elif [[ $(GIT_DIR= ${GIT-git} ls-remote -h https://tls-v1-1.badssl.com:1011/ 2>&1 > /dev/null) =~ repository.*\ not\ found ]]; then
         __git_feature_support_tls=1
-      elif [[ $(GIT_DIR= git ls-remote -h https://tls-v1-0.badssl.com:1010/ 2>&1 > /dev/null) =~ repository.*\ not\ found ]]; then
+      elif [[ $(GIT_DIR= ${GIT-git} ls-remote -h https://tls-v1-0.badssl.com:1010/ 2>&1 > /dev/null) =~ repository.*\ not\ found ]]; then
         __git_feature_support_tls=0
       fi
     fi
