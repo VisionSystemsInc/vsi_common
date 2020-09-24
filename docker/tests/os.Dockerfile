@@ -60,7 +60,7 @@ RUN set -euxv; \
         zypper --gpg-auto-import-keys --non-interactive install -y \
                http://opensource.wandisco.com/suse/11/git/x86_64/wandisco-git-suse-release-11-1.noarch.rpm; \
         rpm --import http://opensource.wandisco.com/RPM-GPG-KEY-WANdisco; \
-        # This must be done separate from other call, becuase the -f flag will
+        # This must be done separate from other call becuase the -f flag will
         # break util-linux
         zypper --gpg-auto-import-keys --non-interactive install -y -f git; \
         other=''; \
@@ -109,7 +109,6 @@ RUN set -euxv; \
                              perl \
                              # libcurl -> git won't work without this
                              cyrus-sasl; \
-                             # curl cyrus-sasl
       # Needed for ssl to work, or else curl, wget, et al would fail
       /usr/sbin/update-ca-certificates --fresh; \
     elif command -v emerge; then \
