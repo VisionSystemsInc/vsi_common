@@ -92,7 +92,7 @@ source "${VSI_COMMON_DIR}/linux/elements.bsh"
 
 # Disable the special docker magic except in docker, no need in singularity
 # TODO: what does podman need?
-if [ ! -f "/.dockerenv" ]; then
+if [ -d /.singularity.d ] || [ ! -f "/.dockerenv" ] || [ "$(id -u)" != "0" ]; then
   export ALREADY_RUN_ONCE=1
 fi
 

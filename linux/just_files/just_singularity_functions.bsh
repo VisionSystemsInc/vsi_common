@@ -172,10 +172,15 @@ function singular_defaultify()
       extra_args+=1
       shift 1
 
-      if [ "${subcommand}" = "instance" ] && (( $# )) && [ "${1}" = "start" ]; then
-        subcommand=instance_start
-        extra_args+=1
-        shift 1
+      # Handle instance start/stop/exec
+      if [ "${subcommand}" = "instance" ] && (( $# )) ; then
+        case "${1}" in
+          start|stop|exec)
+            subcommand="instance_${1}"
+            extra_args+=1
+            shift 1
+            ;;
+        esac
       fi
 
       # Local vars for the ``singular_load_env`` calls below
@@ -183,7 +188,7 @@ function singular_defaultify()
             singular_image singular_mount_points
 
       case $subcommand in
-        run|shell|exec|test|instance_start)
+        run|shell|exec|test|instance_start|instance_stop|instance_exec)
           # TODO: parse_args here
           local instance="$1"
           shift 1
@@ -201,7 +206,8 @@ function singular_defaultify()
           # in directly. The internal /tmp is very limited and quickly starts
           # having problems. So it is best to just mount it in by default.
           if [ "${SINGULARITY_ADD_TMP_DIR-1}" = "1" ]; then
-            subcommand_args+=(-B "$(get_mktemp_dir):/tmp:rw")
+            # Don't say :rw https://github.com/hpcng/singularity/issues/5416
+            subcommand_args+=(-B "$(get_mktemp_dir):/tmp")
           fi
           # /tmp needs to be mounted in BEFORE singular_volumes, incase
           # something tries to mount inside of tmp, like /tmp/.X11-unix. This
@@ -212,22 +218,49 @@ function singular_defaultify()
 
           # Generate binds
           if [ -n "${singular_volumes+set}" ]; then
+            local i
             for (( i=0; i<${#singular_volumes[@]}; i++ )); do
               subcommand_args+=(-B "${singular_volumes[${i}]}")
             done
           fi
 
           # Make Singularity call
-          subcommand_args+=(${singular_flags[@]+"${singular_flags[@]}"} "${singular_image}" ${@+"${@}"})
+          case $subcommand in
+            instance_start)
+              # "singular-compose instance start" should have the instance name added to the end
+              subcommand=instance
+              subcommand_args=(start
+                               ${subcommand_args[@]+"${subcommand_args[@]}"}
+                               ${singular_flags[@]+"${singular_flags[@]}"}
+                               "${singular_image}"
+                               ${@+"${@}"}
+                               "${singular_instance_name}")
+              ;;
+            instance_stop)
+              # "singular-compose instance stop" should have the instance name added to the end, but no image name or singular_flags
+              subcommand=instance
+              subcommand_args=(stop
+                               ${@+"${@}"}
+                               "${singular_instance_name}")
+              ;;
+            instance_exec)
+              # "singular-compose instance exec" is really just singularity exec instance://{instance name} ...
+              subcommand=exec
+              subcommand_args=(${subcommand_args[@]+"${subcommand_args[@]}"}
+                               ${singular_flags[@]+"${singular_flags[@]}"}
+                               "instance://${singular_instance_name}"
+                               ${@+"${@}"})
+              ;;
+            # Everything else follows this pattern
+            *)
+              subcommand_args+=(${singular_flags[@]+"${singular_flags[@]}"} "${singular_image}" ${@+"${@}"})
+              ;;
+          esac
           extra_args+=$#
-
-          if [[ ${subcommand} == instance_start ]]; then
-            subcommand=instance
-            subcommand_args=(start ${subcommand_args[@]+"${subcommand_args[@]}"})
-          fi
 
           function load_singularity_env()
           {
+            local i
             ##########################
             ### Export Environment ###
             ##########################
@@ -240,7 +273,9 @@ function singular_defaultify()
 
           # Check to see if the first element of singular_environment is set, hence no [@]
           if [ "${SINGULARITY_EXEC-0}" = "0" ]; then
+            local JUST_IGNORE_EXIT_CODES="${SINGULARITY_IGNORE_EXIT_CODES-0}"
             (
+              unset JUST_IGNORE_EXIT_CODES
               load_singularity_env
               _Singularity
             ) # Do this in a subshell so that these variables don't pollute the rest of just

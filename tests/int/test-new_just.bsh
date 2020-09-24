@@ -14,25 +14,28 @@ function setup()
 {
   local container_name
 
+  JUST_PATH_ESC="$(. ${VSI_COMMON_DIR}/linux/common_source.sh; echo "${VSI_PATH_ESC}")"
   if command -v docker &> /dev/null; then
     # If this failed, then the docker server is on another host. TESTDIR is a
     # random name so there's practically no possibility of a false positive
-    if container_name=$(docker create --mount "type=bind,source=${TESTDIR},destination=${JUST_PATH_ESC}/src" alpine:3.8); then
-      docker_is_local=1
+    if container_name=$(docker create --mount "type=bind,source=${TESTDIR},destination=${JUST_PATH_ESC}/src" alpine:3.8 2>/dev/null); then
+      docker_is_local=0
       docker rm "${container_name}" &> /dev/null
     else
-      docker_is_local=0
+      docker_is_local=1
 
       # No need to rm, because it failed to be created
       tmp_volume="$(docker volume create)"
     fi
   fi
-  JUST_PATH_ESC="$(. ${VSI_COMMON_DIR}/linux/common_source.sh; echo "${VSI_PATH_ESC}")"
+
+  # Cache results
+  git_bug_submodule_path_with_tab || :
 }
 
 function teardown()
 {
-  if [[ ${docker_is_local-} == 0 ]]; then
+  if [ "${docker_is_local-}" = "1" ]; then
     docker volume rm "${tmp_volume}" &> /dev/null
   fi
 }
@@ -253,14 +256,17 @@ begin_test "New Just no docker"
 )
 end_test
 
+git_feature_support_tls && tls=0 || tls=$?
+[ ${tls} -ge 2 ] && [ ${tls} -ne 125 ] || skip_next_test
 command -v git &> /dev/null || skip_next_test
 begin_test "New just instructions test (git)"
 (
   setup_test
 
-  if [ "${OS-}" = "Windows_NT" ]; then
+  if git_bug_submodule_path_with_tab; then
     # git submodule add on windows won't handle "??? This works on cmd, but not bash.
     # MSYS2_ARG_CONV_EXCL=* did not fix it, therefore it is not a path mangling issue
+    # Also an issue in older git for submodules
     tough_name=""
   else
     tough_name="\""
@@ -316,8 +322,9 @@ begin_test "New just docker test"
 (
   setup_test
 
-  if [ "${OS-}" = "Windows_NT" ]; then
-    # Windows does not allow " in filenames
+  if git_bug_submodule_path_with_tab; then
+    # Windows does not allow " in filenames, and old git doesn't allow it in
+    # submodules
     tough_name=""
   else
     tough_name="\""
@@ -342,7 +349,7 @@ begin_test "New just docker test"
 
   just build
 
-  if [[ ${docker_is_local} == 0 ]]; then
+  if [ "${docker_is_local-}" = "1" ]; then
     tar c . | docker run -i --rm -v "${tmp_volume}:${JUST_PATH_ESC}/src" -w "${JUST_PATH_ESC}/src" alpine:3.8 tar x
 
     # Change the source dir to a volume

@@ -2,7 +2,7 @@
 '''
 @echo off
 python %~f0 %*
-exit /b 
+exit /b
 '''
 
 import argparse
@@ -64,10 +64,9 @@ def main(args=None):
 
   pgrep = Pgrep(cmd, fields_get)
   #Run the pgrep command
-  
+
   remove_pids = [pgrep.pid, os.getpid()]
-  
-  
+
   pgrep.pids = filter(lambda x:not x['processid'] in remove_pids,pgrep.pids)
   #Remove these pids to have more "pgrep" like results aka BETTER
   return pgrep, args

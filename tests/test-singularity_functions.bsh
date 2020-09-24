@@ -70,6 +70,21 @@ begin_test "Singular compose load environment"
 (
   setup_test
 
+  function id()
+  {
+    if [ "${1}" = "-u" ]; then
+      echo "12321"
+    fi
+  }
+
+  function find_any_hash_func()
+  {
+    local str="$(cat -)"
+    if [ "${str}" = "12321:/foo/bar" ]; then
+      echo "deadbeef12345678 -"
+    fi
+  }
+
   export JUSTFILE="${TESTDIR}/Justfile"
   mkdir -p "${TESTDIR}/a/b/c"
 
@@ -78,23 +93,32 @@ begin_test "Singular compose load environment"
   echo "instances+=(foo3)
         foo3_volumes=('${TESTDIR}/foo:/bar:ro')
         foo3_environment=('FOO' 'BAR FAR  BOO ')
+        foo3_instance=cat
         foo3_singular_flags=(-c -e)" > ${TESTDIR}/a/singular-compose.env
 
   echo "instances+=(foo4)
         foo4_volumes=('${TESTDIR}/bar:/bar:ro')
         foo4_environment=('OK' 'DOE')
+        foo4_instance=dog
         foo4_singular_flags=(-e -c)" > ${TESTDIR}/a/b/singular-compose.env
 
   # Using ${JUST_PROJECT_PREFIX}_SINGULAR_COMPOSE_FILES
   JUST_PROJECT_PREFIX=STUFF
+  STUFF_CWD=/foo/bar
 
   # simple case
   not singular_load_env foo3
   singular_load_env foo1
+  assert_array_values singular_volumes
+  assert_array_values singular_flags
+  assert_array_values singular_environment
+  [ -z "${singular_instance_name}" ]
+
   singular_load_env foo2
   assert_array_values singular_volumes
   assert_array_values singular_flags
   assert_array_values singular_environment
+  [ -z "${singular_instance_name}" ]
 
   unset singular_volumes singular_flags singular_environment
   STUFF_SINGULAR_COMPOSE_FILES="${TESTDIR}/a/singular-compose.env"
@@ -105,6 +129,7 @@ begin_test "Singular compose load environment"
   assert_array_values singular_volumes "${TESTDIR}/foo:/bar:ro"
   assert_array_values singular_flags -c -e
   assert_array_values singular_environment 'FOO' 'BAR FAR  BOO '
+  [ "${singular_instance_name}" = "cat-deadbeef1234" ]
   [ -d "${TESTDIR}/foo" ]
   not singular_load_env foo4 2>/dev/null
 
@@ -118,6 +143,7 @@ begin_test "Singular compose load environment"
   assert_array_values singular_volumes "${TESTDIR}/bar:/bar:ro"
   assert_array_values singular_environment 'OK' 'DOE'
   assert_array_values singular_flags -e -c
+  [ "${singular_instance_name}" = "dog-deadbeef1234" ]
   [ -d "${TESTDIR}/bar" ]
 
   # Find based on Justfile

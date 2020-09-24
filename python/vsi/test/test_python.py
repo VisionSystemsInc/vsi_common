@@ -9,8 +9,9 @@ from vsi.tools.python import (Try, is_string_like, BasicDecorator, static,
                               args_to_kwargs_unbound, args_to_kwargs_easy,
                               args_to_kwargs_unbound_easy,
                               ARGS, KWARGS, is_class_method, is_static_method,
-                              ArgvContext, nested_update, nested_in_dict)
-
+                              ArgvContext, nested_update, nested_in_dict,
+                              unwrap_wraps)
+import types
 import sys
 
 if sys.version_info.major > 2:
@@ -440,3 +441,115 @@ class PythonTest(unittest.TestCase):
     self.assertTrue(nested_in_dict({'c': {'d':{}}}, c))
     self.assertTrue(nested_in_dict({'c': {'d':{'e':1}}}, c))
     self.assertTrue(nested_in_dict(c, c))
+
+  def test_unwrap_wraps(self):
+    class Bar:
+      def bar(self):
+        pass
+
+    def foo(func):
+      def wrapper(self):
+        return func(self)
+      wrapper.__wrapped__ = func
+      return wrapper
+
+    def bar(self):
+      pass
+    self.assertEqual(unwrap_wraps(bar),
+                     (bar, False))
+
+    bar = Bar()
+    self.assertEqual(unwrap_wraps(bar.bar),
+                     (bar.bar, True))
+
+    @foo
+    def bar(self):
+      pass
+    self.assertEqual(unwrap_wraps(bar),
+                     (bar.__wrapped__, False))
+
+    @foo
+    @foo
+    @foo
+    def bar(self):
+      pass
+
+    self.assertNotEqual(unwrap_wraps(bar),
+                        (bar.__wrapped__.__wrapped__, False))
+    self.assertEqual(unwrap_wraps(bar),
+                     (bar.__wrapped__.__wrapped__.__wrapped__, False))
+
+    klass = Bar()
+
+    def Foo(func):
+      def wrapper(self):
+        return func(self)
+      wrapper.__wrapped__ = func
+      wrapper = types.MethodType(wrapper, klass)
+      return wrapper
+
+    @Foo
+    def bar(self):
+      pass
+    self.assertEqual(unwrap_wraps(bar),
+                     (bar.__wrapped__, True))
+
+    @Foo
+    @foo
+    @foo
+    def bar(self):
+      pass
+    self.assertEqual(unwrap_wraps(bar),
+                     (bar.__wrapped__.__wrapped__.__wrapped__, True))
+
+    @foo
+    @Foo
+    @foo
+    def bar(self):
+      pass
+    self.assertEqual(unwrap_wraps(bar),
+                     (bar.__wrapped__.__wrapped__.__wrapped__, True))
+
+    @foo
+    @foo
+    @Foo
+    def bar(self):
+      pass
+    self.assertEqual(unwrap_wraps(bar),
+                     (bar.__wrapped__.__wrapped__.__wrapped__, True))
+
+    class Bar:
+      # This doesn't even work, even if I use functools.wraps
+      # @foo
+      # @staticmethod
+      # def bar(cls):
+      #   print(cls)
+
+      @staticmethod
+      @foo
+      def bar2(cls):
+        print(cls)
+
+      @foo
+      @classmethod
+      def car(cls):
+        pass
+
+      @classmethod
+      @foo
+      def car2(cls):
+        pass
+
+
+    bar = Bar()
+    # This is just invalid python I guess, not "broken", just not right.
+    # No bug here
+    # self.assertEqual(unwrap_wraps(bar.bar),
+    #                  (bar.bar.__wrapped__, False))
+    self.assertEqual(unwrap_wraps(bar.bar2),
+                     (bar.bar2.__wrapped__, False))
+
+    self.assertEqual(unwrap_wraps(bar.car),
+                     (bar.car.__wrapped__, True))
+    self.assertEqual(unwrap_wraps(bar.car2),
+                     (bar.car2.__wrapped__, True))

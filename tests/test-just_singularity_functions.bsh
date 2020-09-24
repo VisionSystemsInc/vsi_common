@@ -37,15 +37,17 @@ begin_test "singular-compose"
                           'BAR' '12345')
         foo3_image=${TESTDIR}/my_image.simg
         foo3_singular_flags=(-c -e)
+        foo3_instance=bar4
 
         foo1_environment+=('DONT' 'USE')" > ${TESTDIR}/singular-compose.env
 
   echo "instances+=(foo1)
         foo1_volumes=('${TESTDIR}/foo:/bar:ro')
         foo1_image=${TESTDIR}/image.simg
-        foo1_singular_flags=(-c -e)" > ${TESTDIR}/singular-compose2.env
+        foo1_singular_flags=(-c -e)
+        foo1_instance=bar5" > ${TESTDIR}/singular-compose2.env
   echo "foo1_environment+=('FOO' 'BAR FAR  BOO '
-                          'BAR' '12345')" > ${TESTDIR}/singular-compose3.env
+                           'BAR' '12345')" > ${TESTDIR}/singular-compose3.env
 
   # "Simple" case
   ( # Put in subprocess because loading singular-compose.env files can contaminate each other
@@ -61,7 +63,7 @@ begin_test "singular-compose"
     if [ "${OS-}" = "Windows_NT" ]; then
       [ "${SINGULARITYENV_JUST_HOST_WINDOWS}" = "1" ]
     fi
-    assert_array_values args run -B "$(get_mktemp_dir):/tmp:rw" -B "${TESTDIR}/foo:/bar:ro" -c -e "${TESTDIR}/my_image.simg"
+    assert_array_values args run -B "$(get_mktemp_dir):/tmp" -B "${TESTDIR}/foo:/bar:ro" -c -e "${TESTDIR}/my_image.simg"
   )
 
   # Disable SINGULARITY_ADD_TMP_DIR
@@ -99,7 +101,7 @@ begin_test "singular-compose"
     if [ "${OS-}" = "Windows_NT" ]; then
       [ "${SINGULARITYENV_JUST_HOST_WINDOWS}" = "1" ]
     fi
-    assert_array_values args run -B "$(get_mktemp_dir):/tmp:rw" -B "${TESTDIR}/foo:/bar:ro" -c -e "${TESTDIR}/image.simg"
+    assert_array_values args run -B "$(get_mktemp_dir):/tmp" -B "${TESTDIR}/foo:/bar:ro" -c -e "${TESTDIR}/image.simg"
   )
 
   # container_environment_override
@@ -125,14 +127,18 @@ begin_test "singular-compose"
     if [ "${OS-}" = "Windows_NT" ]; then
       [ "${SINGULARITYENV_JUST_HOST_WINDOWS}" = "1" ]
     fi
-    assert_array_values args run -B "$(get_mktemp_dir):/tmp:rw" -B "${TESTDIR}/foo:/bar:ro" -c -e "${TESTDIR}/my_image.simg"
+    assert_array_values args run -B "$(get_mktemp_dir):/tmp" -B "${TESTDIR}/foo:/bar:ro" -c -e "${TESTDIR}/my_image.simg"
   )
 
   # Instance_start special sub-sub-command
   (
+    function find_any_hash_func()
+    {
+      echo deadbead1234567890
+    }
     singular_defaultify singular-compose instance_start foo3
     source "${TESTDIR}/tappoint.txt"
-    assert_array_values args instance start -B "$(get_mktemp_dir):/tmp:rw" -B "${TESTDIR}/foo:/bar:ro" -c -e "${TESTDIR}/my_image.simg"
+    assert_array_values args instance start -B "$(get_mktemp_dir):/tmp" -B "${TESTDIR}/foo:/bar:ro" -c -e "${TESTDIR}/my_image.simg" "bar4-deadbead1234"
   )
 )
 end_test

@@ -86,6 +86,13 @@ function caseify()
       Just-docker-compose run os ${@+"${@}"}
       extra_args+=$#
       ;;
+    test_oses-common-source) # Test all oses for common_source
+      local os
+      for os in ${VSI_COMMON_TEST_OSES[@]+"${VSI_COMMON_TEST_OSES[@]}"}; do
+        echo "Testing ${os}" >&2
+        justify test os-common-source "${os}"
+      done
+      ;;
     test_os-common-source) # Run VSI Common source test - $1 name of image to check
       local ans
       extra_args=1
@@ -109,6 +116,13 @@ function caseify()
       local os
       for os in ${VSI_COMMON_TEST_OSES[@]+"${VSI_COMMON_TEST_OSES[@]}"}; do
         docker push "${VSI_COMMON_DOCKER_REPO}:os_$(sanitize_tag_name "${os}")"
+      done
+      ;;
+
+    pull_oses) # Pull latest images for other OSes
+      local os
+      for os in ${VSI_COMMON_TEST_OSES[@]+"${VSI_COMMON_TEST_OSES[@]}"}; do
+        docker pull "${os}"
       done
       ;;
 

@@ -17,11 +17,11 @@ RUN apk add --no-cache --virtual .deps wget; \
     wget https://github.com/megastep/makeself/archive/${MAKESELF_VERSION}/makeself.tar.gz; \
     tar xf makeself.tar.gz --strip-components=1; \
     rm makeself.tar.gz; \
-
+    #
     # Disable arg parsing by makeself executable, and make executable quietly extract
     sed '1,/^while true/s|^while true|while \\${MAKESELF_PARSE-false}|; 1,/^quiet="n"/s|^quiet="n"|quiet="y"|' \
         "/makeself/makeself-header.sh" > "/makeself/makeself-header_just.sh"; \
-
+    #
     # Add sourcing local.env to the header, to cover corner cases like needing to to change TMPDIR
     sed -i '2r /dev/stdin' "/makeself/makeself-header_just.sh" < \
            <(echo 'for check_dir in "\`dirname \$0\`" "\${PWD}"; do'; \
