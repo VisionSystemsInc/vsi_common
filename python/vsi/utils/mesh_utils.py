@@ -2,7 +2,7 @@
 import numpy as np
 
 
-def save_point_cloud_ply(output_fname, pts, colors=None):
+def save_point_cloud_ply(output_fname, pts, normals=None, colors=None):
     """ Save a 3D point cloud in PLY acii format
 
     Parameters
@@ -11,6 +11,8 @@ def save_point_cloud_ply(output_fname, pts, colors=None):
         Filename to save to
     pts : array_like
         The 3D points. Shape = Nx3
+    normals : array_like
+        The 3D normals. Shape = Nx3 (optional)
     colors : array_like
         RGB colors of points.  Shape = Nx3 (optional)
 
@@ -24,18 +26,32 @@ def save_point_cloud_ply(output_fname, pts, colors=None):
         fd.write('property float x\n')
         fd.write('property float y\n')
         fd.write('property float z\n')
+        if normals is not None:
+            assert len(normals) == num_pts, "different number of points and normals"
+            fd.write('property float nx\n')
+            fd.write('property float ny\n')
+            fd.write('property float nz\n')
         if colors is not None:
+            assert len(colors) == num_pts, "different number of points and colors"
             fd.write('property uint8 red\n')
             fd.write('property uint8 green\n')
             fd.write('property uint8 blue\n')
         fd.write('end_header\n')
 
-        if colors is None:
-            for pt in pts:
-                fd.write(f'{pt[0]} {pt[1]} {pt[2]}\n')
+        pt_strs = [f'{pt[0]} {pt[1]} {pt[2]}' for pt in pts]
+
+        if normals is None:
+            normal_strs = ['' for pt in pts]
         else:
-            for pt,c in zip(pts,colors):
-                fd.write(f'{pt[0]} {pt[1]} {pt[2]} {c[0]} {c[1]} {c[2]}\n')
+            normal_strs = [f'{n[0]} {n[1]} {n[2]}' for n in normals]
+
+        if colors is None:
+            color_strs = ['' for pt in pts]
+        else:
+            color_strs = [f'{c[0]} {c[1]} {c[2]}' for c in colors]
+
+        for (pt_str, n_str, c_str) in zip(pt_strs, normal_strs, color_strs):
+            fd.write(f"{pt_str} {n_str} {c_str}\n")
 
 
 def save_mesh_ply(output_fname, verts, faces, vert_colors=None):
