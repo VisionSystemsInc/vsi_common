@@ -171,6 +171,36 @@ function load_vsi_compat()
   #
   # :Value: * ``0`` - Declare will escape special characters for arrays
   #         * ``1`` - Declare uses literal versions of special characters, but still escapes quotes as ``\"``
+  #
+  # .. variable:: bash_bug_exported_function_corrupt_bash_source
+  #
+  # Older versions of bash have a bug where exported functions can corrupt the ``BASH_SOURCE`` environment variable, and possibly ``BASH_LINENO`` too. A workaround is not always possible.
+  #
+  # :Value: * ``0`` - Bash source bug is present
+  #         * ``1`` - Bash source bug is not present
+  #
+  # .. rubric:: Example
+  #
+  # .. code-block:: bash
+  #
+  #    for x in 3.2 4.0 4.1 4.2 4.3 4.4 5.0 5.1; do
+  #      docker run -it --rm bash:${x} bash -c "
+  #          echo 'blah(){ declare -p BASH_SOURCE; }
+  #                export -f blah
+  #                bash /tmp/bar' > /tmp/foo
+  #          echo 'declare -p BASH_SOURCE
+  #                blah
+  #                declare -p BASH_SOURCE' > /tmp/bar
+  #          bash /tmp/foo"; done
+  #
+  #    # Bash 4.3
+  #    # declare -a BASH_SOURCE='([0]="/tmp/bar")'
+  #    # declare -a BASH_SOURCE='([1]="/tmp/bar")'
+  #    # declare -a BASH_SOURCE='()'
+  #    # Bash 4.4
+  #    # declare -a BASH_SOURCE=([0]="/tmp/bar")
+  #    # declare -a BASH_SOURCE=([0]="environment" [1]="/tmp/bar")
+  #    # declare -a BASH_SOURCE=([0]="/tmp/bar")
   #**
 
   # Make life easier (and quicker after 6 uses)
@@ -182,11 +212,13 @@ function load_vsi_compat()
     bash_feature_parameter_transformation=0
     bash_feature_declare_array_escape_special_characters=0
     bash_behavior_empty_array_unbound=1
+    bash_bug_exported_function_corrupt_bash_source=1
   else
     bash_behavior_declare_array_quote="'"
     bash_feature_parameter_transformation=1
     bash_feature_declare_array_escape_special_characters=1
     bash_behavior_empty_array_unbound=0
+    bash_bug_exported_function_corrupt_bash_source=0
   fi
 
   #**
