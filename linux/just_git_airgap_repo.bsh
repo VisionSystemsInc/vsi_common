@@ -369,7 +369,7 @@ function convert_git_remote_http_to_git()
   remote_git_url="$(_http_to_git_protocol "${remote_url}")" || remote_git_url_rv=$?
   if [ "${remote_git_url_rv}" == "0" ]; then
     # NOTE since git 1.8, a remote (e.g., origin) can have multiple associated
-    # pushurls (see .git/config)
+    # pushurls (see .git/config:remote)
     # RE providing the old url (remote_url) will update the correct url
     #${GIT} remote set-url "${remote_name}" --push "${remote_git_url}" "${remote_url}"
     # RE If a pushurl is configured, this function returns early; therefore,
@@ -549,7 +549,7 @@ function git_project_git_dir()
 #**
 # .. function:: recursive_submodule_summary
 #
-# Compare the expected commit of each submodule to its current working tree
+# Log the commits differing between each submodule's tracked commit and its current working tree
 #
 # Using ``git diff --submodule=log``, compare the working tree of each submodule to the version committed to HEAD of the super project, and list any commits that are missing and/or now present in the submodule. For example, if an earlier commit in the submodule is checked out, there will be missing commits in the submodule according to the super project. Similarly, if a commit is made to the submodule, there will be new commits present in the submodule according to the super project. Of course, the commit graph could diverge in more complicated ways.
 #
@@ -558,6 +558,10 @@ function git_project_git_dir()
 # .. seealso::
 #
 #   https://git-scm.com/docs/git-diff#Documentation/git-diff.txt---submoduleltformatgt
+#
+# .. note::
+#
+#   This function iterates through each submodule in a depth-first traversal
 #**
 
 function recursive_submodule_summary()
@@ -599,11 +603,11 @@ function recursive_submodule_summary()
 #
 # .. note::
 #
-#    The ultimate source-of-truth of a submodule's path is in its .gitmodules file. If the path in this file is updated, then the repository's configuration will be out-of-date. ``git submodule sync`` will update the configuration using the .gitmodules file and the default remote of the current branch, if set; otherwise origin. :func:`git_sync_submodules_recursively` will do the same but using the specified remote.
+#    The ultimate source-of-truth of a submodule's path is in its .gitmodules file. If the path in this file is updated, then the repository's and submodule's configuration will be out-of-date. ``git submodule sync`` will update these configurations using the .gitmodules file and the default remote of the current branch, if set; otherwise origin. :func:`git_sync_submodules_recursively` will do the same but using the specified remote.
 #
 # .. note::
 #
-#   This function iterates through each submodule in the same order as :func:`get_submodule_urls`, :func:`get_submodule_names` and :func:`get_submodule_toplevels`
+#   This function iterates through each submodule in the same order as :func:`get_submodule_urls`, :func:`get_submodule_names` and :func:`get_submodule_toplevels` (i.e., a depth-first traversal)
 #
 # .. note::
 #
@@ -706,11 +710,11 @@ function get_submodule_displaypaths()
 #
 # .. note::
 #
-#    The ultimate source-of-truth of a submodule's URL is in its .gitmodules file. If the URL is updated in this file, then the repository's configuration will be out-of-date. ``git submodule sync`` will update the configuration using the .gitmodules file and the default remote of the current branch, if set; otherwise origin. :func:`git_sync_submodules_recursively` will do the same but using the specified remote.
+#    The ultimate source-of-truth of a submodule's URL is in its .gitmodules file. If the URL is updated in this file, then the repository's and submodule's configurations will be out-of-date. ``git submodule sync`` will update these configurations using the .gitmodules file and the default remote of the current branch, if set; otherwise origin. :func:`git_sync_submodules_recursively` will do the same but using the specified remote.
 #
 # .. note::
 #
-#   This function iterates through each submodule in the same order as :func:`get_submodule_displaypaths`, :func:`get_submodule_names` and :func:`get_submodule_toplevels`
+#   This function iterates through each submodule in the same order as :func:`get_submodule_displaypaths`, :func:`get_submodule_names` and :func:`get_submodule_toplevels` (i.e., a depth-first traversal)
 #
 # .. note::
 #
@@ -732,13 +736,15 @@ function get_submodule_urls()
 
   # git submodule foreach must be run from the top-level working tree in git 1.8
   pushd "$(${GIT} rev-parse --show-cdup)" &> /dev/null
+    # Query the URL from the submodule's repository configuration
+    # (e.g., .git/modules/docker/recipes/config)
     # REVIEW Should i unset GIT_DIR?
     ${GIT} submodule foreach --quiet ${recursive_flag[@]+"${recursive_flag[@]}"} \
         "export GIT; bash -euc 'echo \"\$(${GIT} config --get remote."${remote_name}".url)\"'"
   popd &> /dev/null
   #
-  # Alternatively, the URL for the submodule can be queried with git config
-  # (although, by itself, not recursively):
+  # Alternatively, the repository's configuration can be queried for the
+  # submodule's URL with git config (although, by itself, not recursively):
   #   git config submodule.docker/recipes.url
   # which looks up the URL in the parent repository's git config file, and
   #   git config -f .gitmodules submodule.docker/recipes.url
@@ -749,6 +755,17 @@ function get_submodule_urls()
   # the current branch, if set; otherwise origin.
   # git_sync_submodules_recursively will do the same but using the specified
   # remote.
+  #
+  # A repository's configuration can also have multiple associated URLs for a
+  # submodule (see .git/config:submodule)
+  #   git config --get-all submodule.docker/recipes.url
+  # Similarly, a submodule's configuration can have multiple associated URLs
+  # (and pushurls) for a named remote (e.g., origin) (see
+  # .git/modules/docker/recipes/config:remote)
+  #   git config --get-all remote.origin.url
+  #   git remote get-url --all origin
+  # However, if there are multiple URLs in either config, git submodule sync
+  # will die
 }
 
 #**
@@ -767,11 +784,11 @@ function get_submodule_urls()
 #
 # .. note::
 #
-#    The ultimate source-of-truth of a submodule's name is in its .gitmodules file. If the name in this file is updated, then the repository's configuration will be out-of-date. ``git submodule sync`` will update the configuration using the .gitmodules file and the default remote of the current branch, if set; otherwise origin. :func:`git_sync_submodules_recursively` will do the same but using the specified remote.
+#    The ultimate source-of-truth of a submodule's name is in its .gitmodules file. If the name in this file is updated, then the repository's and submodule's configurations will be out-of-date. ``git submodule sync`` will update these configurations using the .gitmodules file and the default remote of the current branch, if set; otherwise origin. :func:`git_sync_submodules_recursively` will do the same but using the specified remote.
 #
 # .. note::
 #
-#   This function iterates through each submodule in the same order as :func:`get_submodule_displaypaths`, :func:`get_submodule_urls` and :func:`get_submodule_toplevels`
+#   This function iterates through each submodule in the same order as :func:`get_submodule_displaypaths`, :func:`get_submodule_urls` and :func:`get_submodule_toplevels` (i.e., a depth-first traversal)
 #
 # .. note::
 #
@@ -794,7 +811,7 @@ function get_submodule_names()
     ${GIT} submodule foreach --quiet ${recursive_flag[@]+"${recursive_flag[@]}"} 'echo "${name}"'
   popd &> /dev/null
   #
-  # Alternatively, the URL for the submodule can be queried with git config
+  # Alternatively, the name for the submodule can be queried with git config
   # (although, by itself, not recursively):
   #   git config --name-only --get-regexp '^submodule\..*\.url$' | \
   #       sed -e 's|.url$||' -e 's|^submodule.||'
@@ -807,14 +824,14 @@ function get_submodule_names()
 #
 # Get the path to what git refers to as the top-level directory of the submodule; i.e., the absolute path to the top-level of the immediate superproject. For example, the vsi_common repository has a submodule at ``docker/recipes``. If the repository is cloned in ``/src``, then the top-level directory for the submodule docker/recipes is ``/src/vsi_common``.
 #
-# This function, along with :func:`get_submodule_names`, could be used to, for example, cd to the top-level of each immediate superproject and then query the submodule's configuration using ``git config submodule.<name>.<key>``; e.g., ``git config submodule.docker/recipes.url``.
+# This function, along with :func:`get_submodule_names`, could be used to, for example, cd to the top-level of each immediate superproject and then query the repository's submodule configuration using ``git config submodule.<name>.<key>``; e.g., ``git config submodule.docker/recipes.url``.
 #
 # :Parameters: [``RECURSIVE``] - Should the submodules be iterated through recursively. Default: unset
 # :Output: *stdout* - The top-level directory of each submodule (recursively); e.g., /src/vsi_common
 #
 # .. note::
 #
-#   This function iterates through each submodule in the same order as :func:`get_submodule_displaypaths`, :func:`get_submodule_urls` and :func:`get_submodule_names`
+#   This function iterates through each submodule in the same order as :func:`get_submodule_displaypaths`, :func:`get_submodule_urls` and :func:`get_submodule_names` (i.e., a depth-first traversal)
 #
 # .. note::
 #
@@ -997,7 +1014,7 @@ function orphan_commit_repo_map
       ${GIT} checkout "${orphan_branch}" &> /dev/null
     else
       # If trying to clone a single branch from a bare repo that has only
-      # been initialized, git 1.8 segaults, leaving behind an initialized
+      # been initialized, git 1.8 segfaults, leaving behind an initialized
       # .git directory
       rm -rf .git
       ${GIT} init &> /dev/null
@@ -1159,7 +1176,7 @@ function submodule-helper-relative-url()
 #
 # ``git submodule sync`` but using a specific remote (``just_upstream`` by default)
 #
-# Like ``git submodule sync``, synchronize the URL configuration setting of each submodule (recursively) to the value specified in .gitmodules; however, instead of overwriting the default remote (origin), update the remote specified by JUST_GIT_UPSTREAM (``just_upstream`` by default).
+# Like ``git submodule sync``, synchronize the configured URL of each submodule in a repository (recursively) to the value specified in .gitmodules; however, instead of overwriting the default remote (origin), update the remote specified by JUST_GIT_UPSTREAM (``just_upstream`` by default).
 #
 # :Arguments: [``$1``] - The project-repository's remote. Default: origin
 # :Parameters: - [``JUST_GIT_UPSTREAM``] - The submodules' remote to sync. When updating the URL in the submodules' configuration, use this remote. Default: ``just_upstream``
@@ -1214,6 +1231,7 @@ function git_sync_submodules_recursively()
       # that it not one of the defaults to handle issue #186
       ${GIT} remote add "${JUST_GIT_UPSTREAM}" "${submodule_url}" &> /dev/null || \
         ${GIT} remote set-url "${JUST_GIT_UPSTREAM}" "${submodule_url}"
+
       # Depth-first traversal
       git_sync_submodules_recursively "${JUST_GIT_UPSTREAM}"
     popd &>/dev/null
@@ -1439,10 +1457,10 @@ function relocate_git_defaultify()
         for remote_name in "${remote_names[@]}"; do
           local OLD_IFS="${IFS}"
           IFS=$'\n'
-          # List urls configured for git fetch (i.e., the urls in the
-          # .git/config:[remote] section)
+          # List urls configured for git fetch (i.e., the urls in
+          # .git/config:remote)
           # NOTE Since git 1.8, a remote (e.g., origin) can have multiple
-          # associated urls (and pushurls) (see .git/config)
+          # associated urls (and pushurls)
           #
           # Make the list unique, preserving order
           # https://stackoverflow.com/a/31038481
@@ -1693,7 +1711,7 @@ function relocate_git_defaultify()
                            # url's of the submodules
       # NOTE setup.env must be edited to include logic to init and update
       # vsi_common (basically copying part of git_clone_main) before this
-      # target can be called
+      # target can be called; see git_airgap_submodule_helper.bsh
 
       local repo_map_file
       make_temp_path repo_map_file # auto-deleting file
