@@ -219,7 +219,8 @@ function clone_submodules()
   # Update submodule urls to use GIT_MIRROR_PREP_DIR
   for submodule in ${submodule_names[@]+"${submodule_names[@]}"}; do
     # Calculate full submodule path wrt superproject (not just parent submodule)
-    full_relative_path="${base_submodule_path}${base_submodule_path:+/}$(${GIT} config -f .gitmodules ${submodule}.path)"
+    local sm_path="$(${GIT} config -f .gitmodules ${submodule}.path)"
+    full_relative_path="${base_submodule_path}${base_submodule_path:+/}${sm_path}"
 
     # Get the url of the submodule set by init above
     submodule_url="$(${GIT} config "${submodule}.url")"
@@ -247,13 +248,48 @@ function clone_submodules()
       ${GIT} clone --mirror "${submodule_url}" "${prepped_submodule_path}"
     fi
 
-    # Set the local non-bare repo's url to point to the prepped mirror
-    ${GIT} config "${submodule}.url" "${prepped_submodule_path}"
+    # Set the local non-bare repo's url to point to the prepped mirror (so that
+    # git submodule update pulls from the this local mirror instead of the real
+    # URL, as we've just done a mirror clone
+    if tar_feature_incremental_backup; then
+      # I can't find mention of submodules using hardlinks, but it looks like
+      # 'git submodule update' uses 'git clone' to update the submodule after it
+      # is init'd:
+      #   #. [cmd_update](https://github.com/git/git/blob/v2.16.0/git-submodule.sh#L511)
+      #   #. [update_clone](https://github.com/git/git/blob/v2.16.0/builtin/submodule--helper.c#L1220)
+      #   #. [update_clone_get_next_task](https://github.com/git/git/blob/v2.16.0/builtin/submodule--helper.c#L1118)
+      #   #. [prepare_to_clone_next_submodule](https://github.com/git/git/blob/v2.16.0/builtin/submodule--helper.c#L1008)
+      #   #. [module_clone](https://github.com/git/git/blob/v2.16.0/builtin/submodule--helper.c#L848)
+      #   #. [clone_submodule](https://github.com/git/git/blob/v2.16.0/builtin/submodule--helper.c#L721)
+      # which builds a 'git clone' command. From git clone's documentation:
+      # "When the repository to clone from is on a local machine...the files
+      # under .git/objects/ directory are hardlinked" by default.
+      # https://git-scm.com/docs/git-clone#Documentation/git-clone.txt--l
+      #
+      # A Hardlink affects the change time (ctime) of a file (see stat). Thus,
+      # the files in the objects directory will have their ctime updated. This
+      # causes tar to include the file in its incremental archive. Unfortunately,
+      # there isn't a tar flag to ignore ctime nor a --no-hardlinks flag that
+      # can be passed to git submodule update
+
+      local TEMP_DIR
+      make_temp_path TEMP_DIR -d
+      TEMP_DIR="${TEMP_DIR}"/"$(basename "${prepped_submodule_path}")"
+      cp -a "${prepped_submodule_path}" "${TEMP_DIR}"
+
+      ${GIT} config "${submodule}.url" "${TEMP_DIR}"
+    else
+      ${GIT} config "${submodule}.url" "${prepped_submodule_path}"
+    fi
   done
 
   # Checkout submodule
   next_section "Updating submodules for ${prefix-${displaypath-${GIT_MIRROR_MAIN_REPO}}}"
   # The local non-bare repo doesn't need to waste time copying LFS objects
+  # Could also add --recommend-shallow (introduced in git 2.10.0)
+  # This flag gets translated to the --depth flag, which is ignored for local
+  # clones
+  # RE This optimization does not seem worth it for a local clone
   GIT_LFS_SKIP_SMUDGE=1 ${GIT} submodule update
   # Restore the origin urls after update, so that relative URLs work
   ${GIT} submodule sync
@@ -532,7 +568,17 @@ function git_mirror_repos()
   local TEMP_DIR
   make_temp_path TEMP_DIR -d
   # The local non-bare repo doesn't need to waste time copying LFS objects
-  GIT_LFS_SKIP_SMUDGE=1 ${GIT} clone "${GIT_MIRROR_PREP_DIR}/${MAIN_DIR}" "${TEMP_DIR}"
+  # Could also add --depth 1 --branch "${BRANCH}" --no-recursive
+  # RE --depth is ignored for local clones...could add
+  # --single-branch --branch "${BRNACH}" --no-recursive
+  # RE This optimization does not seem worth it for a local clone
+  if tar_feature_incremental_backup; then
+    # Clone without hardlinks because they mess up the incremental archive
+    # (see clone_submodules)
+    GIT_LFS_SKIP_SMUDGE=1 ${GIT} clone --no-hardlinks "${GIT_MIRROR_PREP_DIR}/${MAIN_DIR}" "${TEMP_DIR}"
+  else
+    GIT_LFS_SKIP_SMUDGE=1 ${GIT} clone "${GIT_MIRROR_PREP_DIR}/${MAIN_DIR}" "${TEMP_DIR}"
+  fi
 
   pushd "${TEMP_DIR}" &> /dev/null
     # The local non-bare repo doesn't need to waste time copying LFS objects
@@ -566,12 +612,6 @@ function git_mirror_repos()
 function archive_mirrors()
 {
   local prep_dir="${1}"
-
-  # Test if tar supports incremental backups
-  local temp_file
-  make_temp_path temp_file
-  local TAR_INCREMENTAL=1
-  ${TAR} -cf /dev/null -g "${temp_file}" /dev/null &> /dev/null || TAR_INCREMENTAL=0
 
   pushd "${prep_dir}" &> /dev/null
     next_section "Creating tar file..."
@@ -621,7 +661,7 @@ function archive_mirrors()
     local existing_tar_files=($(ls "${CWD}"/{*.tgz,*.snar} 2>/dev/null || :))
     IFS="${OLD_IFS}"
     args+=("--exclude" "${CWD}/${tar_file}.tgz")
-    if [ "${TAR_INCREMENTAL}" = "1" ]; then
+    if tar_feature_incremental_backup; then
       args+=("--exclude" "${CWD}/${tar_file}.snar")
     fi
     local existing_tar_file
@@ -633,7 +673,7 @@ function archive_mirrors()
     local last_tar_file
     # https://stackoverflow.com/a/37993307
     touch "${tar_file}.tgz"
-    if [ "${TAR_INCREMENTAL}" = "1" ]; then
+    if tar_feature_incremental_backup; then
       # Get the last one, alphabetically speaking (.l1.snar comes before .snar)
       # per sort's man page:
       # The locale specified by the environment affects sort order. Set LC_ALL=C
@@ -646,7 +686,7 @@ function archive_mirrors()
       ${TAR} czf "${tar_file}.tgz" "${args[@]}" "${CWD}"
     fi
 
-    if [ "${TAR_INCREMENTAL}" = "1" ] && [ "${last_tar_file}" != "" ]; then
+    if tar_feature_incremental_backup && [ "${last_tar_file}" != "" ]; then
       next_section "Creating an incremental tar file too, based on ${last_tar_file}"
       args+=("--exclude" "${CWD}/${tar_file}_${last_tar_file}.tgz" \
              "--exclude" "${CWD}/${last_tar_file}.l1.snar")
