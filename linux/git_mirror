@@ -272,24 +272,10 @@ function clone_submodules()
       # there isn't a tar flag to ignore ctime nor a --no-hardlinks flag that
       # can be passed to git submodule update
 
-      # Fetch a single branch to a bare repo
+      # Bare clone without hardlinks
       local TEMP_DIR
       make_temp_path TEMP_DIR -d
-      TEMP_DIR="${TEMP_DIR}"/"$(basename "${prepped_submodule_path}")"
-
-      local tracked_sha="$(${GIT} submodule status --cached "${sm_path}" | cut -c2- | awk '{print $1}')"
-      local containing_branch="$(cd "${prepped_submodule_path}" && \
-          ${GIT} branch --contains "${tracked_sha}" | cut -c3- | head -n1)" || :
-      # Optimization - instead of copying the entire mirror, just fetch the needed branch
-      if [ -n "${containing_branch:+set}" ]; then
-        mkdir -p "${TEMP_DIR}"
-        pushd "${TEMP_DIR}" &> /dev/null
-          ${GIT} init --bare
-          ${GIT} fetch "${prepped_submodule_path}" "${containing_branch}"
-        popd &> /dev/null
-      else
-        cp -a "${prepped_submodule_path}" "${TEMP_DIR}"
-      fi
+      ${GIT} clone --bare --no-hardlinks "${prepped_submodule_path}" "${TEMP_DIR}"
 
       ${GIT} config "${submodule}.url" "${TEMP_DIR}"
     else
