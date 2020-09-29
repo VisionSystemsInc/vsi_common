@@ -547,12 +547,13 @@ function git_project_git_dir()
 }
 
 #**
-# .. function:: recursive_submodule_summary
+# .. function:: submodule_summary
 #
 # Log the commits differing between each submodule's tracked commit and its current working tree
 #
 # Using ``git diff --submodule=log``, compare the working tree of each submodule to the version committed to HEAD of the super project, and list any commits that are missing and/or now present in the submodule. For example, if an earlier commit in the submodule is checked out, there will be missing commits in the submodule according to the super project. Similarly, if a commit is made to the submodule, there will be new commits present in the submodule according to the super project. Of course, the commit graph could diverge in more complicated ways.
 #
+# :Parameters: [``RECURSIVE``] - Should the submodules be iterated through recursively. Default: unset
 # :Output: - ``*stdout*`` - Each submodule's differences in terms of commits
 #
 # .. seealso::
@@ -564,26 +565,28 @@ function git_project_git_dir()
 #   This function iterates through each submodule in a depth-first traversal
 #**
 
-function recursive_submodule_summary()
+function submodule_summary()
 {
   echo "Entering ${PWD}"
 
   local OLD_IFS="${IFS}"
   IFS=$'\n'
-  local submodule_keys=($(RECURSIVE=0 get_submodule_names))
+  local submodule_keys=($(RECURSIVE= get_submodule_names))
   IFS="${OLD_IFS}"
 
   local sm_key
-  for sm_key in ${submodule_keys+"${submodule_keys[@]}"}; do
+  for sm_key in ${submodule_keys[@]+"${submodule_keys[@]}"}; do
     local sm_path="$(${GIT} config --file .gitmodules --get submodule."${sm_key}".path)"
 
     # Cf. git submodule summary - doesn't show modified/staged content
     ${GIT} diff --submodule=log "${sm_path}"
 
-    pushd "${sm_path}" &>/dev/null
-      # Depth-first traversal
-      recursive_submodule_summary
-    popd &>/dev/null
+    if [ -n "${RECURSIVE:+set}" ]; then
+      pushd "${sm_path}" &>/dev/null
+        # Depth-first traversal
+        submodule_summary
+      popd &>/dev/null
+    fi
   done
 }
 
