@@ -266,7 +266,7 @@ atexit ()
 {
   test_status=$?
 
-  if [ "${setup_started-1}" = "0" ]; then
+  if [ "${__testlib_setup_started-1}" = "0" ]; then
     echo "Calling setup() ${TESTLIB_BAD_COLOR}failed${TESTLIB_RESET_COLOR}!!!" >&2
     # TODO: Add trace/stderr/stdout printout here
     exit 2
@@ -282,7 +282,9 @@ atexit ()
     cleanup_touched_files
   fi
 
-  if [ "${tests}" -ne 0 ] && type -t teardown &> /dev/null && [ "$(command -v teardown)" == "teardown" ]; then
+  if [ "${__testlib_ran_a_test-}" = "1" ] && \
+     type -t teardown &> /dev/null && \
+     [ "$(command -v teardown)" == "teardown" ]; then
     # In case there is a failure in teardown, add one to the failures so the
     # summary notes this, and at least you'll which file is failing
     if [ -d "${TESTLIB_SUMMARY_DIR-}" ]; then
@@ -357,31 +359,39 @@ _begin_common_test ()
   expected_failure=${_expected_failure-0}
   required_fail=${_required_fail-0}
 
-  # Run setup if this is the first test
-  if [ "${tests}" -eq 0 ] && type -t setup &> /dev/null && [ "$(command -v setup)" == "setup" ]; then
-    local setup_started=0
-    setup
-    setup_started=1
-  fi
-
   tests=$(( tests + 1 ))
   local test_file_name="$(basename "$0")"
   test_file_name=${test_file_name%.*}
   test_file_name=${test_file_name#test-}
   test_description="$test_file_name - $1"
 
+  if [ "${TESTLIB_RUN_SINGLE_TEST+set}" = "set" ] && \
+     [ "$1" != "${TESTLIB_RUN_SINGLE_TEST}" ]; then
+    skip_next_test
+  elif [ -n "${TESTLIB_SKIP_TESTS+set}" ] && [[ ${1} =~ ${TESTLIB_SKIP_TESTS} ]]; then
+    skip_next_test
+  fi
+
+  # Run setup if this is the first test
+  if [ "${__testlib_skip_test-}" != "1" ] && \
+     [ "${__testlib_ran_a_test-}" != "1" ] && \
+     type -t setup &> /dev/null && \
+     [ "$(command -v setup)" == "setup" ]; then
+    local __testlib_setup_started=0
+    setup
+    __testlib_setup_started=1
+    __testlib_ran_a_test=1
+  fi
+
+  # This has to run after setup, since setup is where track_touched_files should
+  # be called
   if [ "${tracking_touched_files-}" = "1" ]; then
     track_touched_file="$(mktemp -u)"
     ttouch "${track_touched_file}"
   fi
 
   if [ "${TESTLIB_SHOW_TIMING-0}" = "1" ]; then
-    _time_0=$(get_time_seconds)
-  fi
-
-  if [ "${TESTLIB_RUN_SINGLE_TEST+set}" = "set" ] && \
-     [ "$1" != "${TESTLIB_RUN_SINGLE_TEST}" ]; then
-    skip_next_test
+    __testlib_time_0=$(get_time_seconds)
   fi
 
   if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "41" ]; then
@@ -431,10 +441,6 @@ _begin_common_test ()
       exec 2>"$err"
       ;;
   esac
-
-  if [ -n "${TESTLIB_SKIP_TESTS+set}" ] && [[ ${1} =~ ${TESTLIB_SKIP_TESTS} ]]; then
-    __testlib_skip_test=1
-  fi
 
   # Allow the subshell to exit non-zero without exiting this process
   set -x +e
@@ -634,7 +640,7 @@ end_test ()
 
   local time_e=''
   if [ "${TESTLIB_SHOW_TIMING-0}" = "1" ]; then
-    time_e=$(awk "BEGIN {print \"\t\" $(get_time_seconds)-${_time_0}}")
+    time_e=$(awk "BEGIN {print \"\t\" $(get_time_seconds)-${__testlib_time_0}}")
   fi
 
   # Handle missing call to setup_test
@@ -813,6 +819,8 @@ skip_next_test()
 # Start tracking touched files
 #
 # After running :func:`track_touched_files`, any call to :func:`ttouch` will cause that file to be added to the internal list (touched_files). Just prior to the teardown phase, all of these files will be automatically removed for your convenience.
+#
+# :func:`ttouch` should be used in cases where a file cannot be redirected to :envvar:`TESTDIR` or :envvar:`TRASHDIR`
 #
 # .. rubric:: Example
 #
