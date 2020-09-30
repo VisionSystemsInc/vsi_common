@@ -1,0 +1,132 @@
+#!/usr/bin/env bash
+
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
+
+source "${VSI_COMMON_DIR}/tests/testlib.bsh"
+source "${TESTLIB_DIR}/test_utils.bsh"
+command -v "${GIT-git}" &> /dev/null && source "${VSI_COMMON_DIR}/linux/just_files/just_git_functions.bsh"
+source "${VSI_COMMON_DIR}/linux/compat.bsh"
+
+
+if ! command -v "${GIT-git}" &> /dev/null; then
+  TESTLIB_SKIP_TESTS='.*'
+fi
+
+function setup()
+{
+  # Easier way to take care of committers on vanilla install
+  export GIT_COMMITTER_NAME='Foo Bar'
+  export GIT_AUTHOR_NAME='Foo Bar'
+  export GIT_COMMITTER_EMAIL='foo.bar@example.com'
+  export GIT_AUTHOR_EMAIL='foo.bar@example.com'
+}
+
+begin_test "Test name"
+(
+  setup_test
+
+  ##################################
+  #              SETUP             #
+  ##################################
+
+  BUILD_REPO="${TESTDIR}"/build/repo
+  TEST_REPO="${TESTDIR}"/test
+  PRETEND_URL="${TESTDIR}/git/pretend_repo" # bare repo
+  # Test if git supports difficult submodule paths
+  if git_bug_submodule_path_with_special_characters; then
+    DIFFICULT_PATH='diff  i cult'
+  else
+    DIFFICULT_PATH=$'diff  i \t cult'
+  fi
+  DIFFICULT_NAME='difficult submod'
+
+  # Sub sub module
+  mkdir -p "${BUILD_REPO}_sub_sub"
+  pushd "${BUILD_REPO}_sub_sub" &> /dev/null
+    git init .
+    touch readme_sub_sub
+    git add readme_sub_sub
+    git commit -m "Initial commit"
+  popd &> /dev/null
+  mkdir -p "${PRETEND_URL}_sub_sub"
+  pushd "${PRETEND_URL}_sub_sub" &> /dev/null
+    # This only works right because all branches appear to be "topic" branches,
+    # so a push --mirror (once) will do what I want. Doesn't work well with more
+    # complexities like lfs
+    git clone --mirror "${BUILD_REPO}_sub_sub" .
+    # git init --bare .
+    # cd "${BUILD_REPO}_sub_sub"
+    # git remote add origin "${PRETEND_URL}_sub_sub"
+    # git push origin --mirror
+  popd &> /dev/null
+
+  # Sub module
+  mkdir -p "${BUILD_REPO}_sub"
+  pushd "${BUILD_REPO}_sub" &> /dev/null
+    git init .
+    touch readme_sub
+    git add readme_sub
+    git submodule add "${PRETEND_URL}_sub_sub" "a_sub_sub_module"
+    git commit -m "Initial commit"
+  popd &> /dev/null
+  mkdir -p "${PRETEND_URL}_sub"
+  pushd "${PRETEND_URL}_sub" &> /dev/null
+    git clone --mirror "${BUILD_REPO}_sub" .
+    # git init --bare .
+    # cd "${BUILD_REPO}_sub"
+    # git remote add origin "${PRETEND_URL}_sub"
+    # git push origin --mirror
+  popd &> /dev/null
+
+  # Main Repo
+
+  # sm_path (sm_name, if different)              URL
+  # ./                                           "${PRETEND_URL}"
+  # ./"${DIFFICULT_PATH}" ("${DIFFICULT_NAME}")  "${PRETEND_URL}_sub"
+  # ./"${DIFFICULT_PATH}/a_sub_sub_module"       "${PRETEND_URL}_sub_sub"
+  #
+  # NOTE each repo is created in a respective ${BUILD_REPO}"_* repo and mirror
+  # pushed to "${PRETEND_URL}"_*
+
+  mkdir -p "${PRETEND_URL}"
+  pushd "${PRETEND_URL}" &> /dev/null
+    git init --bare .
+  popd &> /dev/null
+  mkdir -p "${BUILD_REPO}"
+  pushd "${BUILD_REPO}" &> /dev/null
+    git init
+    touch readme
+    mkdir subdir
+    touch subdir/a_file
+    git add readme subdir/a_file
+    git commit -m "Initial commit"
+
+    git submodule add --name "${DIFFICULT_NAME}" "${PRETEND_URL}_sub" "${DIFFICULT_PATH}"
+    # Git itself can't handle newlines, although the config file actually can
+    # escape them. This is a PURE git bug, plain and simple.
+    # This won't actually create a newline in the name, it just ignores it
+    # git submodule add https://github.com/visionsystemsinc/vsi_common $'  foo\tar\n'
+    # This will.
+    # git mv $'  diff  i \t cult' $' \n diff  i \t cult'
+    # However, at random this gives permission denied errors, good thing I don't need it...
+    git submodule update --init --recursive
+    git commit -m "Added submodules"
+    git remote add origin "${PRETEND_URL}"
+    git push origin master
+  popd &> /dev/null
+
+  #################################
+  #              TEST             #
+  #################################
+
+  pushd "${BUILD_REPO}" &> /dev/null
+    submodule-helper-list
+    ans=("${DIFFICULT_NAME}")
+    assert_array_eq submodule_names ans
+    ans=("${DIFFICULT_PATH}")
+    assert_array_eq submodule_paths ans
+  popd &> /dev/null
+)
+end_test

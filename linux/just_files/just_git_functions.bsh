@@ -57,7 +57,7 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 function submodule-helper-list()
 {
   # Get submodule data
-  local submodule_data="$(${GIT} config -l -f .gitmodules | sed -n${sed_flag_rE} 's|^submodule.(.*).path=(.*)|\1'$'\t''\2|p')"
+  local submodule_data="$(${GIT} config -l -f .gitmodules | sed -n${sed_flag_rE} 's|^submodule.(.*).path=(.*)|\1'$'\\\n''\2|p')"
   local IFS=$'\n'
   # Parse submodule data
   # Git modules can't have newlines in the "name", but the path could, and both can have tabs and spaces
@@ -70,14 +70,12 @@ function submodule-helper-list()
   # submodule.w     t  f.url=https://github.com/visionsystemsinc/vsi_common.git
 
   set_oflag noglob
-  # FIXME This doesn't actually handle names/sm_paths with tabs, let alone
-  # newlines as in the case mentioned above
-  # RE Get the submodule names like git_mirror:get_config_submodule_names
+  # TODO Get the submodule names like git_mirror:get_config_submodule_names
   #   git config --name-only --get-regexp '^submodule\..*\.url$'
   # and use these keys to get the path/url as git_mirror:clone_submodules does
   # See also just_git_airgap_repo.bsh:git_sync_submodules_recursively
-  submodule_names=($(awk '{print $1}' <<< "${submodule_data}" ))
-  submodule_paths=($(awk '{print $2}' <<< "${submodule_data}" ))
+  submodule_names=($(awk ' NR % 2 == 1 { print; }' <<< "${submodule_data}" ))
+  submodule_paths=($(awk ' NR % 2 == 0 { print; }' <<< "${submodule_data}" ))
   reset_oflag noglob
 
   # If there are any arguments, filter out unmatched submodules
