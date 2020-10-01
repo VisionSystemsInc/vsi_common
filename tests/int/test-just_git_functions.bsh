@@ -23,7 +23,7 @@ function setup()
   export GIT_AUTHOR_EMAIL='foo.bar@example.com'
 }
 
-begin_test "Test name"
+begin_test "Test safe-submodule-update"
 (
   setup_test
 
@@ -80,12 +80,58 @@ begin_test "Test name"
     # git push origin --mirror
   popd &> /dev/null
 
+  # Sub module
+  # NOTE non-fast-forward merge is tested in this submodule
+  mkdir -p "${BUILD_REPO}_behind"
+  pushd "${BUILD_REPO}_behind" &> /dev/null
+    git init .
+    touch readme_behind
+    git add readme_behind
+    git commit -m "Behind (1)"
+  popd &> /dev/null
+  mkdir -p "${PRETEND_URL}_behind"
+  pushd "${PRETEND_URL}_behind" &> /dev/null
+    git clone --mirror "${BUILD_REPO}_behind" .
+  popd &> /dev/null
+
+  # Sub module
+  mkdir -p "${BUILD_REPO}_equal"
+  pushd "${BUILD_REPO}_equal" &> /dev/null
+    git init .
+    touch readme_equal
+    git add readme_equal
+    git commit -m "Equal (1)"
+    echo 2 >> readme_equal
+    git add readme_equal
+    git commit -m "Equal (2)"
+  popd &> /dev/null
+  mkdir -p "${PRETEND_URL}_equal"
+  pushd "${PRETEND_URL}_equal" &> /dev/null
+    git clone --mirror "${BUILD_REPO}_equal" .
+  popd &> /dev/null
+
+  # Sub module
+  mkdir -p "${BUILD_REPO}_ahead"
+  pushd "${BUILD_REPO}_ahead" &> /dev/null
+    git init .
+    touch readme_ahead
+    git add readme_ahead
+    git commit -m "Ahead (1)"
+  popd &> /dev/null
+  mkdir -p "${PRETEND_URL}_ahead"
+  pushd "${PRETEND_URL}_ahead" &> /dev/null
+    git clone --mirror "${BUILD_REPO}_ahead" .
+  popd &> /dev/null
+
   # Main Repo
 
   # sm_path (sm_name, if different)              URL
   # ./                                           "${PRETEND_URL}"
   # ./"${DIFFICULT_PATH}" ("${DIFFICULT_NAME}")  "${PRETEND_URL}_sub"
   # ./"${DIFFICULT_PATH}/a_sub_sub_module"       "${PRETEND_URL}_sub_sub"
+  # ./behind                                     "${PRETEND_URL}_behind"
+  # ./equal                                      "${PRETEND_URL}_equal"
+  # ./ahead                                      "${PRETEND_URL}_ahead"
   #
   # NOTE each repo is created in a respective ${BUILD_REPO}"_* repo and mirror
   # pushed to "${PRETEND_URL}"_*
@@ -111,9 +157,54 @@ begin_test "Test name"
     # This will.
     # git mv $'  diff  i \t cult' $' \n diff  i \t cult'
     # However, at random this gives permission denied errors, good thing I don't need it...
+
+    git submodule add "${PRETEND_URL}_behind" behind
+    git submodule add "${PRETEND_URL}_equal" equal
+    git submodule add "${PRETEND_URL}_ahead" ahead
     git submodule update --init --recursive
+    pushd equal &> /dev/null
+      git checkout HEAD~1 # Don't track the latest commit
+    popd &> /dev/null
+    git add behind equal ahead
     git commit -m "Added submodules"
     git remote add origin "${PRETEND_URL}"
+    git push origin master
+  popd &> /dev/null
+
+  # Clone the test repo in its initial configuration
+  git clone "${PRETEND_URL}" "${TEST_REPO}"
+  pushd "${TEST_REPO}" &> /dev/null
+    git submodule update --init --recursive
+  popd &> /dev/null
+
+  # Commit/push updates to the submodules
+  pushd "${BUILD_REPO}" &> /dev/null
+    pushd "${DIFFICULT_PATH}" &> /dev/null
+      pushd a_sub_sub_module &> /dev/null
+        git checkout master
+        mkdir subdir
+        touch subdir/a_sub_sub_file
+        git add subdir/a_sub_sub_file
+        git commit -m "Second Commit"
+        git push origin master
+      popd &> /dev/null
+
+      git add a_sub_sub_module
+      git commit -m "update (sub) sub module"
+      git push origin master
+    popd &> /dev/null
+    git add "${DIFFICULT_PATH}"
+
+    pushd behind &> /dev/null
+      git checkout master
+      echo 2 >> readme_behind
+      git add readme_behind
+      git commit -m "Behind (2)"
+      git push origin master
+    popd &> /dev/null
+    git add behind
+
+    git commit -m "Updated submodules"
     git push origin master
   popd &> /dev/null
 
@@ -121,12 +212,126 @@ begin_test "Test name"
   #              TEST             #
   #################################
 
-  pushd "${BUILD_REPO}" &> /dev/null
+  pushd "${TEST_REPO}" &> /dev/null
     submodule-helper-list
-    ans=("${DIFFICULT_NAME}")
+    ans=("${DIFFICULT_NAME}" behind equal ahead)
     assert_array_eq submodule_names ans
-    ans=("${DIFFICULT_PATH}")
+    ans=("${DIFFICULT_PATH}" behind equal ahead)
     assert_array_eq submodule_paths ans
+  popd &> /dev/null
+
+
+  # Test the initial configuration
+  pushd "${TEST_REPO}" &> /dev/null
+    safe_git_submodule_update
+    [ "$(cd behind && git log -n1 --format="%s")" = "Behind (1)" ]
+    # alternatively
+    #[ "$(git show HEAD | git patch-id | awk '{print $1}')" = "b2aefbcea30f2caf2f226371113c491bccdcf06f" ]
+    [ "$(cd equal && git log -n1 --format="%s")" = "Equal (1)" ]
+    [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (1)" ]
+  popd &> /dev/null
+
+  # Create an untracked file that will not conflict with the submodule update
+  pushd "${TEST_REPO}" &> /dev/null
+    touch ahead/file
+    output="$(safe_git_submodule_update | grep "Untracked files")"
+    [ "${output}" = "Untracked files in 'ahead'" ]
+    [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (1)" ]
+    rm ahead/file
+  popd &> /dev/null
+
+  # Modify a tracked file in the ahead submodule of the test repo
+  pushd "${TEST_REPO}" &> /dev/null
+    pushd "ahead" &> /dev/null
+      git checkout master
+      echo 2 >> readme_ahead
+    popd &> /dev/null
+    output="$(safe_git_submodule_update | grep "Uncommited tracked files")"
+    [ "${output}" = "Uncommited tracked files in 'ahead'" ]
+    [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (1)" ]
+  popd &> /dev/null
+
+  # Stage the change in the ahead submodule of the test repo
+  pushd "${TEST_REPO}" &> /dev/null
+    pushd "ahead" &> /dev/null
+      git add readme_ahead
+    popd &> /dev/null
+    output="$(askcontinue=y safe_git_submodule_update <<< "a" | grep "Staged tracked files")"
+    [ "${output}" = "Staged tracked files in 'ahead'" ]
+    [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (1)" ]
+  popd &> /dev/null
+
+  # Commit the change in the ahead submodule of the test repo
+  pushd "${TEST_REPO}" &> /dev/null
+    pushd "ahead" &> /dev/null
+      # Create a local commit; this submodule is now ahead of the tracked commit
+      git commit -m "Ahead (2)"
+    popd &> /dev/null
+    askcontinue=y safe_git_submodule_update
+    [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (2)" ]
+  popd &> /dev/null
+
+  # Pull new changes
+  pushd "${TEST_REPO}" &> /dev/null
+    git pull origin master
+    # behind - HEAD is now behind the tracked commit
+    # equal - HEAD is still equal to tracked commit
+    # ahead - HEAD is still ahead of the tracked commit
+  popd &> /dev/null
+
+  # TODO Untracked file that will conflict with the submodule update
+
+  # Modify a tracked file in the behind submodule of the test repo
+  pushd "${TEST_REPO}" &> /dev/null
+    pushd "behind" &> /dev/null
+      git checkout master
+      echo 3 >> readme_behind
+    popd &> /dev/null
+    output="$(askcontinue=y safe_git_submodule_update <<< "a" 2>&1 | \
+        grep -e "Uncommited tracked files" -e "failed in submodule path")"
+    [[ "${output}" = "Uncommited tracked files in 'behind'"* ]] || false
+    # Tried to update submodule but failed
+    [[ "${output}" = *"failed in submodule path 'behind'" ]] || false
+    [ "$(cd behind && git log -n1 --format="%s")" = "Behind (1)" ]
+  popd &> /dev/null
+
+  # Stage the change in the behind submodule of the test repo
+  pushd "${TEST_REPO}" &> /dev/null
+    pushd "behind" &> /dev/null
+      git add readme_behind
+    popd &> /dev/null
+    output="$(askcontinue=y safe_git_submodule_update <<< "a" 2>&1 | \
+        grep "Staged tracked files")"
+    [ "${output}" = "Staged tracked files in 'behind'" ]
+    [ "$(cd behind && git log -n1 --format="%s")" = "Behind (1)" ]
+  popd &> /dev/null
+
+  # TEST non-ff merge
+  # Commit the change in the ahead submodule of the test repo
+  pushd "${TEST_REPO}" &> /dev/null
+    pushd "behind" &> /dev/null
+      # Create a local commit; this submodule is now ahead of the tracked
+      # commit, which itself has a new commit. Consequently, we have a
+      # non-fast-forward merge that will fail
+      git commit -m "Behind (3)"
+    popd &> /dev/null
+    output="$(askcontinue=y safe_git_submodule_update <<< "a" 2>&1 | \
+        grep "failed in submodule path")"
+    [[ "${output}" = *"failed in submodule path 'behind'" ]] || false
+    [ "$(cd behind && git log -n1 --format="%s")" = "Behind (3)" ]
+    # drop last commit in the behind submodule
+    pushd "behind" &> /dev/null
+      git reset --hard HEAD~1
+    popd &> /dev/null
+  popd &> /dev/null
+
+  pushd "${TEST_REPO}" &> /dev/null
+    # Warns that the repository 'ahead' is not on the expected SHA; prompts
+    # the user to continue
+    askcontinue=y safe_git_submodule_update
+    [ "$(cd behind && git log -n1 --format="%s")" = "Behind (2)" ]
+    [ "$(cd equal && git log -n1 --format="%s")" = "Equal (1)" ]
+    [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (2)" ]
   popd &> /dev/null
 )
 end_test
