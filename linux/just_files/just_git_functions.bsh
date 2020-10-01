@@ -203,6 +203,9 @@ function safe_git_submodule_update()
     local submodule_names
     local submodule_paths
     local submodule_url
+    local current_submodule_url
+    local current_remote_url
+    local current_just_upstream_url
     # Call "close enough" bash equivalent to git submodule--helper list/name
     submodule-helper-list ${@+"${@}"}
     for ((i=0; i<${#submodule_paths[@]}; i++)); do
@@ -223,22 +226,67 @@ function safe_git_submodule_update()
           continue
         fi
       fi
-      # REVIEW Should this use the -f .gitmodules flag since we haven't sync'd
-      # RE Unfortunately, .gitmodules can use relative URLs...
-      # RE See just_git_airgap_repo.bsh:submodule-helper-resolve-url
-      submodule_url="$(${GIT} config submodule."$name".url)"
-      if [ -z "${submodule_url}" ] || ( [ ! -d "$sm_path"/.git ] && [ ! -f "$sm_path"/.git ] ); then
+      current_submodule_url="$(${GIT} config submodule."${name}".url)"
+      # Initialize (and update) the submodule if it is not already
+      if [ -z "${current_submodule_url}" ] || \
+        ([ ! -d "$sm_path"/.git ] && [ ! -f "$sm_path"/.git ]); then
         if ! [ "$(${GIT} config -f .gitmodules "submodule.${name}.update")" == "none" ]; then
           echo "Submodule '${name}' is not checked out! Initializing and updating..."
           ${GIT} submodule update --init "${sm_path}"
         fi
         continue
       fi
+
+      # See just_git_airgap_repo.bsh:submodule-helper-resolve-url; or better
+      # consider using just_git_airgap_repo.bsh:git_sync_submodules_recursively
+      # instead
+      #
+      # git submodule sync is necessary in case .gitmodules changed; however,
+      # we don't want to modify the current configuration so we need to figure
+      # out what settings git is going to change.
+      # git submodule sync will update the configuration using the
+      # .gitmodules file and the default remote of the current branch, if set;
+      # otherwise origin.
+      local current_branch="$(${GIT} rev-parse --abbrev-ref HEAD)"
+      local default_remote="$(${GIT} config branch."${current_branch}".remote || echo origin)"
+      pushd "${sm_path}" > /dev/null
+        current_remote_url="$(${GIT} config remote."${default_remote}".url)"
+        current_just_upstream_url="$(${GIT} config remote."${JUST_GIT_UPSTREAM-just_upstream}".url || :)"
+      popd > /dev/null
+
+      # sync with the .gitmodules file
+      ${GIT} submodule sync "${sm_path}"
+      # Get the updated URL
+      updated_submodule_url="$(${GIT} config submodule."$name".url)"
+
+      # Arguably, if the submodule's URL changed in the .gitmodules file, we
+      # should leave these changes to the remote, but we cannot differentiate
+      # that case from the case where the user modified these values to point
+      # to a custom remote
+      # Instead, compare the current and updated value of just_upstream and if
+      # has changed (and was set), then warn the user to run git submodule sync
+      if [ -n "${current_just_upstream_url:+set}" ] && \
+         [ "${current_just_upstream_url}" != "${updated_submodule_url}" ]; then
+         echo "The URL of the submodule '${BOLD}${RED}${sm_path}${NC}' looks like it changed. You"
+         echo "may want to run 'git submodule sync' in the '$(basename "${PWD}")' repository"
+         echo
+      fi
+
+      # Reset the configuration of the submodule
+      # git submodule sync dies if there are multiple URLs (e.g.,
+      # git config --get-all submodule.<name>.url or
+      # git config --get-all remote.origin.url)
+      ${GIT} config submodule."$name".url "${current_submodule_url}"
+      # Reset the default remote
+      pushd "${sm_path}" > /dev/null
+        ${GIT} remote set-url "${default_remote}" "${current_remote_url}"
+      popd > /dev/null
+
       pushd "${sm_path}" > /dev/null
         # This is my equivalent to "git submodule sync". It uses a specific remote
         # that it not one of the defaults to handle issue #186
-        ${GIT} remote add "${JUST_GIT_UPSTREAM-just_upstream}" "${submodule_url}" &> /dev/null || \
-          ${GIT} remote set-url "${JUST_GIT_UPSTREAM-just_upstream}" "${submodule_url}"
+        ${GIT} remote add "${JUST_GIT_UPSTREAM-just_upstream}" "${updated_submodule_url}" &> /dev/null || \
+          ${GIT} remote set-url "${JUST_GIT_UPSTREAM-just_upstream}" "${updated_submodule_url}"
 
         if ! ${GIT} diff --no-ext-diff --quiet; then
           echo "Uncommited tracked files in '${sm_path}'"
