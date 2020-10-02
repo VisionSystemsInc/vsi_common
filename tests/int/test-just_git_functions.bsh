@@ -255,11 +255,13 @@ begin_test "Test safe-submodule-update"
     [ "$(cd ahead && git config remote.foo_upstream.url)" = "${PRETEND_URL}_ahead" ]
   popd &> /dev/null
 
+
   # Create an untracked file that will not conflict with the submodule update
   pushd "${TEST_REPO}" &> /dev/null
-    touch ahead/file
+    echo 1 >> ahead/file
     output="$(safe_git_submodule_update | grep "Untracked files")"
     [ "${output}" = "Untracked files in 'ahead'" ]
+    [ "$(cat ahead/file)" = "1" ]
     [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (1)" ]
     rm ahead/file
   popd &> /dev/null
@@ -272,6 +274,8 @@ begin_test "Test safe-submodule-update"
     popd &> /dev/null
     output="$(safe_git_submodule_update | grep "Uncommited tracked files")"
     [ "${output}" = "Uncommited tracked files in 'ahead'" ]
+    [ "$(cat ahead/readme_ahead)" = "2" ]
+    [ "$(cd ahead && git status --short readme_ahead | cut -c2)" = "M" ]
     [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (1)" ]
   popd &> /dev/null
 
@@ -282,6 +286,8 @@ begin_test "Test safe-submodule-update"
     popd &> /dev/null
     output="$(askcontinue=y safe_git_submodule_update <<< "a" | grep "Staged tracked files")"
     [ "${output}" = "Staged tracked files in 'ahead'" ]
+    [ "$(cat ahead/readme_ahead)" = "2" ]
+    [ "$(cd ahead && git status --short readme_ahead | cut -c1)" = "M" ]
     [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (1)" ]
   popd &> /dev/null
 
@@ -292,8 +298,15 @@ begin_test "Test safe-submodule-update"
       git commit -m "Ahead (2)"
       git push origin master
     popd &> /dev/null
-    askcontinue=y safe_git_submodule_update
-    [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (2)" ]
+    if git_feature_submodule_update_with_custom_command; then
+      askcontinue=y safe_git_submodule_update
+      [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (2)" ]
+    else
+      safe_git_submodule_update
+      # git is too old to do a safe submodule update; does a normal submodule
+      # update, which forcefully moves HEAD, loosing the new commit
+      [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (1)" ]
+    fi
   popd &> /dev/null
 
   # Pull new changes
@@ -302,7 +315,7 @@ begin_test "Test safe-submodule-update"
     # main repo - merges (commits) changes to submodules
     # behind - HEAD is now behind the tracked commit
     # equal - HEAD is still equal to tracked commit
-    # ahead - HEAD is still ahead of the tracked commit
+    # ahead - HEAD is still ahead of the tracked commit (if git >1.8.3)
     git push origin master
   popd &> /dev/null
 
@@ -315,12 +328,19 @@ begin_test "Test safe-submodule-update"
       echo 3 >> readme_behind
     popd &> /dev/null
     output="$(askcontinue=y safe_git_submodule_update <<< "a" 2>&1 | \
-        grep -e "Uncommited tracked files" -e "failed in submodule path")"
+        grep -e "Uncommited tracked files" -e "in submodule path")"
     [[ "${output}" = "Uncommited tracked files in 'behind'"* ]] || false
     # Tried to update submodule but failed
-    [[ "${output}" = *"failed in submodule path 'behind'" ]] || false
+    if git_feature_submodule_update_with_custom_command; then
+      [[ "${output}" = *"failed in submodule path 'behind'" ]] || false
+    else
+      [[ "${output}" = *"Unable to checkout"*"in submodule path 'behind'" ]] || false
+    fi
+    [ "$(cat behind/readme_behind)" = "3" ]
+    [ "$(cd behind && git status --short readme_behind | cut -c2)" = "M" ]
     [ "$(cd behind && git log -n1 --format="%s")" = "Behind (1)" ]
   popd &> /dev/null
+
 
   # Stage the change in the behind submodule of the test repo
   pushd "${TEST_REPO}" &> /dev/null
@@ -330,6 +350,8 @@ begin_test "Test safe-submodule-update"
     output="$(askcontinue=y safe_git_submodule_update <<< "a" 2>&1 | \
         grep "Staged tracked files")"
     [ "${output}" = "Staged tracked files in 'behind'" ]
+    [ "$(cat behind/readme_behind)" = "3" ]
+    [ "$(cd behind && git status --short readme_behind | cut -c1)" = "M" ]
     [ "$(cd behind && git log -n1 --format="%s")" = "Behind (1)" ]
   popd &> /dev/null
 
@@ -342,24 +364,48 @@ begin_test "Test safe-submodule-update"
       # non-fast-forward merge that will fail
       git commit -m "Behind (3)"
     popd &> /dev/null
-    output="$(askcontinue=y safe_git_submodule_update <<< "a" 2>&1 | \
-        grep "failed in submodule path")"
-    [[ "${output}" = *"failed in submodule path 'behind'" ]] || false
-    [ "$(cd behind && git log -n1 --format="%s")" = "Behind (3)" ]
-    # drop last commit in the behind submodule
-    pushd "behind" &> /dev/null
-      git reset --hard HEAD~1
-    popd &> /dev/null
+    if git_feature_submodule_update_with_custom_command; then
+      output="$(askcontinue=y safe_git_submodule_update <<< "a" 2>&1 | \
+          grep "failed in submodule path")"
+      [[ "${output}" = *"failed in submodule path 'behind'" ]] || false
+      [ "$(cd behind && git log -n1 --format="%s")" = "Behind (3)" ]
+      # drop last commit in the behind submodule
+      pushd "behind" &> /dev/null
+        git reset --hard HEAD~1
+      popd &> /dev/null
+    else
+      safe_git_submodule_update
+      # git is too old to do a safe submodule update; does a normal submodule
+      # update, which forcefully moves HEAD, loosing the new commit
+      [ "$(cd behind && git log -n1 --format="%s")" = "Behind (2)" ]
+      # drop last commit in the behind submodule
+      pushd "behind" &> /dev/null
+        # git submodule update forcefully moved HEAD (dropping the commit)
+        git checkout master
+        git reset --hard HEAD~1
+      popd &> /dev/null
+    fi
   popd &> /dev/null
 
   pushd "${TEST_REPO}" &> /dev/null
-    # Warns that the repository 'ahead' is not on the expected SHA; prompts
-    # the user to continue
-    askcontinue=y safe_git_submodule_update
+    if git_feature_submodule_update_with_custom_command; then
+      askcontinue=y safe_git_submodule_update
+    else
+      safe_git_submodule_update
+    fi
     [ "$(git config submodule.behind.url)" = "${PRETEND_URL}_behind" ]
     [ "$(cd behind && git log -n1 --format="%s")" = "Behind (2)" ]
     [ "$(cd equal && git log -n1 --format="%s")" = "Equal (1)" ]
-    [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (2)" ]
+    if git_feature_submodule_update_with_custom_command; then
+      # Warns that the repository 'ahead' is not on the expected SHA; prompts
+      # the user to continue
+      [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (2)" ]
+    else
+      # (Repeat test from above) git is too old to do a safe submodule update;
+      # does a normal submodule update, which forcefully moves HEAD, loosing
+      # the new commit
+      [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (1)" ]
+    fi
   popd &> /dev/null
 
   # Test sync
@@ -389,7 +435,11 @@ begin_test "Test safe-submodule-update"
 
   pushd "${TEST_REPO}" &> /dev/null
     git pull
-    askcontinue=y safe_git_submodule_update
+    if git_feature_submodule_update_with_custom_command; then
+      askcontinue=y safe_git_submodule_update
+    else
+      safe_git_submodule_update
+    fi
     [ "$(cd behind && git config remote.origin.url)" = "${PRETEND_URL}_behind" ]
     [ "$(cd behind && git config remote.just_upstream.url)" = "${PRETEND_URL}_behind2" ]
     [ "$(cd behind && git log -n1 --format="%s")" = "Behind (4)" ]
