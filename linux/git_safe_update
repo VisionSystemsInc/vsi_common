@@ -4,15 +4,21 @@
 
 set -eu
 
-# Retrieve the SHA
-git fetch "${JUST_GIT_USE_REMOTE-${JUST_GIT_UPSTREAM-just_upstream}}" "${1}"
+# Retrieve the SHA (Some versions of git and git server don't support fetching
+# a single SHA). This is really only necessary if just_upstream's URL changes
+# during sync because a git fetch in the parent repository will fetch changes
+# in the submodules as well (assuming fetch.recurseSubmodules is enabled, which
+# it is by default since at least git 1.8.3)
+git fetch "${JUST_GIT_USE_REMOTE-${JUST_GIT_UPSTREAM-just_upstream}}" "${1}" || \
+    git fetch "${JUST_GIT_USE_REMOTE-${JUST_GIT_UPSTREAM-just_upstream}}"
 # Store the branch name in case merge fails; this will reattach the head
 # exactly how it was
 before_branch="$(git rev-parse --abbrev-ref HEAD)"
 # Detach the head
-git checkout "$(git rev-parse HEAD)"
+git checkout "$(git rev-parse HEAD)" &> /dev/null
 rv=0
-git merge --ff-only FETCH_HEAD || rv=$?
+# Cannot checkout FETCH_HEAD when git fails to fetch a single SHA (see above)
+git merge --ff-only "${1}" || rv=$?
 if [ "${rv}" != "0" ]; then
   git checkout "${before_branch}"
   exit "${rv}"
