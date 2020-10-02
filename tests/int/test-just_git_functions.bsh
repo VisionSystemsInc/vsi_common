@@ -457,5 +457,37 @@ begin_test "Test safe-submodule-update"
     [ "$(cd behind && git config remote.just_upstream.url)" = "${PRETEND_URL}_behind2" ]
     [ "$(cd behind && git log -n1 --format="%s")" = "Behind (4)" ]
   popd &> /dev/null
+
+
+  # Test git_reattach_heads (This could be a separate test; it only requires a
+  # detached head and a branch at the same commit. If only setting up submodules
+  # wasn't such a pain)
+  pushd "${TEST_REPO}" &> /dev/null
+    # Setup some branches to re-attach
+    pushd "${DIFFICULT_PATH}" &> /dev/null
+      git checkout master
+      git checkout "$(git rev-parse master)" # Detach head
+
+      pushd a_sub_sub_module &> /dev/null
+        git checkout master # An attached head
+      popd &> /dev/null
+    popd &> /dev/null
+
+    pushd equal &> /dev/null
+      git checkout "$(git rev-parse abranch)" # Detach head
+    popd &> /dev/null
+
+    git_reattach_heads "${DIFFICULT_PATH}"
+    [ "$(cd "${DIFFICULT_PATH}" && git rev-parse --abbrev-ref HEAD)" = "master" ]
+    [ "$(cd "${DIFFICULT_PATH}"/a_sub_sub_module && git rev-parse --abbrev-ref HEAD)" = "master" ]
+    [ "$(cd behind && git rev-parse --abbrev-ref HEAD)" = "HEAD" ]
+    [ "$(cd equal && git rev-parse --abbrev-ref HEAD)" = "HEAD" ]
+
+    git_reattach_heads
+    [ "$(cd "${DIFFICULT_PATH}" && git rev-parse --abbrev-ref HEAD)" = "master" ]
+    [ "$(cd "${DIFFICULT_PATH}"/a_sub_sub_module && git rev-parse --abbrev-ref HEAD)" = "master" ]
+    [ "$(cd behind && git rev-parse --abbrev-ref HEAD)" = "HEAD" ]
+    [ "$(cd equal && git rev-parse --abbrev-ref HEAD)" = "abranch" ]
+  popd &> /dev/null
 )
 end_test
