@@ -421,7 +421,9 @@ begin_test "Test safe-submodule-update"
     fi
   popd &> /dev/null
 
-  # Test sync
+
+  # Test just_upstream sync'ing (and that other remotes, e.g., origin, are
+  # unaffected)
   cp -a "${PRETEND_URL}_behind" "${PRETEND_URL}_behind2"
   pushd "${BUILD_REPO}" &> /dev/null
     git pull origin master
@@ -447,15 +449,55 @@ begin_test "Test safe-submodule-update"
   popd &> /dev/null
 
   pushd "${TEST_REPO}" &> /dev/null
+    # Ensure submodule behind's URL hasn't been updated yet
+    [ "$(git config submodule.behind.url)" = "${PRETEND_URL}_behind" ]
+    [ "$(cd behind && git config remote.origin.url)" = "${PRETEND_URL}_behind" ]
+
+    # Modify the remotes of submodule equal
+    git config submodule.equal.url "${PRETEND_URL}_equal3"
+    pushd equal &> /dev/null
+      # These repos don't actually have to exist because foo_upstream will be
+      # reset by the sync
+      git config remote.origin.url "${PRETEND_URL}_equal4"
+      git config remote.just_upstream.url "${PRETEND_URL}_equal5"
+      git config remote.foo_upstream.url "${PRETEND_URL}_equal6"
+      git checkout -b abranch
+      # Set the default remote of the branch to foo_upstream
+      git config branch.abranch.remote foo_upstream
+    popd &> /dev/null
+
+    # The tracked SHA in submodule behind will not be in the repository because
+    # the URL changed. safe_git_submodule_update will update just_upstream and
+    # fetch from the new URL
     git pull
+
+    # Sync the submodules, fetches new commits, and update
     if git_feature_submodule_update_with_custom_command; then
       askcontinue=y safe_git_submodule_update
     else
       safe_git_submodule_update
     fi
+
+    [ "$(git config submodule.behind.url)" = "${PRETEND_URL}_behind" ]
     [ "$(cd behind && git config remote.origin.url)" = "${PRETEND_URL}_behind" ]
+    # just_upstream sync'd to the updated URL in the .gitmodules file
     [ "$(cd behind && git config remote.just_upstream.url)" = "${PRETEND_URL}_behind2" ]
-    [ "$(cd behind && git log -n1 --format="%s")" = "Behind (4)" ]
+    [ "$(cd behind && git log -n1 --format="%s")" = "Behind (4)" ] # On a detached head
+
+    [ "$(git config submodule.equal.url)" = "${PRETEND_URL}_equal3" ]
+    [ "$(cd equal && git config remote.origin.url)" = "${PRETEND_URL}_equal4" ]
+    [ "$(cd equal && git config remote.just_upstream.url)" = "${PRETEND_URL}_equal" ]
+    # I'm not sure how to be sure that git used this remote to sync as opposed
+    # to origin. However, if the function being tested assumed origin, this
+    # would fail
+    [ "$(cd equal && git config remote.foo_upstream.url)" = "${PRETEND_URL}_equal6" ]
+    [ "$(cd equal && git log -n1 --format="%s")" = "Equal (1)" ] # On a detached head
+
+    # Reset the remotes
+    pushd equal &> /dev/null
+      git config remote.origin.url "${PRETEND_URL}_equal"
+      git config remote.foo_upstream.url "${PRETEND_URL}_equal"
+    popd &> /dev/null
   popd &> /dev/null
 
 
