@@ -211,13 +211,15 @@ function safe_git_submodule_update()
     local current_remote_url
     local current_just_upstream_url
     # Call "close enough" bash equivalent to git submodule--helper list/name
-    submodule-helper-list ${@+"${@}"}
+    submodule-helper-list ${@+"${@}"} # Sets submodule_paths and submodule_names
     for ((i=0; i<${#submodule_paths[@]}; i++)); do
+      # (it seems that neither submodule name nor path can end in a trailing
+      # slash)
       name="${submodule_names[$i]}"
       sm_path="${submodule_paths[$i]}"
 
       if ! ${GIT} config submodule."$name".url > /dev/null; then
-        if [ "$(${GIT} ls-tree HEAD:"$(dirname "${sm_path}")" "$(basename "${sm_path}")" | awk '{print $2}')" == "commit" ]; then
+        if [ "$(${GIT} ls-tree HEAD:"$(dirname "${sm_path}")"/ "$(basename "${sm_path}")" | awk '{print $2}')" == "commit" ]; then
           echo "Uninitialized submodule '${name}'...Initializing"
           ${GIT} submodule init $sm_path
         else
@@ -237,6 +239,11 @@ function safe_git_submodule_update()
         if ! [ "$(${GIT} config -f .gitmodules "submodule.${name}.update")" == "none" ]; then
           echo "Submodule '${name}' is not checked out! Initializing and updating..."
           ${GIT} submodule update --init "${sm_path}"
+          pushd "${sm_path}" &> /dev/null
+          # Go ahead and setup this remote
+           ${GIT} config remote."${JUST_GIT_UPSTREAM-just_upstream}".url \
+              "$(${GIT} config remote.origin.url)"
+          popd &> /dev/null
         fi
         continue
       fi
