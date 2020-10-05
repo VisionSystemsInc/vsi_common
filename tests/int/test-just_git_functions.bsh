@@ -217,7 +217,7 @@ begin_test "Test safe-submodule-update"
     popd &> /dev/null
     git add behind
 
-    git commit -m "Updated submodules"
+    git commit -m "Update submodules (1)"
     git push origin master
   popd &> /dev/null
 
@@ -311,14 +311,29 @@ begin_test "Test safe-submodule-update"
       git commit -m "Ahead (2)"
     popd &> /dev/null
     if git_feature_submodule_update_with_custom_command; then
+      # Warns that the repository 'ahead' is not on the expected SHA; prompts
+      # the user to continue
       askcontinue=y safe_git_submodule_update
       [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (2)" ]
     else
+      pushd ahead &> /dev/null
+        lost_commit="$(git rev-parse HEAD)"
+      popd &> /dev/null
+
       safe_git_submodule_update
+
       # git is too old to do a safe submodule update; does a normal submodule
       # update, which forcefully moves HEAD, loosing the new commit
       [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (1)" ]
+
+      # Manually recover this commit
+      pushd ahead &> /dev/null
+        git checkout "${lost_commit}"
+      popd &> /dev/null
     fi
+    # Track the new commit in the ahead submodule
+    git add ahead
+    git commit -m "Update submodule (2)"
   popd &> /dev/null
 
   # Pull new changes
@@ -378,7 +393,8 @@ begin_test "Test safe-submodule-update"
           grep "failed in submodule path")"
       [[ "${output}" = *"failed in submodule path 'behind'" ]] || false
       [ "$(cd behind && git log -n1 --format="%s")" = "Behind (3)" ]
-      # drop last commit in the behind submodule
+      # drop last commit in the behind submodule (so we don't get errors going
+      # forward)
       pushd "behind" &> /dev/null
         git reset --hard HEAD~1
       popd &> /dev/null
@@ -387,7 +403,8 @@ begin_test "Test safe-submodule-update"
       # git is too old to do a safe submodule update; does a normal submodule
       # update, which forcefully moves HEAD, loosing the new commit
       [ "$(cd behind && git log -n1 --format="%s")" = "Behind (2)" ]
-      # drop last commit in the behind submodule
+      # drop last commit in the behind submodule (so we don't get errors going
+      # forward)
       pushd "behind" &> /dev/null
         # git submodule update forcefully moved HEAD (dropping the commit)
         git checkout master
@@ -396,39 +413,12 @@ begin_test "Test safe-submodule-update"
     fi
   popd &> /dev/null
 
-  # There is no longer a conflict in the behind submodule, although the ahead
-  # submodule is still ahead of the expected SHA (in git >1.8.3)
-  pushd "${TEST_REPO}" &> /dev/null
-    if git_feature_submodule_update_with_custom_command; then
-      askcontinue=y safe_git_submodule_update
-    else
-      safe_git_submodule_update
-    fi
-    [ "$(git config submodule.behind.url)" = "${PRETEND_URL}_behind" ]
-    [ "$(cd behind && git log -n1 --format="%s")" = "Behind (2)" ]
-    [ "$(cd equal && git log -n1 --format="%s")" = "Equal (1)" ]
-    if git_feature_submodule_update_with_custom_command; then
-      # Warns that the repository 'ahead' is not on the expected SHA; prompts
-      # the user to continue
-      [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (2)" ]
-    else
-      # (Repeat test from above) git is too old to do a safe submodule update;
-      # does a normal submodule update, which forcefully moves HEAD, loosing
-      # the new commit
-      [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (1)" ]
-    fi
-  popd &> /dev/null
-
-  if git_feature_submodule_update_with_custom_command; then
-    pushd "${TEST_REPO}" &> /dev/null
-      git add ahead
-      git commit -m "Update submodule (2)"
-    popd &> /dev/null
-  fi
-
   # All submodules are now on the correct SHA
   pushd "${TEST_REPO}" &> /dev/null
     safe_git_submodule_update
+    [ "$(cd behind && git log -n1 --format="%s")" = "Behind (2)" ]
+    [ "$(cd equal && git log -n1 --format="%s")" = "Equal (1)" ]
+    [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (2)" ]
   popd &> /dev/null
 
 
@@ -467,11 +457,7 @@ begin_test "Test safe-submodule-update"
     git pull origin master
 
     # Sync the submodules, fetches new commits, and update
-    if git_feature_submodule_update_with_custom_command; then
-      askcontinue=y safe_git_submodule_update
-    else
-      safe_git_submodule_update
-    fi
+    safe_git_submodule_update
 
     [ "$(git config submodule.behind.url)" = "${PRETEND_URL}_behind" ]
     [ "$(cd behind && git config remote.origin.url)" = "${PRETEND_URL}_behind" ]
@@ -514,11 +500,7 @@ begin_test "Test safe-submodule-update"
     [ "$(cd ahead && git config remote.origin.url)" = "${PRETEND_URL}_ahead4" ]
     [ "$(cd ahead && git config remote.just_upstream.url)" = "${PRETEND_URL}_ahead" ]
     [ "$(cd ahead && git config remote.foo_upstream.url)" = "${PRETEND_URL}_ahead6" ]
-    if git_feature_submodule_update_with_custom_command; then
-      [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (2)" ] # Still on a detached head
-    else
-      [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (1)" ] # Still on a detached head
-    fi
+    [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (2)" ] # Still on a detached head
 
     [ "$(git config submodule.equal.url)" = "${PRETEND_URL}_equal3" ]
     [ "$(cd equal && git config remote.origin.url)" = "${PRETEND_URL}_equal4" ]
