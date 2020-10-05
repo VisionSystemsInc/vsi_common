@@ -535,6 +535,7 @@ begin_test "Test safe-submodule-update"
 
   # Verify that sync'ing uses the default remote of the current branch;
   # otherwise origin
+  # TODO make equal4 relative
   pushd "${TEST_REPO}" &> /dev/null
     # Modify the remotes of submodule equal and ahead
     # These repos don't have to exist
@@ -555,7 +556,22 @@ begin_test "Test safe-submodule-update"
       # Checkout a detached head
       git checkout "$(git rev-parse HEAD)"
     popd &> /dev/null
+  popd &> /dev/null
 
+  cp -a "${TEST_REPO}" "${TEST_REPO}_ref"
+  pushd "${TEST_REPO}_ref" &> /dev/null
+    git submodule sync
+
+    pushd ahead &> /dev/null
+      ahead_remote_origin_url="$(git config remote.origin.url)" # "${PRETEND_URL}_ahead"
+    popd &> /dev/null
+    pushd equal &> /dev/null
+      [ "$(git config remote.origin.url)" = "${PRETEND_URL}_equal4" ] #  (unchanged)
+      equal_remote_foo_upstream_url="$(git config remote.foo_upstream.url)" # "${PRETEND_URL}_equal"
+    popd &> /dev/null
+  popd &> /dev/null
+
+  pushd "${TEST_REPO}" &> /dev/null
     # Sync the submodules, fetches new commits, and update
     safe_git_submodule_update
 
@@ -564,13 +580,13 @@ begin_test "Test safe-submodule-update"
     # to origin. However, if the function being tested assumed origin, this
     # would fail
     [ "$(cd ahead && git config remote.origin.url)" = "${PRETEND_URL}_ahead4" ]
-    [ "$(cd ahead && git config remote.just_upstream.url)" = "${PRETEND_URL}_ahead" ]
+    [ "$(cd ahead && git config remote.just_upstream.url)" = "${ahead_remote_origin_url}" ]
     [ "$(cd ahead && git config remote.foo_upstream.url)" = "${PRETEND_URL}_ahead6" ]
     [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (2)" ] # Still on a detached head
 
     [ "$(git config submodule.equal.url)" = "${PRETEND_URL}_equal3" ]
     [ "$(cd equal && git config remote.origin.url)" = "${PRETEND_URL}_equal4" ]
-    [ "$(cd equal && git config remote.just_upstream.url)" = "${PRETEND_URL}_equal" ]
+    [ "$(cd equal && git config remote.just_upstream.url)" = "${equal_remote_foo_upstream_url}" ]
     # I'm not sure how to be sure that git used this remote to sync as opposed
     # to origin. However, if the function being tested assumed origin, this
     # would fail
