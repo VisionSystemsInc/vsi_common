@@ -187,7 +187,8 @@ begin_test "Test safe-submodule-update"
   # Clone the test repo in its initial configuration
   git clone "${PRETEND_URL}" "${TEST_REPO}"
   pushd "${TEST_REPO}" &> /dev/null
-    git submodule update --init --recursive
+    git submodule update --init --recursive "${DIFFICULT_PATH}" behind ahead
+    # Don't init submodule equal
   popd &> /dev/null
 
   # Commit/push updates to the submodules
@@ -236,19 +237,46 @@ begin_test "Test safe-submodule-update"
 
   # Test the initial configuration
   pushd "${TEST_REPO}" &> /dev/null
-    safe_git_submodule_update
-    [ "$(cd "${DIFFICULT_PATH}" && git config remote.origin.url)" = "${PRETEND_URL}_sub" ]
+    [ "$(git config submodule."${DIFFICULT_NAME}".url)" = "${PRETEND_URL}_sub" ]
+    [ "$(cd "${DIFFICULT_PATH}" && git config submodule.a_sub_sub_module.url)" = "${PRETEND_URL}_sub_sub" ]
     [ "$(cd "${DIFFICULT_PATH}/a_sub_sub_module" && git config remote.origin.url)" = \
         "${PRETEND_URL}_sub_sub" ]
+    [ "$(git config submodule.behind.url)" = "${PRETEND_URL}_behind" ]
+    [ "$(git config submodule.equal.url)" = "" ]
+    [ "$(git config submodule.ahead.url)" = "${PRETEND_URL}_ahead" ]
+    [ "$(cd "${DIFFICULT_PATH}" && git config remote.origin.url)" = "${PRETEND_URL}_sub" ]
+    [ "$(cd behind && git config remote.origin.url)" = "${PRETEND_URL}_behind" ]
+    #[ "$(cd equal && git config remote.origin.url)" = "" ] # Can't do this test yet
+    [ "$(cd ahead && git config remote.origin.url)" = "${PRETEND_URL}_ahead" ]
+  popd &> /dev/null
+
+  # Test safe_git_submodule_update with a custom remote name
+  # TODO Run this for a single sm_path (e.g., equal)
+  pushd "${TEST_REPO}" &> /dev/null
+    output="$(JUST_GIT_UPSTREAM=foo_upstream safe_git_submodule_update | grep "Uninitialized submodule")"
+    # Test an un-init'd submodule
+    [ "${output}" = "Uninitialized submodule 'equal'...Initializing" ]
+
+    # Verify initial configuration is still correct
+    [ "$(git config submodule."${DIFFICULT_NAME}".url)" = "${PRETEND_URL}_sub" ]
+    [ "$(cd "${DIFFICULT_PATH}" && git config submodule.a_sub_sub_module.url)" = "${PRETEND_URL}_sub_sub" ]
+    [ "$(cd "${DIFFICULT_PATH}/a_sub_sub_module" && git config remote.origin.url)" = \
+        "${PRETEND_URL}_sub_sub" ]
+    [ "$(git config submodule.behind.url)" = "${PRETEND_URL}_behind" ]
+    [ "$(git config submodule.equal.url)" = "${PRETEND_URL}_equal" ]
+    [ "$(git config submodule.ahead.url)" = "${PRETEND_URL}_ahead" ]
+    [ "$(cd "${DIFFICULT_PATH}" && git config remote.origin.url)" = "${PRETEND_URL}_sub" ]
     [ "$(cd behind && git config remote.origin.url)" = "${PRETEND_URL}_behind" ]
     [ "$(cd equal && git config remote.origin.url)" = "${PRETEND_URL}_equal" ]
     [ "$(cd ahead && git config remote.origin.url)" = "${PRETEND_URL}_ahead" ]
-    [ "$(cd "${DIFFICULT_PATH}" && git config remote.just_upstream.url)" = "${PRETEND_URL}_sub" ]
-    [ "$(cd "${DIFFICULT_PATH}/a_sub_sub_module" && git config remote.just_upstream.url)" = \
+
+    # Test that the foo_upstream remote was created
+    [ "$(cd "${DIFFICULT_PATH}" && git config remote.foo_upstream.url)" = "${PRETEND_URL}_sub" ]
+    [ "$(cd "${DIFFICULT_PATH}/a_sub_sub_module" && git config remote.foo_upstream.url)" = \
         "${PRETEND_URL}_sub_sub" ]
-    [ "$(cd behind && git config remote.just_upstream.url)" = "${PRETEND_URL}_behind" ]
-    [ "$(cd equal && git config remote.just_upstream.url)" = "${PRETEND_URL}_equal" ]
-    [ "$(cd ahead && git config remote.just_upstream.url)" = "${PRETEND_URL}_ahead" ]
+    [ "$(cd behind && git config remote.foo_upstream.url)" = "${PRETEND_URL}_behind" ]
+    [ "$(cd equal && git config remote.foo_upstream.url)" = "${PRETEND_URL}_equal" ]
+    [ "$(cd ahead && git config remote.foo_upstream.url)" = "${PRETEND_URL}_ahead" ]
 
     [ "$(cd behind && git log -n1 --format="%s")" = "Behind (1)" ]
     # alternatively
@@ -257,15 +285,15 @@ begin_test "Test safe-submodule-update"
     [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (1)" ]
   popd &> /dev/null
 
-  # Test custom remote name
+  # Test the default remote name
   pushd "${TEST_REPO}" &> /dev/null
-    JUST_GIT_UPSTREAM=foo_upstream safe_git_submodule_update
-    [ "$(cd "${DIFFICULT_PATH}" && git config remote.foo_upstream.url)" = "${PRETEND_URL}_sub" ]
-    [ "$(cd "${DIFFICULT_PATH}/a_sub_sub_module" && git config remote.foo_upstream.url)" = \
+    safe_git_submodule_update
+    [ "$(cd "${DIFFICULT_PATH}" && git config remote.just_upstream.url)" = "${PRETEND_URL}_sub" ]
+    [ "$(cd "${DIFFICULT_PATH}/a_sub_sub_module" && git config remote.just_upstream.url)" = \
         "${PRETEND_URL}_sub_sub" ]
-    [ "$(cd behind && git config remote.foo_upstream.url)" = "${PRETEND_URL}_behind" ]
-    [ "$(cd equal && git config remote.foo_upstream.url)" = "${PRETEND_URL}_equal" ]
-    [ "$(cd ahead && git config remote.foo_upstream.url)" = "${PRETEND_URL}_ahead" ]
+    [ "$(cd behind && git config remote.just_upstream.url)" = "${PRETEND_URL}_behind" ]
+    [ "$(cd equal && git config remote.just_upstream.url)" = "${PRETEND_URL}_equal" ]
+    [ "$(cd ahead && git config remote.just_upstream.url)" = "${PRETEND_URL}_ahead" ]
   popd &> /dev/null
 
 
