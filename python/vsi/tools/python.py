@@ -809,7 +809,11 @@ def nested_patch(obj, condition, patch, _spare_key = None):
   # Handle everything else
   else:
     if condition(_spare_key, obj):
-      return patch(_spare_key, obj)
+      try:
+        return patch(_spare_key, obj)
+      except BaseException as e:
+        logger.error(f'Exception occurred while patching f{_spare_key}')
+        raise e
     return obj
 
 def nested_patch_inplace(obj, condition, patch, _spare_key = None):
@@ -834,7 +838,11 @@ def nested_patch_inplace(obj, condition, patch, _spare_key = None):
   # Handle everything else
   else:
     if condition(_spare_key, obj):
-      return patch(_spare_key, obj)
+      try:
+        return patch(_spare_key, obj)
+      except BaseException as e:
+        logger.error(f'Exception occurred while patching f{_spare_key}')
+        raise e
     return obj
 
 def unwrap_wraps(func):
