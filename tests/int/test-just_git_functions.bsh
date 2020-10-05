@@ -351,7 +351,6 @@ begin_test "Test safe-submodule-update"
     [ "$(cd behind && git log -n1 --format="%s")" = "Behind (1)" ]
   popd &> /dev/null
 
-
   # Stage the change in the behind submodule of the test repo
   pushd "${TEST_REPO}" &> /dev/null
     pushd "behind" &> /dev/null
@@ -397,6 +396,8 @@ begin_test "Test safe-submodule-update"
     fi
   popd &> /dev/null
 
+  # There is no longer a conflict in the behind submodule, although the ahead
+  # submodule is still ahead of the expected SHA (in git >1.8.3)
   pushd "${TEST_REPO}" &> /dev/null
     if git_feature_submodule_update_with_custom_command; then
       askcontinue=y safe_git_submodule_update
@@ -418,6 +419,18 @@ begin_test "Test safe-submodule-update"
     fi
   popd &> /dev/null
 
+  if git_feature_submodule_update_with_custom_command; then
+    pushd "${TEST_REPO}" &> /dev/null
+      git add ahead
+      git commit -m "Update submodule (2)"
+    popd &> /dev/null
+  fi
+
+  # All submodules are now on the correct SHA
+  pushd "${TEST_REPO}" &> /dev/null
+    safe_git_submodule_update
+  popd &> /dev/null
+
 
   # Test just_upstream sync'ing (and that other remotes, e.g., origin, are
   # unaffected)
@@ -433,8 +446,9 @@ begin_test "Test safe-submodule-update"
       echo 4 >> readme_behind
       git add readme_behind
       git commit -m "Behind (4)"
+      # We sync'd so this should be true
+      [ "$(git config remote.origin.url)" = "${PRETEND_URL}_behind2" ]
       git push origin master
-      #git push "${PRETEND_URL}_behind2" master
     popd &> /dev/null
     git add behind
     git commit -m "Update the behind submodule"
@@ -445,24 +459,12 @@ begin_test "Test safe-submodule-update"
     # Ensure submodule behind's URL hasn't been updated yet
     [ "$(git config submodule.behind.url)" = "${PRETEND_URL}_behind" ]
     [ "$(cd behind && git config remote.origin.url)" = "${PRETEND_URL}_behind" ]
-
-    # Modify the remotes of submodule equal
-    git config submodule.equal.url "${PRETEND_URL}_equal3"
-    pushd equal &> /dev/null
-      # These repos don't actually have to exist because foo_upstream will be
-      # reset by the sync
-      git config remote.origin.url "${PRETEND_URL}_equal4"
-      git config remote.just_upstream.url "${PRETEND_URL}_equal5"
-      git config remote.foo_upstream.url "${PRETEND_URL}_equal6"
-      git checkout -b abranch
-      # Set the default remote of the branch to foo_upstream
-      git config branch.abranch.remote foo_upstream
-    popd &> /dev/null
+    [ "$(cd behind && git config remote.just_upstream.url)" = "${PRETEND_URL}_behind" ]
 
     # The tracked SHA in submodule behind will not be in the repository because
     # the URL changed. safe_git_submodule_update will update just_upstream and
     # fetch from the new URL
-    git pull
+    git pull origin master
 
     # Sync the submodules, fetches new commits, and update
     if git_feature_submodule_update_with_custom_command; then
@@ -476,6 +478,47 @@ begin_test "Test safe-submodule-update"
     # just_upstream sync'd to the updated URL in the .gitmodules file
     [ "$(cd behind && git config remote.just_upstream.url)" = "${PRETEND_URL}_behind2" ]
     [ "$(cd behind && git log -n1 --format="%s")" = "Behind (4)" ] # On a detached head
+  popd &> /dev/null
+
+
+  # Verify that sync'ing uses the default remote of the current branch;
+  # otherwise origin
+  pushd "${TEST_REPO}" &> /dev/null
+    # Modify the remotes of submodule equal and ahead
+    # These repos don't have to exist
+    git config submodule.equal.url "${PRETEND_URL}_equal3"
+    git config submodule.ahead.url "${PRETEND_URL}_ahead3"
+    pushd equal &> /dev/null
+      git config remote.origin.url "${PRETEND_URL}_equal4"
+      git config remote.just_upstream.url "${PRETEND_URL}_equal5"
+      git config remote.foo_upstream.url "${PRETEND_URL}_equal6"
+      git checkout -b abranch
+      # Set the default remote of the branch to foo_upstream
+      git config branch.abranch.remote foo_upstream
+    popd &> /dev/null
+    pushd ahead &> /dev/null
+      git config remote.origin.url "${PRETEND_URL}_ahead4"
+      git config remote.just_upstream.url "${PRETEND_URL}_ahead5"
+      git config remote.foo_upstream.url "${PRETEND_URL}_ahead6"
+      # Checkout a detached head
+      git checkout "$(git rev-parse HEAD)"
+    popd &> /dev/null
+
+    # Sync the submodules, fetches new commits, and update
+    safe_git_submodule_update
+
+    [ "$(git config submodule.ahead.url)" = "${PRETEND_URL}_ahead3" ]
+    # I'm not sure how to be sure that git used this remote to sync as opposed
+    # to origin. However, if the function being tested assumed origin, this
+    # would fail
+    [ "$(cd ahead && git config remote.origin.url)" = "${PRETEND_URL}_ahead4" ]
+    [ "$(cd ahead && git config remote.just_upstream.url)" = "${PRETEND_URL}_ahead" ]
+    [ "$(cd ahead && git config remote.foo_upstream.url)" = "${PRETEND_URL}_ahead6" ]
+    if git_feature_submodule_update_with_custom_command; then
+      [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (2)" ] # Still on a detached head
+    else
+      [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (1)" ] # Still on a detached head
+    fi
 
     [ "$(git config submodule.equal.url)" = "${PRETEND_URL}_equal3" ]
     [ "$(cd equal && git config remote.origin.url)" = "${PRETEND_URL}_equal4" ]
@@ -484,9 +527,13 @@ begin_test "Test safe-submodule-update"
     # to origin. However, if the function being tested assumed origin, this
     # would fail
     [ "$(cd equal && git config remote.foo_upstream.url)" = "${PRETEND_URL}_equal6" ]
-    [ "$(cd equal && git log -n1 --format="%s")" = "Equal (1)" ] # On a detached head
+    [ "$(cd equal && git log -n1 --format="%s")" = "Equal (1)" ] # Now on a detached head
 
     # Reset the remotes
+    pushd ahead &> /dev/null
+      git config remote.origin.url "${PRETEND_URL}_ahead"
+      git config remote.foo_upstream.url "${PRETEND_URL}_ahead"
+    popd &> /dev/null
     pushd equal &> /dev/null
       git config remote.origin.url "${PRETEND_URL}_equal"
       git config remote.foo_upstream.url "${PRETEND_URL}_equal"
