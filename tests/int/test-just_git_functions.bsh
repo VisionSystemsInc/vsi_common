@@ -240,7 +240,7 @@ begin_test "Test safe-submodule-update"
     [ "$(git config submodule."${DIFFICULT_NAME}".url)" = "${PRETEND_URL}_sub" ]
     [ "$(cd "${DIFFICULT_PATH}" && git config submodule.a_sub_sub_module.url)" = "${PRETEND_URL}_sub_sub" ]
     [ "$(git config submodule.behind.url)" = "${PRETEND_URL}_behind" ]
-    [ "$(git config submodule.equal.url)" = "" ]
+    not git config submodule.equal.url
     [ "$(git config submodule.ahead.url)" = "${PRETEND_URL}_ahead" ]
     [ "$(cd "${DIFFICULT_PATH}" && git config remote.origin.url)" = "${PRETEND_URL}_sub" ]
     [ "$(cd "${DIFFICULT_PATH}/a_sub_sub_module" && git config remote.origin.url)" = \
@@ -272,16 +272,20 @@ begin_test "Test safe-submodule-update"
     pushd behind &> /dev/null
       not git config remote.foo_upstream.url
       not git config remote.just_upstream.url
+      [ "$(git log -n1 --format="%s")" = "Behind (1)" ]
     popd &> /dev/null
     # Test that the foo_upstream remote was created in the equal submodule
     pushd equal &> /dev/null
       [ "$(git config remote.foo_upstream.url)" = "${PRETEND_URL}_equal" ]
-      [ "$(git log -n1 --format="%s")" = "Equal (1)" ]
       not git config remote.just_upstream.url
+      [ "$(git log -n1 --format="%s")" = "Equal (1)" ]
+      # alternatively
+      #[ "$(git show HEAD | git patch-id | awk '{print $1}')" = "${aSHA}" ]
     popd &> /dev/null
     pushd "ahead" &> /dev/null
       not git config remote.foo_upstream.url
       not git config remote.just_upstream.url
+      [ "$(git log -n1 --format="%s")" = "Ahead (1)" ]
     popd &> /dev/null
   popd &> /dev/null
 
@@ -310,8 +314,6 @@ begin_test "Test safe-submodule-update"
     [ "$(cd ahead && git config remote.foo_upstream.url)" = "${PRETEND_URL}_ahead" ]
 
     [ "$(cd behind && git log -n1 --format="%s")" = "Behind (1)" ]
-    # alternatively
-    #[ "$(git show HEAD | git patch-id | awk '{print $1}')" = "b2aefbcea30f2caf2f226371113c491bccdcf06f" ]
     [ "$(cd equal && git log -n1 --format="%s")" = "Equal (1)" ]
     [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (1)" ]
   popd &> /dev/null
@@ -383,6 +385,10 @@ begin_test "Test safe-submodule-update"
 
       # git is too old to do a safe submodule update; does a normal submodule
       # update, which forcefully moves HEAD, loosing the new commit
+      # RE I guess this commit is really only lost (although not unrecoverable)
+      # if there was not a branch tracking it. But forgetting to checkout a
+      # branch is pretty easy in a submodule, and this test runs the same if we
+      # don't checkout master before modifying readme_ahead
       [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (1)" ]
 
       # Manually recover this commit
@@ -465,7 +471,7 @@ begin_test "Test safe-submodule-update"
       # drop last commit in the behind submodule (so we don't get errors going
       # forward)
       pushd "behind" &> /dev/null
-        # git submodule update forcefully moved HEAD (dropping the commit)
+        # Move HEAD back to master after git submodule update forcefully moved it
         git checkout master
         git reset --hard HEAD~1
       popd &> /dev/null
@@ -482,7 +488,8 @@ begin_test "Test safe-submodule-update"
 
 
   # Test just_upstream sync'ing (and that other remotes, e.g., origin, are
-  # unaffected)
+  # unaffected). (This could be a separate test. If only setting up submodules
+  # wasn't such a pain)
   cp -a "${PRETEND_URL}_behind" "${PRETEND_URL}_behind2"
   pushd "${BUILD_REPO}" &> /dev/null
     sed "${sed_flags_i[@]}" -e \
@@ -522,7 +529,7 @@ begin_test "Test safe-submodule-update"
     [ "$(cd behind && git config remote.origin.url)" = "${PRETEND_URL}_behind" ]
     # just_upstream sync'd to the updated URL in the .gitmodules file
     [ "$(cd behind && git config remote.just_upstream.url)" = "${PRETEND_URL}_behind2" ]
-    [ "$(cd behind && git log -n1 --format="%s")" = "Behind (4)" ] # On a detached head
+    [ "$(cd behind && git log -n1 --format="%s")" = "Behind (4)" ]
   popd &> /dev/null
 
 
@@ -599,13 +606,14 @@ begin_test "Test safe-submodule-update"
     [ "$(cd equal && git log -n1 --format="%s")" = "Equal (1)" ] # Now on a detached head
   popd &> /dev/null
 
-  # If the submodule's URL is relative, resolve using the default remote of the
-  # current branch in the parent repository; otherwise, origin
+  # Verify that if the submodule's URL is relative, sync'ing resolves it using
+  # the default remote of the current branch in the parent repository;
+  # otherwise, origin
   cp -a "${TEST_REPO}" "${TEST_REPO}_ex2"
   pushd "${TEST_REPO}_ex2" &> /dev/null
     git checkout -b new_branch
     # Shouldn't be used by this test
-    [ "$(git config remote.origin.url)" = "${updated_pretend_url}" ]
+    [ "$(git config remote.origin.url)" = "${updated_pretend_url}" ] # .../git1
     updated_pretend_url="${PRETEND_URL/git\/pretend_repo/git2/pretend_repo}"
     git remote add upstream "${updated_pretend_url}"
     git config branch.new_branch.remote upstream
@@ -641,7 +649,7 @@ begin_test "Test safe-submodule-update"
     # Setup some branches to re-attach
     pushd "${DIFFICULT_PATH}" &> /dev/null
       git checkout master
-      git checkout "$(git rev-parse master)" # Detach head
+      git checkout "$(git rev-parse master)" # Detach the head
 
       pushd a_sub_sub_module &> /dev/null
         git checkout master # An attached head
@@ -649,7 +657,7 @@ begin_test "Test safe-submodule-update"
     popd &> /dev/null
 
     pushd equal &> /dev/null
-      git checkout "$(git rev-parse abranch)" # Detach head
+      git checkout "$(git rev-parse abranch)" # Detach the head
     popd &> /dev/null
 
     git_reattach_heads "${DIFFICULT_PATH}"
