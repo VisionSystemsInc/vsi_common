@@ -450,7 +450,7 @@ function is_submodule()
         fi
         #
         # Alternatively, use get_config_submodule_names and then git config to
-        # query the sm_path (as git_sync_submodules_recursively does)
+        # query the sm_path (as git_sync_submodules does)
         # RE Shouldn't be necessary in this case, as the submodule should
         # always be init'd and updated since we are recursing up through it
       popd &> /dev/null
@@ -706,7 +706,7 @@ function get_submodule_displaypaths()
 #
 # .. note::
 #
-#    The ultimate source-of-truth of a submodule's URL is in its .gitmodules file. If the URL is updated in this file, then the repository's and submodule's configurations will be out-of-date. ``git submodule sync`` will update these configurations using the .gitmodules file and the default remote of the current branch, if set; otherwise origin. :func:`git_sync_submodules_recursively` will do the same but using the specified remote.
+#    The ultimate source-of-truth of a submodule's URL is in its .gitmodules file. If the URL is updated in this file, then the repository's and submodule's configurations will be out-of-date. ``git submodule sync`` will update these configurations using the .gitmodules file and the default remote of the current branch, if set; otherwise origin. :func:`git_sync_submodules` will do the same but using the specified remote.
 #
 # .. note::
 #
@@ -752,8 +752,7 @@ function get_submodule_urls()
   # otherwise origin), for the default remote of the current branch in the
   # submodule, if set; otherwise origin.
   # (Source: see the note in the documentation of submodule-helper-relative-url)
-  # git_sync_submodules_recursively will do the same but using the specified
-  # remote.
+  # git_sync_submodules will do the same but using the specified remote.
   #
   # A repository's configuration can also have multiple associated URLs for a
   # submodule (see .git/config:submodule)
@@ -1173,7 +1172,7 @@ function submodule-helper-relative-url()
 }
 
 #**
-# .. function:: git_sync_submodules_recursively
+# .. function:: git_sync_submodules
 #
 # ``git submodule sync`` but using a specific remote (``just_upstream`` by default)
 #
@@ -1181,13 +1180,14 @@ function submodule-helper-relative-url()
 #
 # :Arguments: [``$1``] - The project-repository's remote. Default: origin
 # :Parameters: - [``JUST_GIT_UPSTREAM``] - The submodules' remote to sync. When updating the URL in the submodules' configuration, use this remote. Default: ``just_upstream``
+# :Parameters: [``RECURSIVE``] - Should the submodules be iterated through recursively. Default: unset
 #
 # .. note::
 #
 #   Creates the just_upstream remote just like, and using the same procedure as, :func:`just_git_functions.bsh safe_git_submodule_update`; however, importantly, it does not try to update the submodule to the expected SHA.
 #**
 
-function git_sync_submodules_recursively()
+function git_sync_submodules()
 {
   local remote_name="${1-origin}"
 
@@ -1234,7 +1234,9 @@ function git_sync_submodules_recursively()
         ${GIT} remote set-url "${JUST_GIT_UPSTREAM}" "${submodule_url}"
 
       # Depth-first traversal
-      git_sync_submodules_recursively "${JUST_GIT_UPSTREAM}"
+      if [ -n "${RECURSIVE:+set}" ]; then
+        git_sync_submodules "${JUST_GIT_UPSTREAM}"
+      fi
     popd &>/dev/null
   done
 }
@@ -1252,7 +1254,7 @@ function git_sync_submodules_recursively()
 #
 # .. note::
 #
-#   Creates a JUST_GIT_UPSTREAM remote. See :func:`git_sync_submodules_recursively`.
+#   Creates a JUST_GIT_UPSTREAM remote. See :func:`git_sync_submodules`.
 #
 # .. note::
 #
@@ -1261,7 +1263,7 @@ function git_sync_submodules_recursively()
 
 function check_submodules_are_pushed_recursively()
 {
-  git_sync_submodules_recursively ${@+"${@}"}
+  RECURSIVE=0 git_sync_submodules ${@+"${@}"}
 
   local recursive_index=-1
   local is_tracked_change_private=0
