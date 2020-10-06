@@ -527,11 +527,19 @@ begin_test "Test safe-submodule-update"
 
 
   # Verify that sync'ing uses the default remote of the current branch;
-  # otherwise origin
-  # TODO make equal4 relative
+  # otherwise origin (all of the previous tests implicitly used origin to sync,
+  # but go ahead and test it explicitly)
   pushd "${TEST_REPO}" &> /dev/null
+    sed "${sed_flags_i[@]}" -e \
+         "s|url = ${PRETEND_URL}_equal|url = "../$(basename ${PRETEND_URL}_equal)"|" .gitmodules
+    sed "${sed_flags_i[@]}" -e \
+         "s|url = ${PRETEND_URL}_ahead|url = "../$(basename ${PRETEND_URL}_ahead)"|" .gitmodules
+    git add .gitmodules
+    git commit -m "Update submodule behind's URL"
     # Modify the remotes of submodule equal and ahead
     # These repos don't have to exist
+    updated_pretend_url="${PRETEND_URL/git\/pretend_repo/git1/pretend_repo}"
+    git config remote.origin.url "${updated_pretend_url}"
     git config submodule.equal.url "${PRETEND_URL}_equal3"
     git config submodule.ahead.url "${PRETEND_URL}_ahead3"
     pushd equal &> /dev/null
@@ -551,16 +559,19 @@ begin_test "Test safe-submodule-update"
     popd &> /dev/null
   popd &> /dev/null
 
-  cp -a "${TEST_REPO}" "${TEST_REPO}_ref"
-  pushd "${TEST_REPO}_ref" &> /dev/null
+  cp -a "${TEST_REPO}" "${TEST_REPO}_ref1"
+  pushd "${TEST_REPO}_ref1" &> /dev/null
     git submodule sync
 
     pushd ahead &> /dev/null
-      ahead_remote_origin_url="$(git config remote.origin.url)" # "${PRETEND_URL}_ahead"
+      ahead_remote_origin_url="$(git config remote.origin.url)"
+      [ "${ahead_remote_origin_url}" = "${updated_pretend_url}_ahead" ]
     popd &> /dev/null
     pushd equal &> /dev/null
-      [ "$(git config remote.origin.url)" = "${PRETEND_URL}_equal4" ] #  (unchanged)
-      equal_remote_foo_upstream_url="$(git config remote.foo_upstream.url)" # "${PRETEND_URL}_equal"
+      # (unchanged)
+      [ "$(git config remote.origin.url)" = "${PRETEND_URL}_equal4" ]
+      equal_remote_foo_upstream_url="$(git config remote.foo_upstream.url)"
+      [ "${equal_remote_foo_upstream_url}" = "${updated_pretend_url}_equal" ]
     popd &> /dev/null
   popd &> /dev/null
 
@@ -587,12 +598,52 @@ begin_test "Test safe-submodule-update"
     [ "$(cd equal && git log -n1 --format="%s")" = "Equal (1)" ] # Now on a detached head
 
     # Reset the remotes
+    git config remote.origin.url "${PRETEND_URL}"
     pushd ahead &> /dev/null
       git config remote.origin.url "${PRETEND_URL}_ahead"
       git config remote.foo_upstream.url "${PRETEND_URL}_ahead"
     popd &> /dev/null
     pushd equal &> /dev/null
       git config remote.origin.url "${PRETEND_URL}_equal"
+      git config remote.foo_upstream.url "${PRETEND_URL}_equal"
+    popd &> /dev/null
+  popd &> /dev/null
+
+  # If the submodule's URL is relative, resolve using the default remote of the
+  # current branch in the parent repository; otherwise, origin
+  pushd "${TEST_REPO}" &> /dev/null
+    git checkout -b new_branch
+    updated_pretend_url="${PRETEND_URL/git\/pretend_repo/git2/pretend_repo}"
+    git remote add upstream "${updated_pretend_url}"
+    git config branch.new_branch.remote upstream
+  popd &> /dev/null
+
+  cp -a "${TEST_REPO}" "${TEST_REPO}_ref2"
+  pushd "${TEST_REPO}_ref2" &> /dev/null
+    git submodule sync
+
+    pushd ahead &> /dev/null
+      ahead_remote_origin_url="$(git config remote.origin.url)"
+      [ "${ahead_remote_origin_url}" = "${updated_pretend_url}_ahead" ]
+    popd &> /dev/null
+    pushd equal &> /dev/null
+      equal_remote_foo_upstream_url="$(git config remote.foo_upstream.url)"
+      [ "${equal_remote_foo_upstream_url}" = "${updated_pretend_url}_equal" ]
+    popd &> /dev/null
+  popd &> /dev/null
+
+  pushd "${TEST_REPO}" &> /dev/null
+    # Sync the submodules, fetches new commits, and update
+    safe_git_submodule_update
+
+    [ "$(cd ahead && git config remote.just_upstream.url)" = "${ahead_remote_origin_url}" ]
+    [ "$(cd equal && git config remote.just_upstream.url)" = "${equal_remote_foo_upstream_url}" ]
+
+    # Reset the remotes
+    pushd ahead &> /dev/null
+      git config remote.origin.url "${PRETEND_URL}_ahead"
+    popd &> /dev/null
+    pushd equal &> /dev/null
       git config remote.foo_upstream.url "${PRETEND_URL}_equal"
     popd &> /dev/null
   popd &> /dev/null
