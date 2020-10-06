@@ -558,8 +558,9 @@ begin_test "Test safe-submodule-update"
       git checkout "$(git rev-parse HEAD)"
     popd &> /dev/null
   popd &> /dev/null
+  cp -a "${TEST_REPO}" "${TEST_REPO}_ex1"
 
-  cp -a "${TEST_REPO}" "${TEST_REPO}_ref1"
+  cp -a "${TEST_REPO}_ex1" "${TEST_REPO}_ref1"
   pushd "${TEST_REPO}_ref1" &> /dev/null
     git submodule sync
 
@@ -575,7 +576,7 @@ begin_test "Test safe-submodule-update"
     popd &> /dev/null
   popd &> /dev/null
 
-  pushd "${TEST_REPO}" &> /dev/null
+  pushd "${TEST_REPO}_ex1" &> /dev/null
     # Sync the submodules, fetches new commits, and update
     safe_git_submodule_update
 
@@ -596,29 +597,21 @@ begin_test "Test safe-submodule-update"
     # would fail
     [ "$(cd equal && git config remote.foo_upstream.url)" = "${PRETEND_URL}_equal6" ]
     [ "$(cd equal && git log -n1 --format="%s")" = "Equal (1)" ] # Now on a detached head
-
-    # Reset the remotes
-    git config remote.origin.url "${PRETEND_URL}"
-    pushd ahead &> /dev/null
-      git config remote.origin.url "${PRETEND_URL}_ahead"
-      git config remote.foo_upstream.url "${PRETEND_URL}_ahead"
-    popd &> /dev/null
-    pushd equal &> /dev/null
-      git config remote.origin.url "${PRETEND_URL}_equal"
-      git config remote.foo_upstream.url "${PRETEND_URL}_equal"
-    popd &> /dev/null
   popd &> /dev/null
 
   # If the submodule's URL is relative, resolve using the default remote of the
   # current branch in the parent repository; otherwise, origin
-  pushd "${TEST_REPO}" &> /dev/null
+  cp -a "${TEST_REPO}" "${TEST_REPO}_ex2"
+  pushd "${TEST_REPO}_ex2" &> /dev/null
     git checkout -b new_branch
+    # Shouldn't be used by this test
+    [ "$(git config remote.origin.url)" = "${updated_pretend_url}" ]
     updated_pretend_url="${PRETEND_URL/git\/pretend_repo/git2/pretend_repo}"
     git remote add upstream "${updated_pretend_url}"
     git config branch.new_branch.remote upstream
   popd &> /dev/null
 
-  cp -a "${TEST_REPO}" "${TEST_REPO}_ref2"
+  cp -a "${TEST_REPO}_ex2" "${TEST_REPO}_ref2"
   pushd "${TEST_REPO}_ref2" &> /dev/null
     git submodule sync
 
@@ -632,20 +625,12 @@ begin_test "Test safe-submodule-update"
     popd &> /dev/null
   popd &> /dev/null
 
-  pushd "${TEST_REPO}" &> /dev/null
+  pushd "${TEST_REPO}_ex2" &> /dev/null
     # Sync the submodules, fetches new commits, and update
     safe_git_submodule_update
 
     [ "$(cd ahead && git config remote.just_upstream.url)" = "${ahead_remote_origin_url}" ]
     [ "$(cd equal && git config remote.just_upstream.url)" = "${equal_remote_foo_upstream_url}" ]
-
-    # Reset the remotes
-    pushd ahead &> /dev/null
-      git config remote.origin.url "${PRETEND_URL}_ahead"
-    popd &> /dev/null
-    pushd equal &> /dev/null
-      git config remote.foo_upstream.url "${PRETEND_URL}_equal"
-    popd &> /dev/null
   popd &> /dev/null
 
 
