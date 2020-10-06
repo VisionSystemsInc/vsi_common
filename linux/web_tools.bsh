@@ -36,11 +36,14 @@ fi
 #**
 function download_to_stdout()
 {
+  local success=1
   if command -v wget &> /dev/null; then
-    wget "${1}" -qO -
-  elif command -v curl &> /dev/null; then
-    curl -fsSL "${1}"
-  elif command -v python &> /dev/null; then
+    wget "${1}" -qO - && success=0 || success=$?
+  fi
+  if [ "${success}" != "0" ] && command -v curl &> /dev/null; then
+    curl -fsSL "${1}"  && success=0 || success=$?
+  fi
+  if [ "${success}" != "0" ] && command -v python &> /dev/null; then
     python -c  'if True:
                   try:
                     import requests
@@ -51,14 +54,17 @@ function download_to_stdout()
                     except:
                       import urllib.request as u
                     import os
-                    os.write(1,u.urlopen("'"${1}"'").read())'
-  elif command -v ruby &> /dev/null; then
-    ruby -e "require 'open-uri'; URI.open('${1}', 'rb') do |read_file|; \$stdout.write(read_file.read); end"
-  elif command -v perl &> /dev/null; then
+                    os.write(1,u.urlopen("'"${1}"'").read())' && success=0 || success=$?
+  fi
+  if [ "${success}" != "0" ] && command -v ruby &> /dev/null; then
+    ruby -e "require 'open-uri'; URI.open('${1}', 'rb') do |read_file|; \$stdout.write(read_file.read); end" && success=0 || success=$?
+  fi
+  if [ "${success}" != "0" ] && command -v perl &> /dev/null; then
     # Not all Perls have LWP installed
-    perl -MLWP::Simple -e "getprint '${1}'"
-  else
+    perl -MLWP::Simple -e "getprint '${1}'" && success=0 || success=$?
+  fi
+  if [ "${success}" != "0" ]; then
     echo "Cannot download a file" >&2
-    exit 2
+    return 2
   fi
 }
