@@ -106,7 +106,7 @@ function download_to_file_python()
   local python
   local success=100
   for python in "${PYTHON-}" python3 python python2; do
-    if command -v "${PYTHON}" &> /dev/null; then
+    if command -v "${python}" &> /dev/null; then
       PYTHON="${python}" download_to_stdout_python "${1}" > "${2}" && return || success=$?
     fi
   done
@@ -127,7 +127,10 @@ function download_to_file_python()
 function download_to_stdout_ruby()
 {
   if command -v "${RUBY-ruby}" &> /dev/null; then
-    "${RUBY-ruby}" -e "require 'open-uri'; URI.open('${1}', 'rb') do |read_file|; \$stdout.write(read_file.read); end" && return || return
+    "${RUBY-ruby}" -e " require 'open-uri'
+                        URI.open('${1}', 'rb') do |read_file|
+                          \$stdout.write(read_file.read)
+                        end" && return || return
   fi
   return 100
 }
@@ -160,7 +163,7 @@ function download_to_stdout_perl()
 # :Arguments: ``$1`` - URL to downloa
 # :Output: ``stdout`` - Binary stream of the url
 # :Return Value: - ``0`` - URL downloaded successfully
-#                - ``100`` - wget not found
+#                - ``100`` - No download method found
 #
 # Tries to download a file via various methods, in order:
 #
@@ -202,43 +205,27 @@ function download_to_stdout()
 
 function download_to_file()
 {
-  local success=100
-  # if command -v "${WGET-wget}" &> /dev/null; then
-  #   "${WGET-wget}" "${1}" -qO - && success=0 || success=$?
-  # fi
-  # if [ "${success}" != "0" ] && command -v "${CURL-curl}" &> /dev/null; then
-  #   "${CURL-curl}" -fsSL "${1}"  && success=0 || success=$?
-  # fi
-  # if [ "${success}" != "0" ]; then
-  #   local PYTHON="${PYTHON-}"
-  #   for PYTHON in "${PYTHON-}" python3 python python2; do
-  #     if command -v "${PYTHON}" &> /dev/null; then
-  #       "${PYTHON}" -c  'if True:
-  #           try:
-  #             import requests
-  #             os.write(1, requests.get("'"${1}"'").content)
-  #           except:
-  #             try:
-  #               import urllib2 as u
-  #             except:
-  #               import urllib.request as u
-  #             import os
-  #             os.write(1,u.urlopen("'"${1}"'").read())' && success=0 || success=$?
-  #       if [ "${success}" = "0" ]; then
-  #         break
-  #       fi
-  #     fi
-  #   done
-  # fi
-  # if [ "${success}" != "0" ] && command -v "${RUBY-ruby}" &> /dev/null; then
-  #   "${RUBY-ruby}" -e "require 'open-uri'; URI.open('${1}', 'rb') do |read_file|; \$stdout.write(read_file.read); end" && success=0 || success=$?
-  # fi
-  # if [ "${success}" != "0" ] && command -v "${PERL-perl}" &> /dev/null; then
-  #   # Not all Perls have LWP installed
-  #   "${PERL-perl}" -MLWP::Simple -e "getprint '${1}'" && success=0 || success=$?
-  # fi
-  # if [ "${success}" != "0" ]; then
-  #   echo "Cannot download a file" >&2
-  #   return 2
-  # fi
+  local found=100
+  local rv
+  download_to_stdout_wget "${1}" > "${2}" && return || rv=$?
+  if [ "${rv}" != "100" ]; then
+    found="${rv}"
+  fi
+  download_to_stdout_curl "${1}" > "${2}" && return || rv=$?
+  if [ "${rv}" != "100" ]; then
+    found="${rv}"
+  fi
+  download_to_file_python "${1}" "${2}" && return || rv=$?
+  if [ "${rv}" != "100" ]; then
+    found="${rv}"
+  fi
+  download_to_stdout_ruby "${1}" > "${2}" && return || rv=$?
+  if [ "${rv}" != "100" ]; then
+    found="${rv}"
+  fi
+  download_to_stdout_perl "${1}" > "${2}" && return || rv=$?
+  if [ "${rv}" != "100" ]; then
+    found="${rv}"
+  fi
+  return "${found}"
 }
