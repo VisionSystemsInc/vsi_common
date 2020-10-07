@@ -53,6 +53,16 @@ begin_test "cmake-install"
 end_test
 
 
+# helper function: print registry keys & subkeys to stdout, useful to compare registry values before & after an operation.  Take care to use the correct key names, as errors are ignored. 
+function registry_to_stdout()
+{
+  for key in "$@"
+  do
+    MSYS2_ARG_CONV_EXCL="*" reg query "${key}" /s 2>/dev/null || :
+  done
+}
+
+
 # test conda-python-install & pipenv-install: test in sequence according to typical usage - install python then pipenv
 # alpine musl won't run the miniconda executable
 [ "${VSI_OS}" = "linux" ] && [ "${VSI_MUSL}" = "1" ] && [ -z "${VSI_FORCE_INSTALL_FUNCTIONS_TEST+set}" ] && skip_next_test
@@ -61,10 +71,33 @@ begin_test "conda-python-install and pipenv-install"
   setup_test
 
   # redirect mktemp commands to $TESTDIR (does not work on a mac)
-  [ "${VSI_OS}" != "darwin" ] && export TMPDIR="${TESTDIR}"
+  if [ "${VSI_OS}" != "darwin" ]; then
+    export TMPDIR="${TESTDIR}"
+  fi
 
   # environment
   export JUST_INSTALL_ACTIVATE_BASENAME="test_just_activate.bsh"
+
+  # for windows, perform additional test if possible confirming no change to windows registry.  For example, when misconfigured conda may add an unwanted entry to <HKEY_CURRENT_USER\SOFTWARE\Python>
+  if [ "${VSI_OS}" = "windows" ]; then
+
+    # registry keys for comparison
+    REGISTRY_KEYS=( "HKEY_CURRENT_USER\SOFTWARE\Python" )
+
+    # before/after registry files
+    REGISTRY_BEFORE="${TESTDIR}/before.reg"
+    REGISTRY_AFTER="${TESTDIR}/after.reg"
+
+    # registry comparison requires "reg" and "cmp" commands
+    ENABLE_REGISTRY_TEST="$( command -v reg &> /dev/null && \
+                             command -v cmp &> /dev/null && \
+                             echo "1" )"
+  fi
+
+  # store registry
+  if [ "${ENABLE_REGISTRY_TEST-}" = "1" ]; then
+    registry_to_stdout "${REGISTRY_KEYS[@]}" > "${REGISTRY_BEFORE}"
+  fi
 
   # --python--
 
@@ -88,6 +121,22 @@ begin_test "conda-python-install and pipenv-install"
   # activate version
   RESULT="$(source "${python_activate}"; "${PYTHON_EXE}" --version 2>&1)"
   [ "$RESULT" = "${PYTHON_VER_FULL}" ]
+
+  # registry test
+  if [ "${ENABLE_REGISTRY_TEST-}" = "1" ]; then
+    registry_to_stdout "${REGISTRY_KEYS[@]}" > "${REGISTRY_AFTER}"
+
+    # echo to stderr for debugging
+    { echo "Registry comparison of [${REGISTRY_KEYS[@]}]" ;
+      echo "Initial state:" ;
+      cat "${REGISTRY_BEFORE}" ;
+      echo "Final state:" ;
+      cat "${REGISTRY_AFTER}" ;
+      echo ; } >&2
+
+    # compare
+    cmp "${REGISTRY_BEFORE}" "${REGISTRY_AFTER}"
+  fi
 
   # --pipenv--
 

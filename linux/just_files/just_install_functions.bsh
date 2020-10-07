@@ -250,10 +250,22 @@ function conda-python-install()
   if [ "${install_conda}" = "1" ]; then
     echo "Installing miniconda..." >&2
     local conda_dir="${temp_dir}/conda"
+
+    # windows
     if [ "${OS-}" = "Windows_NT" ]; then
-      MSYS2_ARG_CONV_EXCL="*" "${CONDA_INSTALLER}" /NoRegistry=1 /InstallationType=JustMe /S /D="$(cygpath -aw "${conda_dir}")"
+
+      # manual specification of NoRegistry, AddToPath, & RegisterPython
+      # ensure the temporary miniconda is not added to the system registry
+      # at <HKEY_CURRENT_USER\SOFTWARE\Python\PythonCore>
+      MSYS2_ARG_CONV_EXCL="*" "${CONDA_INSTALLER}" \
+          /NoRegistry=1 /AddToPath=0 /RegisterPython=0 \
+          /InstallationType=JustMe /S /D="$(cygpath -aw "${conda_dir}")"
       CONDA="${conda_dir}/_conda"
-      # CONDA="${conda_temp_dir}/conda/Scripts/conda"
+
+      # cleanup shortcuts
+      "${CONDA}" remove -y -p "${conda_dir}" console_shortcut powershell_shortcut
+
+    # linux & darwin
     else
       bash "${CONDA_INSTALLER}" -b -p "${conda_dir}" -s
       CONDA="${conda_dir}/bin/conda"
