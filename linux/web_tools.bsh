@@ -19,46 +19,215 @@ fi
 #**
 
 #**
+# .. function:: download_to_stdout_wget
+#
+# Download a file from the internet and output stream to stdout using wget
+#
+# :Return value: - ``0`` - Successful download
+#                - ``Non-zero`` - Failed download
+#                - ``100`` - wget not found
+# :Arguments: - ``$1`` - URL to download
+# :Inputs: ``WGET`` - Variable to specify wget executable, defaults to ``wget``
+#          ``WGET_ARGS`` - Array of optional args to add to wget call. ``-qO -`` is always added
+#**
+function download_to_stdout_wget()
+{
+  if command -v "${WGET-wget}" &> /dev/null; then
+    "${WGET-wget}" ${WGET_ARGS[@]+"${WGET_ARGS[@]}"} "${1}" -qO - && return || return
+  fi
+  return 100
+}
+
+#**
+# .. function:: download_to_stdout_curl
+#
+# Download a file from the internet and output stream to stdout using curl
+#
+# :Return value: - ``0`` - Successful download
+#                - ``Non-zero`` - Failed download
+#                - ``100`` - curl not found
+# :Arguments: - ``$1`` - URL to download
+# :Inputs: ``CURL`` - Variable to specify curl executable, defaults to ``curl``
+#          ``CURL_ARGS`` - Array of optional args to add to wget call, ``-fsSL`` is always added
+#**
+function download_to_stdout_curl()
+{
+  if command -v "${CURL-curl}" &> /dev/null; then
+    "${CURL-curl}" ${CURL_ARGS[@]+"${CURL_ARGS[@]}"} -fsSL "${1}" && return || return
+  fi
+  return 100
+}
+
+#**
+# .. function:: download_to_stdout_python
+#
+# Download a file from the internet and output stream to stdout using python
+#
+# :Return value: - ``0`` - Successful download
+#                - ``Non-zero`` - Failed download
+#                - ``100`` - python not found
+# :Arguments: - ``$1`` - URL to download
+# :Inputs: ``PYTHON`` - Variable to specify python executable, defaults to ``python``
+#
+# Compatible with python2 and python3, and attempts to use ``requests``, then ``urllib2`` and ``urllib``
+#**
+function download_to_stdout_python()
+{
+  if command -v "${PYTHON-python}" &> /dev/null; then
+    "${PYTHON-python}" -c  'if True:
+        try:
+          import requests
+          os.write(1, requests.get("'"${1}"'").content)
+        except:
+          try:
+            import urllib2 as u
+          except:
+            import urllib.request as u
+          import os
+          os.write(1,u.urlopen("'"${1}"'").read())' && return || return
+  fi
+  return 100
+}
+
+#**
+# .. function:: download_to_file_python
+#
+# Download a file from the internet and saves to a file using python
+#
+# :Return value: - ``0`` - Successful download
+#                - ``Non-zero`` - Failed download
+#                - ``100`` - python not found
+# :Arguments: - ``$1`` - URL to download
+#             - ``$2`` - Filename to save to
+# :Inputs: ``PYTHON`` - Variable to specify python executable, defaults to ``python``
+#
+# Compatible with python2 and python3, and attempts to use ``requests``, then ``urllib2`` and ``urllib``
+#**
+function download_to_file_python()
+{
+  local python
+  local success=100
+  for python in "${PYTHON-}" python3 python python2; do
+    if command -v "${python}" &> /dev/null; then
+      PYTHON="${python}" download_to_stdout_python "${1}" > "${2}" && return || success=$?
+    fi
+  done
+  return ${success}
+}
+
+#**
+# .. function:: download_to_stdout_ruby
+#
+# Download a file from the internet and output stream to stdout using ruby, using open-uri.
+#
+# :Return value: - ``0`` - Successful download
+#                - ``Non-zero`` - Failed download
+#                - ``100`` - ruby not found
+# :Arguments: - ``$1`` - URL to download
+# :Inputs: ``RUBY`` - Variable to specify ruby executable, defaults to ``ruby``
+#**
+function download_to_stdout_ruby()
+{
+  if command -v "${RUBY-ruby}" &> /dev/null; then
+    "${RUBY-ruby}" -e " require 'open-uri'
+                        URI.open('${1}', 'rb') do |read_file|
+                          \$stdout.write(read_file.read)
+                        end" && return || return
+  fi
+  return 100
+}
+
+#**
+# .. function:: download_to_stdout_perl
+#
+# Download a file from the internet and output stream to stdout using perl, using LWP::Simple.
+#
+# :Return value: - ``0`` - Successful download
+#                - ``Non-zero`` - Failed download
+#                - ``100`` - perl not found
+# :Arguments: - ``$1`` - URL to download
+# :Inputs: ``PERL`` - Variable to specify perl executable, defaults to ``perl``
+#**
+function download_to_stdout_perl()
+{
+  if command -v "${PERL-perl}" &> /dev/null; then
+    # Not all Perls have LWP installed
+    "${PERL-perl}" -MLWP::Simple -e "getprint '${1}'" && return || return
+  fi
+  return 100
+}
+
+#**
 # .. function:: download_to_stdout
 #
 # Download a file from the internet and output stream to stdout
 #
 # :Arguments: ``$1`` - URL to downloa
 # :Output: ``stdout`` - Binary stream of the url
+# :Return Value: - ``0`` - URL downloaded successfully
+#                - ``100`` - No download method found
 #
 # Tries to download a file via various methods, in order:
 #
 # 1. ``wget`` using ``wget -q``
 # 2. ``curl`` using ``curl -fsSL``
-# 3. ``python`` using the ``urllib2`` or ``urllib`` library
+# 3. ``python`` using the ``requests``, ``urllib2`` or ``urllib`` library
 # 4. ``ruby`` using the ``open-uri`` library
 # 5. ``perl`` using the ``LWP::Simple`` library
 #**
 function download_to_stdout()
 {
-  if command -v wget &> /dev/null; then
-    wget "${1}" -qO -
-  elif command -v curl &> /dev/null; then
-    curl -fsSL "${1}"
-  elif command -v python &> /dev/null; then
-    python -c  'if True:
-                  try:
-                    import requests
-                    os.write(1, requests.get("'"${1}"'").content)
-                  except:
-                    try:
-                      import urllib2 as u
-                    except:
-                      import urllib.request as u
-                    import os
-                    os.write(1,u.urlopen("'"${1}"'").read())'
-  elif command -v ruby &> /dev/null; then
-    ruby -e "require 'open-uri'; URI.open('${1}', 'rb') do |read_file|; \$stdout.write(read_file.read); end"
-  elif command -v perl &> /dev/null; then
-    # Not all Perls have LWP installed
-    perl -MLWP::Simple -e "getprint '${1}'"
-  else
-    echo "Cannot download a file" >&2
-    exit 2
+  local success=100
+
+  download_to_stdout_wget "${1}" && return || success=$?
+  if [ "${success}" != "100" ]; then
+    return "${success}"
   fi
+
+  download_to_stdout_curl "${1}" && return || success=$?
+  if [ "${success}" != "100" ]; then
+    return "${success}"
+  fi
+
+  local python
+  for python in "${PYTHON-}" python3 python python2; do
+    PYTHON="${python}" download_to_stdout_python "${1}" && return || success=$?
+    if [ "${success}" != "100" ]; then
+      return "${success}"
+    fi
+  done
+
+  download_to_stdout_ruby "${1}" && return || success=$?
+  if [ "${success}" != "100" ]; then
+    return "${success}"
+  fi
+
+  download_to_stdout_perl "${1}" && return || return
+}
+
+function download_to_file()
+{
+  local found=100
+  local rv
+  download_to_stdout_wget "${1}" > "${2}" && return || rv=$?
+  if [ "${rv}" != "100" ]; then
+    found="${rv}"
+  fi
+  download_to_stdout_curl "${1}" > "${2}" && return || rv=$?
+  if [ "${rv}" != "100" ]; then
+    found="${rv}"
+  fi
+  download_to_file_python "${1}" "${2}" && return || rv=$?
+  if [ "${rv}" != "100" ]; then
+    found="${rv}"
+  fi
+  download_to_stdout_ruby "${1}" > "${2}" && return || rv=$?
+  if [ "${rv}" != "100" ]; then
+    found="${rv}"
+  fi
+  download_to_stdout_perl "${1}" > "${2}" && return || rv=$?
+  if [ "${rv}" != "100" ]; then
+    found="${rv}"
+  fi
+  return "${found}"
 }

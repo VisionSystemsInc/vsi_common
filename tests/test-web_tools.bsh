@@ -1,0 +1,468 @@
+#!/usr/bin/env bash
+
+
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
+
+source "${VSI_COMMON_DIR}/tests/testlib.bsh"
+source "${TESTLIB_DIR}/test_utils.bsh"
+source "${VSI_COMMON_DIR}/linux/web_tools.bsh"
+
+function fail_all()
+{
+  function wget()
+  {
+    echo "bad data"
+    return 1
+  }
+  function wget2()
+  {
+    echo "bad data"
+    return 2
+  }
+
+  function curl()
+  {
+    echo "bad data"
+    return 1
+  }
+  function curl2()
+  {
+    echo "bad data"
+    return 2
+  }
+
+  function python()
+  {
+    echo "bad data"
+    return 1
+  }
+  function python2()
+  {
+    echo "bad data"
+    return 2
+  }
+  function python3()
+  {
+    echo "bad data"
+    return 3
+  }
+  function python4()
+  {
+    echo "bad data"
+    return 4
+  }
+
+  function ruby()
+  {
+    echo "bad data"
+    return 1
+  }
+  function ruby2()
+  {
+    echo "bad data"
+    return 2
+  }
+
+  function perl()
+  {
+    echo "bad data"
+    return 1
+  }
+  function perl2()
+  {
+    echo "bad data"
+    return 2
+  }
+}
+
+function test_perl()
+{
+  function perl()
+  {
+    echo "perl1"
+    return 0
+  }
+  [ "$(${dl} https://www.example.com ${file-"${file-}"}; echo $? | cat ${file-"${file-}"} -)" = $'perl1\n0' ]
+
+  function perl2()
+  {
+    echo "perl2"
+    return 0
+  }
+  [ "$(PERL=perl2 ${dl} https://www.example.com ${file-"${file-}"}; echo $? | cat ${file-"${file-}"} -)" = $'perl2\n0' ]
+}
+
+function test_ruby()
+{
+  function ruby()
+  {
+    echo "ruby1"
+    return 0
+  }
+  [ "$(${dl} https://www.example.com ${file-"${file-}"}; echo $? | cat ${file-"${file-}"} -)" = $'ruby1\n0' ]
+
+  function ruby2()
+  {
+    echo "ruby2"
+    return 0
+  }
+  [ "$(RUBY=ruby2 ${dl} https://www.example.com ${file-"${file-}"}; echo $? | cat ${file-"${file-}"} -)" = $'ruby2\n0' ]
+}
+
+function test_python2()
+{
+  function python2()
+  {
+    echo "python2"
+    return 0
+  }
+  [ "$(${dl} https://www.example.com ${file-"${file-}"}; echo $? | cat ${file-"${file-}"} -)" = $'python2\n0' ]
+}
+
+function test_python()
+{
+  function python()
+  {
+    echo "python1"
+    return 0
+  }
+  [ "$(${dl} https://www.example.com ${file-"${file-}"}; echo $? | cat ${file-"${file-}"} -)" = $'python1\n0' ]
+}
+
+function test_python3()
+{
+  function python3()
+  {
+    echo "python3"
+    return 0
+  }
+  [ "$(${dl} https://www.example.com ${file-"${file-}"}; echo $? | cat ${file-"${file-}"} -)" = $'python3\n0' ]
+}
+
+function test_PYTHON()
+{
+  function python4()
+  {
+    echo "python4"
+    return 0
+  }
+  [ "$(PYTHON=python4 ${dl} https://www.example.com ${file-"${file-}"}; echo $? | cat ${file-"${file-}"} -)" = $'python4\n0' ]
+}
+
+function test_curl()
+{
+  function curl()
+  {
+    echo "curl1"
+    return 0
+  }
+  [ "$(${dl} https://www.example.com ${file-"${file-}"}; echo $? | cat ${file-"${file-}"} -)" = $'curl1\n0' ]
+
+  function curl2()
+  {
+    echo "curl2"
+    return 0
+  }
+  [ "$(CURL=curl2 ${dl} https://www.example.com ${file-"${file-}"}; echo $? | cat ${file-"${file-}"} -)" = $'curl2\n0' ]
+}
+
+function test_wget()
+{
+  function wget()
+  {
+    echo "wget1"
+    return 0
+  }
+  [ "$(${dl} https://www.example.com ${file-"${file-}"}; echo $? | cat ${file-"${file-}"} -)" = $'wget1\n0' ]
+
+  function wget2()
+  {
+    echo "wget2"
+    return 0
+  }
+  [ "$(WGET=wget2 ${dl} https://www.example.com ${file-"${file-}"}; echo $? | cat ${file-"${file-}"} -)" = $'wget2\n0' ]
+}
+
+function mock_command()
+{
+ function command()
+  {
+    local x
+    if [ "${2}" = "" ]; then
+      return 1
+    fi
+    for x in ${command1[@]+"${command1[@]}"}; do
+      if [ "${2}" = "${x}" ]; then
+        return 0
+      fi
+    done
+    # Faster as two separate ifs, no subshell needed
+    for x in ${command2[@]+"${command2[@]}"}; do
+      if [ "${2}" = "${!x-}" ]; then
+        return 0
+      fi
+    done
+    return 1
+  }
+}
+
+begin_test "Test download to stdout perl"
+(
+  setup_test
+
+  mock_command
+  download_to_stdout_perl || rv=$?
+  [ "${rv}" = "100" ]
+  fail_all
+  command1=perl
+  [ "$(download_to_stdout_perl http://www.example.com || echo $?)" = $'bad data\n1' ]
+  command2=PERL
+  [ "$(PERL=perl2 download_to_stdout_perl http://www.example.com || echo $?)" = $'bad data\n2' ]
+
+  dl=download_to_stdout_perl
+  test_perl
+)
+end_test
+
+begin_test "Test download to stdout ruby"
+(
+  setup_test
+
+  mock_command
+  download_to_stdout_ruby || rv=$?
+  [ "${rv}" = "100" ]
+  fail_all
+  command1=ruby
+  [ "$(download_to_stdout_ruby http://www.example.com || echo $?)" = $'bad data\n1' ]
+  command2=RUBY
+  [ "$(RUBY=ruby2 download_to_stdout_ruby http://www.example.com || echo $?)" = $'bad data\n2' ]
+
+  dl=download_to_stdout_ruby
+  test_ruby
+)
+end_test
+
+begin_test "Test download to stdout python"
+(
+  setup_test
+
+  mock_command
+  download_to_stdout_python || rv=$?
+  [ "${rv}" = "100" ]
+  fail_all
+  command1=python
+  [ "$(download_to_stdout_python http://www.example.com || echo $?)" = $'bad data\n1' ]
+  command2=PYTHON
+  [ "$(PYTHON=python4 download_to_stdout_python http://www.example.com || echo $?)" = $'bad data\n4' ]
+
+  dl=download_to_stdout_python
+  test_python
+)
+end_test
+
+begin_test "Test download to stdout wget"
+(
+  setup_test
+
+  mock_command
+  download_to_stdout_wget || rv=$?
+  [ "${rv}" = "100" ]
+  fail_all
+  command1=wget
+  [ "$(download_to_stdout_wget http://www.example.com || echo $?)" = $'bad data\n1' ]
+  command2=WGET
+  [ "$(WGET=wget2 download_to_stdout_wget http://www.example.com || echo $?)" = $'bad data\n2' ]
+
+  dl=download_to_stdout_wget
+  test_wget
+
+  function wget()
+  {
+    echo "${@}"
+  }
+  WGET_ARGS=("-foo" "b a  r")
+  ans="-foo b a  r"
+  [[ $(download_to_stdout_wget http://www.example.com) = *${ans}* ]] || false
+)
+end_test
+
+begin_test "Test download to stdout curl"
+(
+  setup_test
+
+  mock_command
+  download_to_stdout_curl || rv=$?
+  [ "${rv}" = "100" ]
+  fail_all
+  command1=curl
+  [ "$(download_to_stdout_curl http://www.example.com || echo $?)" = $'bad data\n1' ]
+  command2=CURL
+  [ "$(CURL=curl2 download_to_stdout_curl http://www.example.com || echo $?)" = $'bad data\n2' ]
+
+  dl=download_to_stdout_curl
+  test_curl
+
+  function curl()
+  {
+    echo "${@}"
+  }
+  CURL_ARGS=("-foo" "b a  r")
+  ans="-foo b a  r"
+  [[ $(download_to_stdout_curl http://www.example.com) = *${ans}* ]] || false
+)
+end_test
+
+begin_test "Test download to stdout"
+(
+  setup_test
+
+  mock_command
+  not download_to_stdout https://www.example.com
+
+  dl=download_to_stdout
+  command1=perl
+  command2=PERL
+  test_perl
+
+  command1=ruby
+  command2=RUBY
+  test_ruby
+
+  command1=python3
+  test_python3
+  command1=python
+  test_python
+  command1=python2
+  test_python2
+  command2=PYTHON # This has to be set here, and not above, because of how
+                  # PYTHON is used at multiple levels
+  test_PYTHON
+
+  command1=curl
+  command2=CURL
+  test_curl
+
+  command1=wget
+  command2=WGET
+  test_wget
+)
+end_test
+
+begin_test "Test download to file python"
+(
+  setup_test
+
+  mock_command
+
+  file="${TESTDIR}/file.txt"
+  download_to_file_python http://www.example.com "${file}" || rv=$?
+  [ "${rv}" = "100" ]
+
+  fail_all
+  command1=python
+  [ "$(download_to_file_python http://www.example.com "${file}" || echo $? | cat "${file}" -)" = $'bad data\n1' ]
+
+  # Trys just python4
+  command1=()
+  command2=PYTHON
+  [ "$(PYTHON=python4 download_to_file_python http://www.example.com "${file}" || echo $? | cat "${file}" -)" = $'bad data\n4' ]
+
+  # Try python 4 then python3
+  command1=(python4 python3)
+  [ "$(PYTHON=python4 download_to_file_python http://www.example.com "${file}" || echo $? | cat "${file}" -)" = $'bad data\n3' ]
+
+  # Try python 3 then python
+  command1=(python python3)
+  [ "$(download_to_file_python http://www.example.com "${file}" || echo $? | cat "${file}" -)" = $'bad data\n1' ]
+
+  # Try python3, python then finally python 2
+  command1=(python python3 python2)
+  [ "$(PYTHON=python download_to_file_python http://www.example.com "${file}" || echo $? | cat "${file}" -)" = $'bad data\n2' ]
+
+  dl=download_to_file_python
+  command1=(python3 python python2)
+  command2=(PYTHON)
+  test_python2 # Defines a passing version of python2
+  test_python  # Defines a passing version of python
+  test_python3 # Defines a passing version of python3
+  not test_python # So these should be the wrong version now
+  command1=(python python2) # make python3 go away
+  test_python
+  not test_python2
+  command1=(python2)
+  test_python2
+
+  command1=(python3 python python2)
+  not TEST_PYTHON
+  test_PYTHON # PYTHON should take precedence
+)
+end_test
+
+begin_test "Test download to file"
+(
+  setup_test
+
+  function discover_all_commands()
+  {
+    command1=(python python2 python3 perl ruby wget curl)
+    command2=(PYTHON PERL RUBY WGET CURL)
+  }
+
+  mock_command
+  file="${TESTDIR}/file.txt"
+
+  fail_all
+  download_to_file https://www.example.com "${file}" || [ "$?" = 100 ]
+
+  dl=download_to_file
+  command1=perl
+  command2=PERL
+  test_perl
+  discover_all_commands
+  test_perl
+
+  command1=ruby
+  command2=RUBY
+  test_ruby
+  discover_all_commands
+  test_ruby
+  not test_perl
+  fail_all
+  test_perl
+
+  command1=(python2)
+  command2=PYTHON
+  test_python2
+  discover_all_commands
+  test_python2
+  not test_perl
+  test_python
+  test_python3
+  test_PYTHON
+  not test_python
+  fail_all
+  test_perl
+  test_python
+  not test_perl
+
+  command1=curl
+  command2=CURL
+  test_curl
+  discover_all_commands
+  test_curl
+  not test_python
+  fail_all
+  test_python
+
+  command1=wget
+  command2=WGET
+  test_wget
+  discover_all_commands
+  test_wget
+  not test_curl
+  fail_all
+  test_curl
+)
+end_test
