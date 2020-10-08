@@ -1179,8 +1179,13 @@ function submodule-helper-relative-url()
 # Like ``git submodule sync``, synchronize the configured URL of each submodule in a repository (recursively) to the value specified in .gitmodules; however, instead of overwriting the default remote (origin), update the remote specified by JUST_GIT_UPSTREAM (``just_upstream`` by default).
 #
 # :Arguments: [``$1``] - The project-repository's remote. Default: origin
+#             [``$2``] - The submodule path to sync. Default: all submodules of the current repository (non-recursively)
 # :Parameters: - [``JUST_GIT_UPSTREAM``] - The submodules' remote to sync. When updating the URL in the submodules' configuration, use this remote. Default: ``just_upstream``
 # :Parameters: [``RECURSIVE``] - Should the submodules be iterated through recursively. Default: unset
+#
+# .. note::
+#
+#   Because this function uses ``git config`` to list the submodule names (via :func:`git_mirror get_config_submodule_names`), it skips submodules that have not been init'd.
 #
 # .. note::
 #
@@ -1195,8 +1200,25 @@ function git_sync_submodules()
 
   local OLD_IFS="${IFS}"
   IFS=$'\n'
+  # REVIEW I think this should use get_submodule_names because 1) there is no
+  # .gitmodules file until the submodule is updated, and 2) this mirrors what
+  # git submodule sync (and git submodule foreach) do (also update the note
+  # above: copy the note from get_submodule_displaypaths). Same for
+  # check_submodules_are_pushed_recursively
   local submodule_keys=($(get_config_submodule_names))
   IFS="${OLD_IFS}"
+  if [ $# -gt 1 ]; then
+    local sm_key
+    for sm_key in ${submodule_keys[@]+"${submodule_keys[@]}"}; do
+      local sm_path="$(${GIT} config --file .gitmodules --get "${sm_key}".path)"
+      # Remove trailing slash
+      if [ "${sm_path%/}" = "${2%/}" ]; then
+        submodule_keys=("${sm_key}")
+        break
+      fi
+    done
+  fi
+
 
   local sm_key
   for sm_key in ${submodule_keys+"${submodule_keys[@]}"}; do
@@ -1248,6 +1270,7 @@ function git_sync_submodules()
 #
 # Check each submodule (recursively) to see if the SHA tracked by its parent repository has been pushed to the URL tracked by the parent repository (per its .gitmodules file). Must be run from the root of a repository.
 #
+# :Arguments: [``$1``] - The project-repository's remote. Default: origin
 # :Parameters: - [``JUST_GIT_UPSTREAM``] - The submodule's remote to sync. When fetching, use this remote's URL. Default: ``just_upstream``
 #
 # :Output: Return 0 if, for each submodule (recursively), the changes tracked by the parent repository have been made public; otherwise, return 1
@@ -1263,7 +1286,7 @@ function git_sync_submodules()
 
 function check_submodules_are_pushed_recursively()
 {
-  RECURSIVE=0 git_sync_submodules ${@+"${@}"}
+  RECURSIVE=0 git_sync_submodules ${@+"${@:1}"}
 
   local recursive_index=-1
   local is_tracked_change_private=0
