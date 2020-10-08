@@ -811,7 +811,7 @@ function get_submodule_names()
   #       sed -e 's|.url$||' -e 's|^submodule.||'
   #
   # git submodule--helper name docker/recipes will also return the name of a
-  # submodule given an sm_path
+  # submodule given an sm_path (available after git 2.7 at least)
   #
   # NOTE Updating a submodule's name (as recorded in the .gitmodules file) is
   # tricky to get right; git basically treats it as a new submodule
@@ -1185,7 +1185,7 @@ function submodule-helper-relative-url()
 #
 # .. note::
 #
-#   Because this function uses ``git config`` to list the submodule names (via :func:`git_mirror get_config_submodule_names`), it skips submodules that have not been init'd.
+#   Because this function uses ``git submodule foreach``, it skips submodules that have been init'd but not updated.
 #
 # .. note::
 #
@@ -1200,33 +1200,32 @@ function git_sync_submodules()
 
   local OLD_IFS="${IFS}"
   IFS=$'\n'
-  # REVIEW I think this should use get_submodule_names because 1) there is no
-  # .gitmodules file until the submodule is updated, and 2) this mirrors what
-  # git submodule sync (and git submodule foreach) do (also update the note
-  # above: copy the note from get_submodule_displaypaths). Same for
-  # check_submodules_are_pushed_recursively
-  local submodule_keys=($(get_config_submodule_names))
-  IFS="${OLD_IFS}"
+  local submodule_keys=($(RECURSIVE= get_submodule_names))
   if [ $# -gt 1 ]; then
-    local sm_key
-    for sm_key in ${submodule_keys[@]+"${submodule_keys[@]}"}; do
-      local sm_path="$(${GIT} config --file .gitmodules --get "${sm_key}".path)"
-      # Remove trailing slash
-      if [ "${sm_path%/}" = "${2%/}" ]; then
-        submodule_keys=("${sm_key}")
-        break
-      fi
-    done
+    if [ "${#submodule_keys[@]}" -eq 0 ]; then
+      echo "ERROR No submodules to sync"
+      return 1
+    fi
+    # Doesn't have trailing slashes
+    local submodule_displaypaths=($(RECURSIVE= get_submodule_displaypaths))
+    # Remove trailing slash
+    local index="$(findin "${2%/}" ${submodule_displaypaths[@]+"${submodule_displaypaths[@]}"})"
+    if [ "${index}" = "-1" ]; then
+      echo "ERROR No submodule found at requested path: ${2} (PWD: ${PWD})"
+      return 1
+    fi
+    submodule_keys=("${submodule_keys[$index]}")
   fi
+  IFS="${OLD_IFS}"
 
 
   local sm_key
   for sm_key in ${submodule_keys+"${submodule_keys[@]}"}; do
-    local sm_path="$(${GIT} config -f .gitmodules "${sm_key}".path)"
+    local sm_path="$(${GIT} config -f .gitmodules submodule."${sm_key}".path)"
     local sm_name="${sm_key#submodule.}"
     # Remove trailing slash
     sm_path="${sm_path%/}"
-    local submodule_url="$(${GIT} config -f "${PWD}"/.gitmodules "${sm_key}".url)"
+    local submodule_url="$(${GIT} config -f "${PWD}"/.gitmodules submodule."${sm_key}".url)"
     # URLs/paths relative to the CWD must either start with ./ or ../
     # according to git. This is how git-submodule.sh checks for this:
     # https://github.com/git/git/blob/v2.16.0/git-submodule.sh#L1059
@@ -1301,20 +1300,17 @@ function _check_submodules_are_pushed_recursively()
 
   local OLD_IFS="${IFS}"
   IFS=$'\n'
-  local submodule_keys=($(get_config_submodule_names))
-  # NOTE This command will actually skip a submodule that has been init'd but
-  # not updated
-  #local tracked_shas=($(${GIT} submodule foreach --quiet 'echo "${prefix-${displaypath}}" ${sha1}'))
+  local submodule_keys=($(RECURSIVE= get_submodule_names))
   IFS="${OLD_IFS}"
 
   local sm_key
   for sm_key in ${submodule_keys+"${submodule_keys[@]}"}; do
-    local sm_path="$(${GIT} config -f .gitmodules "${sm_key}".path)"
+    local sm_path="$(${GIT} config -f .gitmodules submodule."${sm_key}".path)"
     local sm_name="${sm_key#submodule.}"
     # Remove trailing slash
     sm_path="${sm_path%/}"
     local tracked_sha="$(${GIT} submodule status --cached "${sm_path}" | cut -c2- | awk '{print $1}')"
-    local submodule_url="$(${GIT} config -f "${PWD}"/.gitmodules "${sm_key}".url)"
+    local submodule_url="$(${GIT} config -f "${PWD}"/.gitmodules submodule."${sm_key}".url)"
 
     pushd "${sm_path}" &>/dev/null
       ${GIT} fetch "${JUST_GIT_UPSTREAM}"
