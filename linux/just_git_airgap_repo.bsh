@@ -180,6 +180,7 @@ function _log_commits_helper()
         grep -Eo -e '^(\| )*\*( \|)* +commit' | \
         wc -l | awk '{print $1}')"
     if [ "${ncommits}" -eq 0 ]; then
+      # REVIEW echo "There are 0 unpushed commits"
       : # pass
     elif [ "${ncommits}" -eq 1 ]; then
       echo "There is ${ncommits} "${label}" commit:"
@@ -308,11 +309,9 @@ function get_tracking_branches()
 # Unfortunately, there is no definitive way to tell one from the other.
 # remote_name is effectively ignored if $2 is supplied
 # RE Same for get_tracking_branches
-#
-# NOTE These logs don't always seem to organize themselves in the most compact
-# possible manner; in this case, additional trees are repeated because
-# branches that follow one-another are logged separately.
-# RE This is because I use a for loop to generate the log
+# RE Maybe log_all_outgoing_commits [remote] and log_outgoing_commits branch;
+# and get_tracking_branches [remote] and get_tracking_branch branch (git_*)
+# RE Or accept flags
 function log_outgoing_commits()
 {
   # NOTE Only supports passing in a single branch and named remote
@@ -330,15 +329,16 @@ function log_outgoing_commits()
 
   # This will list only the outgoing commits for a local-tracking branch
   local tracking_branch
-  local commits=()
+  local args=()
   for tracking_branch in ${tracking_branches+"${tracking_branches[@]}"}; do
-    commits+=("$(${GIT} log --decorate --graph --format=short --color=always \
-        "${tracking_branch}"@{upstream}.."${tracking_branch}")")
+    args+=("${tracking_branch}@{upstream}..${tracking_branch}")
   done
-  local OLD_IFS="${IFS}"
-  IFS=$'\n'
-  commits=${commits+"${commits[*]}"}
-  IFS="${OLD_IFS}"
+  local commits
+  if [ "${#args[@]}" -gt 0 ]; then
+    commits="$(${GIT} log --decorate --graph --format=short --color=always "${args[@]}")"
+  else
+    commits=""
+  fi
 
   _log_commits_helper "outgoing" "${commits}"
 }
