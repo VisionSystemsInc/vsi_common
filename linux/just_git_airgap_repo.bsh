@@ -198,7 +198,7 @@ function _log_commits_helper()
 #
 # Get the corresponding remote-tracking branch for a local-tracking branch
 #
-# :Arguments: - ``$1...`` - A local-tracking branch (or multiple branches); e.g., master
+# :Arguments: - ``$1`` - A local-tracking branch; e.g., master
 #
 # :Output: - ``*stdout*`` - The corresponding remote-tracking branch, or the empty string if there is no tracking branch
 #
@@ -210,14 +210,23 @@ function _log_commits_helper()
 
 function get_tracking_branch()
 {
-  local branch
-  for branch in "${@}"; do
-    # git rev-parse will error if the branch doesn't exist or has been pruned.
-    # Although, unfortunately, it is same error code in both cases; the stderr
-    # could be parsed to differentiate though. Also, unfortunately, in the case
-    # the remote-tracking branch has been pruned, it still prints to stdout
-    ${GIT} rev-parse --abbrev-ref "${branch}"@{upstream} 2> /dev/null || :
-  done
+  # Supporting multiple branches (as a variadic argument) is hard because if
+  # the branch is not a tracking branch there is nothing to print out. I tried
+  # to print a newline, but it seems that bash arrays don't capture newlines.
+  # Could just fail, but then you would have to know your list of branches are
+  # already tracking branches
+  local branch="${1}"
+
+  local remote_branch_rv=0
+  local remote_branch
+  # git rev-parse will error if the branch doesn't exist or has been pruned.
+  # Although, unfortunately, it is same error code in both cases; the stderr
+  # could be parsed to differentiate though. Also, unfortunately, in the case
+  # the remote-tracking branch has been pruned, it still prints to stdout
+  remote_branch="$(${GIT} rev-parse --abbrev-ref "${branch}"@{upstream} 2> /dev/null)" || remote_branch_rv=$?
+  if [ "${remote_branch_rv}" -eq 0 ]; then
+    echo "${remote_branch}"
+  fi
 }
 
 #**
@@ -254,14 +263,8 @@ function get_tracking_branches()
   just_git_remote_tracking_branches=()
   local branch
   for branch in ${branches[@]+"${branches[@]}"}; do
-    local remote_branch_rv=0
-    local remote_branch
-    # git rev-parse will error if the branch doesn't exist or has been pruned.
-    # Although, unfortunately, it is same error code in both cases; the stderr
-    # could be parsed to differentiate though. Also, unfortunately, in the case
-    # the remote-tracking branch has been pruned, it still prints to stdout
-    remote_branch="$(${GIT} rev-parse --abbrev-ref "${branch}"@{upstream} 2> /dev/null)" || remote_branch_rv=$?
-    if [ "${remote_branch_rv}" -ne 0 ]; then
+    local remote_branch="$(get_tracking_branch "${branch}")"
+    if [ -z "${remote_branch:+set}" ]; then
       continue
     fi
     local remote_name
