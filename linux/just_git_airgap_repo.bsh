@@ -194,20 +194,41 @@ function _log_commits_helper()
 }
 
 #**
-# .. function:: get_tracking_branches
+# .. function:: get_tracking_branch
 #
-# Find remote- and corresponding local-tracking branches
+# Get the corresponding remote-tracking branch for a local-tracking branch
 #
-# :Arguments: - [``$1``] - A name of a remote to filter by; e.g., origin. If unset, then don't filter
-#             - [``$2``] - A branch's name to filter by; e.g., master. If unset, then don't filter by branch name
+# :Arguments: - ``$1...`` - A local-tracking branch (or multiple branches); e.g., master
 #
-# :Output: - ``just_git_tracking_branches`` - An array of local-tracking branch names
-#          - ``just_git_remote_tracking_branches`` - A corresponding array of remote-tracking branch names
-#          - [``*stdout*``] - If ``$2`` is specified, print the respective remote-tracking branch, or the empty string if there is no tracking branch
+# :Output: - ``*stdout*`` - The corresponding remote-tracking branch, or the empty string if there is no tracking branch
 #
 # .. note::
 #
-#   If any arguments are supplied, then the remote-tracking branch will be printed to ``*stdout*``, otherwise, the tracking branches and corresponding remote-tracking branches will be saved to the output variables, ``just_git_tracking_branches`` and ``just_git_remote_tracking_branches``.
+#   - A branch that you create locally and then push to a remote is not configured as a local-tracking branch by default. You must use the -u flag with ``git push`` or ``git branch``.
+#   - A branch cannot track multiple remotes.
+#**
+
+function get_tracking_branch()
+{
+  local branch
+  for branch in "${@}"; do
+    # git rev-parse will error if the branch doesn't exist or has been pruned.
+    # Although, unfortunately, it is same error code in both cases; the stderr
+    # could be parsed to differentiate though. Also, unfortunately, in the case
+    # the remote-tracking branch has been pruned, it still prints to stdout
+    ${GIT} rev-parse --abbrev-ref "${branch}"@{upstream} 2> /dev/null || :
+  done
+}
+
+#**
+# .. function:: get_tracking_branches
+#
+# Find all local- and corresponding remote-tracking branches
+#
+# :Arguments: - [``$1...``] - The name of a remote to filter by (or multiple remotes); e.g., origin. If unset, then don't filter
+#
+# :Output: - ``just_git_tracking_branches`` - An array of local-tracking branch names
+#          - ``just_git_remote_tracking_branches`` - A corresponding array of remote-tracking branch names
 #
 # .. note::
 #
@@ -217,44 +238,41 @@ function _log_commits_helper()
 
 function get_tracking_branches()
 {
-  # Could support multiple named remotes with a for loop if remote_name(s) was
-  # a parameter
-  local remote_name="${1-}"
-
-  local branches
-  if [ $# -lt 2 ]; then
-    local OLD_IFS="${IFS}"
-    IFS=$'\n'
-    branches=($(${GIT} for-each-ref --format='%(refname:short)' refs/heads))
-    IFS="${OLD_IFS}"
+  local remote_names
+  if [ $# -eq 0 ]; then
+    remote_names=($(${GIT} remote))
   else
-    branches=("${2}")
+    remote_names="${@}"
   fi
+
+  local OLD_IFS="${IFS}"
+  IFS=$'\n'
+  local branches=($(${GIT} for-each-ref --format='%(refname:short)' refs/heads))
+  IFS="${OLD_IFS}"
 
   just_git_tracking_branches=()
   just_git_remote_tracking_branches=()
   local branch
-  for branch in ${branches+"${branches[@]}"}; do
+  for branch in ${branches[@]+"${branches[@]}"}; do
     local remote_branch_rv=0
     local remote_branch
-    # git rev-parse will error if the branch doesn't exist or has been pruned;
-    # although unfortunately, it is same error code in both cases. The stderr
-    # could be parsed to differentiate...
+    # git rev-parse will error if the branch doesn't exist or has been pruned.
+    # Although, unfortunately, it is same error code in both cases; the stderr
+    # could be parsed to differentiate though. Also, unfortunately, in the case
+    # the remote-tracking branch has been pruned, it still prints to stdout
     remote_branch="$(${GIT} rev-parse --abbrev-ref "${branch}"@{upstream} 2> /dev/null)" || remote_branch_rv=$?
     if [ "${remote_branch_rv}" -ne 0 ]; then
       continue
     fi
-    if [ -n "${remote_name}" ] && [[ "${remote_branch}" != "${remote_name}/"* ]]; then
-      continue
-    fi
-    just_git_tracking_branches+=("${branch}")
-    just_git_remote_tracking_branches+=("${remote_branch}")
+    local remote_name
+    for remote_name in ${remote_names[@]+"${remote_names[@]}"}; do
+      if [[ "${remote_branch}" = "${remote_name}/"* ]]; then
+        just_git_tracking_branches+=("${branch}")
+        just_git_remote_tracking_branches+=("${remote_branch}")
+        break
+      fi
+    done
   done
-  # If a branch was specified, then echo its respective tracking branch
-  if [ $# -eq 2 ]; then
-    # Empty string if no tracking branch
-    echo "${just_git_remote_tracking_branches[0]-}"
-  fi
   #
   # Alternatively,
   #   git for-each-ref --format='%(upstream:short) %(refname) %(upstream:track)' refs/heads
@@ -308,20 +326,26 @@ function get_tracking_branches()
 # tracking branch (because a tracking branch can only track a single remote).
 # Unfortunately, there is no definitive way to tell one from the other.
 # remote_name is effectively ignored if $2 is supplied
-# RE Same for get_tracking_branches
 # RE Maybe log_all_outgoing_commits [remote] and log_outgoing_commits branch;
-# and get_tracking_branches [remote] and get_tracking_branch branch (git_*)
 # RE Or accept flags
 function log_outgoing_commits()
 {
   # NOTE Only supports passing in a single branch and named remote
-  local remote_name="${1-}"
+  # HACKY - I don't really want remote_name to be an array, it can only be a
+  # single element. But I can't figure out any other way to call
+  # get_tracking_branches short of switching over the number or arguments in
+  # this same way
+  local remote_name=()
+  if [ "$#" -ge 1 ]; then
+    remote_name=("${1}")
+  fi
 
   local tracking_branches
   if [ $# -lt 2 ]; then
     local just_git_tracking_branches
     local just_git_remote_tracking_branches
-    get_tracking_branches "${remote_name}" # Sets just_git_[remote_]tracking_branches
+
+    get_tracking_branches "${remote_name[@]}" # Sets just_git_[remote_]tracking_branches
     tracking_branches=(${just_git_tracking_branches[@]+"${just_git_tracking_branches[@]}"})
   else
     tracking_branches=("${2}")

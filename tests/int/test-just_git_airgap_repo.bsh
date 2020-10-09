@@ -888,6 +888,7 @@ begin_test "git functionality"
   BUILD_REPO="${TESTDIR}"/build_repo
   PRETEND_URL="${TESTDIR}/git/pretend_repo.git" # bare repo
   UPSTREAM_URL="${TESTDIR}/git/upstream_repo.git" # bare repo
+  NO_REMOTE_REPO="${TESTDIR}/no_remotes"
 
   # Main repo
   mkdir -p "${PRETEND_URL}"
@@ -906,11 +907,8 @@ begin_test "git functionality"
     git commit -m "Initial commit"
     git remote add origin "${PRETEND_URL}"
     git remote add upstream "${UPSTREAM_URL}"
-    git push origin master # master is not tracking origin/master
-
-    # no outgoing commits - no tracking branches
-    output="$(log_outgoing_commits)"
-    [ "${output}" = "" ]
+    git push origin master
+    git branch master -u origin/master
 
     echo "1" >> readme
     git add readme
@@ -939,9 +937,8 @@ begin_test "git functionality"
     git branch tracking_branch_equal
     git push -u origin tracking_branch_equal
 
-    git branch master -u origin/master
     git push origin master
-    # make a remote-tracking branch, origin/tracking_branch_ahead, at
+    # create a remote-tracking branch, origin/tracking_branch_ahead, at
     # origin/master
     git push origin origin/master:refs/heads/tracking_branch_ahead
 
@@ -997,9 +994,30 @@ begin_test "git functionality"
     git commit -m "Eleventh commit"
   popd &> /dev/null
 
+  mkdir -p "${NO_REMOTE_REPO}"
+  pushd "${NO_REMOTE_REPO}" &> /dev/null
+    git init
+    touch readme
+    git add readme
+    git commit -m "Initial commit"
+  popd &> /dev/null
+
   #################################
   #              TEST             #
   #################################
+
+  pushd "${NO_REMOTE_REPO}" &> /dev/null
+    get_tracking_branches
+    [ "${#just_git_tracking_branches}" -eq 0 ]
+    [ "${#just_git_remote_tracking_branches}" -eq 0 ]
+
+    # no remotes
+    [[ "$(log_unpushed_commits | head -n 1)" = *"1 unpushed"* ]] || false
+
+    # no outgoing commits - no remotes (or tracking branches)
+    output="$(log_outgoing_commits)"
+    [ "${output}" = "" ]
+  popd &> /dev/null
 
   pushd "${BUILD_REPO}" &> /dev/null
     # list local tracking branches and their corresponding remote branch
@@ -1009,20 +1027,46 @@ begin_test "git functionality"
     ans=("master" "tracking_branch_ahead" "tracking_branch_behind" \
         "tracking_branch_equal" "tracking_branchpoint" "up_master")
     assert_array_eq just_git_tracking_branches ans
-
     ans=("origin/master" "origin/tracking_branch_ahead" "origin/master" \
         "origin/tracking_branch_equal" "origin/master" "upstream/master")
     assert_array_eq just_git_remote_tracking_branches ans
 
+    # specify a remote
+    get_tracking_branches origin
+    ans=("master" "tracking_branch_ahead" "tracking_branch_behind" \
+        "tracking_branch_equal" "tracking_branchpoint")
+    assert_array_eq just_git_tracking_branches ans
+    ans=("origin/master" "origin/tracking_branch_ahead" "origin/master" \
+        "origin/tracking_branch_equal" "origin/master")
+    assert_array_eq just_git_remote_tracking_branches ans
+
+    get_tracking_branches upstream
+    ans=("up_master")
+    assert_array_eq just_git_tracking_branches ans
+    ans=("upstream/master")
+    assert_array_eq just_git_remote_tracking_branches ans
+
     # specify a branch that has a tracking branch
-    output="$(get_tracking_branches origin tracking_branch_behind)"
+    output="$(get_tracking_branch tracking_branch_behind)"
     [ "${output}" = "origin/master" ]
-    output="$(get_tracking_branches upstream up_master)"
+    output="$(get_tracking_branch up_master)"
     [ "${output}" = "upstream/master" ]
 
+    # specify multiple branches that have a tracking branch
+    output="$(get_tracking_branch tracking_branch_behind up_master)"
+    [ "${output}" = $'origin/master\nupstream/master' ]
+
     # specify a branch that does not have a tracking branch
-    output="$(get_tracking_branches origin nontracking_branch_behind)"
+    output="$(get_tracking_branch nontracking_branch_behind)"
     [ "${output}" = "" ]
+
+    # specify multiple branches that have a tracking branch
+    # FIXME this list does not print a value for nontracking_branch_behind...
+    # RE It could print a newline
+    # RE RE array's don't seem to capture newlines...arr=($(printf '\n\n'))=()
+    # RE Maybe it should just fail
+    #output="$(get_tracking_branch tracking_branch_behind up_master nontracking_branch_behind)"
+    #[ "${output}" = $'origin/master\nupstream/master' ]
   popd &> /dev/null
 
 
