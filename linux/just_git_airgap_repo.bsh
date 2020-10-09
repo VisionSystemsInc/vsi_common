@@ -311,48 +311,22 @@ function get_tracking_branches()
 #**
 # .. function:: log_outgoing_commits
 #
-# List all unpushed commits for tracking branches to stdout
+# List all unpushed commits for a tracking branch to stdout
 #
-# :Arguments: - [``$1``] - A name of a remote to filter by; e.g., origin. If unset, then don't filter
-#             - [``$2``] - A local-tracking branch's name to filter by; e.g., master. If unset, then don't filter by branch name
+# :Arguments: - ``$1...`` - A local-tracking branch (or multiple branches); e.g., master
 #
-# :Output: - ``*stdout*`` - Print all unpushed commits for tracking branches to stdout
+# :Output: - ``*stdout*`` - Print all unpushed commits for the tracking branch to stdout
 #
 # .. seealso::
 #
-#   :func:`log_unpushed_commits`
+#   :func:`log_all_outgoing_commits` and :func:`log_unpushed_commits`
 #**
 
 # REVIEW Simply output the number of outgoing commits, not the graph of outgoing
 # commits; much easier with --format=%H
-# REVIEW This really should only take a single parameter, a remote xor a
-# tracking branch (because a tracking branch can only track a single remote).
-# Unfortunately, there is no definitive way to tell one from the other.
-# remote_name is effectively ignored if $2 is supplied
-# RE Maybe log_all_outgoing_commits [remote] and log_outgoing_commits branch;
-# RE Or accept flags
 function log_outgoing_commits()
 {
-  # NOTE Only supports passing in a single branch and named remote
-  # HACKY - I don't really want remote_name to be an array, it can only be a
-  # single element. But I can't figure out any other way to call
-  # get_tracking_branches short of switching over the number or arguments in
-  # this same way
-  local remote_name=()
-  if [ "$#" -ge 1 ]; then
-    remote_name=("${1}")
-  fi
-
-  local tracking_branches
-  if [ $# -lt 2 ]; then
-    local just_git_tracking_branches
-    local just_git_remote_tracking_branches
-
-    get_tracking_branches "${remote_name[@]}" # Sets just_git_[remote_]tracking_branches
-    tracking_branches=(${just_git_tracking_branches[@]+"${just_git_tracking_branches[@]}"})
-  else
-    tracking_branches=("${2}")
-  fi
+  local tracking_branches=(${@+"${@}"})
 
   # This will list only the outgoing commits for a local-tracking branch
   local tracking_branch
@@ -368,6 +342,33 @@ function log_outgoing_commits()
   fi
 
   _log_commits_helper "outgoing" "${commits}"
+}
+
+#**
+# .. function:: log_all_outgoing_commits
+#
+# List all unpushed commits for tracking branches to stdout
+#
+# :Arguments: - [``$1...``] - The name of a remote to filter by (or multiple remotes); e.g., origin. If unset, then don't filter
+#
+# :Output: - ``*stdout*`` - Print all unpushed commits for tracking branches to stdout
+#
+# .. seealso::
+#
+#   :func:`log_outgoing_commits` and :func:`log_unpushed_commits`
+#**
+
+# REVIEW Simply output the number of outgoing commits, not the graph of outgoing
+# commits; much easier with --format=%H
+function log_all_outgoing_commits()
+{
+  local remote_names=(${@+"${@}"})
+
+  local just_git_tracking_branches
+  local just_git_remote_tracking_branches
+  get_tracking_branches ${remote_names+"${remote_names[@]}"} # Sets just_git_[remote_]tracking_branches
+
+  log_outgoing_commits ${just_git_tracking_branches[@]+"${just_git_tracking_branches[@]}"}
 }
 
 #**
