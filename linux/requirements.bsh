@@ -136,6 +136,26 @@ function _meet_requirements()
   done
 }
 
+function _requirements_pre_format_version()
+{
+  local IFS='.'
+
+  split_version_string_and_remainder lhs lhs_remainder "${1}"
+  split_version_string_and_remainder rhs rhs_remainder "${2}"
+
+  # Equalize the lengths
+  local i
+  if [ "${#rhs[@]}" -gt "${#lhs[@]}" ]; then
+    for (( i=${#lhs[@]}; i<${#rhs[@]}; i++ )); do
+      lhs[$i]=0
+    done
+  elif [ "${#lhs[@]}" -gt "${#rhs[@]}" ]; then
+    for (( i=${#rhs[@]}; i<${#lhs[@]}; i++ )); do
+      rhs[$i]=0
+    done
+  fi
+}
+
 #**
 # .. function:: version_eq
 #
@@ -150,30 +170,8 @@ function _meet_requirements()
 #**
 function version_eq()
 {
-  local IFS='.'
-
-  # This MUST be in a separate variable for bash 4.3 and newer. If it's not,
-  # the last . (is interpreted as an IFS?, and) is force escaped, breaking the
-  # regex
-  local pattern='([0-9.]*)(.*)'
-  [[ ${1} =~ ${pattern} ]]
-  local lhs=(${BASH_REMATCH[1]})
-  local lhs_remainder="${BASH_REMATCH[2]}"
-  [[ ${2} =~ ${pattern} ]]
-  local rhs=(${BASH_REMATCH[1]})
-  local rhs_remainder="${BASH_REMATCH[2]}"
-
-  # Equalize the lengths
-  local i
-  if [ "${#rhs[@]}" -gt "${#lhs[@]}" ]; then
-    for (( i=${#lhs[@]}; i<${#rhs[@]}; i++ )); do
-      lhs[$i]=0
-    done
-  elif [ "${#lhs[@]}" -gt "${#rhs[@]}" ]; then
-    for (( i=${#rhs[@]}; i<${#lhs[@]}; i++ )); do
-      rhs[$i]=0
-    done
-  fi
+  local rhs rhs_remainder lhs lhs_remainder
+  _requirements_pre_format_version "${1}" "${2}"
 
   if [ "${lhs[*]}" = "${rhs[*]}" -a "${lhs_remainder}" = "${rhs_remainder}" ]; then
     return 0
@@ -195,26 +193,8 @@ function version_eq()
 #**
 function version_lt()
 {
-  local IFS='.'
-  local pattern='([0-9.]*)(.*)'
-  [[ ${1} =~ ${pattern} ]]
-  local lhs=(${BASH_REMATCH[1]})
-  local lhs_remainder="${BASH_REMATCH[2]}"
-  [[ ${2} =~ ${pattern} ]]
-  local rhs=(${BASH_REMATCH[1]})
-  local rhs_remainder="${BASH_REMATCH[2]}"
-
-  # Equalize the lengths
-  local i
-  if [ "${#rhs[@]}" -gt "${#lhs[@]}" ]; then
-    for (( i=${#lhs[@]}; i<${#rhs[@]}; i++ )); do
-      lhs[$i]=0
-    done
-  elif [ "${#lhs[@]}" -gt "${#rhs[@]}" ]; then
-    for (( i=${#rhs[@]}; i<${#lhs[@]}; i++ )); do
-      rhs[$i]=0
-    done
-  fi
+  local rhs rhs_remainder lhs lhs_remainder
+  _requirements_pre_format_version "${1}" "${2}"
 
   # Run the check
   for (( i=0; i<${#lhs[@]}; i++ )); do
@@ -253,26 +233,8 @@ function version_lt()
 #**
 function version_gt()
 {
-  local IFS='.'
-  local pattern='([0-9.]*)(.*)'
-  [[ ${1} =~ ${pattern} ]]
-  local lhs=(${BASH_REMATCH[1]})
-  local lhs_remainder="${BASH_REMATCH[2]}"
-  [[ ${2} =~ ${pattern} ]]
-  local rhs=(${BASH_REMATCH[1]})
-  local rhs_remainder="${BASH_REMATCH[2]}"
-
-  # Equalize the lengths
-  local i
-  if [ "${#rhs[@]}" -gt "${#lhs[@]}" ]; then
-    for (( i=${#lhs[@]}; i<${#rhs[@]}; i++ )); do
-      lhs[$i]=0
-    done
-  elif [ "${#lhs[@]}" -gt "${#rhs[@]}" ]; then
-    for (( i=${#rhs[@]}; i<${#lhs[@]}; i++ )); do
-      rhs[$i]=0
-    done
-  fi
+  local rhs rhs_remainder lhs lhs_remainder
+  _requirements_pre_format_version "${1}" "${2}"
 
   # Run the check
   for (( i=0; i<${#lhs[@]}; i++ )); do
@@ -305,7 +267,7 @@ function version_gt()
 #
 # Splits a version string up into its elements and stores them in an array.
 #
-# The last element is always the pre-release/metadata. If there is no pre-release or metadata, the last element will be an empty string.
+# Any non-numerical values are stored in the last element is as pre-release/metadata (including leading/trailing whitespace)
 #
 # .. rubric:: Example:
 #
@@ -321,7 +283,32 @@ function split_version_string()
   # IFS must come AFTER the regex in bash 4.3 and older. If it's not, the last
   # "." (is interpreted as an IFS, and) is force escaped, breaking the regex
   local IFS='.'
-  dynamic_set_a "${1}" ${BASH_REMATCH[1]} "${BASH_REMATCH[2]}"
+  if [ "${BASH_REMATCH[2]}" = "" ]; then
+    dynamic_set_a "${1}" ${BASH_REMATCH[1]}
+  else
+    dynamic_set_a "${1}" ${BASH_REMATCH[1]} "${BASH_REMATCH[2]}"
+  fi
+}
+
+#**
+# .. function:: split_version_string_and_remainder
+#
+# :Arguments: - ``$1`` - Variable name to store the array in
+#             - ``$2`` - Variable name to leftover versioning information in (anything non-numeric)
+#             - ``$3`` - The version string
+#
+# Splits a version string up into its elements and stores them in an array.
+#
+# Any non-numerical values are stored in a separate variable as pre-release/metadata (including leading/trailing whitespace)
+#**
+function split_version_string_and_remainder()
+{
+  [[ ${3} =~ ([0-9.]*)(.*) ]]
+  # IFS must come AFTER the regex in bash 4.3 and older. If it's not, the last
+  # "." (is interpreted as an IFS, and) is force escaped, breaking the regex
+  local IFS='.'
+  dynamic_set_a "${1}" ${BASH_REMATCH[1]}
+  dynamic_set "${2}" "${BASH_REMATCH[2]}"
 }
 
 #**
@@ -405,4 +392,18 @@ function tar_version_info()
     tar_version="$(echo "${version_info}" | awk 'NR==1{print $NF}')"
     tar_vendor="unknown"
   fi
+}
+
+function openssh_version()
+{
+  local version_info="$(ssh -V 2>&1)"
+  local pattern='OpenSSH_([^0-9]*_)?([^ ]*), (.*SSL) ([^ ]*).*'
+  local version version_remainder
+  [[ ${version_info} =~ ${pattern} ]]
+  ssh_version="${BASH_REMATCH[2]}"
+  ssl_vendor="${BASH_REMATCH[3]}"
+  ssl_version="${BASH_REMATCH[4]}"
+
+  split_version_string ssh_version "${ssh_version}"
+  split_version_string ssl_version "${ssl_version}"
 }
