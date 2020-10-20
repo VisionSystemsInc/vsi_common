@@ -279,10 +279,13 @@ function version_gt()
 #**
 function split_version_string()
 {
-  [[ ${2} =~ ([0-9.]*)(.*) ]]
-  # IFS must come AFTER the regex in bash 4.3 and older. If it's not, the last
-  # "." (is interpreted as an IFS, and) is force escaped, breaking the regex
   local IFS='.'
+  # In older versions of bash, the period may be interpreted as an IFS, and then
+  # automatically escaped. This breaks the parsing. One solution is to put IFS
+  # after the [[ ]] clause, however, that doesn't cover the situation where the
+  # code up the stack changes IFS for other reasons
+  local __split_version_string_pattern='([0-9.]*)(.*)'
+  [[ ${2} =~ ${__split_version_string_pattern} ]]
   if [ "${BASH_REMATCH[2]}" = "" ]; then
     dynamic_set_a "${1}" ${BASH_REMATCH[1]}
   else
@@ -303,12 +306,12 @@ function split_version_string()
 #**
 function split_version_string_and_remainder()
 {
-  [[ ${3} =~ ([0-9.]*)(.*) ]]
-  # IFS must come AFTER the regex in bash 4.3 and older. If it's not, the last
-  # "." (is interpreted as an IFS, and) is force escaped, breaking the regex
   local IFS='.'
-  dynamic_set_a "${1}" ${BASH_REMATCH[1]}
+  local __split_version_string_and_remainder_pattern='([0-9.]*)(.*)'
+  [[ ${3} =~ ${__split_version_string_and_remainder_pattern} ]]
+  # Call dynamic_set first because dynamic_set_a -> clear_a -> another regex
   dynamic_set "${2}" "${BASH_REMATCH[2]}"
+  dynamic_set_a "${1}" ${BASH_REMATCH[1]}
 }
 
 #**
