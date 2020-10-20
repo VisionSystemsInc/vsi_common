@@ -404,8 +404,9 @@ begin_test "Test safe-submodule-update"
 
   # Pull new changes
   pushd "${TEST_REPO}" &> /dev/null
-    git pull origin master
+    git fetch origin master
     # main repo - merges (commits) changes to submodules
+    git merge origin/master --no-edit
     # behind - HEAD is now behind the tracked commit
     # equal - HEAD is still equal to tracked commit
     # ahead - HEAD is still ahead of the tracked commit (if git >1.8.3)
@@ -495,7 +496,8 @@ begin_test "Test safe-submodule-update"
   # wasn't such a pain)
   cp -a "${PRETEND_URL}_behind" "${PRETEND_URL}_behind2"
   pushd "${BUILD_REPO}" &> /dev/null
-    git pull origin master
+    git fetch origin master
+    git merge origin/master
     git submodule update --init --recursive
     sed "${sed_flags_i[@]}" -e \
          "s|url = ${PRETEND_URL}_behind|url = ${PRETEND_URL}_behind2|" .gitmodules
@@ -527,7 +529,11 @@ begin_test "Test safe-submodule-update"
     # The tracked SHA in submodule behind will not be in the repository because
     # the URL changed. safe_git_submodule_update will update just_upstream and
     # fetch from the new URL
-    git pull origin master
+    #
+    # In git 2.27, git pull began recommending a merge strategy
+    # https://stackoverflow.com/a/62653694
+    git fetch origin master
+    git merge origin/master
 
     # Sync the submodules, fetches new commits, and update
     safe_git_submodule_update
