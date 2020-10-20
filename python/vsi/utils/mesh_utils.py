@@ -36,6 +36,7 @@ def save_point_cloud_ply(output_fname, pts, normals=None, colors=None):
             fd.write('property uint8 red\n')
             fd.write('property uint8 green\n')
             fd.write('property uint8 blue\n')
+        fd.write('element face 0\n')
         fd.write('end_header\n')
 
         pt_strs = [f'{pt[0]} {pt[1]} {pt[2]}' for pt in pts]
