@@ -125,11 +125,14 @@ esac
 # Default: I can't figure it out, probably glibc
 VSI_MUSL=-1
 if command -v ldd 2>&1 > /dev/null; then
+  source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
+  unset_flags xv # incase ldd is an alias or wrapped function, and user has xv on
   if ! VSI_MUSL=$(ldd --version 2>&1); then
     # Some versions of ldd fail when using the --version flag, but succeed on
     # no flag
     VSI_MUSL=$(ldd 2>&1 || :)
   fi
+  reset_flags xv
   # Was musl not found in first line
   if command -v awk 2>&1 > /dev/null; then
     if echo "${VSI_MUSL}" | awk '{if (NR < 2 && $0 ~ /musl/) {exit 1} else {exit 0}}'; then

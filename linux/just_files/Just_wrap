@@ -113,24 +113,26 @@ if ( ( [ ${#BASH_SOURCE[@]} -gt 1 ] && [ "${BASH_SOURCE[1]}" == "${0}" ] ) || \
 
   if [ -t 0 ]; then
     # Interactive mode
-    if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -le 42 ]; then
+    if [ "${bash_feature_posix_process_substitution}" = "1" ]; then
       # Unexport all functions. Non-posix functions upsets bash --posix in bash 4.2 and older
       while IFS= read -r x || [[ -n ${x} ]] ; do
         export -fn ${x##* }
       done < <(declare -Fx)
     fi
 
-    if [ "${BASH_VERSINFO[0]}" -le 3 ]; then
+    if bash_feature_rcfile; then
       # Thanks bash for making this hard! https://unix.stackexchange.com/q/187369
-      if [[ ${OSTYPE} == darwin* ]]; then
-        # Does not work in Darling :(
-        exec bash --rcfile <(echo "${rc_file_line}")
+      if bash_bug_rcfile_process_substitution; then
+        temp_file="$(mktemp)"
+        echo "${rc_file_line}" >> "${temp_file}"
+        echo "rm \"${temp_file}\"" >> "${temp_file}"
+        exec bash --rcfile "${temp_file}"
       else
-        echo "This does not work properly on bash 3.2 interactive mode" >&2
+        exec bash --rcfile <(echo "${rc_file_line}")
       fi
     fi
 
-    ENV=<(echo "set +o posix; declare -p SHELLOPTS; ${rc_file_line}") exec bash --posix
+    ENV=<(echo "set +o posix; ${rc_file_line}") exec bash --posix
   else
     # If not interactive
     if bash_bug_bash_env_process_substitution; then
