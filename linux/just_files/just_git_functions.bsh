@@ -113,14 +113,37 @@ function submodule-helper-list()
 }
 
 #**
+# .. function:: _is_tip_reachable
+#
+# Is a commit reachable from a ref
+#
+# :Arguments: ``$1`` - Submodule path (relative)
+#             ``$2`` - Submodule commit
+#
+# :Return Value: * ``0`` - Commit is reachable from a ref
+#                * ``1`` - Commit is not reachable from a ref
+#                * ``128`` - Commit does not exist in repository
+#
+# .. seealso::
+#
+#   https://github.com/git/git/blob/v2.8.0/git-submodule.sh#L409 (stable through at least v2.29.0)
+#**
+
+function _is_tip_reachable()
+{
+  # local foo="$(bar)" || rv=$? does not work as one line in bash 4.2 or older. Use two lines
+  local rev
+  rev=$(cd "${1}" && git rev-list -n 1 "${2}" --not --all 2> /dev/null) && \
+  [ -z "${rev}" ]
+}
+
+#**
 # .. function:: _checkout_git_submodule
 #
 # Helper function for :func:`safe_git_submodule_update`
 #
 # :Arguments: ``$1`` - Submodule name
-#
 #             ``$2`` - Submodule path (relative)
-#
 #             ``$3`` - Message to print out if submodule update failed
 #
 # :Output: ``presskey`` - set variable presskey on failure
@@ -134,9 +157,13 @@ function _checkout_git_submodule()
      ! git_feature_submodule_update_with_custom_command; then
     # This is older than 1.8 so it doesn't support -c OR submodule.${1}.update
     echo "${YELLOW}Warning:${NC} your version of git is too old. Doing normal submodule update" >&2
-    pushd "${2}" &> /dev/null
-      ${GIT} fetch "${JUST_GIT_UPSTREAM-just_upstream}"
-    popd &> /dev/null
+
+    local tracked_sha="$(${GIT} submodule status --cached "${2}" | cut -c2- | awk '{print $1}')"
+    if ! _is_tip_reachable "${2}" "${tracked_sha}"; then
+      pushd "${2}" &> /dev/null
+        ${GIT} fetch "${JUST_GIT_UPSTREAM-just_upstream}"
+      popd &> /dev/null
+    fi
     if ${GIT} submodule update "${2}"; then
       if [ -f "${2}/.gitmodules" ]; then
         pushd "${2}" &> /dev/null
