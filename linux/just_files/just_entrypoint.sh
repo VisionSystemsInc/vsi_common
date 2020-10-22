@@ -90,6 +90,11 @@ set -eu
 
 source "${VSI_COMMON_DIR}/linux/elements.bsh"
 
+if [ -n "${JUST_DEBUG_ENTRYPOINT+set}" ]; then
+  # No quotes here, so allow things like "source ~/something"
+  ${JUST_DEBUG_SHELL-bash}
+fi
+
 # Disable the special docker magic except in docker, no need in singularity
 # TODO: what does podman need?
 if [ -d /.singularity.d ] || [ ! -f "/.dockerenv" ] || [ "$(id -u)" != "0" ]; then
