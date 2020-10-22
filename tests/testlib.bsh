@@ -102,6 +102,7 @@ source "${VSI_COMMON_DIR}/linux/file_tools.bsh"
 source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
 source "${VSI_COMMON_DIR}/tests/test_colors.sh"
 source "${VSI_COMMON_DIR}/linux/signal_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/compat.bsh"
 
 # create a temporary work space
 TRASHDIR="$(mktemp -d -t $(basename "$0")-$$.XXXXXXXX)"
@@ -394,7 +395,7 @@ _begin_common_test ()
     __testlib_time_0=$(get_time_seconds)
   fi
 
-  if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "41" ]; then
+  if [ "${bash_feature_allocate_file_descriptor}" = "0" ]; then
     case ${TESTLIB_REDIRECT_OUTPUT} in
       3)
         exec {stdout}>&1 {stderr}>&2
@@ -404,10 +405,10 @@ _begin_common_test ()
         ;;
     esac
     xtrace="${TESTDIR}/xtrace"
+    # bash_feature_allocate_file_descriptor and bash_feature_xtracefd coincide,
+    # so there's no need to test for bash_feature_xtracefd
     if [ "${TESTLIB_REDIRECT_OUTPUT}" -ge "1" ]; then
-      if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -le "42" ]; then
-        # Weird bug in bash 4.1 and 4.2
-        # https://github.com/cylc/cylc-flow/pull/3572#pullrequestreview-398453037
+      if [ "${bash_bug_allocate_xtracefd}" = "0" ]; then
         local fd
         find_open_fd fd
         eval "exec ${fd}>\"${xtrace}\""
@@ -733,7 +734,7 @@ function testlib_print_test_trace()
     # Technically, the process substitution happens before the eval, but that
     # doesn't matter in the end, still works correctly.
     eval "exec ${test_output}> >(perl -e 'print && select undef,undef,undef,0.0001 while <>;' >&2 )"
-  elif [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "41" ]; then
+  elif [ "${bash_feature_allocate_file_descriptor}" = "0" ]; then
     exec {test_output}>&2
   else
     find_open_fd test_output
@@ -775,7 +776,7 @@ function testlib_print_test_trace()
   ) 1>&${test_output}
 
   # Close fd test_output, which will end perl if its running
-  if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "41" ]; then
+  if [ "${bash_feature_allocate_file_descriptor}" = "0" ]; then
     exec {test_output}>&-
   else
     eval "exec ${test_output}>&-"

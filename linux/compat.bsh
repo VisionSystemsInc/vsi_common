@@ -150,7 +150,39 @@ function load_vsi_compat()
   # ====
   #
   # The following variables will help cope with the difference in bash versions as seamlessly as possible.
+  #**
+
+  # Make life easier (and quicker after 6 uses)
+  local bash_major_version="${BASH_VERSINFO[0]}"
+  local bash_minor_version="${bash_major_version}${BASH_VERSINFO[1]}"
+
+  #**
+  # .. var:: bash_feature_posix_process_substitution
   #
+  # In bash 5.0 and older, process substitution isn't allowed when in posix mode. This issue can arise if a function contains non-posix commands and is exported before calling ``bash --posix``. Bash will complain about each and every function that is non-posix.
+  #
+  # :Value: * ``0`` - Bash does not allow process substitution in posix mode
+  #         * ``1`` - Bash does allows process substitution in posix mode
+  #
+  # .. code-block:: bash
+  #
+  #    function foo()
+  #    {
+  #      cat <(echo hi)
+  #    }
+  #    export -f foo
+  #    bash --posix
+  #
+  # One solution is to unexport any functions that might be causing an issue. Another is to ignore the error messages, and start bash without ``set -e`` and then enable ``set -e`` after starting the new shell.
+  #**
+
+  if [ "${bash_minor_version}" -ge "51" ]; then
+    bash_feature_posix_process_substitution=0
+  else
+    bash_feature_posix_process_substitution=1
+  fi
+
+  #**
   # .. var:: bash_behavior_declare_array_quote
   #
   # In bash version 4.3 and older, ``declare -p`` of an array adds an extra ``'`` around the array. This variable stores the state of that variable
@@ -203,10 +235,6 @@ function load_vsi_compat()
   #    # declare -a BASH_SOURCE=([0]="/tmp/bar")
   #**
 
-  # Make life easier (and quicker after 6 uses)
-  local bash_major_version="${BASH_VERSINFO[0]}"
-  local bash_minor_version="${bash_major_version}${BASH_VERSINFO[1]}"
-
   if [ "${bash_minor_version}" -ge "44" ]; then
     bash_behavior_declare_array_quote=""
     bash_feature_parameter_transformation=0
@@ -231,7 +259,7 @@ function load_vsi_compat()
   #
   # .. var:: bash_feature_declare_print_function
   #
-  # Does ``declare`` support printing a function via ``declare -pf function_name``. Work around include: ``declare -F`` to list all functions and ``type function_name``, however the first line needs to be removed.
+  # Does ``declare`` support printing a function via ``declare -pf function_name``. Work around include: ``declare -F`` to list all functions and ``type function_name`` or ``command -V function_name``, however the first line needs to be removed.
   #
   # :Value: * ``0`` - ``declare`` supports printing a function
   #         * ``1`` - ``declare`` does not support printing a specific function.
@@ -261,26 +289,81 @@ function load_vsi_compat()
   #    # x will be 12 when bash_bug_local_shadow_exported_variable is 1
   #    export -f foo; x=11 bash -c foo # Same result as above
   #    x=13 foo # x is always 13 and in the bash child too. No explanation for this behavior
+  #
+  # .. var:: bash_bug_allocate_xtracefd
+  #
+  # In Bash 4.1 and 4.2, there is a bug where the following command does not work right:
+  #
+  # .. code-block:: bash
+  #
+  #    exec {BASH_XTRACEFD}>"somefile"
+  #
+  # ``BASH_XTRACEFD``'s value is set, but whatever triggers ``BASH_XTRACEFD`` to work, is not triggered.
+  #
+  # .. note::
+  #
+  #   ``BASH_XTRACEFD`` and automatic file descriptor allocation are not available features in bash 4.0 or older, but :var:`bash_bug_allocate_xtracefd` will still be set to ``0``
+  #
+  # .. seealso::
+  #
+  #   https://github.com/cylc/cylc-flow/pull/3572#pullrequestreview-398453037
   #**
   if [ "${bash_minor_version}" -ge "43" ]; then
     bash_feature_declare_name_reffing=0
     bash_feature_declare_print_function=0
     bash_bug_local_shadow_exported_variable=1
+    bash_bug_allocate_xtracefd=1
+    bash_behavior_pattern_substitution_slash_escape_with_single_quote=0
   else
     bash_feature_declare_name_reffing=1
     bash_feature_declare_print_function=1
     bash_bug_local_shadow_exported_variable=0
+    bash_bug_allocate_xtracefd=0
+    bash_behavior_pattern_substitution_slash_escape_with_single_quote=1
   fi
 
-  # TODO: Cannot reliable replicate this, table for now
-  # .. var:: bash_behavior_strict_posix_functions
-  # Bash 4.2 and older is stricter when it comes to exported functions that are not POSIX compliant, when running with the ``--posix`` flag. Workaround, unexport functions that would cause an issue.
-  # # My notes say 4.2, by unit tests say 5.1?!
-  # if [ "${bash_minor_version}" -ge "51" ]; then
-  #   bash_behavior_strict_posix_functions=1
-  # else
-  #   bash_behavior_strict_posix_functions=0
-  # fi
+  #**
+  # .. var:: bash_behavior_pattern_substitution_slash_escape_with_single_quote
+  #
+  # Substitution expressions kind of have an implied quote in them. In bash 4.2 and older, the results of pattern substitutions change when outside quotes are added if the string contains backslashes. In bash 4.3, extra slashes are needed if the string contains a single quote. :var:`bash_behavior_pattern_substitution_slash_escape_with_single_quote` standardizes this behavior to always use surrounding quotes on the outside and get an expected result.
+  #
+  # :Value: * '0' - On bash 4.3 and newer
+  #         * '1' - On bash 4.2 and older
+  #
+  # .. code-block:: bash
+  #
+  #    # Bash 4.2
+  #    $ (FOOBAR="o'o"; x="${FOOBAR//\'/\\\'}"; declare -p x)
+  #    declare -- x="o\\\\'o"
+  #    $ (FOOBAR="o'o"; x=${FOOBAR//\'/\\\'}; declare -p x)
+  #    declare -- x="o\\'o"
+  #
+  #    # Bash 4.3
+  #    $ (FOOBAR="o'o"; x=${FOOBAR//\'/\\\\\'}; declare -p x)
+  #    declare -- x="o\\\\'o"
+  #    $ (FOOBAR="o'o"; x="${FOOBAR//\'/\\\\\'}"; declare -p x)
+  #    declare -- x="o\\\\'o"
+  #
+  #    # Compatible way
+  #    $ FOOBAR="o'o"
+  #    $ if [ "${bash_behavior_pattern_substitution_slash_escape_with_single_quote}" = "0" ]; then
+  #        x="${FOOBAR//\'/\\\\\'}"
+  #        y="${FOOBAR//\'/\\\'}"
+  #      else
+  #        x="${FOOBAR//\'/\\\'}"
+  #        y="${FOOBAR//\'/\'}"
+  #      fi
+  #    $ declare -p FOOBAR x y
+  #    declare -- FOOBAR="o'o"
+  #    declare -- x="o\\\\'o"
+  #    declare -- y="o\\'o"
+  #**
+  bash_behavior_pattern_substitution_slash_escape_with_single_quote="o'o"
+  if [ "${bash_behavior_pattern_substitution_slash_escape_with_single_quote/\'/\\\'}" = "o\\'o" ]; then
+    bash_behavior_pattern_substitution_slash_escape_with_single_quote=0
+  else
+    bash_behavior_pattern_substitution_slash_escape_with_single_quote=1
+  fi
 
   #**
   # .. var:: bash_feature_declare_global
@@ -289,12 +372,18 @@ function load_vsi_compat()
   #
   # :Value: * ``0`` - Bash supports ``declare -g``
   #         * ``1`` - Bash does not support ``declare -g``
+  #
+  # .. var:: bash_behavior_all_traps_display_inherited
+  #
+  # When a subshell is spawned, the ERR/RETURN/DEBUG traps always show up in ``trap -p`` even if they are not actually inherited. (``set -E`` and ``set -T`` control whether these traps are actually inherited or not). This is an annoying behavior bash has and it makes determining which traps are actually active impossible to determine. Starting in bash 4.2, all signals started observing this behavior. This was done on purpose, but really makes tracking traps harder.
   #**
   if [ "${bash_minor_version}" -ge "42" ]; then
     bash_feature_declare_global=0
+    bash_behavior_all_traps_display_inherited=0
     bash_bug_declared_unset_value='' # Documented below
   else
     bash_feature_declare_global=1
+    bash_behavior_all_traps_display_inherited=1
     bash_bug_declared_unset_value='=""' # Documented below
   fi
 
@@ -315,13 +404,22 @@ function load_vsi_compat()
   #
   # .. seealso::
   #   :func:`file_tools.bash find_open_fd`
+  #
+  # .. var:: bash_feature_xtracefd
+  #
+  # Does bash support the ``BASH_XTRACEFD`` environment variable
+  #
+  # :Value: * ``0`` - Bash supports ``BASH_XTRACEFD``
+  #         * ``1`` - Bash does not support ``BASH_XTRACEFD``
   #**
   if [ "${bash_minor_version}" -ge "41" ]; then
     bash_feature_printf_array_assignment=0
     bash_feature_allocate_file_descriptor=0
+    bash_feature_xtracefd=0
   else
     bash_feature_printf_array_assignment=1
     bash_feature_allocate_file_descriptor=1
+    bash_feature_xtracefd=1
   fi
 
   #**
@@ -391,7 +489,7 @@ function load_vsi_compat()
   #**
   # .. function:: bash_bug_bash_env_process_substitution
   #
-  # With most bash 3.2's, using process substitution for the BASH_ENV env variable does not work as expected. (Perhaps the file is read twice, and since it is a stream, it cannot seek to the beginning.) Work around is to write to a temporary file instead. Some bash 3.2 do support this. Since this is expensive to test (one fork, which is only expensive in windows), it is not evaluated into a variable on load. Instead, this is a function that is called. The result is cached so that is does not need to be tested again. The feature has less to do with the exact version of bash, and how it is compiled or patched.
+  # With most bash 3.2's, using process substitution for the BASH_ENV env variable does not work as expected (for some reason.) A work around is to write to a temporary file instead. Since this can be expensive to test, it is not evaluated into a variable on load. Instead, this is a function that is called. The result is cached so that is does not need to be tested again. The feature has less to do with the exact version of bash, but rather how it is compiled or patched.
   #
   # :Return Value: * ``0`` - ``BASH_ENV`` does not support process substitution
   #                * ``1`` - ``BASH_ENV`` works normally
@@ -407,6 +505,42 @@ function load_vsi_compat()
     fi
 
     return "${__bash_bug_bash_env_process_substitution}"
+  }
+
+  #**
+  # .. function:: bash_feature_rcfile
+  #
+  # Depending on how bash is compiled (``-DSYS_BASHRC``), bash will use or ignore the ``--rcfile`` argument. This has to be tested by actually seeing if this works, so it is a function that is called on demand, instead of on :file:`compat.bsh` load.
+  #
+  # :Return Value: * ``0`` - Bash supports ``--rcfile``
+  #                * ``1`` - Bash ignored ``--rcfile``
+  #**
+  function bash_feature_rcfile()
+  {
+    local tempfile="$(mktemp)"
+    echo "echo 0; rm \"${tempfile}\"" >> "${tempfile}"
+    if [ -z "${__bash_feature_rcfile+set}" ]; then
+      if [ "$(bash --rcfile "${tempfile}" -ic :)" = "0" ]; then
+        __bash_feature_rcfile=0
+      else
+        __bash_feature_rcfile=1
+      fi
+    fi
+
+    return "${__bash_feature_rcfile}"
+  }
+
+  function bash_bug_rcfile_process_substitution()
+  {
+    if [ -z "${__bash_bug_rcfile_process_substitution+set}" ]; then
+      if [ "$(bash --rcfile <(echo echo 0) -ic :)" = "0" ]; then
+        __bash_bug_rcfile_process_substitution=1
+      else
+        __bash_bug_rcfile_process_substitution=0
+      fi
+    fi
+
+    return "${__bash_bug_rcfile_process_substitution}"
   }
 
   #**

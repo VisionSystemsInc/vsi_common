@@ -7,6 +7,7 @@ fi
 source "${VSI_COMMON_DIR}/tests/testlib.bsh"
 source "${TESTLIB_DIR}/test_utils.bsh"
 source "${VSI_COMMON_DIR}/linux/compat.bsh"
+source "${VSI_COMMON_DIR}/linux/file_tools.bsh"
 
 begin_test "Sed flag"
 (
@@ -318,37 +319,6 @@ begin_test "Bash flags"
   unset __bash_bug_bash_env_process_substitution
   unset bash
 
-#   # TODO: Can't replicate, table for now
-#   ### bash_behavior_strict_posix_functions
-#   function foo_17()
-#   {
-#     local re='^[a-z][a-z]$'
-#     x="$(cat <(echo ok))"
-#     if [[ ${x} =~ ${re} ]]; then
-#       echo yes
-#     else
-#       echo no
-#     fi
-#   }
-#   echo 000 >&2
-#   export -f foo_17
-#   # 3.2 failed, 4.0-4.2 pass, 4.3-5.0 failed 5.1 passed
-
-#   # echo 111 >&2
-#   # if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "51" ]; then
-#   #   [ "$(bash --posix -euc "foo_17" || :)" = "yes" ]
-#   # else
-#   #   [ "$(bash --posix -euc "foo_17" || :)" = "" ]
-#   # fi
-
-# echo 222 >&2
-#   if [ "${BASH_VERSINFO[0]}${BASH_VERSINFO[1]}" -ge "42" ]; then
-#     [ "$(bash --posix -c : 2>&1 || :)" = "1" ]
-#   else
-#     [ "$(bash --posix -c : 2>&1 || :)" = "1" ]
-#   fi
-# echo 333 >&2
-
   ### bash_behavior_empty_array_unbound
   x_17=()
   y_17="$(echo "${x_17[@]}bound")" || :
@@ -383,11 +353,83 @@ begin_test "Bash flags"
   else
     bash -xv "${TESTDIR}/foo_19"
   fi
+
+  ### bash_behavior_strict_posix_functions
+  function foo_20()
+  {
+    local re='^[a-z][a-z]$'
+    x="$(cat <(echo ok))"
+  }
+  export -f foo_20
+
+  if [ "${bash_feature_posix_process_substitution}" = "0" ]; then
+    bash --posix -euc "foo_20"
+  else
+    # This will result in stderr saying:
+    # environment: command substitution: line 2: syntax error near unexpected token `('
+    not bash --posix -euc "foo_20"
+  fi
+
+  ### bash_feature_rcfile
+  echo "echo hi" > "${TESTDIR}/foo_21"
+  result_21="$(bash --rcfile "${TESTDIR}/foo_21" -ic :)"
+  if bash_feature_rcfile; then
+    [ "${result_21}" = "hi" ]
+  else
+    [ "${result_21}" = "" ]
+  fi
+
+  ### bash_bug_rcfile_process_substitution
+  if bash_feature_rcfile; then
+    result_22="$(bash --rcfile <(echo "echo bye") -ic :)"
+    if bash_bug_rcfile_process_substitution; then
+      [ "${result_22}" = "" ]
+    else
+      [ "${result_22}" = "bye" ]
+    fi
+  fi
+
+  ### bash_behavior_all_traps_display_inherited
+  int_23="$(function foo_23()
+            {
+              exit 3
+            }
+            trap foo_23 INT
+            (
+              trap -p INT
+              :
+            )
+          )"
+  if [ "${bash_behavior_all_traps_display_inherited}" = "0" ]; then
+    [ -n "${int_23}" ]
+  else
+    [ -z "${int_23}" ]
+  fi
+
+  ### bash_behavior_pattern_substitution_slash_escape
+  foo_24="o'k"
+
+  if [ "${bash_behavior_pattern_substitution_slash_escape_with_single_quote}" = "0" ]; then
+    bar_24="${foo_24//\'/\\\'}"
+    [ "${bar_24}" = "o\\'k" ]
+
+    foo_24="${foo_24//\'/\\\\\'}"
+    [ "${foo_24}" = "o\\\\'k" ]
+
+  else
+    bar_24="${foo_24//\'/\'}"
+    [ "${bar_24}" = "o\\'k" ]
+
+    foo_24="${foo_24//\'/\\\'}"
+    [ "${foo_24}" = "o\\\\'k" ]
+  fi
 )
 end_test
 
 ### bash_feature_parameter_transformation part 2
-[ "${bash_feature_parameter_transformation}" = "1" ] || skip_next_test
+if [ "${bash_feature_parameter_transformation}" = "0" ]; then
+  skip_next_test
+fi
 begin_required_fail_test "Fail bash parameter transformation"
 (
   setup_test
@@ -397,13 +439,61 @@ begin_required_fail_test "Fail bash parameter transformation"
 end_test
 
 ### bash_feature_case_modification part 2
-[ "${bash_feature_case_modification}" = "1" ] || skip_next_test
+if [ "${bash_feature_case_modification}" = "0" ]; then
+  skip_next_test
+fi
 begin_required_fail_test "Fail bash case modification"
 (
   setup_test
   x_16="aBcD"
   begin_fail_zone
   echo "${x_16^^}"
+)
+end_test
+
+### bash_feature_xtracefd
+begin_test "Bash feature xtracefd"
+(
+  setup_test
+
+  find_open_fd xtrace
+  eval "exec ${xtrace}>/dev/null"
+  BASH_XTRACEFD=${xtrace}
+  set -xv
+
+  x="$(exec 2>&1; echo hi 1>&2)"
+
+  # Close the fd
+  eval "exec ${xtrace}>&-"
+
+  if [ "${bash_feature_xtracefd}" = "0" ]; then
+    [ "${x}" = "hi" ]
+  else
+    [[ "${x}" = *$'\nhi' ]] || false
+  fi
+)
+end_test
+
+if [ "${bash_feature_xtracefd}" != "0" ]; then
+  skip_next_test
+fi
+begin_test "Bash bug allocate xtracefd"
+(
+  setup_test
+
+  filename="${TESTDIR}/trace.txt"
+  set -xv
+  exec {BASH_XTRACEFD}>${filename}
+  echo hi
+  # Close the fd
+  exec {BASH_XTRACEFD}>&-
+  unset BASH_XTRACEFD
+
+  if [ "${bash_bug_allocate_xtracefd}" = "0" ]; then
+    [ "$(cat "${filename}")" = "" ]
+  else
+    [[ $(cat "${filename}") = *"echo hi"* ]] || false
+  fi
 )
 end_test
 
