@@ -52,15 +52,21 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 #
 # :Output: ``submodule_names`` - array of submodule names (matched if filters supplied)
 #          ``submodule_paths`` - corresponding array of submodule paths
+#
+# .. rubric:: Bugs
+#
+# Unlike ``git submodule--helper list``, must be run from the toplevel (root) directory of the repository. Also, ``$1`` technically needs to match submodule.<name>.path; ``git submodule--helper`` is more forgiving.
 #**
 
 function submodule-helper-list()
 {
   # Get submodule data
-  local submodule_data="$(${GIT} config -l -f .gitmodules | sed -n${sed_flag_rE} 's|^submodule.(.*).path=(.*)|\1'$'\\\n''\2|p')"
   local IFS=$'\n'
+  local submodule_data=($(${GIT} config -l -f .gitmodules | \
+      sed -n${sed_flag_rE} 's|^submodule.(.*).path=(.*)|\1'$'\\\n''\2|p'))
   # Parse submodule data
-  # Git modules can't have newlines in the "name", but the path could, and both can have tabs and spaces
+  # Git submodules can't have newlines in the "name" nor (realistically) "path",
+  # but both can have tabs and spaces
   # [submodule "w	t  f"]
   # 	path = w\tt\n  f
   # 	url = https://github.com/visionsystemsinc/vsi_common.git
@@ -68,48 +74,41 @@ function submodule-helper-list()
   # submodule.w     t  f.path=w     t
   #   f
   # submodule.w     t  f.url=https://github.com/visionsystemsinc/vsi_common.git
-
-  set_oflag noglob
-  # TODO Get the submodule names like git_mirror:get_config_submodule_names
-  #   git config --name-only --get-regexp '^submodule\..*\.url$'
-  # and use these keys to get the path/url as git_mirror:clone_submodules does
+  #
+  # REVIEW Get the submodule names like git_mirror:get_config_submodule_names
+  #   git config [-f .gitmodules] --name-only --get-regexp '^submodule\..*\.url$'
+  # and use these keys to get the path as git_mirror:clone_submodules does
   # See also just_git_airgap_repo.bsh:git_sync_submodules_recursively
-  submodule_names=($(awk ' NR % 2 == 1 { print; }' <<< "${submodule_data}" ))
-  submodule_paths=($(awk ' NR % 2 == 0 { print; }' <<< "${submodule_data}" ))
-  reset_oflag noglob
 
-  # If there are any arguments, filter out unmatched submodules
-  if (( $# )); then
-    local i
-    local j
-    local git_root_dir="$(${GIT} rev-parse --show-toplevel)"
-    # Store array size, since the length changes in the loop
-    local submodules=${#submodule_names[@]}
-    local pattern
+  submodule_names=()
+  submodule_paths=()
 
-    # Loop through submodules
-    for ((i=0; i<$submodules; i++)); do
+  # Loop through submodules
+  local i
+  for ((i=0; i<${#submodule_data[@]}; i+=2)); do
+    local submodule_name="${submodule_data[$i]}"
+    local submodule_path="${submodule_data[$i+1]}"
+
+    # If there are any arguments, filter out unmatched submodules
+    if [ $# -ne 0 ]; then
       # loop through all arguments
+      local j
       for j in "${@}"; do
         # Check to see if the pattern matches. The two slashes on the LHS are
         # to match the RHS /*/. /*/ allows additional pattern matching only for
         # full subdirectories names, and nothing else, since that is how
         # git-submodule--helper already works.
-        if [[ ${submodule_paths[$i]}// == ${j}/*/ ]]; then
-          continue 2
+        if [[ ${submodule_path}// == ${j}/*/ ]]; then
+          submodule_names+=("${submodule_name}")
+          submodule_paths+=("${submodule_path}")
+          break
         fi
       done
-      # Remove them if the continue 2 doesn't cause a skip
-      unset submodule_names[$i]
-      unset submodule_paths[$i]
-    done
-
-    if (( ${#submodule_names[@]} )); then # If not empty
-      # Reset the arrays, so that they are contiguous
-      submodule_names=("${submodule_names[@]}")
-      submodule_paths=("${submodule_paths[@]}")
+    else
+      submodule_names+=("${submodule_name}")
+      submodule_paths+=("${submodule_path}")
     fi
-  fi
+  done
 }
 
 #**
