@@ -27,6 +27,26 @@ begin_test "Test sed_flag_i"
 )
 end_test
 
+function begin_git_cli_config_option_test()
+{
+  if git_feature_cli_config_option; then
+    begin_test "${@}"
+  else
+    begin_required_fail_test "${@}"
+  fi
+}
+
+command -v "${GIT-git}" &> /dev/null || skip_next_test
+begin_git_cli_config_option_test "Test if git supports the -c option"
+(
+  setup_test
+
+  begin_fail_zone
+  ${GIT-git} -c foo=bar version
+  end_fail_zone
+)
+end_test
+
 command -v "${GIT-git}" &> /dev/null || skip_next_test
 git_feature_support_tls && tls=0 || tls=$?
 [ ${tls} -ge 2 ] && [ ${tls} -ne 125 ] || skip_next_test
@@ -97,7 +117,7 @@ function begin_submodule_update_test()
   fi
 }
 
-command -v "${GIT-git}" &> /dev/null || skip_next_test
+(command -v "${GIT-git}" &> /dev/null && git_feature_cli_config_option) || skip_next_test
 begin_submodule_update_test "Test git submodule update with custom command"
 (
   setup_test
@@ -138,7 +158,7 @@ begin_submodule_update_test "Test git submodule update with custom command"
     git -c "submodule.submod.update"='!echo custom_command' submodule update submod
     begin_fail_zone
     output="$(cd submod && git log -n1 --format="%s")"
-    # "Ahead (1)" when it does not support a custom command
+    # "Ahead (1)" when git does not support a custom command
     [ "${output}" = "second commit" ]
     end_fail_zone
   popd &> /dev/null
