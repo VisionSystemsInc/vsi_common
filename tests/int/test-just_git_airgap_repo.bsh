@@ -52,9 +52,8 @@ begin_test "Part 1 - Setup test repo"
   setup_test
   setup_variables
 
-  pushd "${VSI_COMMON_DIR}" &> /dev/null
-    VSI_COMMON_SHA="$(git rev-parse HEAD)"
-  popd &> /dev/null
+  VSI_COMMON_SHA="$(cd "${VSI_COMMON_DIR}" && git rev-parse HEAD)"
+  RECIPES_SHA="$(cd "${VSI_COMMON_DIR}/docker/recipes" && git rev-parse HEAD)"
 
   # Create faux-urls for the repo and its submodules
 
@@ -63,21 +62,29 @@ begin_test "Part 1 - Setup test repo"
   # found (it is expected to be at ../../VisionSystemsInc/docker_recipes.git)
   # I also now push a change to it
   pushd "${VSI_COMMON_URL}" &> /dev/null
-    # This only works right because all branches appear to be "topic" branches,
-    # so a push --mirror (once) will do what I want. Doesn't work well with more
-    # complexities like lfs
-    # The mirror's HEAD will be at the SHA as the real VSI_COMMON_DIR under test
+    # The mirror's HEAD will be at the same SHA as the real VSI_COMMON_DIR
+    # under test
     git clone --mirror "${VSI_COMMON_DIR}" . # This is the real VSI_COMMON_DIR
     [ "${VSI_COMMON_SHA}" = "$(git rev-parse HEAD)" ]
+    # This is creating a faux-mirror from a (local) clone. Therefore, the
+    # tracked commit (HEAD) cannot exist on a remote-only branch (e.g.,
+    # origin/master) because these are skipped during git_import-repo to the
+    # air-gapped server (in a true mirror, there should be no refs/remotes;
+    # they get translated to refs/heads by the refspec on push)
+    # RE Could checkout each ref/remotes, but we only need the current SHA
+    # RE This should not be a problem on CI
+    git branch local "${VSI_COMMON_SHA}"
   popd &> /dev/null
 
   # In this case, it is lucky that the recipes submodule is stored as a relative
   # URL; otherwise, we'd have to modify the parent project
   pushd "${RECIPES_URL}" &> /dev/null
-    # This only works right because all branches appear to be "topic" branches,
-    # so a push --mirror (once) will do what I want. Doesn't work well with more
-    # complexities like lfs
     git clone --mirror "${VSI_COMMON_DIR}"/docker/recipes .
+    [ "${RECIPES_SHA}" = "$(git rev-parse HEAD)" ]
+    # Because we are creating a faux-mirror from a (local) clone, create a
+    # local branch at the current SHA to ensure the commit is properly mirrored
+    # (see above)
+    git branch local "${RECIPES_SHA}"
   popd &> /dev/null
 
   # Main repo
@@ -89,7 +96,8 @@ begin_test "Part 1 - Setup test repo"
     git commit -m "Initial commit"
 
     # The working tree of this vsi_common submodule will have the same SHA
-    # checked out as the VSI_COMMON_DIR being tested
+    # checked out as the VSI_COMMON_DIR being tested. Uncommited changes will
+    # not exist in this repo
     git submodule add "${VSI_COMMON_URL}" vsi_common
     git submodule update --init --recursive
     [ "${VSI_COMMON_SHA}" = "$(git submodule status vsi_common | awk '{print $1}')" ]
@@ -112,7 +120,7 @@ begin_test "Part 2 - Initial mirror"
 
   pushd "${BUILD_REPO}" &> /dev/null
     # NOTE Uncommited changes to just_git_airgap_repo.bsh will not exist in
-    # this repo, so they are not sourced
+    # this repo, so they cannot be not sourced
     source "${BUILD_REPO}/vsi_common/linux/just_files/just_version.bsh"
     source "${BUILD_REPO}/vsi_common/linux/just_git_airgap_repo.bsh"
     GIT_MIRROR_PREP_DIR="${PREP_DIR}"
@@ -216,7 +224,7 @@ begin_test "Part 6 - Incremental update"
   pushd "${BUILD_REPO}" &> /dev/null
   (
     # NOTE Uncommited changes to just_git_airgap_repo.bsh will not exist in
-    # this repo, so they are not sourced
+    # this repo, so they cannot be sourced
     source "${BUILD_REPO}/vsi_common/linux/just_files/just_version.bsh"
     source "${BUILD_REPO}/vsi_common/linux/just_git_airgap_repo.bsh"
     GIT_MIRROR_PREP_DIR="${PREP_DIR}"
@@ -274,6 +282,7 @@ begin_test "Check for unpushed tracked commits in submodules"
   ##################################
 
   BUILD_REPO="${TESTDIR}"/build_repo
+  SYNC_REPO="${TESTDIR}"/sync_repo
   PRETEND_URL="${TESTDIR}/git/pretend_repo" # bare repo
   # Test if git supports difficult submodule paths
   if git_bug_submodule_path_with_special_characters; then
@@ -381,6 +390,10 @@ begin_test "Check for unpushed tracked commits in submodules"
     git commit -m "Updated submodules"
   popd &> /dev/null
 
+  # Use this repo to test git_sync_submodules
+  cp -a "${BUILD_REPO}" "${SYNC_REPO}"
+
+
   # Create another repo hierarchy, similar to the first, but with a separate
   # git dir and inside another git repo
 
@@ -436,12 +449,10 @@ begin_test "Check for unpushed tracked commits in submodules"
     [ "$(cd "${DIFFICULT_PATH}" && RECURSIVE=0 get_submodule_displaypaths)" = "a_sub_sub_module" ]
 
     # Test in a repo with no submodules
-    pushd "${DIFFICULT_PATH}/a_sub_sub_module" &> /dev/null
-      output="$(get_submodule_displaypaths)"
-      [ "${output}" = "" ]
-      output="$(RECURSIVE=0 get_submodule_displaypaths)"
-      [ "${output}" = "" ]
-    popd &> /dev/null
+    output="$(cd "${DIFFICULT_PATH}/a_sub_sub_module" && get_submodule_displaypaths)"
+    [ "${output}" = "" ]
+    output="$(cd "${DIFFICULT_PATH}/a_sub_sub_module" && RECURSIVE=0 get_submodule_displaypaths)"
+    [ "${output}" = "" ]
 
     # Verify the listing of the submodule URLs
     [ "$(get_submodule_urls)" = "${PRETEND_URL}_sub" ]
@@ -452,6 +463,14 @@ begin_test "Check for unpushed tracked commits in submodules"
     ans="$(printf "${PRETEND_URL}_sub\n${PRETEND_URL}_sub_sub")"
     [ "$(cd subdir && RECURSIVE=0 get_submodule_urls)" = "${ans}" ]
 
+    [ "$(cd "${DIFFICULT_PATH}" && get_submodule_urls)" = "${PRETEND_URL}_sub_sub" ]
+    [ "$(cd "${DIFFICULT_PATH}" && RECURSIVE=0 get_submodule_urls)" = "${PRETEND_URL}_sub_sub" ]
+
+    output="$(cd "${DIFFICULT_PATH}/a_sub_sub_module" && get_submodule_urls)"
+    [ "${output}" = "" ]
+    output="$(cd "${DIFFICULT_PATH}/a_sub_sub_module" && RECURSIVE=0 get_submodule_urls)"
+    [ "${output}" = "" ]
+
     # Verify the listing of the submodule names
     [ "$(get_submodule_names)" = "${DIFFICULT_NAME}" ]
     ans="$(printf "${DIFFICULT_NAME}\na_sub_sub_module")"
@@ -460,6 +479,14 @@ begin_test "Check for unpushed tracked commits in submodules"
     [ "$(cd subdir && get_submodule_names)" = "${DIFFICULT_NAME}" ]
     ans="$(printf "${DIFFICULT_NAME}\na_sub_sub_module")"
     [ "$(cd subdir && RECURSIVE=0 get_submodule_names)" = "${ans}" ]
+
+    [ "$(cd "${DIFFICULT_PATH}" && get_submodule_names)" = a_sub_sub_module ]
+    [ "$(cd "${DIFFICULT_PATH}" && RECURSIVE=0 get_submodule_names)" = a_sub_sub_module ]
+
+    output="$(cd "${DIFFICULT_PATH}/a_sub_sub_module" && get_submodule_names)"
+    [ "${output}" = "" ]
+    output="$(cd "${DIFFICULT_PATH}/a_sub_sub_module" && RECURSIVE=0 get_submodule_names)"
+    [ "${output}" = "" ]
 
     # Verify the listing of the submodule top-levels
     [ "$(real_path "$(get_submodule_toplevels)")" = "$(real_path "${BUILD_REPO}")" ]
@@ -472,9 +499,221 @@ begin_test "Check for unpushed tracked commits in submodules"
     output="$(cd subdir && \
         RECURSIVE=0 get_submodule_toplevels | tr "\n" "\0" | xargs -0 -I {} -n 1 real_path {})"
     [ "${output}" = "${ans}" ]
+
+    output="$(cd "${DIFFICULT_PATH}" && real_path "$(get_submodule_toplevels)")"
+    [ "${output}" = "$(real_path "${BUILD_REPO}/${DIFFICULT_PATH}")" ]
+    output="$(cd "${DIFFICULT_PATH}" && real_path "$(RECURSIVE=0 get_submodule_toplevels)")"
+    [ "${output}" = "$(real_path "${BUILD_REPO}/${DIFFICULT_PATH}")" ]
+
+    output="$(cd "${DIFFICULT_PATH}/a_sub_sub_module" && get_submodule_toplevels)"
+    [ "${output}" = "" ]
+    output="$(cd "${DIFFICULT_PATH}/a_sub_sub_module" && RECURSIVE=0 get_submodule_toplevels)"
+    [ "${output}" = "" ]
   popd &> /dev/null
 
 
+  # Test git_sync_submodules
+  # NOTE submodule-helper-relative-url is tested below
+  pushd "${SYNC_REPO}" &> /dev/null
+    # (Don't change git config remote.origin.url here)
+    git config submodule."${DIFFICULT_NAME}".url "${PRETEND_URL}_sub1"
+    pushd "${DIFFICULT_PATH}" &> /dev/null
+      git config remote.origin.url "${PRETEND_URL}_sub1"
+      git config submodule.a_sub_sub_module.url "${PRETEND_URL}_sub_sub1"
+    popd &> /dev/null
+    pushd "${DIFFICULT_PATH}/a_sub_sub_module" &> /dev/null
+      git config remote.origin.url "${PRETEND_URL}_sub_sub1"
+    popd &> /dev/null
+    git submodule sync --recursive
+    # Test the default configuration is correct (absolute paths)
+    [ "$(git config remote.origin.url)" = "${PRETEND_URL}" ]
+    [ "$(git config submodule."${DIFFICULT_NAME}".url)" = "${PRETEND_URL}_sub" ]
+    [ "$(cd "${DIFFICULT_PATH}" && \
+        git config remote.origin.url)" = "${PRETEND_URL}_sub" ]
+    [ "$(cd "${DIFFICULT_PATH}" && \
+      git config submodule.a_sub_sub_module.url)" = "${PRETEND_URL}_sub_sub" ]
+    [ "$(cd "${DIFFICULT_PATH}"/a_sub_sub_module && \
+      git config remote.origin.url)" = "${PRETEND_URL}_sub_sub" ]
+
+    # Test non-recursively
+    git_sync_submodules
+    [ "$(git config remote.origin.url)" = "${PRETEND_URL}" ]
+    [ "$(git config submodule."${DIFFICULT_NAME}".url)" = "${PRETEND_URL}_sub" ]
+    [ "$(cd "${DIFFICULT_PATH}" && \
+      git config remote.origin.url)" = "${PRETEND_URL}_sub" ]
+    # Test the just_upstream configuration is correct
+    [ "$(cd "${DIFFICULT_PATH}" && \
+        git config remote.just_upstream.url)" = "${PRETEND_URL}_sub" ]
+    pushd "${DIFFICULT_PATH}"/a_sub_sub_module &> /dev/null
+      not git config remote.just_upstream.url
+    popd &> /dev/null
+
+    #        submod
+    #      abs rel url
+    # abs  1   4   7
+    # rel  2   5   8
+    # url  3   6   9
+    # Tests 4, 5, and 6 depend on the parent repository; the rest should not
+
+    # 1) Test the default configuration is still correct (just_upstream == origin)
+    RECURSIVE=0 git_sync_submodules
+    [ "$(git config remote.origin.url)" = "${PRETEND_URL}" ]
+    [ "$(git config submodule."${DIFFICULT_NAME}".url)" = "${PRETEND_URL}_sub" ]
+    [ "$(cd "${DIFFICULT_PATH}" && \
+      git config remote.origin.url)" = "${PRETEND_URL}_sub" ]
+    [ "$(cd "${DIFFICULT_PATH}" && \
+      git config submodule.a_sub_sub_module.url)" = "${PRETEND_URL}_sub_sub" ]
+    [ "$(cd "${DIFFICULT_PATH}"/a_sub_sub_module && \
+      git config remote.origin.url)" = "${PRETEND_URL}_sub_sub" ]
+    # Test the just_upstream configuration is correct
+    [ "$(cd "${DIFFICULT_PATH}" && \
+        git config remote.just_upstream.url)" = "${PRETEND_URL}_sub" ]
+    [ "$(cd "${DIFFICULT_PATH}"/a_sub_sub_module && \
+        git config remote.just_upstream.url)" = "${PRETEND_URL}_sub_sub" ]
+
+    # 1) Test abs remote and abs submodule (for a specified remote)
+    git remote add upstream "${PRETEND_URL}"
+    # Change origin's URL so we can tell if we are using the wrong remote
+    # NOTE These paths don't have to resolve
+    git remote set-url origin "${PRETEND_URL}_origin"
+    pushd "${DIFFICULT_PATH}" &> /dev/null
+      git remote set-url origin "${PRETEND_URL}_origin_sub"
+    popd &> /dev/null
+    pushd "${DIFFICULT_PATH}"/a_sub_sub_module &> /dev/null
+      git remote set-url origin "${PRETEND_URL}_origin_sub_sub"
+    popd &> /dev/null
+    RECURSIVE=0 git_sync_submodules upstream
+    # 1) Test the default configuration is still correct
+    [ "$(git config remote.origin.url)" = "${PRETEND_URL}_origin" ]
+    [ "$(git config submodule."${DIFFICULT_NAME}".url)" = "${PRETEND_URL}_sub" ]
+    [ "$(cd "${DIFFICULT_PATH}" && \
+      git config remote.origin.url)" = "${PRETEND_URL}_origin_sub" ]
+    [ "$(cd "${DIFFICULT_PATH}" && \
+      git config submodule.a_sub_sub_module.url)" = "${PRETEND_URL}_sub_sub" ]
+    [ "$(cd "${DIFFICULT_PATH}"/a_sub_sub_module && \
+      git config remote.origin.url)" = "${PRETEND_URL}_origin_sub_sub" ]
+    # Test the upstream configuration is still correct
+    [ "$(git config remote.upstream.url)" = "${PRETEND_URL}" ]
+    # Test the just_upstream configuration is correct
+    [ "$(cd "${DIFFICULT_PATH}" && \
+        git config remote.just_upstream.url)" = "${PRETEND_URL}_sub" ]
+    [ "$(cd "${DIFFICULT_PATH}"/a_sub_sub_module && \
+        git config remote.just_upstream.url)" = "${PRETEND_URL}_sub_sub" ]
+
+    # 2) Test relative remote and abs submodule
+    git remote set-url upstream "../$(basename "${PRETEND_URL}")"
+    RECURSIVE=0 git_sync_submodules upstream
+    [ "$(cd "${DIFFICULT_PATH}" && \
+        git config remote.just_upstream.url)" = "${PRETEND_URL}_sub" ]
+
+    # 3) Test URL remote and abs submodule
+    git remote set-url upstream "https://git-server.com/org/repo.git"
+    RECURSIVE=0 git_sync_submodules upstream
+    [ "$(cd "${DIFFICULT_PATH}" && \
+        git config remote.just_upstream.url)" = "${PRETEND_URL}_sub" ]
+
+
+    # 4) Test an abs remote and relative submodule
+    git remote set-url upstream "${PRETEND_URL}"
+    cp .gitmodules .gitmodules.bak
+    sed "${sed_flags_i[@]}" -e \
+         "s|url = ${PRETEND_URL}_sub|url = ../$(basename "${PRETEND_URL}_rel_sub")|" .gitmodules
+    git add .gitmodules
+    git commit -m "update .gitmodules"
+    RECURSIVE=0 git_sync_submodules upstream
+    # Test the just_upstream configuration is correct
+    [ "$(cd "${DIFFICULT_PATH}" && \
+        git config remote.just_upstream.url)" = "${PRETEND_URL}_rel_sub" ]
+
+    # 5) Test relative remote and relative submodule
+    git remote set-url upstream "../$(basename "${PRETEND_URL}")"
+    RECURSIVE=0 git_sync_submodules upstream
+    [ "$(cd "${DIFFICULT_PATH}" && \
+        git config remote.just_upstream.url)" = "../../../$(basename "${PRETEND_URL}_rel_sub")" ]
+
+    # 6) Test URL remote and relative submodule
+    git remote set-url upstream "https://git-server.com/org/repo.git"
+    RECURSIVE=0 git_sync_submodules upstream
+    [ "$(cd "${DIFFICULT_PATH}" && git config remote.just_upstream.url)" = \
+        "https://git-server.com/org/$(basename "${PRETEND_URL}_rel_sub")" ]
+
+
+    # 7) Test abs remote and URL submodule
+    git remote set-url upstream "${PRETEND_URL}"
+    cp .gitmodules.bak .gitmodules
+    sed "${sed_flags_i[@]}" -e \
+         "s|url = ${PRETEND_URL}_sub|url = https://git-server.com/org/submod.git|" .gitmodules
+    git add .gitmodules
+    git commit -m "update .gitmodules"
+    RECURSIVE=0 git_sync_submodules upstream
+    [ "$(cd "${DIFFICULT_PATH}" && \
+        git config remote.just_upstream.url)" = "https://git-server.com/org/submod.git" ]
+
+    # 8) Test relative remote and URL submodule
+    git remote set-url upstream "../$(basename "${PRETEND_URL}")"
+    RECURSIVE=0 git_sync_submodules upstream
+    [ "$(cd "${DIFFICULT_PATH}" && \
+        git config remote.just_upstream.url)" = "https://git-server.com/org/submod.git" ]
+
+    # 9) Test URL remote and URL submodule
+    git remote set-url upstream "https://git-server.com/org/repo.git"
+    RECURSIVE=0 git_sync_submodules upstream
+    [ "$(cd "${DIFFICULT_PATH}" && \
+        git config remote.just_upstream.url)" = "https://git-server.com/org/submod.git" ]
+
+    # Reset remotes
+    cp .gitmodules.bak .gitmodules
+    git add .gitmodules
+    git commit -m "update .gitmodules"
+    # git submodule sync
+    git remote set-url origin "${PRETEND_URL}"
+    pushd "${DIFFICULT_PATH}" &> /dev/null
+      git remote set-url origin "${PRETEND_URL}_sub"
+    popd &> /dev/null
+    pushd "${DIFFICULT_PATH}"/a_sub_sub_module &> /dev/null
+      git remote set-url origin "${PRETEND_URL}_sub_sub"
+    popd &> /dev/null
+
+
+    # Test in a repository with no submodules
+    pushd "${DIFFICULT_PATH}/a_sub_sub_module" &> /dev/null
+      RECURSIVE=0 git_sync_submodules # This shouldn't die
+      [ "$(git config remote.just_upstream.url)" = "${PRETEND_URL}_sub_sub" ]
+    popd &> /dev/null
+
+
+    # Customize the remote name and ensure no other remotes get modified
+    git remote set-url origin "https://git-server.com/org/repo1.git"
+    pushd "${DIFFICULT_PATH}" &> /dev/null
+      git remote set-url just_upstream "https://git-server.com/org/submod2.git"
+    popd &> /dev/null
+    cp .gitmodules.bak .gitmodules
+    sed "${sed_flags_i[@]}" -e \
+        "s|url = ${PRETEND_URL}_sub|url = https://git-server.com/org/submod3.git|" .gitmodules
+    git add .gitmodules
+    git commit -m "update .gitmodules"
+    JUST_GIT_UPSTREAM=foo_upstream RECURSIVE=0 git_sync_submodules
+    [ "$(git config remote.origin.url)" = "https://git-server.com/org/repo1.git" ]
+    pushd "${DIFFICULT_PATH}" &> /dev/null
+      [ "$(git config remote.origin.url)" = "${PRETEND_URL}_sub" ]
+      [ "$(git config remote.just_upstream.url)" = "https://git-server.com/org/submod2.git" ]
+      [ "$(git config remote.foo_upstream.url)" = "https://git-server.com/org/submod3.git" ]
+    popd &> /dev/null
+
+    # Test the default configuration is still correct
+    [ "$(git config submodule."${DIFFICULT_NAME}".url)" = "${PRETEND_URL}_sub" ]
+    [ "$(cd "${DIFFICULT_PATH}" && \
+        git config remote.origin.url)" = "${PRETEND_URL}_sub" ]
+    [ "$(cd "${DIFFICULT_PATH}" && \
+        git config submodule.a_sub_sub_module.url)" = "${PRETEND_URL}_sub_sub" ]
+    [ "$(cd "${DIFFICULT_PATH}"/a_sub_sub_module && \
+        git config remote.origin.url)" = "${PRETEND_URL}_sub_sub" ]
+    [ "$(cd "${DIFFICULT_PATH}"/a_sub_sub_module && \
+        git config remote.just_upstream.url)" = "${PRETEND_URL}_sub_sub" ]
+  popd &> /dev/null
+
+
+  # Test check_submodules_are_pushed_recursively
   expected1="WARNING The commit tracked by the parent repository of the
 submodule, '${DIFFICULT_NAME}', has not been pushed to the
 remote URL tracked by the parent repository:
@@ -524,67 +763,44 @@ remote URL tracked by the parent repository:
 
   # Test git_project_root_dir
   ans="$(real_path "${BUILD_REPO}")"
-  pushd "${BUILD_REPO}" &> /dev/null
-    # needed by macOS to deal with /var/... and /private/var/...
-    [ "$(real_path "$(git_project_root_dir)")" = "${ans}" ]
-  popd &> /dev/null
-  pushd "${BUILD_REPO}"/subdir &> /dev/null
-    # needed by macOS to deal with /var/... and /private/var/...
-    [ "$(real_path "$(git_project_root_dir)")" = "${ans}" ]
-  popd &> /dev/null
-  pushd "${BUILD_REPO}/${DIFFICULT_PATH}"/a_sub_sub_module/subdir &> /dev/null
-    [ "$(real_path "$(git_project_root_dir)")" = "${ans}" ]
-  popd &> /dev/null
+  # needed by macOS to deal with /var/... and /private/var/...
+  [ "$(cd "${BUILD_REPO}" && real_path "$(git_project_root_dir)")" = "${ans}" ]
+  # needed by macOS to deal with /var/... and /private/var/...
+  [ "$(cd "${BUILD_REPO}"/subdir && real_path "$(git_project_root_dir)")" = "${ans}" ]
+  [ "$(cd "${BUILD_REPO}/${DIFFICULT_PATH}"/a_sub_sub_module/subdir && \
+      real_path "$(git_project_root_dir)")" = "${ans}" ]
 
   ans="$(real_path "${SEPARATE_REPO}")"
-  pushd "${SEPARATE_REPO}" &> /dev/null
-    # needed by macOS to deal with /var/... and /private/var/...
-    [ "$(real_path "$(git_project_root_dir)")" = "${ans}" ]
-  popd &> /dev/null
-  pushd "${SEPARATE_REPO}"/subdir &> /dev/null
-    # needed by macOS to deal with /var/... and /private/var/...
-    [ "$(real_path "$(git_project_root_dir)")" = "${ans}" ]
-  popd &> /dev/null
-  pushd "${SEPARATE_REPO}/${DIFFICULT_PATH}"/a_sub_sub_module/subdir &> /dev/null
-    [ "$(real_path "$(git_project_root_dir)")" = "${ans}" ]
-  popd &> /dev/null
+  # needed by macOS to deal with /var/... and /private/var/...
+  [ "$(cd "${SEPARATE_REPO}" && real_path "$(git_project_root_dir)")" = "${ans}" ]
+  # needed by macOS to deal with /var/... and /private/var/...
+  [ "$(cd "${SEPARATE_REPO}"/subdir && real_path "$(git_project_root_dir)")" = "${ans}" ]
+  [ "$(cd "${SEPARATE_REPO}/${DIFFICULT_PATH}"/a_sub_sub_module/subdir && \
+      real_path "$(git_project_root_dir)")" = "${ans}" ]
 
 
   # Test git_project_git_dir
   ans="$(real_path "${BUILD_REPO}/.git")"
-  pushd "${BUILD_REPO}" &> /dev/null
-    # needed by macOS to deal with /var/... and /private/var/...
-    [ "$(real_path "$(git_project_git_dir)")" = "${ans}" ]
-  popd &> /dev/null
-  pushd "${BUILD_REPO}"/subdir &> /dev/null
-    # needed by macOS to deal with /var/... and /private/var/...
-    [ "$(real_path "$(git_project_git_dir)")" = "${ans}" ]
-  popd &> /dev/null
-  pushd "${BUILD_REPO}/${DIFFICULT_PATH}"/a_sub_sub_module/subdir &> /dev/null
-    [ "$(real_path "$(git_project_git_dir)")" = "${ans}" ]
-  popd &> /dev/null
+  # needed by macOS to deal with /var/... and /private/var/...
+  [ "$(cd "${BUILD_REPO}" && real_path "$(git_project_git_dir)")" = "${ans}" ]
+  # needed by macOS to deal with /var/... and /private/var/...
+  [ "$(cd "${BUILD_REPO}"/subdir && real_path "$(git_project_git_dir)")" = "${ans}" ]
+  [ "$(cd "${BUILD_REPO}/${DIFFICULT_PATH}"/a_sub_sub_module/subdir && \
+      real_path "$(git_project_git_dir)")" = "${ans}" ]
 
   # Test from within a repo with a separate .git directory
   ans="$(real_path "${SEPARATE_GITDIR}")"
-  pushd "${SEPARATE_REPO}" &> /dev/null
-    # needed by macOS to deal with /var/... and /private/var/...
-    [ "$(real_path "$(git_project_git_dir)")" = "${ans}" ]
-  popd &> /dev/null
+  # needed by macOS to deal with /var/... and /private/var/...
+  [ "$(cd "${SEPARATE_REPO}" && real_path "$(git_project_git_dir)")" = "${ans}" ]
 
   # Test from within a bare repo
   ans="$(real_path "${PRETEND_URL}")"
-  pushd "${PRETEND_URL}" &> /dev/null
-    [ "$(real_path "$(git_project_git_dir)")" = "${ans}" ]
-  popd &> /dev/null
-  pushd "${PRETEND_URL}/hooks" &> /dev/null
-    [ "$(real_path "$(git_project_git_dir)")" = "${ans}" ]
-  popd &> /dev/null
+  [ "$(cd "${PRETEND_URL}" && real_path "$(git_project_git_dir)")" = "${ans}" ]
+  [ "$(cd "${PRETEND_URL}/hooks" && real_path "$(git_project_git_dir)")" = "${ans}" ]
 
   # Test from within the separate .git directory
   ans="$(real_path "${SEPARATE_GITDIR}")"
-  pushd "${SEPARATE_GITDIR}" &> /dev/null
-    [ "$(real_path "$(git_project_git_dir)")" = "${ans}" ]
-  popd &> /dev/null
+  [ "$(cd "${SEPARATE_GITDIR}" && real_path "$(git_project_git_dir)")" = "${ans}" ]
 )
 end_test
 
@@ -737,6 +953,29 @@ begin_test "git functionality"
   #################################
 
   pushd "${BUILD_REPO}" &> /dev/null
+    # list local tracking branches and their corresponding remote branch
+    # NOTE remote_tracking_branch_deleted is a tracking branch, but the remote-
+    # tracking branch has been deleted
+    get_tracking_branches
+    ans=("master" "tracking_branch_ahead" "tracking_branch_behind" \
+        "tracking_branch_equal" "tracking_branchpoint")
+    assert_array_eq just_git_tracking_branches ans
+
+    ans=("origin/master" "origin/tracking_branch_ahead" "origin/master" \
+        "origin/tracking_branch_equal" "origin/master")
+    assert_array_eq just_git_remote_tracking_branches ans
+
+    # specify a branch that has a tracking branch
+    output="$(get_tracking_branches origin tracking_branch_behind)"
+    [ "${output}" = "origin/master" ]
+
+    # specify a branch that does not have a tracking branch
+    output="$(get_tracking_branches origin nontracking_branch_behind)"
+    [ "${output}" = "" ]
+  popd &> /dev/null
+
+
+  pushd "${BUILD_REPO}" &> /dev/null
     # nothing unpushed - branch (non-tracking) behind origin/master
     output="$(log_unpushed_commits origin nontracking_branch_behind)"
     [ "${output}" = "" ]
@@ -768,39 +1007,29 @@ begin_test "git functionality"
     # possible manner; in this case, commits are repeated because branches that
     # follow one-another are logged separately
     [[ "$(log_outgoing_commits | head -n 1)" = *"12 outgoing"* ]] || false
-
-    # list local tracking branches and their corresponding remote branch
-    # NOTE remote_tracking_branch_deleted is a tracking branch, but the remote-
-    # tracking branch has been deleted
-    get_tracking_branches
-    ans=("master" "tracking_branch_ahead" "tracking_branch_behind" \
-        "tracking_branch_equal" "tracking_branchpoint")
-    assert_array_eq just_git_tracking_branches ans
-
-    ans=("origin/master" "origin/tracking_branch_ahead" "origin/master" \
-        "origin/tracking_branch_equal" "origin/master")
-    assert_array_eq just_git_remote_tracking_branches ans
-
-    # specify a branch that has a tracking branch
-    output="$(get_tracking_branches origin tracking_branch_behind)"
-    [ "${output}" = "origin/master" ]
-
-    # specify a branch that does not have a tracking branch
-    output="$(get_tracking_branches origin nontracking_branch_behind)"
-    [ "${output}" = "" ]
   popd &> /dev/null
 
 
   # Test submodule-helper-relative-url
+  # NOTE git_sync_submodules is tested above
   [ "$(submodule-helper-relative-url https://git-server.com/org/repo.git ../submod.git)" = "https://git-server.com/org/submod.git" ]
   [ "$(submodule-helper-relative-url /path/to/git/repo.git ../submod.git)" = "/path/to/git/submod.git" ]
   [ "$(submodule-helper-relative-url ../../git/repo.git ../submod.git)" = "../../git/submod.git" ]
   [ "$(submodule-helper-relative-url ../../git/repo.git ../../git/submod.git)" = "../../git/submod.git" ]
 
-  [ "$(submodule-helper-relative-url https://git-server.com/org/repo.git ../submod.git ../)" = "https://git-server.com/org/submod.git" ]
+  [ "$(submodule-helper-relative-url https://git-server.com/org/repo.git ../submod.git ../)" = \
+      "https://git-server.com/org/submod.git" ]
   [ "$(submodule-helper-relative-url /some/git/repo.git ../submod.git ../)" = "/some/git/submod.git" ]
   [ "$(submodule-helper-relative-url ../../git/repo.git ../submod.git ../)" = "../../../git/submod.git" ]
   [ "$(submodule-helper-relative-url ../../git/repo.git ../../git/submod.git ../)" = "../../../git/submod.git" ]
+
+  [ "$(submodule-helper-relative-url https://git-server.com/org/repo.git ../submod.git ../../)" = \
+      "https://git-server.com/org/submod.git" ]
+  [ "$(submodule-helper-relative-url /some/git/repo.git ../submod.git ../../)" = "/some/git/submod.git" ]
+  [ "$(submodule-helper-relative-url ../../git/repo.git ../submod.git ../../)" = \
+      "../../../../git/submod.git" ]
+  [ "$(submodule-helper-relative-url ../../git/repo.git ../../git/submod.git ../../)" = \
+      "../../../../git/submod.git" ]
 )
 end_test
 
