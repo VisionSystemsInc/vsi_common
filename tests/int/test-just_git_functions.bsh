@@ -392,10 +392,9 @@ begin_test "Test safe-submodule-update"
 
       # git is too old to do a safe submodule update; does a normal submodule
       # update, which forcefully moves HEAD, loosing the new commit
-      # RE I guess this commit is really only lost (although not unrecoverable)
-      # if there was not a branch tracking it. But forgetting to checkout a
-      # branch is pretty easy in a submodule, and this test runs the same if we
-      # don't checkout master before modifying readme_ahead
+      # RE This commit is really only lost if there was not a branch tracking
+      # it. However, forgetting to checkout a branch is pretty easy in a
+      # submodule.
       [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (1)" ]
 
       # Manually recover this commit
@@ -410,7 +409,7 @@ begin_test "Test safe-submodule-update"
 
   # Pull new changes
   pushd "${TEST_REPO}" &> /dev/null
-    # In git 1.8.3, 'git fetch origin master' amazingly does not update the
+    # In git <=1.8.3, 'git fetch origin master' amazingly does not update the
     # remote tracking branch: https://stackoverflow.com/a/20967347
     # RE git fetch origin master:refs/remotes/origin/master would have also
     # worked
@@ -460,7 +459,7 @@ begin_test "Test safe-submodule-update"
   popd &> /dev/null
 
   # Test non-ff merge
-  # Commit the change in the ahead submodule of the test repo
+  # Commit the change in the behind submodule of the test repo
   pushd "${TEST_REPO}" &> /dev/null
     pushd "behind" &> /dev/null
       # Create a local commit; this submodule is now ahead of the tracked
@@ -508,7 +507,7 @@ begin_test "Test safe-submodule-update"
   # wasn't such a pain)
   cp -a "${PRETEND_URL}_behind" "${PRETEND_URL}_behind2"
   pushd "${BUILD_REPO}" &> /dev/null
-    # In git 1.8.3, 'git fetch origin master' amazingly does not update the
+    # In git <=1.8.3, 'git fetch origin master' amazingly does not update the
     # remote tracking branch: https://stackoverflow.com/a/20967347
     git fetch
     git merge origin/master
@@ -547,17 +546,18 @@ begin_test "Test safe-submodule-update"
     # In git 2.27, git pull began recommending a merge strategy
     # https://stackoverflow.com/a/62653694
     #
-    # In git 1.8.3, 'git fetch origin master' amazingly does not update the
+    # In git <=1.8.3, 'git fetch origin master' amazingly does not update the
     # remote tracking branch: https://stackoverflow.com/a/20967347
     #
-    # At some point before git 2.24, 'git fetch' started failing if the commit
-    # of a submodule as tracked by the parent repo couldn't be found (which can
-    # happen if the submodule's URL changes and needs to be sync'd). That is,
-    # running 'git fetch' from within a parent repo fetches all branches (from
-    # either the default remote of the current branch or, if not set, origin).
-    # Then, git runs fetch in each submodule. Finally, git seems to inspect the
-    # submodule to ensure that each commit tracked by the parent exists in the
-    # submdoule, otherwise, it errors
+    # In git 2.21.0, 'git fetch' started failing if the commit of a submodule
+    # as tracked by the parent repo couldn't be found (which can happen if the
+    # submodule's URL changes and needs to be sync'd). That is, running
+    # 'git fetch'  from within a parent repo fetches all branches (from either
+    # the default remote of the current branch or, if not set, origin). Then,
+    # git runs fetch in each submodule (assuming fetch.recurseSubmodules is
+    # enabled, which it is by default since at least git 1.8.3). Finally, git
+    # seems to inspect the submodule to ensure that each commit tracked by the
+    # parent exists in the submdoule, otherwise, it errors
     git fetch || :
     git merge origin/master
 
