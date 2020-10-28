@@ -1,0 +1,56 @@
+#!/usr/bin/env false bash
+
+if [[ $- != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
+source "${VSI_COMMON_DIR}/linux/requirements.bsh"
+
+#*# linux/compat_singularity.bsh
+
+#**
+# ===================================
+# Singularity Compatibility Variables
+# ===================================
+#
+# .. default-domain:: bash
+#
+# .. file:: compat_singularity.bsh
+#
+# A collection of variables to help cope with the differences between singularity versions.
+#**
+
+function _compat_singularity_get_version()
+{
+  if [ -z "${_compat_singularity_version+set}" ]; then
+    _compat_singularity_version="$("${SINGULARITY-singularity}" --version)"
+    _compat_singularity_version="${_compat_singularity_version##* }"
+    _compat_singularity_version="${_compat_singularity_version%%-*}"
+  fi
+}
+
+#**
+# .. function:: singularity_singularityenv_priority_bug
+#
+# In singularity 3.0-3.5, there is an ambiguity when it comes to the precedence of ``SINGULARITYENV_`` variables setting
+#
+# :Return Value: * ``0`` - Singularity has bug, and the value of the environment variable will be hard to predict
+#                * ``1`` - Singularity does not have the bug, and ``SINGULARITYENV_`` take priority.
+#
+# .. seealso::
+#
+#    https://github.com/hpcng/singularity/issues/4827
+#**
+function singularity_singularityenv_priority_bug()
+{
+  if [ -z "${_singularity_singularityenv_priority_bug+set}" ]; then
+    _compat_singularity_get_version
+    if meet_requirements "${_compat_singularity_version}" '>=3.0' '<3.6'; then
+      _singularity_singularityenv_priority_bug=0
+    else
+      _singularity_singularityenv_priority_bug=1
+    fi
+  fi
+
+  return "${_singularity_singularityenv_priority_bug}"
+}
