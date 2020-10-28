@@ -90,9 +90,14 @@ set -eu
 
 source "${VSI_COMMON_DIR}/linux/elements.bsh"
 
+#**
+# .. envvar:: JUST_DEBUG_ENTRYPOINT
+#
+# :file:`just_entrypoint.sh` will execute the unquoted string specified by :envvar:`JUST_DEBUG_ENTRYPOINT` at the beginning of the script for the purposes of debugging. A typical value would be ``/usr/local/bin/bash``, ``bash -i``, or ``source /foo/bar/something``. If set to null, it will default to running ``bash``.
+#**
 if [ -n "${JUST_DEBUG_ENTRYPOINT+set}" ]; then
-  # No quotes here, so allow things like "source ~/something"
-  ${JUST_DEBUG_SHELL-bash}
+  # No quotes here, so allow things like: JUST_DEBUG_ENTRYPOINT="source /foo/bar/something"
+  ${JUST_DEBUG_ENTRYPOINT:-bash}
 fi
 
 # Disable the special docker magic except in docker, no need in singularity
