@@ -12,6 +12,7 @@ fi
 source "${VSI_COMMON_DIR}/linux/string_tools.bsh"
 source "${VSI_COMMON_DIR}/linux/command_tools.bsh"
 source "${VSI_COMMON_DIR}/linux/elements.bsh"
+source "${VSI_COMMON_DIR}/linux/compat_singularity.bsh"
 
 #*# just/plugins/singularity/singularity_functions
 
@@ -80,9 +81,20 @@ function _Singularity()
 
   if [ "${SINGULARITY_EXEC-0}" != "1" ] || [ "${DRYRUN-}" != "" ]; then
     local JUST_IGNORE_EXIT_CODES="${SINGULARITY_IGNORE_EXIT_CODES-0}"
-    "${cmd[@]}"
+
+    if singularity_singularityenv_priority_bug; then
+      (
+        singularity_prioritize_env
+        "${cmd[@]}"
+      )
+    else
+      "${cmd[@]}"
+    fi
     return $?
   else
+    if singularity_singularityenv_priority_bug; then
+      singularity_prioritize_env
+    fi
     exec "${cmd[@]}"
   fi
 }
@@ -103,6 +115,47 @@ function _Singularity()
 function singularity_env_pass()
 {
   export "SINGULARITYENV_${1}"="${2}"
+}
+
+
+#**
+# .. function:: singularity_prioritize_env
+#
+# Due to an ambiguity bug in processing the host environment variables in singularity 3.0-3.5, ``SINGULARITYENV_`` variables don't always take precedence.
+#
+# This function unsets the variables that would have otherwise caused issue.
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
+#    if singularity_singularityenv_priority_bug; then
+#      (
+#        singularity_prioritize_env
+#        singularity run something.simg
+#      )
+#    else
+#      singularity run something.simg
+#    fi
+#
+# .. seealso::
+#
+#    https://github.com/hpcng/singularity/issues/4827
+#**
+function singularity_prioritize_env()
+{
+  local singularity_vars=($(compgen -A export SINGULARITYENV_))
+  local singularity_var
+  for singularity_var in ${singularity_vars[@]+"${singularity_vars[@]}"}; do
+    singularity_var="${singularity_var#SINGULARITYENV_}"
+    # Special exception
+    if [ "${singularity_var}" = "PATH" ]; then
+      continue
+    fi
+    if [ -n "${!singularity_var+set}" ]; then
+      unset "${singularity_var}"
+    fi
+  done
 }
 
 #**
