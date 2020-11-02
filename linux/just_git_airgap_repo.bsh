@@ -1309,7 +1309,7 @@ function git_submodule_sync_recursive()
 # Like ``git submodule sync``, synchronize the configured URL of each submodule in a repository (recursively) to the value specified in .gitmodules; however, instead of overwriting the default remote (origin), update the remote specified by JUST_GIT_UPSTREAM (``just_upstream`` by default).
 #
 # :Arguments: [``$1``] - The project-repository's remote. Default: origin
-#             [``$2``] - The submodule path to sync. Default: all submodules of the current repository (non-recursively)
+#             [``$2...``] - The submodule path to sync (or multiple submodules). Default: all submodules of the current repository (non-recursively)
 # :Parameters: - [``JUST_GIT_UPSTREAM``] - The submodules' remote to sync. When updating the URL in the submodules' configuration, use this remote. Default: ``just_upstream``
 #
 # .. note::
@@ -1337,15 +1337,25 @@ function git_submodule_sync()
   if [ $# -gt 1 ]; then
     # Doesn't have trailing slashes
     local submodule_displaypaths=($(git_submodule_displaypaths))
-    # NOTE Could support multiple submodules (as a variadic argument)
-    # Remove trailing slash
-    local index="$(findin "${2%/}" ${submodule_displaypaths[@]+"${submodule_displaypaths[@]}"})"
-    if [ "${index}" = "-1" ]; then
-      # Mirror git error
-      echo "ERROR pathspec '${2}' did not match any file(s) known to git (PWD: ${PWD})"
-      return 1
-    fi
-    submodule_keys=("${submodule_keys[$index]}")
+    # Array slicing doesn't work in bash 3.2 if IFS is set to $'\n'
+    IFS="${OLD_IFS}"
+    local in_displaypaths=("${@:2}")
+    IFS=$'\n'
+    local in_displaypath
+    local filtered_sm_keys=()
+    # Select the submodule name for each displaypath
+    for in_displaypath in "${in_displaypaths[@]}"; do
+      # Remove trailing slash
+      # FIXME if recursive is set, this should match anything under basepath
+      local index="$(findin "${in_displaypath%/}" \
+          ${submodule_displaypaths[@]+"${submodule_displaypaths[@]}"})"
+      if [ "${index}" = "-1" ]; then
+        echo "ERROR pathspec '${2}' did not match any file(s) known to git (PWD: ${PWD})"
+        return 1
+      fi
+      filtered_sm_keys+=("${submodule_keys[$index]}")
+    done
+    submodule_keys=("${filtered_sm_keys[@]}")
   fi
   IFS="${OLD_IFS}"
 

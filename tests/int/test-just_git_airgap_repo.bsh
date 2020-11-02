@@ -340,6 +340,7 @@ begin_test "Check for unpushed tracked commits in submodules"
   # ./                                           "${PRETEND_URL}"
   # ./"${DIFFICULT_PATH}" ("${DIFFICULT_NAME}")  "${PRETEND_URL}_sub"
   # ./"${DIFFICULT_PATH}/a_sub_sub_module"       "${PRETEND_URL}_sub_sub"
+  # ./another_sub_module                         "${PRETEND_URL}_sub_sub" (in SYNC_REPO)
   #
   # NOTE each repo is created in a respective ${BUILD_REPO}"_* repo and mirror
   # pushed to "${PRETEND_URL}"_*
@@ -541,49 +542,55 @@ begin_test "Check for unpushed tracked commits in submodules"
         git config remote.origin.url)" = "${PRETEND_URL}_sub_sub" ]
     [ "$(cd another_sub_module && \
         git config remote.origin.url)" = "${PRETEND_URL}_sub_sub" ]
+  popd &> /dev/null
 
-    # Test a single submodule
-    git_submodule_sync origin "${DIFFICULT_PATH}"
+  cp -a "${SYNC_REPO}" "${SYNC_REPO}_1"
+  pushd "${SYNC_REPO}_1" &> /dev/null
+    git submodule add "${PRETEND_URL}_sub_sub" a_third_sub_module
+    git commit -m "Add a third submodule"
+
+    # Test specifying submodules
+    git_submodule_sync origin "${DIFFICULT_PATH}" another_sub_module
     [ "$(git config remote.origin.url)" = "${PRETEND_URL}" ]
     [ "$(git config submodule."${DIFFICULT_NAME}".url)" = "${PRETEND_URL}_sub" ]
     [ "$(git config submodule.another_sub_module.url)" = "${PRETEND_URL}_sub_sub" ]
+    [ "$(git config submodule.a_third_sub_module.url)" = "${PRETEND_URL}_sub_sub" ]
     [ "$(cd "${DIFFICULT_PATH}" && \
         git config remote.origin.url)" = "${PRETEND_URL}_sub" ]
     [ "$(cd "${DIFFICULT_PATH}"/a_sub_sub_module && \
         git config remote.origin.url)" = "${PRETEND_URL}_sub_sub" ]
     [ "$(cd another_sub_module && \
         git config remote.origin.url)" = "${PRETEND_URL}_sub_sub" ]
+    [ "$(cd a_third_sub_module && \
+        git config remote.origin.url)" = "${PRETEND_URL}_sub_sub" ]
     # Test the just_upstream configuration is correct
     [ "$(cd "${DIFFICULT_PATH}" && \
         git config remote.just_upstream.url)" = "${PRETEND_URL}_sub" ]
+    [ "$(cd another_sub_module && \
+        git config remote.just_upstream.url)" = "${PRETEND_URL}_sub_sub" ]
     pushd "${DIFFICULT_PATH}"/a_sub_sub_module &> /dev/null
       not git config remote.just_upstream.url
     popd &> /dev/null
-    pushd another_sub_module &> /dev/null
+    pushd a_third_sub_module &> /dev/null
       not git config remote.just_upstream.url
     popd &> /dev/null
+  popd &> /dev/null
 
+  cp -a "${SYNC_REPO}" "${SYNC_REPO}_2"
+  pushd "${SYNC_REPO}_2" &> /dev/null
     # Test non-recursively
     git_submodule_sync
-    [ "$(git config remote.origin.url)" = "${PRETEND_URL}" ]
-    [ "$(git config submodule."${DIFFICULT_NAME}".url)" = "${PRETEND_URL}_sub" ]
-    [ "$(git config submodule.another_sub_module.url)" = "${PRETEND_URL}_sub_sub" ]
-    [ "$(cd "${DIFFICULT_PATH}" && \
-      git config remote.origin.url)" = "${PRETEND_URL}_sub" ]
-    [ "$(cd "${DIFFICULT_PATH}"/a_sub_sub_module && \
-        git config remote.origin.url)" = "${PRETEND_URL}_sub_sub" ]
-    [ "$(cd another_sub_module && \
-        git config remote.origin.url)" = "${PRETEND_URL}_sub_sub" ]
     # Test the just_upstream configuration is correct
     [ "$(cd "${DIFFICULT_PATH}" && \
         git config remote.just_upstream.url)" = "${PRETEND_URL}_sub" ]
+    [ "$(cd another_sub_module && \
+        git config remote.just_upstream.url)" = "${PRETEND_URL}_sub_sub" ]
     pushd "${DIFFICULT_PATH}"/a_sub_sub_module &> /dev/null
       not git config remote.just_upstream.url
     popd &> /dev/null
-    pushd another_sub_module &> /dev/null
-      [ "$(git config remote.just_upstream.url)" = "${PRETEND_URL}_sub_sub" ]
-    popd &> /dev/null
+  popd &> /dev/null
 
+  pushd "${SYNC_REPO}" &> /dev/null
     #        submod
     #      abs rel url
     # abs  1   4   7
