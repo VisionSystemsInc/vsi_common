@@ -59,12 +59,13 @@ class TaskTimer(object):
       duration = time() - self.start
 
       plural = 's' if self.num_tasks != 1 else ''
-      time_str = format_time_string(duration)
-      avg_seconds = duration / self.num_tasks
+      total_duration_str = format_time_string(duration)
+      avg_duration = duration / self.num_tasks
+      avg_duration_str = format_time_string(avg_duration)
 
       self.logging_func(f'Finished {self.num_tasks} {self.task_name} '
-                        f'task{plural} in {time_str} for an average time of '
-                        f'{avg_seconds} seconds per task.')
+                        f'task{plural} in {total_duration_str} for an average time of '
+                        f'{avg_duration_str} per task.')
 
 
 class GenericTimer(object):
