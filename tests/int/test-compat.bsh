@@ -6,6 +6,7 @@ fi
 
 source "${VSI_COMMON_DIR}/tests/testlib.bsh"
 source "${VSI_COMMON_DIR}/linux/compat.bsh"
+source "${VSI_COMMON_DIR}/linux/aliases.bsh"
 
 function setup()
 {
@@ -36,25 +37,25 @@ function begin_git_cli_config_option_test()
   fi
 }
 
-command -v "${GIT-git}" &> /dev/null || skip_next_test
+command -v "${GIT}" &> /dev/null || skip_next_test
 begin_git_cli_config_option_test "Test if git supports the -c option"
 (
   setup_test
 
   begin_fail_zone
-  ${GIT-git} -c foo=bar version
+  "${GIT}" -c foo=bar version
   end_fail_zone
 )
 end_test
 
-command -v "${GIT-git}" &> /dev/null || skip_next_test
+command -v "${GIT}" &> /dev/null || skip_next_test
 git_feature_support_tls && tls=0 || tls=$?
 [ ${tls} -ge 2 ] && [ ${tls} -ne 125 ] || skip_next_test
 begin_test "Test git_feature_support_tls"
 (
   setup_test
 
-  ${GIT-git} ls-remote -h https://github.com/visionsystemsinc/small_trinkets.git
+  "${GIT}" ls-remote -h https://github.com/visionsystemsinc/small_trinkets.git
 )
 end_test
 
@@ -67,7 +68,7 @@ function begin_submodule_path_test()
   fi
 }
 
-command -v "${GIT-git}" &> /dev/null || skip_next_test
+command -v "${GIT}" &> /dev/null || skip_next_test
 begin_submodule_path_test "Test difficult git submodule path"
 (
   setup_test
@@ -80,27 +81,27 @@ begin_submodule_path_test "Test difficult git submodule path"
   # Sub module
   mkdir -p "${SUBMODULE_REPO}"
   pushd "${SUBMODULE_REPO}" &> /dev/null
-    ${GIT-git} init .
+    "${GIT}" init .
     touch readme_sub
-    ${GIT-git} add readme_sub
-    ${GIT-git} commit -m "initial commit"
+    "${GIT}" add readme_sub
+    "${GIT}" commit -m "initial commit"
   popd &> /dev/null
   mkdir -p "${SUBMODULE_URL}"
   pushd "${SUBMODULE_URL}" &> /dev/null
-    ${GIT-git} clone --mirror "${SUBMODULE_REPO}" .
+    "${GIT}" clone --mirror "${SUBMODULE_REPO}" .
   popd &> /dev/null
 
   # Main Repo
   mkdir -p "${GIT_TEST_REPO}"
   pushd "${GIT_TEST_REPO}" &> /dev/null
-    ${GIT-git} init .
-    ${GIT-git} submodule add "${SUBMODULE_URL}" "${DIFFICULT_PATH}"
-    ${GIT-git} commit -m "add submodule"
+    "${GIT}" init .
+    "${GIT}" submodule add "${SUBMODULE_URL}" "${DIFFICULT_PATH}"
+    "${GIT}" commit -m "add submodule"
   popd &> /dev/null
 
   # Test if git supports difficult submodule paths
   pushd "${GIT_TEST_REPO}" &> /dev/null
-    output="$(${GIT-git} submodule foreach -q 'echo "${sm_path}"')"
+    output="$("${GIT}" submodule foreach -q 'echo "${sm_path}"')"
     begin_fail_zone
     [ "${output}" = "${DIFFICULT_PATH}" ] # output="" when it fails
     end_fail_zone
@@ -117,7 +118,7 @@ function begin_submodule_update_test()
   fi
 }
 
-(command -v "${GIT-git}" &> /dev/null && git_feature_cli_config_option) || skip_next_test
+(command -v "${GIT}" &> /dev/null && git_feature_cli_config_option) || skip_next_test
 begin_submodule_update_test "Test git submodule update with custom command"
 (
   setup_test
@@ -129,35 +130,35 @@ begin_submodule_update_test "Test git submodule update with custom command"
   # Sub module
   mkdir -p "${SUBMODULE_REPO}"
   pushd "${SUBMODULE_REPO}" &> /dev/null
-    ${GIT-git} init .
+    "${GIT}" init .
     echo 1 > readme_sub
-    ${GIT-git} add readme_sub
-    ${GIT-git} commit -m "initial commit"
+    "${GIT}" add readme_sub
+    "${GIT}" commit -m "initial commit"
   popd &> /dev/null
   mkdir -p "${SUBMODULE_URL}"
   pushd "${SUBMODULE_URL}" &> /dev/null
-    ${GIT-git} clone --mirror "${SUBMODULE_REPO}" .
+    "${GIT}" clone --mirror "${SUBMODULE_REPO}" .
   popd &> /dev/null
 
   # Main Repo
   mkdir -p "${BUILD_REPO}"
   pushd "${BUILD_REPO}" &> /dev/null
-    ${GIT-git} init .
-    ${GIT-git} submodule add "${SUBMODULE_URL}"
-    ${GIT-git} commit -m "add submodule"
+    "${GIT}" init .
+    "${GIT}" submodule add "${SUBMODULE_URL}"
+    "${GIT}" commit -m "add submodule"
   popd &> /dev/null
 
   # Test if git supports custom commands in submodule.<name>.update
   pushd "${BUILD_REPO}" &> /dev/null
     pushd submod &> /dev/null
-      ${GIT-git} checkout master
+      "${GIT}" checkout master
       echo 2 >> readme_sub
-      ${GIT-git} add readme_sub
-      ${GIT-git} commit -m "second commit"
+      "${GIT}" add readme_sub
+      "${GIT}" commit -m "second commit"
     popd &> /dev/null
-    ${GIT-git} -c "submodule.submod.update"='!echo custom_command' submodule update submod
+    "${GIT}" -c "submodule.submod.update"='!echo custom_command' submodule update submod
     begin_fail_zone
-    output="$(cd submod && ${GIT-git} log -n1 --format="%s")"
+    output="$(cd submod && "${GIT}" log -n1 --format="%s")"
     # "Ahead (1)" when git does not support a custom command
     [ "${output}" = "second commit" ]
     end_fail_zone

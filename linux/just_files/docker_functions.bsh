@@ -12,6 +12,7 @@ source "${VSI_COMMON_DIR}/linux/mount_tools.bsh"
 source "${VSI_COMMON_DIR}/linux/just_files/docker_compose_override"
 source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
 source "${VSI_COMMON_DIR}/linux/compat.bsh"
+source "${VSI_COMMON_DIR}/linux/aliases.bsh"
 
 #*# just/plugins/docker/docker_functions
 
@@ -26,33 +27,6 @@ source "${VSI_COMMON_DIR}/linux/compat.bsh"
 #
 # Set of functions to make using dockers easier
 #
-# .. envvar:: DOCKER
-#
-# Name/path of docker executable
-#
-# Instead of hard-coding "docker" everywhere, use the variable :envvar:`DOCKER` so that
-# when the need comes, it is easier to switch which executable gets called.
-#**
-
-: ${DOCKER=docker}
-
-#**
-# .. envvar:: NVIDIA_DOCKER
-#
-# Name/path of nvidia-docker executable
-#
-# Instead of hard-coding "nvidia-docker" everywhere, use the variable
-# :envvar:`NVIDIA_DOCKER` so that when the need comes, it is easier to switch which
-# executable gets called. Default to :envvar:`DOCKER` if nvidia-docker executable is not
-# in the path (hash-able)
-#**
-
-: ${NVIDIA_DOCKER=nvidia-docker}
-if ! hash ${NVIDIA_DOCKER} 2> /dev/null; then
-  NVIDIA_DOCKER=${DOCKER}
-fi
-
-#**
 # .. var:: DOCKER_VOLUME_PATTERN
 #
 # Regex pattern for matching docker volume short form
@@ -464,22 +438,6 @@ function parse-docker()
 }
 
 #**
-# .. function:: Exec-Nvidia-Docker
-#
-# Version of Docker for Nvidia and ``exec``'s
-#**
-
-function Exec-Nvidia-docker(){ DOCKER_EXEC=1 Nvidia-Docker "${@}";}
-
-#**
-# .. function:: Nvidia-Docker
-#
-# Version of Docker for Nvidia
-#**
-
-function Nvidia-docker(){ DOCKER="${NVIDIA_DOCKER}" Docker "${@}";}
-
-#**
 # .. function:: Exec-Docker
 #
 # Version of Docker that ``exec``'s the command rather than call
@@ -524,7 +482,7 @@ function Docker()
 function _Docker()
 {
   local docker_extra_command_args=()
-  local cmd=(${DRYRUN} ${DOCKER})
+  local cmd=(${DRYRUN} "${DOCKER}")
   local extra_args_var
 
   if [ "${docker_command}" = "run" ] && [ "${DOCKER_AUTOREMOVE-1}" == "1" ]; then
@@ -554,18 +512,6 @@ function _Docker()
 ######################
 ### docker-compose ###
 ######################
-
-#**
-# .. envvar:: DOCKER_COMPOSE
-#
-# Name/path of docker-compose executable
-#
-# Instead of hard-coding "docker-compose" everywhere, use the variable
-# :envvar:`DOCKER_COMPOSE` so that when the need comes, it is easier to switch which
-# executable gets called
-#**
-
-: ${DOCKER_COMPOSE=docker-compose}
 
 #**
 # .. function:: docker-compose-volumes-old
@@ -1137,7 +1083,7 @@ function Docker-compose()
 function _Docker-compose()
 {
   local docker_compose_extra_command_args=()
-  local cmd=(${DRYRUN} ${DOCKER_COMPOSE})
+  local cmd=(${DRYRUN} "${DOCKER_COMPOSE}")
   local extra_args_var
 
   if [ "${docker_compose_command}" = "run" ] && [ "${DOCKER_COMPOSE_AUTOREMOVE-1}" == "1" ]; then
@@ -1353,8 +1299,8 @@ function Just-docker-compose()
 
 function docker_service_running()
 {
-  ${DOCKER} inspect -f '{{.State.Status}}' \
-            $(${DOCKER_COMPOSE} ps -q ${@+"${@}"}) 2>/dev/null
+  "${DOCKER}" inspect -f '{{.State.Status}}' \
+              $("${DOCKER_COMPOSE}" ps -q ${@+"${@}"}) 2>/dev/null
 }
 
 #**
