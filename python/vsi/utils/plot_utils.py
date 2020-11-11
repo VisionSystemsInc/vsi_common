@@ -258,7 +258,7 @@ class OrthoAnd3DPlot:
   """ 2x2 array of plots consisting of 3 ortho views, plus one 3-d view """
   def __init__(self, fig, aligned_x_dim=0, aligned_y_dim=2, dim_labels=('X','Y','Z')):
     self.fig = fig
-    self.ax_array = [[None,None],[None,None]]
+    self.ax_array = np.array([[None,None],[None,None]])
     self.ax_array[0][0] = fig.add_subplot(2,2,1)
     self.ax_array[0][1] = fig.add_subplot(2,2,2)
     self.ax_array[1][0] = fig.add_subplot(2,2,3)
@@ -291,6 +291,11 @@ class OrthoAnd3DPlot:
     self.ax_array[1][1].set_ylabel(self.dim_labels[self.extra_dim])
     self.ax_array[1][1].set_zlabel(self.dim_labels[self.aligned_y_dim])
 
+  def set_axes_equal(self):
+      """ set equal scale in the x and y dimensions on the 2D plots """
+      self.ax_array[0][0].axis('equal')
+      self.ax_array[0][1].axis('equal')
+      self.ax_array[1][0].axis('equal')
 
   def plot(self, items, *args, **kwargs):
     """ add a set of 3-d elements to the plot.
@@ -303,6 +308,9 @@ class OrthoAnd3DPlot:
     **kwargs
         Arbitrary keyword arguments.
     """
+
+    if len(items.shape) == 1:
+        items = items.reshape(-1,1)
 
     self.ax_array[0][0].plot(items[self.aligned_x_dim,:],
               items[self.aligned_y_dim,:], *args, **kwargs)
