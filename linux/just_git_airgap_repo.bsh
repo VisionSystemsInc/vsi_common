@@ -36,14 +36,13 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 #
 # .. rubric:: Example
 #
-# Assume we have a project called simple_repo stored at ``https://git-server.com/projectA/simple_repo.git`` and vsi_common is a submodule of it.
+# Assume we have a project called project_repo stored at ``https://git-server.com/projectA/project_repo.git`` and vsi_common is a submodule of it.
 #
 # This repository is recursively cloned to /src; it looks like
 #
 # .. code-block:: bash
 #
-#    /src/
-#      simple_repo/
+#      project_repo/
 #        .gitmodules
 #        Justfile
 #        setup.env
@@ -80,32 +79,41 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 #
 # This repository is now setup and can be mirrored and pushed to a new air-gapped git server:
 #
-# #. ``just git export-repo-guided`` - This target asks a series of questions and then mirrors the repository and its submodules (recursively). In this case, there is only a single remote, ``origin``, and a single branch, ``master``; these are chosen automatically. We will save the the mirrored repositories to the output directory, ``/mirrors``.
+# #. ``just git export-repo-guided`` - This target asks a series of questions and then mirrors the repository and its submodules (recursively). For this example, when prompted, we will, "Create a new mirror from a remote's URL", and save the the mirrored repositories to the output directory, ``{output_dir}/mirrors``. In this case, because there is only a single remote, ``origin``, and a single branch, ``master``, they are chosen automatically.
 #
 # .. note::
 #   The mirror is created from (the URL of) the remote---not directly from this clone itself.
 #
-# 2. Transfer ``/mirrors/transfer_{date}.tgz`` to your destination.
-# #. On the destination, create a directory, e.g., ``/airgap``, and move the archive into it
+# 2. Transfer the archive at ``{output_dir}/mirrors/transfer_{date}.tgz`` to your destination.
+# #. On the destination, create a directory, e.g., ``{transfer_dir}/airgap``, and move the archive into it
 # #. Extract the archive (the archive will extract directly into this directory)
 #
-#   a) In ``/airgap``, edit ``repo_map.env`` and set the :var:`just_git_airgap_repo.bsh create_repo_map JUST_GIT_AIRGAP_MIRROR_URL` environment variable. For example,
+#   a) In ``{transfer_dir}/airgap``, edit ``repo_map.env`` and set the :var:`just_git_airgap_repo.bsh create_repo_map JUST_GIT_AIRGAP_MIRROR_URL` environment variable. For example,
 #
 #     - ``JUST_GIT_AIRGAP_MIRROR_URL=https://git-airgap.com/projectA``
 #
-# 5. If not already, initialize bare repositories on the air-gapped git server for simple_repo and its submodules. In this example, these should be located at
+# 5. Initialize bare repositories on the air-gapped git server for the project_repo and its submodules. The list of all submodules can be found in the ``repo_map.env`` file. In this example, these should be located at
 #
-#   - ``https://git-airgap.com/projectA/simple_repo.git``
+#   - ``https://git-airgap.com/projectA/project_repo.git``
 #   - ``https://git-airgap.com/projectA/vsi_common.git``
 #   - ``https://git-airgap.com/projectA/recipes.git``
 #
 # 6. ``source setup.env``
 # #. ``just git import-repo`` - Push the mirrored repository and all its submodules to the new git server as defined by repo_map.env
-# #. Incremental updates can be pushed to the repositories using much the same process.
+#
+# 1. Subsequent updates can be pushed to the repositories using much the same process, although with a few variations:
+#   #. In step 1, when prompted, choose "Base the archive off an existing airgap mirror"; in this example, ``{output_dir}/mirrors``.
+#     - In addition to another full archive, an incremental archive, ``transfer_{date}_transfer_{previous_date}.tgz``, is also created (if supported). This incremental archive may be significantly smaller than the full archive.
+#     - In step 2, if the incremental archive is transferred to the destination, then
+#       - In step 3, move the archive into the same directory as before; in this example, ``{transfer_dir}/airgap``.
+#       - In step 4, extract this incremental archive on top of the existing mirror.
+#     - In step 2, if instead the full archive is transferred, then
+#       - In step 3, the same directory, ``{transfer_dir}/airgap``, can be re-used, although it doesn't have to be.
+#  #. In step 5, unless there is a new submodule being mirrored, the repositories are already configured.
 #
 # A developer can then run:
 #
-# #. ``git clone https://git-airgap.com/projectA/simple_repo.git`` - Note: non-recursive
+# #. ``git clone https://git-airgap.com/projectA/project_repo.git`` - Note: non-recursive
 # #. ``source setup.env``
 # #. ``just git clone-airgap-repo`` - Clone submodules recursively from the new mirror
 #
@@ -1504,13 +1512,12 @@ function relocate_git_defaultify()
     git_export-repo-guided) # Walk through how to export a mirror of the git \
                             # repository, including all submodules, to a tarball
       if [ $# -eq 0 ]; then
-        echo "Creating a mirror of a git repository (which is not the same"
-        echo "thing as a clone) and all of its submodules (for a specific"
-        echo "branch). The mirror is based on the URL for a git remote in this"
-        echo "clone---not directly on this clone itself."
+        echo "Creating a mirror of a git repository (which is not the same thing as a clone)"
+        echo "and all of its submodules (for a specific branch). The mirror is based on the"
+        echo "URL for a git remote in this clone---not directly on this clone itself."
         echo
         echo "NOTE A question can be bypassed by adding the respective flag."
-        echo "Add --help to see the flags."
+        echo "Use --help to see the flags."
         echo
       fi
 
@@ -1576,8 +1583,8 @@ function relocate_git_defaultify()
         # Either the repo is misconfigured or initialized locally.
         # REVIEW In the latter case at least, we could mirror the repo directly
         # RE We won't worry about that use case now
-        echo "This repository has no remotes. Please push the repo to a"
-        echo "git server and try again."
+        echo "This repository has no remotes. Please push the repo to a git server and"
+        echo "try again."
         return 123
       fi
 
@@ -1586,7 +1593,7 @@ function relocate_git_defaultify()
       if [ -z "${remote_name:+set}" ] && [ -z "${prep_dir:+set}" ]; then
         echo "Would you like to:"
         picker "Create a new mirror from a remote's URL" \
-               "Base off an existing airgap mirror (i.e., a PREP_DIR)" || picked=$?
+               "Base the archive off an existing airgap mirror (i.e., a PREP_DIR)" || picked=$?
         echo
         if [ "${picked}" -eq 1 ]; then
           local OLD_IFS="${IFS}"
@@ -1772,9 +1779,9 @@ function relocate_git_defaultify()
           echo
         fi
         if [ "${sm_status_rv}" -ne 0 ] || [ "${unpushed_commits}" != "" ]; then
-          echo "WARNING There are unpushed changes. You may want to ensure all"
-          echo "changes to this repository and its submodules have been pushed"
-          echo "to their respective remote servers."
+          echo "WARNING There are unpushed changes. You may want to ensure all changes to"
+          echo "this repository and its submodules have been pushed to their respective"
+          echo "remote servers."
           ask_question "Continue?" response n
           if [ "$response" == "0" ]; then
             return 123
