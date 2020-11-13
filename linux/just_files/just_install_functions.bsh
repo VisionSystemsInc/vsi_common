@@ -54,16 +54,16 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 
 function cmake-install()
 {
-  local install_dir  # install directory
+  local cmake_dir  # install directory
   local cmake_ver="${CMAKE_VERSION:-3.16.3}"  # cmake version
 
   parse_args cmake_extra_args \
-      --dir install_dir: \
+      --dir cmake_dir: \
       --version cmake_ver: \
       -- ${@+"${@}"}
 
   # directory check
-  if [ -z "${install_dir-}" ] ; then
+  if [ -z "${cmake_dir-}" ] ; then
     echo "CMake install must specify --dir" >& 2
     local JUST_IGNORE_EXIT_CODES=1
     return 1
@@ -89,25 +89,33 @@ function cmake-install()
   local cmake_file="${temp_dir}/$(basename "${cmake_url}")"
   download_to_file "${cmake_url}" "${cmake_file}"
 
-  # create output directory
-  mkdir -p "${install_dir}"
-  install_dir="$(cd "${install_dir}"; pwd)"
-
-  # unzip or untar
-  echo "Extracting cmake archive..." >&2
-  if [ "${OS-}" = "Windows_NT" ]; then
-    unzip -oq "${cmake_file}" -x "*/doc/**" -d "${install_dir}"
-  else
-    tar -xf "${cmake_file}" --exclude="*/doc" -C "${install_dir}"
+  # convert zip to tar
+  # cmake archives contain an extra parent directory that must be ignored,
+  # which is easily handled by "tar --strip-components=1". Unfortunately, 
+  # unzip has no equivalent argument so we convert to tar.
+  if [ "${OS-}" = "Windows_NT" ]; then    
+    local unzip_dir="${temp_dir}/unzip"
+    unzip -oq "${cmake_file}" -x "*/doc/**" -d "${unzip_dir}"
+    
+    cmake_file="${temp_dir}/cmake.tar"
+    tar -cf "${cmake_file}" -C "${unzip_dir}" "${cmake_id}"
   fi
 
+  # create output directory
+  mkdir -p "${cmake_dir}"
+  cmake_dir="$(cd "${cmake_dir}"; pwd)"
+
+  # extract archive
+  echo "Extracting cmake archive..." >&2
+  tar -xf "${cmake_file}" --exclude="*/doc" -C "${cmake_dir}" \
+      --strip-components=1
+
   # executable
-  local cmake_dir="${install_dir}/${cmake_id}"
   local cmake_exe_footer
   if [[ ${OSTYPE-} = darwin* ]]; then
     cmake_exe_footer="CMake.app/Contents/bin/cmake"
   else
-    cmake_exe_footer="/bin/cmake"
+    cmake_exe_footer="bin/cmake"
   fi
   local CMAKE="${cmake_dir}/${cmake_exe_footer}"
 
@@ -170,7 +178,7 @@ function cmake-install()
 
 function conda-python-install()
 {
-  local install_dir  # install directory
+  local python_dir  # install directory
   local python_ver="${PYTHON_VERSION:-3.6.9}"  # python version
   local CONDA  # conda executable
   local CONDA_INSTALLER  # conda installer
@@ -178,7 +186,7 @@ function conda-python-install()
   local packages=()
 
   parse_args conda_python_extra_args \
-      --dir install_dir: \
+      --dir python_dir: \
       --version python_ver: \
       --conda CONDA: \
       --conda-installer CONDA_INSTALLER: \
@@ -187,7 +195,7 @@ function conda-python-install()
       -- ${@+"${@}"}
 
   # directory check
-  if [ -z "${install_dir-}" ] ; then
+  if [ -z "${python_dir-}" ] ; then
     echo "Conda python install must specify --dir" >& 2
     local JUST_IGNORE_EXIT_CODES=1
     return 1
@@ -220,7 +228,6 @@ function conda-python-install()
   fi
 
   # create output directory
-  local python_dir="${install_dir}/python-${python_ver}"
   mkdir -p "${python_dir}"
   python_dir="$(cd "${python_dir}"; pwd)"
 
@@ -364,7 +371,7 @@ function conda-python-install()
 
 function pipenv-install()
 {
-  local install_dir  # install directory
+  local pipenv_dir  # install directory
   local pipenv_ver="${PIPENV_VERSION:-2020.8.13}"  # pipenv version
   local PYTHON  # python executable
   local python_activate
@@ -372,7 +379,7 @@ function pipenv-install()
   local virtualenv_ver="${VIRTUALENV_VERSION:-20.0.33}"
 
   parse_args pipenv_extra_args \
-      --dir install_dir: \
+      --dir pipenv_dir: \
       --version pipenv_ver: \
       --python PYTHON: \
       --python-activate python_activate: \
@@ -381,7 +388,7 @@ function pipenv-install()
       -- ${@+"${@}"}
 
   # check for pipenv directory
-  if [ -z "${install_dir}" ]; then
+  if [ -z "${pipenv_dir-}" ]; then
     echo "Pipenv install must specify --dir" >& 2
     local JUST_IGNORE_EXIT_CODES=1
     return 1
@@ -403,7 +410,6 @@ function pipenv-install()
   fi
 
   # create pipenv directory
-  pipenv_dir="${install_dir}/pipenv-${pipenv_ver}"
   mkdir -p "${pipenv_dir}"
   pipenv_dir="$(cd "${pipenv_dir}"; pwd)"
 
