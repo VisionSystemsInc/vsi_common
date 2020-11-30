@@ -39,12 +39,12 @@ def save_point_cloud_ply(output_fname, pts, normals=None, colors=None):
         fd.write('element face 0\n')
         fd.write('end_header\n')
 
-        pt_strs = [f'{pt[0]} {pt[1]} {pt[2]}' for pt in pts]
+        pt_strs = [f'{pt[0]:0.3f} {pt[1]:0.3f} {pt[2]:0.3f}' for pt in pts]
 
         if normals is None:
             normal_strs = ['' for pt in pts]
         else:
-            normal_strs = [f'{n[0]} {n[1]} {n[2]}' for n in normals]
+            normal_strs = [f'{n[0]:0.3f} {n[1]:0.3f} {n[2]:0.3f}' for n in normals]
 
         if colors is None:
             color_strs = ['' for pt in pts]
