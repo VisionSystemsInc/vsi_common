@@ -98,7 +98,7 @@ def save_mesh_ply(output_fname, verts, faces, vert_colors=None):
                 fd.write(f'{vert[0]} {vert[1]} {vert[2]} {c[0]} {c[1]} {c[2]}\n')
 
         for face in faces:
-            fd.write(f'{len(face)} {face[0]} {face[1]} {face[2]}\n')
+            fd.write(' '.join([f"{len(face)}",] + [f"{face[i]}" for i in range(len(face))]) + '\n')
 
 
 def save_cameras_ply(filename, cam_Ks, cam_Rs, cam_Ts, img_sizes, scale=1.0):
