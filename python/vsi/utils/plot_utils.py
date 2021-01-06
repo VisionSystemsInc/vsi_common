@@ -5,6 +5,7 @@ import matplotlib.cm
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+from itertools import product
 import numpy as np
 from PIL import Image
 
@@ -222,10 +223,50 @@ def plot_rectangle(min_pt, max_pt, axis=None, *args, **kwargs):
     axis = plt.gca()
   axis.plot(xvec, yvec, *args, **kwargs)
 
-def plot_cube(x, y, z, width, height, depth, *args, **kwargs):
-  """ plot a 3-d cube """
-  # TODO
-  pass
+
+def plot_cuboid(axis, min_pt, max_pt, P=None, *args, **kwargs):
+  """ plot a 3-d cuboid
+  
+  Parameters
+  ----------
+  axis:
+      Matplotlib axis to use for plot
+  min_pt : array_like
+      The minimum corner of the cuboid
+  max_pt : array_like
+      The maximum corner of the cuboid
+  P : array_like (optional)
+      The 3x4 projection matrix.  If None, plot in 3D
+  """
+  assert len(min_pt) == 3, "min_pt should be a 3D point"
+  assert len(max_pt) == 3, "max_pt should be a 3D point"
+  bbox_pts = np.stack((min_pt.reshape(-1), max_pt.reshape(-1)), axis=0)
+  corner_pts = np.array([(bbox_pts[i,0], bbox_pts[j,1], bbox_pts[k,2]) for (i,j,k) in product((0,1),(0,1),(0,1))])
+  if P is not None:
+    assert P.shape == (3,4), "P should have shape (3,4)"
+    pts_h = np.concatenate((corner_pts, np.ones((8,1))), axis=1)
+    pts2d_h = np.einsum('RC,NC->NR', P, pts_h)
+    pts2d = pts2d_h[:,0:2] / pts2d_h[:,2:3]
+    plot_pts = [pts2d[:,0], pts2d[:,1]]
+  else:
+    plot_pts = [corner_pts[:,0], corner_pts[:,1], corner_pts[:,2]]
+
+  # plot the points
+  axis.plot(*plot_pts, '.', *args, **kwargs)
+  # plot the edges
+  edges = [(p[0],p[1],p[5],p[4],p[0]) for p in plot_pts]
+  axis.plot(*edges, '-', *args, **kwargs)
+  edges = [(p[2],p[6],p[7],p[3],p[2]) for p in plot_pts]
+  axis.plot(*edges, '-', *args, **kwargs)
+  edges = [(p[0],p[2]) for p in plot_pts]
+  axis.plot(*edges, '-', *args, **kwargs)
+  edges = [(p[1],p[3]) for p in plot_pts]
+  axis.plot(*edges, '-', *args, **kwargs)
+  edges = [(p[5],p[7]) for p in plot_pts]
+  axis.plot(*edges, '-', *args, **kwargs)
+  edges = [(p[4],p[6]) for p in plot_pts]
+  axis.plot(*edges, '-', *args, **kwargs)
+
 
 def plot_camera(cam, img_dims=(1280,720), axis=None, axis_order=(0,1,2), img_plane_depth=1.0):
   """ plot a 3-d representation of a perspective camera with image plane

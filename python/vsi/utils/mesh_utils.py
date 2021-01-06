@@ -39,12 +39,12 @@ def save_point_cloud_ply(output_fname, pts, normals=None, colors=None):
         fd.write('element face 0\n')
         fd.write('end_header\n')
 
-        pt_strs = [f'{pt[0]} {pt[1]} {pt[2]}' for pt in pts]
+        pt_strs = [f'{pt[0]:0.3f} {pt[1]:0.3f} {pt[2]:0.3f}' for pt in pts]
 
         if normals is None:
             normal_strs = ['' for pt in pts]
         else:
-            normal_strs = [f'{n[0]} {n[1]} {n[2]}' for n in normals]
+            normal_strs = [f'{n[0]:0.3f} {n[1]:0.3f} {n[2]:0.3f}' for n in normals]
 
         if colors is None:
             color_strs = ['' for pt in pts]
@@ -98,7 +98,7 @@ def save_mesh_ply(output_fname, verts, faces, vert_colors=None):
                 fd.write(f'{vert[0]} {vert[1]} {vert[2]} {c[0]} {c[1]} {c[2]}\n')
 
         for face in faces:
-            fd.write(f'{len(face)} {face[0]} {face[1]} {face[2]}\n')
+            fd.write(' '.join([f"{len(face)}",] + [f"{face[i]}" for i in range(len(face))]) + '\n')
 
 
 def save_cameras_ply(filename, cam_Ks, cam_Rs, cam_Ts, img_sizes, scale=1.0):
