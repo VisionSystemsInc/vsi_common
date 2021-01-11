@@ -22,30 +22,79 @@ fi
 #
 # Print the epoch time in seconds
 #
-# Uses the date command to print nanosecond-accurate epoch time, if your date command supports that feature.
+# :Output: **stdout** - The epoch time, in seconds with nanosecond precision (if available)
 #
-# Else, uses python or ruby if available to get microsecond-accurate time. If all else fails, use the date command, which sometimes does not support more than second accuracy.
+# Uses the ``date`` command to print nanosecond-accurate epoch time, if your date command supports that feature.
+#
+# Else, uses ``python3``, ``ruby``, or ``perl`` if available to get microsecond-accurate time. If all else fails, use the ``date`` command, even if it does not support more than second precision.
 #**
-get_time_seconds()
+function get_time_seconds()
+{
+  local _get_time_decimal='.'
+  # local _get_time_nanoseconds_cmd=()
+  get_time_nanoseconds
+  # _get_time_seconds_cmd=("${_get_time_nanoseconds_cmd[@]}")
+
+  # _get_time_seconds_cmd
+}
+
+#**
+# .. function:: get_time_nanoseconds
+#
+# Print the epoch time in nanoseconds. Same as :func:`get_time_seconds`, but in nanoseconds and always an integer
+#**
+function get_time_nanoseconds()
 {
   # If this date doesn't support nanoseconds
   if [[ ! $(date +%N) =~ ^[0-9]+$ ]]; then
-    local python_cmd="import time; print('%0.9f' % time.time())"
-    if command -v python &> /dev/null; then
-      python -c "${python_cmd}"
-    elif command -v python3 &> /dev/null; then
-      python3 -c "${python_cmd}"
+    local python_cmd="import time; t = time.time_ns(); print('%i${_get_time_decimal-}%09i' % (int(t/1e9), t % 1e9))"
+    if command -v python3 &> /dev/null; then
+      eval 'function get_time_nanoseconds(){ python3 -c "'"${python_cmd}"'"; }'
+    elif command -v python &> /dev/null; then
+      eval 'function get_time_nanoseconds(){ python -c "'"${python_cmd}"'"; }'
     elif command -v ruby &> /dev/null; then
-      ruby -e "print Time.now.to_f"
-    # Add other elif commands here for other common languages. Perl needs a
-    # plugin, so that's a no-go.
+      function get_time_nanoseconds()
+      {
+        ruby -e "t = Time.now; print '%i${_get_time_decimal-}%09i'\"\n\" % [t.tv_sec, t.tv_nsec]"
+      }
+    elif command -v perl &> /dev/null; then
+      # Only microsecond accurate
+      function get_time_nanoseconds()
+      {
+        perl -e 'use warnings;
+          my ($s, $us);
+          no warnings;
+          {
+            local *STDOUT;
+            eval "use Time::HiRes qw(gettimeofday); (\$s, \$us) = gettimeofday";
+            # Using eval here the same way as ualarm does NOT work, unknown why
+            # Use https://stackoverflow.com/a/7506859/4166604 workaround
+          }
+          if ($@){
+            printf("%i'"${_get_time_decimal-}"'000000000\n", time)
+          } else {
+            printf("%i'"${_get_time_decimal-}"'%09i\n", $s, $us*1000)
+          }'
+      }
+    # Add other elif commands here for other common languages
     else # Else, just do seconds; best I can do
-      date '+%s.0'
+      function get_time_nanoseconds()
+      {
+        date "+%s${_get_time_decimal-}000000000"
+      }
     fi
   else
-    date '+%s.%N'
+    function get_time_nanoseconds()
+    {
+      date "+%s${_get_time_decimal-}%N"
+    }
   fi
+
+  # This function redefines itself for efficiency on multiple calls. Once here,
+  # it's been redefined, so it needs to be called once
+  get_time_nanoseconds
 }
+
 
 #**
 # .. function:: timeout
@@ -75,6 +124,8 @@ if [[ ${OSTYPE-} = darwin* ]]; then
       {
         local *STDOUT;
         eval "use Time::HiRes qw(ualarm)";
+        # I have no idea what so ever why this works. The eval load of ualarm
+        # should not escape this scope, and yet it does
       }
 
       if ( $@ ) {
@@ -110,24 +161,6 @@ if [[ ${OSTYPE-} = darwin* ]]; then
   }
 fi
 
-if [[ ! $(date +%N) =~ ^[0-9]+$ ]]; then
-  if command -v perl &> /dev/null; then
-    # Another option on macOS/other perls
-    function _tictoc_fun()
-    { # The spaces in the argument means we have to wrap this in a function
-      # so that the _tictoc_cmd call works.
-      perl -e 'use Time::HiRes qw(gettimeofday);
-               ($s,$ms) = gettimeofday;
-               printf("%i%09i\n", $s, $ms*1000)';
-    }
-    _tictoc_cmd=_tictoc_fun
-  else
-    _tictoc_cmd="date +%s000000000"
-  fi
-else
-  _tictoc_cmd="date +%s%N"
-fi
-
 #**
 # .. function:: tic
 #
@@ -147,7 +180,7 @@ fi
 #**
 function tic()
 {
-  _time0="$($_tictoc_cmd)"
+  _time0="$(get_time_nanoseconds)"
 }
 
 #**
@@ -160,7 +193,7 @@ function tic()
 function toc()
 {
   # Make it round
-  toc_time=$(($($_tictoc_cmd)-_time0+500000000))
+  toc_time=$(($(get_time_nanoseconds)-_time0+500000000))
   # If less than 1 s, make it 0, or else removing 9 digits doesn't work
   if [ "${toc_time}" -lt "1000000000" ]; then
     toc_time=0
@@ -183,7 +216,7 @@ function toc()
 #**
 function toc_ms()
 {
-  toc_time=$(($($_tictoc_cmd)-_time0+500000))
+  toc_time=$(($(get_time_nanoseconds)-_time0+500000))
   # If less than 1 ms, make it 0, or else removing 6 digits doesn't work
   if [ "${toc_time}" -lt "1000000" ]; then
     toc_time=0
@@ -206,6 +239,6 @@ function toc_ms()
 #**
 function toc_ns()
 {
-  toc_time=$(($($_tictoc_cmd)-_time0))
+  toc_time=$(($(get_time_nanoseconds)-_time0))
   echo "${toc_time} ns"
 }
