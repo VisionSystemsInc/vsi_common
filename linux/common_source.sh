@@ -451,6 +451,7 @@ if [ "${VSI_DISTRO}" = "centos" ] || \
 fi
 
 # Turn debian codenames to numbers
+# https://wiki.debian.org/DebianReleases
 if [ "${VSI_DISTRO_CORE-}" = "debian" ]; then
   # Remove the /sid for some debian derivatives
   VSI_DISTRO_VERSION_CORE="${VSI_DISTRO_VERSION_CORE%/sid}"
@@ -463,11 +464,13 @@ if [ "${VSI_DISTRO_CORE-}" = "debian" ]; then
     buster)   VSI_DISTRO_VERSION_CORE=10 ;; # EOL 2022
     bullseye) VSI_DISTRO_VERSION_CORE=11 ;; # Release ?
     bookworm) VSI_DISTRO_VERSION_CORE=12 ;; # Release ?
+    trixie)   VSI_DISTRO_VERSION_CORE=13 ;; # Release ?
   esac
 fi
 
 # Fix the case when OSes like mint are like ubuntu but use the codename
 # https://wiki.ubuntu.com/Releases
+# https://launchpad.net/ubuntu/
 if [ "${VSI_DISTRO_LIKE-}" = "ubuntu" ]; then
   case "${VSI_DISTRO_VERSION_LIKE-}" in
     precise) VSI_DISTRO_VERSION_LIKE=12.04 ;; # EOL Apr 28, 2017
@@ -484,7 +487,8 @@ if [ "${VSI_DISTRO_LIKE-}" = "ubuntu" ]; then
     disco)   VSI_DISTRO_VERSION_LIKE=19.04 ;; # EOL Jan 23, 2020
     eoan)    VSI_DISTRO_VERSION_LIKE=19.10 ;; # EOL Jul 17, 2020
     focal)   VSI_DISTRO_VERSION_LIKE=20.04 ;; # EOL Apr 2030
-    groovy)  VSI_DISTRO_VERSION_LIKE=20.10 ;; # Release October 22, 2020 : EOL Jul 2021
+    groovy)  VSI_DISTRO_VERSION_LIKE=20.10 ;; # EOL Jul 2021
+    hirsute) VSI_DISTRO_VERSION_LIKE=21.04 ;; # Release April 22, 2021 : EOL ~Jan 2022
   esac
 fi
 
