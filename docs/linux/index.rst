@@ -11,7 +11,7 @@ Linux Utilities
    *.auto
    python_scripts/modules
 
-A set of useful linux scripts that should on any modern Linux machine. For the most part, these are bash scripts that are either pure bash, or rely on core Linux utils. These scripts are tests against a variety of Linuxes, macOS, and Windows using msys2/mingw64 (such as Git for Windows). And scripts that require something beyond cord utils should have these requirements called in their documentation.
+A set of useful linux scripts that should be on any modern Linux machine. For the most part, these are bash scripts that are either pure bash or rely on core Linux utils. These scripts are tested against a variety of Linuxes, macOS, and Windows using msys2/mingw64 (such as Git for Windows). And scripts that require something beyond these core and common utils should have these requirements called in their documentation.
 
 Used core utils include:
 
