@@ -7,6 +7,7 @@ fi
 source "${VSI_COMMON_DIR}/tests/testlib.bsh"
 source "${TESTLIB_DIR}/test_utils.bsh"
 source "${VSI_COMMON_DIR}/linux/just_files/singularity_functions.bsh"
+source "${VSI_COMMON_DIR}/linux/aliases.bsh"
 
 function SiNgUlArItY()
 {
@@ -154,5 +155,31 @@ begin_test "Singular compose load environment"
   not singular_load_env foo2 2>/dev/null
   not singular_load_env foo3 2>/dev/null
   singular_load_env foo4
+)
+end_test
+
+begin_test "Singularity prioritize env"
+(
+  setup_test
+
+  export SINGULARITYENV_PATH=/foo
+  export SINGULARITYENV_FOO=bar
+  export SINGULARITYENV_BAR=foo
+  export BAR=stuff
+  export FOOBAR=12
+
+  singularity_prioritize_env
+
+  # Path should be left alone
+  [ -n "${PATH+set}" ]
+  # FOOBAR should be left alone
+  [ "${FOOBAR}" = "12" ]
+  # BAR should be unset, FOO was never set
+  [ -z "${BAR+set}" ]
+  [ -z "${FOO+set}" ]
+  # Values should be unaltered
+  [ "${SINGULARITYENV_PATH}" = "/foo" ]
+  [ "${SINGULARITYENV_FOO}" = "bar" ]
+  [ "${SINGULARITYENV_BAR}" = "foo" ]
 )
 end_test

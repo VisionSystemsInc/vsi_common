@@ -4,6 +4,8 @@ if [[ $- != *i* ]]; then
   source_once &> /dev/null && return 0
 fi
 
+source "${VSI_COMMON_DIR}/linux/aliases.bsh"
+
 # compat should avoid sourcing other files because it is used everywhere and we'd
 # like to avoid any potential circular source or time delays, without "having" to
 # use circular source or source once.
@@ -162,7 +164,7 @@ function load_vsi_compat()
   # In bash 5.0 and older, process substitution isn't allowed when in posix mode. This issue can arise if a function contains non-posix commands and is exported before calling ``bash --posix``. Bash will complain about each and every function that is non-posix.
   #
   # :Value: * ``0`` - Bash does not allow process substitution in posix mode
-  #         * ``1`` - Bash does allows process substitution in posix mode
+  #         * ``1`` - Bash allows process substitution in posix mode
   #
   # .. code-block:: bash
   #
@@ -259,7 +261,7 @@ function load_vsi_compat()
   #
   # .. var:: bash_feature_declare_print_function
   #
-  # Does ``declare`` support printing a function via ``declare -pf function_name``. Work around include: ``declare -F`` to list all functions and ``type function_name`` or ``command -V function_name``, however the first line needs to be removed.
+  # Does ``declare`` support printing a function via ``declare -pf function_name``. Work around: use ``declare -F`` to list all functions and ``type function_name`` or ``command -V function_name``, however the first line needs to be removed.
   #
   # :Value: * ``0`` - ``declare`` supports printing a function
   #         * ``1`` - ``declare`` does not support printing a specific function.
@@ -325,7 +327,9 @@ function load_vsi_compat()
   #**
   # .. var:: bash_behavior_pattern_substitution_slash_escape_with_single_quote
   #
-  # Substitution expressions kind of have an implied quote in them. In bash 4.2 and older, the results of pattern substitutions change when outside quotes are added if the string contains backslashes. In bash 4.3, extra slashes are needed if the string contains a single quote. :var:`bash_behavior_pattern_substitution_slash_escape_with_single_quote` standardizes this behavior to always use surrounding quotes on the outside and get an expected result.
+  # A pattern substitution with single quotes and backslashes is hard to get right. In bash 4.2 and older, if the string contains backslashes, the results of pattern substitution changes when quotes are added around the expression. In bash 4.3, surrounding quotes don't affect the substitution, however, extra slashes are needed if the string contains a single quote.
+  #
+  # When surrounding quotes are always used, :var:`bash_behavior_pattern_substitution_slash_escape_with_single_quote` gives a way to determine if extra back slashes are needed.
   #
   # :Value: * '0' - On bash 4.3 and newer
   #         * '1' - On bash 4.2 and older
@@ -796,14 +800,14 @@ function load_vsi_compat()
       # GIT_DIR= ignores being in vsi_common/tests, which will break if the supermodule is not mounted in
 
       # Cannot be uncommented until https://github.com/chromium/badssl.com/issues/332
-      # if [[ $(GIT_DIR= ${GIT-git} ls-remote -h https://tls-v1-3.badssl.com:1013/ 2>&1 > /dev/null) =~ repository.*\ not\ found ]; then
+      # if [[ $(GIT_DIR= "${GIT}" ls-remote -h https://tls-v1-3.badssl.com:1013/ 2>&1 > /dev/null) =~ repository.*\ not\ found ]; then
       #   __git_feature_support_tls=3
       # elif ...
-      if [[ $(GIT_DIR= ${GIT-git} ls-remote -h https://tls-v1-2.badssl.com:1012/ 2>&1 > /dev/null) =~ repository.*\ not\ found ]]; then
+      if [[ $(GIT_DIR= "${GIT}" ls-remote -h https://tls-v1-2.badssl.com:1012/ 2>&1 > /dev/null) =~ repository.*\ not\ found ]]; then
         __git_feature_support_tls=2
-      elif [[ $(GIT_DIR= ${GIT-git} ls-remote -h https://tls-v1-1.badssl.com:1011/ 2>&1 > /dev/null) =~ repository.*\ not\ found ]]; then
+      elif [[ $(GIT_DIR= "${GIT}" ls-remote -h https://tls-v1-1.badssl.com:1011/ 2>&1 > /dev/null) =~ repository.*\ not\ found ]]; then
         __git_feature_support_tls=1
-      elif [[ $(GIT_DIR= ${GIT-git} ls-remote -h https://tls-v1-0.badssl.com:1010/ 2>&1 > /dev/null) =~ repository.*\ not\ found ]]; then
+      elif [[ $(GIT_DIR= "${GIT}" ls-remote -h https://tls-v1-0.badssl.com:1010/ 2>&1 > /dev/null) =~ repository.*\ not\ found ]]; then
         __git_feature_support_tls=0
       fi
     fi
@@ -844,7 +848,7 @@ function load_vsi_compat()
   function git_feature_cli_config_option()
   {
     if [ -z "${__git_feature_cli_config_option+set}" ]; then
-      if ${GIT-git} -c foo=bar version &> /dev/null; then
+      if "${GIT}" -c foo=bar version &> /dev/null; then
         __git_feature_cli_config_option=0
       else
         __git_feature_cli_config_option=1
