@@ -79,16 +79,16 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 #
 # This repository is now setup and can be mirrored and pushed to a new air-gapped git server:
 #
-# #. ``just git export-repo-guided`` - This target asks a series of questions and then mirrors the repository and its submodules (recursively). For this example, when prompted, we will, "Create a new mirror from a remote's URL", and save the the mirrored repositories to the output directory, ``{output_dir}/mirrors``. In this case, because there is only a single remote, ``origin``, and a single branch, ``master``, they are chosen automatically.
+# #. ``just git export-repo-guided`` - This target asks a series of questions and then mirrors the repository and its submodules (recursively). For this example, when prompted, we will, "Create a new mirror from a remote's URL", and save the the mirrored repositories to the output directory, ``{output_dir}``. In this case, because there is only a single remote, ``origin``, and a single branch, ``master``, they are chosen automatically.
 #
 # .. note::
 #   The mirror is created from (the URL of) the remote---not directly from this clone itself.
 #
-# 2. Transfer the archive at ``{output_dir}/mirrors/transfer_{date}.tgz`` to your destination.
-# #. On the destination, create a directory, e.g., ``{transfer_dir}/airgap``, and move the archive into it
+# 2. Transfer the archive at ``{output_dir}/transfer_{date}.tgz`` to your destination.
+# #. On the destination, create a directory, e.g., ``{transfer_dir}``, and move the archive into it
 # #. Extract the archive (the archive will extract directly into this directory)
 #
-#   a) In ``{transfer_dir}/airgap``, edit ``repo_map.env`` and set the :var:`just_git_airgap_repo.bsh create_repo_map JUST_GIT_AIRGAP_MIRROR_URL` environment variable. For example,
+#   a) In ``{transfer_dir}``, edit ``repo_map.env`` and set the :var:`just_git_airgap_repo.bsh create_repo_map JUST_GIT_AIRGAP_MIRROR_URL` environment variable. For example,
 #
 #     - ``JUST_GIT_AIRGAP_MIRROR_URL=https://git-airgap.com/projectA``
 #
@@ -103,14 +103,14 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 #
 # 1. Subsequent updates can be pushed to the repositories using much the same process, although with a few variations:
 #
-#   #. In step 1, when prompted, choose "Base the archive off an existing airgap mirror"; in this example, ``{output_dir}/mirrors``.
+#   #. In step 1, when prompted, choose "Base the archive off an existing airgap mirror"; in this example, ``{output_dir}``.
 #
 #     - In addition to another full archive, an incremental archive, ``transfer_{date}_transfer_{previous_date}.tgz``, is also created (if supported). This incremental archive may be significantly smaller than the full archive.
 #     - In step 2, if the incremental archive is transferred to the destination, then
-#       - In step 3, move the archive into the same directory as before; in this example, ``{transfer_dir}/airgap``.
+#       - In step 3, move the archive into the same directory as before; in this example, ``{transfer_dir}``.
 #       - In step 4, extract this incremental archive on top of the existing mirror.
 #     - In step 2, if instead the full archive is transferred, then
-#       - In step 3, the same directory, ``{transfer_dir}/airgap``, can be re-used, although it doesn't have to be.
+#       - In step 3, the same directory, ``{transfer_dir}``, can be re-used, although it doesn't have to be.
 #
 #  #. In step 5, unless there is a new submodule being mirrored, the repositories are already configured.
 #
@@ -191,6 +191,7 @@ function _log_commits_helper()
         wc -l | awk '{print $1}')"
     if [ "${ncommits}" -eq 0 ]; then
       # REVIEW echo "There are 0 unpushed commits"
+      # RE Could use JUST_VERBOSE
       : # pass
     elif [ "${ncommits}" -eq 1 ]; then
       echo "There is ${ncommits} "${label}" commit:"
@@ -1348,9 +1349,9 @@ function git_submodule_sync()
   if [ $# -gt 1 ]; then
     # Doesn't have trailing slashes
     local submodule_displaypaths=($(git_submodule_displaypaths))
-    # Array slicing doesn't work in bash 3.2 if IFS is set to $'\n'
+    # Array copying doesn't work in bash 3.2 if IFS is set to $'\n'
     # See compat.bsh:bash_bug_ifs_array_slice_expansion
-    IFS="${OLD_IFS}"
+    IFS=$' \t\n'
     local in_displaypaths=("${@:2}")
     IFS=$'\n'
     local in_displaypath
