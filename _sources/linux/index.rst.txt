@@ -32,6 +32,7 @@ Used core utils include:
 * ``mkdir``
 * ``mktemp``
 * ``mkfifo``
+* ``nproc``
 * ``pwd``
 * ``rm``
 * ``sort``
