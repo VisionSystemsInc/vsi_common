@@ -53,7 +53,7 @@ _just()
   # Emulate how the just systems finds all of its help files
 
   # 1. Initial files: just_functions.bsh
-  local JUST_HELP_FILES=(${JUST_HELP_FILES+"${JUST_HELP_FILES[@]}"})
+  local JUST_HELP_FILES=(${JUST_HELP_FILES[@]+"${JUST_HELP_FILES[@]}"})
   if [ "${JUST_HELP_FILES+set}" != "set" ]; then
     JUST_HELP_FILES=("${VSI_COMMON_DIR}/linux/just_files/just_functions.bsh")
   fi
@@ -61,23 +61,23 @@ _just()
   # 2. Find Justfile, load it, and copy the JUST_HELP_FILES array
   local just_files="$(
     _just_load_justfile "${JUSTFILE-Justfile}" &> /dev/null
-    join_a just_files ${JUST_HELP_FILES+"${JUST_HELP_FILES[@]}"}
+    join_a just_files ${JUST_HELP_FILES[@]+"${JUST_HELP_FILES[@]}"}
     echo "${just_files}"
   )"
   split_s just_files "${just_files}"
-  JUST_HELP_FILES=(${just_files+"${just_files[@]}"})
+  JUST_HELP_FILES=(${just_files[@]+"${just_files[@]}"})
 
   # 3. Emulate finding and adding plugins
   # _just_load_justfile should have made the Justfile the first entry in JUST_HELP_FILES
   local just_dir="$(dirname "${JUST_HELP_FILES[0]}")"
   _just_get_plugins "${just_dir}"
-  for just_plugin in ${JUST_PLUGINS+"${JUST_PLUGINS[@]}"}; do
+  for just_plugin in ${JUST_PLUGINS[@]+"${JUST_PLUGINS[@]}"}; do
     JUST_HELP_FILES+=("${just_plugin}")
   done
 
   # Get all command info once
   local parsed_help_a
-  _just_parse_helps ${JUST_HELP_FILES+"${JUST_HELP_FILES[@]}"}
+  _just_parse_helps ${JUST_HELP_FILES[@]+"${JUST_HELP_FILES[@]}"}
   # Get just command names and remove the comments
   parsed_help_a=("${parsed_help_a[@]%% ${JUST_HELP_SEPARATOR}*}")
 
@@ -101,7 +101,7 @@ _just()
   # Call local .just if it exists. Starts with checking the Justfile, and
   # then all plugin directories
   local sourced_dotjusts=()
-  for i in ${JUST_HELP_FILES+"${JUST_HELP_FILES[@]}"}; do
+  for i in ${JUST_HELP_FILES[@]+"${JUST_HELP_FILES[@]}"}; do
     i="$(dirname "${i}")"
     if [ -f "${i}/.just" ]; then
       # Skip duplicates
@@ -119,8 +119,8 @@ _just()
   done
 
   # If the last word completed is a subcommand, only match subtargets
-  if isin "$3" ${just_subcommands+"${just_subcommands[@]}"} ]; then
-    _just_subtargets_from_array "${3}" ${parsed_help_a+"${parsed_help_a[@]}"}
+  if isin "$3" ${just_subcommands[@]+"${just_subcommands[@]}"} ]; then
+    _just_subtargets_from_array "${3}" ${parsed_help_a[@]+"${parsed_help_a[@]}"}
     #WARNING: Susceptible to wildcard expansion (what if a subtarget is literal *)
     COMPREPLY+=($(\compgen -W "${just_subtargets+${just_subtargets[*]}}" -- $2))
     return 0
@@ -130,8 +130,8 @@ _just()
   # list of just_commands
   for (( i=${#COMP_WORDS[@]}-1; i>0; i--)); do
     if isin "${COMP_WORDS[$i]}" "${just_subcommands[@]}"; then
-      _just_subtargets_from_array "${COMP_WORDS[$i]}" ${parsed_help_a+"${parsed_help_a[@]}"}
-      just_commands+=(${just_subtargets+"${just_subtargets[@]}"})
+      _just_subtargets_from_array "${COMP_WORDS[$i]}" ${parsed_help_a[@]+"${parsed_help_a[@]}"}
+      just_commands+=(${just_subtargets[@]+"${just_subtargets[@]}"})
       break
     fi
   done
