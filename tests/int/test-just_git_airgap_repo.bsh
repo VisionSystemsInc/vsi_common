@@ -575,7 +575,17 @@ begin_test "Check for unpushed tracked commits in submodules"
     pushd a_third_sub_module &> /dev/null
       not git config remote.just_upstream.url
     popd &> /dev/null
+
+    # Test in a repository with no submodules
+    pushd "${DIFFICULT_PATH}/a_sub_sub_module" &> /dev/null
+      git_submodule_sync_recursive # This shouldn't die
+      not git config remote.just_upstream.url
+    popd &> /dev/null
+
+    # Test specifying a path that is not a submodule
+    not git_submodule_sync origin bad_path
   popd &> /dev/null
+
 
   cp -a "${SYNC_REPO}" "${SYNC_REPO}_2"
   pushd "${SYNC_REPO}_2" &> /dev/null
@@ -605,7 +615,8 @@ begin_test "Check for unpushed tracked commits in submodules"
     popd &> /dev/null
   popd &> /dev/null
 
-  pushd "${SYNC_REPO}" &> /dev/null
+  cp -a "${SYNC_REPO}" "${SYNC_REPO}_4"
+  pushd "${SYNC_REPO}_4" &> /dev/null
     #        submod
     #      abs rel url
     # abs  1   4   7
@@ -613,7 +624,7 @@ begin_test "Check for unpushed tracked commits in submodules"
     # url  3   6   9
     # Tests 4, 5, and 6 depend on the parent repository; the rest should not
 
-    # 1) Test the default configuration is still correct (just_upstream == origin)
+    # Test the default configuration is still correct (just_upstream == origin)
     git_submodule_sync_recursive
     [ "$(git config remote.origin.url)" = "${PRETEND_URL}" ]
     [ "$(git config submodule."${DIFFICULT_NAME}".url)" = "${PRETEND_URL}_sub" ]
@@ -641,7 +652,7 @@ begin_test "Check for unpushed tracked commits in submodules"
       git remote set-url origin "${PRETEND_URL}_origin_sub_sub"
     popd &> /dev/null
     git_submodule_sync_recursive upstream
-    # 1) Test the default configuration is still correct
+    # Test the default configuration is still correct
     [ "$(git config remote.origin.url)" = "${PRETEND_URL}_origin" ]
     [ "$(git config submodule."${DIFFICULT_NAME}".url)" = "${PRETEND_URL}_sub" ]
     [ "$(cd "${DIFFICULT_PATH}" && \
@@ -718,59 +729,41 @@ begin_test "Check for unpushed tracked commits in submodules"
     git_submodule_sync_recursive upstream
     [ "$(cd "${DIFFICULT_PATH}" && \
         git config remote.just_upstream.url)" = "https://git-server.com/org/submod.git" ]
+  popd &> /dev/null
 
-    # Reset remotes
-    cp .gitmodules.bak .gitmodules
-    git add .gitmodules
-    git commit -m "update .gitmodules"
-    # git submodule sync
-    git remote set-url origin "${PRETEND_URL}"
-    pushd "${DIFFICULT_PATH}" &> /dev/null
-      git remote set-url origin "${PRETEND_URL}_sub"
-    popd &> /dev/null
-    pushd "${DIFFICULT_PATH}"/a_sub_sub_module &> /dev/null
-      git remote set-url origin "${PRETEND_URL}_sub_sub"
-    popd &> /dev/null
-
-
-    # Test in a repository with no submodules
-    pushd "${DIFFICULT_PATH}/a_sub_sub_module" &> /dev/null
-      git_submodule_sync_recursive # This shouldn't die
-      [ "$(git config remote.just_upstream.url)" = "${PRETEND_URL}_sub_sub" ]
-    popd &> /dev/null
-
-    # Test specifying a path that is not a submodule
-    not git_submodule_sync origin no_submod
-
-
+  pushd "${SYNC_REPO}" &> /dev/null
     # Customize the remote name and ensure no other remotes get modified
     git remote set-url origin "https://git-server.com/org/repo1.git"
+    # Set these remotes to something other than what is in the .gitmodules file
     pushd "${DIFFICULT_PATH}" &> /dev/null
-      git remote set-url just_upstream "https://git-server.com/org/submod2.git"
+      git remote add just_upstream "https://lab-server.com/org/submod1.git"
     popd &> /dev/null
-    cp .gitmodules.bak .gitmodules
+    pushd "${DIFFICULT_PATH}"/a_sub_sub_module &> /dev/null
+      git remote add just_upstream "https://lab-server.com/org/subsubmod.git"
+    popd &> /dev/null
     sed "${sed_flags_i[@]}" -e \
-        "s|url = ${PRETEND_URL}_sub|url = https://git-server.com/org/submod3.git|" .gitmodules
+        "s|url = ${PRETEND_URL}_sub|url = https://git-server.com/org/submod2.git|" .gitmodules
     git add .gitmodules
     git commit -m "update .gitmodules"
+
     JUST_GIT_UPSTREAM=foo_upstream git_submodule_sync_recursive
+    [ "$(cd "${DIFFICULT_PATH}" && \
+        git config remote.foo_upstream.url)" = "https://git-server.com/org/submod2.git" ]
+    [ "$(cd "${DIFFICULT_PATH}"/a_sub_sub_module && \
+        git config remote.foo_upstream.url)" = "${PRETEND_URL}_sub_sub" ]
+
+    # Test the other configurations are still correct
     [ "$(git config remote.origin.url)" = "https://git-server.com/org/repo1.git" ]
+    [ "$(git config submodule."${DIFFICULT_NAME}".url)" = "${PRETEND_URL}_sub" ]
     pushd "${DIFFICULT_PATH}" &> /dev/null
       [ "$(git config remote.origin.url)" = "${PRETEND_URL}_sub" ]
-      [ "$(git config remote.just_upstream.url)" = "https://git-server.com/org/submod2.git" ]
-      [ "$(git config remote.foo_upstream.url)" = "https://git-server.com/org/submod3.git" ]
+      [ "$(git config remote.just_upstream.url)" = "https://lab-server.com/org/submod1.git" ]
+      [ "$(git config submodule.a_sub_sub_module.url)" = "${PRETEND_URL}_sub_sub" ]
     popd &> /dev/null
-
-    # Test the default configuration is still correct
-    [ "$(git config submodule."${DIFFICULT_NAME}".url)" = "${PRETEND_URL}_sub" ]
-    [ "$(cd "${DIFFICULT_PATH}" && \
-        git config remote.origin.url)" = "${PRETEND_URL}_sub" ]
-    [ "$(cd "${DIFFICULT_PATH}" && \
-        git config submodule.a_sub_sub_module.url)" = "${PRETEND_URL}_sub_sub" ]
-    [ "$(cd "${DIFFICULT_PATH}"/a_sub_sub_module && \
-        git config remote.origin.url)" = "${PRETEND_URL}_sub_sub" ]
-    [ "$(cd "${DIFFICULT_PATH}"/a_sub_sub_module && \
-        git config remote.just_upstream.url)" = "${PRETEND_URL}_sub_sub" ]
+    pushd "${DIFFICULT_PATH}"/a_sub_sub_module &> /dev/null
+        [ "$(git config remote.origin.url)" = "${PRETEND_URL}_sub_sub" ]
+        [ "$(git config remote.just_upstream.url)" = "https://lab-server.com/org/subsubmod.git" ]
+    popd &> /dev/null
   popd &> /dev/null
 
 
@@ -824,6 +817,8 @@ remote URL tracked by the parent repository:
   popd &> /dev/null
 
 
+  # This doesn't really make sense in this test but submodules are such a pain
+  # to setup and the next test, git functionality, doesn't have submodules
   # Test git_project_root_dir
   ans="$(real_path "${BUILD_REPO}")"
   # needed by macOS to deal with /var/... and /private/var/...
