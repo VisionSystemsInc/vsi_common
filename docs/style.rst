@@ -27,6 +27,7 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
   .. code-block:: bash
 
      echo hi 1>&2 # No extra spaces, as bash doesn't allow that
+
      echo bye >&2 # No extra spaces
 
 * Closing an open file
