@@ -65,6 +65,20 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
        do_something
      fi
 
+* Checking to see if an array exists before accessing it
+
+  .. code-block:: bash
+
+     arr=(${foo+"${foo[@]}"}) # WRONG
+
+  * ``arr`` will be empty if the first element of ``foo`` (``"${foo[0]}"``) doesn't exist. Unless this is desired, instead use
+
+  .. code-block:: bash
+
+     ${foo[@]+"${foo[@]}"}
+     ${foo[@]+"${!foo[@]}"}
+     ${foo[@]+"${foo[*]}"}
+
 * Scripting file naming and shebangs
 
   * Files that are only meant to be sourced should have a ``.bsh`` extension, and should have the following header:
