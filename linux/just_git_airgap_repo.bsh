@@ -1350,15 +1350,19 @@ function git_submodule_sync()
     return
   fi
 
+  # Lookup the submodule_name for each in_displaypath
   if [ $# -gt 1 ]; then
     IFS=$'\n'
     # Doesn't have trailing slashes
     local submodule_displaypaths=($(git_submodule_displaypaths))
-    # Copying an array slice doesn't work in bash 3.2 if IFS is set to $'\n'
+    IFS="${OLD_IFS}" # REVIEW move up
+    # NOTE Array slice copying doesn't work in bash 3.2 if IFS is set to $'\n'.
+    # Set IFS to $' \t\n' instead.
     # See compat.bsh:bash_bug_ifs_array_slice_expansion
-    IFS=$' \t\n'
+    # RE IFS is no longer being changed to $'\n', but I'm leaving this comment
+    # for posterity
+    # REVIEW Should I specify the IFS around all array slice copying?
     local in_displaypaths=("${@:2}")
-    IFS=$'\n'
     local in_displaypath
     local filtered_sm_names=()
     # Select the submodule name for each displaypath
@@ -1378,7 +1382,6 @@ function git_submodule_sync()
       fi
       filtered_sm_names+=("${submodule_names[$index]}")
     done
-    IFS="${OLD_IFS}"
     submodule_names=("${filtered_sm_names[@]}")
   fi
 
@@ -1476,7 +1479,6 @@ function git_submodule_is_published_recursive()
   # the parameter to not exist at all if $1 is not defined
   git_submodule_sync_recursive ${1+"${1}"}
 
-  local recursive_index=-1
   local is_tracked_change_private=0
 
   # If we are not in the top-level directory of the repo, change to it
@@ -1492,8 +1494,6 @@ function git_submodule_is_published_recursive()
 function _git_submodule_is_published_recursive()
 {
   local JUST_GIT_UPSTREAM="${JUST_GIT_UPSTREAM-just_upstream}"
-
-  local recursive_index=$((recursive_index+1))
 
   local OLD_IFS="${IFS}"
   IFS=$'\n'
@@ -1533,11 +1533,8 @@ function _git_submodule_is_published_recursive()
     popd &>/dev/null
   done
 
-  # Check all submodules before returning a (potential) failure code
+  # NOTE All submodules are checked before returning
   # RE Alternatively, short circuit and return early
-  if [ "${recursive_index}" -eq 0 ]; then
-    return "${is_tracked_change_private}"
-  fi
 }
 
 #**
