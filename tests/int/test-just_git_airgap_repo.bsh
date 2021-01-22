@@ -545,8 +545,8 @@ begin_test "Check for unpushed tracked commits in submodules"
         git config remote.origin.url)" = "${PRETEND_URL}_sub_sub" ]
   popd &> /dev/null
 
-  cp -a "${SYNC_REPO}" "${SYNC_REPO}_1"
-  pushd "${SYNC_REPO}_1" &> /dev/null
+  cp -a "${SYNC_REPO}" "${SYNC_REPO}_0"
+  pushd "${SYNC_REPO}_0" &> /dev/null
     git submodule add "${PRETEND_URL}_sub_sub" a_third_sub_module
     git commit -m "Add a third submodule"
 
@@ -586,6 +586,20 @@ begin_test "Check for unpushed tracked commits in submodules"
     not git_submodule_sync origin bad_path
   popd &> /dev/null
 
+  cp -a "${SYNC_REPO}" "${SYNC_REPO}_1"
+  pushd "${SYNC_REPO}_1/subdir" &> /dev/null
+    # Test specifying a (display)path
+    git_submodule_sync origin ../"${DIFFICULT_PATH}"
+    # Test the just_upstream configuration is correct
+    [ "$(cd ../"${DIFFICULT_PATH}" && \
+        git config remote.just_upstream.url)" = "${PRETEND_URL}_sub" ]
+    pushd ../"${DIFFICULT_PATH}"/a_sub_sub_module &> /dev/null
+      not git config remote.just_upstream.url
+    popd &> /dev/null
+    pushd ../another_sub_module &> /dev/null
+      not git config remote.just_upstream.url
+    popd &> /dev/null
+  popd &> /dev/null
 
   cp -a "${SYNC_REPO}" "${SYNC_REPO}_2"
   pushd "${SYNC_REPO}_2" &> /dev/null

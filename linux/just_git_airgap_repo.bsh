@@ -621,27 +621,30 @@ function git_submodule_summary_recursive()
 
 function git_submodule_summary()
 {
-  echo "Entering ${PWD}"
+  # REVIEW Re-write with git_submodule_displaypaths
+  pushd "$("${GIT}" rev-parse --show-cdup)" &> /dev/null
+    echo "Entering ${PWD}"
 
-  local OLD_IFS="${IFS}"
-  IFS=$'\n'
-  local submodule_keys=($(git_submodule_names))
-  IFS="${OLD_IFS}"
+    local OLD_IFS="${IFS}"
+    IFS=$'\n'
+    local submodule_keys=($(git_submodule_names))
+    IFS="${OLD_IFS}"
 
-  local sm_key
-  for sm_key in ${submodule_keys[@]+"${submodule_keys[@]}"}; do
-    local sm_path="$("${GIT}" config --file .gitmodules --get submodule."${sm_key}".path)"
+    local sm_key
+    for sm_key in ${submodule_keys[@]+"${submodule_keys[@]}"}; do
+      local sm_path="$("${GIT}" config --file .gitmodules --get submodule."${sm_key}".path)"
 
-    # Cf. git submodule summary - doesn't show modified/staged content
-    "${GIT}" diff --submodule=log "${sm_path}"
+      # Cf. git submodule summary - doesn't show modified/staged content
+      "${GIT}" diff --submodule=log "${sm_path}"
 
-    if [ -n "${_recursive_summary:+set}" ]; then
-      pushd "${sm_path}" &>/dev/null
-        # Depth-first traversal
-        git_submodule_summary
-      popd &>/dev/null
-    fi
-  done
+      if [ -n "${_recursive_summary:+set}" ]; then
+        pushd "${sm_path}" &>/dev/null
+          # Depth-first traversal
+          git_submodule_summary
+        popd &>/dev/null
+      fi
+    done
+  popd &> /dev/null
 }
 
 #**
@@ -696,7 +699,7 @@ function git_submodule_displaypaths()
   local up_path="$("${GIT}" rev-parse --show-cdup)"
   # Relative path from the root of the current repository to the CWD
   local relative_cwd="$("${GIT}" rev-parse --show-prefix)"
-  # Guarantee a trailing / or empty string (this may be guaranteed by
+  # Guarantee a trailing / or empty string (this probably is guaranteed by
   # --show-cdup)
   up_path="${up_path:+"${up_path%/}"/}"
   relative_cwd="${relative_cwd:+"${relative_cwd%/}/"}"
@@ -1227,7 +1230,7 @@ function submodule-helper-relative-url()
 {
   local remote_url="${1}"
   local gitmodules_url="${2}"
-  local up_path="${3-}" # Guaranteed by git to have a trailing slash
+  local up_path="${3-}" # If set, guaranteed by git to have a trailing slash
 
   # Replace ../../ with subdir/subdir/
   local sm_path="${up_path//..\//subdir/}submod"
@@ -1263,7 +1266,8 @@ function submodule-helper-relative-url()
               path = "${sm_path}"
               url = ${gitmodules_url}" > .gitmodules
     mkdir -p "${sm_path}" .git/modules/"${sm_path}"/{objects,refs/heads}
-    echo "gitdir: ${up_path}/.git/modules/${sm_path}" > "${sm_path}"/.git
+    # Strip trailing slash (not necessary, but easy)
+    echo "gitdir: ${up_path%/}/.git/modules/${sm_path}" > "${sm_path}"/.git
     echo "ref: refs/heads/master" > .git/modules/"${sm_path}"/HEAD
     echo "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" > .git/modules/"${sm_path}"/refs/heads/master
 
@@ -1361,13 +1365,18 @@ function git_submodule_sync()
   fi
   IFS="${OLD_IFS}"
 
+  local up_path="$("${GIT}" rev-parse --show-cdup)"
+  # If empty string, set to CWD
+  up_path="${up_path:-.}"
+  # Guarantee a trailing /
+  up_path="${up_path%/}"/
 
   local sm_name
   for sm_name in ${submodule_names[@]+"${submodule_names[@]}"}; do
-    local sm_path="$("${GIT}" config -f .gitmodules submodule."${sm_name}".path)"
+    local sm_path="$("${GIT}" config -f "${up_path}"/.gitmodules submodule."${sm_name}".path)"
     # Remove trailing slash
     sm_path="${sm_path%/}"
-    local submodule_url="$("${GIT}" config -f "${PWD}"/.gitmodules submodule."${sm_name}".url)"
+    local submodule_url="$("${GIT}" config -f "${up_path}"/.gitmodules submodule."${sm_name}".url)"
     # URLs/paths relative to the CWD must either start with ./ or ../
     # according to git. This is how git-submodule.sh checks for this:
     # https://github.com/git/git/blob/v2.16.0/git-submodule.sh#L1059
@@ -1375,12 +1384,12 @@ function git_submodule_sync()
       # Based on https://github.com/git/git/blob/v2.16.0/git-submodule.sh#L1060
       # rewrite foo/bar as ../.. to find path from
       # submodule work tree to superproject work tree
-      local up_path="$(printf '%s\n' "$sm_path" | sed "s/[^/][^/]*/../g")"
+      local up_path_of_path="$(printf '%s\n' "$sm_path" | sed "s/[^/][^/]*/../g")" # was up_path
       # guarantee a trailing /
-      up_path=${up_path%/}/
+      up_path_of_path=${up_path_of_path%/}/
       local remote_url="$("${GIT}" config remote."${remote_name}".url)"
       # path from submodule work tree to submodule origin repo
-      sub_origin_url="$(submodule-helper-relative-url "${remote_url}" "${submodule_url}" "${up_path}")"
+      sub_origin_url="$(submodule-helper-relative-url "${remote_url}" "${submodule_url}" "${up_path_of_path}")"
       # path from superproject work tree to submodule origin repo
       # super_config_url=$(submodule-helper-relative-url "${remote_url}" "${submodule_url}")
       # No need to set this:
@@ -1389,7 +1398,7 @@ function git_submodule_sync()
       submodule_url="${sub_origin_url}"
     fi
 
-    pushd "${sm_path}" &>/dev/null
+    pushd "${up_path}/${sm_path}" &>/dev/null
       # See just_git_functions.bsh:safe_git_submodule_update:
       # This is my equivalent to "git submodule sync". It uses a specific remote
       # that it not one of the defaults to handle issue #186
@@ -1447,18 +1456,24 @@ function _git_submodule_is_published_recursive()
   local submodule_names=($(git_submodule_names))
   IFS="${OLD_IFS}"
 
+  local up_path="$("${GIT}" rev-parse --show-cdup)"
+  # If empty string, set to CWD
+  up_path="${up_path:-.}"
+  # Guarantee a trailing /
+  up_path="${up_path%/}"/
+
   local sm_name
   for sm_name in ${submodule_names[@]+"${submodule_names[@]}"}; do
-    local sm_path="$("${GIT}" config -f .gitmodules submodule."${sm_name}".path)"
+    local sm_path="$("${GIT}" config -f "${up_path}"/.gitmodules submodule."${sm_name}".path)"
     # Remove trailing slash
     sm_path="${sm_path%/}"
     # This seems faster than git submodule status --cached
     # RE This must be run from the toplevel (root) directory of the repository
     local tracked_sha="$("${GIT}" ls-tree HEAD:"$(dirname "${sm_path}")"/ "$(basename "${sm_path}")" | \
         awk '{print $3}')"
-    local submodule_url="$("${GIT}" config -f "${PWD}"/.gitmodules submodule."${sm_name}".url)"
+    local submodule_url="$("${GIT}" config -f "${up_path}"/.gitmodules submodule."${sm_name}".url)"
 
-    pushd "${sm_path}" &>/dev/null
+    pushd "${up_path}/${sm_path}" &>/dev/null
       "${GIT}" fetch "${JUST_GIT_UPSTREAM}"
 
       # git branch -r --contains SHA will show a list of remote/branch refs
