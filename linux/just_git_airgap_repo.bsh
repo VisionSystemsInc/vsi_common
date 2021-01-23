@@ -1350,12 +1350,12 @@ function git_submodule_sync()
     return
   fi
 
-  # Lookup the submodule_name for each in_displaypath
+  # Filter the submodule_names by the provided in_displaypaths
   if [ $# -gt 1 ]; then
     IFS=$'\n'
     # Doesn't have trailing slashes
     local submodule_displaypaths=($(git_submodule_displaypaths))
-    IFS="${OLD_IFS}" # REVIEW move up
+    IFS="${OLD_IFS}"
     # NOTE Array slice copying doesn't work in bash 3.2 if IFS is set to $'\n'.
     # Set IFS to $' \t\n' instead.
     # See compat.bsh:bash_bug_ifs_array_slice_expansion
@@ -1397,16 +1397,7 @@ function git_submodule_sync()
 function _git_submodule_sync()
 {
   local remote_name="${1}"
-
-  local submodule_names=()
-  if [ $# -gt 1 ]; then
-    submodule_names=("${@:2}")
-  else
-    local OLD_IFS="${IFS}"
-    IFS=$'\n'
-    submodule_names=($(git_submodule_names))
-    IFS="${OLD_IFS}"
-  fi
+  local submodule_names=("${@:2}") # empty array if unset
 
   local JUST_GIT_UPSTREAM="${JUST_GIT_UPSTREAM-just_upstream}"
 
@@ -1446,7 +1437,12 @@ function _git_submodule_sync()
 
       # Depth-first traversal
       if [ -n "${_recursive_sync:+set}" ]; then
-        _git_submodule_sync "${JUST_GIT_UPSTREAM}"
+          local OLD_IFS="${IFS}"
+          IFS=$'\n'
+          submodule_names=($(git_submodule_names))
+          IFS="${OLD_IFS}"
+
+        _git_submodule_sync "${JUST_GIT_UPSTREAM}" ${submodule_names[@]+"${submodule_names[@]}"}
       fi
     popd &>/dev/null
   done
@@ -1482,7 +1478,6 @@ function git_submodule_is_published_recursive()
   local is_tracked_change_private=0
 
   # If we are not in the top-level directory of the repo, change to it
-  # Alternatively, re-write using git_submodule_displaypaths
   local up_path="$(git rev-parse --show-cdup)"
   pushd "${up_path}" &> /dev/null
     _git_submodule_is_published_recursive
