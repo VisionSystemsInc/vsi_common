@@ -792,9 +792,20 @@ function git_push_main()
     exit 1
   fi
 
+  # This regex is backwards intentionally: if unset, don't exclude any refs
+  GIT_MIRROR_SKIP_REFS_REGEX="${GIT_MIRROR_SKIP_REFS_REGEX-$^}"
+  # By default, push all refs
+  GIT_MIRROR_PUSH_REFS_REGEX="${GIT_MIRROR_PUSH_REFS_REGEX-}"
+  # By default, force push all refs
+  GIT_MIRROR_FORCE_PUSH_REFS_REGEX="${GIT_MIRROR_FORCE_PUSH_REFS_REGEX-}"
+  # By default, only tag /refs/heads/*
+  GIT_MIRROR_TAG_FORCED_REFS_REGEX="${GIT_MIRROR_TAG_FORCED_REFS_REGEX-/refs/heads/.+}"
+
   _git_mirror_load_info "${1}" # Sets repo_paths and repo_urls
 
   pushd "${2}" &> /dev/null
+    local tag_suffix="$(date '+%Y_%m_%d_%H_%M')"
+
     local index
     # Loop through the repos
     for index in ${repo_paths[@]+"${!repo_paths[@]}"}; do
@@ -815,9 +826,36 @@ function git_push_main()
           # only filter out refs/remotes
           #
           # Push to the mirror (git push --mirror will remove deleted refs)
+          #
           # Spaces are not allowed in a refname
-          "${GIT}" for-each-ref --format='%(refname)' | grep -v -e '^refs/remotes' -e '^refs/stash' | \
-              xargs "${GIT}" push "${repo_urls[$index]}"
+          #
+          # An include-ref and exclude-ref regex (GIT_MIRROR_SKIP_REFS_REGEX
+          # and GIT_MIRROR_PUSH_REFS_REGEX respectively; include applied before
+          # exclude) to determine which refs to push to the mirror. If a ref
+          # cannot be pushed, another regex, GIT_MIRROR_FORCE_PUSH_REFS_REGEX,
+          # defines which refs to force. GIT_MIRROR_TAG_FORCED_REFS_REGEX
+          # defines which refs should be tagged if forced.
+          local refs=($("${GIT}" for-each-ref --format='%(refname)' | \
+              grep -E "${GIT_MIRROR_PUSH_REFS_REGEX}" | \
+              grep -v -E "${GIT_MIRROR_SKIP_REFS_REGEX}" -e '^refs/remotes' -e '^refs/stash'))
+          # xargs seems to try all args before returning an error code
+          if ! echo ${refs[@]+"${refs[@]}"} | grep -E "${GIT_MIRROR_FORCE_PUSH_REFS_REGEX}" | \
+              xargs "${GIT}" push "${repo_urls[$index]}"; then
+            # Re-run each push, forcing those that failed
+            for ref in "${refs[@]}"; do
+              if ! "${GIT}" push "${repo_urls[$index]}" "${ref}"; then
+                local tag="${ref}_${tag_suffix}"
+                "${GIT}" push --force "${repo_urls[$index]}" "${ref}"
+                echo "WARNING Fast-forward merge not possible. Force pushing ${ref} to"
+                echo "        ${repo_urls[$index]}"
+                # No quotes around REGEX
+                if [[ "${ref}" =~ ${GIT_MIRROR_TAG_FORCED_REFS_REGEX} ]]; then
+                  "${GIT}" tag -a -m "Previous HEAD of ${ref}" "${tag}" "${ref}"
+                  echo "        The original branch can be found at tag: ${tag}"
+                fi
+              fi
+            done
+          fi
 
           if git_mirror_has_lfs; then
             next_section "Pushing lfs objects for ${repo_path}"
