@@ -273,7 +273,8 @@ function clone_submodules()
     if [ -z "${base_submodule_path}" ]; then
       prepped_submodule_path="${GIT_MIRROR_PREP_DIR}/${MAIN_DIR}"
     else
-      prepped_submodule_path="$(dirname "$(shopt -s nullglob; echo "${GIT_MIRROR_PREP_DIR}"/*/"${base_submodule_path}/config")")"
+      prepped_submodule_path="$(dirname "$(shopt -s nullglob; \
+          echo "${GIT_MIRROR_PREP_DIR}"/*/"${base_submodule_path}/config")")"
     fi
 
     local lfs_dir="$("${GIT}" rev-parse --git-dir)/lfs"
@@ -321,7 +322,9 @@ function clone_submodules()
   # get_config_submodule_names (which uses git config and works with init-only
   # submodules) and, here, with git submodule foreach (which does not).
   # NOTE We could make a similar change in update_submodules
-  GIT_MIRROR_PREP_DIR="${GIT_MIRROR_PREP_DIR}" base_submodule_path="${base_submodule_path}" "${GIT}" submodule foreach --quiet "export prefix displaypath; bash -euc 'unset GIT_DIR; source \"${GIT_MIRROR_SOURCE[0]}\"; clone_submodules'"
+  GIT_MIRROR_PREP_DIR="${GIT_MIRROR_PREP_DIR}" base_submodule_path="${base_submodule_path}" \
+      "${GIT}" submodule foreach --quiet \
+      "export prefix displaypath; bash -euc 'unset GIT_DIR; source \"${GIT_MIRROR_SOURCE[0]}\"; clone_submodules'"
   # The "unset GIT_DIR" is needed because somewhere between git 2.17 and 2.21,
   # git-submodule-foreach started setting the GIT_DIR; however, the logic here
   # is constantly switching directories into different repositories &
@@ -363,7 +366,8 @@ function update_submodules()
   local submodule_names=($(get_config_submodule_names))
 
   for submodule_name in ${submodule_names[@]+"${submodule_names[@]}"}; do
-    full_relative_path="${base_submodule_path}${base_submodule_path:+/}$("${GIT}" config -f .gitmodules ${submodule_name}.path)"
+    full_relative_path="${base_submodule_path}${base_submodule_path:+/}$( \
+        "${GIT}" config -f .gitmodules ${submodule_name}.path)"
     "${GIT}" config "${submodule_name}.url" "$(_git_mirror_get_url "${full_relative_path}")"
   done
   next_section "Updating ${current_repo}'s submodules"
@@ -864,7 +868,8 @@ function git_push_main()
 
           if git_mirror_has_lfs; then
             next_section "Pushing lfs objects for ${repo_path}"
-            "${GIT}" remote add mirror "${repo_urls[$index]}" 2>/dev/null || "${GIT}" remote set-url mirror "${repo_urls[$index]}"
+            "${GIT}" remote add mirror "${repo_urls[$index]}" 2>/dev/null || \
+                "${GIT}" remote set-url mirror "${repo_urls[$index]}"
             # Does not work on file systems, only with real lfs servers, unless you set up lfs-filestore
             "${GIT}" lfs push mirror --all || :
           fi
