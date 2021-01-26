@@ -775,6 +775,10 @@ function git_clone_main()
 # :Arguments: ``$1`` - A file specifying the mapping between each repository's original url and its mirror url
 #             ``$2`` - The mirrored repositories (extracted from the archive) created by :func:`git_mirror_main`
 #
+# :Parameters: ``GIT_MIRROR_PUSH_REFS_REGEX`` - A regular expression specifying which refs to push to the git server; applied before ``GIT_MIRROR_SKIP_REFS_REGEX``. The refs should be matched in their long form, e.g., refs/heads/master. Default: Skip none
+#              ``GIT_MIRROR_SKIP_REFS_REGEX`` - A regular expression specifying which refs to skip when pushing to the git server; applied after ``GIT_MIRROR_PUSH_REFS_REGEX``. The refs should be matched in their long form, e.g., refs/heads/master. Default: Push all refs
+#              ``GIT_MIRROR_FORCE_PUSH_REFS_REGEX`` - A regular expression specifying which refs to force push, should it be necessary. The refs should be matched in their long form, e.g., refs/heads/master. Default: Force push all refs
+#
 # .. rubric:: Example
 #
 # In this example, the main repo's mirror url is ``https://git-server.com/foobar/vsi_common.git``, and the submodule stored at ``./docker/recipes`` has the url ``https://git-server.com/foobar/recipes.git``. This file is also used by :func:`git_clone_main`. (Any valid git URL format can be used.)
@@ -796,20 +800,16 @@ function git_push_main()
     exit 1
   fi
 
-  # This regex is backwards intentionally: if unset, don't exclude any refs
-  GIT_MIRROR_SKIP_REFS_REGEX="${GIT_MIRROR_SKIP_REFS_REGEX-$^}"
   # By default, push all refs
   GIT_MIRROR_PUSH_REFS_REGEX="${GIT_MIRROR_PUSH_REFS_REGEX-}"
+  # This regex is backwards intentionally: if unset, don't exclude any refs
+  GIT_MIRROR_SKIP_REFS_REGEX="${GIT_MIRROR_SKIP_REFS_REGEX-$^}"
   # By default, force push all refs
   GIT_MIRROR_FORCE_PUSH_REFS_REGEX="${GIT_MIRROR_FORCE_PUSH_REFS_REGEX-}"
-  # By default, only tag /refs/heads/*
-  GIT_MIRROR_TAG_FORCED_REFS_REGEX="${GIT_MIRROR_TAG_FORCED_REFS_REGEX-/refs/heads/.+}"
 
   _git_mirror_load_info "${1}" # Sets repo_paths and repo_urls
 
   pushd "${2}" &> /dev/null
-    local tag_suffix="$(date '+%Y_%m_%d_%H_%M')"
-
     local index
     # Loop through the repos
     for index in ${repo_paths[@]+"${!repo_paths[@]}"}; do
@@ -819,6 +819,9 @@ function git_push_main()
       next_section "Pushing repo '${repo_path}' to '${repo_urls[$index]}'"
       if [ -d "${repo_path}" ]; then
         pushd "${repo_path}" &> /dev/null
+          # Push to the mirror (git push --mirror does a force push, however, it
+          # will remove deleted refs)
+          #
           # It seems mirrored repositories (vxl, pytorch) can include refs/remotes/
           # I'm not sure how/why these are created---this is the pattern for the
           # ref of a remote branch in a clone. Setting up a remote-tracking branch,
@@ -829,38 +832,37 @@ function git_push_main()
           # "deny updating a hidden ref:", when pushing to a gitlab server. For now,
           # only filter out refs/remotes
           #
-          # Push to the mirror (git push --mirror will remove deleted refs)
+          # An include-ref and exclude-ref regex, GIT_MIRROR_SKIP_REFS_REGEX
+          # and GIT_MIRROR_PUSH_REFS_REGEX respectively (include applied before
+          # exclude), to determine which refs to push to the mirror. If a ref
+          # cannot be pushed, another regex, GIT_MIRROR_FORCE_PUSH_REFS_REGEX,
+          # defines which refs to force.
           #
           # Spaces are not allowed in a refname
-          #
-          # An include-ref and exclude-ref regex (GIT_MIRROR_SKIP_REFS_REGEX
-          # and GIT_MIRROR_PUSH_REFS_REGEX respectively; include applied before
-          # exclude) to determine which refs to push to the mirror. If a ref
-          # cannot be pushed, another regex, GIT_MIRROR_FORCE_PUSH_REFS_REGEX,
-          # defines which refs to force. GIT_MIRROR_TAG_FORCED_REFS_REGEX
-          # defines which refs should be tagged if forced.
           local refs=($("${GIT}" for-each-ref --format='%(refname)' | \
               grep -E "${GIT_MIRROR_PUSH_REFS_REGEX}" | \
               grep -v -E "${GIT_MIRROR_SKIP_REFS_REGEX}" -e '^refs/remotes' -e '^refs/stash'))
-          # xargs tries all args before returning an error code; do this mostly
-          # for efficiency since each ref is re-pushed individually if this
-          # command fails
+          # xargs tries all args before returning an error code
           # per xarg's man page:
           # "The xargs utility exits immediately (without processing any
           # further input) if ... an invocation of utility exits with a value
-          # of 255", which is not the case if this push fails
+          # of 255", which is not the case if pushing a branch fails
           if ! echo ${refs[@]+"${refs[@]}"} | xargs "${GIT}" push "${repo_urls[$index]}"; then
-            # Re-run each push, forcing those that failed
+            # Force push those refs that failed
             for ref in "${refs[@]}"; do
-              if ! "${GIT}" push "${repo_urls[$index]}" "${ref}"; then
-                local tag="${ref}_${tag_suffix}"
+              # No quotes around REGEX
+              if [[ "${ref}" =~ ${GIT_MIRROR_FORCE_PUSH_REFS_REGEX} ]]; then
                 "${GIT}" push --force "${repo_urls[$index]}" "${ref}"
-                echo "WARNING Fast-forward merge not possible. Force pushing ${ref} to"
-                echo "        ${repo_urls[$index]}"
-                # No quotes around REGEX
-                if [[ "${ref}" =~ ${GIT_MIRROR_TAG_FORCED_REFS_REGEX} ]]; then
-                  "${GIT}" tag -a -m "Previous HEAD of ${ref}" "${tag}" "${ref}"
-                  echo "        The original branch can be found at tag: ${tag}"
+                echo "WARNING Fast-forward merge not possible. Force pushed ${ref} to"
+                echo "    ${repo_urls[$index]}"
+                # These refs are tagged by git_tag_main with {branch}_{date}
+                local tag="$("${GIT}" for-each-ref --sort='-*authordate' --format='%(refname:short)' "refs/tags/${ref}_*" | \
+                    head -n 1)"
+                if [ -n "${tag:+set}" ]; then
+                  echo "The original ref for this branch is still referenced by this tag:"
+                  echo "    ${tag}"
+                else
+                  echo "Could not find the original ref for this branch"
                 fi
               fi
             done
@@ -873,6 +875,71 @@ function git_push_main()
             # Does not work on file systems, only with real lfs servers, unless you set up lfs-filestore
             "${GIT}" lfs push mirror --all || :
           fi
+        popd &> /dev/null
+      else
+        echo "No dir found for submodule ${repo_paths[$index]}"
+      fi
+    done
+  popd &> /dev/null
+
+  # Reset the color
+  echo -n $'\e[0m'
+}
+
+#**
+# .. function:: git_tag_main
+#
+# Tag the refs in the mirrored repository and all submodules
+#
+# Before pushing the mirrored repository and all of its submodules to the new git server with :func:`git_push_main`, tag the refs so that if, during the **next** transfer, they become dereferenced (due to a force push, which is sometimes necessary), they are not lost.
+#
+# :Arguments: ``$1`` - A file specifying the mapping between each repository's original url and its mirror url
+#             ``$2`` - The mirrored repositories (extracted from the archive) created by :func:`git_mirror_main`
+#
+# :Parameters: ``GIT_MIRROR_TAG_REFS_REGEX`` - A regular expression specifying which refs to tag. The refs should be matched in their long form, e.g., refs/heads/master. Default: ^refs/heads/.+
+#
+# .. seealso::
+#
+#   :func:`git_push_main`
+#**
+
+function git_tag_main()
+{
+  if [ $# -eq 0 ]; then
+    echo "Usage:" >&2
+    echo "${BASH_SOURCE[0]} REPO_MAP_FILE PREP_DIR" >&2
+    exit 1
+  fi
+
+  # By default, only tag refs/heads/*
+  # REVIEW This is tagging all refs, not just those that had to be forced...
+  GIT_MIRROR_TAG_REFS_REGEX="${GIT_MIRROR_TAG_REFS_REGEX-^refs/heads/.+}"
+
+  _git_mirror_load_info "${1}" # Sets repo_paths and repo_urls
+
+  pushd "${2}" &> /dev/null
+    local tag_suffix="$(date -u '+%Y-%m-%d@%H.%M.%S+UTC')" # ':' isn't valid
+
+    local index
+    # Loop through the repos
+    for index in ${repo_paths[@]+"${!repo_paths[@]}"}; do
+      local repo_path
+      repo_path="$(shopt -s nullglob; dirname */"${repo_paths[$index]}/config")"
+      next_section "Tagging repo '${repo_path}' to '${repo_urls[$index]}'"
+      if [ -d "${repo_path}" ]; then
+        pushd "${repo_path}" &> /dev/null
+          # Spaces are not allowed in a refname
+          local refs=($("${GIT}" for-each-ref --format='%(refname)' | \
+              grep -E "${GIT_MIRROR_TAG_REFS_REGEX}" | \
+              grep -v -e '^refs/tags' -e '^refs/remotes' -e '^refs/stash'))
+          for ref in "${refs[@]}"; do
+            # ref is a long-form ref to maintain namespacing of the tag;
+            # otherwise, refs/heads/4 and refs/pull/4 would both be tagged
+            # 4_{date}
+            local tag="${ref}_${tag_suffix}"
+            "${GIT}" tag -a -m "just:git_mirror pushed '${ref}' on ${tag_suffix}" \
+                "${tag}" "${ref}"
+          done
         popd &> /dev/null
       else
         echo "No dir found for submodule ${repo_paths[$index]}"
