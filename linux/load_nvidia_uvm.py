@@ -26,10 +26,9 @@ def find_cudart(search_dirs):
 
   for search_dir in search_dirs:
     for root, dirs, files in os.walk(search_dir, followlinks=False):
-      cuda_runtimes.extend([os.path.join(root, rt) \
-                            for rt in files \
-                            if rt.startswith('libcudart.so')])
-      for cuda_runtime in cuda_runtimes:
+      for cuda_runtime in [os.path.join(root, rt) \
+                           for rt in files \
+                           if rt.startswith('libcudart.so')]:
         try:
           return c.cdll.LoadLibrary(cuda_runtime)
         except OSError:
