@@ -813,10 +813,11 @@ function git_push_main()
     local index
     # Loop through the repos
     for index in ${repo_paths[@]+"${!repo_paths[@]}"}; do
+      local repo_url="${repo_urls[$index]}"
 
       local repo_path
       repo_path="$(shopt -s nullglob; dirname */"${repo_paths[$index]}/config")"
-      next_section "Pushing repo '${repo_path}' to '${repo_urls[$index]}'"
+      next_section "Pushing repo '${repo_path}' to '${repo_url}'"
       if [ -d "${repo_path}" ]; then
         pushd "${repo_path}" &> /dev/null
           # Push to the mirror (git push --mirror does a force push, however, it
@@ -850,18 +851,18 @@ function git_push_main()
           # "The xargs utility exits immediately (without processing any
           # further input) if ... an invocation of utility exits with a value
           # of 255", which is not the case if pushing a branch fails
-          if ! echo ${refs[@]+"${refs[@]}"} | xargs "${GIT}" push "${repo_urls[$index]}"; then
+          if ! echo ${refs[@]+"${refs[@]}"} | xargs "${GIT}" push "${repo_url}"; then
             # Force push those refs that failed
             for ref in "${refs[@]}"; do
               # If the push was successful, then there is no need to force push
               # (If the ref is not found, git ls-remote returns the empty string)
-              if [ "$("${GIT}" ls-remote "${repo_urls[$index]}" "${ref}" | awk '{print $1}')" != \
+              if [ "$("${GIT}" ls-remote "${repo_url}" "${ref}" | awk '{print $1}')" != \
                    "$("${GIT}" show-ref "${ref}" | awk '{print $1}')" ] && \
                   # No quotes around REGEX
                   [[ "${ref}" =~ ${GIT_MIRROR_FORCE_PUSH_REFS_REGEX} ]]; then
-                "${GIT}" push --force "${repo_urls[$index]}" "${ref}"
+                "${GIT}" push --force "${repo_url}" "${ref}"
                 echo "WARNING Fast-forward merge not possible. Force pushed ${ref} to"
-                echo "    ${repo_urls[$index]}"
+                echo "    ${repo_url}"
                 # These refs are tagged by git_tag_main with {branch}_{date}
                 local tag="$("${GIT}" for-each-ref --sort='-*authordate' \
                     --format='%(refname:short)' "refs/tags/${ref}_*" | head -n 1)"
@@ -877,14 +878,14 @@ function git_push_main()
 
           if git_mirror_has_lfs; then
             next_section "Pushing lfs objects for ${repo_path}"
-            "${GIT}" remote add mirror "${repo_urls[$index]}" 2>/dev/null || \
-                "${GIT}" remote set-url mirror "${repo_urls[$index]}"
+            "${GIT}" remote add mirror "${repo_url}" 2>/dev/null || \
+                "${GIT}" remote set-url mirror "${repo_url}"
             # Does not work on file systems, only with real lfs servers, unless you set up lfs-filestore
             "${GIT}" lfs push mirror --all || :
           fi
         popd &> /dev/null
       else
-        echo "No dir found for submodule ${repo_paths[$index]}"
+        echo "No dir found for submodule ${repo_path}"
       fi
     done
   popd &> /dev/null
@@ -960,7 +961,7 @@ function git_tag_main()
           done
         popd &> /dev/null
       else
-        echo "No dir found for submodule ${repo_paths[$index]}"
+        echo "No dir found for submodule ${repo_path}"
       fi
     done
   popd &> /dev/null
