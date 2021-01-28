@@ -46,6 +46,28 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
 
      run_some_command >& /dev/null # WRONG style. This is dealing with filenames
 
+* Always quote variables
+
+  .. code-block:: bash
+
+    avar=foo
+    echo "${avar}"
+
+    echo ${avar} # WRONG style. It is safer to always quote the variable,
+                 # even if it is not strictly necessary
+
+* Prefer ``[ ]`` tests to the ``[[ ]]`` construct and = to ==
+
+  .. code-block:: bash
+
+    [ "${avar}" = "1" ] # Variables are always quoted in [] tests
+
+    [[ ${avar} == "1" ]] # WRONG style. Sometimes ${avar} needs to be quoted, sometimes not
+
+    [[ "${avar}" = *foo*bar* ]] # Ok. Pattern matching is not possible with []
+
+    [[ "${avar}" =~ ^foo.+bar$ ]] # Ok. Pattern matching is not possible with []
+
 * Checking to see if a variable exists
 
   .. code-block:: bash
