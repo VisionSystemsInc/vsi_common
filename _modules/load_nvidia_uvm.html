@@ -177,32 +177,38 @@
 <span class="kn">from</span> <span class="nn">glob</span> <span class="kn">import</span> <span class="n">glob</span>
 <span class="kn">import</span> <span class="nn">sys</span>
 
-<div class="viewcode-block" id="main"><a class="viewcode-back" href="../linux/python_scripts/load_nvidia_uvm.html#load_nvidia_uvm.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">(</span><span class="n">args</span><span class="o">=</span><span class="p">[]):</span>
+<div class="viewcode-block" id="find_cudart"><a class="viewcode-back" href="../linux/python_scripts/load_nvidia_uvm.html#load_nvidia_uvm.find_cudart">[docs]</a><span class="k">def</span> <span class="nf">find_cudart</span><span class="p">(</span><span class="n">search_dirs</span><span class="p">):</span>
   <span class="n">cuda_runtimes</span><span class="o">=</span><span class="p">[]</span>
 
+  <span class="k">for</span> <span class="n">search_dir</span> <span class="ow">in</span> <span class="n">search_dirs</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">root</span><span class="p">,</span> <span class="n">dirs</span><span class="p">,</span> <span class="n">files</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">search_dir</span><span class="p">,</span> <span class="n">followlinks</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+      <span class="k">for</span> <span class="n">cuda_runtime</span> <span class="ow">in</span> <span class="p">[</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">rt</span><span class="p">)</span> \
+                           <span class="k">for</span> <span class="n">rt</span> <span class="ow">in</span> <span class="n">files</span> \
+                           <span class="k">if</span> <span class="n">rt</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;libcudart.so&#39;</span><span class="p">)]:</span>
+        <span class="k">try</span><span class="p">:</span>
+          <span class="k">return</span> <span class="n">c</span><span class="o">.</span><span class="n">cdll</span><span class="o">.</span><span class="n">LoadLibrary</span><span class="p">(</span><span class="n">cuda_runtime</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">OSError</span><span class="p">:</span>
+          <span class="k">continue</span>
+
+  <span class="k">return</span> <span class="kc">None</span></div>
+
+<div class="viewcode-block" id="main"><a class="viewcode-back" href="../linux/python_scripts/load_nvidia_uvm.html#load_nvidia_uvm.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">(</span><span class="n">args</span><span class="o">=</span><span class="p">[]):</span>
+
   <span class="k">if</span> <span class="n">args</span><span class="p">:</span>
-    <span class="n">cuda_runtimes</span><span class="o">=</span><span class="n">args</span>
+    <span class="n">cudart</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">cdll</span><span class="o">.</span><span class="n">LoadLibrary</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
   <span class="k">else</span><span class="p">:</span>
     <span class="c1"># Attempt to discover cuda runtime</span>
     <span class="n">common_dirs</span> <span class="o">=</span> <span class="n">glob</span><span class="p">(</span><span class="s1">&#39;/usr/local/cuda*&#39;</span><span class="p">)</span> <span class="o">+</span> <span class="n">glob</span><span class="p">(</span><span class="s1">&#39;/usr/cuda*&#39;</span><span class="p">)</span> <span class="o">+</span> <span class="p">[</span><span class="s1">&#39;/usr&#39;</span><span class="p">]</span> \
                   <span class="o">+</span> <span class="p">[</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">dirname</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)]</span>
+    <span class="n">cudart</span> <span class="o">=</span> <span class="n">find_cudart</span><span class="p">(</span><span class="n">common_dirs</span><span class="p">)</span>
 
-    <span class="k">for</span> <span class="n">common_dir</span> <span class="ow">in</span> <span class="n">common_dirs</span><span class="p">:</span>
-      <span class="k">for</span> <span class="n">root</span><span class="p">,</span> <span class="n">dirs</span><span class="p">,</span> <span class="n">files</span> <span class="ow">in</span> <span class="n">os</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">common_dir</span><span class="p">,</span> <span class="n">followlinks</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-        <span class="n">cuda_runtimes</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">rt</span><span class="p">)</span> \
-                            <span class="k">for</span> <span class="n">rt</span> <span class="ow">in</span> <span class="n">files</span> \
-                            <span class="k">if</span> <span class="n">rt</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;libcudart.so&#39;</span><span class="p">)])</span>
-        <span class="k">if</span> <span class="n">cuda_runtimes</span><span class="p">:</span>
-          <span class="k">break</span>
-      <span class="k">if</span> <span class="n">cuda_runtimes</span><span class="p">:</span>
-        <span class="k">break</span>
-
-  <span class="k">if</span> <span class="ow">not</span> <span class="n">cuda_runtimes</span><span class="p">:</span>
+  <span class="k">if</span> <span class="ow">not</span> <span class="n">cudart</span><span class="p">:</span>
     <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Could not find cuda runtime. &quot;</span>
           <span class="s2">&quot;Please pass the full path of a cuda runtime as an argument&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Try running:&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;  python &quot;</span> <span class="o">+</span> <span class="vm">__file__</span> <span class="o">+</span> <span class="s2">&quot; path_to_libcudart.so&quot;</span><span class="p">)</span>
     <span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
 
-  <span class="n">cudart</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">cdll</span><span class="o">.</span><span class="n">LoadLibrary</span><span class="p">(</span><span class="n">cuda_runtimes</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
   <span class="n">cudart</span><span class="o">.</span><span class="n">cudaGetDeviceCount</span><span class="o">.</span><span class="n">argtypes</span> <span class="o">=</span> <span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">POINTER</span><span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">c_int</span><span class="p">),)</span>
 
   <span class="n">gpu_count</span> <span class="o">=</span> <span class="n">c</span><span class="o">.</span><span class="n">c_int</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
