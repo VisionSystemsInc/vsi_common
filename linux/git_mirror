@@ -814,9 +814,7 @@ function git_push_main()
     # Loop through the repos
     for index in ${repo_paths[@]+"${!repo_paths[@]}"}; do
       local repo_url="${repo_urls[$index]}"
-
-      local repo_path
-      repo_path="$(shopt -s nullglob; dirname */"${repo_paths[$index]}/config")"
+      local repo_path="$(shopt -s nullglob; dirname */"${repo_paths[$index]}/config")"
       next_section "Pushing repo '${repo_path}' to '${repo_url}'"
       if [ -d "${repo_path}" ]; then
         pushd "${repo_path}" &> /dev/null
@@ -863,9 +861,12 @@ function git_push_main()
                 "${GIT}" push --force "${repo_url}" "${ref}"
                 echo "WARNING Fast-forward merge not possible. Force pushed ${ref} to"
                 echo "    ${repo_url}"
-                # These refs are tagged by git_tag_main with {branch}_{date}
+                # A ref is tagged by git_tag_main with
+                # just_git_mirror/{date}/{namespaced_ref}, where namespaced_ref
+                # is the long-form ref (e.g., refs/heads/master) with the refs/
+                # domain stripped off
                 local tag="$("${GIT}" for-each-ref --sort='-*authordate' \
-                    --format='%(refname:short)' "refs/tags/${ref}_*" | head -n 1)"
+                    --format='%(refname:short)' "refs/tags/just_git_mirror/*/${ref/refs\//}" | head -n 1)"
                 if [ -n "${tag:+set}" ]; then
                   echo "The original ref for this branch is still referenced by this tag:"
                   echo "    ${tag}"
@@ -899,7 +900,7 @@ function git_push_main()
 #
 # Tag the refs in the mirrored repository and all submodules
 #
-# Before pushing the mirrored repository and all of its submodules to the new git server with :func:`git_push_main`, tag the refs so that if, during the **next** transfer, they become dereferenced (due to a force push, which is sometimes necessary), they are not lost.
+# Before pushing the mirrored repository and all of its submodules to the new git server with :func:`git_push_main`, tag the refs so that if, during the **next** transfer, they become dereferenced (due to a force push, which is sometimes necessary), they are not lost. For a ref of the form refs/heads/master, this tag takes the (long) form of refs/tags/just_git_mirror/{datetime}/heads/master
 #
 # :Arguments: ``$1`` - A file specifying the mapping between each repository's original url and its mirror url
 #             ``$2`` - The mirrored repositories (extracted from the archive) created by :func:`git_mirror_main`
@@ -909,6 +910,10 @@ function git_push_main()
 # .. seealso::
 #
 #   :func:`git_push_main`
+#
+# .. note::
+#
+#   Because this function creates a tag directory called just_git_mirror/ (note the trailing slash), a user can no longer create a tag called just_git_mirror
 #**
 
 function git_tag_main()
@@ -926,37 +931,29 @@ function git_tag_main()
   _git_mirror_load_info "${1}" # Sets repo_paths and repo_urls
 
   pushd "${2}" &> /dev/null
-    local tag_suffix="$(date -u '+%Y-%m-%d@%H.%M.%S+UTC')" # ':' isn't valid
+    local tag_date="$(date -u '+%Y-%m-%dT%H.%M.%SZ')" # ISO8061; ':' isn't valid
 
     local index
     # Loop through the repos
     for index in ${repo_paths[@]+"${!repo_paths[@]}"}; do
-      local repo_path
-      repo_path="$(shopt -s nullglob; dirname */"${repo_paths[$index]}/config")"
+      local repo_path="$(shopt -s nullglob; dirname */"${repo_paths[$index]}/config")"
       next_section "Tagging refs in '${repo_path}'"
       if [ -d "${repo_path}" ]; then
         pushd "${repo_path}" &> /dev/null
           # Spaces are not allowed in a refname
-          # FIXME We need to tag refs/tags because they might need to be force
-          # pushed as well. Filter only our tags
           local refs=($("${GIT}" for-each-ref --format='%(refname)' | \
               grep -E "${GIT_MIRROR_TAG_REFS_REGEX}" | \
-              grep -v -e '^refs/tags' -e '^refs/remotes' -e '^refs/stash' || :))
+              grep -v -e '^refs/tags/just_git_mirror/' -e '^refs/remotes' -e '^refs/stash' || :))
           for ref in "${refs[@]}"; do
             # ref is a long-form ref to maintain namespacing of the tag;
             # otherwise, refs/heads/4 and refs/pull/4 would both be tagged
-            # 4_{date}
-            # REVIEW I could strip off refs/
-            # REVIEW Switch to "${ref}@${tag_suffix}" and use T and Z (a la
-            # iso8061) instead of @ and +UTC in tag_suffix
-            # RE Or even something like
-            # e.g., refs/tags/git_mirror/2021-01-26T12.21.55Z/heads/master
-            # REVIEW Don't re-tag if a tag already exists for this ref at the
+            # identically
+            # TODO Don't re-tag if a tag already exists for this ref at the
             # correct SHA. This could be done with:
             # git ls-remote --ref refs/tags/"${ref}_"* (--ref avoids "peeled
             # tags": https://stackoverflow.com/a/35219362)
-            local tag="${ref}_${tag_suffix}"
-            "${GIT}" tag -a -m "just:git_mirror pushed '${ref}' on ${tag_suffix}" \
+            local tag="just_git_mirror/${tag_date}/${ref/refs\//}"
+            "${GIT}" tag -a -m "just:git_mirror pushed '${ref}' on ${tag_date}" \
                 "${tag}" "${ref}"
           done
         popd &> /dev/null
