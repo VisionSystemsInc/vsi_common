@@ -932,10 +932,12 @@ function git_tag_main()
     for index in ${repo_paths[@]+"${!repo_paths[@]}"}; do
       local repo_path
       repo_path="$(shopt -s nullglob; dirname */"${repo_paths[$index]}/config")"
-      next_section "Tagging repo '${repo_path}' to '${repo_urls[$index]}'"
+      next_section "Tagging refs in '${repo_path}'"
       if [ -d "${repo_path}" ]; then
         pushd "${repo_path}" &> /dev/null
           # Spaces are not allowed in a refname
+          # FIXME We need to tag refs/tags because they might need to be force
+          # pushed as well. Filter only our tags
           local refs=($("${GIT}" for-each-ref --format='%(refname)' | \
               grep -E "${GIT_MIRROR_TAG_REFS_REGEX}" | \
               grep -v -e '^refs/tags' -e '^refs/remotes' -e '^refs/stash' || :))
@@ -943,6 +945,15 @@ function git_tag_main()
             # ref is a long-form ref to maintain namespacing of the tag;
             # otherwise, refs/heads/4 and refs/pull/4 would both be tagged
             # 4_{date}
+            # REVIEW I could strip off refs/
+            # REVIEW Switch to "${ref}@${tag_suffix}" and use T and Z (a la
+            # iso8061) instead of @ and +UTC in tag_suffix
+            # RE Or even something like
+            # e.g., refs/tags/git_mirror/2021-01-26T12.21.55Z/heads/master
+            # REVIEW Don't re-tag if a tag already exists for this ref at the
+            # correct SHA. This could be done with:
+            # git ls-remote --ref refs/tags/"${ref}_"* (--ref avoids "peeled
+            # tags": https://stackoverflow.com/a/35219362)
             local tag="${ref}_${tag_suffix}"
             "${GIT}" tag -a -m "just:git_mirror pushed '${ref}' on ${tag_suffix}" \
                 "${tag}" "${ref}"
