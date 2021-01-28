@@ -837,6 +837,8 @@ function git_push_main()
           # should not have any remote refs. In any case, these cause an error,
           # "deny updating a hidden ref:", when pushing to a gitlab server. For now,
           # only filter out refs/remotes
+          # RE It is possible to get refs/remotes/ if a bare repo fetches from
+          # another (bare) repo, which could then be pushed to, e.g., github
 
           # Spaces are not allowed in a refname
           local refs=($("${GIT}" for-each-ref --format='%(refname)' | \
@@ -851,14 +853,18 @@ function git_push_main()
           if ! echo ${refs[@]+"${refs[@]}"} | xargs "${GIT}" push "${repo_urls[$index]}"; then
             # Force push those refs that failed
             for ref in "${refs[@]}"; do
-              # No quotes around REGEX
-              if [[ "${ref}" =~ ${GIT_MIRROR_FORCE_PUSH_REFS_REGEX} ]]; then
+              # If the push was successful, then there is no need to force push
+              # Alternatively, use git ls-remote --exit-code "$repo_url" "$ref"
+              # and see if the SHA is correct, which is much faster
+              if ! "${GIT}" push "${repo_urls[$index]}" "${ref}" && \
+                  # No quotes around REGEX
+                  [[ "${ref}" =~ ${GIT_MIRROR_FORCE_PUSH_REFS_REGEX} ]]; then
                 "${GIT}" push --force "${repo_urls[$index]}" "${ref}"
                 echo "WARNING Fast-forward merge not possible. Force pushed ${ref} to"
                 echo "    ${repo_urls[$index]}"
                 # These refs are tagged by git_tag_main with {branch}_{date}
-                local tag="$("${GIT}" for-each-ref --sort='-*authordate' --format='%(refname:short)' "refs/tags/${ref}_*" | \
-                    head -n 1)"
+                local tag="$("${GIT}" for-each-ref --sort='-*authordate' \
+                    --format='%(refname:short)' "refs/tags/${ref}_*" | head -n 1)"
                 if [ -n "${tag:+set}" ]; then
                   echo "The original ref for this branch is still referenced by this tag:"
                   echo "    ${tag}"
