@@ -865,8 +865,9 @@ function git_push_main()
                 # just_git_mirror/{date}/{namespaced_ref}, where namespaced_ref
                 # is the long-form ref (e.g., refs/heads/master) with the refs/
                 # domain stripped off
+                local namespaced_ref="${ref/refs\//}"
                 local tag="$("${GIT}" for-each-ref --sort='-*authordate' \
-                    --format='%(refname:short)' "refs/tags/just_git_mirror/*/${ref/refs\//}" | head -n 1)"
+                    --format='%(refname:short)' "refs/tags/just_git_mirror/*/${namespaced_ref}" | head -n 1)"
                 if [ -n "${tag:+set}" ]; then
                   echo "The original ref for this branch is still referenced by this tag:"
                   echo "    ${tag}"
@@ -900,7 +901,7 @@ function git_push_main()
 #
 # Tag the refs in the mirrored repository and all submodules
 #
-# Before pushing the mirrored repository and all of its submodules to the new git server with :func:`git_push_main`, tag the refs so that if, during the **next** transfer, they become dereferenced (due to a force push, which is sometimes necessary), they are not lost. For a ref of the form refs/heads/master, this tag takes the (long) form of refs/tags/just_git_mirror/{datetime}/heads/master
+# Before pushing the mirrored repository and all of its submodules to the new git server with :func:`git_push_main`, tag the refs so that if, during the **next** transfer, they become dereferenced (due to a force push, which is sometimes necessary), they are not lost. For a ref of the form refs/heads/master, this (lightweight) tag takes the (long) form of refs/tags/just_git_mirror/{datetime}/heads/master
 #
 # :Arguments: ``$1`` - A file specifying the mapping between each repository's original url and its mirror url
 #             ``$2`` - The mirrored repositories (extracted from the archive) created by :func:`git_mirror_main`
@@ -936,25 +937,41 @@ function git_tag_main()
     local index
     # Loop through the repos
     for index in ${repo_paths[@]+"${!repo_paths[@]}"}; do
+      local repo_url="${repo_urls[$index]}"
       local repo_path="$(shopt -s nullglob; dirname */"${repo_paths[$index]}/config")"
       next_section "Tagging refs in '${repo_path}'"
       if [ -d "${repo_path}" ]; then
         pushd "${repo_path}" &> /dev/null
+          # refs take their long form to maintain namespacing of the tag;
+          # otherwise, refs/heads/4 and refs/pull/4 would both be tagged
+          # identically
+          #
           # Spaces are not allowed in a refname
           local refs=($("${GIT}" for-each-ref --format='%(refname)' | \
               grep -E "${GIT_MIRROR_TAG_REFS_REGEX}" | \
               grep -v -e '^refs/tags/just_git_mirror/' -e '^refs/remotes' -e '^refs/stash' || :))
           for ref in "${refs[@]}"; do
-            # ref is a long-form ref to maintain namespacing of the tag;
-            # otherwise, refs/heads/4 and refs/pull/4 would both be tagged
-            # identically
-            # TODO Don't re-tag if a tag already exists for this ref at the
-            # correct SHA. This could be done with:
-            # git ls-remote --ref refs/tags/"${ref}_"* (--ref avoids "peeled
-            # tags": https://stackoverflow.com/a/35219362)
-            local tag="just_git_mirror/${tag_date}/${ref/refs\//}"
-            "${GIT}" tag -a -m "just:git_mirror pushed '${ref}' on ${tag_date}" \
-                "${tag}" "${ref}"
+            # Don't re-tag a ref if we have already tagged it at this SHA.
+            # Unfortunately, it doesn't look like there is something like
+            # git tag --points-at for ls-remote. Instead, return all of our
+            # tags that match our ref and grep for the correct SHA
+            local namespaced_ref="${ref/refs\//}"
+            local SHA="$("${GIT}" show-ref "${ref}" | awk '{print $1}')"
+            # git has two kinds of tags: lightweight and annotated. Annotated
+            # tags are commits of their own [1]. In order to list the commit
+            # referred to by the tag (instead of the tag's commit itself) with
+            # git show-ref (from a local repo), use the --dereference flag, or
+            # with git ls-remote (from a remote repo), peel the ref with ^{} [2]
+            # Fortunately, in this case, we are creating lightweight refs, so
+            # there is no need to deal with dereferencing the ref
+            #
+            # [1] https://git-scm.com/book/en/v2/Git-Basics-Tagging
+            # [2] https://stackoverflow.com/a/35219362
+            if ! "${GIT}" ls-remote "${repo_url}" "refs/tags/just_git_mirror/*/${namespaced_ref}" | \
+                awk '{print $1}' | grep "^${SHA}$"; then
+              local tag="just_git_mirror/${tag_date}/${namespaced_ref}"
+              "${GIT}" tag -m "just:git_mirror pushed '${ref}' on ${tag_date}" "${tag}" "${ref}"
+            fi
           done
         popd &> /dev/null
       else
