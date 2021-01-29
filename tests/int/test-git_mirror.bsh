@@ -115,6 +115,16 @@ begin_test "Part 1 - Setup test repo"
     touch readme_sub_sub
     git add readme_sub_sub
     git commit -m "Initial commit"
+
+    # A branch to force push with GIT_MIRROR_FORCE_PUSH_REFS_REGEX
+    git checkout -b to_force1
+    touch rewritten_file
+    git add rewritten_file
+    git commit -m "A file to be rewritten"
+    echo 1 > rewritten_file
+    git add rewritten_file
+    git commit -m "sub_sub_1"
+    git checkout master
   popd &> /dev/null
   mkdir -p "${PRETEND_URL}_sub_sub"
   pushd "${PRETEND_URL}_sub_sub" &> /dev/null
@@ -192,6 +202,7 @@ begin_test "Part 1 - Setup test repo"
     # LFS_DIR="${PRETEND_URL}_lfs/lfs/objects" "${TRASHDIR}/git2" submodule add "${PRETEND_URL}_lfs" "lfs"
     GIT_LFS_SKIP_SMUDGE=1 git submodule add --name "lfs files" "${PRETEND_URL}_lfs" "lfs"
     git submodule add "${PRETEND_URL}_sub" "${DIFFICULT_NAME}"
+    git submodule update --init --recursive
     # Git itself can't handle newlines, although the config file actually can
     # escape them. This is a PURE git bug, plain and simple.
     # This won't actually create a newline in the name, it just ignores it
@@ -199,8 +210,17 @@ begin_test "Part 1 - Setup test repo"
     # This will.
     # git mv $'  diff  i \t cult' $' \n diff  i \t cult'
     # However, at random this gives permission denied errors, good thing I don't need it...
-
     git commit -m "Added submodules"
+
+    # A branch to force push with GIT_MIRROR_FORCE_PUSH_REFS_REGEX
+    git checkout -b to_force
+    touch rewritten_file
+    git add rewritten_file
+    git commit -m "A file to be rewritten"
+    echo 1 > rewritten_file
+    git add rewritten_file
+    git commit -m "1"
+    git checkout master
   popd &> /dev/null
   mkdir -p "${PRETEND_URL}"
   pushd "${PRETEND_URL}" &> /dev/null
@@ -248,6 +268,7 @@ begin_test "Part 4 - Pushing to mirror"
     popd &> /dev/null
   done
 
+  git_tag_main "${TRANSFER_DIR}/info.env" "${TRANSFER_DIR}"
   LFS_DIR="${MIRROR_DIR}/lfs/lfs/objects" GIT="${TRASHDIR}/git2" git_push_main "${TRANSFER_DIR}/info.env" "${TRANSFER_DIR}"
 )
 end_test
@@ -267,13 +288,50 @@ begin_test "Part 5 - Cloning from mirror"
   LFS_DIR="${MIRROR_DIR}/lfs/lfs/objects" GIT="${TRASHDIR}/git2" git_clone_main "${TRANSFER_DIR}/info.env" "${CLONE_DIR}"
 
   # Tests
-  [ -f "${CLONE_DIR}/readme" ]
+  # git 1.8.3 does not support git -C
+  pushd "${MIRROR_DIR}/main" &> /dev/null
+    # Verify all refs are pushed (and none are skipped) by git_push_main with
+    # the default regexs (nothing to force-push here though)
+    # REVIEW These may need to be sorted
+    [[ "$(git for-each-ref --format='%(refname)')" = \
+refs/heads/master$'\n'\
+refs/heads/to_force$'\n'\
+refs/tags/just_git_mirror/*/heads/master$'\n'\
+refs/tags/just_git_mirror/*/heads/to_force$'\n'\
+refs/tags/original_commit ]] || false
+  popd &> /dev/null
+  pushd "${MIRROR_DIR}/recipes" &> /dev/null
+    # Verify all refs are pushed (and none are skipped) by git_push_main with
+    # the default regexs (nothing to force-push here though)
+    [[ "$(git for-each-ref --format='%(refname)')" = \
+refs/heads/master$'\n'\
+refs/heads/to_force1$'\n'\
+refs/tags/just_git_mirror/*/heads/master$'\n'\
+refs/tags/just_git_mirror/*/heads/to_force1 ]] || false
+  popd &> /dev/null
+
   # git 1.8.3 does not support git -C
   pushd "${CLONE_DIR}" &> /dev/null
-    git show-ref --verify --quiet refs/tags/original_commit
+    [ -f readme ]
+    [ "$(git log master -n1 --format="%s")" = "Added submodules" ]
+    # (to_force has not been checked out locally)
+    [ "$(git log origin/to_force -n1 --format="%s")" = "1" ]
+    # Verify the refs are tagged by git_tag_main with the default regex
+    [[ "$(git for-each-ref --format='%(refname)' refs/tags)" = \
+refs/tags/just_git_mirror/*/heads/master$'\n'\
+refs/tags/just_git_mirror/*/heads/to_force$'\n'\
+refs/tags/original_commit ]] || false
   popd &> /dev/null
   [ -f "${CLONE_DIR}/${DIFFICULT_NAME}/readme_sub" ]
-  [ -f "${CLONE_DIR}/${DIFFICULT_NAME}/a_sub_sub_module/readme_sub_sub" ]
+  pushd "${CLONE_DIR}/${DIFFICULT_NAME}/a_sub_sub_module" &> /dev/null
+    [ -f readme_sub_sub ]
+    [ "$(git log master -n1 --format="%s")" = "Initial commit" ]
+    [ "$(git log origin/to_force1 -n1 --format="%s")" = "sub_sub_1" ]
+    # Verify the refs are tagged
+    [[ "$(git for-each-ref --format='%(refname)' refs/tags)" = \
+refs/tags/just_git_mirror/*/heads/master$'\n'\
+refs/tags/just_git_mirror/*/heads/to_force1 ]] || false
+  popd &> /dev/null
   [ $(sha256sum ${CLONE_DIR}/lfs/readme1.bin | awk '{print $1}') = abc6fd595fc079d3114d4b71a4d84b1d1d0f79df1e70f8813212f2a65d8916df ]
   # This file shouldn't exist yet
   [ ! -e "${CLONE_DIR}/.git/modules/lfs files/lfs/objects/98/ea/98ea6e4f216f2fb4b69fff9b3a44842c38686ca685f3f55dc48c5d3fb1107be4" ]
@@ -283,7 +341,7 @@ begin_test "Part 5 - Cloning from mirror"
 )
 end_test
 
-begin_test "Part 6 - Update a repo and the prepped mirror"
+begin_test "Part 6 - Update a repo and mirror"
 (
   setup_test
 
@@ -299,12 +357,26 @@ begin_test "Part 6 - Update a repo and the prepped mirror"
       git add newfile_sub
       git commit -m "add a new file"
       git push origin master
+
+      pushd a_sub_sub_module &> /dev/null
+        # Rewrite the to_force1 branch
+        git checkout origin/to_force1~1
+        git branch -f to_force1 HEAD
+        git checkout to_force1
+        echo 2 > rewritten_file
+        git add rewritten_file
+        git commit -m "sub_sub_2"
+        git push --force origin to_force1
+        git checkout master
+      popd &> /dev/null
     popd &> /dev/null
     git add "${DIFFICULT_NAME}"
     git commit -m "update submodule"
     git push "${PRETEND_URL}" master
 
     # Add a commit to a submodule that is not tracked by the main repo
+    # REVIEW It would be better if this were done in "${BUILD_REPO}_sub" and
+    # pushed to "${PRETEND_REPO}_sub" (although that remote isn't setup)
     pushd "${DIFFICULT_NAME}" &> /dev/null
       echo "1" >> newfile_sub
       git add newfile_sub
@@ -313,13 +385,22 @@ begin_test "Part 6 - Update a repo and the prepped mirror"
     popd &> /dev/null
 
     # Add a branch to the main repo
-    current_branch="$(git rev-parse --abbrev-ref HEAD)"
     git checkout -b a_branch
     touch branchfile
     git add branchfile
     git commit -m "add a file on a branch"
     git push "${PRETEND_URL}" a_branch
-    git checkout "${current_branch}"
+    git checkout master
+
+    # Rewrite the to_force branch
+    git checkout to_force~1
+    git branch -f to_force HEAD
+    git checkout to_force
+    echo 2 > rewritten_file
+    git add rewritten_file
+    git commit -m "2"
+    git push --force "${PRETEND_URL}" to_force
+    git checkout master
   popd &> /dev/null
 
   # Add a branch to the air-gapped main repo
@@ -353,6 +434,7 @@ begin_test "Part 6 - Update a repo and the prepped mirror"
   popd &> /dev/null
 
   # Push to mirror
+  git_tag_main "${TRANSFER_DIR}/info.env" "${TRANSFER_DIR}"
   LFS_DIR="${MIRROR_DIR}/lfs/lfs/objects" GIT="${TRASHDIR}/git2" git_push_main "${TRANSFER_DIR}/info.env" "${TRANSFER_DIR}"
 
   # Pull changes
@@ -363,7 +445,15 @@ begin_test "Part 6 - Update a repo and the prepped mirror"
 
   # Tests
   [ -f "${CLONE_DIR}/newfile" ]
+  # Verify this branch was force pushed by git_push_main with the default regex
+  [ "$(cd "${CLONE_DIR}" && git log origin/to_force -n1 --format="%s")" = "2" ]
   [ -f "${CLONE_DIR}/${DIFFICULT_NAME}/newfile_sub" ]
+  # Verify this branch was force pushed by git_push_main with the default regex
+  # Cannot check the "${CLONE_DIR}/${DIFFICULT_NAME}/a_sub_sub_module" because
+  # a fetch is (surprisingly) not performed on the submodule by
+  # git submodule update --init --recursive (perhaps because the tracked commits
+  # don't change)
+  [ "$(cd "${MIRROR_DIR}/recipes" && git log to_force1 -n1 --format="%s")" = "sub_sub_2" ]
   output="$(cat "${CLONE_DIR}/${DIFFICULT_NAME}/newfile_sub")"
   [ "${output}" = "" ]
   # git 1.8.3 does not support git -C
@@ -372,6 +462,8 @@ begin_test "Part 6 - Update a repo and the prepped mirror"
     git show-ref --verify --quiet refs/heads/a_branch
   popd &> /dev/null
   pushd "${MIRROR_DIR}/${DIFFICULT_NAME}" &> /dev/null
+    # Verify the mirror contains all of the commits (including new commits not
+    # tracked by the parent repo of the submodule)
     [ "$(git log -n1 --format="%s")" = "update file" ]
     # alternatively
     #[ "$(git show HEAD | git patch-id | awk '{print $1}')" = "bd6ba42dfd6bb1cacf02ec71f97292f25b58d0da" ]
