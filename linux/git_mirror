@@ -855,7 +855,7 @@ function git_push_main()
               # If the push was successful, then there is no need to force push
               # (If the ref is not found, git ls-remote returns the empty string)
               if [ "$("${GIT}" ls-remote "${repo_url}" "${ref}" | awk '{print $1}')" != \
-                   "$("${GIT}" show-ref "${ref}" | awk '{print $1}')" ] && \
+                   "$("${GIT}" show-ref --hash "${ref}")" ] && \
                   # No quotes around REGEX
                   [[ "${ref}" =~ ${GIT_MIRROR_FORCE_PUSH_REFS_REGEX} ]]; then
                 "${GIT}" push --force "${repo_url}" "${ref}"
@@ -955,22 +955,25 @@ function git_tag_main()
             # Unfortunately, it doesn't look like there is something like
             # git tag --points-at for ls-remote. Instead, return all of our
             # tags that match our ref and grep for the correct SHA
-            local namespaced_ref="${ref/refs\//}"
-            local SHA="$("${GIT}" show-ref "${ref}" | awk '{print $1}')"
+            #
             # git has two kinds of tags: lightweight and annotated. Annotated
             # tags are commits of their own [1]. In order to list the commit
             # referred to by the tag (instead of the tag's commit itself) with
             # git show-ref (from a local repo), use the --dereference flag, or
-            # with git ls-remote (from a remote repo), peel the ref with ^{} [2]
-            # Fortunately, in this case, we are creating lightweight refs, so
-            # there is no need to deal with dereferencing the ref
+            # with git rev-parse (from a local repo) or ls-remote (from a
+            # remote repo), peel the ref with ^{} [2], e.g.,
+            # git rev-pasre refs/tags/atag^{}
+            # We are creating annotated tags (because including a message implies
+            # annotation)
             #
             # [1] https://git-scm.com/book/en/v2/Git-Basics-Tagging
             # [2] https://stackoverflow.com/a/35219362
-            if ! "${GIT}" ls-remote "${repo_url}" "refs/tags/just_git_mirror/*/${namespaced_ref}" | \
+            local namespaced_ref="${ref/refs\//}"
+            local SHA="$("${GIT}" show-ref --hash "${ref}")"
+            if ! "${GIT}" ls-remote "${repo_url}" "refs/tags/just_git_mirror/*/${namespaced_ref}^{}" | \
                 awk '{print $1}' | grep "^${SHA}$"; then
               local tag="just_git_mirror/${tag_date}/${namespaced_ref}"
-              "${GIT}" tag -m "just:git_mirror pushed '${ref}' on ${tag_date}" "${tag}" "${ref}"
+              "${GIT}" tag -a -m "just:git_mirror pushed this tag for '${ref}' on ${tag_date}" "${tag}" "${ref}"
             fi
           done
         popd &> /dev/null
