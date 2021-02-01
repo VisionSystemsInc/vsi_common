@@ -849,30 +849,37 @@ function git_push_main()
           # "The xargs utility exits immediately (without processing any
           # further input) if ... an invocation of utility exits with a value
           # of 255", which is not the case if pushing a branch fails
+          # (If refs is empty, the echo succeeds but there is nothing to pass
+          # through the pipe, so the command short-circuits)
           if ! echo ${refs[@]+"${refs[@]}"} | xargs "${GIT}" push "${repo_url}"; then
             # Force push those refs that failed
             for ref in "${refs[@]}"; do
               # If the push was successful, then there is no need to force push
               # (If the ref is not found, git ls-remote returns the empty string)
               if [ "$("${GIT}" ls-remote "${repo_url}" "${ref}" | awk '{print $1}')" != \
-                   "$("${GIT}" show-ref --hash "${ref}")" ] && \
-                  # No quotes around REGEX
-                  [[ "${ref}" =~ ${GIT_MIRROR_FORCE_PUSH_REFS_REGEX} ]]; then
-                "${GIT}" push --force "${repo_url}" "${ref}"
-                echo "WARNING Fast-forward merge not possible. Force pushed ${ref} to"
-                echo "    ${repo_url}"
-                # A ref is tagged by git_tag_main with
-                # just_git_mirror/{date}/{namespaced_ref}, where namespaced_ref
-                # is the long-form ref (e.g., refs/heads/master) with the refs/
-                # domain stripped off
-                local namespaced_ref="${ref/refs\//}"
-                local tag="$("${GIT}" for-each-ref --sort='-*authordate' \
-                    --format='%(refname:short)' "refs/tags/just_git_mirror/*/${namespaced_ref}" | head -n 1)"
-                if [ -n "${tag:+set}" ]; then
-                  echo "The original ref for this branch is still referenced by this tag:"
-                  echo "    ${tag}"
+                   "$("${GIT}" show-ref --hash "${ref}")" ]; then
+                # No quotes around REGEX
+                if [[ "${ref}" =~ ${GIT_MIRROR_FORCE_PUSH_REFS_REGEX} ]]; then
+                  "${GIT}" push --force "${repo_url}" "${ref}"
+                  echo "WARNING Fast-forward merge not possible. Force pushed ${ref} to"
+                  echo "    ${repo_url}"
+                  # A ref is tagged by git_tag_main with
+                  # just_git_mirror/{date}/{namespaced_ref}, where namespaced_ref
+                  # is the long-form ref (e.g., refs/heads/master) with the refs/
+                  # domain stripped off
+                  local namespaced_ref="${ref/refs\//}"
+                  local tag="$("${GIT}" for-each-ref --sort='-*authordate' \
+                      --format='%(refname:short)' "refs/tags/just_git_mirror/*/${namespaced_ref}" | head -n 1)"
+                  if [ -n "${tag:+set}" ]; then
+                    echo "The original ref for this branch is still referenced by this tag:"
+                    echo "    ${tag}"
+                  else
+                    echo "Could not find the original ref for this branch"
+                  fi
                 else
-                  echo "Could not find the original ref for this branch"
+                  echo "WARNING Fast-forward merge not possible. ${ref} was not force pushed to"
+                  echo "    ${repo_url}"
+                  echo "because it was not included by GIT_MIRROR_FORCE_PUSH_REFS_REGEX=${GIT_MIRROR_FORCE_PUSH_REFS_REGEX}"
                 fi
               fi
             done
