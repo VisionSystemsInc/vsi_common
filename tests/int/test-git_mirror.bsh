@@ -117,7 +117,7 @@ begin_test "Part 1 - Setup test repo"
     git commit -m "Initial commit"
 
     # A branch to force push with GIT_MIRROR_FORCE_PUSH_REFS_REGEX
-    git checkout -b to_force1
+    git checkout -b to_force2
     touch rewritten_file
     git add rewritten_file
     git commit -m "A file to be rewritten"
@@ -213,7 +213,7 @@ begin_test "Part 1 - Setup test repo"
     git commit -m "Added submodules"
 
     # A branch to force push with GIT_MIRROR_FORCE_PUSH_REFS_REGEX
-    git checkout -b to_force
+    git checkout -b to_force1
     touch rewritten_file
     git add rewritten_file
     git commit -m "A file to be rewritten"
@@ -301,42 +301,42 @@ begin_test "Part 5 - Cloning from mirror"
     # REVIEW These may need to be sorted
     [[ "$(git for-each-ref --format='%(refname)')" = \
 refs/heads/master$'\n'\
-refs/heads/to_force$'\n'\
+refs/heads/to_force1$'\n'\
 refs/tags/just_git_mirror/*/heads/master$'\n'\
-refs/tags/just_git_mirror/*/heads/to_force$'\n'\
+refs/tags/just_git_mirror/*/heads/to_force1$'\n'\
 refs/tags/original_commit ]] || false
   popd &> /dev/null
   pushd "${MIRROR_DIR}/recipes" &> /dev/null
     [[ "$(git for-each-ref --format='%(refname)')" = \
 refs/heads/master$'\n'\
-refs/heads/to_force1$'\n'\
+refs/heads/to_force2$'\n'\
 refs/tags/just_git_mirror/*/heads/master$'\n'\
-refs/tags/just_git_mirror/*/heads/to_force1 ]] || false
+refs/tags/just_git_mirror/*/heads/to_force2 ]] || false
   popd &> /dev/null
 
   # git 1.8.3 does not support git -C
   pushd "${CLONE_DIR}" &> /dev/null
     [ -f readme ]
     [ "$(git log master -n1 --format="%s")" = "Added submodules" ]
-    # (to_force has not been checked out locally)
-    [ "$(git log origin/to_force -n1 --format="%s")" = "1" ]
+    # (to_force1 has not been checked out locally)
+    [ "$(git log origin/to_force1 -n1 --format="%s")" = "1" ]
     # Verify the refs are tagged by git_tag_main with the default regex
     # REVIEW This has already been tested in the mirror...
     [[ "$(git for-each-ref --format='%(refname)' refs/tags)" = \
 refs/tags/just_git_mirror/*/heads/master$'\n'\
-refs/tags/just_git_mirror/*/heads/to_force$'\n'\
+refs/tags/just_git_mirror/*/heads/to_force1$'\n'\
 refs/tags/original_commit ]] || false
   popd &> /dev/null
   [ -f "${CLONE_DIR}/${DIFFICULT_NAME}/readme_sub" ]
   pushd "${CLONE_DIR}/${DIFFICULT_NAME}/a_sub_sub_module" &> /dev/null
     [ -f readme_sub_sub ]
     [ "$(git log master -n1 --format="%s")" = "Initial commit" ]
-    [ "$(git log origin/to_force1 -n1 --format="%s")" = "sub_sub_1" ]
+    [ "$(git log origin/to_force2 -n1 --format="%s")" = "sub_sub_1" ]
     # Verify the refs are tagged
     # REVIEW This has already been tested in the mirror...
     [[ "$(git for-each-ref --format='%(refname)' refs/tags)" = \
 refs/tags/just_git_mirror/*/heads/master$'\n'\
-refs/tags/just_git_mirror/*/heads/to_force1 ]] || false
+refs/tags/just_git_mirror/*/heads/to_force2 ]] || false
   popd &> /dev/null
   [ $(sha256sum ${CLONE_DIR}/lfs/readme1.bin | awk '{print $1}') = abc6fd595fc079d3114d4b71a4d84b1d1d0f79df1e70f8813212f2a65d8916df ]
   # This file shouldn't exist yet
@@ -369,14 +369,14 @@ begin_test "Part 6 - Update a repo and mirror"
       git push origin master
 
       pushd a_sub_sub_module &> /dev/null
-        # Rewrite the to_force1 branch
-        git checkout origin/to_force1~1
-        git branch -f to_force1 HEAD
-        git checkout to_force1
+        # Rewrite the to_force2 branch
+        git checkout origin/to_force2~1
+        git branch -f to_force2 HEAD
+        git checkout to_force2
         echo 2 > rewritten_file
         git add rewritten_file
         git commit -m "sub_sub_2"
-        git push --force origin to_force1
+        git push --force origin to_force2
         git checkout master
       popd &> /dev/null
     popd &> /dev/null
@@ -402,14 +402,14 @@ begin_test "Part 6 - Update a repo and mirror"
     git push "${PRETEND_URL}" a_branch
     git checkout master
 
-    # Rewrite the to_force branch
-    git checkout to_force~1
-    git branch -f to_force HEAD
-    git checkout to_force
+    # Rewrite the to_force1 branch
+    git checkout to_force1~1
+    git branch -f to_force1 HEAD
+    git checkout to_force1
     echo 2 > rewritten_file
     git add rewritten_file
     git commit -m "2"
-    git push --force "${PRETEND_URL}" to_force
+    git push --force "${PRETEND_URL}" to_force1
     git checkout master
   popd &> /dev/null
 
@@ -449,7 +449,7 @@ begin_test "Part 6 - Update a repo and mirror"
 
   # Pull changes
   pushd "${CLONE_DIR}" &> /dev/null
-    # NOTE If to_force had been checked out in CLONE_DIR, then updating that
+    # NOTE If to_force1 had been checked out in CLONE_DIR, then updating that
     # branch to the correct commit would require manual intervention because
     # its history was rewritten
     git pull
@@ -473,32 +473,32 @@ begin_test "Part 6 - Update a repo and mirror"
 refs/heads/a_branch$'\n'\
 refs/heads/airgap_branch$'\n'\
 refs/heads/master$'\n'\
-refs/heads/to_force$'\n'\
+refs/heads/to_force1$'\n'\
 refs/tags/just_git_mirror/*/heads/master$'\n'\
-refs/tags/just_git_mirror/*/heads/to_force$'\n'\
+refs/tags/just_git_mirror/*/heads/to_force1$'\n'\
 refs/tags/just_git_mirror/*/heads/a_branch$'\n'\
 refs/tags/just_git_mirror/*/heads/master$'\n'\
-refs/tags/just_git_mirror/*/heads/to_force$'\n'\
+refs/tags/just_git_mirror/*/heads/to_force1$'\n'\
 refs/tags/original_commit ]] || false
   popd &> /dev/null
   pushd "${MIRROR_DIR}/recipes" &> /dev/null
       [[ "$(git for-each-ref --format='%(refname)')" = \
 refs/heads/master$'\n'\
-refs/heads/to_force1$'\n'\
+refs/heads/to_force2$'\n'\
 refs/tags/just_git_mirror/*/heads/master$'\n'\
-refs/tags/just_git_mirror/*/heads/to_force1$'\n'\
-refs/tags/just_git_mirror/*/heads/to_force1 ]] || false
+refs/tags/just_git_mirror/*/heads/to_force2$'\n'\
+refs/tags/just_git_mirror/*/heads/to_force2 ]] || false
   popd &> /dev/null
   # Verify this branch was force pushed by git_push_main with the default regex
-  [ "$(cd "${CLONE_DIR}" && git log origin/to_force -n1 --format="%s")" = "2" ]
+  [ "$(cd "${CLONE_DIR}" && git log origin/to_force1 -n1 --format="%s")" = "2" ]
   [ -f "${CLONE_DIR}/${DIFFICULT_NAME}/newfile_sub" ]
   # Verify this branch was force pushed by git_push_main with the default regex
   # Cannot check the "${CLONE_DIR}/${DIFFICULT_NAME}/a_sub_sub_module" because
   # a fetch is (surprisingly) not performed on the submodule by
   # git submodule update --init --recursive (perhaps because the tracked commits
   # don't change). And even if we fetched, we would run into the same problem as
-  # with to_force
-  [ "$(cd "${MIRROR_DIR}/recipes" && git log to_force1 -n1 --format="%s")" = "sub_sub_2" ]
+  # with to_force1
+  [ "$(cd "${MIRROR_DIR}/recipes" && git log to_force2 -n1 --format="%s")" = "sub_sub_2" ]
   output="$(cat "${CLONE_DIR}/${DIFFICULT_NAME}/newfile_sub")"
   [ "${output}" = "" ]
   # git 1.8.3 does not support git -C
@@ -546,7 +546,7 @@ begin_test "Part 7 - Rewrite a ref and mirror"
 
   pushd "${BUILD_REPO}" &> /dev/null
     # Pushing and force pushing a branch has already been tested using the
-    # branches, master (among others) and to_force, however, only using
+    # branches, master (among others) and to_force1, however, only using
     # default regex for GIT_MIRROR_FORCE_PUSH_REFS_REGEX
 
     # A branch that will be pushed via GIT_MIRROR_PUSH_REFS_REGEX (this branch
@@ -700,8 +700,8 @@ begin_test "Part 7 - Rewrite a ref and mirror"
   # RE On second thought, this seems surprising; I would prefer if only tags
   # for refs that were pushed were themselves pushed
   # Verify that no_tag_to_push_can_force1 was not tagged (by git_tag_main) and
-  # that master and to_force have not been tagged a third time, which would
-  # indicate that there are two tags referencing the same SHA because to_force
+  # that master and to_force1 have not been tagged a third time, which would
+  # indicate that there are two tags referencing the same SHA because to_force1
   # was not updated between the second and third transfer
   # RE This could also be checked explicitly for each ref with:
   # git ls-remote . --tags just_git_mirror/*/heads/master^{} | awk '{print $1}'
@@ -719,15 +719,15 @@ refs/heads/a_branch$'\n'\
 refs/heads/airgap_branch$'\n'\
 refs/heads/master$'\n'\
 refs/heads/no_tag_to_push_can_force1$'\n'\
-refs/heads/to_force$'\n'\
+refs/heads/to_force1$'\n'\
 refs/heads/to_tag_to_push_can_force1$'\n'\
 refs/heads/to_tag_to_push_no_force1$'\n'\
 refs/heads/to_tag_to_push_to_force1$'\n'\
 refs/tags/just_git_mirror/*/heads/master$'\n'\
-refs/tags/just_git_mirror/*/heads/to_force$'\n'\
+refs/tags/just_git_mirror/*/heads/to_force1$'\n'\
 refs/tags/just_git_mirror/*/heads/a_branch$'\n'\
 refs/tags/just_git_mirror/*/heads/master$'\n'\
-refs/tags/just_git_mirror/*/heads/to_force$'\n'\
+refs/tags/just_git_mirror/*/heads/to_force1$'\n'\
 refs/tags/just_git_mirror/*/heads/to_tag_to_push_can_force1$'\n'\
 refs/tags/just_git_mirror/*/heads/to_tag_to_push_no_force1$'\n'\
 refs/tags/just_git_mirror/*/heads/to_tag_to_push_to_force1$'\n'\
@@ -737,13 +737,13 @@ refs/tags/original_commit ]] || false
     [[ "$(git for-each-ref --format='%(refname)')" = \
 refs/heads/master$'\n'\
 refs/heads/no_tag_to_push_can_force2$'\n'\
-refs/heads/to_force1$'\n'\
+refs/heads/to_force2$'\n'\
 refs/heads/to_tag_to_push_can_force2$'\n'\
 refs/heads/to_tag_to_push_no_force2$'\n'\
 refs/heads/to_tag_to_push_to_force2$'\n'\
 refs/tags/just_git_mirror/*/heads/master$'\n'\
-refs/tags/just_git_mirror/*/heads/to_force1$'\n'\
-refs/tags/just_git_mirror/*/heads/to_force1$'\n'\
+refs/tags/just_git_mirror/*/heads/to_force2$'\n'\
+refs/tags/just_git_mirror/*/heads/to_force2$'\n'\
 refs/tags/just_git_mirror/*/heads/to_tag_to_push_can_force2$'\n'\
 refs/tags/just_git_mirror/*/heads/to_tag_to_push_no_force2$'\n'\
 refs/tags/just_git_mirror/*/heads/to_tag_to_push_to_force2 ]] || false
@@ -855,15 +855,15 @@ refs/heads/a_branch$'\n'\
 refs/heads/airgap_branch$'\n'\
 refs/heads/master$'\n'\
 refs/heads/no_tag_to_push_can_force1$'\n'\
-refs/heads/to_force$'\n'\
+refs/heads/to_force1$'\n'\
 refs/heads/to_tag_to_push_can_force1$'\n'\
 refs/heads/to_tag_to_push_no_force1$'\n'\
 refs/heads/to_tag_to_push_to_force1$'\n'\
 refs/tags/just_git_mirror/*/heads/master$'\n'\
-refs/tags/just_git_mirror/*/heads/to_force$'\n'\
+refs/tags/just_git_mirror/*/heads/to_force1$'\n'\
 refs/tags/just_git_mirror/*/heads/a_branch$'\n'\
 refs/tags/just_git_mirror/*/heads/master$'\n'\
-refs/tags/just_git_mirror/*/heads/to_force$'\n'\
+refs/tags/just_git_mirror/*/heads/to_force1$'\n'\
 refs/tags/just_git_mirror/*/heads/to_tag_to_push_can_force1$'\n'\
 refs/tags/just_git_mirror/*/heads/to_tag_to_push_no_force1$'\n'\
 refs/tags/just_git_mirror/*/heads/to_tag_to_push_to_force1$'\n'\
@@ -875,13 +875,13 @@ refs/tags/original_commit ]] || false
     [[ "$(git for-each-ref --format='%(refname)')" = \
 refs/heads/master$'\n'\
 refs/heads/no_tag_to_push_can_force2$'\n'\
-refs/heads/to_force1$'\n'\
+refs/heads/to_force2$'\n'\
 refs/heads/to_tag_to_push_can_force2$'\n'\
 refs/heads/to_tag_to_push_no_force2$'\n'\
 refs/heads/to_tag_to_push_to_force2$'\n'\
 refs/tags/just_git_mirror/*/heads/master$'\n'\
-refs/tags/just_git_mirror/*/heads/to_force1$'\n'\
-refs/tags/just_git_mirror/*/heads/to_force1$'\n'\
+refs/tags/just_git_mirror/*/heads/to_force2$'\n'\
+refs/tags/just_git_mirror/*/heads/to_force2$'\n'\
 refs/tags/just_git_mirror/*/heads/to_tag_to_push_can_force2$'\n'\
 refs/tags/just_git_mirror/*/heads/to_tag_to_push_no_force2$'\n'\
 refs/tags/just_git_mirror/*/heads/to_tag_to_push_to_force2$'\n'\
@@ -896,7 +896,7 @@ refs/tags/just_git_mirror/*/heads/to_tag_to_push_to_force2 ]] || false
   # a fetch is (surprisingly) not performed on the submodule by
   # git submodule update --init --recursive (perhaps because the tracked commits
   # don't change). And even if we fetched, we would run into the same problem as
-  # with to_force
+  # with to_force1
   # Verify this branch was force pushed
   [ "$(cd "${MIRROR_DIR}/recipes" && git log to_tag_to_push_to_force2 -n1 --format="%s")" = "sub_sub_6" ]
   # Verify this branch was NOT force pushed
