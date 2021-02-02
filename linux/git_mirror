@@ -810,6 +810,7 @@ function git_push_main()
   local GIT_MIRROR_SKIP_REFS_REGEX="${GIT_MIRROR_SKIP_REFS_REGEX-$^}"
   # By default, force push all refs
   local GIT_MIRROR_FORCE_PUSH_REFS_REGEX="${GIT_MIRROR_FORCE_PUSH_REFS_REGEX-.+}"
+  # REVIEW Should I have a GIT_MIRROR_SKIP_FORCE_REGEX here too
 
   _git_mirror_load_info "${1}" # Sets repo_paths and repo_urls
 
@@ -864,6 +865,9 @@ function git_push_main()
                    "$("${GIT}" show-ref --hash "${ref}")" ]; then
                 # No quotes around REGEX
                 if [[ "${ref}" =~ ${GIT_MIRROR_FORCE_PUSH_REFS_REGEX} ]]; then
+                  # REVIEW We should never have to force push one of
+                  # git_tag_main's tags, although perhaps I should reject them
+                  # here anyway
                   "${GIT}" push --force "${repo_url}" "${ref}"
                   echo "WARNING Fast-forward merge not possible. Force pushed ${ref} to"
                   echo "    ${repo_url}"
@@ -875,6 +879,9 @@ function git_push_main()
                   local tag="$("${GIT}" for-each-ref --sort='-*authordate' \
                       --format='%(refname:short)' "refs/tags/just_git_mirror/*/${namespaced_ref}" | head -n 1)"
                   if [ -n "${tag:+set}" ]; then
+                    # REVIEW Instead of only printing a message here, I could
+                    # create a new tag with this information so it is available
+                    # when fetching these changes in a clone
                     echo "The original ref for this branch is still referenced by this tag:"
                     echo "    ${tag}"
                   else
@@ -939,6 +946,7 @@ function git_tag_main()
   # By default, only tag refs/heads/*
   # REVIEW This is tagging all refs, not just those that had to be forced...
   local GIT_MIRROR_TAG_REFS_REGEX="${GIT_MIRROR_TAG_REFS_REGEX-^refs/heads/.+}"
+  # REVIEW Should I have a GIT_MIRROR_SKIP_REFS_REGEX here too
 
   _git_mirror_load_info "${1}" # Sets repo_paths and repo_urls
 
@@ -961,7 +969,7 @@ function git_tag_main()
           local refs=($("${GIT}" for-each-ref --format='%(refname)' | \
               grep -E "${GIT_MIRROR_TAG_REFS_REGEX}" | \
               grep -v -e '^refs/tags/just_git_mirror/' -e '^refs/remotes' -e '^refs/stash' || :))
-          for ref in "${refs[@]}"; do
+          for ref in ${refs+"${refs[@]}"}; do
             # Don't re-tag a ref if we have already tagged it at this SHA.
             # Unfortunately, it doesn't look like there is something like
             # git tag --points-at for ls-remote. Instead, return all of our
