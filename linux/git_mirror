@@ -779,6 +779,10 @@ function git_clone_main()
 #              ``GIT_MIRROR_SKIP_REFS_REGEX`` - An extended regular expression specifying which refs to skip when pushing to the git server; applied after ``GIT_MIRROR_PUSH_REFS_REGEX``. The refs should be matched in their long form, e.g., refs/heads/master or refs/tags/v1.0.0. Default: Skip none
 #              ``GIT_MIRROR_FORCE_PUSH_REFS_REGEX`` - An extended regular expression specifying which refs to force push, should it be necessary. The refs should be matched in their long form, e.g., refs/heads/master or refs/tags/v1.0.0. Default: Force push all refs
 #
+# .. note::
+#
+#   If :func:`git_tag_main` is called, ``GIT_MIRROR_PUSH_REFS_REGEX`` and ``GIT_MIRROR_SKIP_REFS_REGEX`` should be set to the exact same regular expressions in both functions.
+#
 # .. rubric:: Example
 #
 # In this example, the main repo's mirror url is ``https://git-server.com/foobar/vsi_common.git``, and the submodule stored at ``./docker/recipes`` has the url ``https://git-server.com/foobar/recipes.git``. This file is also used by :func:`git_clone_main`. (Any valid git URL format can be used.)
@@ -793,9 +797,12 @@ function git_clone_main()
 #
 # .. rubric:: Bugs
 #
-# There is a surprising aspect of this design when coupled with :func:`git_tag_main`: it is possible, for example, to skip a ref with ``GIT_MIRROR_SKIP_REFS_REGEX`` (or not include it with ``GIT_MIRROR_PUSH_REFS_REGEX``), but nevertheless push the commits belonging to the ref because the tag placed alongside the ref by :func:`git_tag_main` was included by the regex's. This should not cause any problems as far as git is concerned; however, it does mean that excluding refs may not truly exclude their commits from the mirror.
+# There is a surprising aspect of this design when coupled with :func:`git_tag_main`: it is possible, for example, to have a ref that cannot be pushed and is not force pushed due to not being included by ``GIT_MIRROR_FORCE_PUSH_REFS_REGEX``, but nevertheless, still push the commits belonging to the ref because the tag placed alongside the ref by :func:`git_tag_main` was included by ``GIT_MIRROR_PUSH_REFS_REGEX`` (and not excluded by ``GIT_MIRROR_SKIP_REFS_REGEX``). This should not cause any problems as far as git is concerned; however, it does mean that excluding refs may not truly exclude their commits from the mirror.
 #**
 
+# REVIEW Perhaps git_tag_main should be merged with this function so only those
+# tags that we actually push/force push get tagged. This would also prevent us
+# from having to supply the same regex's to both git_push_main and git_tag_main
 function git_push_main()
 {
   if [ $# -eq 0 ]; then
@@ -804,6 +811,7 @@ function git_push_main()
     exit 1
   fi
 
+  # NOTE These two regex's must be kept in sync with git_tag_main
   # By default, push all refs
   local GIT_MIRROR_PUSH_REFS_REGEX="${GIT_MIRROR_PUSH_REFS_REGEX-.+}"
   # This regex is backwards intentionally: if unset, don't exclude any refs
@@ -928,6 +936,12 @@ function git_push_main()
 #             ``$2`` - The mirrored repositories (extracted from the archive) created by :func:`git_mirror_main`
 #
 # :Parameters: ``GIT_MIRROR_TAG_REFS_REGEX`` - An extended regular expression specifying which refs to tag. The refs should be matched in their long form, e.g., refs/heads/master or refs/tags/v1.0.0. Default: ^refs/heads/.+
+#              ``GIT_MIRROR_PUSH_REFS_REGEX`` - An extended regular expression specifying which refs to push to the git server; applied before ``GIT_MIRROR_SKIP_REFS_REGEX``. The refs should be matched in their long form, e.g., refs/heads/master or refs/tags/v1.0.0. Default: Skip none
+#              ``GIT_MIRROR_SKIP_REFS_REGEX`` - An extended regular expression specifying which refs to skip when pushing to the git server; applied after ``GIT_MIRROR_PUSH_REFS_REGEX``. The refs should be matched in their long form, e.g., refs/heads/master or refs/tags/v1.0.0. Default: Push all refs
+#
+# .. note::
+#
+#   If :func:`git_push_main` is called, ``GIT_MIRROR_PUSH_REFS_REGEX`` and ``GIT_MIRROR_SKIP_REFS_REGEX`` should be set to the exact same regular expressions in both functions.
 #
 # .. seealso::
 #
@@ -947,9 +961,13 @@ function git_tag_main()
   fi
 
   # By default, only tag refs/heads/*
-  # REVIEW This is tagging all refs, not just those that had to be forced...
   local GIT_MIRROR_TAG_REFS_REGEX="${GIT_MIRROR_TAG_REFS_REGEX-^refs/heads/.+}"
   # REVIEW Should I have a GIT_MIRROR_SKIP_REFS_REGEX here too
+  # NOTE These regex's must be kept in sync with git_push_main
+  # By default, push all refs
+  local GIT_MIRROR_PUSH_REFS_REGEX="${GIT_MIRROR_PUSH_REFS_REGEX-.+}"
+  # This regex is backwards intentionally: if unset, don't exclude any refs
+  local GIT_MIRROR_SKIP_REFS_REGEX="${GIT_MIRROR_SKIP_REFS_REGEX-$^}"
 
   _git_mirror_load_info "${1}" # Sets repo_paths and repo_urls
 
@@ -971,6 +989,8 @@ function git_tag_main()
           # Spaces are not allowed in a refname
           local refs=($("${GIT}" for-each-ref --format='%(refname)' | \
               grep -E "${GIT_MIRROR_TAG_REFS_REGEX}" | \
+              grep -E "${GIT_MIRROR_PUSH_REFS_REGEX}" | \
+              grep -v -E "${GIT_MIRROR_SKIP_REFS_REGEX}" | \
               grep -v -e '^refs/tags/just_git_mirror/' -e '^refs/remotes' -e '^refs/stash' || :))
           for ref in ${refs+"${refs[@]}"}; do
             # Don't re-tag a ref if we have already tagged it at this SHA.
