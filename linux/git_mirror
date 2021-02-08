@@ -763,7 +763,8 @@ function git_clone_main()
 #
 # Push the mirrored repository and all submodules to a new git server
 #
-# After transferring the archive file created by :func:`git_mirror_main` to a prep directory on your destination and extracting the archive into it, this function pushes all the mirrored repositories in the extracted archive to your own mirrors on a new git server.
+# After transferring the archive file created by :func:`git_mirror_main` to a prep directory on your destination and extracting the archive into it, this function pushes all the mirrored repositories in the extracted archive to your own mirrors on a new git server. Then, tag the refs so that if, during the **next** transfer, they become dereferenced (due to a force push, which is sometimes necessary), they are not lost. For a ref of the form refs/heads/master, this (annotated) tag takes the (long) form of refs/tags/just_git_mirror/{datetime}/heads/master
+
 #
 # .. note::
 #
@@ -774,13 +775,10 @@ function git_clone_main()
 # :Arguments: ``$1`` - A file specifying the mapping between each repository's original url and its mirror url
 #             ``$2`` - The mirrored repositories (extracted from the archive) created by :func:`git_mirror_main`
 #
-# :Parameters: [``GIT_MIRROR_PUSH_REFS_REGEX``] - An extended regular expression specifying which refs to push to the git server; applied before ``GIT_MIRROR_SKIP_REFS_REGEX``. The refs should be matched in their long form, e.g., refs/heads/master or refs/tags/v1.0.0. Default: Push all refs
+# :Parameters: [``GIT_MIRROR_TAG_REFS_REGEX``] - An extended regular expression specifying which refs to tag. The refs should be matched in their long form, e.g., refs/heads/master or refs/tags/v1.0.0. Default: ^refs/heads/.+
+#              [``GIT_MIRROR_PUSH_REFS_REGEX``] - An extended regular expression specifying which refs to push to the git server; applied before ``GIT_MIRROR_SKIP_REFS_REGEX``. The refs should be matched in their long form, e.g., refs/heads/master or refs/tags/v1.0.0. Default: Push all refs
 #              [``GIT_MIRROR_SKIP_REFS_REGEX``] - An extended regular expression specifying which refs to skip when pushing to the git server; applied after ``GIT_MIRROR_PUSH_REFS_REGEX``. The refs should be matched in their long form, e.g., refs/heads/master or refs/tags/v1.0.0. Default: Skip none
 #              [``GIT_MIRROR_FORCE_PUSH_REFS_REGEX``] - An extended regular expression specifying which refs to force push, should it be necessary. The refs should be matched in their long form, e.g., refs/heads/master or refs/tags/v1.0.0. Default: Force push all refs
-#
-# .. note::
-#
-#   If :func:`git_tag_main` is called, ``GIT_MIRROR_PUSH_REFS_REGEX`` and ``GIT_MIRROR_SKIP_REFS_REGEX`` should be set to the exact same regular expressions in both functions.
 #
 # .. rubric:: Example
 #
@@ -794,14 +792,11 @@ function git_clone_main()
 #
 # git_push_main info.env vsi_common_prep
 #
-# .. rubric:: Bugs
+# .. note::
 #
-# There is a surprising aspect of this design when coupled with :func:`git_tag_main`: it is possible, for example, to have a ref that cannot be pushed and is not force pushed due to not being included by ``GIT_MIRROR_FORCE_PUSH_REFS_REGEX``, but nevertheless, still push the commits belonging to the ref because the tag placed alongside the ref by :func:`git_tag_main` was included by ``GIT_MIRROR_PUSH_REFS_REGEX`` (and not excluded by ``GIT_MIRROR_SKIP_REFS_REGEX``). This should not cause any problems as far as git is concerned; however, it does mean that excluding refs may not truly exclude their commits from the mirror.
+#   Because this function creates a tag directory called just_git_mirror/ (note the trailing slash), a user can no longer create a tag called just_git_mirror
 #**
 
-# REVIEW Perhaps git_tag_main should be merged with this function so only those
-# tags that we actually push/force push get tagged. This would also prevent us
-# from having to supply the same regex's to both git_push_main and git_tag_main
 function git_push_main()
 {
   if [ $# -eq 0 ]; then
@@ -810,7 +805,9 @@ function git_push_main()
     exit 1
   fi
 
-  # NOTE These two regex's must be kept in sync with git_tag_main
+  # By default, only tag refs/heads/*
+  local GIT_MIRROR_TAG_REFS_REGEX="${GIT_MIRROR_TAG_REFS_REGEX-^refs/heads/.+}"
+  # REVIEW Should I have a GIT_MIRROR_SKIP_REFS_REGEX here too
   # By default, push all refs
   local GIT_MIRROR_PUSH_REFS_REGEX="${GIT_MIRROR_PUSH_REFS_REGEX-.+}"
   # This regex is backwards intentionally: if unset, don't exclude any refs
@@ -822,6 +819,8 @@ function git_push_main()
   _git_mirror_load_info "${1}" # Sets repo_paths and repo_urls
 
   pushd "${2}" &> /dev/null
+    local tag_date="$(date -u '+%Y-%m-%dT%H.%M.%SZ')" # ISO8061; ':' isn't valid
+
     local index
     # Loop through the repos
     for index in ${repo_paths[@]+"${!repo_paths[@]}"}; do
@@ -850,12 +849,16 @@ function git_push_main()
           # only filter out refs/remotes
           # RE It is possible to get refs/remotes/ if a bare repo fetches from
           # another (bare) repo, which could then be pushed to, e.g., github
+          #
+          # Existing just_git_mirror/* tags, created below during a prior call to
+          # this function, have already been pushed manually
 
           # Spaces are not allowed in a refname
           local refs=($("${GIT}" for-each-ref --format='%(refname)' | \
               grep -E "${GIT_MIRROR_PUSH_REFS_REGEX}" | \
               grep -v -E "${GIT_MIRROR_SKIP_REFS_REGEX}" | \
-              grep -v -e '^refs/remotes' -e '^refs/stash' || :))
+              grep -v -e '^refs/remotes' -e '^refs/stash' | \
+              grep -v -e '^refs/tags/just_git_mirror/' || :))
           # xargs tries all args before returning an error code
           # per xarg's man page:
           # "The xargs utility exits immediately (without processing any
@@ -864,30 +867,35 @@ function git_push_main()
           # (If refs is empty, the echo succeeds but there is nothing to pass
           # through the pipe, so the command short-circuits)
           if ! echo ${refs[@]+"${refs[@]}"} | xargs "${GIT}" push "${repo_url}"; then
-            # Force push those refs that failed
             for ref in "${refs[@]}"; do
-              # If the push was successful, then there is no need to force push
+              # If the push failed, then force push the ref and then tag it;
+              # otherwise, simply tag it
               # (If the ref is not found, git ls-remote returns the empty string)
               if [ "$("${GIT}" ls-remote "${repo_url}" "${ref}" | awk '{print $1}')" != \
                    "$("${GIT}" show-ref --hash "${ref}")" ]; then
                 # No quotes around REGEX
                 if [[ "${ref}" =~ ${GIT_MIRROR_FORCE_PUSH_REFS_REGEX} ]]; then
-                  # NOTE A tag from git_tag_main's should never have to be
-                  # force pushed
+                  # Force push those refs that failed
                   "${GIT}" push --force "${repo_url}" "${ref}"
                   echo "WARNING Fast-forward merge not possible. Force pushed ${ref} to"
                   echo "    ${repo_url}"
-                  # A ref is tagged by git_tag_main with
-                  # just_git_mirror/{date}/{namespaced_ref}, where namespaced_ref
-                  # is the long-form ref (e.g., refs/heads/master) with the refs/
-                  # domain stripped off
+
+                  # During a prior call to this function, _git_tag_ref (called
+                  # at the end of this function) may have tagged the ref with
+                  #   just_git_mirror/{date}/{namespaced_ref}
+                  # where namespaced_ref is the long-form ref (e.g.,
+                  # refs/heads/master) with the refs/ domain stripped off
                   local namespaced_ref="${ref/refs\//}"
-                  # REVIEW This is brittle, but the tag for this ref should
-                  # have already been pushed by the xargs git push above; as
-                  # such, we actually want the second-to-last tag
+                  # Find the last tag that we created; this is the original ref
+                  # that just got re-written
+                  # Alternatively, fetch the refs from the remote and log the
+                  # ref's commit directly; e.g., origin/master points to SHA.
+                  # It is also more straightforward to check if pushing a ref
+                  # failed this way than by using ls-remote
+                  # RE Although would have to do this before the force push
                   local tag="$("${GIT}" for-each-ref --sort='-*authordate' \
                       --format='%(refname:short)' "refs/tags/just_git_mirror/*/${namespaced_ref}" | \
-                      tail -n +2 | head -n 1)"
+                      head -n 1)"
                   if [ -n "${tag:+set}" ]; then
                     # REVIEW Instead of only printing a message here, I could
                     # create a new tag with this information so it is available
@@ -897,11 +905,15 @@ function git_push_main()
                   else
                     echo "Could not find the original ref for this branch"
                   fi
+                  _git_tag_ref "${ref}" "${tag_date}" "${repo_url}"
                 else
                   echo "WARNING Fast-forward merge not possible. ${ref} was not force pushed to"
                   echo "    ${repo_url}"
                   echo "because it was not included by GIT_MIRROR_FORCE_PUSH_REFS_REGEX=${GIT_MIRROR_FORCE_PUSH_REFS_REGEX}"
                 fi
+              else
+                # The push was successful
+                _git_tag_ref "${ref}" "${tag_date}" "${repo_url}"
               fi
             done
           fi
@@ -924,111 +936,47 @@ function git_push_main()
   echo -n $'\e[0m'
 }
 
-#**
-# .. function:: git_tag_main
-#
-# Tag the refs in the mirrored repository and all submodules
-#
-# Before pushing the mirrored repository and all of its submodules to the new git server with :func:`git_push_main`, tag the refs so that if, during the **next** transfer, they become dereferenced (due to a force push, which is sometimes necessary), they are not lost. For a ref of the form refs/heads/master, this (annotated) tag takes the (long) form of refs/tags/just_git_mirror/{datetime}/heads/master
-#
-# :Arguments: ``$1`` - A file specifying the mapping between each repository's original url and its mirror url
-#             ``$2`` - The mirrored repositories (extracted from the archive) created by :func:`git_mirror_main`
-#
-# :Parameters: [``GIT_MIRROR_TAG_REFS_REGEX``] - An extended regular expression specifying which refs to tag. The refs should be matched in their long form, e.g., refs/heads/master or refs/tags/v1.0.0. Default: ^refs/heads/.+
-#              [``GIT_MIRROR_PUSH_REFS_REGEX``] - An extended regular expression specifying which refs to push to the git server; applied before ``GIT_MIRROR_SKIP_REFS_REGEX``. The refs should be matched in their long form, e.g., refs/heads/master or refs/tags/v1.0.0. Default: Skip none
-#              [``GIT_MIRROR_SKIP_REFS_REGEX``] - An extended regular expression specifying which refs to skip when pushing to the git server; applied after ``GIT_MIRROR_PUSH_REFS_REGEX``. The refs should be matched in their long form, e.g., refs/heads/master or refs/tags/v1.0.0. Default: Push all refs
-#
-# .. note::
-#
-#   If :func:`git_push_main` is called, ``GIT_MIRROR_PUSH_REFS_REGEX`` and ``GIT_MIRROR_SKIP_REFS_REGEX`` should be set to the exact same regular expressions in both functions.
-#
-# .. seealso::
-#
-#   :func:`git_push_main`
-#
-# .. note::
-#
-#   Because this function creates a tag directory called just_git_mirror/ (note the trailing slash), a user can no longer create a tag called just_git_mirror
-#**
-
-function git_tag_main()
+function _git_tag_ref()
 {
-  if [ $# -eq 0 ]; then
-    echo "Usage:" >&2
-    echo "${BASH_SOURCE[0]} REPO_MAP_FILE PREP_DIR" >&2
-    exit 1
+  local ref="${1}"
+  local tag_date="${2}"
+  local repo_url="${3}"
+
+  # No quotes around REGEX
+  if [[ "${ref}" =~ ${GIT_MIRROR_TAG_REFS_REGEX} ]]; then
+    # Don't re-tag a ref if we have already tagged it at this SHA.
+    # Unfortunately, it doesn't look like there is something like
+    # git tag --points-at for ls-remote. Instead, return all of our
+    # tags that match our ref and grep for the correct SHA
+    #
+    # git has two kinds of tags: lightweight and annotated. Annotated
+    # tags are commits of their own [1]. In order to list the commit
+    # referred to by the tag (instead of the tag's commit itself)
+    # with git show-ref (from a local repo), use the --dereference
+    # flag, or with git rev-parse (from a local repo) or ls-remote
+    # (from a remote repo), peel the ref with ^{} [2], e.g.,
+    # git rev-pasre refs/tags/atag^{}
+    # We are creating annotated tags (because including a message implies
+    # annotation)
+    #
+    # [1] https://git-scm.com/book/en/v2/Git-Basics-Tagging
+    # [2] https://stackoverflow.com/a/35219362
+
+    # refs take their long form to maintain namespacing of the tag;
+    # otherwise, refs/heads/4 and refs/pull/4 would both be tagged
+    # identically
+    local namespaced_ref="${ref/refs\//}"
+    local SHA="$("${GIT}" show-ref --hash "${ref}")"
+    if ! "${GIT}" ls-remote "${repo_url}" "refs/tags/just_git_mirror/*/${namespaced_ref}^{}" | \
+        awk '{print $1}' | grep "^${SHA}$"; then
+      local tag="just_git_mirror/${tag_date}/${namespaced_ref}"
+      # NOTE It is possible to create these tags directly on the remote
+      # so as not to modify the transfer dir with:
+      # git push origin "${ref}":refs/tags/"${tag}"
+      "${GIT}" tag -a -m "just:git_mirror pushed this tag for '${ref}' on ${tag_date}" "${tag}" "${ref}"
+      "${GIT}" push "${repo_url}" "${tag}"
+    fi
   fi
-
-  # By default, only tag refs/heads/*
-  local GIT_MIRROR_TAG_REFS_REGEX="${GIT_MIRROR_TAG_REFS_REGEX-^refs/heads/.+}"
-  # REVIEW Should I have a GIT_MIRROR_SKIP_REFS_REGEX here too
-  # NOTE These regex's must be kept in sync with git_push_main
-  # By default, push all refs
-  local GIT_MIRROR_PUSH_REFS_REGEX="${GIT_MIRROR_PUSH_REFS_REGEX-.+}"
-  # This regex is backwards intentionally: if unset, don't exclude any refs
-  local GIT_MIRROR_SKIP_REFS_REGEX="${GIT_MIRROR_SKIP_REFS_REGEX-$^}"
-
-  _git_mirror_load_info "${1}" # Sets repo_paths and repo_urls
-
-  pushd "${2}" &> /dev/null
-    local tag_date="$(date -u '+%Y-%m-%dT%H.%M.%SZ')" # ISO8061; ':' isn't valid
-
-    local index
-    # Loop through the repos
-    for index in ${repo_paths[@]+"${!repo_paths[@]}"}; do
-      local repo_url="${repo_urls[$index]}"
-      local repo_path="$(shopt -s nullglob; dirname */"${repo_paths[$index]}/config")"
-      next_section "Tagging refs in '${repo_path}'"
-      if [ -d "${repo_path}" ]; then
-        pushd "${repo_path}" &> /dev/null
-          # refs take their long form to maintain namespacing of the tag;
-          # otherwise, refs/heads/4 and refs/pull/4 would both be tagged
-          # identically
-          #
-          # Spaces are not allowed in a refname
-          local refs=($("${GIT}" for-each-ref --format='%(refname)' | \
-              grep -E "${GIT_MIRROR_TAG_REFS_REGEX}" | \
-              grep -E "${GIT_MIRROR_PUSH_REFS_REGEX}" | \
-              grep -v -E "${GIT_MIRROR_SKIP_REFS_REGEX}" | \
-              grep -v -e '^refs/tags/just_git_mirror/' -e '^refs/remotes' -e '^refs/stash' || :))
-          for ref in ${refs+"${refs[@]}"}; do
-            # Don't re-tag a ref if we have already tagged it at this SHA.
-            # Unfortunately, it doesn't look like there is something like
-            # git tag --points-at for ls-remote. Instead, return all of our
-            # tags that match our ref and grep for the correct SHA
-            #
-            # git has two kinds of tags: lightweight and annotated. Annotated
-            # tags are commits of their own [1]. In order to list the commit
-            # referred to by the tag (instead of the tag's commit itself) with
-            # git show-ref (from a local repo), use the --dereference flag, or
-            # with git rev-parse (from a local repo) or ls-remote (from a
-            # remote repo), peel the ref with ^{} [2], e.g.,
-            # git rev-pasre refs/tags/atag^{}
-            # We are creating annotated tags (because including a message implies
-            # annotation)
-            #
-            # [1] https://git-scm.com/book/en/v2/Git-Basics-Tagging
-            # [2] https://stackoverflow.com/a/35219362
-            local namespaced_ref="${ref/refs\//}"
-            local SHA="$("${GIT}" show-ref --hash "${ref}")"
-            if ! "${GIT}" ls-remote "${repo_url}" "refs/tags/just_git_mirror/*/${namespaced_ref}^{}" | \
-                awk '{print $1}' | grep "^${SHA}$"; then
-              local tag="just_git_mirror/${tag_date}/${namespaced_ref}"
-              # NOTE It is possible to create these tags directly on the remote
-              # so as not to modify the transfer dir with:
-              # git push origin "${ref}":refs/tags/"${tag}"
-              "${GIT}" tag -a -m "just:git_mirror pushed this tag for '${ref}' on ${tag_date}" "${tag}" "${ref}"
-            fi
-          done
-        popd &> /dev/null
-      else
-        echo "No dir found for submodule ${repo_path}"
-      fi
-    done
-  popd &> /dev/null
-
-  # Reset the color
-  echo -n $'\e[0m'
 }
 
 function usage()
