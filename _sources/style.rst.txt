@@ -27,6 +27,7 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
   .. code-block:: bash
 
      echo hi 1>&2 # No extra spaces, as bash doesn't allow that
+
      echo bye >&2 # No extra spaces
 
 * Closing an open file
@@ -44,6 +45,38 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
      run_some_command &> /dev/null # Spaces added around &>
 
      run_some_command >& /dev/null # WRONG style. This is dealing with filenames
+
+* Always quote variables
+
+  .. code-block:: bash
+
+    avar=foo
+    echo "${avar}"
+
+    echo ${avar} # WRONG style. It is safer to always quote the variable,
+                 # even if it is not strictly necessary
+
+* Prefer ``[ ]`` tests to the ``[[ ]]`` construct and = to ==
+
+  .. code-block:: bash
+
+    [ "${avar}" = "foo bar" ]  # Variables are always quoted in [] tests
+
+    [[ "${avar}" == "foo bar" ]] # WRONG style. Use []
+
+    [[ ${avar} = foobar* ]] # Ok. Pattern matching is not possible with []
+
+    [[ ${avar} = "foo bar"* ]] # WRONG style. If quotes are needed, use a variable
+    pattern="foo bar*"
+    [[ ${avar} = ${pattern} ]] # Ok. Also, never quote variables in [[ ]] as
+                               # this disables pattern matching---in which case,
+                               # [] can be used instead
+
+    [[ ${avar} =~ foobar.+ ]]  # Ok. Regex's are not possible with []
+
+    [[ ${avar} =~ "foo bar".+ ]] # WRONG style. If quotes are needed, use a variable
+    pattern='foo bar.+'
+    [[ ${avar} =~ ${pattern} ]]  # Ok. Again, don't quote variables in [[ ]]
 
 * Checking to see if a variable exists
 
