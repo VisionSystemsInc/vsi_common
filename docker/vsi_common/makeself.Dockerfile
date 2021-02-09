@@ -8,7 +8,10 @@ RUN apk add --no-cache bash tar
 
 SHELL ["/usr/bin/env", "bash", "-euxvc"]
 
-# Need newer than 2.4.2 for certain features like ARCHIVE_DIR
+# Must be version after 2.4.2, I need a working ARCHIVE_DIR and append.
+# https://github.com/megastep/makeself/issues/213
+# https://github.com/megastep/makeself/issues/216
+# https://github.com/megastep/makeself/issues/219
 ARG MAKESELF_VERSION=release-2.4.3
 
 RUN apk add --no-cache --virtual .deps wget; \
