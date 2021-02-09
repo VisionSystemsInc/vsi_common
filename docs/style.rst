@@ -60,13 +60,23 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
 
   .. code-block:: bash
 
-    [ "${avar}" = "1" ] # Variables are always quoted in [] tests
+    [ "${avar}" = "foo bar" ]  # Variables are always quoted in [] tests
 
-    [[ ${avar} == "1" ]] # WRONG style. Sometimes ${avar} needs to be quoted, sometimes not
+    [[ "${avar}" == "foo bar" ]] # WRONG style. Use []
 
-    [[ "${avar}" = *foo*bar* ]] # Ok. Pattern matching is not possible with []
+    [[ ${avar} = foobar* ]] # Ok. Pattern matching is not possible with []
 
-    [[ "${avar}" =~ ^foo.+bar$ ]] # Ok. Pattern matching is not possible with []
+    [[ ${avar} = "foo bar"* ]] # WRONG style. If quotes are needed, use a variable
+    pattern="foo bar*"
+    [[ ${avar} = ${pattern} ]] # Ok. Also, never quote variables in [[ ]] as
+                               # this disables pattern matching---in which case,
+                               # [] can be used instead
+
+    [[ ${avar} =~ foobar.+ ]]  # Ok. Regex's are not possible with []
+
+    [[ ${avar} =~ "foo bar".+ ]] # WRONG style. If quotes are needed, use a variable
+    pattern='foo bar.+'
+    [[ ${avar} =~ ${pattern} ]]  # Ok. Again, don't quote variables in [[ ]]
 
 * Checking to see if a variable exists
 
