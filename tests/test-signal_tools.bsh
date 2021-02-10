@@ -213,3 +213,57 @@ begin_test "Trap chain multiple"
   done
 )
 end_test
+
+begin_test "Trap chain enabled"
+(
+  setup_test
+  function foo1()
+  {
+    if [ "${trap_chain_active-}" = "0" ]; then
+      touch "${TESTDIR}/active"
+    fi
+  }
+  trap_chain "foo1" USR1
+
+  set_bashpid
+
+  kill -USR1 "${BASHPID}"
+  [ ! -e "${TESTDIR}/active" ]
+
+  trap_chain ":" USR1
+  kill -USR1 "${BASHPID}"
+  [ -e "${TESTDIR}/active" ]
+)
+end_test
+
+begin_test "Trap chain exit after chain"
+(
+  setup_test
+
+  function foo()
+  {
+    touch "${TESTDIR}/foo${1}"
+    exit_chain 0
+  }
+
+  (
+    trap_chain "foo 1" USR1
+    set_bashpid
+    kill -USR1 "${BASHPID}"
+    false
+  )
+  [ -e "${TESTDIR}/foo1" ]
+  rm "${TESTDIR}/foo1"
+
+  (
+    trap_chain "foo 2" USR1
+    trap_chain "foo 3" USR1
+    set_bashpid
+    kill -USR1 "${BASHPID}"
+    false
+  )
+  [ ! -e "${TESTDIR}/foo1" ]
+  [ -e "${TESTDIR}/foo2" ]
+  [ -e "${TESTDIR}/foo3" ]
+)
+end_test

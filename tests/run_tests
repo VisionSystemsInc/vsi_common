@@ -85,6 +85,10 @@ function run_all_tests_atexit()
 {
   local rv=${1:-$?}
 
+  if [ "${skip_run_all_tests_atexit-}" = "0" ]; then
+    return "${rv}"
+  fi
+
   # Optional global teardown here
 
   # Print any global logs here
@@ -173,12 +177,19 @@ function run_all_tests_atexit()
 
   run_all_tests_cleanup
 
-  exit $rv
+  exit_chain $rv
 }
 
 function run_all_tests_cleanup()
 {
   rm -r "${TESTLIB_SUMMARY_DIR}"
+
+  skip_run_all_tests_atexit=0
+  if [ "${1-}" = "term" ]; then
+    exit_chain 143
+  elif [ "${1-}" = "int" ]; then
+    exit_chain 130
+  fi
 }
 
 function run_all_tests_setup_summary_dir()
@@ -195,9 +206,9 @@ function run_all_tests_setup_summary_dir()
 
   export TESTLIB_SUMMARY_DIR="$(mktemp -d)"
 
-  trap_chain run_all_tests_atexit EXIT
-  trap_chain run_all_tests_cleanup INT
-  trap_chain run_all_tests_cleanup TERM
+  trap_chain "run_all_tests_atexit" EXIT
+  trap_chain "run_all_tests_cleanup int" INT
+  trap_chain "run_all_tests_cleanup term" TERM
   # Everything but kill -9 should cause a proper cleanup
 }
 

@@ -35,7 +35,7 @@ source "${VSI_COMMON_DIR}/linux/compat.bsh"
 #
 # Searches for files to use. It starts by checking the current directory, and goes up. Just like git searches for a .git directory
 #**
-parent_find_files()
+function parent_find_files()
 {
   local name
   local pwd_before
@@ -118,8 +118,7 @@ _VSI_TEMP_PATHS=()
 # .. note::
 #   This uses the EXIT, INT, and TERM traps. If you use these too, your traps will be automatically chained using :func:`signal_tools.bsh trap_chain`.
 #**
-# REVIEW rename to mktemp_deleting
-make_temp_path()
+function make_temp_path()
 {
   local _local_variable_name="${1}"
   shift 1
@@ -128,13 +127,18 @@ make_temp_path()
   export -n "${_local_variable_name}=$_vsi_temporary_directory"
 
   _VSI_TEMP_PATHS+=("${_vsi_temporary_directory}")
-  trap_chain _make_temp_path_cleanup EXIT
-  trap_chain _make_temp_path_cleanup INT
-  trap_chain _make_temp_path_cleanup TERM
+  trap_chain "_make_temp_path_cleanup exit" EXIT
+  trap_chain "_make_temp_path_cleanup int" INT
+  trap_chain "_make_temp_path_cleanup term" TERM
 }
 
-_make_temp_path_cleanup()
+function _make_temp_path_cleanup()
 {
+  local rv="$?"
+  if [ "${__make_temp_path_cleanup_called-}" = "0" ]; then
+    return "${rv}"
+  fi
+
   local temp_path
   for temp_path in ${_VSI_TEMP_PATHS[@]+"${_VSI_TEMP_PATHS[@]}"}; do
     if [ -d "${temp_path}" ]; then
@@ -150,6 +154,15 @@ _make_temp_path_cleanup()
       rm -f "${temp_path}"
     fi
   done
+
+  # Ctrl+C (INT) and TERM don't end script when INT/TERM is trapped
+  if [ "${1-}" = "term" ]; then
+    __make_temp_path_cleanup_called=0
+    exit_chain 130
+  elif [ "${1-}" = "int" ]; then
+    __make_temp_path_cleanup_called=0
+    exit_chain 127
+  fi
 }
 
 #**
@@ -187,7 +200,7 @@ function mktemp_compat()
 #
 # Unlike :file:`real_path`, this works on non-existing path, but is not as reliable as :file:`real_path`
 #**
-normpath()
+function normpath()
 {
   local IFS
   local x
@@ -259,7 +272,7 @@ normpath()
 # .. note::
 #   ``basenames 2 test`` will result in ``./test`` as the implied dirname is ``.``
 #**
-basenames()
+function basenames()
 {
   local IFS=/
   local noglob=0
@@ -278,7 +291,7 @@ basenames()
   echo ${components[@]+"${components[*]:${min}}"}
 }
 
-dirname()
+function dirname()
 {
   # Remove trailing slashes
   local dn="${1%${1##*[!/]}}"
@@ -296,7 +309,7 @@ dirname()
   fi
 }
 
-basename()
+function basename()
 {
   # Remove trailing slashes
   local bn="${1%${1##*[!/]}}"
