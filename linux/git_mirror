@@ -880,50 +880,7 @@ function git_push_main()
                   echo "WARNING Fast-forward merge not possible. Force pushed ${ref} to"
                   echo "    ${repo_url}"
 
-                  # Refactor into a function called _git_tag_forced_ref
-                  # During a prior call to this function, _git_tag_ref (called
-                  # at the end of this function) may have tagged the ref with
-                  #   just_git_mirror/{date}/{namespaced_ref}
-                  # where namespaced_ref is the long-form ref (e.g.,
-                  # refs/heads/master) with the refs/ domain stripped off
-                  local namespaced_ref="${ref/refs\//}"
-                  # Find the last tag that we created; this is the original ref
-                  # that just got re-written
-                  # Alternatively, fetch the refs from the remote and log the
-                  # ref's commit directly; e.g., origin/master points to SHA.
-                  # It is also more straightforward to check if pushing a ref
-                  # failed this way than by using ls-remote
-                  # RE Although would have to do this before the force push
-                  local tag_at_original_ref="$("${GIT}" for-each-ref --sort='-*authordate' \
-                      --format='%(refname:short)' "refs/tags/just_git_mirror/*/${namespaced_ref}" | \
-                      head -n 1)"
-                  if [ -n "${tag_at_original_ref:+set}" ]; then
-                    # Also create a tag pointing to the previous HEAD so it is
-                    # available when fetching changes in the clone
-                    # REVIEW Should the tag be from the original_ref to the forced_ref
-                    local part1="$(printf "%s\n" \
-                        "WARNING Fast-forward merge not possible." \
-                        "just:git_mirror force-pushed this '${ref}' on ${tag_date}.")"
-                    # https://stackoverflow.com/a/37067964
-                    local part2="$(printf "%s\n" \
-                        "The original ref for this branch is still referenced by this tag:" \
-                        "    ${tag_at_original_ref}" | tee /dev/tty)"
-                    local message="${part1}"$'\n'"${part2}"
-
-                    # In the clone, this tag will exist alongside origin/master,
-                    # hopefully giving a hint that git merge is not the correct
-                    # thing to do
-                    # REVIEW It might be better to make this a dummy commit on
-                    # original_ref (as that ref is now effectively dead)
-                    # RE The problem with a dummy commit is that it would only
-                    # be visible with git log --all
-                    # just_git_forced/{date}/heads/master
-                    local tag_at_forced_ref="just_git_forced/${tag_date}/${namespaced_ref}"
-                    "${GIT}" tag -a -m "${message}" "${tag_at_forced_ref}" "${ref}"
-                    "${GIT}" push "${repo_url}" "${tag_at_forced_ref}"
-                  else
-                    echo "Could not find the original ref for this branch"
-                  fi
+                  _git_tag_forced_ref "${ref}" "${tag_date}" "${repo_url}"
                   _git_tag_ref "${ref}" "${tag_date}" "${repo_url}"
                 else
                   echo "WARNING Fast-forward merge not possible. ${ref} was not force pushed to"
@@ -953,6 +910,56 @@ function git_push_main()
 
   # Reset the color
   echo -n $'\e[0m'
+}
+
+function _git_tag_forced_ref
+{
+  local ref="${1}"
+  local tag_date="${2}"
+  local repo_url="${3}"
+
+  # During a prior call to git_push_main, _git_tag_ref, which is called after
+  # this function, tagged the refs (as included by GIT_MIRROR_TAG_REFS_REGEX)
+  # with
+  #   just_git_mirror/{date}/{namespaced_ref}
+  # where namespaced_ref is the long-form ref (e.g., refs/heads/master) with
+  # the refs/ domain stripped off
+  local namespaced_ref="${ref/refs\//}"
+  # Find the last tag that we created; this is the original ref that just got
+  # re-written
+  # Alternatively, fetch the refs from the remote and log the ref's commit
+  # directly; e.g., origin/master points to SHA. It is also more straightforward
+  # to check if pushing a ref failed this way than by using ls-remote
+  # RE Although would have to do this before the force push
+  local tag_at_original_ref="$("${GIT}" for-each-ref --sort='-*authordate' \
+      --format='%(refname:short)' "refs/tags/just_git_mirror/*/${namespaced_ref}" | \
+      head -n 1)"
+  if [ -n "${tag_at_original_ref:+set}" ]; then
+    # Also create a tag pointing to the previous HEAD so it is available when
+    # fetching changes in the clone
+    # REVIEW Should the tag be from the original_ref to the forced_ref
+    local part1="$(printf "%s\n" \
+        "WARNING Fast-forward merge not possible." \
+        "just:git_mirror force-pushed this '${ref}' on ${tag_date}.")"
+    # https://stackoverflow.com/a/37067964
+    local part2="$(printf "%s\n" \
+        "The original ref for this branch is still referenced by this tag:" \
+        "    ${tag_at_original_ref}" | tee /dev/tty)"
+    local message="${part1}"$'\n'"${part2}"
+
+    # In the clone, this tag will exist alongside origin/master, hopefully
+    # giving a hint that git merge is not the correct thing to do
+    # REVIEW It might be better to make this a dummy commit on original_ref (as
+    # that ref is now effectively dead)
+    # RE The problem with a dummy commit is that it would only be visible with
+    # git log --all
+    # just_git_forced/{date}/heads/master
+    local tag_at_forced_ref="just_git_forced/${tag_date}/${namespaced_ref}"
+    "${GIT}" tag -a -m "${message}" "${tag_at_forced_ref}" "${ref}"
+    "${GIT}" push "${repo_url}" "${tag_at_forced_ref}"
+  else
+    echo "Could not find the original ref for this branch"
+  fi
 }
 
 function _git_tag_ref()
