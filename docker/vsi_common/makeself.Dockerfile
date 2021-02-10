@@ -2,9 +2,11 @@ FROM vsiri/recipe:tini-musl as tini
 FROM vsiri/recipe:gosu as gosu
 FROM vsiri/recipe:vsi as vsi
 
-FROM alpine:3.8
+FROM alpine:3.13
 
-RUN apk add --no-cache bash tar
+# GNU sed to handle nulls
+# GNU tar to handle --transform
+RUN apk add --no-cache bash tar git sed
 
 SHELL ["/usr/bin/env", "bash", "-euxvc"]
 
