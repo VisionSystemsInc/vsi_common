@@ -18,14 +18,14 @@ function caseify()
 
   case "${cmd}" in
     juste) # Make a pure just executable, not a project executable (Not finished. .juste_wrapper needs to be merged into just_wrapper)
-      pushd "${just_project_src_dir}" &> /dev/null
+      pushd "${just_project_src_dir}" > /dev/null
         mkdir -p "${just_project_dist_dir}"
         /makeself/makeself.sh \
           --header /makeself/makeself-header_just.sh \
           --noprogress --nomd5 --nocrc --nox11 --keep-umask \
           --tar-extra "${vsi_common_excludes} ../.juste_wrapper" \
           vsi_common/ "${just_project_dist_dir}/juste" juste_label ./.juste_wrapper
-      popd &> /dev/null
+      popd > /dev/null
       ;;
 
     makeself) # Run makeself
@@ -38,11 +38,7 @@ function caseify()
         # Unit tests can be run via: just --wrap bash -c 'cd ${VSI_COMMON_DIR}; just test'
       local include_unit_tests
       parse_args extra_args --tests include_unit_tests -- ${@+"${@}"}
-      if [ "${include_unit_tests}" = "0" ]; then
-        include_unit_tests='--exclude=test-*.bsh'
-      else
-        include_unit_tests=""
-      fi
+      shift "${extra_args}"
 
       # Review: Does the transform below handle (multiple) spaces in the path correctly???
       local vsi_common_rel="${1}"
@@ -50,55 +46,38 @@ function caseify()
       local excluded_files
       make_temp_path excluded_files
 
-      # Makeself ~ runs: find {my dir} | xargs tar ${tar_extra} xcvf /dist/${MAKESELF_NAME}
+      # Makeself ~ runs: find {my dir} | xargs tar ${tar_extra} czvf /dist/${MAKESELF_NAME}
       # I need to slip into ${tar_extra} what I want to get it to behave the way I want
       # -T won't work, because it just adds the files I want twice, and all the files I don't want once
-      # -X is my only hope
-
-      pushd "${just_project_src_dir}/${vsi_common_rel}" &> /dev/null
+      # -X is my only choice
+      pushd "${just_project_src_dir}/${vsi_common_rel}" > /dev/null
 
         # 1) Create a list of files I want ignore
         # a - list all ignored files
         #     --ignored lists TRACKED files that match the ignore filter,
         #     adding --other makes it untracked ignored files
-        # b - list all untracked files
-        (git ls-files --others --ignored --exclude-standard;
-         git ls-files --others --exclude-standard |
-         sed "s|^|${vsi_common_rel}/|") > "${excluded_files}"
+        # b - list all untracked files (--others)
+        git ls-files --others --ignored --exclude-standard > "${excluded_files}"
+        git ls-files --others --exclude-standard >> "${excluded_files}"
 
-        # "git ls-files -z" outputs "filename1{null}filename2{null}" or "" for no files
-        # We want to:
-        # 1. add displaypath at the beginning of filename1
-        # 2. add displaypath after every null
-        # 3. Except the last one
-
+        # For no reason --recurse-submodules isn't supported by --others/--ignored
+        # c - sed to append path back to filenames
         git submodule --quiet foreach --recursive '(
           git ls-files --others --ignored --exclude-standard;
           git ls-files --others --exclude-standard) | \
-          sed "s|^|${vsi_common_rel}/${displaypath}/|"' >> "${excluded_files}"
-        # GNU Tar -X doesn't support --null
-        # git submodule --quiet foreach --recursive '(
-        #   git ls-files -z --others --ignored --exclude-standard;
-        #   git ls-files -z --others --exclude-standard) | \
-        #   sed "1s|^|${displaypath}/|;
-        #        s|\x00|&${displaypath}/|g;
-        #        \$s|${displaypath}/$||"' >> "${excluded_files}"
-          # first line of sed, does #1, insert displaypath at the front of line 1 only
-          #   in case there are unexpected newlines in filenames
-          # second line of sed does #2
-          # third line of sed does #3, remove the displaypath/ added from #2, but only
-          #   on the last line, in case there are unexpected newlines in filenames
-      popd &> /dev/null
+          sed "s|^|${displaypath}/|"' >> "${excluded_files}"
+      popd > /dev/null
 
-      # GNU Tar -X doesn't support --null
-      # sed -i "1s|^|./${vsi_common_rel}/|;
-      #         s|\x00|&./${vsi_common_rel}/|g;
-      #         \$s|./${vsi_common_rel}/$||" \
-      #         "${excluded_files}"
-
-      local tar_extra="--show-transformed --transform s|^\./|./${vsi_common_rel}/|"
-      tar_extra+=" ${include_unit_tests} ${vsi_common_excludes}"
+      # Transform the path, so the vsi dir appears where it really is, wrt to the
+      # base repo
+      local tar_extra="${vsi_common_excludes}"
+      if [ "${vsi_common_rel}" != "." ]; then
+        tar_extra+=" --show-transformed --transform s|^\./|./${vsi_common_rel}/|"
+      fi
       tar_extra+=" -X ${excluded_files}"
+      if [ "${include_unit_tests}" = "0" ]; then
+        tar_extra+=' --exclude=test-*.bsh --exclude=quiz-*.bsh'
+      fi
 
       # Start by adding just vsi_common, and transform it to have the same relative path as vsi_common_dir really has.
       /makeself/makeself.sh \
@@ -111,10 +90,47 @@ function caseify()
           "./${vsi_common_rel}/freeze/just_wrapper"
       # You can't put quotes in tar-extra apparently, it'll screw things up.
 
-      extra_args=1
+      extra_args+=1
       ;;
+    # 1 - Relative path to dir of files to add
+    # [2] tar_extra flags
+    add-git-files) # Append files to a makeself executable
+      local git_dir_rel="${1}"
+
+      local excluded_files
+      make_temp_path excluded_files
+
+      pushd "${just_project_src_dir}/${git_dir_rel}" > /dev/null
+        (git ls-files --others --ignored --exclude-standard;
+         git ls-files --others --exclude-standard |
+         sed "s|^|${git_dir_rel}/|") > "${excluded_files}"
+
+        # For no reason --recurse-submodules isn't supported by --others/--ignored
+        git submodule --quiet foreach --recursive '(
+          git ls-files --others --ignored --exclude-standard;
+          git ls-files --others --exclude-standard) | \
+          sed "s|^|${vsi_common_rel}/${displaypath}/|"' >> "${excluded_files}"
+      popd > /dev/null
+
+      local tar_extra="--exclude=.git"
+      if [ "${git_dir_rel}" != "." ]; then
+        tar_extra+=" --show-transformed --transform s|^\./|./${git_dir_rel}/|"
+      fi
+      tar_extra+=" -X ${excluded_files}"
+      tar_extra+=" ${2-}"
+
+      MAKESELF_PARSE=true /makeself/makeself.sh \
+        --header /makeself/makeself-header_just.sh \
+        --noprogress --nomd5 --nocrc --nox11 --keep-umask \
+        --tar-extra "${tar_extra}" --append \
+        "${just_project_src_dir}/${git_dir_rel}" \
+        "${just_project_dist_dir}/${MAKESELF_NAME-just}"
+
+      extra_args=$#
+      ;;
+
     add-files) # Append files to a makeself executable
-      pushd "${just_project_src_dir}" &> /dev/null
+      pushd "${just_project_src_dir}" > /dev/null
         MAKESELF_PARSE=true /makeself/makeself.sh \
             --header /makeself/makeself-header_just.sh \
             --noprogress --nomd5 --nocrc --nox11 --keep-umask \
@@ -122,7 +138,7 @@ function caseify()
             . "${just_project_dist_dir}/${MAKESELF_NAME-just}"
 
         extra_args=$#
-      popd &> /dev/null
+      popd > /dev/null
       ;;
 
     *)

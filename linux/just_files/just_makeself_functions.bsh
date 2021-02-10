@@ -55,6 +55,15 @@ function _makeself_docker_compose()
   # .. env:: MAKESELF_SOURCE_DIR
   #
   # The input directory of the files used to add files to the makeself executable. Default: ``${JUST_PROJECT_PREFIX}_MAKESELF_SRC_DIR`` or else ``${JUST_PROJECT_PREFIX}_CWD``.
+  #**
+  if [ -z "${MAKESELF_SOURCE_DIR+set}" ]; then
+    local id_project_cwd="${JUST_PROJECT_PREFIX}_CWD"
+    local MAKESELF_SOURCE_DIR="${JUST_PROJECT_PREFIX}_MAKESELF_SRC_DIR"
+    export MAKESELF_SOURCE_DIR="${!MAKESELF_SOURCE_DIR:-${!id_project_cwd}}"
+    declare -p MAKESELF_SOURCE_DIR
+  fi
+
+  #**
   #
   # .. env:: MAKESELF_DIST_DIR
   #
@@ -87,7 +96,7 @@ function _makeself_docker_compose()
   MIFS="${JUST_SETTINGS_SEPARATOR}" join_a VSI_COMMON_JUST_SETTINGS ${JUST_SETTINGSS[@]+"${JUST_SETTINGSS[@]}"}
   export VSI_COMMON_JUST_SETTINGS
 
-  Just-docker-compose \
+  MAKESELF_SOURCE_DIR="${MAKESELF_SOURCE_DIR}" Just-docker-compose \
     -f "${VSI_COMMON_DIR}/docker/vsi_common/docker-compose.yml" ${@+"${@}"}
 }
 
@@ -101,10 +110,6 @@ function makeself_defaultify()
 
   local PROJECT_CWD="${JUST_PROJECT_PREFIX}_CWD"
   PROJECT_CWD="${!PROJECT_CWD}"
-
-  local id_project_cwd="${JUST_PROJECT_PREFIX}_CWD"
-  local MAKESELF_SOURCE_DIR="${JUST_PROJECT_PREFIX}_MAKESELF_SRC_DIR"
-  export MAKESELF_SOURCE_DIR="${!MAKESELF_SOURCE_DIR:-${!id_project_cwd}}"
 
   case $arg in
     #**
@@ -180,7 +185,7 @@ function makeself_defaultify()
     #     ;;
     #
     #   makeself_complicated) # Complicated case
-    #     # First step is the same, it uses your PWD do determing the "main dir",
+    #     # First step is the same, it uses your PWD do determine the "main dir",
     #     # so it can determine the relative path of VSI_COMMON_DIR
     #     justify makeself just-project
     #
@@ -212,10 +217,7 @@ function makeself_defaultify()
     #   :cmd:`makeself_just-project`
     #**
     makeself_add-files) # Append files to a makeself executable
-      export MAKESELF_SOURCE_DIR="${1}"
-      if [ "${2+set}" ]; then
-        extra_args=2
-      else
+      if [ "${1+set}" ]; then
         extra_args=1
       fi
       shift 1
@@ -223,6 +225,17 @@ function makeself_defaultify()
       _makeself_docker_compose run makeself add-files ${@+"${@}"}
       ;;
 
+    # 1 - relative
+    # [2] - tar_extra
+    makeself_add-git-files) # Append files to a makeself executable
+      if [ "${2+set}" ]; then
+        extra_args=2
+      else
+        extra_args=1
+      fi
+
+      _makeself_docker_compose run makeself add-git-files ${@+"${@}"}
+      ;;
     ##**
     ## .. command:: makeself_setup-local
     ##
