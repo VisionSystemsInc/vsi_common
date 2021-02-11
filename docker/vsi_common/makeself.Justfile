@@ -4,15 +4,15 @@ source "${VSI_COMMON_DIR}/linux/command_tools.bsh"
 source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
 
 #**
-# .. function: makeself_prep
+# .. function: makeself_git_prep
 #
 # Helper function for running makeself on git repos
 #
 # :Arguments: ``$1`` - Relative path of dir to be added to makeself archive
-# :Outputs: * ``excluded_files`` - Name of file containing list of files to exclude
+# :Outputs: * ``excluded_files`` - Name of file containing list of filenames to exclude
 #           * ``tar_extra`` - Additional tar arguments
 #**
-function makeself_prep()
+function makeself_git_prep()
 {
   make_temp_path excluded_files
 
@@ -22,11 +22,11 @@ function makeself_prep()
   # -X is my only choice
   pushd "${just_project_src_dir}/${1}" > /dev/null
 
-    # 1) Create a list of files I want ignore
+    # 1) Create a list of files I want ignored
     # a - list all ignored files
     #     --ignored lists TRACKED files that match the ignore filter,
-    #     adding --other makes it untracked ignored files
-    # b - list all untracked files (--others)
+    #     adding --other makes it untracked ignored files, what I'm actually after
+    # b - list all untracked files (--others), the ones that show up in "git status"
     git ls-files --others --ignored --exclude-standard > "${excluded_files}"
     git ls-files --others --exclude-standard >> "${excluded_files}"
 
@@ -40,8 +40,10 @@ function makeself_prep()
 
   tar_extra="-X ${excluded_files}"
 
-  # Transform the path, so the vsi dir appears where it really is, wrt to the
-  # base repo
+  # Make self works by adding a dir, so that dir always becomes "."
+  # When I add "external/vsi_common", the path becomes "./" instead of
+  # "./external/vsi_common/"
+  # Transform the path, so the dir appears where it really is
   # You can't put quotes in tar-extra apparently, it'll screw things up.
   if [ "${1}" != "." ]; then
     # Review: Does this transform (multiple) spaces in the path correctly???
@@ -89,7 +91,7 @@ function caseify()
 
       local excluded_files
       local tar_extra
-      makeself_prep $1
+      makeself_git_prep $1
 
       # You can't put quotes in tar-extra apparently, it'll screw things up.
       tar_extra+=" ${common_vcs_excludes} --exclude=./docs"
@@ -97,7 +99,14 @@ function caseify()
         tar_extra+=' --exclude=test-*.bsh --exclude=quiz-*.bsh'
       fi
 
-      # Start by adding just vsi_common, and transform it to have the same relative path as vsi_common_dir really has.
+      extra_args+=1
+      if [ "$#" -ge "2" ]; then
+        tar_extra+=" ${2}"
+        extra_args+=1
+      fi
+
+      # Start by adding just vsi_common, it will be transformed (in makefile_prep)
+      # to have the same relative path as vsi_common_dir really has.
       /makeself/makeself.sh \
           --header /makeself/makeself-header_just.sh \
           --noprogress --nomd5 --nocrc --nox11 --keep-umask \
@@ -107,18 +116,19 @@ function caseify()
           "${MAKESELF_LABEL-just_label}" \
           "./${1}/freeze/just_wrapper"
 
-      extra_args+=1
       ;;
     # 1 - Relative path to dir of files to add
     # [2] tar_extra flags
-    add-git-files) # Append files to a makeself executable
+    add-git-files) # Append files from a git repo to a makeself executable
       local excluded_files
       local tar_extra
-      makeself_prep "${1}"
+      makeself_git_prep "${1}"
 
+      extra_args=1
       tar_extra+=" ${common_vcs_excludes}"
       if [ "$#" -ge "2" ]; then
         tar_extra+=" ${2}"
+        extra_args+=1
       fi
 
       MAKESELF_PARSE=true /makeself/makeself.sh \
@@ -127,8 +137,6 @@ function caseify()
         --tar-extra "${tar_extra}" --append \
         "${just_project_src_dir}/${1}" \
         "${just_project_dist_dir}/${MAKESELF_NAME-just}"
-
-      extra_args=$#
       ;;
 
     add-files) # Append files to a makeself executable
@@ -139,7 +147,9 @@ function caseify()
             --tar-extra "${1-}" --append \
             . "${just_project_dist_dir}/${MAKESELF_NAME-just}"
 
-        extra_args=$#
+        if [ -n "${1+set}" ]; then
+          extra_args=1
+        fi
       popd > /dev/null
       ;;
 

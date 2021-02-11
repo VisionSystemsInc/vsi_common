@@ -90,7 +90,7 @@ function _makeself_docker_compose()
   MIFS="${JUST_SETTINGS_SEPARATOR}" join_a VSI_COMMON_JUST_SETTINGS ${JUST_SETTINGSS[@]+"${JUST_SETTINGSS[@]}"}
   export VSI_COMMON_JUST_SETTINGS
 
-  MAKESELF_SOURCE_DIR="${MAKESELF_SOURCE_DIR}" Just-docker-compose \
+  Just-docker-compose \
     -f "${VSI_COMMON_DIR}/docker/vsi_common/docker-compose.yml" ${@+"${@}"}
 }
 
@@ -136,18 +136,18 @@ function makeself_defaultify()
     #
     # :Arguments: * ``[--tests]`` - Include unit tests. Calling this from another project is tricky though. For example, ``./just --wrap bash -c 'JUSTFILE="${VSI_COMMON_DIR}/Justfile" just test'``
     #
-    # Creates a just project executable using makeself. Relative paths will be with respect to ``${JUST_PROJECT_PREFIX}_MAKESELF_SRC_DIR``. After the initial executable is added, called to :command:`makeself_add-git-files` and :command:`makeself_add-files` should be made to add project files. For example:
+    # Creates a just project executable using makeself. Relative paths will be with respect to ``${JUST_PROJECT_PREFIX}_MAKESELF_SRC_DIR``. After the initial executable is added, calls to :command:`makeself_add-git-files` and :command:`makeself_add-files` should be made to add project files. For example:
     #
     # * Project: ``foo`` in ``.``
     # * Submodule: ``bar`` in ``./external/bar``
     # * VSI Common in ``./external/bar/external/vsi_common``
     #
     # #. Set ``BAR_MAKESELF_SRC_DIR`` to ``${FOO_CWD}``
-    # #. Run: ``just makeself_just-project``
+    # #. Call: ``just makeself_just-project``
     # #. Call: ``makeself_add-files ./external/bar '--show-transformed --transform s|^\./|./${bar_rel}/| --exclude=.git --exclude=./docs --exclude=./external --exclude=./tests'``
-    # #. Or git Call:``makeself_add-git-files ./external/bar '--exclude=./docs --exclude=./external --exclude=./tests'``
+    # #. Or for git, call:``makeself_add-git-files ./external/bar '--exclude=./docs --exclude=./external --exclude=./tests'``
     # #. Call: ``makeself_add-files ./ '--exclude=.git --exclude=./docs --exclude=./external/bar --exclude=./tests'``
-    # #. Or git Call: ``makeself_add-files ./ '--exclude=./docs --exclude=./external/bar --exclude=./tests'``
+    # #. Or for git, call: ``makeself_add-files ./ '--exclude=./docs --exclude=./external/bar --exclude=./tests'``
     #
     # .. seealso::
     #   :cmd:`makeself_add-files`
@@ -193,8 +193,7 @@ function makeself_defaultify()
     #     # The "other project" has a different default settings file.
     #     # Tell the makeself plugin what it is
     #     local VSI_COMMON_JUST_SETTINGS=/src/other_project.env
-    #     # Now determine the other project relative path (again, to ${JUST_PROJECT_PREFIX}_MAKESELF_SRC_DIR same as ".")
-    #     # This is too variable to be automated
+    #     # Now determine the other project's relative path (again, wrt ${JUST_PROJECT_PREFIX}_MAKESELF_SRC_DIR which is the same as ".")
     #     local other_project_rel="$(relative_path "${OTHER_PROJECT_CWD}" .)"
     #     # Add the other project files
     #     justify makeself add-files "${OTHER_PROJECT_CWD}" \
@@ -218,12 +217,13 @@ function makeself_defaultify()
     #   :cmd:`makeself_just-project` :cmd:`makeself_add-git-files`
     #**
     makeself_add-files) # Append files to a makeself executable
-      if [ "${1+set}" ]; then
+      if [ "${2+set}" ]; then
+        extra_args=2
+      else
         extra_args=1
       fi
-      shift 1
 
-      _makeself_docker_compose run makeself add-files ${@+"${@}"}
+      _makeself_docker_compose run makeself add-files "${1}" ${2+"${2}"}
       ;;
     #**
     # .. command:: makeself_add-git-files
@@ -273,7 +273,7 @@ function makeself_defaultify()
         echo >&2
         echo "${RED}ERROR${NC} calling 'just makeself add-git-files':" >&2
         echo "      \"${1}\" is not in \"${MAKESELF_SOURCE_DIR}\"" >&2
-        echo "      Consider changing ${JUST_PROJECT_PREFIX}_MAKESELF_SRC_DIR" >&2
+        echo "      Consider correcting ${JUST_PROJECT_PREFIX}_MAKESELF_SRC_DIR" >&2
         JUST_IGNORE_EXIT_CODES=15
         return 15
       fi
@@ -285,7 +285,7 @@ function makeself_defaultify()
         extra_args=1
       fi
 
-      _makeself_docker_compose run makeself add-git-files "${relative_path}" ${@+"${@}"}
+      _makeself_docker_compose run makeself add-git-files "${relative_path}" ${1+"${1}"}
       ;;
     *)
       plugin_not_found=1

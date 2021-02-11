@@ -24,8 +24,8 @@ SOFTWARE.
 https://github.com/sakurai-youhei/envcontext
 """
 
-# Vendored because the setup.py file is written badly, and creates a version
-# mismatch starting in pip 20.3
+# Vendored because the setup.py file in envcontext is written poorly, and
+# creates a version mismatch starting in pip 20.3 and newer
 
 """
 Usage:
