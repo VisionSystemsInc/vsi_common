@@ -136,21 +136,12 @@ function makeself_defaultify()
     #
     # :Arguments: * ``[--tests]`` - Include unit tests. Calling this from another project is tricky though. For example, ``./just --wrap bash -c 'JUSTFILE="${VSI_COMMON_DIR}/Justfile" just test'``
     #
-    # Creates a just project executable using makeself. Relative paths will be with respect to ``${JUST_PROJECT_PREFIX}_MAKESELF_SRC_DIR``. After the initial executable is added, calls to :command:`makeself_add-git-files` and :command:`makeself_add-files` should be made to add project files. For example:
+    # Creates a just project executable using makeself. Relative paths will be with respect to ``${JUST_PROJECT_PREFIX}_MAKESELF_SRC_DIR``. After the initial executable is added, calls to :command:`makeself_add-git-files` and :command:`makeself_add-files` should be made to add project files.
     #
-    # * Project: ``foo`` in ``.``
-    # * Submodule: ``bar`` in ``./external/bar``
-    # * VSI Common in ``./external/bar/external/vsi_common``
-    #
-    # #. Set ``BAR_MAKESELF_SRC_DIR`` to ``${FOO_CWD}``
-    # #. Call: ``just makeself_just-project``
-    # #. Call: ``makeself_add-files ./external/bar '--show-transformed --transform s|^\./|./${bar_rel}/| --exclude=.git --exclude=./docs --exclude=./external --exclude=./tests'``
-    # #. Or for git, call:``makeself_add-git-files ./external/bar '--exclude=./docs --exclude=./external --exclude=./tests'``
-    # #. Call: ``makeself_add-files ./ '--exclude=.git --exclude=./docs --exclude=./external/bar --exclude=./tests'``
-    # #. Or for git, call: ``makeself_add-files ./ '--exclude=./docs --exclude=./external/bar --exclude=./tests'``
+    # This target should be used in conjunction with :cmd:`makeself_add-git-files` which automatically uses ``.git`` metadata to simplified the extra tar arguments needed, or :cmd:`makeself_add-files` for maximum flexibility.
     #
     # .. seealso::
-    #   :cmd:`makeself_add-files`
+    #   :cmd:`makeself_add-git-files`, :cmd:`makeself_add-files`
     #**
     makeself_just-project) # Run makeself to create a just project executable
       local vsi_common_rel="$(relative_path "${VSI_COMMON_DIR}" .)" # Does not start with ./
@@ -180,20 +171,22 @@ function makeself_defaultify()
     #
     # .. code-block:: bash
     #
+    #   # ``MY_PROJECT_MAKESELF_SRC_DIR`` should be set to ``${MY_PROJECT_CWD}`` in ``my_project.env``
+    #
     #   makeself) # Simple case
     #     justify makeself just-project
     #     justify makeself add-files "${MY_PROJECT_CWD}" "--exclude .git --exclude ./external/vsi_common"
     #     ;;
     #
     #   makeself_complicated) # Complicated case
-    #     # First step is the same, it uses your ${JUST_PROJECT_PREFIX}_MAKESELF_SRC_DIR do determine the "main dir",
+    #     # First step is the same, it uses your ${JUST_PROJECT_PREFIX}_MAKESELF_SRC_DIR to determine the "main dir",
     #     # so it can determine the relative path of VSI_COMMON_DIR
     #     justify makeself just-project
     #
     #     # The "other project" has a different default settings file.
     #     # Tell the makeself plugin what it is
     #     local VSI_COMMON_JUST_SETTINGS=/src/other_project.env
-    #     # Now determine the other project's relative path (again, wrt ${JUST_PROJECT_PREFIX}_MAKESELF_SRC_DIR which is the same as ".")
+    #     # Now determine the other project's relative path (again, wrt ${JUST_PROJECT_PREFIX}_MAKESELF_SRC_DIR, which is the same as ".")
     #     local other_project_rel="$(relative_path "${OTHER_PROJECT_CWD}" .)"
     #     # Add the other project files
     #     justify makeself add-files "${OTHER_PROJECT_CWD}" \
@@ -235,15 +228,19 @@ function makeself_defaultify()
     #
     # :cmd:`makeself_add-git-files` has many advantages over :cmd:`makeself_add-files`
     #
-    # #. No need to exclude .git, this is added to ``TAR_EXTRA`` for you
+    # #. No need for you to exclude ``.git``. This is appended to ``TAR_EXTRA`` for you
     # #. No need to setup the path transform, this is auto determined for you
-    # #. Only git tracked files are added. Ignored and untracked files are not added. This both simplifies the exclude pattern and prevents accidental including of large files.
+    # #. Only git tracked files are added. Ignored and untracked files are not added. This both simplifies the exclude pattern and prevents accidentally including of large files.
     #
     # The second argument can still be used to exclude files or pass any other arguments to ``tar``.
+    # * Simple case: ``${project_dir}/external/vsi_common``
+    # * Complicated case: ``${project_dir}/external/${other_project}/external/vsi_common``
     #
     # .. rubric:: Example just targets
     #
     # .. code-block:: bash
+    #
+    #   # ``MY_PROJECT_MAKESELF_SRC_DIR`` should be set to ``${MY_PROJECT_CWD}`` in ``my_project.env``
     #
     #   makeself) # Simple case
     #     justify makeself just-project

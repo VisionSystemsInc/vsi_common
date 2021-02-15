@@ -8,7 +8,8 @@ source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
 #
 # Helper function for running makeself on git repos
 #
-# :Arguments: ``$1`` - Relative path of dir to be added to makeself archive
+# :Arguments: ``$1`` - Relative path of dir to be added to makeself archive, should not lead with ``./`` nor end with ``/``. Use ``.`` to denote ``just_project_src_dir``
+# :Parameters: ``just_project_src_dir`` - The main project dir. ``$1`` must be relative to ``just_project_src_dir`` and ``$1`` needs to be a subdirectory of ``just_project_src_dir``
 # :Outputs: * ``excluded_files`` - Name of file containing list of filenames to exclude
 #           * ``tar_extra`` - Additional tar arguments
 #**
@@ -22,11 +23,14 @@ function makeself_git_prep()
   # -X is my only choice
   pushd "${just_project_src_dir}/${1}" > /dev/null
 
-    # 1) Create a list of files I want ignored
-    # a - list all ignored files
-    #     --ignored lists TRACKED files that match the ignore filter,
-    #     adding --other makes it untracked ignored files, what I'm actually after
-    # b - list all untracked files (--others), the ones that show up in "git status"
+    # 1) Create a list of all untracked files I want ignored
+    # a - List all untracked ignored files
+    #     "--ignored --exclude-standard" lists ignored files, "--others" makes
+    #     it untracked ignored files. In other words: the extra files that show
+    #     up in "git status --ignored" as "Untracked files"
+    # b - List all untracked files "--others --exclude-standard", except those
+    #     that match the exclude filter. In other words: the files that show up
+    #     in "git status" as "Untracked files"
     git ls-files --others --ignored --exclude-standard > "${excluded_files}"
     git ls-files --others --exclude-standard >> "${excluded_files}"
 
@@ -40,11 +44,13 @@ function makeself_git_prep()
 
   tar_extra="-X ${excluded_files}"
 
-  # Make self works by adding a dir, so that dir always becomes "."
-  # When I add "external/vsi_common", the path becomes "./" instead of
-  # "./external/vsi_common/"
-  # Transform the path, so the dir appears where it really is
-  # You can't put quotes in tar-extra apparently, it'll screw things up.
+  # Makeself works by adding a directory to an self enclosed archive. The path
+  # of the directory for the added files always becomes ".". For example, when
+  #  you call makeself on "/project_dir/external/vsi_common", this path becomes
+  # "./" instead of "./external/vsi_common/" in the archive. Transform the path
+  # (using --tranform) so the dir has the correct relative path, which is why
+  # $1 has to be the relative path, as specified in the documentation.
+  # Note: You can't put quotes in tar-extra apparently, it'll screw things up.
   if [ "${1}" != "." ]; then
     # Review: Does this transform (multiple) spaces in the path correctly???
     # Does it handle names with | in it?!
@@ -105,7 +111,7 @@ function caseify()
         extra_args+=1
       fi
 
-      # Start by adding just vsi_common, it will be transformed (in makefile_prep)
+      # Start by adding only vsi_common, it will have been transformed (by makeself_git_prep)
       # to have the same relative path as vsi_common_dir really has.
       /makeself/makeself.sh \
           --header /makeself/makeself-header_just.sh \
@@ -115,8 +121,8 @@ function caseify()
           "${just_project_dist_dir}/${MAKESELF_NAME-just}" \
           "${MAKESELF_LABEL-just_label}" \
           "./${1}/freeze/just_wrapper"
-
       ;;
+
     # 1 - Relative path to dir of files to add
     # [2] tar_extra flags
     add-git-files) # Append files from a git repo to a makeself executable

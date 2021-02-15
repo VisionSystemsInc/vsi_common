@@ -155,13 +155,13 @@ function trap_chain()
 #**
 # .. function:: exit_chain
 #
-# In case there are multiple functions being chained together for a trap, you might not want to exit until after all the traps have a chance to go. In order to accomplish this, use :func:`exit_chain`. If it trap is not part of a chain, ``exit`` is called immediately. If the trap is part of a chain, ``exit`` is called after the chain is complete
+# In case there are multiple functions being chained together for a trap, you might not want to exit until after all the traps have a chance to run. In order to accomplish this, use :func:`exit_chain`. If it trap is not part of a chain, ``exit`` is called immediately. If the trap is part of a chain, ``exit`` is called after the chain is complete
 #
 # :Arguments: * ``[$1]`` - The exit code used when ``exit`` is called
 #
 # .. note::
 #
-#    This is not designed to work if the function is called in a subshell, this includes ``function name()( ... )`` subshell functions.
+#    This is not designed to work if the function is called in a subshell; this includes ``function name()( ... )`` subshell functions.
 #**
 function exit_chain()
 {
@@ -183,7 +183,7 @@ function _trap_unchained()
   #**
   # .. var:: trap_chain_active
   #
-  # When a :func:`trap_chain` trap is triggered, a single trap will be called directly, without using ``_trap_unchained``, while a chain of multiple traps will be using that function. Functions like :func:`exit_chain` will want to change how they work depending on whether ``_trap_unchained`` is used or not. This variable store that state.
+  # When a :func:`trap_chain` trap is triggered, a single trap will be called directly, while a chain of multiple traps will be using ``_trap_unchained``. Functions like :func:`exit_chain` will change how they work depending on whether ``_trap_unchained`` is used or not. This variable stores that state.
   #
   # :Value: * ``0`` - ``_trap_unchained`` is being used to call the chain
   #         * *Unset* - The trap function is being called directly (by ``trap`` or other)
@@ -206,10 +206,10 @@ function _trap_unchained()
 #
 # The following example handles Ctrl+C, kills (SIGTERM) and normal exit cases. Writing exit handlers in bash is very tricky. Fortunately, little is needed to make it work with :func:`trap_chain` correctly.
 #
-# Mainly:
+# The major differences in writing a trap for :func:`trap_chain` are:
 #
-# * ``trap`` - setting up a trap handler uses :func:`trap_chain`
-# * ``exit`` - exiting should use :func:`exit_chain`
+# * ``trap`` becomes :func:`trap_chain`. Use this to set a trap handler.
+# * ``exit`` becomes :func:`exit_chain`. Use this to exit the script from within a trap handler.
 #
 # The rest of this boiler plate example is handling all the intricacies of bash.
 #
@@ -220,8 +220,7 @@ function _trap_unchained()
 #     # When exit (which exit_chain calls eventually) is called, the exit code
 #     # will get stored in $?, but only for the first line of a function, so
 #     # it should first be stored in rv
-#     # If an error occurs (with set -e enabled), then $? will have the error
-#     # code
+#     # This is also the case when an error occurs (with "set -e" is enabled)
 #     # This will *not* capture an error code for unbound variables on bash 3.2
 #     local rv=$?
 #
@@ -240,7 +239,7 @@ function _trap_unchained()
 #     # If the TERM signal is being handled, the program does not exit. Ironically,
 #     # if the trap wasn't setup in the first place, it would have exited. So we have
 #     # to manually call exit. To do this, use exit_chain so that all the TERM
-#     # handlers in the chain have a chance to go.
+#     # handlers in the chain have a chance to run.
 #     if [ "${1-}" = "term" ]; then
 #       my_trap_called=0
 #       exit_chain 143
@@ -257,7 +256,7 @@ function _trap_unchained()
 #   }
 #   # Here is where you connect "my_trap" to EXIT, INT, and TERM handles.
 #   # We typically use all three to catch the different ways a program can
-#   # end. Handling all three signals increase compatibility on all OSes
+#   # end. Handling all three signals increases compatibility on all OSes
 #   trap_chain "my_trap exit" EXIT
 #   trap_chain "my_trap int"  INT
 #   trap_chain "my_trap term" TERM
