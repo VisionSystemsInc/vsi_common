@@ -8,8 +8,8 @@ source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
 #
 # Helper function for running makeself on git repos
 #
-# :Arguments: ``$1`` - Relative path of dir to be added to makeself archive, should not lead with ``./`` nor end with ``/``. Use ``.`` to denote ``just_project_src_dir``
-# :Parameters: ``just_project_src_dir`` - The main project dir. ``$1`` must be relative to ``just_project_src_dir`` and ``$1`` needs to be a subdirectory of ``just_project_src_dir``
+# :Arguments: ``$1`` - Relative path of dir to be added to makeself archive; should not start with ``./`` nor end with ``/``. Use ``.`` to denote ``just_project_src_dir``
+# :Parameters: ``just_project_src_dir`` - The main project dir. ``$1`` needs to be relative to and a subdirectory of ``just_project_src_dir`
 # :Outputs: * ``excluded_files`` - Name of file containing list of filenames to exclude
 #           * ``tar_extra`` - Additional tar arguments
 #**
@@ -44,9 +44,9 @@ function makeself_git_prep()
 
   tar_extra="-X ${excluded_files}"
 
-  # Makeself works by adding a directory to an self enclosed archive. The path
+  # Makeself works by adding a directory to a self-enclosed archive. The path
   # of the directory for the added files always becomes ".". For example, when
-  #  you call makeself on "/project_dir/external/vsi_common", this path becomes
+  # you call makeself on "/project_dir/external/vsi_common", this path becomes
   # "./" instead of "./external/vsi_common/" in the archive. Transform the path
   # (using --tranform) so the dir has the correct relative path, which is why
   # $1 has to be the relative path, as specified in the documentation.
@@ -111,7 +111,7 @@ function caseify()
         extra_args+=1
       fi
 
-      # Start by adding only vsi_common, it will have been transformed (by makeself_git_prep)
+      # Start by adding only vsi_common; it will be transformed (due to makeself_git_prep)
       # to have the same relative path as vsi_common_dir really has.
       /makeself/makeself.sh \
           --header /makeself/makeself-header_just.sh \
