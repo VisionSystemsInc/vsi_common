@@ -2,13 +2,18 @@ FROM vsiri/recipe:tini-musl as tini
 FROM vsiri/recipe:gosu as gosu
 FROM vsiri/recipe:vsi as vsi
 
-FROM alpine:3.8
+FROM alpine:3.13
 
-RUN apk add --no-cache bash tar
+# GNU sed to handle nulls
+# GNU tar to handle --transform
+RUN apk add --no-cache bash tar git sed
 
 SHELL ["/usr/bin/env", "bash", "-euxvc"]
 
-# Need newer than 2.4.2 for certain features like ARCHIVE_DIR
+# Must be a version newer than 2.4.2, I need a working ARCHIVE_DIR and append.
+# https://github.com/megastep/makeself/issues/213
+# https://github.com/megastep/makeself/issues/216
+# https://github.com/megastep/makeself/issues/219
 ARG MAKESELF_VERSION=release-2.4.3
 
 RUN apk add --no-cache --virtual .deps wget; \
