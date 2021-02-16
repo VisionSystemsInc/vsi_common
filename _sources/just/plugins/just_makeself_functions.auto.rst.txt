@@ -35,6 +35,7 @@ The makeself internal "label". Not really relevant, as quiet mode is enforced. D
 
 The input directory of the files used to add files to the makeself executable. Default: ``${JUST_PROJECT_PREFIX}_MAKESELF_SRC_DIR`` or else ``${JUST_PROJECT_PREFIX}_CWD``.
 
+
 .. env:: MAKESELF_DIST_DIR
 
 The output directory for the makeself distribution. Default: ``${JUST_PROJECT_PREFIX}_MAKESELF_DIST_DIR`` or else ``${MAKESELF_SOURCE_DIR}/dist``
@@ -67,23 +68,13 @@ The branch/tag name or SHA of makeself used. Requires version 2.4.3 or newer.
 .. command:: makeself_just-project
 
 :Arguments: * ``[--tests]`` - Include unit tests. Calling this from another project is tricky though. For example, ``./just --wrap bash -c 'JUSTFILE="${VSI_COMMON_DIR}/Justfile" just test'``
-:Uses: - ``tar`` - Only works using GNU Tar.
 
-Creates a just project executable using makeself. Should be called from the main project's just project, otherwise directory paths will be auto determined correctly. After the initial executable is added, called to :command:`makeself_add-files` should be made to add project files. For example:
+Creates a just project executable using makeself. Relative paths will be with respect to ``${JUST_PROJECT_PREFIX}_MAKESELF_SRC_DIR``. After the initial executable is added, calls to :command:`makeself_add-git-files` and :command:`makeself_add-files` should be made to add project files.
 
-* Project: ``foo`` in ``.``
-* Submodule: ``bar`` in ``./external/bar``
-* VSI Common in ``./external/bar/external/vsi_common``
-
-#. Call: ``just makeself_just-project-locally`` in ``.``
-#. Get bar relative dir: ``local bar_rel="$(relative_path "${BAR_CWD}" .)" # NOTE: Does not start with ./``
-#. Call: ``makeself_add-files-locally ./external/bar '"--show-transformed --transform s|^\./|./${bar_rel}/| --exclude=.git --exclude=./docs --exclude=./external --exclude=./tests"'`` in ``.``
-#. Call: ``makeself_add-files-locally ./ '"--exclude=.git --exclude=./docs --exclude=./external/bar --exclude=./tests"'`` in ``.``
-
-All calls are made from the root repo directory (``.``)
+This target should be used in conjunction with :cmd:`makeself_add-git-files` which automatically uses ``.git`` metadata to simplify the extra tar arguments needed, or :cmd:`makeself_add-files` for maximum flexibility.
 
 .. seealso::
-  :cmd:`makeself_add-files`
+  :cmd:`makeself_add-git-files`, :cmd:`makeself_add-files`
 
 .. command:: makeself_add-files
 
@@ -100,21 +91,22 @@ The second argument can be used to exclude files, and in complicated situations,
 
 .. code-block:: bash
 
+  # ``MY_PROJECT_MAKESELF_SRC_DIR`` should be set to ``${MY_PROJECT_CWD}`` in ``my_project.env``
+
   makeself) # Simple case
     justify makeself just-project
     justify makeself add-files "${MY_PROJECT_CWD}" "--exclude .git --exclude ./external/vsi_common"
     ;;
 
   makeself_complicated) # Complicated case
-    # First step is the same, it uses your PWD do determing the "main dir",
+    # First step is the same; it uses your ${JUST_PROJECT_PREFIX}_MAKESELF_SRC_DIR to determine the "main dir",
     # so it can determine the relative path of VSI_COMMON_DIR
     justify makeself just-project
 
     # The "other project" has a different default settings file.
     # Tell the makeself plugin what it is
     local VSI_COMMON_JUST_SETTINGS=/src/other_project.env
-    # Now determine the other project relative path (again, to pwd aka ".")
-    # This is too variable to be automated
+    # Now determine the other project's relative path (again, wrt ${JUST_PROJECT_PREFIX}_MAKESELF_SRC_DIR, which is the same as ".")
     local other_project_rel="$(relative_path "${OTHER_PROJECT_CWD}" .)"
     # Add the other project files
     justify makeself add-files "${OTHER_PROJECT_CWD}" \
@@ -135,5 +127,49 @@ The second argument can be used to exclude files, and in complicated situations,
     ;;
 
 .. seealso::
-  :cmd:`makeself_just-project`
+  :cmd:`makeself_just-project` :cmd:`makeself_add-git-files`
+
+.. command:: makeself_add-git-files
+
+:Arguments: * ``$1`` - Directory to add (can be relative or absolute)
+            * ``[$2]`` - Extra tar flags to be passed to makeself/tar
+
+After the initial just executable is created by calling :command:`makeself_just-project`, git project directories are added using :command:`makeself_add-git-files`
+
+:cmd:`makeself_add-git-files` has many advantages over :cmd:`makeself_add-files`
+
+#. No need for you to exclude ``.git``. This is appended to ``TAR_EXTRA`` for you
+#. No need to setup the path transform, this is auto determined for you
+#. Only git tracked files are added. Ignored and untracked files are not added. This both simplifies the exclude pattern and prevents accidentally including of large files.
+
+The second argument can still be used to exclude files or pass any other arguments to ``tar``.
+* Simple case: ``${project_dir}/external/vsi_common``
+* Complicated case: ``${project_dir}/external/${other_project}/external/vsi_common``
+
+.. rubric:: Example just targets
+
+.. code-block:: bash
+
+  # ``MY_PROJECT_MAKESELF_SRC_DIR`` should be set to ``${MY_PROJECT_CWD}`` in ``my_project.env``
+
+  makeself) # Simple case
+    justify makeself just-project
+    justify makeself add-git-files "${MY_PROJECT_CWD}" "--exclude ./external"
+    ;;
+
+  makeself_complicated) # Complicated case
+    # First step is the same
+    justify makeself just-project
+
+    # Add the other project files
+    justify makeself add-git-files "${OTHER_PROJECT_CWD}" \
+      "--exclude=./external/vsi_common"
+
+    # Finally add the "main" project files.
+    justify makeself add-git-files "${MY_PROJECT_CWD}" \
+      "--exclude ./external/other_project"
+    ;;
+
+.. seealso::
+  :cmd:`makeself_just-project` :cmd:`makeself_add-files`
 

@@ -1797,25 +1797,37 @@ fi
 
 function new_just_cleanup()
 {
+  local rv="$?"
+
+  if [ "${new_just_cleanup_called-}" = "0" ]; then
+    return "${rv}"
+  fi
+
   # We want to delete the temp file when we are done executing, so that uwecho
   # can use the file, the entire point of making the file
   if [ -e "${temp_file-}" ]; then
     \rm "${temp_file}"
   fi
   echo
+
+  if [ "${1-}" = "term" ]; then
+    new_just_cleanup_called=0
+    exit_chain 143
+  elif [ "${1-}" = "int" ]; then
+    new_just_cleanup_called=0
+    exit_chain 130
+  fi
+
+  return "${rv}"
 }
 
 if [ "${BASH_SOURCE[0]}" = "${0}" ] || [ "$(basename "${BASH_SOURCE[0]}")" = "${0}" ]; then
   set -eu
 
   # Cleanup
-  trap "new_just_cleanup" EXIT
-  # On Ctrl+C, input commands repeat, basically breaking the purpose of Ctrl+C
-  # By adding an exit here, it catches the Ctrl+C/kill signal, cleans up, and
-  # then exits the script. Clear the exit trap, so that is is not run twice
-  # sometimes
-  trap "new_just_cleanup; trap -- EXIT; exit" INT
-  trap "new_just_cleanup; trap -- EXIT; exit" TERM
+  trap "new_just_cleanup exit" EXIT
+  trap "new_just_cleanup int" INT
+  trap "new_just_cleanup term" TERM
   # I didn't makes these traps just "exit", becuase I'm not sure that'll work
   # in all OSes and cornercases
 

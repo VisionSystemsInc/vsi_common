@@ -288,28 +288,12 @@
 <li><p><code class="docutils literal notranslate"><span class="pre">[--tests]</span></code> - Include unit tests. Calling this from another project is tricky though. For example, <code class="docutils literal notranslate"><span class="pre">./just</span> <span class="pre">--wrap</span> <span class="pre">bash</span> <span class="pre">-c</span> <span class="pre">'JUSTFILE=&quot;${VSI_COMMON_DIR}/Justfile&quot;</span> <span class="pre">just</span> <span class="pre">test'</span></code></p></li>
 </ul>
 </dd>
-<dt class="field-even">Uses</dt>
-<dd class="field-even"><ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">tar</span></code> - Only works using GNU Tar.</p></li>
-</ul>
-</dd>
 </dl>
-<p>Creates a just project executable using makeself. Should be called from the main project’s just project, otherwise directory paths will be auto determined correctly. After the initial executable is added, called to <strong class="command">makeself_add-files</strong> should be made to add project files. For example:</p>
-<ul class="simple">
-<li><p>Project: <code class="docutils literal notranslate"><span class="pre">foo</span></code> in <code class="docutils literal notranslate"><span class="pre">.</span></code></p></li>
-<li><p>Submodule: <code class="docutils literal notranslate"><span class="pre">bar</span></code> in <code class="docutils literal notranslate"><span class="pre">./external/bar</span></code></p></li>
-<li><p>VSI Common in <code class="docutils literal notranslate"><span class="pre">./external/bar/external/vsi_common</span></code></p></li>
-</ul>
-<ol class="arabic simple">
-<li><p>Call: <code class="docutils literal notranslate"><span class="pre">just</span> <span class="pre">makeself_just-project-locally</span></code> in <code class="docutils literal notranslate"><span class="pre">.</span></code></p></li>
-<li><p>Get bar relative dir: <code class="docutils literal notranslate"><span class="pre">local</span> <span class="pre">bar_rel=&quot;$(relative_path</span> <span class="pre">&quot;${BAR_CWD}&quot;</span> <span class="pre">.)&quot;</span> <span class="pre">#</span> <span class="pre">NOTE:</span> <span class="pre">Does</span> <span class="pre">not</span> <span class="pre">start</span> <span class="pre">with</span> <span class="pre">./</span></code></p></li>
-<li><p>Call: <code class="docutils literal notranslate"><span class="pre">makeself_add-files-locally</span> <span class="pre">./external/bar</span> <span class="pre">'&quot;--show-transformed</span> <span class="pre">--transform</span> <span class="pre">s|^\./|./${bar_rel}/|</span> <span class="pre">--exclude=.git</span> <span class="pre">--exclude=./docs</span> <span class="pre">--exclude=./external</span> <span class="pre">--exclude=./tests&quot;'</span></code> in <code class="docutils literal notranslate"><span class="pre">.</span></code></p></li>
-<li><p>Call: <code class="docutils literal notranslate"><span class="pre">makeself_add-files-locally</span> <span class="pre">./</span> <span class="pre">'&quot;--exclude=.git</span> <span class="pre">--exclude=./docs</span> <span class="pre">--exclude=./external/bar</span> <span class="pre">--exclude=./tests&quot;'</span></code> in <code class="docutils literal notranslate"><span class="pre">.</span></code></p></li>
-</ol>
-<p>All calls are made from the root repo directory (<code class="docutils literal notranslate"><span class="pre">.</span></code>)</p>
+<p>Creates a just project executable using makeself. Relative paths will be with respect to <code class="docutils literal notranslate"><span class="pre">${JUST_PROJECT_PREFIX}_MAKESELF_SRC_DIR</span></code>. After the initial executable is added, calls to <strong class="command">makeself_add-git-files</strong> and <strong class="command">makeself_add-files</strong> should be made to add project files.</p>
+<p>This target should be used in conjunction with <a class="reference internal" href="#command-just_makeself_functions.bsh makeself_defaultify makeself_add-git-files"><code class="xref bash bash-cmd docutils literal notranslate"><span class="pre">makeself_add-git-files</span></code></a> which automatically uses <code class="docutils literal notranslate"><span class="pre">.git</span></code> metadata to simplify the extra tar arguments needed, or <a class="reference internal" href="#command-just_makeself_functions.bsh makeself_defaultify makeself_add-files"><code class="xref bash bash-cmd docutils literal notranslate"><span class="pre">makeself_add-files</span></code></a> for maximum flexibility.</p>
 <div class="admonition seealso">
 <p class="admonition-title">See also</p>
-<p><a class="reference internal" href="#command-just_makeself_functions.bsh makeself_defaultify makeself_add-files"><code class="xref bash bash-cmd docutils literal notranslate"><span class="pre">makeself_add-files</span></code></a></p>
+<p><a class="reference internal" href="#command-just_makeself_functions.bsh makeself_defaultify makeself_add-git-files"><code class="xref bash bash-cmd docutils literal notranslate"><span class="pre">makeself_add-git-files</span></code></a>, <a class="reference internal" href="#command-just_makeself_functions.bsh makeself_defaultify makeself_add-files"><code class="xref bash bash-cmd docutils literal notranslate"><span class="pre">makeself_add-files</span></code></a></p>
 </div>
 <dl class="bash command">
 <dt id="command-just_makeself_functions.bsh makeself_defaultify makeself_add-files">
@@ -329,21 +313,22 @@
 * Simple case: <code class="docutils literal notranslate"><span class="pre">${project_dir}/external/vsi_common</span></code>
 * Complicated case: <code class="docutils literal notranslate"><span class="pre">${project_dir}/external/${other_project}/external/vsi_common</span></code></p>
 <p class="rubric">Example just targets</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>makeself<span class="o">)</span> <span class="c1"># Simple case</span>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># ``MY_PROJECT_MAKESELF_SRC_DIR`` should be set to ``${MY_PROJECT_CWD}`` in ``my_project.env``</span>
+
+makeself<span class="o">)</span> <span class="c1"># Simple case</span>
   justify makeself just-project
   justify makeself add-files <span class="s2">&quot;</span><span class="si">${</span><span class="nv">MY_PROJECT_CWD</span><span class="si">}</span><span class="s2">&quot;</span> <span class="s2">&quot;--exclude .git --exclude ./external/vsi_common&quot;</span>
   <span class="p">;;</span>
 
 makeself_complicated<span class="o">)</span> <span class="c1"># Complicated case</span>
-  <span class="c1"># First step is the same, it uses your PWD do determing the &quot;main dir&quot;,</span>
+  <span class="c1"># First step is the same; it uses your ${JUST_PROJECT_PREFIX}_MAKESELF_SRC_DIR to determine the &quot;main dir&quot;,</span>
   <span class="c1"># so it can determine the relative path of VSI_COMMON_DIR</span>
   justify makeself just-project
 
   <span class="c1"># The &quot;other project&quot; has a different default settings file.</span>
   <span class="c1"># Tell the makeself plugin what it is</span>
   <span class="nb">local</span> <span class="nv">VSI_COMMON_JUST_SETTINGS</span><span class="o">=</span>/src/other_project.env
-  <span class="c1"># Now determine the other project relative path (again, to pwd aka &quot;.&quot;)</span>
-  <span class="c1"># This is too variable to be automated</span>
+  <span class="c1"># Now determine the other project&#39;s relative path (again, wrt ${JUST_PROJECT_PREFIX}_MAKESELF_SRC_DIR, which is the same as &quot;.&quot;)</span>
   <span class="nb">local</span> <span class="nv">other_project_rel</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>relative_path <span class="s2">&quot;</span><span class="si">${</span><span class="nv">OTHER_PROJECT_CWD</span><span class="si">}</span><span class="s2">&quot;</span> .<span class="k">)</span><span class="s2">&quot;</span>
   <span class="c1"># Add the other project files</span>
   justify makeself add-files <span class="s2">&quot;</span><span class="si">${</span><span class="nv">OTHER_PROJECT_CWD</span><span class="si">}</span><span class="s2">&quot;</span> <span class="se">\</span>
@@ -366,7 +351,56 @@ makeself_complicated<span class="o">)</span> <span class="c1"># Complicated case
 </div>
 <div class="admonition seealso">
 <p class="admonition-title">See also</p>
-<p><a class="reference internal" href="#command-just_makeself_functions.bsh makeself_defaultify makeself_just-project"><code class="xref bash bash-cmd docutils literal notranslate"><span class="pre">makeself_just-project</span></code></a></p>
+<p><a class="reference internal" href="#command-just_makeself_functions.bsh makeself_defaultify makeself_just-project"><code class="xref bash bash-cmd docutils literal notranslate"><span class="pre">makeself_just-project</span></code></a> <a class="reference internal" href="#command-just_makeself_functions.bsh makeself_defaultify makeself_add-git-files"><code class="xref bash bash-cmd docutils literal notranslate"><span class="pre">makeself_add-git-files</span></code></a></p>
+</div>
+<dl class="bash command">
+<dt id="command-just_makeself_functions.bsh makeself_defaultify makeself_add-git-files">
+<code class="sig-prename descclassname">just makeself add-git-files</code><a class="headerlink" href="#command-just_makeself_functions.bsh makeself_defaultify makeself_add-git-files" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="field-list simple">
+<dt class="field-odd">Arguments</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">$1</span></code> - Directory to add (can be relative or absolute)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">[$2]</span></code> - Extra tar flags to be passed to makeself/tar</p></li>
+</ul>
+</dd>
+</dl>
+<p>After the initial just executable is created by calling <strong class="command">makeself_just-project</strong>, git project directories are added using <strong class="command">makeself_add-git-files</strong></p>
+<p><a class="reference internal" href="#command-just_makeself_functions.bsh makeself_defaultify makeself_add-git-files"><code class="xref bash bash-cmd docutils literal notranslate"><span class="pre">makeself_add-git-files</span></code></a> has many advantages over <a class="reference internal" href="#command-just_makeself_functions.bsh makeself_defaultify makeself_add-files"><code class="xref bash bash-cmd docutils literal notranslate"><span class="pre">makeself_add-files</span></code></a></p>
+<ol class="arabic simple">
+<li><p>No need for you to exclude <code class="docutils literal notranslate"><span class="pre">.git</span></code>. This is appended to <code class="docutils literal notranslate"><span class="pre">TAR_EXTRA</span></code> for you</p></li>
+<li><p>No need to setup the path transform, this is auto determined for you</p></li>
+<li><p>Only git tracked files are added. Ignored and untracked files are not added. This both simplifies the exclude pattern and prevents accidentally including of large files.</p></li>
+</ol>
+<p>The second argument can still be used to exclude files or pass any other arguments to <code class="docutils literal notranslate"><span class="pre">tar</span></code>.
+* Simple case: <code class="docutils literal notranslate"><span class="pre">${project_dir}/external/vsi_common</span></code>
+* Complicated case: <code class="docutils literal notranslate"><span class="pre">${project_dir}/external/${other_project}/external/vsi_common</span></code></p>
+<p class="rubric">Example just targets</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># ``MY_PROJECT_MAKESELF_SRC_DIR`` should be set to ``${MY_PROJECT_CWD}`` in ``my_project.env``</span>
+
+makeself<span class="o">)</span> <span class="c1"># Simple case</span>
+  justify makeself just-project
+  justify makeself add-git-files <span class="s2">&quot;</span><span class="si">${</span><span class="nv">MY_PROJECT_CWD</span><span class="si">}</span><span class="s2">&quot;</span> <span class="s2">&quot;--exclude ./external&quot;</span>
+  <span class="p">;;</span>
+
+makeself_complicated<span class="o">)</span> <span class="c1"># Complicated case</span>
+  <span class="c1"># First step is the same</span>
+  justify makeself just-project
+
+  <span class="c1"># Add the other project files</span>
+  justify makeself add-git-files <span class="s2">&quot;</span><span class="si">${</span><span class="nv">OTHER_PROJECT_CWD</span><span class="si">}</span><span class="s2">&quot;</span> <span class="se">\</span>
+    <span class="s2">&quot;--exclude=./external/vsi_common&quot;</span>
+
+  <span class="c1"># Finally add the &quot;main&quot; project files.</span>
+  justify makeself add-git-files <span class="s2">&quot;</span><span class="si">${</span><span class="nv">MY_PROJECT_CWD</span><span class="si">}</span><span class="s2">&quot;</span> <span class="se">\</span>
+    <span class="s2">&quot;--exclude ./external/other_project&quot;</span>
+  <span class="p">;;</span>
+</pre></div>
+</div>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#command-just_makeself_functions.bsh makeself_defaultify makeself_just-project"><code class="xref bash bash-cmd docutils literal notranslate"><span class="pre">makeself_just-project</span></code></a> <a class="reference internal" href="#command-just_makeself_functions.bsh makeself_defaultify makeself_add-files"><code class="xref bash bash-cmd docutils literal notranslate"><span class="pre">makeself_add-files</span></code></a></p>
 </div>
 </div>
 

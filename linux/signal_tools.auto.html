@@ -247,6 +247,92 @@
 <p class="admonition-title">Note</p>
 <p>If you are using signal <code class="docutils literal notranslate"><span class="pre">ERR</span></code>, you must have <code class="docutils literal notranslate"><span class="pre">set</span> <span class="pre">-E</span></code> set, or else it will not inherit correctly. The same goes for <code class="docutils literal notranslate"><span class="pre">DEBUG</span></code> and <code class="docutils literal notranslate"><span class="pre">RETURN</span></code> with <code class="docutils literal notranslate"><span class="pre">set</span> <span class="pre">-T</span></code>. This is part of normal <code class="docutils literal notranslate"><span class="pre">bash</span></code> behavior, however the same bug mentioned above, can happened if you <code class="docutils literal notranslate"><span class="pre">set</span> <span class="pre">+E</span></code> or <code class="docutils literal notranslate"><span class="pre">set</span> <span class="pre">+T</span></code> before creating a subshell, and then re-enabling the same flag before calling <a class="reference internal" href="#function-signal_tools.bsh trap_chain"><code class="xref bash bash-func docutils literal notranslate"><span class="pre">trap_chain</span></code></a>. A different warning is printed out, unless disabled via <code class="docutils literal notranslate"><span class="pre">TRAP_CHAIN_QUIET</span></code>.</p>
 </div>
+<dl class="bash function">
+<dt id="function-signal_tools.bsh exit_chain">
+<code class="sig-name descname">exit_chain</code><a class="headerlink" href="#function-signal_tools.bsh exit_chain" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<p>In case there are multiple functions being chained together for a trap, you might not want to exit until after all the traps have a chance to run. In order to accomplish this, use <a class="reference internal" href="#function-signal_tools.bsh exit_chain"><code class="xref bash bash-func docutils literal notranslate"><span class="pre">exit_chain</span></code></a>. If the trap is not part of a chain, <code class="docutils literal notranslate"><span class="pre">exit</span></code> is called immediately. If the trap is part of a chain, <code class="docutils literal notranslate"><span class="pre">exit</span></code> is called after the chain is complete</p>
+<dl class="field-list simple">
+<dt class="field-odd">Arguments</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">[$1]</span></code> - The exit code used when <code class="docutils literal notranslate"><span class="pre">exit</span></code> is called</p></li>
+</ul>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This is not designed to work if the function is called in a subshell; this includes <code class="docutils literal notranslate"><span class="pre">function</span> <span class="pre">name()(</span> <span class="pre">...</span> <span class="pre">)</span></code> subshell functions.</p>
+</div>
+<dl class="bash var">
+<dt id="var-signal_tools.bsh exit_chain trap_chain_active">
+<code class="sig-name descname">trap_chain_active</code><a class="headerlink" href="#var-signal_tools.bsh exit_chain trap_chain_active" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<p>When a <a class="reference internal" href="#function-signal_tools.bsh trap_chain"><code class="xref bash bash-func docutils literal notranslate"><span class="pre">trap_chain</span></code></a> trap is triggered, a single trap will be called directly, while a chain of multiple traps will be using <code class="docutils literal notranslate"><span class="pre">_trap_unchained</span></code>. Functions like <a class="reference internal" href="#function-signal_tools.bsh exit_chain"><code class="xref bash bash-func docutils literal notranslate"><span class="pre">exit_chain</span></code></a> will change how they work depending on whether <code class="docutils literal notranslate"><span class="pre">_trap_unchained</span></code> is used or not. This variable stores that state.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Value</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">0</span></code> - <code class="docutils literal notranslate"><span class="pre">_trap_unchained</span></code> is being used to call the chain</p></li>
+<li><p><em>Unset</em> - The trap function is being called directly (by <code class="docutils literal notranslate"><span class="pre">trap</span></code> or other)</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Example</p>
+<p>The following example handles Ctrl+C, kills (SIGTERM) and normal exit cases. Writing exit handlers in bash is very tricky. Fortunately, little is needed to make it work with <a class="reference internal" href="#function-signal_tools.bsh trap_chain"><code class="xref bash bash-func docutils literal notranslate"><span class="pre">trap_chain</span></code></a> correctly.</p>
+<p>The major differences in writing a trap for <a class="reference internal" href="#function-signal_tools.bsh trap_chain"><code class="xref bash bash-func docutils literal notranslate"><span class="pre">trap_chain</span></code></a> are:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">trap</span></code> becomes <a class="reference internal" href="#function-signal_tools.bsh trap_chain"><code class="xref bash bash-func docutils literal notranslate"><span class="pre">trap_chain</span></code></a>. Use this to set a trap handler.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">exit</span></code> becomes <a class="reference internal" href="#function-signal_tools.bsh exit_chain"><code class="xref bash bash-func docutils literal notranslate"><span class="pre">exit_chain</span></code></a>. Use this to exit the script from within a trap handler.</p></li>
+</ul>
+<p>The rest of this boiler plate example is handling all the intricacies of bash.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="k">function</span> my_trap<span class="o">()</span>
+<span class="o">{</span>
+  <span class="c1"># When exit (which exit_chain calls eventually) is called, the exit code</span>
+  <span class="c1"># will get stored in $?, but only for the first line of a function, so</span>
+  <span class="c1"># it should first be stored in rv</span>
+  <span class="c1"># This is also the case when an error occurs (with &quot;set -e&quot; is enabled)</span>
+  <span class="c1"># This will *not* capture an error code for unbound variables on bash 3.2</span>
+  <span class="nb">local</span> <span class="nv">rv</span><span class="o">=</span><span class="nv">$?</span>
+
+  <span class="c1"># If INT or TERM were already triggered, and EXIT is being triggered after</span>
+  <span class="c1"># that, there is no need to run everything a second time, so return rv right</span>
+  <span class="c1"># away. Failure to specify rv will result in an exit code of 0</span>
+  <span class="k">if</span> <span class="o">[</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">my_trap_called</span><span class="p">-</span><span class="si">}</span><span class="s2">&quot;</span> <span class="o">=</span> <span class="s2">&quot;0&quot;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+    <span class="k">return</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">rv</span><span class="si">}</span><span class="s2">&quot;</span>
+  <span class="k">fi</span>
+
+
+  <span class="c1"># This is where the trap handler code goes</span>
+  <span class="c1"># &lt;- Do stuff.</span>
+
+
+  <span class="c1"># If the TERM signal is being handled, the program does not exit. Ironically,</span>
+  <span class="c1"># if the trap wasn&#39;t setup in the first place, it would have exited. So we have</span>
+  <span class="c1"># to manually call exit. To do this, use exit_chain so that all the TERM</span>
+  <span class="c1"># handlers in the chain have a chance to run.</span>
+  <span class="k">if</span> <span class="o">[</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">1</span><span class="p">-</span><span class="si">}</span><span class="s2">&quot;</span> <span class="o">=</span> <span class="s2">&quot;term&quot;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+    <span class="nv">my_trap_called</span><span class="o">=</span><span class="m">0</span>
+    exit_chain <span class="m">143</span>
+  <span class="c1"># The same caveats for TERM are true for the INT signal, generated by</span>
+  <span class="c1"># pressing Ctrl+C</span>
+  <span class="k">elif</span> <span class="o">[</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">1</span><span class="p">-</span><span class="si">}</span><span class="s2">&quot;</span> <span class="o">=</span> <span class="s2">&quot;int&quot;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
+    <span class="nv">my_trap_called</span><span class="o">=</span><span class="m">0</span>
+    exit_chain <span class="m">130</span>
+  <span class="k">fi</span>
+
+  <span class="c1"># If this is just a normal EXIT call, you&#39;ll get here, and you still</span>
+  <span class="c1"># need to pass the return value, or else the exit code will always be zero</span>
+  <span class="k">return</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">rv</span><span class="si">}</span><span class="s2">&quot;</span>
+<span class="o">}</span>
+<span class="c1"># Here is where you connect &quot;my_trap&quot; to EXIT, INT, and TERM handles.</span>
+<span class="c1"># We typically use all three to catch the different ways a program can</span>
+<span class="c1"># end. Handling all three signals increases compatibility on all OSes</span>
+trap_chain <span class="s2">&quot;my_trap exit&quot;</span> EXIT
+trap_chain <span class="s2">&quot;my_trap int&quot;</span>  INT
+trap_chain <span class="s2">&quot;my_trap term&quot;</span> TERM
+</pre></div>
+</div>
 </div>
 
 
