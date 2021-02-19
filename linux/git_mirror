@@ -966,27 +966,24 @@ function git_tag_main()
             # git tag --points-at for ls-remote. Instead, return all of our
             # tags that match our ref and grep for the correct SHA
             #
-            # git has two kinds of tags: lightweight and annotated. Annotated
-            # tags are commits of their own [1]. In order to list the commit
-            # referred to by the tag (instead of the tag's commit itself) with
-            # git show-ref (from a local repo), use the --dereference flag, or
-            # with git rev-parse (from a local repo) or ls-remote (from a
-            # remote repo), peel the ref with ^{} [2], e.g.,
-            # git rev-pasre refs/tags/atag^{}
-            # We are creating annotated tags (because including a message implies
-            # annotation)
+            # git has two kinds of tags: lightweight and annotated [1].
+            # Lightweight tags are like branches that do not move. Annotated
+            # tags are commits of their own. We are creating lightweight tags
             #
             # [1] https://git-scm.com/book/en/v2/Git-Basics-Tagging
-            # [2] https://stackoverflow.com/a/35219362
+
+            # A ref is tagged with just_git_mirror/{date}/{namespaced_ref},
+            # where namespaced_ref is the long-form ref (e.g., refs/heads/master)
+            # with the refs/ domain stripped off
             local namespaced_ref="${ref/refs\//}"
             local SHA="$("${GIT}" show-ref --hash "${ref}")"
-            if ! "${GIT}" ls-remote "${repo_url}" "refs/tags/just_git_mirror/*/${namespaced_ref}^{}" | \
+            if ! "${GIT}" ls-remote "${repo_url}" "refs/tags/just_git_mirror/*/${namespaced_ref}" | \
                 awk '{print $1}' | grep "^${SHA}$"; then
               local tag="just_git_mirror/${tag_date}/${namespaced_ref}"
               # NOTE It is possible to create a lightweight tag directly on the
               # remote so as not to modify the transfer dir with:
               # git push origin "${ref}":refs/tags/"${tag}"
-              "${GIT}" tag -a -m "just:git_mirror pushed this tag for '${ref}' on ${tag_date}" "${tag}" "${ref}"
+              "${GIT}" tag "${tag}" "${ref}"
             fi
           done
         popd &> /dev/null
