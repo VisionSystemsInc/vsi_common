@@ -508,3 +508,13 @@ def find_file_in_path(fname, path=None):
       return possible_file_location
 
   return None
+
+def is_dir_empty(path):
+  '''
+  Checks to see if a dir is empty. Much faster than ``os.listdir`` and
+  ``os.walk``
+  '''
+  with os.scandir(path) as scandir:
+    for _ in scandir:
+      return False
+  return True
