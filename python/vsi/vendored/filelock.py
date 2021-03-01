@@ -9,6 +9,8 @@ import logging
 import os
 import threading
 import time
+import atexit
+import weakref
 try:
   import warnings
 except ImportError:
@@ -106,6 +108,8 @@ class BaseFileLock(object):
   Implements the base class of a file lock.
   """
 
+  _locks = weakref.WeakSet()
+
   def __init__(self, lock_file, timeout = -1):
     """
     """
@@ -116,7 +120,7 @@ class BaseFileLock(object):
     # os.open() function.
     # This file lock is only NOT None, if the object currently holds the
     # lock.
-    self._lock_file_fd = None
+    self._lock_file_fid = None
 
     # The default timeout value.
     self.timeout = timeout
@@ -128,6 +132,9 @@ class BaseFileLock(object):
     # mechanism. Whenever the lock is acquired, the counter is increased and
     # the lock is only released, when this value is 0 again.
     self._lock_counter = 0
+
+    BaseFileLock._locks.add(self)
+
     return None
 
   @property
@@ -166,14 +173,14 @@ class BaseFileLock(object):
   def _acquire(self):
     """
     Platform dependent. If the file lock could be
-    acquired, self._lock_file_fd holds the file descriptor
+    acquired, self._lock_file_fid holds the file descriptor
     of the lock file.
     """
     raise NotImplementedError()
 
   def _release(self):
     """
-    Releases the lock and sets self._lock_file_fd to None.
+    Releases the lock and sets self._lock_file_fid to None.
     """
     raise NotImplementedError()
 
@@ -189,7 +196,7 @@ class BaseFileLock(object):
 
       This was previously a method and is now a property.
     """
-    return self._lock_file_fd is not None
+    return self._lock_file_fid is not None
 
   def acquire(self, timeout=None, poll_intervall=0.05):
     """
@@ -263,6 +270,7 @@ class BaseFileLock(object):
         self._lock_counter = max(0, self._lock_counter - 1)
 
       raise
+    BaseFileLock._locks.add(self)
     return _Acquire_ReturnProxy(lock = self)
 
   def release(self, force = False):
@@ -287,16 +295,17 @@ class BaseFileLock(object):
           lock_id = id(self)
           lock_filename = self._lock_file
 
+          # https://github.com/python/cpython/blob/8d21aa21f2cbc6d50aab3f420bb23be1d081dac4/Lib/logging/__init__.py#L647-L650
           try:
             logger().debug('Attempting to release lock %s on %s', lock_id, lock_filename)
           except TypeError:
-            pass
+            pass; raise
           self._release()
           self._lock_counter = 0
           try:
             logger().info('Lock %s released on %s', lock_id, lock_filename)
           except TypeError:
-            pass
+            pass; raise
 
     return None
 
@@ -313,6 +322,14 @@ class BaseFileLock(object):
     return None
 
 
+def atexit_release():
+  for lock in BaseFileLock._locks:
+    if lock.is_locked:
+      lock.release()
+
+atexit.register(atexit_release)
+
+
 # Windows locking mechanism
 # ~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -322,27 +339,29 @@ class WindowsFileLock(BaseFileLock):
   windows systems.
   """
 
-  def _acquire(self):
-    open_mode = os.O_RDWR | os.O_CREAT | os.O_TRUNC
+  def _opener(self, path, flags, *args, **kwargs):
+    # By default, flags has O_CLOEXEC, should flags be added?
+    return os.open(path, os.O_RDWR | os.O_CREAT | os.O_TRUNC)
 
+  def _acquire(self):
     try:
-      fd = os.open(self._lock_file, open_mode)
+      fid = open(self._lock_file, opener=self._opener)
     except OSError:
       pass
     else:
       try:
-        msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+        msvcrt.locking(fid.fileno(), msvcrt.LK_NBLCK, 1)
       except (IOError, OSError):
-        os.close(fd)
+        fid.close()
       else:
-        self._lock_file_fd = fd
+        self._lock_file_fid = fid
     return None
 
   def _release(self):
-    fd = self._lock_file_fd
-    self._lock_file_fd = None
-    msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
-    os.close(fd)
+    fid = self._lock_file_fid
+    self._lock_file_fid = None
+    msvcrt.locking(fid.fileno(), msvcrt.LK_UNLCK, 1)
+    fid.close()
 
     try:
       os.remove(self._lock_file)
@@ -355,21 +374,25 @@ class WindowsFileLock(BaseFileLock):
 # Unix locking mechanism
 # ~~~~~~~~~~~~~~~~~~~~~~
 
+
 class UnixFileLock(BaseFileLock):
   """
   Uses the :func:`fcntl.flock` to hard lock the lock file on unix systems.
   """
 
+  def _opener(self, path, flags, *args, **kwargs):
+    # By default, flags has O_CLOEXEC, should flags be added?
+    return os.open(path, os.O_RDWR | os.O_CREAT | os.O_TRUNC)
+
   def _acquire(self):
-    open_mode = os.O_RDWR | os.O_CREAT | os.O_TRUNC
-    fd = os.open(self._lock_file, open_mode)
+    fid = open(self._lock_file, opener=self._opener)
 
     try:
-      fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+      fcntl.flock(fid.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
     except (IOError, OSError):
-      os.close(fd)
+      fid.close()
     else:
-      self._lock_file_fd = fd
+      self._lock_file_fid = fid
     return None
 
   def _release(self):
@@ -377,42 +400,45 @@ class UnixFileLock(BaseFileLock):
     #
     #   https://github.com/benediktschmitt/py-filelock/issues/31
     #   https://stackoverflow.com/questions/17708885/flock-removing-locked-file-without-race-condition
-    fd = self._lock_file_fd
-    self._lock_file_fd = None
+    fid = self._lock_file_fid
+    self._lock_file_fid = None
     try:
-      fcntl.flock(fd, fcntl.LOCK_UN)
+      fcntl.flock(fid.fileno(), fcntl.LOCK_UN)
     except TypeError:
-      pass
+      pass; raise
     try:
-      os.close(fd)
+      fid.close()
     except TypeError:
-      pass
+      pass; raise
     return None
 
 # Soft lock
 # ~~~~~~~~~
+from os import remove
 
 class SoftFileLock(BaseFileLock):
   """
   Simply watches the existence of the lock file.
   """
+  def _opener(self, path, flags, *args, **kwargs):
+    return os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_TRUNC)
 
   def _acquire(self):
-    open_mode = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_TRUNC
     try:
-      fd = os.open(self._lock_file, open_mode)
+      fid = open(self._lock_file, opener=self._opener)
     except (IOError, OSError):
       pass
     else:
-      self._lock_file_fd = fd
+      self._lock_file_fid = fid
     return None
 
   def _release(self):
-    os.close(self._lock_file_fd)
-    self._lock_file_fd = None
+    self._lock_file_fid.close()
+    self._lock_file_fid = None
 
     try:
-      os.remove(self._lock_file)
+      import os
+      remove(self._lock_file)
     # The file is already deleted and that's what we want.
     except OSError:
       pass
