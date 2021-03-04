@@ -317,12 +317,12 @@ class BaseFileLock(object):
     return None
 
 
-def atexit_release():
+def atexit_lockfile_release():
   for lock in BaseFileLock._locks:
     if lock.is_locked:
       lock.release()
 
-atexit.register(atexit_release)
+atexit.register(atexit_lockfile_release)
 
 
 # Windows locking mechanism
@@ -372,12 +372,24 @@ class UnixFileLock(BaseFileLock):
   Uses the :func:`fcntl.flock` to hard lock the lock file on unix systems.
   """
 
+  def __init__(self, lock_file, timeout = -1, lockf = False):
+    '''
+    :arg bool lockf:
+      If true, locks using lockf. Default: False, use flock
+    '''
+    self._lockf = lockf
+    super().__init__(lock_file, timeout)
+
+
   def _acquire(self):
     open_mode = os.O_RDWR | os.O_CREAT | os.O_TRUNC
     fd = os.open(self._lock_file, open_mode)
 
     try:
-      fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+      if self._lockf:
+        fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+      else:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except (IOError, OSError):
       os.close(fd)
     else:
@@ -391,7 +403,10 @@ class UnixFileLock(BaseFileLock):
     #   https://stackoverflow.com/questions/17708885/flock-removing-locked-file-without-race-condition
     fd = self._lock_file_fd
     self._lock_file_fd = None
-    fcntl.flock(fd, fcntl.LOCK_UN)
+    if self._lockf:
+      fcntl.lockf(fd, fcntl.LOCK_UN)
+    else:
+      fcntl.flock(fd, fcntl.LOCK_UN)
     os.close(fd)
     return None
 
