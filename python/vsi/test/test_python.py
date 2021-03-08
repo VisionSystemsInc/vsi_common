@@ -13,6 +13,7 @@ from vsi.tools.python import (Try, is_string_like, BasicDecorator, static,
                               unwrap_wraps)
 import types
 import sys
+import copy
 
 if sys.version_info.major > 2:
   from vsi.test.py3_python import *
@@ -397,21 +398,34 @@ class PythonTest(unittest.TestCase):
     # Normal update
     y={"a":11, "b":{"c":22, "e":33}}
     ans={"a":11, "b": {"c": 22, "d": 3, "e":33}, "d": 4}
-    z=x.copy()
+    z=copy.deepcopy(x)
     nested_update(z, y)
     self.assertEqual(z, ans)
 
     # Keys not there before + replace dict with int
     y={"b": 5, "e":{"c":22, "e":33}, "f": 6}
     ans={"a":1, "b": 5, "e": {"c": 22, "e":33}, "d": 4, "f":6}
-    z=x.copy()
+    z=copy.deepcopy(x)
     nested_update(z, y)
     self.assertEqual(z, ans)
 
     y={"a": {"g": 15}}
-    z=x.copy()
-    with self.assertRaises(TypeError):
-      nested_update(z, y)
+    z=copy.deepcopy(x)
+    # No longer a type error
+    # with self.assertRaises(TypeError):
+    nested_update(z, y)
+    ans={'a': {'g': 15}, 'b': {'c': 2, 'd': 3}, 'd': 4}
+    self.assertEqual(z, ans)
+
+    z = {'foo': 13, 'bar': 12, 'far': 14, 'boo': {}}
+    z2 = copy.deepcopy(z)
+    nested_update(z2, foo={}, bar={'x': 11}, far={'y': {}}, boo=[11, 22, 33])
+    ans = {'foo': {}, 'bar': {'x': 11}, 'far': {'y': {}}, 'boo': [11, 22, 33]}
+    self.assertEqual(z2, ans)
+
+    nested_update(z2, foo=13, bar=12, far=14, boo={})
+    self.assertEqual(z, z2)
+
 
   # Test for dict derived classes
   def test_nested_update_dervied(self):

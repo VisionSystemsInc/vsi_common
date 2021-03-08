@@ -682,8 +682,12 @@ def nested_update(dict_, *args, **kwargs):
   # here (infinite recursion)!
   for key, value in dict(*args, **kwargs).items():
     if isinstance(value, Mapping):
+      if key in dict_ and not isinstance(dict_[key], Mapping):
+        dict_[key] = type(dict_)()
       dict_[key] = nested_update(dict_.get(key, type(dict_)()), value)
     elif isinstance(value, Iterable) and not isinstance(value, str):
+      if key in dict_ and not isinstance(dict_[key], Mapping):
+        dict_[key] = type(value)()
       dict_[key] = patch_it(value)
     else:
       dict_[key] = value
