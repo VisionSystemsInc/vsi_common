@@ -814,7 +814,7 @@ function git_push_main()
           # Push to the mirror (git push --mirror does a force push, however, it
           # will remove deleted refs)
           #
-          # It seems mirrored repositories (vxl, pytorch) can include refs/remotes/
+          # It seems mirrored repositories (vxl, pytorch) can include refs/remotes
           # These refs are unusual---this is the pattern for the ref of a remote
           # branch in a clone. Setting up a remote-tracking branch, specifying
           # the remote & branch name manually during a git push or creating a
@@ -823,8 +823,34 @@ function git_push_main()
           # should not have any remote refs. In any case, these cause an error,
           # "deny updating a hidden ref:", when pushing to a gitlab server. For
           # now, only filter out refs/remotes
-          # RE It is possible to get refs/remotes/ if a bare repo fetches from
+          # RE It is possible to get refs/remotes if a bare repo fetches from
           # another (bare) repo, which could then be pushed to, e.g., github
+
+          # I could fetch refs from the remote so I can determine when a (fast-
+          # forward) push was not possible; and if a force push was done, what
+          # the original ref was. This is more straightforward than using
+          # ls-remote.
+          # RE This would introduce refs/remotes to the bare repo, which, as
+          # noted above, is unusual
+          # RE Also, tags are created locally (in refs/tags)
+          # RE RE It is possible to fetch refs into a namespace
+          #   git fetch --no-tags origin \
+          #           '+refs/*:refs/remotes/origin/just_git_mirror/*'
+          # will fetch the refs to the namespace, just_git_mirror, in git 1.8,
+          # and
+          #   git fetch --no-tags --refmap='' origin \
+          #           '+refs/*:refs/remotes/origin/just_git_mirror/*'
+          # will do the same in later versions (probably git 2.1.0; def before
+          # 2.17.1). However, git ~1.9 does not support the --refmap flag and
+          # seems to not have a way to ignore configured refspecs, which will
+          # cause origin:refs/heads to be created in refs/remotes as well
+          # (hence the need for --refmap='')
+          # RE Doing this would also modify the transfer dir (although in a
+          # predictable way)
+          #
+          # Alternatively, the SHA returned by ls-remote is the original ref.
+          # I could then use git tag --points-at SHA to find the tag that
+          # git_tag_main added (if the tags are local, as they are now)
 
           # Spaces are not allowed in a refname
           local refs=($("${GIT}" for-each-ref --format='%(refname)' | \
@@ -852,57 +878,9 @@ function git_push_main()
                   "${GIT}" push --force "${repo_url}" "${ref}"
                   echo "WARNING Fast-forward merge not possible. Force pushed ${ref} to"
                   echo "    ${repo_url}"
-                  # A ref is tagged by git_tag_main with
-                  # just_git_mirror/{date}/{namespaced_ref}, where namespaced_ref
-                  # is the long-form ref (e.g., refs/heads/master) with the refs/
-                  # domain stripped off
-                  local namespaced_ref="${ref/refs\//}"
-                  # REVIEW This is brittle, but the tag for this ref should
-                  # have already been pushed by the xargs git push above; as
-                  # such, we actually want the second-to-last tag
-                  # RE Assuming the ref was tagged this time...
-                  #
-                  # Alternatively, fetch the refs from the remote and log the
-                  # ref's commit directly; e.g., origin/master points to SHA.
-                  # It is also more straightforward to check if pushing a ref
-                  # failed this way than by using ls-remote
-                  # RE Would have to do this before the force push
-                  # RE This would introduce refs/remotes/ to the bare repo,
-                  # which, as noted above, is unusual
-                  # RE Also, tags are created locally (in refs/tags)
-                  # RE RE It is possible to fetch refs into a namespace
-                  #   git fetch --no-tags origin \
-                  #           '+refs/*:refs/remotes/origin/just_git_mirror/*'
-                  # will fetch the refs to the namespace, just_git_mirror, in
-                  # git 1.8, and
-                  #   git fetch --no-tags --refmap='' origin \
-                  #           '+refs/*:refs/remotes/origin/just_git_mirror/*'
-                  # will do the same in later versions (probably git 2.1.0 but
-                  # before 2.17.1). However, git ~1.9 does not support the
-                  # --refmap flag and seems to not have a way to ignore
-                  # configured refspecs, which will cause origin:refs/heads to
-                  # also be added to refs/remotes as well (hence the need for
-                  # --refmap='')
-                  # RE Doing this would modify the transfer dir
-                  #
-                  # Alternatively, the SHA returned by ls-remote is the
-                  # original ref. I could then use git tag --points-at SHA to
-                  # find the tag that git_tag_main added (if the tags are local,
-                  # as they are now)
-                  local tag="$("${GIT}" for-each-ref --sort='-*authordate' \
-                      --format='%(refname:short)' "refs/tags/just_git_mirror/*/${namespaced_ref}" | \
-                      tail -n +2 | head -n 1)"
-                  if [ -n "${tag:+set}" ]; then
-                    # REVIEW Instead of only printing a message here, I could
-                    # create a new tag with this information so it is available
-                    # when fetching these changes in a clone
-                    # REVIEW Should the tag be from the original_ref to the
-                    # forced_ref or visa versa
-                    echo "The original ref for this branch is still referenced by this tag:"
-                    echo "    ${tag}"
-                  else
-                    echo "Could not find the original ref for this branch"
-                  fi
+                  # TODO Create a tag at the forced ref pointing to the
+                  # original ref that could be used by a git hook to warn the
+                  # developer that a force push occurred
                 else
                   echo "WARNING Fast-forward merge not possible. ${ref} was not force pushed to"
                   echo "    ${repo_url}"
