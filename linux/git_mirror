@@ -861,15 +861,34 @@ function git_push_main()
                   # have already been pushed by the xargs git push above; as
                   # such, we actually want the second-to-last tag
                   # RE Assuming the ref was tagged this time...
+                  #
                   # Alternatively, fetch the refs from the remote and log the
                   # ref's commit directly; e.g., origin/master points to SHA.
                   # It is also more straightforward to check if pushing a ref
                   # failed this way than by using ls-remote
-                  # RE Although would have to do this before the force push
+                  # RE Would have to do this before the force push
                   # RE This would introduce refs/remotes/ to the bare repo,
                   # which, as noted above, is unusual
+                  # RE Also, tags are created locally (in refs/tags)
+                  # RE RE It is possible to fetch refs into a namespace
+                  #   git fetch --no-tags origin \
+                  #           '+refs/*:refs/remotes/origin/just_git_mirror/*'
+                  # will fetch the refs to the namespace, just_git_mirror, in
+                  # git 1.8, and
+                  #   git fetch --no-tags --refmap='' origin \
+                  #           '+refs/*:refs/remotes/origin/just_git_mirror/*'
+                  # will do the same in later versions (probably git 2.1.0 but
+                  # before 2.17.1). However, git ~1.9 does not support the
+                  # --refmap flag and seems to not have a way to ignore
+                  # configured refspecs, which will cause origin:refs/heads to
+                  # also be added to refs/remotes as well (hence the need for
+                  # --refmap='')
                   # RE Doing this would modify the transfer dir
-                  # TODO Switch to fetching the refs from the mirror
+                  #
+                  # Alternatively, the SHA returned by ls-remote is the
+                  # original ref. I could then use git tag --points-at SHA to
+                  # find the tag that git_tag_main added (if the tags are local,
+                  # as they are now)
                   local tag="$("${GIT}" for-each-ref --sort='-*authordate' \
                       --format='%(refname:short)' "refs/tags/just_git_mirror/*/${namespaced_ref}" | \
                       tail -n +2 | head -n 1)"
@@ -987,6 +1006,9 @@ function git_tag_main()
               # NOTE It is possible to create a lightweight tag directly on the
               # remote so as not to modify the transfer dir with:
               # git push origin "${ref}":refs/tags/"${tag}"
+              # RE Although looking up the tag to the original ref after a
+              # force push in git_push_main would need to be done like it is
+              # here, with ls-remote
               "${GIT}" tag "${tag}" "${ref}"
             fi
           done
