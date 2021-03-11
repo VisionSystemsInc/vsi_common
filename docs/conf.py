@@ -116,8 +116,10 @@ autodoc_mock_imports = [
 nitpick_ignore = [
     ('py:class', 'frame'), # watch dog
     ('py:class', 'rpdb2.CDebuggerCoreThread'),
+    ('py:class', 'rpdb2.'),
     ('py:class', 're.Pattern'),
-    ('py:class', 'BasicDecorator'), # Using decorator currently blocks sphinx
+    ('py:obj', 'BasicDecorator'), # Using decorator currently blocks sphinx
+    ('py:class', 'IPython.terminal.debugger.'), # Decorator screws things up
 ]
 
 # -- Options for HTML output -------------------------------------------------
