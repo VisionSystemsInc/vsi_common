@@ -131,9 +131,9 @@ function caseify()
         INPUT="${1}"
         URL=$(pipenv run python -c "if True:
             import conf, posixpath
-            url = conf.intersphinx_mapping['${INPUT}'][0]
-            inv = conf.intersphinx_mapping['${INPUT}'][1] or 'objects.inv'
-            print(posixpath.join(url, inv))
+            url = (conf.intersphinx_mapping['${INPUT}'][1] or
+                   posixpath.join(conf.intersphinx_mapping['${INPUT}'][0], 'objects.inv'))
+            print(url)
             ")
         echo "Fetch intersphinx mapping from <${URL}>..."
       fi
