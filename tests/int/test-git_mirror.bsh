@@ -115,6 +115,16 @@ begin_test "Part 1 - Setup test repo"
     touch readme_sub_sub
     git add readme_sub_sub
     git commit -m "Initial commit"
+
+    # A branch to force push
+    git checkout -b to_force2
+    touch rewritten_file
+    git add rewritten_file
+    git commit -m "A file to be rewritten"
+    echo 1 > rewritten_file
+    git add rewritten_file
+    git commit -m "sub_sub_1"
+    git checkout master
   popd &> /dev/null
   mkdir -p "${PRETEND_URL}_sub_sub"
   pushd "${PRETEND_URL}_sub_sub" &> /dev/null
@@ -192,6 +202,7 @@ begin_test "Part 1 - Setup test repo"
     # LFS_DIR="${PRETEND_URL}_lfs/lfs/objects" "${TRASHDIR}/git2" submodule add "${PRETEND_URL}_lfs" "lfs"
     GIT_LFS_SKIP_SMUDGE=1 git submodule add --name "lfs files" "${PRETEND_URL}_lfs" "lfs"
     git submodule add "${PRETEND_URL}_sub" "${DIFFICULT_NAME}"
+    git submodule update --init --recursive
     # Git itself can't handle newlines, although the config file actually can
     # escape them. This is a PURE git bug, plain and simple.
     # This won't actually create a newline in the name, it just ignores it
@@ -199,8 +210,17 @@ begin_test "Part 1 - Setup test repo"
     # This will.
     # git mv $'  diff  i \t cult' $' \n diff  i \t cult'
     # However, at random this gives permission denied errors, good thing I don't need it...
-
     git commit -m "Added submodules"
+
+    # A branch to force push
+    git checkout -b to_force1
+    touch rewritten_file
+    git add rewritten_file
+    git commit -m "A file to be rewritten"
+    echo 1 > rewritten_file
+    git add rewritten_file
+    git commit -m "1"
+    git checkout master
   popd &> /dev/null
   mkdir -p "${PRETEND_URL}"
   pushd "${PRETEND_URL}" &> /dev/null
@@ -248,6 +268,7 @@ begin_test "Part 4 - Pushing to mirror"
     popd &> /dev/null
   done
 
+  git_tag_main "${TRANSFER_DIR}/info.env" "${TRANSFER_DIR}"
   LFS_DIR="${MIRROR_DIR}/lfs/lfs/objects" GIT="${TRASHDIR}/git2" git_push_main "${TRANSFER_DIR}/info.env" "${TRANSFER_DIR}"
 )
 end_test
@@ -267,13 +288,47 @@ begin_test "Part 5 - Cloning from mirror"
   LFS_DIR="${MIRROR_DIR}/lfs/lfs/objects" GIT="${TRASHDIR}/git2" git_clone_main "${TRANSFER_DIR}/info.env" "${CLONE_DIR}"
 
   # Tests
-  [ -f "${CLONE_DIR}/readme" ]
+  # Verify all refs are pushed (and none are skipped) by git_push_main with
+  # the default regexs (nothing to force-push here though)
+  #
+  # I could do these tests in the clone instead (the refs would be listed under
+  # refs/remotes and there would be a separate set of refs/heads; also, there
+  # are cases where certain tags are not fetched without the
+  # git fetch --tags flag)
+  #
+  # git 1.8.3 does not support git -C
+  pushd "${MIRROR_DIR}/main" &> /dev/null
+    # (These may need to be sorted)
+    output=\
+'^refs/heads/master
+refs/heads/to_force1
+refs/tags/just_git_mirror/[-.0-9TZ]+/heads/master
+refs/tags/just_git_mirror/[-.0-9TZ]+/heads/to_force1
+refs/tags/original_commit$'
+    [[ "$(git for-each-ref --format='%(refname)')" =~ ${output} ]] || false
+  popd &> /dev/null
+  pushd "${MIRROR_DIR}/recipes" &> /dev/null
+    output=\
+'^refs/heads/master
+refs/heads/to_force2
+refs/tags/just_git_mirror/[-.0-9TZ]+/heads/master
+refs/tags/just_git_mirror/[-.0-9TZ]+/heads/to_force2$'
+    [[ "$(git for-each-ref --format='%(refname)')" =~ ${output} ]] || false
+  popd &> /dev/null
+
   # git 1.8.3 does not support git -C
   pushd "${CLONE_DIR}" &> /dev/null
-    git show-ref --verify --quiet refs/tags/original_commit
+    [ -f readme ]
+    [ "$(git log master -n1 --format="%s")" = "Added submodules" ]
+    # (to_force1 has not been checked out locally)
+    [ "$(git log origin/to_force1 -n1 --format="%s")" = "1" ]
   popd &> /dev/null
   [ -f "${CLONE_DIR}/${DIFFICULT_NAME}/readme_sub" ]
-  [ -f "${CLONE_DIR}/${DIFFICULT_NAME}/a_sub_sub_module/readme_sub_sub" ]
+  pushd "${CLONE_DIR}/${DIFFICULT_NAME}/a_sub_sub_module" &> /dev/null
+    [ -f readme_sub_sub ]
+    [ "$(git log master -n1 --format="%s")" = "Initial commit" ]
+    [ "$(git log origin/to_force2 -n1 --format="%s")" = "sub_sub_1" ]
+  popd &> /dev/null
   [ $(sha256sum ${CLONE_DIR}/lfs/readme1.bin | awk '{print $1}') = abc6fd595fc079d3114d4b71a4d84b1d1d0f79df1e70f8813212f2a65d8916df ]
   # This file shouldn't exist yet
   [ ! -e "${CLONE_DIR}/.git/modules/lfs files/lfs/objects/98/ea/98ea6e4f216f2fb4b69fff9b3a44842c38686ca685f3f55dc48c5d3fb1107be4" ]
@@ -283,9 +338,13 @@ begin_test "Part 5 - Cloning from mirror"
 )
 end_test
 
-begin_test "Part 6 - Update a repo and the prepped mirror"
+begin_test "Part 6 - Update a repo and mirror"
 (
   setup_test
+
+  ####################################
+  #              UPDATE              #
+  ####################################
 
   # Add a file to the main repo
   pushd "${BUILD_REPO}" &> /dev/null
@@ -299,12 +358,26 @@ begin_test "Part 6 - Update a repo and the prepped mirror"
       git add newfile_sub
       git commit -m "add a new file"
       git push origin master
+
+      pushd a_sub_sub_module &> /dev/null
+        # Rewrite the to_force2 branch
+        git checkout origin/to_force2~1
+        git branch -f to_force2 HEAD
+        git checkout to_force2
+        echo 2 > rewritten_file
+        git add rewritten_file
+        git commit -m "sub_sub_2"
+        git push --force origin to_force2
+        git checkout master
+      popd &> /dev/null
     popd &> /dev/null
     git add "${DIFFICULT_NAME}"
     git commit -m "update submodule"
     git push "${PRETEND_URL}" master
 
     # Add a commit to a submodule that is not tracked by the main repo
+    # REVIEW It would be better if this were done in "${BUILD_REPO}_sub" and
+    # pushed to "${PRETEND_REPO}_sub" (although that remote isn't setup)
     pushd "${DIFFICULT_NAME}" &> /dev/null
       echo "1" >> newfile_sub
       git add newfile_sub
@@ -313,13 +386,22 @@ begin_test "Part 6 - Update a repo and the prepped mirror"
     popd &> /dev/null
 
     # Add a branch to the main repo
-    current_branch="$(git rev-parse --abbrev-ref HEAD)"
     git checkout -b a_branch
     touch branchfile
     git add branchfile
     git commit -m "add a file on a branch"
     git push "${PRETEND_URL}" a_branch
-    git checkout "${current_branch}"
+    git checkout master
+
+    # Rewrite the to_force1 branch
+    git checkout to_force1~1
+    git branch -f to_force1 HEAD
+    git checkout to_force1
+    echo 2 > rewritten_file
+    git add rewritten_file
+    git commit -m "2"
+    git push --force "${PRETEND_URL}" to_force1
+    git checkout master
   popd &> /dev/null
 
   # Add a branch to the air-gapped main repo
@@ -353,17 +435,63 @@ begin_test "Part 6 - Update a repo and the prepped mirror"
   popd &> /dev/null
 
   # Push to mirror
+  git_tag_main "${TRANSFER_DIR}/info.env" "${TRANSFER_DIR}"
   LFS_DIR="${MIRROR_DIR}/lfs/lfs/objects" GIT="${TRASHDIR}/git2" git_push_main "${TRANSFER_DIR}/info.env" "${TRANSFER_DIR}"
 
   # Pull changes
   pushd "${CLONE_DIR}" &> /dev/null
+    # NOTE If to_force1 had been checked out in CLONE_DIR, then updating that
+    # branch to the correct commit would require manual intervention because
+    # its history was rewritten
     git pull
     git submodule update --init --recursive
   popd &> /dev/null
 
-  # Tests
+  ##################################
+  #              TEST              #
+  ##################################
+
   [ -f "${CLONE_DIR}/newfile" ]
+  # Verify the refs are re-tagged by git_tag_main (still with the default regex)
+  #
+  # I could do these tests in the clone instead (the refs would be listed under
+  # refs/remotes and there would be a separate set of refs/heads; also, there
+  # are cases where certain tags are not fetched without the
+  # git fetch --tags flag)
+  pushd "${MIRROR_DIR}/main" &> /dev/null
+    # (These may need to be sorted)
+    output=\
+'^refs/heads/a_branch
+refs/heads/airgap_branch
+refs/heads/master
+refs/heads/to_force1
+refs/tags/just_git_mirror/[-.0-9TZ]+/heads/master
+refs/tags/just_git_mirror/[-.0-9TZ]+/heads/to_force1
+refs/tags/just_git_mirror/[-.0-9TZ]+/heads/a_branch
+refs/tags/just_git_mirror/[-.0-9TZ]+/heads/master
+refs/tags/just_git_mirror/[-.0-9TZ]+/heads/to_force1
+refs/tags/original_commit$'
+    [[ "$(git for-each-ref --format='%(refname)')" =~ ${output} ]] || false
+  popd &> /dev/null
+  pushd "${MIRROR_DIR}/recipes" &> /dev/null
+    output=\
+'^refs/heads/master
+refs/heads/to_force2
+refs/tags/just_git_mirror/[-.0-9TZ]+/heads/master
+refs/tags/just_git_mirror/[-.0-9TZ]+/heads/to_force2
+refs/tags/just_git_mirror/[-.0-9TZ]+/heads/to_force2$'
+    [[ "$(git for-each-ref --format='%(refname)')" =~ ${output} ]] || false
+  popd &> /dev/null
+  # Verify this branch was force pushed by git_push_main
+  [ "$(cd "${CLONE_DIR}" && git log origin/to_force1 -n1 --format="%s")" = "2" ]
   [ -f "${CLONE_DIR}/${DIFFICULT_NAME}/newfile_sub" ]
+  # Verify this branch was force pushed by git_push_main
+  # Cannot check the "${CLONE_DIR}/${DIFFICULT_NAME}/a_sub_sub_module" because
+  # a fetch is (surprisingly) not performed on the submodule by
+  # git submodule update --init --recursive (perhaps because the tracked commits
+  # don't change). And even if we fetched, we would run into the same problem as
+  # with to_force1
+  [ "$(cd "${MIRROR_DIR}/recipes" && git log to_force2 -n1 --format="%s")" = "sub_sub_2" ]
   output="$(cat "${CLONE_DIR}/${DIFFICULT_NAME}/newfile_sub")"
   [ "${output}" = "" ]
   # git 1.8.3 does not support git -C
@@ -372,6 +500,8 @@ begin_test "Part 6 - Update a repo and the prepped mirror"
     git show-ref --verify --quiet refs/heads/a_branch
   popd &> /dev/null
   pushd "${MIRROR_DIR}/${DIFFICULT_NAME}" &> /dev/null
+    # Verify the mirror contains all of the commits (including new commits not
+    # tracked by the parent repo of the submodule)
     [ "$(git log -n1 --format="%s")" = "update file" ]
     # alternatively
     #[ "$(git show HEAD | git patch-id | awk '{print $1}')" = "bd6ba42dfd6bb1cacf02ec71f97292f25b58d0da" ]
@@ -394,6 +524,180 @@ begin_test "Part 6 - Update a repo and the prepped mirror"
       ! tar tf "${last_incremental_tar_file}" | grep -e "/objects/../.\+[^/]$"
     popd &> /dev/null
   fi
+)
+end_test
+
+begin_test "Part 7 - Rewrite a ref and mirror"
+(
+  setup_test
+
+  ####################################
+  #              UPDATE              #
+  ####################################
+
+  # cd mirror/main && git log --pretty=format:"%s%d" --graph --all
+  # * Shouldn't get tagged (no_tag1)
+  # | * 3 (tag: just_git_mirror/2021-03-17T01.43.15Z/heads/to_force1)
+  # | | * add a file on a branch (tag: just_git_mirror/2021-03-17T01.43.07Z/heads/a_branch, a_branch)
+  # | |/
+  # |/|
+  # * | update submodule (HEAD -> master, tag: just_git_mirror/2021-03-17T01.43.07Z/heads/master)
+  # * | add a file
+  # | | * add a new file on this branch (airgap_branch)
+  # | |/
+  # |/|
+  # | | * 2 (tag: just_git_mirror/2021-03-17T01.43.07Z/heads/to_force1, to_force1)
+  # | |/
+  # | | * 1 (tag: just_git_mirror/2021-03-17T01.42.55Z/heads/to_force1)
+  # | |/
+  # | * A file to be rewritten
+  # |/
+  # * Added submodules (tag: just_git_mirror/2021-03-17T01.42.55Z/heads/master)
+  # * Initial commit (tag: original_commit)
+
+
+  pushd "${BUILD_REPO}" &> /dev/null
+    # Tagging, pushing and force pushing a branch has already been tested using
+    # the branches master and to_force1 (among others)
+
+    # Rewrite the to_force1 branch again; this time, GIT_MIRROR_FORCE_PUSH_REFS
+    # will be disabled
+    git checkout to_force1~1
+    git branch -f to_force1 HEAD
+    git checkout to_force1
+    echo 2 > rewritten_file
+    git add rewritten_file
+    git commit -m "3"
+    git push --force "${PRETEND_URL}" to_force1
+    git checkout master
+
+    # A branch to NOT tag
+    git checkout -b no_tag1
+    git commit --allow-empty -m "Shouldn't get tagged"
+    git push "${PRETEND_URL}" no_tag1
+    git checkout master
+
+    pushd "${DIFFICULT_NAME}"/a_sub_sub_module &> /dev/null
+      # Rewrite the to_force2 branch again
+      git checkout to_force2~1
+      git branch -f to_force2 HEAD
+      git checkout to_force2
+      echo 2 > rewritten_file
+      git add rewritten_file
+      git commit -m "sub_sub_3"
+      git push --force origin to_force2
+      git checkout master
+
+      # A branch to NOT tag
+      git checkout -b no_tag2
+      git commit --allow-empty -m "Shouldn't get tagged"
+      git push origin no_tag2
+      git checkout master
+    popd &> /dev/null
+  popd &> /dev/null
+
+  # Update the prepped mirror
+  pushd "${TRASHDIR}" &> /dev/null
+    LFS_DIR="${PRETEND_URL}_lfs/lfs/objects" GIT="${TRASHDIR}/git2" git_mirror_main "${PRETEND_URL}"
+  popd &> /dev/null
+
+  # Select the incremental backup if it exists
+  # List with 'ls -rt' because the archives are only datetime stamped out to
+  # seconds, so its not inconceivable two archives could be created within a
+  # single second
+  PREP_FILE="$(ls -rt "${PRETEND_URL}_prep"/transfer_*_transfer_*.tgz | tail -n1)"
+  if [ -z "${PREP_FILE:+set}" ]; then
+    PREP_FILE="$(ls -rt "${PRETEND_URL}_prep"/transfer_*.tgz | tail -n1)"
+  fi
+
+  # Simulate the transfer
+  pushd "${TRANSFER_DIR}" &> /dev/null
+    tar zxf "${PREP_FILE}"
+  popd &> /dev/null
+
+  # Push to mirror
+  # NOTE These regex's are matching long-form refs (this regex is "evil", but
+  # negative look-aheads are not supported by bash, and this is easier than
+  # reorganizing the branches so that only the no_tag branch is filtered out;
+  # https://stackoverflow.com/a/1395247)
+  GIT_MIRROR_TAG_REFS_REGEX='^refs/heads/([^n]|n([^o]|o([^_]|$)|$)|$).+$' \
+      git_tag_main "${TRANSFER_DIR}/info.env" "${TRANSFER_DIR}"
+  GIT_MIRROR_FORCE_PUSH_REFS=0 \
+      LFS_DIR="${MIRROR_DIR}/lfs/lfs/objects" \
+      GIT="${TRASHDIR}/git2" \
+      git_push_main "${TRANSFER_DIR}/info.env" "${TRANSFER_DIR}"
+
+  # Pull changes
+  pushd "${CLONE_DIR}" &> /dev/null
+    git pull
+    git submodule update --init --recursive
+  popd &> /dev/null
+
+  ##################################
+  #              TEST              #
+  ##################################
+
+  # Verify to_force1 was NOT updated this time
+  # NOTE While to_force1 is not force pushed, the tag to the updated commit is
+  # pushed:
+  #     just_git_mirror/{date}/heads/to_force1
+  # RE While a little unexpected, this is not obviously wrong
+  # Verify that no_tag1 was not tagged (by git_tag_main) and that master has
+  # not been tagged a third time, which would indicate that there are two tags
+  # referencing the same SHA because master was not updated between the second
+  # and third transfer
+  # RE This could also be checked explicitly for each ref with:
+  # git ls-remote . --tags just_git_mirror/*/heads/master^{} | awk '{print $1}'
+  # and then check for duplicate SHAs (this is sort of an abuse of ls-remote,
+  # but I can't find a way to do this with git show-ref or git rev-parse)
+  #
+  # I could do these tests in the clone instead (the refs would be listed under
+  # refs/remotes and there would be a separate set of refs/heads; also, there
+  # are cases where certain tags are not fetched without the
+  # git fetch --tags flag)
+  pushd "${MIRROR_DIR}/main" &> /dev/null
+    # (These may need to be sorted)
+    output=\
+'^refs/heads/a_branch
+refs/heads/airgap_branch
+refs/heads/master
+refs/heads/no_tag1
+refs/heads/to_force1
+refs/tags/just_git_mirror/[-.0-9TZ]+/heads/master
+refs/tags/just_git_mirror/[-.0-9TZ]+/heads/to_force1
+refs/tags/just_git_mirror/[-.0-9TZ]+/heads/a_branch
+refs/tags/just_git_mirror/[-.0-9TZ]+/heads/master
+refs/tags/just_git_mirror/[-.0-9TZ]+/heads/to_force1
+refs/tags/just_git_mirror/[-.0-9TZ]+/heads/to_force1
+refs/tags/original_commit$'
+    [[ "$(git for-each-ref --format='%(refname)')" =~ ${output} ]] || false
+  popd &> /dev/null
+  pushd "${MIRROR_DIR}/recipes" &> /dev/null
+    output=\
+'^refs/heads/master
+refs/heads/no_tag2
+refs/heads/to_force2
+refs/tags/just_git_mirror/[-.0-9TZ]+/heads/master
+refs/tags/just_git_mirror/[-.0-9TZ]+/heads/to_force2
+refs/tags/just_git_mirror/[-.0-9TZ]+/heads/to_force2
+refs/tags/just_git_mirror/[-.0-9TZ]+/heads/to_force2$'
+    [[ "$(git for-each-ref --format='%(refname)')" =~ ${output} ]] || false
+  popd &> /dev/null
+  # Verify this branch was NOT force pushed
+  [ "$(cd "${CLONE_DIR}" && git log origin/to_force1 -n1 --format="%s")" = "2" ]
+  # Cannot check the "${CLONE_DIR}/${DIFFICULT_NAME}/a_sub_sub_module" because
+  # a fetch is (surprisingly) not performed on the submodule by
+  # git submodule update --init --recursive (perhaps because the tracked commits
+  # don't change). And even if we fetched, we would run into the same problem as
+  # with to_force1
+  # Verify this branch was NOT force pushed
+  [ "$(cd "${MIRROR_DIR}/recipes" && git log to_force2 -n1 --format="%s")" = "sub_sub_2" ]
+
+
+  # NOTE If we ever checked out a branch in CLONE_DIR that gets rewritten, then
+  # updating that branch to the correct commit would require manual intervention
+  # because its history was rewritten. At some point, we could add a git hook
+  # that detects a tag that indicates the current branch has been rewritten
 )
 end_test
 
