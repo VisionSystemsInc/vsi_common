@@ -537,18 +537,22 @@ begin_test "Part 7 - Rewrite a ref and mirror"
 
   # cd mirror/main && git log --pretty=format:"%s%d" --graph --all
   # * Shouldn't get tagged (no_tag1)
-  # | * add a file on a branch (tag: just_git_mirror/2021-03-09T21.16.19Z/heads/a_branch, a_branch)
-  # |/
-  # * update submodule (HEAD -> master, tag: just_git_mirror/2021-03-09T21.16.19Z/heads/master)
-  # * add a file
-  # | * add a new file on this branch (airgap_branch)
-  # |/
-  # | * 2 (tag: just_git_mirror/2021-03-09T21.16.19Z/heads/to_force1, to_force1)
-  # | | * 1 (tag: just_git_mirror/2021-03-09T21.16.08Z/heads/to_force1)
+  # | * 3 (tag: just_git_mirror/2021-03-17T01.43.15Z/heads/to_force1)
+  # | | * add a file on a branch (tag: just_git_mirror/2021-03-17T01.43.07Z/heads/a_branch, a_branch)
+  # | |/
+  # |/|
+  # * | update submodule (HEAD -> master, tag: just_git_mirror/2021-03-17T01.43.07Z/heads/master)
+  # * | add a file
+  # | | * add a new file on this branch (airgap_branch)
+  # | |/
+  # |/|
+  # | | * 2 (tag: just_git_mirror/2021-03-17T01.43.07Z/heads/to_force1, to_force1)
+  # | |/
+  # | | * 1 (tag: just_git_mirror/2021-03-17T01.42.55Z/heads/to_force1)
   # | |/
   # | * A file to be rewritten
   # |/
-  # * Added submodules (tag: just_git_mirror/2021-03-09T21.16.08Z/heads/master)
+  # * Added submodules (tag: just_git_mirror/2021-03-17T01.42.55Z/heads/master)
   # * Initial commit (tag: original_commit)
 
 
@@ -612,9 +616,11 @@ begin_test "Part 7 - Rewrite a ref and mirror"
   popd &> /dev/null
 
   # Push to mirror
-  # NOTE These regex's are matching long-form refs (this regex is using a
-  # negative look-ahead)
-  GIT_MIRROR_TAG_REFS_REGEX='^(?!no_).+$' \
+  # NOTE These regex's are matching long-form refs (this regex is "evil", but
+  # negative look-aheads are not supported by bash, and this is easier than
+  # reorganizing the branches so that only the no_tag branch is filtered out;
+  # https://stackoverflow.com/a/1395247)
+  GIT_MIRROR_TAG_REFS_REGEX='^refs/heads/([^n]|n([^o]|o([^_]|$)|$)|$).+$' \
       git_tag_main "${TRANSFER_DIR}/info.env" "${TRANSFER_DIR}"
   GIT_MIRROR_FORCE_PUSH_REFS=0 \
       LFS_DIR="${MIRROR_DIR}/lfs/lfs/objects" \
@@ -631,15 +637,15 @@ begin_test "Part 7 - Rewrite a ref and mirror"
   #              TEST              #
   ##################################
 
-  # Verify to_force1 was not updated this time
+  # Verify to_force1 was NOT updated this time
   # NOTE While to_force1 is not force pushed, the tag to the updated commit is
   # pushed:
   #     just_git_mirror/{date}/heads/to_force1
   # RE While a little unexpected, this is not obviously wrong
   # Verify that no_tag1 was not tagged (by git_tag_main) and that master has
   # not been tagged a third time, which would indicate that there are two tags
-  # referencing the same SHA because to_force1 was not updated between the
-  # second and third transfer
+  # referencing the same SHA because master was not updated between the second
+  # and third transfer
   # RE This could also be checked explicitly for each ref with:
   # git ls-remote . --tags just_git_mirror/*/heads/master^{} | awk '{print $1}'
   # and then check for duplicate SHAs (this is sort of an abuse of ls-remote,
@@ -662,6 +668,7 @@ refs/tags/just_git_mirror/[-.0-9TZ]+/heads/to_force1
 refs/tags/just_git_mirror/[-.0-9TZ]+/heads/a_branch
 refs/tags/just_git_mirror/[-.0-9TZ]+/heads/master
 refs/tags/just_git_mirror/[-.0-9TZ]+/heads/to_force1
+refs/tags/just_git_mirror/[-.0-9TZ]+/heads/to_force1
 refs/tags/original_commit$'
     [[ "$(git for-each-ref --format='%(refname)')" =~ ${output} ]] || false
   popd &> /dev/null
@@ -671,6 +678,7 @@ refs/tags/original_commit$'
 refs/heads/no_tag2
 refs/heads/to_force2
 refs/tags/just_git_mirror/[-.0-9TZ]+/heads/master
+refs/tags/just_git_mirror/[-.0-9TZ]+/heads/to_force2
 refs/tags/just_git_mirror/[-.0-9TZ]+/heads/to_force2
 refs/tags/just_git_mirror/[-.0-9TZ]+/heads/to_force2$'
     [[ "$(git for-each-ref --format='%(refname)')" =~ ${output} ]] || false
