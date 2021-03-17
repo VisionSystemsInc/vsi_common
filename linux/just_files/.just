@@ -85,7 +85,7 @@ _just()
   local just_commands=()
   while IFS= read -r -d '' i || [ -n "${i}" ]; do
     # Remove all entries containing an _, and sort them and remove duplicates
-    if [[ "${i}" != *_* ]]; then
+    if [[ ${i} != *_* ]]; then
       just_commands+=("${i}")
     fi
   done < <(MIFS='\\x00' join_a_out "${parsed_help_a[@]}" | sort -u -z)
