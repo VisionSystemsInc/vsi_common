@@ -35,10 +35,6 @@ Change the color of the text output to sdtout/stderr
 
 Change the current text color. A temporary file is created to track the current index into the COLORS array; this index is updated with each call to this function. This temporary file will automatically be deleted
 
-TODO: Move to colors.bsh
-TODO: Switch to colors.bsh:get_color
-REVIEW Set a trap that resets the color on ERR or RETURN
-
 .. function:: get_config_submodule_names
 
 Get list of initialized submodules, non-recursive
@@ -224,6 +220,8 @@ However, because the urls for your mirrors will be different from the original r
 :Arguments: ``$1`` - A file specifying the mapping between each repository's original url and its mirror url
             ``$2`` - The mirrored repositories (extracted from the archive) created by :func:`git_mirror_main`
 
+             [``GIT_MIRROR_FORCE_PUSH_REFS``] - A flag specifying whether to force push refs, should it be necessary. Default: 1 (force-push refs)
+
 .. rubric:: Example
 
 In this example, the main repo's mirror url is ``https://git-server.com/foobar/vsi_common.git``, and the submodule stored at ``./docker/recipes`` has the url ``https://git-server.com/foobar/recipes.git``. This file is also used by :func:`git_clone_main`. (Any valid git URL format can be used.)
@@ -235,4 +233,23 @@ repos[.]=https://git-server.com/foobar/vsi_common.git
 repos[docker/recipes]=https://git-server.com/foobar/recipes.git
 
 git_push_main info.env vsi_common_prep
+
+.. function:: git_tag_main
+
+Tag the refs in the mirrored repository and all submodules
+
+Before pushing the mirrored repository and all of its submodules to the new git server with :func:`git_push_main`, tag the refs so that if, during the **next** transfer, they become dereferenced (due to a force push, which is sometimes necessary), they are not lost. For a ref of the form refs/heads/master, this (annotated) tag takes the (long) form of refs/tags/just_git_mirror/{datetime}/heads/master
+
+:Arguments: ``$1`` - A file specifying the mapping between each repository's original url and its mirror url
+            ``$2`` - The mirrored repositories (extracted from the archive) created by :func:`git_mirror_main`
+
+:Parameters: [``GIT_MIRROR_TAG_REFS_REGEX``] - An extended regular expression specifying which refs to tag. The refs should be matched in their long form, e.g., refs/heads/master or refs/tags/v1.0.0. Default: ^refs/heads/.+
+
+.. seealso::
+
+  :func:`git_push_main`
+
+.. note::
+
+  Because this function creates a tag directory called just_git_mirror/ (note the trailing slash), a user can no longer create a tag called just_git_mirror
 
