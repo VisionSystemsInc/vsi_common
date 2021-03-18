@@ -78,6 +78,10 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
     pattern='foo bar.+'
     [[ ${avar} =~ ${pattern} ]]  # Ok. Again, don't quote variables in [[ ]]
 
+    [[ 3 < 4 ]]     # WRONG style. Use [ -lt ]
+
+    [[ 3.5 < 4.0 ]] # Ok. Floating point comparison not possible with []
+
 * Checking to see if a variable exists
 
   .. code-block:: bash
