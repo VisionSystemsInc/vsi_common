@@ -93,7 +93,7 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 #
 #     - ``JUST_GIT_AIRGAP_MIRROR_URL=https://git-airgap.com/projectA``
 #
-# 5. Initialize bare repositories on the air-gapped git server for the project_repo and its submodules. The list of all submodules can be found in the ``repo_map.env`` file. In this example, these should be located at
+# 5. Initialize bare repositories on the air-gapped git server for the project_repo and its submodules. The list of all submodules can be found in the ``repo_map.env`` file, which maps between the submodule's path and its new URL. In this example, these should be located at
 #
 #   - ``https://git-airgap.com/projectA/project_repo.git``
 #   - ``https://git-airgap.com/projectA/vsi_common.git``
@@ -121,13 +121,21 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 # #. ``source setup.env``
 # #. ``just git clone-airgap-repo`` - Clone submodules recursively from the new mirror
 #
+# .. note::
+#
+#   Limitations - There are a few limitations with a mirrored repository:
+#
+#     1. While the mirrored repository is a full fledged git repo, care must be taken to ensure subsequent transfers are successful. Ideally, the mirrored repository should be considered read-only; however, all that is technically required is that the transferred branches remain read-only---additional branches can be created in the repo and merged to as needed.
+#
+#     #. If a submodule is removed from the repository, then checking out an old version of the repository prior to its removal and trying to update its submodules with the git_update-submodules target will fail. This is because, before the submodule can be cloned, it must first be re-configured to point to the URL specified by repo_map.env. However, the old submodule will not be found in this map because :func:`git_mirror git_mirror_main`, and by extension this plugin, only create mirrors of submodules **currently** in a specific branch. Even inspecting the history of the .gitmodules file and including all submodules ever tracked by a branch could be problematic if, for example, the identity of a submodule (at a particular path) changed at some point (this is probably fairly unlikely, but would still be a problem).
+#
 # .. seealso::
 #
 #   :func:`git_mirror git_mirror_main`, :func:`git_mirror git_push_main`, and :func:`git_mirror git_clone_main`
 #
 # .. rubric:: Bugs
 #
-# The airgap'ed repository will not support ``git submodule sync`` because the value in the .gitmodules file has been re-configured
+# An airgap'ed clone does not support changing the location of the airgap'ed git server (i.e., by running ``git submodule sync``) because the location of the submodules as defined in the .gitmodules file is not correct in this case; the submodule has been re-configured to point to the URL specified by repo_map.env
 #**
 
 #**
@@ -989,7 +997,7 @@ function git_submodule_toplevels()
 #
 # :Parameters: [``ASSOCIATIVE_REPO_MAP``] - Set to a value to create the repo map as an associative-array, ``repos``, as opposed to two partitioned arrays (which is bash 3.2 compatible): ``repo_urls`` and ``repo_paths``. (Default: unset; i.e., partitioned)
 #
-# :Output: *stdout* - The contents of the repo_map.env file. For example,
+# :Output: *stdout* - The contents of the repo_map.env file, the file that maps between the submodule's path and its new URL. For example,
 #
 # .. code-block:: bash
 #
