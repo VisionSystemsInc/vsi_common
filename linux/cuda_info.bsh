@@ -23,320 +23,34 @@ source "${VSI_COMMON_DIR}/linux/aliases.bsh"
 #
 # .. file:: cuda_info.bsh
 #
-# Determine easy to use capabilities for ``CUDA`` devices
+# Determine easy to use capabilities for CUDA devices
 #
-# There are many versions of ``CUDA``, ``CUDA`` card architectures, etc... Knowing how to compile for a specific card is hard enough, but it's very difficult to know what the right architectures are for your specific card and what the limitations are based on your version of ``CUDA/NVIDIA`` driver, etc. This script should help determine what versions you have and suggest what architectures to use. This is good enough for an automated solution to get up and running, but these suggestions are not absolute. You may find a fine-tuned configuration that works better on a case-by-case basis.
-#**
-
-#**
-# .. envvar:: CUDA_VERSION
+# There are many versions of CUDA, CUDA card architectures, etc... Knowing how to compile for a specific card is hard enough, but it's very difficult to know what the right architectures are for your specific card and what the limitations are based on your version of CUDA/NVIDIA driver, etc. This script should help determine what versions you have and suggest what architectures to use. This is good enough for an automated solution to get up and running, but these suggestions are not absolute. You may find a fine-tuned configuration that works better on a case-by-case basis.
 #
-# The version of ``CUDA`` being used
 #
-# :file:`cuda_info.bsh` will attempt to discover the ``CUDA`` Development Kit in commonly known locations, and accumulate a list of all discovered CDKs in the sorted array CUDA_VERSIONS. Then, the highest capable version of ``CUDA`` is picked and set to :envvar:`CUDA_VERSION`.
+# A number of variables are set by the following functions.
 #
-# :envvar:`CUDA_VERSION` can optionally be set to a specific version (e.g. "7.5.13"), in which case other ``CUDA`` versions will not be discovered and ``CUDA_VERSIONS`` will not be populated.
+# .. var:: CUDA_VERSION
 #
-# .. note::
-#   Currently, CDKs are discovered by checking the system PATH and /usr/local/cuda*/bin/ directories for the nvcc executable. More paths should be added to this file as they become necessary.
-#**
-
-#**
-# .. function:: discover_cuda_versions
+# The version of CUDA being used. Some functions will attempt to discover the CUDA Toolkit in commonly known locations, and accumulate a list of all discovered CUDAs in the sorted array :var:`CUDA_VERSIONS`. Then, the highest capable version of CUDA is picked and set to :var:`CUDA_VERSION`.
 #
-# :Output: ``CUDA_VERSIONS`` - List of ``CUDA`` versions found
-#
-# Find ``CUDA`` development kits
+# :var:`CUDA_VERSION` can optionally be set to a specific version (e.g. "7.5.13"), in which case other CUDA versions will not be discovered and :var:`CUDA_VERSIONS` will not be populated.
 #
 # .. note::
-#   Will not work on macosx if mac have nvidia and two or more versions of cuda
-#   installed. Seems unlikely
-#**
-function discover_cuda_versions()
-{
-  CUDA_VERSIONS=()
-  local IFS=$'\n' # Handle spaces, tabs, but not newlines in the paths
-  local version
-  for version in $(command -v nvcc) /usr/local/cuda*/bin/nvcc; do
-    CUDA_VERSIONS+=($("${version}" --version | \awk 'END{print substr($6, 2)}'))
-  done 2>/dev/null
+#
+#    Currently, CUDA Toolkits are discovered by checking the system ``PATH`` and ``/usr/local/cuda*/bin/`` directories for the nvcc executable. More paths should be added to this file as they become necessary.
+#
+# .. var:: CUDA_VERSIONS
+#
+# List of all :var:`CUDA_VERSION`-s discovered
+#*
 
-  if [ "${#CUDA_VERSIONS[@]}" = "0" ] && command -v "${NVIDIA_SMI}" &> /dev/null; then
-    echo "No CUDA found: Determining max supported CUDA instead" >&2
-    CUDA_VERSIONS=("$(nvidia-smi | sed -n${sed_flag_rE} '/CUDA Version:/{s|.*CUDA Version: *([0-9.]*).*|\1|;p;q;}')")
-  fi
-
-  # Prevent macOS from crashing. Not sure why this is new. Might be darling
-  if [ ${#CUDA_VERSIONS[@]} -gt 1 ]; then
-    CUDA_VERSIONS=($(sort -uV <<< ${CUDA_VERSIONS[@]+"${CUDA_VERSIONS[*]}"}))
-  fi
-  # Get the highest cuda level
-  CUDA_VERSION=${CUDA_VERSIONS[@]+"${CUDA_VERSIONS[${#CUDA_VERSIONS[@]}-1]}"}
-}
-
-#**
-# .. envvar:: CUDA_DISCOVER
+#*
+# .. var:: CUDA_ARCHES
 #
-# :Parameter: ``CUDA_DISCOVER`` - Default is disabled, set to ``1`` to enable.
+# An array of CUDA "virtual" instruction sets supported by CUDA. Every version of CUDA (``nvcc``) has a set of "virtual" ``compute_xx`` architectures (ISAs) that it can build against when compiling code for "real" ``sm_xx`` architectures.
 #
-# Flag to enable the discovery of CUDA cards and capabilities
-#
-# Because the ``CUDA`` card discovery can be expensive (milliseconds on some computers, hundreds on others), it is disabled by default.
-#
-# There are two methods for CUDA device discovery (in order):
-#  1. Using deviceQuery (available here https://goo.gl/ocBgPU)
-#
-#   * looks for ${DEVICE_QUERY-deviceQuery} on the PATH
-#
-#  2. Using the nvidia-docker-plugin to get and parse GPU information
-#
-#   * discovered using either ``NV_HOST`` or checking to see if nvidia-docker-plugin is running locally using pgrep or ps
-#
-# When running in a docker, deviceQuery is the preferred method. ``NV_HOST`` could be used, but that involves telling the docker the IP of the host, or using a shared network mode in order to use localhost (which is not recommended for production). Attempting to discover nvidia-docker-plugin will not work in a docker.
-#**
-
-#**
-# .. envvar:: CUDA_CARDS
-#
-# List of ``CUDA`` devices found on the computer
-#
-# An array of all the ``CUDA`` cards discovered. The only way to manually override this would be to disable :envvar:`CUDA_DISCOVER`, but that was not the intended use.
-#**
-
-#**
-# .. envvar:: CUDA_CARD_ARCHES
-#
-# List of ``CUDA`` card architectures
-#
-# An array of all the architectures the ``CUDA`` cards discovered. The only way to manually override this would be to disable :envvar:`CUDA_DISCOVER`, but that was not the intended use.
-#**
-
-#**
-# .. envvar:: CUDA_CARD_FAMILIES
-#
-# List of ``CUDA`` card family names
-#
-# An array of all the family names of the ``CUDA`` cards discovered. The only way to manually override this would be to disable :envvar:`CUDA_DISCOVER`, but that was not the intended use.
-#
-# .. note::
-#   If deviceQuery is not used, then an internal lookup table is used, but only supports Tesla, Fermi, Kepler, Maxwell, Pascal, Volta, Tesla, and Ampere. Additional family names need to be added as they are released.
-#**
-
-#**
-# .. function:: nvidia_smi_cuda_version
-#
-# Starting at Nvidia Driver version 410.72, ``nvidia-smi`` started listing the maximum version of CUDA that driver supports in ``nvidia-smi`` output. This function can be used to parse that.
-#
-# :Parameters: * ``NVIDIA_SMI`` - Optional path to a specific ``nvidia-smi``. Default: ``nvidia-smi`` (using the system path)
-#
-# :Output: *stdout* - echoes out the version of CUDA that ``nvidia-smi`` says it supports. If this version of ``nvidia-smi`` does not say, nothing is output.
-#**
-function nvidia_smi_cuda_version()
-{
-  ${NVIDIA_SMI-nvidia-smi} | sed -n${sed_flag_rE} 's|.*CUDA Version: *([0-9.]*).*|\1|;
-                                                   t done;
-                                                   b;
-                                                   :done;
-                                                   p;
-                                                   q'
-}
-
-#**
-# .. function:: device_query_cuda_capability
-#
-# :Output: * CUDA_CARD_ARCHES - Array of architectures that ``deviceQuery`` says the current NVIDIA cards support
-#          * CUDA_CARDS - Array of card names
-#
-# :Parameters: * ``DEVICE_QUERY`` - Optional path to a specific ``deviceQuery``. Default: ``deviceQuery`` (using the system path)
-#
-# Device query is one of the sample programs in the CUDA Samples that prints out useful information about the connected CUDA devices.
-#
-# The ``deviceQuery`` executable is compiled from the source code typically found the in ``/usr/local/cuda/samples/1_Utilities/deviceQuery/``, but can be downloaded precompiled for Linux from https://goo.gl/equvX3
-#**
-function device_query_cuda_capability()
-{
-  local card_info
-  card_info="$(${DEVICE_QUERY-deviceQuery} | \grep -E "CUDA Capability Major/Minor version number|^Device")" || return $?
-  CUDA_CARD_ARCHES=($(echo "${card_info}" | \grep "CUDA Capability Major/Minor version number" | \awk '{print $NF}'))
-  local IFS=$'\n'
-  CUDA_CARDS=($(echo "${card_info}" | \grep ^Device | \awk '{$1=$2=""; $0=$0; $1=$1}1' | \sed 's|"||g'))
-}
-
-#**
-# .. function:: nvidia_docker_plugin_cuda_capability
-#
-# The deprecated nvidia-docker v1 API hosted GPU information, which was useful for determining the CUDA Arches. This is rarely used now.
-#
-# :Parameters: [``NV_HOST``] - Environment variable to optionally specify a custom NVIDIA host for the GPUs. Default: ``http://localhost:3476``
-#
-# :Output: * ``CUDA_CARD_FAMILIES``
-#          * ``CUDA_CARD_ARCHES``
-#          * ``CUDA_CARDS``
-#**
-function nvidia_docker_plugin_cuda_capability()
-{
-  local card_info="$(download_to_stdout ${NV_HOST-http://localhost:3476}/gpu/info)"
-
-  CUDA_CARD_FAMILIES=($(echo "${card_info}" | \grep Family: | \awk '{print $NF}'))
-  CUDA_CARD_ARCHES=($(echo "${card_info}" | \grep Arch: | \awk '{print $NF}'))
-  local IFS=$'\n'
-  CUDA_CARDS=($(echo "${card_info}" | \grep Model: | \awk '{$1=""; $0=$0; $1=$1}1'))
-}
-
-#**
-# .. function:: version_txt_cuda_version
-#
-# Parses the ``version.txt`` file left behind by some CUDA installs (Version 5.5 through 11.0. 11.0 only installs as part of the "docs" package).
-#
-# For versions of CUDA that are patched, the highest version number is returned.
-#
-# :Parameters: [``$1``] - Filename of ``version.txt`` file. Default: Read from stdin
-#**
-
-function version_txt_cuda_version()
-{
-  local versions=($(awk '{print $NF}' "${1--}" | sort))
-  if [ "${#versions[@]}" -ge 1 ]; then
-    echo "${versions[${#versions[@]}-1]}"
-  fi
-}
-
-#**
-# .. function:: version_txt_cuda_version
-#
-# Parses the ``version.txt`` file left behind by some CUDA installs (11.2 or newer).
-#
-# :Parameters: [``$1``] - Filename of ``version.json`` file. Default: Read from stdin
-#**
-function version_json_cuda_version()
-{
-  sed -n${sed_flag_rE} '/"name" *: *"CUDA NVCC"/{N;
-                                                 s|.*"version" *: *"([^"]*)".*|\1|p}' "${1--}"
-}
-
-#**
-# .. function::
-#**
-function get_nvcc_version()
-{
-  local IFS=' ,V'
-  local version=($("${NVCC-nvcc}" | sed -n "s|Cuda compilation tools.*release ||p"))
-  # Format before 5.5
-  if [ "${version[${#version[@]}-1]}" = "0.2.1221" ]; then
-    echo "${version[0]}"
-  else # new format starting in 5.5
-    echo "${version[${#version[@]}-1]}"
-  fi
-}
-
-#**
-# .. function:: discover_cuda_info
-#
-# :Output: * :envvar:`CUDA_CARDS` - List of all ``CUDA`` capable devices
-#          * :envvar:`CUDA_CARD_ARCHES` - Matching list of ``CUDA`` real architectures
-#          * :envvar:`CUDA_CARD_FAMILIES` - Matching list of ``CUDA`` families
-#
-# Get ``CUDA`` info about each card
-#**
-function discover_cuda_info()
-{
-  if command -v pgrep &> /dev/null; then
-    function nvidia_docker_is_running()
-    {
-      \pgrep -f "${1}" &> /dev/null
-      return $?
-    }
-  else
-    function nvidia_docker_is_running()
-    {
-      [ $(\ps -ef | \grep "${1}" | \wc -l) -gt 1 ]
-      return $?
-    }
-  fi
-
-  local IFS="${IFS}"
-  local OLD_IFS="${IFS}"
-
-  CUDA_CARD_FAMILIES=()
-
-  # Attempt to use deviceQuery
-  if command -v "${DEVICE_QUERY-deviceQuery}" &> /dev/null; then
-    local card_info cuda_card_arches cuda_card_families
-    local x y
-
-    # deviceQuery may fail, for example, if running without nvidia-docker or if
-    # the CUDA driver version is insufficient for CUDA runtime version
-    if card_info="$(${DEVICE_QUERY-deviceQuery} | \grep -E "CUDA Capability Major/Minor version number|^Device")"; then
-      CUDA_CARD_ARCHES=($(echo "${card_info}" | \grep "CUDA Capability Major/Minor version number" | \awk '{print $NF}'))
-      IFS=$'\n'
-      CUDA_CARDS=($(echo "${card_info}" | \grep ^Device | \awk '{$1=$2=""; $0=$0; $1=$1}1' | \sed 's|"||g'))
-      IFS="${OLD_IFS}"
-      # Currently these two arrays can't have spaces, if they do, the awk will need to be updated
-      cuda_card_arches=(1 2 3 5 6 7 7.5 8) # Lowest possible version number, put in ascending order
-      cuda_card_families=(Tesla Fermi Kepler Maxwell Pascal Volta Turing Ampere) # Matching Family name
-      for x in ${CUDA_CARD_ARCHES[@]+"${CUDA_CARD_ARCHES[@]}"}; do
-        CUDA_CARD_FAMILIES+=("$(awk '
-        BEGIN {
-          # Split the arches array
-          version[0]=""
-          a="'"${cuda_card_arches[*]}"'"
-          n=split(a, version, " ")
-
-          # Split the family array
-          family[0]=""
-          a="'"${cuda_card_families[*]}"'"
-          split(a, family, " ")
-
-          # loop through all the versions
-          for(j = n; j > 0; j--)
-          {
-            # if it matches
-            if ('"${x}"' >= version[j])
-            {
-              # Print it out
-              print family[j]
-              exit(0)
-            }
-          }
-          # Default behavior
-          print "Unknown family"
-        }')")
-      done
-    fi
-  # Else attempt to use the nvidia-docker daemon
-  elif nvidia_docker_is_running nvidia-docker-plugin || declare -p NV_HOST &> /dev/null; then
-    local download_cmd
-    local card_info
-    # Warning not in cuda order. Oh well
-    if command -v curl &> /dev/null; then
-      download_cmd="curl -s"
-    else
-      download_cmd="wget -qO-"
-    fi
-
-    card_info="$($download_cmd ${NV_HOST-http://localhost:3476}/gpu/info)"
-
-    CUDA_CARD_FAMILIES=($(echo "${card_info}" | \grep Family: | \awk '{print $NF}'))
-    CUDA_CARD_ARCHES=($(echo "${card_info}" | \grep Arch: | \awk '{print $NF}'))
-    IFS=$'\n'
-    CUDA_CARDS=($(echo "${card_info}" | \grep Model: | \awk '{$1=""; $0=$0; $1=$1}1'))
-    IFS="${OLD_IFS}"
-  else
-    echo "deviceQuery not found and nvidia-docker v1 plugin not running"
-    echo "deviceQuery can be downloaded from https://www.vsi-ri.com/bin/deviceQuery60"
-    echo "or https://goo.gl/equvX3"
-  fi
-  CUDA_CARD_ARCHES=(${CUDA_CARD_ARCHES[@]+"${CUDA_CARD_ARCHES[@]/./}"})
-}
-
-#**
-# .. envvar:: CUDA_ARCHES
-#
-# List of ``CUDA`` "virtual" instruction sets supported by ``CUDA``
-#
-# Every version of ``CUDA`` (nvcc) has a set of "virtual" compute_xx architectures (ISAs) that it can build against when compiling code for "real" sm_xx architectures.
-#
-# This array contains the list of the compute (virtual) architectures supported by the :envvar:`CUDA_VERSION` version of ``CUDA`` as an array of two digit numbers.
+# This array contains the list of the compute (virtual) architectures supported by the :var:`CUDA_VERSION` version of CUDA as an array of two digit numbers.
 #
 # .. rubric:: Example
 #
@@ -356,54 +70,343 @@ function discover_cuda_info()
 #   2.0 3.0 3.2 3.5 3.7 5.0 5.2 5.3 6.0 6.1 6.2
 #
 # .. seealso::
-#   :envvar:`CUDA_DEPRECATED`
-#**
-
-#**
-# .. envvar:: CUDA_CODES
+#   :var:`CUDA_DEPRECATED`
 #
-# List of ``CUDA`` "real" instruction sets supported by ``CUDA``
+# .. var:: CUDA_CODES
 #
-# Every version of ``CUDA`` (nvcc) has a set of "real" sm_xx architectures that that it can assemble native (``CUDA`` binary) code for.
+# An array of CUDA "real" instruction sets supported by CUDA. Every version of CUDA (``nvcc``) has a set of "real" ``sm_xx`` architectures that that it can assemble native (CUDA binary) code for.
 #
-# This array contains a list of the sm architectures supported by the :envvar:`CUDA_VERSION` version of ``CUDA`` as an array of two digit numbers.
-#
-# .. rubric:: Example
-#
-# .. code-block:: bash
-#
-#     $ echo "${CUDA_CODES[@]}"
-#     20 21 30 32 35 37 50 52 53 60 61 62
+# This array contains a list of the sm architectures supported by the :var:`CUDA_VERSION` version of CUDA as an array of two digit numbers.
 #
 # .. seealso::
-#   :envvar:`CUDA_DEPRECATED`
+#   :var:`CUDA_DEPRECATED`
+#
+# .. var:: CUDA_MINIMAL_DRIVER_VERSION
+#
+# Every version of CUDA has a minimal version of the NVIDIA graphics-card driver that must be installed in order to support that version of CUDA. This was largely undocumented until CUDA 10 came out, despite being obviously important. This variable is set to the minimum required version of the NVIDIA driver for the :var:`CUDA_VERSION` version of CUDA, as best as we've been able to determine.
+#
+# .. var:: CUDA_DEPRECATED
+#
+# Some versions of CUDA support old instruction sets, but print a deprecated warning. For those versions of CUDA, a :var:`CUDA_DEPRECATED` array is defined to list the two digit architectures that are supported yet deprecated in the :var:`CUDA_VERSION` version of CUDA.
+#
+# .. var:: CUDA_FORWARD_PTX
+#
+# PTX arch for newer CUDA cards. In situations where you are making portable fatbinaries, you should compile for every architecture. However, in order to future proof your fatbin for architectures newer than your current version of CUDA supports, you will need to compile to a pure virtual architecture using the PTX feature so that the real architecture can be JIT (Just-In-Time) compiled.
+#
+# :var:`CUDA_FORWARD_PTX` identifies the fullest featured PTX architecture so that you can choose to add this to your builds.
+#*
+
+#*
+# .. var:: CUDA_CARDS
+#
+# The names of the CUDA cards. Exact values may vary, e.g. "Titan X (Pascal)" vs "Titan Xp".
+#
+# ..var:: CUDA_CARD_FAMILIES
+#
+#   The family of card, for each card in :var:`CUDA_CARDS` is in.
+#
+# .. var:: CUDA_CARD_ARCHES
+#
+# The specific :var:`CUDA_ARCHES` a card natively supports, for each card in :var:`CUDA_CARDS`.
+#*
+
+#*
+# .. var:: CUDA_SUGGESTED_ARCHES
+#
+# Suggested "virtual" architectures to compile for. Instead of compiling for every architecture that the :var:`CUDA_VERSION` version of CUDA supports, :var:`CUDA_SUGGESTED_ARCHES` is the intersection between :var:`CUDA_CARD_ARCHES` and :var:`CUDA_ARCHES` so that you compile only for your cards.
+#
+# .. var:: CUDA_SUGGESTED_CODES
+#
+# Suggested "real" architectures to compile for. Instead of compiling for every architecture that the :var:`CUDA_VERSION` version of CUDA supports, :var:`CUDA_SUGGESTED_CODES` is the intersection between :var:`CUDA_CARD_ARCHES` and :var:`CUDA_CODES` so that you compile only for your cards.
+#
+# .. var:: CUDA_SUGGESTED_PTX
+#
+# Suggested PTX architectures to compile for. If your graphics card is too new for the :var:`CUDA_VERSION` version of CUDA, you will need to compile to a pure virtual architecture (by embedding PTX code in the fatbinary) in order to use it. That way, the real architecture can be JIT (Just-In-Time) compiled for at runtime.
+#
+# :var:`CUDA_SUGGESTED_PTX` identifies the PTX architectures you need to run on newer (unsupported) cards. You can choose to add them to your builds.
 #**
 
 #**
-# .. envvar:: CUDA_MINIMAL_DRIVER_VERSION
+# .. function:: discover_cuda_versions
 #
-# Required version of NVIDIA driver
+# :Output: :var:`CUDA_VERSIONS`
+#          :var:`CUDA_VERSION`
 #
-# Every version of ``CUDA`` has a minimal version of the NVIDIA graphics-card driver that must be installed in order to support that version of ``CUDA``. This is largely undocumented, despite being obviously important. This variable is set to the minimum required version of the NVIDIA driver for the :envvar:`CUDA_VERSION` version of ``CUDA``, as best as we've been able to determine.
+# Find CUDA development kits
+#
+# .. note::
+#   Will not work on macosx if mac have nvidia and two or more versions of cuda
+#   installed. Seems unlikely
 #**
+function discover_cuda_versions()
+{
+  CUDA_VERSIONS=()
+  # local IFS=$'\n' # Handle spaces, tabs, but not newlines in the paths
+  local version
+  for version in nvcc /usr/local/cuda*/bin/nvcc; do
+    if ! command -v "${version}" &> /dev/null; then
+      continue
+    fi
+    CUDA_VERSIONS+=($(NVCC="${version}" get_nvcc_version))
+  done
+
+  # Maybe nvcc isn't running right or is missing, check for version files
+  if [ "${#CUDA_VERSIONS[@]}" = "0" ]; then
+    for version in /usr/local/cuda*/version.txt; do
+      if [ -r "${version}" ]; then
+        CUDA_VERSIONS+=($(version_txt_cuda_version "${version}"))
+      fi
+    done
+    for version in /usr/local/cuda*/version.json; do
+      if [ -r "${version}" ]; then
+        CUDA_VERSIONS+=($(version_json_cuda_version "${version}"))
+      fi
+    done
+  fi
+
+  if [ "${#CUDA_VERSIONS[@]}" = "0" ] && command -v "${NVIDIA_SMI}" &> /dev/null; then
+    echo "No CUDA found: Determining max supported CUDA instead" >&2
+    CUDA_VERSIONS=($(nvidia_smi_cuda_version))
+  fi
+
+  # Prevent macOS from crashing. Not sure why this is new. Might be darling
+  if [ ${#CUDA_VERSIONS[@]} -gt 1 ]; then
+    CUDA_VERSIONS=($(sort -uV <<< ${CUDA_VERSIONS[@]+"${CUDA_VERSIONS[*]}"}))
+  fi
+
+  # Get the highest cuda level
+  CUDA_VERSION=${CUDA_VERSIONS[@]+"${CUDA_VERSIONS[${#CUDA_VERSIONS[@]}-1]}"}
+}
 
 #**
-# .. envvar:: CUDA_DEPRECATED
+# .. function:: nvidia_smi_cuda_version
 #
-# List of deprecated instruction sets supported by ``CUDA``
+# Starting at Nvidia Driver version 410.72, ``nvidia-smi`` started listing the maximum version of CUDA that driver supports in ``nvidia-smi`` output. This function can be used to parse that.
 #
-# Some versions of ``CUDA`` support old instruction sets, but print a deprecated warning. For those versions of ``CUDA``, a :envvar:`CUDA_DEPRECATED` array is defined to list the two digit architectures that are supported yet deprecated in the :envvar:`CUDA_VERSION` version of ``CUDA``.
+# :Parameters: * ``NVIDIA_SMI`` - Optional path to a specific ``nvidia-smi``. Default: ``nvidia-smi`` (using the system path)
+#
+# :Output: *stdout* - echoes out the version of CUDA that ``nvidia-smi`` says it supports. If this version of ``nvidia-smi`` does not say, nothing is output.
 #**
+function nvidia_smi_cuda_version()
+{
+  ${NVIDIA_SMI} | sed -n${sed_flag_rE} 's|.*CUDA Version: *([0-9.]*).*|\1|;
+                                        t done
+                                        b
+                                        :done
+                                        p;
+                                        q;'
+}
+
+#**
+# .. function:: device_query_cuda_capability
+#
+# :Output: * :var:`CUDA_CARD_ARCHES`
+#          * :var:`CUDA_CARDS`
+#
+# :Parameters: * ``DEVICE_QUERY`` - Optional path to a specific ``deviceQuery``. Default: ``deviceQuery`` (using the system path)
+#
+# :Return Value: * ``0`` - No errors
+#                * Non-zero - If the output of ``deviceQuery`` does not contain any Cuda Capabilities, then something likely failed. This is usually caused by running a contianer without the nvidia extensions or having an insufficient nvidia driver for the CUDA running in ``deviceQuery``
+#
+# Device query is one of the sample programs in the CUDA Samples that prints out useful information about the connected CUDA devices.
+#
+# The ``deviceQuery`` executable is compiled from the source code typically found the in ``/usr/local/cuda/samples/1_Utilities/deviceQuery/``, but can be downloaded precompiled for Linux from https://goo.gl/equvX3
+#**
+function device_query_cuda_capability()
+{
+  local card_info
+
+  # deviceQuery may fail, for example, if running without nvidia-docker or if the CUDA driver version is insufficient for CUDA runtime version
+  card_info="$(${DEVICE_QUERY-deviceQuery} | \grep -E "CUDA Capability Major/Minor version number|^Device")" || return $?
+  CUDA_CARD_ARCHES=($(echo "${card_info}" | \awk '/CUDA Capability Major\/Minor version number/{print $NF}'))
+  local IFS=$'\n'
+  CUDA_CARDS=($(echo "${card_info}" | \awk '/^Device/{$1=$2=""; $0=$0; $1=$1; print}' | \sed 's|"||g'))
+}
+
+#**
+# .. function:: nvidia_docker_plugin_cuda_capability
+#
+# The deprecated nvidia-docker v1 API hosted GPU information, which was useful for determining the CUDA Arches. This is rarely used now.
+#
+# :Parameters: [``NV_HOST``] - Environment variable to optionally specify a custom NVIDIA host for the GPUs. Default: ``http://localhost:3476``
+#
+# :Output: * :var:`CUDA_CARD_FAMILIES`
+#          * :var:`CUDA_CARD_ARCHES`
+#          * :var:`CUDA_CARDS`
+#**
+function nvidia_docker_plugin_cuda_capability()
+{
+  local card_info="$(download_to_stdout ${NV_HOST-http://localhost:3476}/gpu/info)"
+
+  CUDA_CARD_FAMILIES=($(echo "${card_info}" | \awk '/Family:/{print $NF}'))
+  CUDA_CARD_ARCHES=($(echo "${card_info}" | \awk '/Arch:/{print $NF}'))
+  local IFS=$'\n'
+  CUDA_CARDS=($(echo "${card_info}" | \awk '/Model:/{$1=""; $0=$0; $1=$1; print}'))
+}
+
+#**
+# .. function:: version_txt_cuda_version
+#
+# Parses the ``version.txt`` file left behind by some CUDA installs (Version 5.5 through 11.0. 11.0 only installs as part of the "docs" package).
+#
+# For versions of CUDA that are patched, the highest version number is returned.
+#
+# :Parameters: [``$1``] - Filename of ``version.txt`` file. Default: Read from stdin
+#**
+
+function version_txt_cuda_version()
+{
+  local versions=($(\awk '{print $NF}' ${1+"${1}"} | sort))
+  if [ "${#versions[@]}" -ge 1 ]; then
+    echo "${versions[${#versions[@]}-1]}"
+  fi
+}
+
+#**
+# .. function:: version_txt_cuda_version
+#
+# Parses the ``version.txt`` file left behind by some CUDA installs (11.2 or newer).
+#
+# :Parameters: [``$1``] - Filename of ``version.json`` file. Default: Read from stdin
+#**
+function version_json_cuda_version()
+{
+  \sed -n${sed_flag_rE} '/"name" *: *"CUDA NVCC"/{N;
+                                                  s|.*"version" *: *"([^"]*)".*|\1|p;}' ${1+"${1}"}
+}
+
+#**
+# .. function:: get_nvcc_version
+#
+# Determine the version of nvcc
+#
+# :Parameters: [``$NVCC``] - Name of nvcc executable. Default: ``nvcc``
+#
+# :Output: **stdout** - Version of ``nvcc``
+#**
+function get_nvcc_version()
+{
+  local IFS=' ,V'
+  local version=($("${NVCC}" | \sed -n "s|Cuda compilation tools.*release ||p"))
+  # Format before 5.5
+  if [ "${version[${#version[@]}-1]}" = "0.2.1221" ]; then
+    echo "${version[0]}"
+  else # new format starting in 5.5
+    echo "${version[${#version[@]}-1]}"
+  fi
+}
+
+#**
+# .. function:: cuda_arch_to_cuda_family
+#
+# Determines CUDA Family names based off of CUDA Arch stored in ``CUDA_CARD_ARCHES``
+#
+# :Parameters: :var:`CUDA_CARD_ARCHES`
+#
+# :Output: :var:`CUDA_CARD_FAMILIES`
+#**
+function cuda_arch_to_cuda_family()
+{
+  local cuda_card_arches cuda_card_families
+
+  # Currently these two arrays can't have spaces, if they do, the awk will need to be updated
+  cuda_card_arches=(1 2 3 5 6 7 7.5 8) # Lowest possible version number, put in ascending order
+  cuda_card_families=(Tesla Fermi Kepler Maxwell Pascal Volta Turing Ampere) # Matching Family name
+
+  # Use awk because this is decimal arithmetic
+  CUDA_CARD_FAMILIES=($(\awk '
+    BEGIN {
+      # Split the arches array
+
+      arches[0]=""
+      a="'"${CUDA_CARD_ARCHES[*]}"'"
+      num_arches=split(a, arches, " ")
+
+      versions[0]=""
+      a="'"${cuda_card_arches[*]}"'"
+      num_versions=split(a, versions, " ")
+
+      # Split the family array
+      family[0]=""
+      a="'"${cuda_card_families[*]}"'"
+      split(a, family, " ")
+
+      for(arch=1; arch <= num_arches; arch++)
+      {
+        # Default behavior
+        fam="Unknown family"
+
+        # loop through all the versions
+        for(ver = num_versions; ver > 0; ver--)
+        {
+          # if it matches
+          if (arches[arch] >= versions[ver])
+          {
+            # Print it out
+            fam=family[ver]
+            break
+          }
+        }
+        print fam
+      }
+    }'))
+}
+
+#**
+# .. function:: discover_cuda_info
+#
+# Get CUDA info about each card
+#
+# :Output: * :var:`CUDA_CARDS`
+#          * :var:`CUDA_CARD_ARCHES`
+#          * :var:`CUDA_CARD_FAMILIES`
+#**
+
+if command -v pgrep &> /dev/null; then
+  function __nvidia_docker_is_running()
+  {
+    \pgrep -f "${1}" &> /dev/null
+    return $?
+  }
+else
+  function __nvidia_docker_is_running()
+  {
+    [ $(\ps -ef | \grep "${1}" | \wc -l) -gt 1 ]
+    return $?
+  }
+fi
+
+
+function discover_cuda_info()
+{
+  local IFS="${IFS}"
+  local OLD_IFS="${IFS}"
+
+  CUDA_CARD_FAMILIES=()
+
+  # Attempt to use deviceQuery
+  if command -v "${DEVICE_QUERY-deviceQuery}" &> /dev/null && device_query_cuda_capability; then
+    cuda_arch_to_cuda_family
+  # Else attempt to use the nvidia-docker daemon
+  elif __nvidia_docker_is_running nvidia-docker-plugin || declare -p NV_HOST &> /dev/null; then
+    nvidia_docker_plugin_cuda_capability
+  else
+    echo "deviceQuery not found and nvidia-docker v1 plugin not running"
+    echo "deviceQuery can be downloaded from https://www.vsi-ri.com/bin/deviceQuery60"
+    echo "or https://goo.gl/equvX3"
+  fi
+  CUDA_CARD_ARCHES=(${CUDA_CARD_ARCHES[@]+"${CUDA_CARD_ARCHES[@]/./}"})
+}
 
 #**
 # .. function:: cuda_capabilities
 #
-# :Parameters: ``$1`` - The cuda version to check against. This is typically the ``nvcc`` version, but the docs version should work too. In a pinch, ``CUDA`` version will work, to some extent.
+# :Parameters: ``$1`` - The cuda version to check against. This is typically the ``nvcc`` version, but the docs version should work too. In a pinch, CUDA version will work, to some extent.
 #
-# :Output: * :envvar:`CUDA_ARCHES` - Supported ``CUDA`` virtual architectures (compute_xx)
-#          * :envvar:`CUDA_CODES` - Supported ``CUDA`` real architectures (sm_xx)
-#          * :envvar:`CUDA_MINIMAL_DRIVER_VERSION` - Minimal NVIDIA driver version needed for :envvar:`CUDA_VERSION` version of graphics-card driver
-#          * [:envvar:`CUDA_DEPRECATED`] - List of deprecated (yet working) architectures.
+# :Output: * :var:`CUDA_ARCHES`
+#          * :var:`CUDA_CODES`
+#          * :var:`CUDA_MINIMAL_DRIVER_VERSION`
+#          * :var:`CUDA_DEPRECATED`
 #
 # Determine compiler capabilities for specific CDK
 #**
@@ -653,7 +656,7 @@ function cuda_capabilities()
         CUDA_MINIMAL_DRIVER_VERSION=450.36.06
       fi
       ;;
-    11.1.74) # CUDA .0 GA
+    11.1.74|11.1.0) # CUDA .0 GA
       CUDA_ARCHES=(35 37 50 52 53 60 61 62 70 72 75 80 86)
       CUDA_CODES=(35 37 50 52 53 60 61 62 70 72 75 80 86) #sm_20 too? That can't be right
       CUDA_DEPRECATED=(35 37 50)
@@ -675,7 +678,7 @@ function cuda_capabilities()
         CUDA_MINIMAL_DRIVER_VERSION=455.32
       fi
       ;;
-    11.2.67) # CUDA .0
+    11.2.67|11.2.0) # CUDA .0
       CUDA_ARCHES=(35 37 50 52 53 60 61 62 70 72 75 80 86)
       CUDA_CODES=(35 37 50 52 53 60 61 62 70 72 75 80 86)
       CUDA_DEPRECATED=(35 37 50)
@@ -688,7 +691,7 @@ function cuda_capabilities()
         CUDA_MINIMAL_DRIVER_VERSION=460.27.03
       fi
       ;;
-    11.2.142) # CUDA .1 Update 1
+    11.2.142|11.2.1) # CUDA .1 Update 1
       CUDA_ARCHES=(35 37 50 52 53 60 61 62 70 72 75 80 86)
       CUDA_CODES=(35 37 50 52 53 60 61 62 70 72 75 80 86)
       CUDA_DEPRECATED=(35 37 50)
@@ -726,48 +729,12 @@ function cuda_capabilities()
 }
 
 #**
-# .. envvar:: CUDA_SUGGESTED_ARCHES
-#
-# Suggested "virtual" architectures to compile for
-#
-# Instead of compiling for every architecture that the :envvar:`CUDA_VERSION` version of ``CUDA`` supports, :envvar:`CUDA_SUGGESTED_ARCHES` is the intersection between :envvar:`CUDA_CARD_ARCHES` and :envvar:`CUDA_ARCHES` so that you compile only for your cards.
-#**
-
-#**
-# .. envvar:: CUDA_SUGGESTED_CODES
-#
-# Suggested "real" architectures to compile for
-#
-# Instead of compiling for every architecture that the :envvar:`CUDA_VERSION` version of ``CUDA`` supports, :envvar:`CUDA_SUGGESTED_CODES` is the intersection between ``CUDA_CARD_CODES`` and :envvar:`CUDA_CODES` so that you compile only for your cards.
-#**
-
-#**
-# .. envvar:: CUDA_SUGGESTED_PTX
-#
-# Suggested PTX architectures to compile for
-#
-# If your graphics card is too new for the :envvar:`CUDA_VERSION` version of ``CUDA``, you will need to compile to a pure virtual architecture (by embedding PTX code in the fatbinary) in order to use it. That way, the real architecture can be JIT (Just-In-Time) compiled for at runtime.
-#
-# :envvar:`CUDA_SUGGESTED_PTX` identifies the PTX architectures you need to run on newer (unsupported) cards. You can choose to add them to your builds.
-#**
-
-#**
-# .. envvar:: CUDA_FORWARD_PTX
-#
-# PTX arch for newer ``CUDA`` cards
-#
-# In situations where you are making portable fatbinaries, you should compile for every architecture. However, in order to future proof your fatbin for architectures newer than your current version of ``CUDA`` supports, you will need to compile to a pure virtual architecture using the PTX feature so that the real architecture can be JIT (Just-In-Time) compiled.
-#
-# :envvar:`CUDA_FORWARD_PTX` identifies the fullest featured PTX architecture so that you can choose to add this to your builds.
-#**
-
-#**
 # .. function:: suggested_architectures
 #
-# :Output: * :envvar:`CUDA_SUGGESTED_ARCHES` - Suggested virtual architectures for your cards
-#          * :envvar:`CUDA_SUGGESTED_CODES` - Suggested real architectures for your cards
-#          * :envvar:`CUDA_SUGGESTED_PTX` - Suggested PTX for your cards
-#          * :envvar:`CUDA_FORWARD_PTX` - Potential forward compatibility PTX to compile for cards newer than your current ``CUDA`` supports
+# :Output: * :var:`CUDA_SUGGESTED_ARCHES`
+#          * :var:`CUDA_SUGGESTED_CODES`
+#          * :var:`CUDA_SUGGESTED_PTX`
+#          * :var:`CUDA_FORWARD_PTX`
 #
 # Calculate suggested architectures
 #**
@@ -839,10 +806,9 @@ function suggested_architectures()
     # the first case first.
     if [ "${CUDA_CODES[$x]:0:1}" == "${arch:0:1}" ]; then
       CUDA_SUGGESTED_CODES+=("${CUDA_CODES[$x]}")
-    else
-      # If you get here, that means you have have a newer card than this version
-      # of cuda supports. So the best answer is to PTX compile for it.
-      CUDA_SUGGESTED_PTX+=("${CUDA_CODES[$x]}")
+    # PTX is for ARCH, not CODES
+    # else
+    #   CUDA_SUGGESTED_PTX+=("${CUDA_CODES[$x]}")
     fi
   done
 
@@ -857,12 +823,12 @@ function suggested_architectures()
 #**
 # .. function:: cmake_cuda_flags
 #
-# :Parameters: * :envvar:`CUDA_SUGGESTED_ARCHES` - List of virtual architectures to compile
-#              * :envvar:`CUDA_SUGGESTED_CODES` - Matching list of real architectures to compile
-#              * [:envvar:`CUDA_SUGGESTED_PTX`] - Optional list of PTX architectures to compile
+# :Parameters: * :var:`CUDA_SUGGESTED_ARCHES`
+#              * :var:`CUDA_SUGGESTED_CODES`
+#              * [:var:`CUDA_SUGGESTED_PTX`]
 # :Output: *stdout* - echoes out the value of the target_CUDA_architectures
 #
-# Generate ``CUDA`` flags for CMake
+# Generate CUDA flags for CMake
 #
 # Modern CMake installs include a FindCUDA.cmake script which calls the select_compute_arch.cmake script (https://goo.gl/uZvAjR). It uses a limited version of the tables that :file:`cuda_info.bsh` uses and is prone to being out of date.
 #
@@ -880,9 +846,9 @@ function suggested_architectures()
 #
 #   CUDA_SELECT_NVCC_ARCH_FLAGS(NVCC_FLAGS_EXTRA $ENV{TORCH_CUDA_ARCH_LIST})
 #
-# Setting the environment variable ``TORCH_CUDA_ARCH_LIST`` to the output of :func:`cmake_cuda_flags` will result in using the desired ``CUDA`` architecture and code versions.
+# Setting the environment variable ``TORCH_CUDA_ARCH_LIST`` to the output of :func:`cmake_cuda_flags` will result in using the desired CUDA architecture and code versions.
 #
-# To add the :envvar:`CUDA_FORWARD_PTX`, run:
+# To add the :var:`CUDA_FORWARD_PTX`, run:
 #
 # .. code-block:: bash
 #
@@ -929,20 +895,39 @@ function cmake_cuda_flags()
 # .. function:: discover_cuda_all
 #
 # Helper function to call all the discovery code in one call.
+#
+# There are two methods for CUDA device discovery (in order):
+#
+# 1. Using deviceQuery (available here https://goo.gl/ocBgPU)
+#
+#   * looks for ${DEVICE_QUERY-deviceQuery} on the PATH
+#
+# 2. Using the nvidia-docker-plugin to get and parse GPU information
+#
+#   * discovered using either ``NV_HOST`` or checking to see if nvidia-docker-plugin is running locally using pgrep or ps
+#
+# When running in a docker, deviceQuery is the preferred method. ``NV_HOST`` could be used, but that involves telling the docker the IP of the host, or using a shared network mode in order to use localhost (which is not recommended for production). Attempting to discover nvidia-docker-plugin will not work in a docker.
+#
+# :Output: * :var:`CUDA_CARDS`
+#          * :var:`CUDA_CARD_ARCHES`
+#          * :var:`CUDA_CARD_FAMILIES`
+#
+# .. note::
+#
+#    If deviceQuery is not used, then an internal lookup table is used, but only supports Tesla, Fermi, Kepler, Maxwell, Pascal, Volta, Tesla, and Ampere. Additional family names need to be added as they are released.
 #**
 function discover_cuda_all()
 {
   # Call all of the CUDA discovery functions
-
-  if [ "${CUDA_VERSION+set}" != "set" ]; then
+  if [ -z "${CUDA_VERSION+set}" ]; then
     discover_cuda_versions
   fi
 
-  if [ "${CUDA_DISCOVER-}" == "1" ] && [ "${CUDA_VERSION+set}" == "set" ]; then
+  if [ -n "${CUDA_VERSION+set}" ]; then
     discover_cuda_info
+    cuda_capabilities "${CUDA_VERSION}"
+    suggested_architectures
+  else
+    echo "Could not determine a CUDA version, please set CUDA_VERSION and call again" >&2
   fi
-  #unset CUDA_DISCOVER # ??? To prevent multiple calls
-
-  cuda_capabilities "${CUDA_VERSION}"
-  suggested_architectures
 }

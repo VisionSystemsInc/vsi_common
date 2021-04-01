@@ -682,134 +682,7 @@ versions_txt_ans=(7.5.18
 versions_json=("${version1121}" "${version1122}")
 versions_json_ans=(11.2.142 11.2.152)
 
-if ! command -v "${NVIDIA_SMI}" &> /dev/null; then
-  skip_next_test
-fi
-begin_test "Cuda discover"
-(
-  setup_test
-
-  CUDA_DISCOVER=1
-  discover_cuda_all
-
-  (( ${#CUDA_CARD_FAMILIES[@]} > 0 ))
-  (( ${#CUDA_CARD_ARCHES[@]} > 0 ))
-  (( ${#CUDA_CARDS[@]} > 0 ))
-  (( ${#CUDA_VERSIONS[@]} > 0 ))
-)
-end_test
-
-begin_test "Cuda 7.5 test"
-(
-  setup_test
-
-  # Setup
-  CUDA_VERSION=7.5.01
-  CUDA_CARD_ARCHES=(30 35 52 200)
-
-  # Run it
-  discover_cuda_all
-
-  # Test it
-  [ "${CUDA_VERSION}" = "7.5.01" ]
-  assert_array_values CUDA_SUGGESTED_ARCHES 30 35 52
-  assert_array_values CUDA_SUGGESTED_CODES 30 35 52
-  [ "$(cmake_cuda_flags)" = "3.0 3.5 5.2 5.3+PTX" ]
-)
-end_test
-
-begin_test "Cuda 9 test"
-(
-  setup_test
-
-  # Setup
-  CUDA_VERSION=9.0.01
-  CUDA_CARD_ARCHES=(37 52 70)
-
-  # Run it
-  discover_cuda_all
-
-  # Test it
-  [ "${CUDA_VERSION}" = "9.0.01" ]
-  assert_array_values CUDA_SUGGESTED_ARCHES 37 52 70
-  assert_array_values CUDA_SUGGESTED_CODES 37 52 70
-  [ "$(cmake_cuda_flags)" = "3.7 5.2 7.0" ]
-
-  # Test the future flag
-  CUDA_SUGGESTED_PTX+=(${CUDA_SUGGESTED_PTX+"${CUDA_SUGGESTED_PTX[@]}"} "${CUDA_FORWARD_PTX}")
-  [ "$(cmake_cuda_flags)" = "3.7 5.2 7.0 7.0+PTX" ]
-)
-end_test
-
-if [[ ${OSTYPE} != darwin* ]]; then
- skip_next_test
-fi
-begin_test "No Cuda on Darwin"
-(
-  setup_test
-
-  . "${VSI_COMMON_DIR}/linux/cuda_info.bsh"
-
-  [ -z "${CUDA_ARCHES+set}" ]
-  [ -z "${CUDA_CODES+set}" ]
-  [ -z "${CUDA_SUGGESTED_ARCHES+set}" ]
-  [ -z "${CUDA_SUGGESTED_CODES+set}" ]
-  [ -z "${CUDA_SUGGESTED_PTX+set}" ]
-  [ -z "${CUDA_VERSIONS+set}" ]
-  [ -z "${CUDA_VERSION}" ]
-  [ -z "${CUDA_FORWARD_PTX}" ]
-)
-end_test
-
-begin_test "Use nvidia-smi to get cuda version"
-(
-  setup_test
-
-  function nvidia-smi()
-  {
-    echo 'Wed Mar 17 20:15:45 2021
-+-----------------------------------------------------------------------------+
-| NVIDIA-SMI 384.81                 Driver Version: 384.81                    |
-|-------------------------------+----------------------+----------------------+
-| GPU  Name        Persistence-M| Bus-Id        Disp.A | Volatile Uncorr. ECC |
-| Fan  Temp  Perf  Pwr:Usage/Cap|         Memory-Usage | GPU-Util  Compute M. |
-|===============================+======================+======================|
-|   0  Tesla K80           Off  | 00000000:04:00.0 Off |                    0 |
-| N/A   32C    P0    59W / 149W |      0MiB / 11439MiB |      0%      Default |
-+-------------------------------+----------------------+----------------------+'
-  }
-
-  [ "$(nvidia_smi_cuda_version)" == "" ]
-
-
-  function nvidiasmi2()
-  {
-    echo 'Wed Mar 17 19:10:41 2021
-+-----------------------------------------------------------------------------+
-| NVIDIA-SMI 455.45.01    Driver Version: 455.45.01    CUDA Version: 11.1     |
-|-------------------------------+----------------------+----------------------+
-| GPU  Name        Persistence-M| Bus-Id        Disp.A | Volatile Uncorr. ECC |
-| Fan  Temp  Perf  Pwr:Usage/Cap|         Memory-Usage | GPU-Util  Compute M. |
-|                               |                      |               MIG M. |
-|===============================+======================+======================|
-|   0  Quadro K600         Off  | 00000000:03:00.0 Off |                  N/A |
-| 25%   48C    P8    N/A /  N/A |    182MiB /   981MiB |      0%      Default |
-|                               |                      |                  N/A |
-+-------------------------------+----------------------+----------------------+'
-  }
-
-  [ "$(NVIDIA_SMI=nvidiasmi2 nvidia_smi_cuda_version)" == "11.1" ]
-
-)
-end_test
-
-begin_test "Use deviceQuery to get cuda version"
-(
-  setup_test
-
-  function deviceQuery2()
-  {
-    echo 'deviceQuery Starting...
+device_query_string='deviceQuery Starting...
 
  CUDA Device Query (Runtime API) version (CUDART static linking)
 
@@ -926,29 +799,32 @@ Device 2: "Quadro K600"
 
 deviceQuery, CUDA Driver = CUDART, CUDA Driver Version = 11.1, CUDA Runtime Version = 7.5, NumDevs = 3, Device0 = TITAN X (Pascal), Device1 = TITAN X (Pascal), Device2 = Quadro K600
 Result = PASS'
-  }
 
-  function deviceQuery()
-  {
-    return 1
-  }
+nvidia_smi_old='Wed Mar 17 20:15:45 2021
++-----------------------------------------------------------------------------+
+| NVIDIA-SMI 384.81                 Driver Version: 384.81                    |
+|-------------------------------+----------------------+----------------------+
+| GPU  Name        Persistence-M| Bus-Id        Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp  Perf  Pwr:Usage/Cap|         Memory-Usage | GPU-Util  Compute M. |
+|===============================+======================+======================|
+|   0  Tesla K80           Off  | 00000000:04:00.0 Off |                    0 |
+| N/A   32C    P0    59W / 149W |      0MiB / 11439MiB |      0%      Default |
++-------------------------------+----------------------+----------------------+'
 
-  not device_query_cuda_capability
+nvidia_smi_new='Wed Mar 17 19:10:41 2021
++-----------------------------------------------------------------------------+
+| NVIDIA-SMI 455.45.01    Driver Version: 455.45.01    CUDA Version: 11.1     |
+|-------------------------------+----------------------+----------------------+
+| GPU  Name        Persistence-M| Bus-Id        Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp  Perf  Pwr:Usage/Cap|         Memory-Usage | GPU-Util  Compute M. |
+|                               |                      |               MIG M. |
+|===============================+======================+======================|
+|   0  Quadro K600         Off  | 00000000:03:00.0 Off |                  N/A |
+| 25%   48C    P8    N/A /  N/A |    182MiB /   981MiB |      0%      Default |
+|                               |                      |                  N/A |
++-------------------------------+----------------------+----------------------+'
 
-  DEVICE_QUERY=deviceQuery2 device_query_cuda_capability
-
-  assert_array_values CUDA_CARD_ARCHES 6.1 6.1 3.0
-  assert_array_values CUDA_CARDS "TITAN X (Pascal)" "TITAN X (Pascal)" "Quadro K600"
-)
-end_test
-
-begin_test "Use nvidia-docker plugin to get capabilities"
-(
-  setup_test
-
-  function wget()
-  {
-    echo '
+nvidia_docker_gpu_info='
 Driver version:          455.28
 Supported CUDA version:  11.1
 
@@ -1002,6 +878,134 @@ Device #1
     Memory:       5705 MHz
   P2P Available:  None'
 
+if ! command -v "${NVIDIA_SMI}" &> /dev/null; then
+  skip_next_test
+fi
+begin_test "Cuda discover"
+(
+  setup_test
+
+  discover_cuda_all
+
+  (( ${#CUDA_CARD_FAMILIES[@]} > 0 ))
+  (( ${#CUDA_CARD_ARCHES[@]} > 0 ))
+  (( ${#CUDA_CARDS[@]} > 0 ))
+  (( ${#CUDA_VERSIONS[@]} > 0 ))
+)
+end_test
+
+begin_test "Cuda 7.5 test"
+(
+  setup_test
+
+  # Setup
+  CUDA_VERSION=7.5.01
+  CUDA_CARD_ARCHES=(30 35 52 200)
+
+  # Run code
+  cuda_capabilities "${CUDA_VERSION}"
+  suggested_architectures
+
+  # Test it
+  [ "${CUDA_VERSION}" = "7.5.01" ]
+  assert_array_values CUDA_SUGGESTED_ARCHES 30 35 52
+  assert_array_values CUDA_SUGGESTED_CODES 30 35 52
+  [ "$(cmake_cuda_flags)" = "3.0 3.5 5.2 5.3+PTX" ]
+)
+end_test
+
+begin_test "Cuda 9 test"
+(
+  setup_test
+
+  # Setup
+  CUDA_VERSION=9.0.01
+  CUDA_CARD_ARCHES=(37 52 70)
+
+  # Run code
+  cuda_capabilities "${CUDA_VERSION}"
+  suggested_architectures
+
+  # Test it
+  [ "${CUDA_VERSION}" = "9.0.01" ]
+  assert_array_values CUDA_SUGGESTED_ARCHES 37 52 70
+  assert_array_values CUDA_SUGGESTED_CODES 37 52 70
+  [ "$(cmake_cuda_flags)" = "3.7 5.2 7.0" ]
+
+  # Test the future flag
+  CUDA_SUGGESTED_PTX+=(${CUDA_SUGGESTED_PTX+"${CUDA_SUGGESTED_PTX[@]}"} "${CUDA_FORWARD_PTX}")
+  [ "$(cmake_cuda_flags)" = "3.7 5.2 7.0 7.0+PTX" ]
+)
+end_test
+
+if [[ ${OSTYPE} != darwin* ]]; then
+ skip_next_test
+fi
+begin_test "No Cuda on Darwin"
+(
+  setup_test
+
+  . "${VSI_COMMON_DIR}/linux/cuda_info.bsh"
+
+  [ -z "${CUDA_ARCHES+set}" ]
+  [ -z "${CUDA_CODES+set}" ]
+  [ -z "${CUDA_SUGGESTED_ARCHES+set}" ]
+  [ -z "${CUDA_SUGGESTED_CODES+set}" ]
+  [ -z "${CUDA_SUGGESTED_PTX+set}" ]
+  [ -z "${CUDA_VERSIONS+set}" ]
+  [ -z "${CUDA_VERSION+set}" ]
+  [ -z "${CUDA_FORWARD_PTX+set}" ]
+)
+end_test
+
+begin_test "Use nvidia-smi to get cuda version"
+(
+  setup_test
+
+  function nvidia-smi()
+  {
+    echo "${nvidia_smi_old}"
+  }
+
+  [ "$(nvidia_smi_cuda_version)" == "" ]
+
+  function nvidiasmi2()
+  {
+    echo "${nvidia_smi_new}"
+  }
+
+  [ "$(NVIDIA_SMI=nvidiasmi2 nvidia_smi_cuda_version)" == "11.1" ]
+)
+end_test
+
+begin_test "Use deviceQuery to get cuda version"
+(
+  setup_test
+
+  function deviceQuery2()
+  {
+    echo "${device_query_string}"
+  }
+
+  function deviceQuery(){ return 1;}
+
+  not device_query_cuda_capability
+
+  DEVICE_QUERY=deviceQuery2 device_query_cuda_capability
+
+  assert_array_values CUDA_CARD_ARCHES 6.1 6.1 3.0
+  assert_array_values CUDA_CARDS "TITAN X (Pascal)" "TITAN X (Pascal)" "Quadro K600"
+)
+end_test
+
+begin_test "Use nvidia-docker plugin to get capabilities"
+(
+  setup_test
+
+  function wget()
+  {
+    echo "${nvidia_docker_gpu_info}"
+
     echo "${@}" > "${TESTDIR}/args.txt"
   }
 
@@ -1048,20 +1052,100 @@ begin_test "Get nvcc version"
 (
   setup_test
 
-  function nvcc()
-  {
-    echo "${nvcc_string}"
-  }
+  function nvcc(){ echo "${nvcc_string}";}
 
   for i in "${!nvccs[@]}"; do
     nvcc_string="${nvccs[i]}"
     [ "$(get_nvcc_version)" = "${nvccs_ans[i]}" ]
   done
 
-  function nvcc2()
-  {
-    echo "${nvcc1}"
-  }
+  function nvcc2(){ echo "${nvcc1}";}
   [ "$(NVCC=nvcc2 get_nvcc_version)" = "1.0" ]
+)
+end_test
+
+begin_test "Discover cuda versions"
+(
+  setup_test
+  function nvcc(){ :;}
+  function get_nvcc_version(){ :;}
+  function version_txt_cuda_version(){ :;}
+  function version_json_cuda_version(){ :;}
+  function nvidia-smi(){ :;}
+
+  function nvidia_smi_cuda_version(){ echo "11.2";}
+  discover_cuda_versions
+  [[ ${CUDA_VERSIONS[*]} = *11.2* ]] || false
+
+  function get_nvcc_version(){ echo "10.2.3";}
+  discover_cuda_versions
+  [[ ${CUDA_VERSIONS[*]} = *10.2.3* ]] || false
+)
+end_test
+
+begin_test "Cuda Arch to Cuda Family"
+(
+  setup_test
+
+  CUDA_CARD_ARCHES=()
+  cuda_arch_to_cuda_family
+  assert_array_values CUDA_CARD_FAMILIES
+
+  CUDA_CARD_ARCHES=(6.1)
+  cuda_arch_to_cuda_family
+  assert_array_values CUDA_CARD_FAMILIES Pascal
+
+  CUDA_CARD_ARCHES=(6.1 3.0)
+  cuda_arch_to_cuda_family
+  assert_array_values CUDA_CARD_FAMILIES Pascal Kepler
+
+  CUDA_CARD_ARCHES=(6.1 6.1 8.0)
+  cuda_arch_to_cuda_family
+  assert_array_values CUDA_CARD_FAMILIES Pascal Pascal Ampere
+)
+end_test
+
+begin_test "Discover Cuda Info"
+(
+  setup_test
+
+  DEVICE_QUERY=--error
+
+  function __nvidia_docker_is_running()
+  {
+    return 1
+  }
+
+  ans="deviceQuery not found and nvidia-docker v1 plugin not running"
+  [[ $(discover_cuda_info) = ${ans}* ]] || false
+
+  function __nvidia_docker_is_running()
+  {
+    return 0
+  }
+
+  function nvidia_docker_plugin_cuda_capability()
+  {
+    echo 111
+  }
+  [ "$(discover_cuda_info)" = "111" ]
+
+  unset DEVICE_QUERY
+  function device_query()
+  {
+    return
+  }
+
+  function device_query_cuda_capability()
+  {
+    return 1
+  }
+  [ "$(discover_cuda_info)" = "111" ]
+
+  function device_query_cuda_capability()
+  {
+    echo "222"
+  }
+  [ "$(discover_cuda_info)" = "222" ]
 )
 end_test
