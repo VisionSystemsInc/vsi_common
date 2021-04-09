@@ -11,6 +11,7 @@ fi
 source "${VSI_COMMON_DIR}/linux/web_tools.bsh"
 source "${VSI_COMMON_DIR}/linux/compat.bsh"
 source "${VSI_COMMON_DIR}/linux/aliases.bsh"
+source "${VSI_COMMON_DIR}/linux/versions.bsh"
 
 #*# linux/cuda_info
 
@@ -141,7 +142,7 @@ function discover_cuda_versions()
     if ! command -v "${version}" &> /dev/null; then
       continue
     fi
-    CUDA_VERSIONS+=($(NVCC="${version}" get_nvcc_version))
+    CUDA_VERSIONS+=($(NVCC="${version}" nvcc_version))
   done
 
   # Maybe nvcc isn't running right or is missing, check for version files
@@ -239,57 +240,6 @@ function nvidia_docker_plugin_cuda_capability()
   CUDA_CARD_ARCHES=($(echo "${card_info}" | \awk '/Arch:/{sub(/\./, "", $NF); print $NF}'))
   local IFS=$'\n'
   CUDA_CARDS=($(echo "${card_info}" | \awk '/Model:/{$1=""; $0=$0; $1=$1; print}'))
-}
-
-#**
-# .. function:: version_txt_cuda_version
-#
-# Parses the ``version.txt`` file left behind by some CUDA installs (Version 5.5 through 11.0. 11.0 only installs as part of the "docs" package).
-#
-# For versions of CUDA that are patched, the highest version number is returned.
-#
-# :Parameters: [``$1``] - Filename of ``version.txt`` file. Default: Read from stdin
-#**
-function version_txt_cuda_version()
-{
-  local versions=($(\awk '{print $NF}' ${1+"${1}"} | sort))
-  if [ "${#versions[@]}" -ge 1 ]; then
-    echo "${versions[${#versions[@]}-1]}"
-  fi
-}
-
-#**
-# .. function:: version_json_cuda_version
-#
-# Parses the ``version.json`` file left behind by some CUDA installs (11.2 or newer).
-#
-# :Parameters: [``$1``] - Filename of ``version.json`` file. Default: Read from stdin
-#**
-function version_json_cuda_version()
-{
-  \sed -n${sed_flag_rE} '/"name" *: *"CUDA NVCC"/{N;
-                                                  s|.*"version" *: *"([^"]*)".*|\1|p;}' ${1+"${1}"}
-}
-
-#**
-# .. function:: get_nvcc_version
-#
-# Determine the version of nvcc
-#
-# :Parameters: [``$NVCC``] - Name of nvcc executable. Default: ``nvcc``
-#
-# :Output: **stdout** - Version of ``nvcc``
-#**
-function get_nvcc_version()
-{
-  local IFS=' ,V'
-  local version=($("${NVCC}" | \sed -n "s|Cuda compilation tools.*release ||p"))
-  # Format before 5.5
-  if [ "${version[${#version[@]}-1]}" = "0.2.1221" ]; then
-    echo "${version[0]}"
-  else # new format starting in 5.5
-    echo "${version[${#version[@]}-1]}"
-  fi
 }
 
 #**
