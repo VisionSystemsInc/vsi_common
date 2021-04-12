@@ -93,7 +93,7 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 #
 #     - ``JUST_GIT_AIRGAP_MIRROR_URL=https://git-airgap.com/projectA``
 #
-# 5. Initialize bare repositories on the air-gapped git server for the project_repo and its submodules. The list of all submodules can be found in the ``repo_map.env`` file. In this example, these should be located at
+# 5. Initialize bare repositories on the air-gapped git server for the project_repo and its submodules. The list of all submodules can be found in the ``repo_map.env`` file, which maps between the submodule's path and its new URL. In this example, these should be located at
 #
 #   - ``https://git-airgap.com/projectA/project_repo.git``
 #   - ``https://git-airgap.com/projectA/vsi_common.git``
@@ -121,13 +121,21 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 # #. ``source setup.env``
 # #. ``just git clone-airgap-repo`` - Clone submodules recursively from the new mirror
 #
+# .. note::
+#
+#   Limitations - There are a few limitations with a mirrored repository:
+#
+#   1. While the mirrored repository is a proper git repository, care must be taken to ensure subsequent (incremental) mirrors are successful: specifically, the transferred branches must remain read-only. However, additional branches/tags can be created as long as their names won't clash with those from the host repository.
+#
+#   #. :func:`git_mirror git_mirror_main`, and by extension this plugin, does not mirror all submodules that have ever been part of the repo, only those from a specific branch/SHA/tag you specify (master by default). Consequently, checking out another version of the repository with a different version of the .gitmodules file in which a submodule has been deleted or renamed may cause the ``git_clone-airgap-repo`` to fail because the submodule's remote URL could not be re-configured to point to the mirror.
+#
 # .. seealso::
 #
 #   :func:`git_mirror git_mirror_main`, :func:`git_mirror git_push_main`, and :func:`git_mirror git_clone_main`
 #
 # .. rubric:: Bugs
 #
-# The airgap'ed repository will not support ``git submodule sync`` because the value in the .gitmodules file has been re-configured
+# An airgap'ed clone does not support changing the location of the airgap'ed git server (i.e., by running ``git submodule sync``) because the location of the submodules as defined in the .gitmodules file is not correct in this case; the submodule has been re-configured to point to the URL specified by repo_map.env
 #**
 
 #**
@@ -989,7 +997,7 @@ function git_submodule_toplevels()
 #
 # :Parameters: [``ASSOCIATIVE_REPO_MAP``] - Set to a value to create the repo map as an associative-array, ``repos``, as opposed to two partitioned arrays (which is bash 3.2 compatible): ``repo_urls`` and ``repo_paths``. (Default: unset; i.e., partitioned)
 #
-# :Output: *stdout* - The contents of the repo_map.env file. For example,
+# :Output: *stdout* - The contents of the repo_map.env file, the file that maps between the submodule's path and its new URL. For example,
 #
 # .. code-block:: bash
 #
@@ -1917,6 +1925,7 @@ function relocate_git_defaultify()
         orphan_commit_repo_map "${repo_map}"
       popd &>/dev/null
 
+      git_tag_main repo_map.env ./
       git_push_main repo_map.env ./
       ;;
 
