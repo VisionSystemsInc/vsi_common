@@ -1,0 +1,191 @@
+#!/usr/bin/env false bash
+
+if [[ $- != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
+if [ -z ${VSI_COMMON_DIR+set} ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
+
+source "${VSI_COMMON_DIR}/linux/compat.bsh"
+source "${VSI_COMMON_DIR}/linux/aliases.bsh"
+source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
+source "${VSI_COMMON_DIR}/linux/requirements.bsh"
+
+
+#*# linux/versions
+
+#**
+# .. default-domain:: bash
+#
+# ========
+# Versions
+# ========
+#
+# .. file:: versions.bsh
+#
+# A set of functions for determining the versions of specific programs.
+#**
+
+#**
+# .. function:: git_version
+#
+# Retrieves the version number of ``git``.
+#
+# :Parameters: [``GIT``] - The ``git`` executable that will be called. Can be overwritten to call a different executable. Defaults to ``git``.
+# :Output: *stdout* - The ``git`` version number
+#**
+function git_version()
+{
+  "${GIT}" --version | awk '{print $3}'
+}
+
+#**
+# .. function:: docker_version
+#
+# Retrieves the version number of ``docker``.
+#
+# :Parameters: [``DOCKER``] - The ``docker`` executable that will be called. Can be overwritten to call a different executable. Defaults to ``docker``.
+# :Output: *stdout* - The ``docker`` version number
+#**
+function docker_version()
+{
+  local version="$("${DOCKER}" --version | awk '{print $3}')"
+  echo "${version%,}"
+}
+
+#**
+# .. function:: docker_compose_version
+#
+# Retrieves the version number of ``docker-compose``.
+#
+# :Parameters: [``DOCKER_COMPOSE``] - The ``docker-compose`` executable that will be called. Can be overwritten to call a different executable. Defaults to ``docker-compose``.
+# :Output: *stdout* - The ``docker-compose`` version number
+#**
+function docker_compose_version()
+{
+  local version="$("${DOCKER_COMPOSE}" --version | awk '{print $3}')"
+  echo "${version%,}"
+}
+
+#**
+# .. function:: bash_version
+#
+# Retrieves the version number of ``bash``.
+#
+# :Parameters: [``BASH``] - The ``bash`` executable that will be called. Can be overwritten to call a different executable. Defaults to ``bash``.
+# :Output: *stdout* - The ``bash`` version number
+#**
+function bash_version()
+{
+  "${BASH-bash}" --version | sed -n${sed_flag_rE} 's|[^0-9]+([0-9.()]*).*|\1|;s|\((.*)\)|r\1|;p;q'
+}
+
+#**
+# .. function:: tar_version_info
+#
+# Sets the vendor and version number of ``tar``.
+#
+# :Parameters: [``TAR``] - The ``tar`` executable that will be called. Can be overwritten to call a different executable. Defaults to ``tar``.
+# :Output: - ``tar_vendor`` - The ``tar`` vendor (BSD or GNU)
+#          - ``tar_version`` - The ``tar`` version number
+#**
+function tar_version_info()
+{
+  local version_info="$("${TAR-tar}" --version)"
+  local gnu_pattern="tar (GNU tar)*"
+  local busybox_pattern="tar (busybox)*"
+  if [[ ${version_info} = ${gnu_pattern} ]]; then
+    tar_version="$(echo "${version_info}" | awk 'NR==1{print $4}')"
+    tar_vendor="GNU"
+  # macOS
+  elif [[ ${version_info} = bsdtar* ]]; then
+    tar_version="$(echo "${version_info}" | awk '{print $2}')"
+    tar_vendor="BSD"
+  # busybox
+  elif [[ ${version_info} = ${busybox_pattern} ]]; then
+    tar_version="$(echo "${version_info}" | awk '{print $3}')"
+    tar_vendor="BUSYBOX"
+  else
+    tar_version="$(echo "${version_info}" | awk 'NR==1{print $NF}')"
+    tar_vendor="unknown"
+  fi
+}
+
+#**
+# .. function:: openssh_version
+#
+# Sets the vendor and version number of ``ssh``.
+#
+# :Parameters: [``SSH``] - The ``ssh`` executable that will be called. Can be overwritten to call a different executable. Defaults to ``ssh``.
+# :Output: - ``ssh_version`` - The ``ssh`` version number
+#          - ``ssl_vendor`` - The SSL vendor linked to ssh
+#          - ``ssl_version`` - The SSL version linked to ssh
+#**
+function openssh_version()
+{
+  unset_flags xv # incase ssh is an alias or wrapped function, and user has xv on
+  local version_info="$("${SSH}" -V 2>&1)"
+  reset_flags xv
+  local pattern='OpenSSH_([^0-9]*_)?([^ ]*)( [^,]*)?, (.*SSL) ([^ ]*).*'
+  local version version_remainder
+  [[ ${version_info} =~ ${pattern} ]]
+  ssh_version="${BASH_REMATCH[2]}"
+  ssl_vendor="${BASH_REMATCH[4]}"
+  ssl_version="${BASH_REMATCH[5]}"
+
+  split_version_string ssh_version "${ssh_version}"
+  split_version_string ssl_version "${ssl_version}"
+}
+
+#**
+# .. function:: nvcc_version
+#
+# Determine the version of nvcc
+#
+# :Parameters: [``$NVCC``] - The ``nvcc`` executable that will be called. Can be overwritten to call a different executable. Default: ``nvcc``
+#
+# :Output: *stdout* - Version of ``nvcc``
+#**
+function nvcc_version()
+{
+  local IFS=' ,V'
+  local version=($("${NVCC}" | \sed -n "s|Cuda compilation tools.*release ||p"))
+  # Format before 5.5
+  if [ "${version[${#version[@]}-1]}" = "0.2.1221" ]; then
+    echo "${version[0]}"
+  else # new format starting in 5.5
+    echo "${version[${#version[@]}-1]}"
+  fi
+}
+
+#**
+# .. function:: version_txt_cuda_version
+#
+# Parses the ``version.txt`` file left behind by some CUDA installs (Version 5.5 through 11.0. 11.0 only installs it as part of the "docs" package).
+#
+# For versions of CUDA that are patched, the highest version number is returned.
+#
+# :Parameters: [``$1``] - Filename of ``version.txt`` file. Default: Read from stdin
+#**
+function version_txt_cuda_version()
+{
+  local versions=($(\awk '{print $NF}' ${1+"${1}"} | sort))
+  if [ "${#versions[@]}" -ge 1 ]; then
+    echo "${versions[${#versions[@]}-1]}"
+  fi
+}
+
+#**
+# .. function:: version_json_cuda_version
+#
+# Parses the ``version.json`` file left behind by some CUDA installs (11.2 or newer).
+#
+# :Parameters: [``$1``] - Filename of ``version.json`` file. Default: Read from stdin
+#**
+function version_json_cuda_version()
+{
+  \sed -n${sed_flag_rE} '/"name" *: *"CUDA NVCC"/{N;
+                                                  s|.*"version" *: *"([^"]*)".*|\1|p;}' ${1+"${1}"}
+}
