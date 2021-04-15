@@ -11,7 +11,7 @@ fi
 
 # Use a command like true, so that when I comment, it still works
 # COMMENT NEXT LINE when developing, uncomment before commiting.
-# cat - << 'true' > "${temp_file}"
+cat - << 'true' > "${temp_file}"
 
 #*# just/new_just
 
@@ -211,7 +211,7 @@ function write_project_env()
   exists "${1}" && return 0
 
   uwecho   'JUST_PROJECT_PREFIX='"${PROJECT_PREFIX}"'
-            JUST_VERSION="'"${JUST_VERSION-new_just}"'"
+            JUST_VERSION="'"${JUST_VERSION-JUST_VERSION unset in ${1}}"'"
             if [ -z "${'"${PROJECT_PREFIX}"'_CWD+set}" ]; then
               '"${PROJECT_PREFIX}"'_CWD="$(\cd "$(\dirname "${BASH_SOURCE[0]}")"; \pwd)"
             fi
@@ -293,7 +293,7 @@ function write_readme_md()
   fi
   uwecho   '```
 
-            #T# Just usage:
+            ## Just usage:
 
             ```' >> "${1}"
 
@@ -904,6 +904,17 @@ function write_gitignore()
   fi
 }
 
+function format_tutorial()
+{
+  if [ "${USE_TUTORIAL-}" = "1" ]; then
+    # Convert #T# to #
+    sed -i '/^ *#T# /{ s/#T#/#/; }' "${1}"
+  else
+    # Remove #T# lines
+    sed -i '/^ *#T# /d' "${1}"
+  fi
+}
+
 #**
 # .. function:: new_just
 #
@@ -1303,8 +1314,12 @@ function new_just()
   fi
 
   write_project_env "${PROJECT_NAME}.env"
+  format_tutorial "${PROJECT_NAME}.env"
+
   write_readme_md "README.md"
-  write_justfile "${JUSTFILE}" 755
+
+  write_justfile "${JUSTFILE}"
+  format_tutorial "${JUSTFILE}"
 
   if [ "${USE_PIPENV}" = "1" ]; then
     write_pipfile Pipfile
@@ -1315,19 +1330,24 @@ function new_just()
     mkdir -p docker
 
     write_dockerfile "docker/${APP_NAME}.Dockerfile"
+    format_tutorial "docker/${APP_NAME}.Dockerfile"
+
     write_app_justfile "docker/${APP_NAME}.Justfile"
+    format_tutorial "docker/${APP_NAME}.Justfile"
+
     write_docker_compose_yml docker-compose.yml
+    format_tutorial docker-compose.yml
+
     write_dockerignore .dockerignore
+    format_tutorial .dockerignore
   else
     write_hi_cpp hi.cpp
   fi
 
-  ###
   # Some final bookkeeping...
-  ###
-
-  write_gitattributes .gitattributes
   write_gitignore .gitignore
+  write_gitattributes .gitattributes
+  format_tutorial .gitattributes
 
   # ****************************************************************************
   # ****DONE****DONE****DONE****DONE****DONE****DONE****DONE****DONE****DONE****
@@ -1405,13 +1425,14 @@ function new_just()
 
   if [ "${USE_DOCKER}" = "1" ]; then
     uwecho "${just_cmd} sync
-            ${just_cmd} run ${APP_NAME} bash"
+            ${just_cmd} shell"
   else
     uwecho "${just_cmd} compile
             ${just_cmd} run"
   fi
 }
 
+# Don't remove this "true", this is part curl compatibility
 true
 
 # If statement in case mktemp is commented out for development purposes
