@@ -11,12 +11,18 @@ orbs:
 # generic yaml anchors (reusable by multiple projects)
 # -----
 x-stuff:
+  # directories
+  directories:
+    - &linux_source_dir  /home/circleci/repo
+
   # container configuration & update
   container_config: &container_config
-    working_directory: ~/repo
+    working_directory: *linux_source_dir
     shell: /bin/bash -eu
     docker:
-      - image: vsiri/circleci:bash-compose-lfs
+      - image: cimg/python:3.8
+    environment:
+      SOURCE_DIR: *linux_source_dir
 
 commands:
   submodule_checkout:
@@ -37,7 +43,7 @@ commands:
             git config --global user.email "you@example.com"
             git config --global user.name "Your Name"
             . setup.env
-            tar c . | docker run -i --rm -v /root/repo:/src -w /src alpine:3.11 tar x
+            tar c . | docker run -i --rm -v ${SOURCE_DIR}:/src -w /src alpine:3.11 tar x
 
 jobs:
   compile_docs:
@@ -53,9 +59,9 @@ jobs:
           name: Generate docs
           command: |
             . setup.env
-            tar c . | docker run -i --rm -v /root/repo:/src -w /src alpine:3.11 tar x
+            tar c . | docker run -i --rm -v ${SOURCE_DIR}:/src -w /src alpine:3.11 tar x
             SPHINXOPTS='-W  --keep-going' just sphinx build compile -n --all
-            docker run --rm -v /root/repo:/src -w /src alpine:3.11 tar c ./docs/_build/html | tar x
+            docker run --rm -v ${SOURCE_DIR}:/src -w /src alpine:3.11 tar c ./docs/_build/html | tar x
 
       - persist_to_workspace:
           root: docs/_build
