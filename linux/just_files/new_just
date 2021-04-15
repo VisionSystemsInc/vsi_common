@@ -11,7 +11,7 @@ fi
 
 # Use a command like true, so that when I comment, it still works
 # COMMENT NEXT LINE when developing, uncomment before commiting.
-cat - << 'true' > "${temp_file}"
+# cat - << 'true' > "${temp_file}"
 
 #*# just/new_just
 
@@ -474,21 +474,30 @@ function write_dockerfile()
 {
   exists "${1}" && return 0
 
-  uwecho   'FROM vsiri/recipe:gosu as gosu
+  uwecho   '## Dockers use gosu instead of sudo for smoother operation
+            FROM vsiri/recipe:gosu as gosu
+            ## Dockers do not have a zombies reape by default, tini does this
             FROM vsiri/recipe:tini as tini
+            ## Just dockers use vsi common
             FROM vsiri/recipe:vsi as vsi' >> "${1}"
 
   if [ "${USE_PIPENV}" = "1" ]; then
-    uwecho 'FROM vsiri/recipe:pipenv as pipenv
+    uwecho '## Download and setups up pipenv for you
+            FROM vsiri/recipe:pipenv as pipenv
             ## # Uncomment for GDAL
-            FROM vsiri/recipe:gdal as gdal
+            ## FROM vsiri/recipe:gdal as gdal
 
             ###############################################################################
 
+            ## The dep_stage stage is the common stage that all other stages can use. You
+            ## can install and setup any programs that are common to all of the other stages
             FROM debian:stretch as dep_stage
+
+            ## Unlike normal docker shells, this shell will stop after any error, so you
+            ## no longer need to end command lines with "&& \", you can just use a "; \"
             SHELL ["/usr/bin/env", "bash", "-euxvc"]
 
-            ## Install any runtime dependencies
+            # Install your common dependencies here
             RUN apt-get update; \
                 DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
                   python3 tzdata ca-certificates; \
@@ -497,6 +506,7 @@ function write_dockerfile()
             ENV \
                 ## Move all virtualenvs to /venv
                 WORKON_HOME=/venv \
+                ## Make pipenv work from any directory in the container
                 PIPENV_PIPFILE=/src/Pipfile \
                 ## The pipenv cache is how we avoid recompiling packages at runtime
                 ## when the build dependencies are no longer available
@@ -513,11 +523,26 @@ function write_dockerfile()
             ## # Uncomment for GDAL
             ## COPY --from=gdal /usr/local /usr/local
             COPY --from=pipenv /usr/local /usr/local
+
+            ## The universal "run all build steps for docker recipes like pipevn" command.
+            ## Only has to be done once, after any number of COPY from commands.
+            ## See https://git.io/JOcp6 for more details about docker recipes
             RUN for patch in /usr/local/share/just/container_build_patch/*; do "${patch}"; done
 
             ###############################################################################
 
+            ## The pipenv_cache stage is a build staged dedicated to the smooth operation of
+            ## "pipenv sync" and "pipenv install" commands. While the final stage stage does
+            ## not need build dependencies for python packages, "pipenv sync" below will need
+            ## all of the dependencies installed in order to compile wheels that are not
+            ## pre-built wheels.
             FROM dep_stage as pipenv_cache
+
+            # Install your build dependencies for python packages here
+            ## RUN apt-get update; \
+            ##     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            ##       libxml-devel; \
+            ##     rm -r /var/lib/apt/lists/*
 
             ADD Pipfile Pipfile.lock /src/
             ## Simple packages can be added as dependencies to your project by:
@@ -525,34 +550,26 @@ function write_dockerfile()
             ##     just pipenv install scipy
             ##     # installs scipy (Note: all other packages will be updated. Avoiding
             ##     # this is difficult; the --keep-outdated flag is currently buggy)
-            ##     just sync (optionally update docker image)
+            ##     just sync # (optionally update docker image)
+            ## - Or editing your Pipfile manually (https://pipenv.pypa.io/en/latest/advanced/)
+            ##   and then run
+            ##     just sync
 
             ## GDAL, for example, is a more complicated example
             ## - The GDAL Docker recipe will build the GDAL C Library for you
-            ## - GDAL needs numpy installed before it is built, otherwise, numpy
-            ##   integration will not be compiled
+            ## - The GDAL pypi packages needs numpy installed before it is built,
+            ##   otherwise, numpy integration will not be compiled and
+            ##   "import osgeo.gdal_array" will fail
             ##
             ## To test this out:
             ## 1) Uncomment all the "Uncomment for GDAL" sections
-            ## 2) just sync
-            ## 3) Remove the existing pipenv install section below
-            ## 4) Edit your Pipfile and add the following lines (or similar) to the
-            ##    [packages] section
-            ##        gdal = "==2.1.0"
-            ##        numpy = "*"
-            ##    This will add the latest version of numpy and the version of
-            ##    gdal compatible with debian:stretch to your pipenv environment.
-            ##    Note: the version of the pypi package should match (as closely as
-            ##    possible) to the version of the GDAL-binary dependency (gdal-bin)
-            ## 5) just pipenv install
-            ## 6) just sync (optionally update docker image)
-            ##
-            ## Steps 4 and 5 can also be done by:
-            ## - just pipenv install numpy gdal==2.1.0
-            ## - These can be combined because numpy is already installed at
-            ##   just sync time, so numpy was already installed before gdal
-            ## - All other pipenv install arguments can be passed in, such as
-            ##   --pre, etc...
+            ## 2) just sync # Update the image
+            ## 3) just pipenv install numpy gdal==3.2.1 # Or edit the Pipfile manually
+            ##    This will add the latest version of numpy and the version of the
+            ##    pypi package gdal compatible with the GDAL C Library from the recipe.
+            ##    Note: the version of the pypi gdal and C should match as closely as possible
+            ## 4) just sync # (optionally update docker image)
+
 
             RUN \
             ## # Uncomment for GDAL
@@ -565,6 +582,9 @@ function write_dockerfile()
                 # Cleanup and make way for the real /src that will be mounted at runtime
                 rm -rf /src/* /tmp/pip*
 
+            # These recipes are added hear instead of dep_stage do that the docker
+            # cache is not constantly rerunning pipenv sycn everytime the slightest
+            # change to vsi_common is made.
             COPY --from=gosu /usr/local/bin/gosu /usr/local/bin/gosu
             COPY --from=vsi /vsi /vsi
 
@@ -574,31 +594,37 @@ function write_dockerfile()
 
             ###############################################################################
 
-            FROM dep_stage' >> "${1}"
+            ## The final stage is the runtime stage for the application, where everything
+            ## that is needed is installed and setup
+            FROM dep_stage
+            ' >> "${1}"
   else
     uwecho '
             ###############################################################################
 
             FROM debian:stretch
-            SHELL ["/usr/bin/env", "bash", "-euxvc"]
 
-            # Install any runtime dependencies
-            RUN apt-get update; \
-                DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-                  tzdata; \
-                rm -r /var/lib/apt/lists/*' >> "${1}"
+            ## Unlike normal docker shells, this shell will stop after any error, so you
+            ## no longer need to end command lines with "&& \", you can just use a "; \"
+            SHELL ["/usr/bin/env", "bash", "-euxvc"]
+            ' >> "${1}"
   fi
 
-  uwecho   '
-            # Install any additional packages
-            RUN apt-get update; \
-                DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-                  ## Example of a package
-                  ## qbs-examples \
-                  ; \
-                rm -rf /var/lib/apt/lists/*
+  uwecho '# Install your runtime dependencies here
+          RUN apt-get update; \
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                ## Example of a package
+                ## qbs-examples \' >> "${1}"
 
-            ## Another typical example of installing a package
+  if [ "${USE_PIPENV}" != "1" ]; then
+    echo '      tzdata \' >> "${1}"
+  fi
+
+  uwecho '      ; \
+              rm -rf /var/lib/apt/lists/*
+
+            ## Another typical example of installing a package, using it, and then removing
+            ## it right away, for efficientcy/stability
             ## RUN build_deps="wget ca-certificates"; \
             ##     apt-get update; \
             ##     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ${build_deps}; \
@@ -607,10 +633,9 @@ function write_dockerfile()
             ##     rm -rf /var/lib/apt/lists/*
 
             COPY --from=tini /usr/local /usr/local
-
             COPY --from=gosu /usr/local/bin/gosu /usr/local/bin/gosu
             ## Allow non-privileged to run gosu (remove this to take root away from user)
-            ## Do not use this in production!
+            ## Do not leave this in for production!
             RUN chmod u+s /usr/local/bin/gosu
             ' >> "${1}"
 
@@ -618,8 +643,7 @@ function write_dockerfile()
     uwecho 'COPY --from=pipenv_cache /venv /venv' >> "${1}"
   fi
 
-  uwecho   '
-            COPY --from=vsi /vsi /vsi
+  uwecho   'COPY --from=vsi /vsi /vsi
             ADD ["'"$(docker_add_quote_escape "${PROJECT_NAME}.env")"'", "Pipfile", "Pipfile.lock", "/src/"]
             ADD ["'"$(docker_add_quote_escape docker/"${APP_NAME}.Justfile")"'", "/src/docker/"]
 
@@ -630,6 +654,7 @@ function write_dockerfile()
             ## Does not require execute permissions, unlike:
             ## ENTRYPOINT ["/usr/local/bin/tini", "--", "/vsi/linux/just_files/just_entrypoint.sh"]
 
+            ## Update the default '"${APP_NAME}.Justfile"' target
             CMD ["'"${APP_NAME}"'-cmd"]' >> "${1}"
 }
 
@@ -641,6 +666,9 @@ function write_app_justfile()
   exists "${1}" 755 && return 0
 
   uwecho   '#!/usr/bin/env false bash
+            ## Env false because you should never run this file directly.
+            ## bash is added because most code editors will detect this as a shell
+            ## script and use the proper syntax color highlighter
 
             source "${VSI_COMMON_DIR}/linux/just_files/just_default_run_functions.bsh"
 
