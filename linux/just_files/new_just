@@ -765,19 +765,37 @@ function write_docker_compose_yml()
 #####################
 function write_dockerignore()
 {
-  exists "${1}" && return 0
-
-  echo   '*' >> "${1}"
-  echo   '!docker' >> "${1}"
-  if [ "${USE_VSI_COMMON}" = "1" ]; then
-    echo '!'"${RELATIVE_PATH}" >> "${1}"
+  if ! exists "${1}"; then
+    uwecho "## Just dockers ignore all files by default, and you have to add exceptions
+            ## for each file you want to have added to the docker context. This results
+            ## in faster build times, and does not add minutes when you add GBs of data
+            ## to a folder that do not need to part of the docker image.
+            *" > "${1}"
+  # https://stackoverflow.com/a/40919/4166604
+  elif [ "$(tail -c 1 "${1}")" != "" ]; then
+    echo >> "${1}"
   fi
 
-  echo   '!'"${PROJECT_NAME}.env" >> "${1}"
+  if ! grep -q '!docker' "${1}" 2>/dev/null; then
+    uwecho '## Add the entire docker subdir, everything in there should be for building images.
+            !docker' >> "${1}"
+  fi
+  if [ "${USE_VSI_COMMON}" = "1" ] && ! grep -q '!'"${RELATIVE_PATH}" "${1}" 2>/dev/null; then
+    uwecho '## We need the vsi common dir for the vsi recipe
+            !'"${RELATIVE_PATH}" >> "${1}"
+  fi
+
+  if ! grep -q '!'"${PROJECT_NAME}.env" "${1}" 2>/dev/null; then
+    echo   '!'"${PROJECT_NAME}.env" >> "${1}"
+  fi
 
   if [ "${USE_PIPENV}" = "1" ]; then
-    echo '!Pipfile' >> "${1}"
-    echo '!Pipfile.lock' >> "${1}"
+    if ! grep -q '!Pipfile$' "${1}" 2>/dev/null; then
+      echo '!Pipfile' >> "${1}"
+    fi
+    if ! grep -q '!Pipfile.lock$' "${1}" 2>/dev/null; then
+      echo '!Pipfile.lock' >> "${1}"
+    fi
   fi
 }
 
@@ -786,17 +804,33 @@ function write_dockerignore()
 ######################
 function write_gitattributes()
 {
-  exists "${1}" && return 0
-  uwecho '## These file types are being explicitly set to linux line endings for windows.
-          ## This is to allow windows user to edit and run these files inside a linux docker
-          ## this list may need additions as time goes on
-          *.sh eol=lf
-          *.bsh eol=lf
-          *.py eol=lf
-          *.env eol=lf
-          .justplugins eol=lf
-          Justfile eol=lf' >> "${1}"
-  if [ "${USE_DOCKER}" = "1" ]; then
+  if ! exists "${1}"; then
+    uwecho '## These file types are being explicitly set to linux line endings for windows.
+            ## This is to allow windows user to edit and run these files inside a linux docker
+            ## this list may need additions as time goes on' > "${1}"
+  elif [ "$(tail -c 1 "${1}")" != "" ]; then
+    echo >> "${1}"
+  fi
+
+  if ! grep -q "\*\.sh" "${1}" 2>/dev/null; then
+    echo '*.sh eol=lf' >> "${1}"
+  fi
+  if ! grep -q "\*\.bsh" "${1}" 2>/dev/null; then
+    echo '*.bsh eol=lf' >> "${1}"
+  fi
+  if ! grep -q "\*\.py" "${1}" 2>/dev/null; then
+    echo '*.py eol=lf' >> "${1}"
+  fi
+  if ! grep -q "\*\.env" "${1}" 2>/dev/null; then
+    echo '*.env eol=lf' >> "${1}"
+  fi
+  if ! grep -q "\.justplugins" "${1}" 2>/dev/null; then
+    echo '.justplugins eol=lf' >> "${1}"
+  fi
+  if ! grep -q "Justfile" "${1}" 2>/dev/null; then
+    echo 'Justfile eol=lf' >> "${1}"
+  fi
+  if [ "${USE_DOCKER}" = "1" ] && ! grep -q "\*\.Justfile" "${1}" 2>/dev/null; then
     echo '*.Justfile eol=lf' >> "${1}"
   fi
 }
@@ -820,6 +854,10 @@ function write_hi_cpp()
 ##################
 function write_gitignore()
 {
+  if [ "$(tail -c 1 "${1}")" != "" ]; then
+    echo >> "${1}"
+  fi
+
   if ! grep -q local.env "${1}" 2>/dev/null; then
     echo local.env >> "${1}"
   fi
