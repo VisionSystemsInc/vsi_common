@@ -368,7 +368,7 @@ function write_justfile()
                       #T# to be run the first time sync is run.
                       touch "${'"${PROJECT_PREFIX}"'_CWD}/.just_synced"
                     fi
-                    # Add any extra steps run when syncing
+                    # Add any extra steps to run when syncing
                     Docker-compose down
                     justify git_submodule-update # For those users who don'"'"'t remember!
                     justify build
@@ -381,14 +381,14 @@ function write_justfile()
                     extra_args=$#
                     ;;
                   clean_all) # Delete all local volumes
-                    #T# Optional ask question to protect accidental deletion.
-                    ask_question "Are you sure? This will remove packages not in Pipfile!" n
+                    #T# Confirm action to protect accidental deletion. Can be removed if you don't want it.
+                    ask_question "Are you sure you want to delete all docker volumes?" n
                     justify docker-compose clean --all
                     ;;
               ' >> "${1}"
     fi
     uwecho   '    *)
-                    #T# Forward targets to all other plugins, when they do not match any
+                    #T# Forward targets to all other plugins when they do not match any
                     #T# targets in this caseify.
                     defaultify "${just_arg}" ${@+"${@}"}
                     ;;
@@ -479,15 +479,16 @@ function write_dockerfile()
 {
   exists "${1}" && return 0
 
-  uwecho   '#T# Dockers use gosu instead of sudo for smoother operation
+  uwecho   '#T# Dockers use gosu instead of sudo because sudo is poorly designed for use in a docker
+  uwecho   '#T# Note: A function "sudo" is added to call "gosu root" for convenience
             FROM vsiri/recipe:gosu as gosu
-            #T# Dockers do not have a zombies reape by default, tini does this
+            #T# Dockers do not reap zombies by default, tini does this
             FROM vsiri/recipe:tini as tini
             #T# Just dockers use vsi common
             FROM vsiri/recipe:vsi as vsi' >> "${1}"
 
   if [ "${USE_PIPENV}" = "1" ]; then
-    uwecho '#T# Download and setups up pipenv for you
+    uwecho '#T# pipenv manages the python virtual env and installs a consistent set of packages
             FROM vsiri/recipe:pipenv as pipenv
             #T# # Uncomment for GDAL
             #T# FROM vsiri/recipe:gdal as gdal
@@ -529,18 +530,18 @@ function write_dockerfile()
             #T# COPY --from=gdal /usr/local /usr/local
             COPY --from=pipenv /usr/local /usr/local
 
-            #T# The universal "run all build steps for docker recipes like pipevn" command.
-            #T# Only has to be done once, after any number of COPY from commands.
+            #T# Run post-install scripts for docker recipes (like pipevn).
+            #T# Should be run after all of the "COPY --from" commands.
             #T# See https://git.io/JOcp6 for more details about docker recipes
             RUN for patch in /usr/local/share/just/container_build_patch/*; do "${patch}"; done
 
             ###############################################################################
 
-            #T# The pipenv_cache stage is a build staged dedicated to the smooth operation of
-            #T# "pipenv sync" and "pipenv install" commands. While the final stage stage does
-            #T# not need build dependencies for python packages, "pipenv sync" below will need
-            #T# all of the dependencies installed in order to compile wheels that are not
-            #T# pre-built wheels.
+            #T# The pipenv_cache stage is a build stage intended to make the operation of the
+            #T# "pipenv sync" and "pipenv install" commands more efficient. It also helps to
+            #T# minimize the size of the final build stage, which does not require any build
+            #T# dependencies needed by this stage to compile python packages during
+            #T# "pipenv sync" that, for example, do not have a pre-built wheels
             FROM dep_stage as pipenv_cache
 
             # Install your build dependencies for python packages here
@@ -557,12 +558,12 @@ function write_dockerfile()
             #T#     # this is difficult; the --keep-outdated flag is currently buggy)
             #T#     just sync # (optionally updates the docker image)
             #T# - Or editing your Pipfile manually (https://pipenv.pypa.io/en/latest/advanced/)
-            #T#   and then run
+            #T#   and then running
             #T#     just sync
 
-            #T# GDAL, for example, is a more complicated example
+            #T# A more complicated python package, for example, is GDAL
             #T# - The GDAL Docker recipe will build the GDAL C Library for you
-            #T# - The GDAL pypi packages needs numpy installed before it is built,
+            #T# - The GDAL pypi package needs numpy installed before it is built,
             #T#   otherwise, numpy integration will not be compiled and
             #T#   "import osgeo.gdal_array" will fail
             ##
@@ -570,9 +571,11 @@ function write_dockerfile()
             #T# 1) Uncomment all the "Uncomment for GDAL" sections
             #T# 2) just sync # Update the image
             #T# 3) just pipenv install numpy gdal==3.2.1 # Or edit the Pipfile manually
-            #T#    This will add the latest version of numpy and the version of the
-            #T#    pypi package gdal compatible with the GDAL C Library from the recipe.
-            #T#    Note: the version of the pypi GDAL and C GDAL should match as closely as possible
+            #T#    This will add the latest version of numpy (although a specific version can
+            #T#    be specified) and a version of the pypi package GDAL compatible with the
+            #T#    GDAL C Library from the recipe.
+            #T#    Note: the version of the pypi GDAL and C GDAL should match as closely as
+            #T#    possible
             #T# 4) just sync # (optionally updates the docker image)
 
 
@@ -587,9 +590,9 @@ function write_dockerfile()
                 # Cleanup and make way for the real /src that will be mounted at runtime
                 rm -rf /src/* /tmp/pip*
 
-            # These recipes are added hear instead of dep_stage do that the docker
-            # cache is not constantly rerunning pipenv sycn everytime the slightest
-            # change to vsi_common is made.
+            # These recipes are added here instead of in the dep_stage so that docker
+            # is not constantly rerunning pipenv sync everytime the slightest change
+            # to vsi_common is made.
             COPY --from=gosu /usr/local/bin/gosu /usr/local/bin/gosu
             COPY --from=vsi /vsi /vsi
 
@@ -600,7 +603,7 @@ function write_dockerfile()
             ###############################################################################
 
             #T# The final stage is the runtime stage for the application, where everything
-            #T# that is needed is installed and setup
+            #T# else that is needed is installed and setup
             FROM dep_stage
             ' >> "${1}"
   else
@@ -629,7 +632,7 @@ function write_dockerfile()
               rm -rf /var/lib/apt/lists/*
 
             #T# Another typical example of installing a package, using it, and then removing
-            #T# it right away, for efficientcy/stability
+            #T# it by the end of the RUN command to minimize the size of the docker image
             #T# RUN build_deps="wget ca-certificates"; \
             #T#     apt-get update; \
             #T#     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ${build_deps}; \
@@ -673,7 +676,7 @@ function write_app_justfile()
   uwecho   '#!/usr/bin/env false bash
             #T# Env false because you should never run this file directly.
             #T# bash is added because most code editors will detect this as a shell
-            #T# script and use the proper syntax color highlighter
+            #T# script and use the proper syntax highlighting
 
             source "${VSI_COMMON_DIR}/linux/just_files/just_default_run_functions.bsh"
 
@@ -1235,7 +1238,7 @@ function new_just()
   #
   # Flag to turn on tutorial comments
   #**
-  ask_question "Add tutorial comments? (only good if you are unfamiliar with just)" USE_TUTORIAL n
+  ask_question "Add tutorial comments? (good if you are unfamiliar with just)" USE_TUTORIAL n
 
   #**
   # .. env:: REPO_NAME
