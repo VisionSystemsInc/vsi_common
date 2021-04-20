@@ -264,9 +264,13 @@ function safe_git_submodule_update()
         continue
       fi
 
-      # See just_git_airgap_repo.bsh:submodule-helper-resolve-url; or better
-      # consider using just_git_airgap_repo.bsh:git_sync_submodules_recursively
-      # instead
+      # TODO Refactor this sync'ing step into a new function
+      # NOTE It is beneficial to interleave sync'ing and updating because a
+      # repo/submodule that is updated might have its URL in the .gitmodules
+      # file modified and need to be re-synced before its submodules can be
+      # updated. Note, however, that this is not a problem that git solves
+
+      # REVIEW consider using just_git_airgap_repo.bsh:git_submodule_sync instead
       #
       # git submodule sync is necessary in case .gitmodules changed; however,
       # we don't want to modify the current configuration so we need to figure
@@ -274,6 +278,9 @@ function safe_git_submodule_update()
       # git submodule sync will update the configuration using the
       # .gitmodules file and the default remote of the current branch, if set;
       # otherwise origin.
+      # RE However, we cannot change the default remote, either via
+      # git config branch.<branch>.remote or git -c branch.<branch>.remote
+      # because submodules commonly have detached heads
       pushd "${sm_path}" > /dev/null
         local current_branch="$("${GIT}" rev-parse --abbrev-ref HEAD)"
         local default_remote="$("${GIT}" config branch."${current_branch}".remote || echo origin)"
@@ -301,7 +308,7 @@ function safe_git_submodule_update()
       fi
 
       # Reset the configuration of the submodule
-      # git submodule sync dies if there are multiple URLs (e.g.,
+      # git submodule sync dies if there are multiple URLs (e.g., with
       # git config --get-all submodule.<name>.url or
       # git config --get-all remote.origin.url)
       "${GIT}" config submodule."$name".url "${current_submodule_url}"
@@ -309,6 +316,7 @@ function safe_git_submodule_update()
       pushd "${sm_path}" > /dev/null
         "${GIT}" remote set-url "${default_remote}" "${current_remote_url}"
       popd > /dev/null
+
 
       pushd "${sm_path}" > /dev/null
         # This is my equivalent to "git submodule sync". It uses a specific remote
