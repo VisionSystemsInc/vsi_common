@@ -34,7 +34,22 @@ source "${VSI_COMMON_DIR}/linux/compat.bsh"
 #**
 function set_bashpid()
 {
+  local f
   if [ "${bash_feature_bashpid}" = "1" ]; then
+    for f in "${FUNCNAME[@]}"; do
+      # Check if "source/." was called  FUNCNAME, multiple source only produce one "phantom" fork
+      # A source means we need the grandparent
+      if [ "${f}" == "source" ]; then
+        if [ -d /proc ]; then
+          BASHPID="$(bash -c "sed -E 's|.*\) [^ ]* ([^ ]*) .*|\1|' /proc/\${PPID}/stat")"
+          return
+        else
+          # Not all ps's support -fp, but this should work on mac where these is no /proc
+          BASHPID="$(bash -c "ps -fp \${PPID} | awk '(NR>1) {print \$3}'")"
+          return
+        fi
+      fi
+    done
     BASHPID=$(bash -c 'echo ${PPID}')
   fi
 }
