@@ -41,29 +41,58 @@ source "${VSI_COMMON_DIR}/linux/elements.bsh"
 #**
 function array_to_python_ast_list_of_strings()
 {
-  if is_array "${1}"; then
-    unset "${1}"
+  _array_to_python "[" "]" '"' ${@+"${@}"}
+}
+
+#**
+# .. function:: array_to_python_ast_list_of_literals
+#
+# :Arguments: * ``$1`` - Variable to set result to. If the destination is an array, it will be unset (and become global)
+#             * [``$2``...] - Array elements (to be treated literally)
+#
+# Set ``$1`` to a python ast.literal_eval compliant string for an list of strings
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
+#   array_to_python_ast_list_of_literals x 1 '"1\"1"' "\"2'2\"" 3.3
+#   # x=[1, "1\"1", "2'2", 3.3]
+#
+#   array_to_python_ast_list_of_literals x 1+1
+#   # x=[1+1], valid for python eval, but ast.literal_eval
+#
+#   array_to_python_ast_list_of_literals x $((1+1))
+#   # x=[2], valid for ast.literal_eval
+#**
+function array_to_python_ast_list_of_literals()
+{
+  _array_to_python "[" "]" '' ${@+"${@}"}
+}
+
+function _array_to_python()
+{
+  local __array_to_python_open_array="${1}"
+  local __array_to_python_close_array="${2}"
+  local __array_to_python_quote_element="${3}"
+
+  if is_array "${4}"; then
+    unset "${4}"
   fi
 
-  if [ "${1}" != "indirect" ]; then
-    local indirect
-  fi
-  if [ "${1}" != "string" ]; then
-    local string
-  fi
+  local __array_to_python_indirect="${4}"
+  shift 4
 
-  indirect="${1}"
-  shift 1
-  string='['
+  local __array_to_python_string="${__array_to_python_open_array}"
   if (( $# )); then
-    string+="\"${1//\"/\\\"}\""
+    __array_to_python_string+="${__array_to_python_quote_element}${1//${__array_to_python_quote_element}/\\${__array_to_python_quote_element}}${__array_to_python_quote_element}"
     shift 1
   fi
   while (( $# )); do
-    string+=", \"${1//\"/\\\"}\""
+    __array_to_python_string+=", ${__array_to_python_quote_element}${1//${__array_to_python_quote_element}/\\${__array_to_python_quote_element}}${__array_to_python_quote_element}"
     shift 1
   done
-  string="${string}]"
+  __array_to_python_string="${__array_to_python_string}${__array_to_python_close_array}"
 
-  dynamic_set "${indirect}" "${string}"
+  dynamic_set "${__array_to_python_indirect}" "${__array_to_python_string}"
 }
