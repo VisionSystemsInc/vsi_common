@@ -141,12 +141,6 @@
 #   Must **not** be set in the :ref:`project environment files <just-project-env-files>` i.e. cannot be set in ``local.env``, project env file or ``local_post.env``. It will **not** have the desired effect, as this is too late in the load chain. Instead, it can either be exported before calling :file:`just` (not recommended unless in a container or VM) or exported in the :ref:`setup file <just-setup-file>`.
 #**
 
-if [ -e "${JUST_PRELOAD-}" ]; then
-  source "${JUST_PRELOAD}"
-fi
-
-set -euE
-
 #**
 # .. envvar:: JUST_VERBOSE
 #
@@ -160,19 +154,6 @@ set -euE
 #
 #   Must **not** be set in the :ref:`project environment files <just-project-env-files>` i.e. cannot be set in ``local.env``, project env file or ``local_post.env``. It will **not** have the desired effect, as this is too late in the load chain. Instead, it can either be exported before calling :file:`just` (not recommended unless in a container or VM) or exported in the :ref:`setup file <just-setup-file>`.
 #**
-if [ "${JUST_VERBOSE-}" = "1" ]; then
-  function print_and_run()
-  {
-    print_command just --wrap ${@+"${@}"} >&2
-    ${@+"${@}"}
-  }
-  DRYRUN=print_and_run
-elif [ "${JUST_VERBOSE-}" = "2" ]; then
-  set -v
-elif [ "${JUST_VERBOSE-}" = "3" ]; then
-  PS4='+${BASH_SOURCE[0]}:${LINENO} '
-  set -xv
-fi
 
 function print_error()
 {
@@ -211,7 +192,6 @@ function print_error()
   echo >&2
   echo "$1: line $2: Returned $rv" >&2
 }
-trap 'print_error "${BASH_SOURCE[0]}" "${LINENO}"' ERR
 
 #**
 # .. envvar:: JUST_IN_SCRIPT
@@ -220,7 +200,6 @@ trap 'print_error "${BASH_SOURCE[0]}" "${LINENO}"' ERR
 #
 # Currently one use of this is dual purposing a file, so that it behaves differently when sourced by just or by a user on the prompts
 #**
-JUST_IN_SCRIPT=1
 
 if [ -z ${VSI_COMMON_DIR+set} ]; then
   VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
@@ -233,20 +212,11 @@ source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
 source "${VSI_COMMON_DIR}/linux/just_files/just_functions.bsh"
 source "${VSI_COMMON_DIR}/linux/bash_utils.bsh"
 
-setup_tty ${@+"${@}"}
-
 #**
 # .. envvar:: JUST_USER_CWD
 #
 # Although :file:`just` does not have to be run from the just project's root directory, some commands (e.g., docker-compose, but also parts of ``just`` proper) expect to be run from the project's root directory. Typically, the :file:`Justfile` will ``cd`` from the current working directory to the project's root directory, as specified by ``${PROJECT_PREFIX}_CWD`` (thereafter the project's CWD). :envvar:`JUST_USER_CWD` tracks the working directory from which a ``just`` command was run.
 #**
-
-if [ "${JUST_RODEO-}" = "1" ]; then
-  : ${JUST_USER_CWD=${USER_PWD}}
-else
-  : ${JUST_USER_CWD=${PWD}}
-fi
-export JUST_USER_CWD
 
 #**
 # .. envvar:: JUSTFILE
@@ -269,27 +239,67 @@ export JUST_USER_CWD
 #    Must **not** be set in the :ref:`project environment files <just-project-env-files>` i.e. cannot be set in ``local.env``, project env file or ``local_post.env``. It will **not** have the desired effect, as this is too late in the load chain. Instead, it can either be exported before calling :file:`just` (not recommended unless in a container or VM) or exported in the :ref:`setup file <just-setup-file>`.
 #**
 
-: ${JUSTFILE=Justfile}
+function just()
+{
+  if [ -e "${JUST_PRELOAD-}" ]; then
+    source "${JUST_PRELOAD}"
+  fi
 
-# Solve #130
-if [ "${JUSTFILE:0:1}" = "." ]; then
-  JUSTFILE="$(real_path "${JUSTFILE}")"
-fi
+  set -euE
 
-# Covers certain corner cases, like Just_wrap
-unset JUST_SETTINGS
+  if [ "${JUST_VERBOSE-}" = "1" ]; then
+    function print_and_run()
+    {
+      print_command just --wrap ${@+"${@}"} >&2
+      ${@+"${@}"}
+    }
+    DRYRUN=print_and_run
+  elif [ "${JUST_VERBOSE-}" = "2" ]; then
+    set -v
+  elif [ "${JUST_VERBOSE-}" = "3" ]; then
+    PS4='+${BASH_SOURCE[0]}:${LINENO} '
+    set -xv
+  fi
 
-if ! _just_load_justfile "${JUSTFILE}"; then
-  JUST_FILE_NOT_FOUND=1
-fi
+  trap 'print_error "${BASH_SOURCE[0]}" "${LINENO}"' ERR
 
-# Move this check here, so that if there are multiple JUST_SETTINGS, or other
-# advanced setups, that what ever is set when it is all done being loaded is
-# what really counts.
-check_just_version
+  JUST_IN_SCRIPT=1
+
+  setup_tty ${@+"${@}"}
+
+  if [ "${JUST_RODEO-}" = "1" ]; then
+    : ${JUST_USER_CWD=${USER_PWD}}
+  else
+    : ${JUST_USER_CWD=${PWD}}
+  fi
+  export JUST_USER_CWD
+
+  : ${JUSTFILE=Justfile}
+
+  # Solve #130
+  if [ "${JUSTFILE:0:1}" = "." ]; then
+    JUSTFILE="$(real_path "${JUSTFILE}")"
+  fi
+
+  # Covers certain corner cases, like Just_wrap
+  unset JUST_SETTINGS
+
+  if ! _just_load_justfile "${JUSTFILE}"; then
+    JUST_FILE_NOT_FOUND=1
+  fi
+
+  # Move this check here, so that if there are multiple JUST_SETTINGS, or other
+  # advanced setups, that what ever is set when it is all done being loaded is
+  # what really counts.
+  check_just_version
+
+  if [ "${1-}" != "_null" ]; then
+    justify ${@+"${@}"}
+  fi
+}
 
 if [ "${BASH_SOURCE[0]}" = "${0}" ] || [ "$(basename "${BASH_SOURCE[0]}")" = "${0}" ]; then
-  justify ${@+"${@}"}
+  just ${@+"${@}"}
 fi
 
 #**
