@@ -188,7 +188,8 @@ done
 unset shell
 
 if [ "${run_just}" = "1" ]; then
-  exec "${VSI_COMMON_DIR}/linux/just" "${@}"
+  source "${VSI_COMMON_DIR}/linux/just"
+  just ${@+"${@}"}
 else
-  exec "${@}"
+  exec ${@+"${@}"}
 fi
