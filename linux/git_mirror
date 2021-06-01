@@ -158,12 +158,12 @@ function git_mirror_has_lfs()
 #
 # Mirror a submodule and all of its submodules (recursively)
 #
-# This is a helper function to :func:`git_mirror_main`. Create a mirror of each submodule in a git repository, recursively. Each mirror is stored according to its full relative path in the project repository in a unique temporary directory created in the GIT_MIRROR_PREP_DIR. Submodules of a submodule are processed recursively in a depth-first fashion.
+# This is a helper function to :func:`git_mirror_main`. Create a mirror of each submodule in a git repository, recursively. Each mirror is stored according to its full relative path in the project repository in a unique temporary directory created in the ``GIT_MIRROR_PREP_DIR``. Submodules of a submodule are processed recursively in a depth-first fashion.
 #
 # WARNING: ``git submodule foreach`` runs commands via sh because git is weird; however I start bash and source this script for its vars and functions, so it's really bash again.
 #
-# :Arguments: ``GIT_MIRROR_PREP_DIR`` - The directory in which to mirror the repositories
-#             [``base_submodule_path``] - The (relative) path from the project repository to the submodule (i.e., ``git submodule foreach '$displaypath'`` assuming the CWD is the root of the project repository)
+# :Parameters: ``GIT_MIRROR_PREP_DIR`` - The directory in which to mirror the repositories
+#              [``base_submodule_path``] - The (relative) path from the project repository to a submodule (a repository itself) with, potentially, submodules of its own that need to be mirrored/updated (i.e., a path as printed by ``git submodule foreach -q 'echo "$displaypath"'`` assuming the CWD is the root of the project repository)
 #
 # :Output: A mirrored submodule located at ``GIT_MIRROR_PREP_DIR/{temp_dir}/base_submodule_path``
 #**
@@ -336,12 +336,14 @@ function clone_submodules()
 #
 # Clone a submodule and any of its submodules (recursively)
 #
-# This is a helper function to git_clone_main. Recursively clone a submodule mirrored with :func:`git_mirror_main`, and fixup the submodules' remote urls according to the mapping specified by ``$1``.
+# This is a helper function to :func:`git_clone_main`. Recursively clone a submodule mirrored with :func:`git_mirror_main`, and fixup the submodules' remote urls according to the mapping specified by ``$1``.
 #
 # WARNING: ``git submodule foreach`` runs commands via sh because git is weird; however I start bash and source this script for its vars and functions, so it's really bash again.
 #
 # :Arguments: ``$1`` - A file specifying the mapping between each repository's original url and its mirror url
-#             [``base_submodule_path``] - The (relative) path from the project repository to the submodule
+#              [``base_submodule_path``] - The (relative) path from the project repository to a submodule (a repository itself) with, potentially,  submodules of its own that need to be cloned/updated (i.e., a path as printed by ``git submodule foreach -q 'echo "$displaypath"'`` assuming the CWD is the root of the project repository)
+#              [``prefix``] - A variable set when calling ``git submodule foreach`` (and, by necessity, re-exported by this function) to the submodule path (sm_path) from the .gitmodules file. After git v1.8.3, ``prefix`` was replaced with ``displaypath``
+#              [``displaypath``] - A variable set when calling ``git submodule foreach`` (and, by necessity, re-exported by this function) to the relative path from the current working directory to the submodules root directory
 # :Output: The recursively cloned submodule
 #**
 
@@ -783,8 +785,7 @@ function git_clone_main()
 #
 # :Arguments: ``$1`` - A file specifying the mapping between each repository's original url and its mirror url
 #             ``$2`` - The mirrored repositories (extracted from the archive) created by :func:`git_mirror_main`
-#
-#              [``GIT_MIRROR_FORCE_PUSH_REFS``] - A flag specifying whether to force push refs, should it be necessary. Default: 1 (force-push refs)
+# :Parameters: [``GIT_MIRROR_FORCE_PUSH_REFS``] - A flag specifying whether to force push refs, should it be necessary. Default: 1 (force-push refs)
 #
 # .. rubric:: Example
 #
@@ -932,7 +933,6 @@ function git_push_main()
 #
 # :Arguments: ``$1`` - A file specifying the mapping between each repository's original url and its mirror url
 #             ``$2`` - The mirrored repositories (extracted from the archive) created by :func:`git_mirror_main`
-#
 # :Parameters: [``GIT_MIRROR_TAG_REFS_REGEX``] - An extended regular expression specifying which refs to tag. The refs should be matched in their long form, e.g., refs/heads/master or refs/tags/v1.0.0. Default: ^refs/heads/.+
 #
 # .. seealso::
