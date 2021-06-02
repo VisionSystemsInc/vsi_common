@@ -356,25 +356,19 @@ function update_submodules()
   # Arrays aren't exported, reload
   _git_mirror_load_info "${1}" # Sets repo_paths and repo_urls
 
-  local submodule_name
-  local full_relative_path
+  # In the root of the project repository (the first pass through this
+  # function), base_submodule_path is unset
   local base_submodule_path="${base_submodule_path-}${base_submodule_path:+/}${prefix-${displaypath-}}"
   # Remove trailing slashes because on some versions of git (1.8.3, 2.17.1)
   # prefix has a trailing slash
   base_submodule_path="${base_submodule_path%/}"
   local current_repo="$(_git_mirror_get_url "${base_submodule_path:-.}")"
-  next_section "Initializing ${current_repo}'s submodules"
 
   "${GIT}" submodule init
-  local IFS=$'\n'
-  local submodule_names=($(get_config_submodule_names))
 
   # Sync the submodules to the mirrored repository
-  for submodule_name in ${submodule_names[@]+"${submodule_names[@]}"}; do
-    full_relative_path="${base_submodule_path}${base_submodule_path:+/}$( \
-        "${GIT}" config -f .gitmodules ${submodule_name}.path)"
-    "${GIT}" config "${submodule_name}.url" "$(_git_mirror_get_url "${full_relative_path}")"
-  done
+  sync_submodules ${base_submodule_path:+"${base_submodule_path}"}
+
   next_section "Updating ${current_repo}'s submodules"
   "${GIT}" submodule update
 
@@ -384,6 +378,61 @@ function update_submodules()
   base_submodule_path="${base_submodule_path-}" \
       "${GIT}" submodule foreach --quiet "export prefix displaypath; bash -euc \
           'unset GIT_DIR; source \"${GIT_MIRROR_SOURCE[0]}\"; update_submodules \"${1}\"'"
+}
+
+#**
+# .. function:: sync_submodules
+#
+# Sync the submodules to the mirrored remote (non-recursive)
+#
+# This is a helper function to :func:`update_submodules`. Sync the submodules' remote urls (non-recursively), a la ``git submodule sync``, however, instead of referring to the .gitmodules file, use the mapping specified by ``repo_paths`` and ``repo_urls``.
+#
+# :Arguments: ``$1`` - The (relative) path from the project repository to a submodule (a repository itself) with, potentially, submodules of its own that need to be sync'ed (i.e., a path as printed by ``git submodule foreach -q 'echo "$displaypath"'`` assuming the CWD is the root of the project repository)
+# :Parameters: ``repo_paths`` - The array of (relative) paths from the root of the project repository to each submodule (recursively); see :func:`_git_mirror_load_info`
+#              ``repo_urls`` - The corresponding URL of each repo_path
+#
+# .. note::
+#
+#   This function assumes ``$1`` is also the PWD
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
+#    repo_paths=(
+#      .
+#      docker/recipes
+#    )
+#    repo_urls=(
+#      https://git-server.com/foobar/vsi_common.git
+#      https://git-server.com/foobar/recipes.git
+#    )
+#**
+
+# TODO RE the above .. note:: use just_git_airgap_repo.bsh:git_project_root_dir
+# to find the project root and compute base_submodule_path from the PWD
+# RE It would be good to refactor those functions into git_functions.bsh,
+# otherwise the import would be circular
+#
+# NOTE Unlike just_git_functions:safe_git_submodule_update, we don't want to
+# use a custom remote here because there would be no way to update the default
+# remote, and then things like git fetch could stop working
+function sync_submodules()
+{
+  local base_submodule_path="${1-}"
+
+  local IFS=$'\n'
+  local submodule_names=($(get_config_submodule_names))
+
+  local submodule_name
+  local sm_path
+  local full_relative_path
+  for submodule_name in ${submodule_names[@]+"${submodule_names[@]}"}; do
+    # NOTE Assumes we are in the top-level directory
+    sm_path="$("${GIT}" config -f .gitmodules ${submodule_name}.path)"
+    full_relative_path="${base_submodule_path}${base_submodule_path:+/}${sm_path}"
+    "${GIT}" config "${submodule_name}.url" "$(_git_mirror_get_url "${full_relative_path}")"
+  done
 }
 
 #**
