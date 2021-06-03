@@ -668,7 +668,16 @@ function git_submodule_summary()
   for sm_key in ${submodule_keys[@]+"${submodule_keys[@]}"}; do
     local sm_path="$("${GIT}" config --file .gitmodules --get submodule."${sm_key}".path)"
 
-    # Cf. git submodule summary - doesn't show modified/staged content
+    # Cf. git submodule summary - doesn't show modified/staged content [1]
+    # The implementations are actually different
+    # While both can be used to list changes to the working tree,
+    # git diff --submodule=log SHA~1..SHA (or git log --patch --submodule=log SHA)
+    # can be used to list the changes (in commits) to a submodule; however in
+    # that case, it only lists merges (unfortunately) [2]:
+    # [1] https://github.com/git/git/blob/v2.24.1/git-submodule.sh#L777
+    # [2] https://github.com/git/git/blob/v2.24.1/diff.c#L3400 =>
+    #     https://github.com/git/git/blob/v2.24.1/submodule.c#L613-L640
+    #     https://github.com/git/git/blob/v2.24.1/submodule.c#L586-L592
     "${GIT}" diff --submodule=log "${sm_path}"
 
     if [ -n "${_recursive_summary:+set}" ]; then
