@@ -216,9 +216,9 @@ begin_test "Unwrapped test run"
 )
 end_test
 
-command -v screen >& /dev/null || skip_next_test
-# Screen doesn't work in darling
-[[ "${OSTYPE-}" = darwin* ]] && [ "$(sw_vers -buildVersion)" = "Darling" ] && skip_next_test
+if not command -v script >& /dev/null; then
+  skip_next_test
+fi
 
 begin_test "Interactive just_wrap"
 (
@@ -232,23 +232,9 @@ begin_test "Interactive just_wrap"
 
   session="${TRASHDIR////}"
 
-  screen -dmS "${session}"
-  # Macos compatibility, needs a literal newline
   nl=$'\n'
-  screen -S "${session}" -p 0 -X stuff "${VSI_COMMON_DIR}/linux/just_files/Just_wrap${nl}declare -p TEST_LOCAL2 TEST_VAR2 > \"${TESTDIR}/output\"${nl}touch \"${TESTDIR}/sync\"${nl}"
+  echo "'${VSI_COMMON_DIR}/linux/just_files/Just_wrap'${nl}declare -p TEST_LOCAL2 TEST_VAR2 > '${TESTDIR}/output'${nl}exit" | script -q /dev/null
 
-  # Wait for five second for file to be created
-  declare -i count=0
-  while (( count < 50 )); do
-    if [ -e "${TESTDIR}/sync" ]; then
-      break
-    fi
-    count+=1
-    sleep 0.1
-  done
-  screen -S "${session}" -X quit
-
-  # eval "$(grep "^declare -a" "${TESTDIR}/screenlog.0")"
   source "${TESTDIR}/output"
   if [ "${BASH_VERSINFO[0]}" -ge "4" ]; then
     # Unexported functions and arrays don't work in bash 3.2
@@ -257,9 +243,3 @@ begin_test "Interactive just_wrap"
   [ "${TEST_LOCAL2}" = "2:3" ]
 )
 end_test
-
-function teardown()
-{
-  # cleanup in case test fails
-  command -v screen >& /dev/null && screen -S "${TRASHDIR////}" -X quit >& /dev/null || :
-}
