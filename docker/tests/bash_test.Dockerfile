@@ -28,8 +28,6 @@ RUN apk add --no-cache \
       perl \
       # git for git... pretty self explanitory
       git \
-      # unit test interactive shells
-      screen \
       # For git_mirror
       git-lfs \
       # Make typeing in the docker easier (for debugging)
