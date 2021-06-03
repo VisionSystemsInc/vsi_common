@@ -4,6 +4,8 @@ if [[ $- != *i* ]]; then
   source_once &> /dev/null && return 0
 fi
 
+source "${VSI_COMMON_DIR}/linux/compat.bsh"
+
 #*# linux/bash_utils.bsh
 
 #**
@@ -71,5 +73,30 @@ function print_bash_stack()
     for (( i=1+${1-0}; i<${#BASH_SOURCE[@]}; ++i)); do
       printf "%${stack_depth_pad}s. %-${funcname_pad}s:%-${lineno_pad}s %s\n" "$((i-${1-0}))" "${FUNCNAME[i]:+${FUNCNAME[i]}()}" "${BASH_LINENO[i-1]}" "${BASH_SOURCE[i]}" >&2
     done
+  fi
+}
+
+# $1 - RC file commands
+# [$2...] - Args to bash
+# BASH_EXEC - Set to "exec" to exec call bash
+# For interactive shell only, and arguments added that make the shell non-interactive effective nullify the purpose of this function
+# Depending on how bash is compiled (``-DSYS_BASHRC``)
+function run_bash_rc_file()
+{
+  local rc_file_line="${1}"
+  shift 1
+
+  if bash_feature_rcfile; then
+    # Thanks bash for making this hard! https://unix.stackexchange.com/q/187369
+    if bash_bug_rcfile_process_substitution; then
+      local temp_file="$(mktemp)"
+      echo "${rc_file_line}" >> "${temp_file}"
+      echo "rm \"${temp_file}\"" >> "${temp_file}"
+      ${BASH_EXEC-} bash --rcfile "${temp_file}" ${@+"${@}"}
+    else
+      ${BASH_EXEC-} bash --rcfile <(echo "${rc_file_line}") ${@+"${@}"}
+    fi
+  else
+    ENV=<(echo "set +o posix; ${rc_file_line}") ${BASH_EXEC-} bash --posix ${@+"${@}"}
   fi
 }
