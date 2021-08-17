@@ -332,83 +332,36 @@ function conda-python-install()
     return 1
   fi
 
-  # conda download & install requirements
-  local download_conda=0
-  local install_conda=0
-
+  # conda install requirements
   if [ -n "${CONDA:+set}" ]; then
     # use provided conda
     :
-  elif [ -n "${CONDA_INSTALL:+set}" ]; then
-    # use provided conda installer
-    install_conda=1
   elif [ "${prefer_download}" == "1" ]; then
-    # download is preferred
-    download_conda=1
-    install_conda=1
+    # download fresh installer
+    CONDA_INSTALLER=
+  elif [ -n "${CONDA_INSTALLER:+set}" ]; then
+    # use provided conda installer to install conda
+    :
   else
+    # check path for available conda
     CONDA="$( ( (command -v conda3 || command -v conda || command -v conda2) | head -n 1) || :)"
-    if [ -n "${CONDA:+set}" ]; then
-      # use system conda
-      :
-    else
-      # otherwise default to download
-      download_conda=1
-      install_conda=1
-    fi
+  fi
+
+  # install conda to self-deleting temporary directory
+  if [ -z "${CONDA-}" ]; then
+    local conda_temp_dir
+    make_temp_path conda_temp_dir -d
+
+    conda-install \
+        --dir "${conda_temp_dir}/conda" \
+        ${CONDA_INSTALLER:+ --installer "${CONDA_INSTALLER}"}
+
+    CONDA="${conda_exe}"
   fi
 
   # create output directory
   mkdir -p "${python_dir}"
   python_dir="$(cd "${python_dir}"; pwd)"
-
-  # temporary conda directory
-  if [ "${install_conda}" = "1" ]; then
-    make_temp_path temp_dir -d
-  fi
-
-  # download conda
-  if [ "${download_conda}" = "1" ]; then
-    echo "Downloading miniconda..." >&2
-
-    local conda_url="https://repo.anaconda.com/miniconda/"
-    if [ "${OS-}" = "Windows_NT" ]; then
-      conda_url+="Miniconda3-latest-Windows-x86_64.exe"
-    elif [[ ${OSTYPE-} = darwin* ]]; then
-      conda_url+="Miniconda3-latest-MacOSX-x86_64.sh"
-    else
-      conda_url+="Miniconda3-latest-Linux-x86_64.sh"
-    fi
-
-    CONDA_INSTALLER="${temp_dir}/$(basename "${conda_url}")"
-    download_to_file "${conda_url}" "${CONDA_INSTALLER}"
-  fi
-
-  # install conda
-  if [ "${install_conda}" = "1" ]; then
-    echo "Installing miniconda..." >&2
-    local conda_dir="${temp_dir}/conda"
-
-    # windows
-    if [ "${OS-}" = "Windows_NT" ]; then
-
-      # manual specification of NoRegistry, AddToPath, & RegisterPython
-      # ensure the temporary miniconda is not added to the system registry
-      # at <HKEY_CURRENT_USER\SOFTWARE\Python\PythonCore>
-      MSYS2_ARG_CONV_EXCL="*" "${CONDA_INSTALLER}" \
-          /NoRegistry=1 /AddToPath=0 /RegisterPython=0 \
-          /InstallationType=JustMe /S /D="$(cygpath -aw "${conda_dir}")"
-      CONDA="${conda_dir}/_conda"
-
-      # cleanup shortcuts
-      "${CONDA}" remove --offline -y -p "${conda_dir}" console_shortcut powershell_shortcut
-
-    # linux & darwin
-    else
-      bash "${CONDA_INSTALLER}" -b -p "${conda_dir}" -s
-      CONDA="${conda_dir}/bin/conda"
-    fi
-  fi
 
   # install python
   echo "Installing python..." >&2
