@@ -91,12 +91,12 @@ function cmake-install()
 
   # convert zip to tar
   # cmake archives contain an extra parent directory that must be ignored,
-  # which is easily handled by "tar --strip-components=1". Unfortunately, 
+  # which is easily handled by "tar --strip-components=1". Unfortunately,
   # unzip has no equivalent argument so we convert to tar.
-  if [ "${OS-}" = "Windows_NT" ]; then    
+  if [ "${OS-}" = "Windows_NT" ]; then
     local unzip_dir="${temp_dir}/unzip"
     unzip -oq "${cmake_file}" -x "*/doc/**" -d "${unzip_dir}"
-    
+
     cmake_file="${temp_dir}/cmake.tar"
     tar -cf "${cmake_file}" -C "${unzip_dir}" "${cmake_id}"
   fi
@@ -148,6 +148,137 @@ function cmake-install()
           # update PATH
           PATH="$(dirname "${CMAKE_EXE}"):${PATH}"
           ' >> "${cmake_activate}"
+}
+
+
+#**
+# .. function:: conda-install
+#
+# Install miniconda
+#
+# :Arguments: * [``--dir {dir}``] - conda install directory
+#             * [``--version {version}``] - conda version for install (default= ``${CONDA_VERSION:-latest}``)
+#             * [``--installer {INSTALLER}``] - Conda installer
+#
+# :Output: * conda_exe - conda executable
+#          * conda_version - conda version
+#          * conda_extra_args - number of arguments consumed
+#          * conda_activate - bash file to make conda available
+#
+#**
+
+function conda-install()
+{
+  local conda_dir  # install directory
+  local conda_ver="${CONDA_VERSION:-latest}"  # conda version
+  local CONDA_INSTALLER  # optional conda installer
+
+  parse_args conda_extra_args \
+      --dir conda_dir: \
+      --version conda_ver: \
+      --installer CONDA_INSTALLER: \
+      -- ${@+"${@}"}
+
+  # directory check
+  if [ -z "${conda_dir-}" ] ; then
+    echo "Conda install must specify --dir" >& 2
+    local JUST_IGNORE_EXIT_CODES=1
+    return 1
+  fi
+
+  # download conda installer to self-deleting temporary directory
+  if [ -z "${CONDA_INSTALL-}" ]; then
+
+    local conda_url="https://repo.anaconda.com/miniconda/"
+    if [ "${OS-}" = "Windows_NT" ]; then
+      conda_url+="Miniconda3-${conda_ver}-Windows-x86_64.exe"
+    elif [[ ${OSTYPE-} = darwin* ]]; then
+      conda_url+="Miniconda3-${conda_ver}-MacOSX-x86_64.sh"
+    else
+      conda_url+="Miniconda3-${conda_ver}-Linux-x86_64.sh"
+    fi
+    echo "Downloading miniconda <${conda_url}>..." >&2
+
+    local conda_installer_dir
+    make_temp_path conda_installer_dir -d
+    CONDA_INSTALLER="${conda_installer_dir}/$(basename "${conda_url}")"
+    download_to_file "${conda_url}" "${CONDA_INSTALLER}"
+  fi
+
+  # install conda
+  echo "Installing miniconda..." >&2
+
+  # windows
+  if [ "${OS-}" = "Windows_NT" ]; then
+
+    # manual specification of NoRegistry, AddToPath, & RegisterPython
+    # ensure the temporary miniconda is not added to the system registry
+    # at <HKEY_CURRENT_USER\SOFTWARE\Python\PythonCore>
+    MSYS2_ARG_CONV_EXCL="*" "${CONDA_INSTALLER}" \
+        /NoRegistry=1 /AddToPath=0 /RegisterPython=0 \
+        /InstallationType=JustMe /S /D="$(cygpath -aw "${conda_dir}")"
+
+    # conda executable
+    conda_exe_footer="Scripts/conda.exe"
+    CONDA="${conda_dir}/${conda_exe_footer}"
+
+    # cleanup shortcuts
+    "${CONDA}" remove --offline -y -p "${conda_dir}" console_shortcut powershell_shortcut
+
+  # linux & darwin
+  else
+
+    # install conda
+    bash "${CONDA_INSTALLER}" -b -p "${conda_dir}" -s
+
+    # conda executable
+    conda_exe_footer="bin/conda"
+    CONDA="${conda_dir}/${conda_exe_footer}"
+  fi
+
+  # output: executable & version
+  conda_exe="${CONDA}"
+  conda_version="$("${CONDA}" --version | awk 'NR==1{print $2}')"
+  echo "Conda ${conda_version} installed at \"${conda_exe}\"" >&2
+
+  # Make sure version meets request
+  # note we remove any any "py??_" prefix during version comparison
+  if [ "${conda_ver}" != "latest" ]; then
+    if ! meet_requirements "${conda_version}" "==${conda_ver#*_}"; then
+      echo "Conda version ${conda_version} is not the requested version ${conda_ver}" >&2
+      local JUST_IGNORE_EXIT_CODES=1
+      return 1
+    fi
+  fi
+
+  # conda "activation", making conda available on the command line
+  conda_activate="${conda_dir}/conda_${JUST_INSTALL_ACTIVATE_BASENAME}"
+  uwecho '#!/usr/bin/env bash
+          set -eu
+
+          # folder where this file resides
+          CONDA_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)"
+          ' > "${conda_activate}"
+  uwecho "
+          # executable & version
+          CONDA_EXE=\"\${CONDA_DIR}/${conda_exe_footer}\"
+          CONDA_VER=\"${conda_version}\"
+          " >> "${conda_activate}"
+
+  if [ "${OS-}" = "Windows_NT" ]; then
+    uwecho '
+            # source conda.sh which contains the "conda" command as a function
+            # https://github.com/conda/conda/blob/master/CHANGELOG.md#440-2017-12-20
+            # This function will auto-update the path
+            CONDA_SH="${CONDA_DIR}/etc/profile.d/conda.sh"
+            . "${CONDA_SH}"
+            ' >> "${conda_activate}"
+  else
+    uwecho '
+            # update PATH
+            PATH="$(dirname "${CONDA_EXE}"):${PATH}"
+            ' >> "${conda_activate}"
+  fi
 }
 
 
@@ -481,6 +612,15 @@ function pipenv-install()
 #   :func:`cmake-install`
 #
 
+# .. command:: install_conda
+#
+# Install miniconda
+#
+# .. seealso::
+#
+#   :func:`conda-install`
+#
+
 # .. command:: install_conda-python
 #
 # Install python via conda
@@ -489,9 +629,9 @@ function pipenv-install()
 #
 #   :func:`conda-python-install`
 #
+
 # .. command:: install_pipenv
 #
-
 # Install a virtualenv containing pipenv
 #
 # .. seealso::
@@ -510,6 +650,10 @@ function install_defaultify()
     install_cmake) # Install CMake
       cmake-install ${@+"${@}"}
       extra_args=cmake_extra_args
+      ;;
+    install_conda) # Install Miniconda
+      conda-install ${@+"${@}"}
+      extra_args=conda_extra_args
       ;;
     install_conda-python) # Install python via conda
       conda-python-install ${@+"${@}"}
