@@ -39,12 +39,12 @@ GIT_MIRROR_SOURCE="$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)"/"$(basename "${B
 # #. Transfer ``vsi_common_prep/transfer_{date}.tgz`` to your destination
 # #. On the destination, create a directory, e.g., vsi_common_prep, and move the archive into it
 # #. Extract the archive (the archive will extract directly into this directory)
-# #. Write an ``info.env`` file:
+# #. Write an ``info.env`` file mapping each repository to its mirrored URL:
 #
 # .. code-block:: bash
 #
-#     repos[.]=https://git-server.com/foobar/vsi_common.git
-#     repos[docker/recipes]=https://git-server.com/foobar/recipes.git
+#    repos[.]=https://git-server.com/foobar/vsi_common.git
+#    repos[docker/recipes]=https://git-server.com/foobar/recipes.git
 #
 # 6. ``git_mirror push ./info.env ./transfer_extracted_dir/`` - Push the mirrored repository and all submodules to a new git server as defined by info.env
 # #. ``git_mirror clone ./info.env ./my_project_dir/`` - Clone recursively from the new mirror
@@ -95,8 +95,8 @@ GIT_VERSION="$(git_version)"
 #
 # .. code-block:: bash
 #
-#   get_config_submodule_names() # from within ./vsi_common/
-#   # submodule.docker/recipes
+#    $ get_config_submodule_names() # from within ./vsi_common/
+#    submodule.docker/recipes
 #
 # .. note::
 #
@@ -158,14 +158,18 @@ function git_mirror_has_lfs()
 #
 # Mirror a submodule and all of its submodules (recursively)
 #
-# This is a helper function to :func:`git_mirror_main`. Create a mirror of each submodule in a git repository, recursively. Each mirror is stored according to its full relative path in the project repository in a unique temporary directory created in the GIT_MIRROR_PREP_DIR. Submodules of a submodule are processed recursively in a depth-first fashion.
+# This is a helper function to :func:`git_mirror_main`. Create a mirror of each submodule in a git repository, recursively. Each mirror is stored according to its full relative path in the project repository in a unique temporary directory created in the ``GIT_MIRROR_PREP_DIR``. Submodules of a submodule are processed recursively in a depth-first fashion.
 #
 # WARNING: ``git submodule foreach`` runs commands via sh because git is weird; however I start bash and source this script for its vars and functions, so it's really bash again.
 #
-# :Arguments: ``GIT_MIRROR_PREP_DIR`` - The directory in which to mirror the repositories
-#             [``base_submodule_path``] - The (relative) path from the project repository to the submodule (i.e., ``git submodule foreach '$displaypath'`` assuming the CWD is the root of the project repository)
+# :Parameters: ``GIT_MIRROR_PREP_DIR`` - The directory in which to mirror the repositories
+#              [``base_submodule_path``] - The (relative) path from the project repository to a submodule with, potentially, submodules of its own that need to be mirrored/updated. This must also be the CWD. If unset, mirror the submodules of the parent repository.
 #
 # :Output: A mirrored submodule located at ``GIT_MIRROR_PREP_DIR/{temp_dir}/base_submodule_path``
+#
+# .. note::
+#
+#   This function assumes ``base_submodule_path`` is also the PWD
 #**
 
 function clone_submodules()
@@ -263,7 +267,8 @@ function clone_submodules()
   # Could also add --recommend-shallow (introduced in git 2.10.0)
   # This flag gets translated to the --depth flag, which is ignored for local
   # clones
-  # RE This optimization does not seem worth it for a local clone
+  # RE Whether this optimization is worth it for a local clone depends on a lot
+  # of things, including the filesystem
   GIT_LFS_SKIP_SMUDGE=1 "${GIT}" submodule update
   # Restore the origin urls after update, so that relative URLs work
   "${GIT}" submodule sync
@@ -308,20 +313,18 @@ function clone_submodules()
   # to pass the prefix/displaypath variables from git into the called function,
   # so export them.
   #
-  # NOTE We already have the list of submodule names (via get_submodule_name),
-  # and their associated sm_paths (via git config). We could recurse through
-  # the submodules ourselves like just_git_functions:safe_git_submodule_update
-  # (which is called recursively via just_git_functions:_checkout_git_submodule)
-  # and just_git_airgap_repo.bsh:git_sync_submodules_recursively.
+  # NOTE We list submodules two ways in this function: at the beginning with
+  # get_config_submodule_names (which uses git config and works with init-only
+  # submodules) and, here, with git submodule foreach (which does not).
+  # RE With the submodule names we could get the associated submodule paths
+  # (via git config) and then recurse through the submodules ourselves like
+  # just_git_functions:safe_git_submodule_update (which is called recursively
+  # via just_git_functions:_checkout_git_submodule) and
+  # just_git_airgap_repo.bsh:git_sync_submodules_recursively.
   # This would avoid the complications involved with exporting the required
   # variables, keeping track of base_submodule_path, re-sourcing this file (and
   # the info.env in update_submodules), etc. needed because git submodule foreach
   # runs in an sh subshell
-  # RE We would first have to do a recursive clone, but we are effectively
-  # doing that here anyway, just manually
-  # NOTE We list submodules two ways in this function: at the beginning with
-  # get_config_submodule_names (which uses git config and works with init-only
-  # submodules) and, here, with git submodule foreach (which does not).
   # NOTE We could make a similar change in update_submodules
   GIT_MIRROR_PREP_DIR="${GIT_MIRROR_PREP_DIR}" base_submodule_path="${base_submodule_path}" \
       "${GIT}" submodule foreach --quiet \
@@ -335,42 +338,45 @@ function clone_submodules()
 #**
 # .. function:: update_submodules
 #
-# Clone a submodule and any of its submodules (recursively)
+# Init/update a submodule and any of its submodules (recursively)
 #
-# This is a helper function to git_clone_main. Recursively clone a submodule mirrored with :func:`git_mirror_main`, and fixup the submodules' remote urls according to the mapping specified by ``$1``.
+# This is a helper function to :func:`git_clone_main`. Recursively clone a submodule mirrored with :func:`git_mirror_main`, and fixup the submodules' remote URLs according to the mapping specified by ``$1``.
 #
 # WARNING: ``git submodule foreach`` runs commands via sh because git is weird; however I start bash and source this script for its vars and functions, so it's really bash again.
 #
-# :Arguments: ``$1`` - A file specifying the mapping between each repository's original url and its mirror url
-#             [``base_submodule_path``] - The (relative) path from the project repository to the submodule
+# :Arguments: ``$1`` - A file specifying the mapping between each repository and its mirror URL; see :func:`_git_mirror_load_info`
+#              [``base_submodule_path``] - The (relative) path from the project repository to a submodule with, potentially, submodules of its own that need to be cloned/updated. This must also be the CWD. If unset, update the submodules of the parent repository.
+#              [``prefix``] - A variable set when calling ``git submodule foreach`` (and, by necessity, re-exported by this function) to the submodule path (sm_path) from the .gitmodules file. After git v1.8.3, ``prefix`` was replaced with ``displaypath``
+#              [``displaypath``] - A variable set when calling ``git submodule foreach`` (and, by necessity, re-exported by this function) to the relative path from the current working directory to the submodules root directory
 # :Output: The recursively cloned submodule
+#
+# .. note::
+#
+#   This function assumes ``base_submodule_path`` is also the PWD
 #**
 
+# NOTE This function could be refactored in the same manner as suggested in
+# clone_submodules
+# RE This would make it easier to support refactoring this into a non-recursive
+# submodule sync and recursive submodule update function
 function update_submodules()
 {
   # Arrays aren't exported, reload
   _git_mirror_load_info "${1}" # Sets repo_paths and repo_urls
 
-  local submodule_name
-  local full_relative_path
+  # In the root of the project repository (the first pass through this
+  # function), base_submodule_path is unset
   local base_submodule_path="${base_submodule_path-}${base_submodule_path:+/}${prefix-${displaypath-}}"
   # Remove trailing slashes because on some versions of git (1.8.3, 2.17.1)
   # prefix has a trailing slash
   base_submodule_path="${base_submodule_path%/}"
   local current_repo="$(_git_mirror_get_url "${base_submodule_path:-.}")"
-  next_section "Initializing ${current_repo}'s submodules"
 
-  # This is only done once when initially cloning the repo, so should not need
-  # a sync
   "${GIT}" submodule init
-  local IFS=$'\n'
-  local submodule_names=($(get_config_submodule_names))
 
-  for submodule_name in ${submodule_names[@]+"${submodule_names[@]}"}; do
-    full_relative_path="${base_submodule_path}${base_submodule_path:+/}$( \
-        "${GIT}" config -f .gitmodules ${submodule_name}.path)"
-    "${GIT}" config "${submodule_name}.url" "$(_git_mirror_get_url "${full_relative_path}")"
-  done
+  # Sync the submodules to the mirrored repository
+  sync_submodules ${base_submodule_path:+"${base_submodule_path}"}
+
   next_section "Updating ${current_repo}'s submodules"
   "${GIT}" submodule update
 
@@ -380,6 +386,48 @@ function update_submodules()
   base_submodule_path="${base_submodule_path-}" \
       "${GIT}" submodule foreach --quiet "export prefix displaypath; bash -euc \
           'unset GIT_DIR; source \"${GIT_MIRROR_SOURCE[0]}\"; update_submodules \"${1}\"'"
+}
+
+#**
+# .. function:: sync_submodules
+#
+# Sync the submodules to the mirrored remote (non-recursive)
+#
+# This is a helper function to :func:`update_submodules`. Sync the submodules' remote URLs (non-recursively), a la ``git submodule sync``, however, instead of referring to the .gitmodules file, use the mapping specified by ``repo_paths`` and ``repo_urls``.
+#
+# :Arguments: ``$1`` - The (relative) path from the project repository to a submodule with, potentially, submodules of its own that need to be sync'ed. This must also be the CWD. If unset, sync the submodules of the parent repository.
+# :Parameters: ``repo_paths`` - The array of (relative) paths from the root of the project repository to each submodule (recursively); see :func:`_git_mirror_load_info`
+#              ``repo_urls`` - The corresponding URL of each repo_path
+#
+# .. note::
+#
+#   This function assumes ``$1`` is also the PWD
+#**
+
+# TODO RE the above .. note:: use just_git_airgap_repo.bsh:git_project_root_dir
+# to find the project root and compute base_submodule_path from the PWD
+# RE It would be good to refactor those functions into git_functions.bsh,
+# otherwise the import would be circular
+#
+# NOTE Unlike just_git_functions:safe_git_submodule_update, we don't want to
+# use a custom remote here because there would be no way to update the default
+# remote, and then things like git fetch could stop working
+function sync_submodules()
+{
+  local base_submodule_path="${1-}"
+
+  local IFS=$'\n'
+  local submodule_names=($(get_config_submodule_names))
+
+  local submodule_name
+  local sm_path
+  local full_relative_path
+  for submodule_name in ${submodule_names[@]+"${submodule_names[@]}"}; do
+    # NOTE Assumes we are in the top-level directory
+    sm_path="$("${GIT}" config -f .gitmodules ${submodule_name}.path)"
+    full_relative_path="${base_submodule_path}${base_submodule_path:+/}${sm_path}"
+    "${GIT}" config "${submodule_name}.url" "$(_git_mirror_get_url "${full_relative_path}")"
+  done
 }
 
 #**
@@ -410,8 +458,8 @@ function update_submodules()
 #
 # .. code-block:: bash
 #
-# git_mirror_main https://github.com/visionsystemsinc/vsi_common.git master
-# # produces ./vsi_common_prep/transfer_2020_03_02_14_16_09.tgz
+#    git_mirror_main https://github.com/visionsystemsinc/vsi_common.git master
+#    # produces ./vsi_common_prep/transfer_2020_03_02_14_16_09.tgz
 #
 # .. rubric:: Example
 #
@@ -419,8 +467,8 @@ function update_submodules()
 #
 # .. code-block:: bash
 #
-# git_mirror_main vsi_common_prep
-# # produces ./vsi_common_prep/transfer_2020_03_02_14_24_12_transfer_2020_03_02_14_16_09.tgz
+#    git_mirror_main vsi_common_prep
+#    # produces ./vsi_common_prep/transfer_2020_03_02_14_24_12_transfer_2020_03_02_14_16_09.tgz
 #
 # .. rubric:: Example
 #
@@ -428,16 +476,16 @@ function update_submodules()
 #
 # .. code-block:: bash
 #
-# tar zxf transfer_2020_03_02_14_16_09.tgz
-# tar --incremental zxf transfer_2020_03_02_14_24_12_transfer_2020_03_02_14_16_09.tgz
+#    tar zxf transfer_2020_03_02_14_16_09.tgz
+#    tar --incremental zxf transfer_2020_03_02_14_24_12_transfer_2020_03_02_14_16_09.tgz
 #
-# ###
+# .. code-block:: bash
 #
-# tar zxf transfer_2020_03_02_14_24_12.tgz
+#    tar zxf transfer_2020_03_02_14_24_12.tgz
 #
 # .. note::
 #
-#   ``git_mirror_main`` does not mirror all submodules that have ever been part of the repo, only those from a specific branch/SHA/tag you specify (master by default). This is because trying to mirror all submodules from the past could be very lengthy, and is very likely to include urls that do not exist anymore.
+#   ``git_mirror_main`` does not mirror all submodules that have ever been part of the repo, only those from a specific branch/SHA/tag you specify (master by default). This is because trying to mirror all submodules from the past could be very lengthy, and is very likely to include URLs that do not exist anymore.
 #
 # .. rubric:: Bugs
 #
@@ -468,7 +516,7 @@ function git_mirror_main()
 #
 # .. note::
 #
-#   :func:`git_mirror_repos` does not mirror all submodules that have ever been part of the repo, only those from a specific branch/SHA/tag you specify (master by default). This is because trying to mirror all submodules from the past could be very lengthy, and is very likely to include urls that do not exist anymore.
+#   :func:`git_mirror_repos` does not mirror all submodules that have ever been part of the repo, only those from a specific branch/SHA/tag you specify (master by default). This is because trying to mirror all submodules from the past could be very lengthy, and is very likely to include URLs that do not exist anymore.
 #
 # .. rubric:: Bugs
 #
@@ -549,7 +597,8 @@ function git_mirror_repos()
   # Could also add --depth 1 --branch "${BRANCH}" --no-recursive
   # RE --depth is ignored for local clones...could add
   # --single-branch --branch "${BRNACH}" --no-recursive
-  # RE This optimization does not seem worth it for a local clone
+  # RE Whether this optimization is worth it for a local clone depends on a lot
+  # of things, including the filesystem
   if tar_feature_incremental_backup; then
     # Clone without hardlinks because they mess up the incremental archive
     # (see clone_submodules)
@@ -698,6 +747,37 @@ function archive_mirrors()
   echo -n $'\e[0m'
 }
 
+#**
+# .. function:: _git_mirror_load_info
+#
+# Load the mapping between each repository and its mirror URL
+#
+# :Arguments: ``$1`` - A file specifying the mapping between each repository and its mirror URL
+# :Output: ``repo_paths`` - The array of (relative) paths from the root of the project repository to each submodule (recursively). (That is, a path as printed by ``echo . && git submodule foreach -q 'echo "$displaypath"'`` assuming the CWD is the root of the project repository)
+#          ``repo_urls`` - The corresponding URL of each repo_path
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
+#    $ cat info.env
+#    repo_paths=(
+#      .
+#      docker/recipes
+#    )
+#    repo_urls=(
+#      https://git-server.com/foobar/vsi_common.git
+#      https://git-server.com/foobar/recipes.git
+#    )
+#
+# Or alternatively, using associative arrays:
+#
+# .. code-block:: bash
+#
+#    repos[.]=https://git-server.com/foobar/vsi_common.git
+#    repos[docker/recipes]=https://git-server.com/foobar/recipes.git
+#**
+
 function _git_mirror_load_info()
 {
   if [ "${bash_feature_associative_array}" = "0" ]; then
@@ -714,6 +794,17 @@ function _git_mirror_load_info()
     done
   fi
 }
+
+#**
+# .. function:: _git_mirror_get_url
+#
+# Return the URL for a given submodule
+#
+# :Arguments: ``$1`` - A path that can be found in ``repo_paths``
+# :Parameters: ``repo_paths`` - The array of (relative) paths from the root of the project repository to each submodule (recursively); see :func:`_git_mirror_load_info`
+#              ``repo_urls`` - The corresponding URL of each repo_path
+# :Output: The URL corresponding to ``$1``
+#**
 
 function _git_mirror_get_url()
 {
@@ -732,16 +823,16 @@ function _git_mirror_get_url()
 #
 # Clone recursively from the new mirror
 #
-# Once the repository has been mirrored to the new git server with :func:`git_push_main`, it can be cloned. However, because the .gitmodules file will point to different urls than the mirrors, and changing the .gitmodules file will change the repo, which we don't want to do, we need to make a shallow clone of the repository, init the submodules, modify the submodules' urls, and then finally update the submodules. And all of this has to be done recursively for each submodule. As you can tell, this is very tedious, so this script will do it all for you.
+# Once the repository has been mirrored to the new git server with :func:`git_push_main`, it can be cloned. However, because the .gitmodules file will point to different URLs than the mirrors, and changing the .gitmodules file will change the repo, which we don't want to do, we need to make a shallow clone of the repository, init the submodules, modify the submodules' URLs, and then finally update the submodules. And all of this has to be done recursively for each submodule. As you can tell, this is very tedious, so this script will do it all for you.
 #
-# :Arguments: ``$1`` - A file specifying the mapping between each repository's original url and its mirror url
+# :Arguments: ``$1`` - A file specifying the mapping between each repository and its mirror URL; see :func:`_git_mirror_load_info`
 #             [``$2``] - The directory in which to clone the repo
 #
 # .. rubric:: Example
 #
 # .. code-block:: bash
 #
-# git_clone_main init.env ~/
+#    git_clone_main init.env ~/
 #**
 
 function git_clone_main()
@@ -776,24 +867,23 @@ function git_clone_main()
 #
 #   The mirrors must be initialized on the git server.
 #
-# However, because the urls for your mirrors will be different from the original repo urls in .gitmodules, and modifying the urls will change the git repo, which we do not want to do, you must create a file specifying the mapping between each repository's original url and its mirror url (remote). The main repo is referred to as ``.`` while the rest of the repos are referred to by the relative path with respect to the main repo (e.g. ``external/vsi_common``). These need to be stored in an associative array called ``repos``.
+# However, because the URLs for your mirrors will be different from the original repo URLs in .gitmodules, and modifying the URLs will change the git repo, which we do not want to do, you must create a file specifying the mapping between each repository and its mirror URL. The main repo is referred to as ``.`` while the rest of the repos are referred to by the relative path with respect to the main repo (e.g. ``external/vsi_common``). These need to be stored in an associative array called ``repos``.
 #
-# :Arguments: ``$1`` - A file specifying the mapping between each repository's original url and its mirror url
+# :Arguments: ``$1`` - A file specifying the mapping between each repository and its mirror URL; see :func:`_git_mirror_load_info`
 #             ``$2`` - The mirrored repositories (extracted from the archive) created by :func:`git_mirror_main`
-#
-#              [``GIT_MIRROR_FORCE_PUSH_REFS``] - A flag specifying whether to force push refs, should it be necessary. Default: 1 (force-push refs)
+# :Parameters: [``GIT_MIRROR_FORCE_PUSH_REFS``] - A flag specifying whether to force push refs, should it be necessary. Default: 1 (force-push refs)
 #
 # .. rubric:: Example
 #
-# In this example, the main repo's mirror url is ``https://git-server.com/foobar/vsi_common.git``, and the submodule stored at ``./docker/recipes`` has the url ``https://git-server.com/foobar/recipes.git``. This file is also used by :func:`git_clone_main`. (Any valid git URL format can be used.)
+# In this example, the main repo's mirror URL is ``https://git-server.com/foobar/vsi_common.git``, and the submodule stored at ``./docker/recipes`` has the URL ``https://git-server.com/foobar/recipes.git``. This file is also used by :func:`git_clone_main`. (Any valid git URL format can be used.)
 #
 # .. code-block:: bash
 #
-# cat info.env
-# repos[.]=https://git-server.com/foobar/vsi_common.git
-# repos[docker/recipes]=https://git-server.com/foobar/recipes.git
+#    $ cat info.env
+#    repos[.]=https://git-server.com/foobar/vsi_common.git
+#    repos[docker/recipes]=https://git-server.com/foobar/recipes.git
 #
-# git_push_main info.env vsi_common_prep
+#    $ git_push_main info.env vsi_common_prep
 #**
 
 function git_push_main()
@@ -927,9 +1017,8 @@ function git_push_main()
 #
 # Before pushing the mirrored repository and all of its submodules to the new git server with :func:`git_push_main`, tag the refs so that if, during the **next** transfer, they become dereferenced (due to a force push, which is sometimes necessary), they are not lost. For a ref of the form refs/heads/master, this (annotated) tag takes the (long) form of refs/tags/just_git_mirror/{datetime}/heads/master
 #
-# :Arguments: ``$1`` - A file specifying the mapping between each repository's original url and its mirror url
+# :Arguments: ``$1`` - A file specifying the mapping between each repository and its mirror URL; see :func:`_git_mirror_load_info`
 #             ``$2`` - The mirrored repositories (extracted from the archive) created by :func:`git_mirror_main`
-#
 # :Parameters: [``GIT_MIRROR_TAG_REFS_REGEX``] - An extended regular expression specifying which refs to tag. The refs should be matched in their long form, e.g., refs/heads/master or refs/tags/v1.0.0. Default: ^refs/heads/.+
 #
 # .. seealso::
