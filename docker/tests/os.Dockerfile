@@ -175,6 +175,12 @@ RUN if ! docker-compose --version; then \
           cp -r "${d}" "/usr/local/"; \
         fi; \
       done; \
+      # Patch for old linuxes
+      ldd_version="$(ldd --version 2>/dev/null | awk '{print $NF; exit}')"; \
+      which python; \
+      if [ -n "${ldd_version}" ] && python -c "from distutils.version import LooseVersion as lv; exit(lv('${ldd_version') >= lv('2.24'))"; \
+        pip install cryptography==3.2; \
+      fi; \
       pip install docker-compose; \
       docker-compose --version; \
     fi
