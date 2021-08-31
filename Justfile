@@ -43,6 +43,11 @@ function caseify()
         shift "${extra_args}"
         vsi_test_env "${VSI_COMMON_DIR}/tests/run_tests" ${@+"${@}"}
       )
+      local rv=$?
+      if [ "${rv}" -ne "0" ]; then
+        # This is needed for bash 3.2
+        return rv
+      fi
       extra_args=$#
       ;;
     test_int) # Run integration tests
@@ -162,6 +167,11 @@ function caseify()
         cd "${VSI_COMMON_DIR}"
         TESTLIB_PARALLEL=8 vsi_test_env darling shell ./tests/run_tests ${@+"${@}"}
       )
+      local rv=$?
+      if [ "${rv}" -ne "0" ]; then
+        # This is needed for bash 3.2
+        return rv
+      fi
       extra_args=$#
       ;;
     test_python) # Run python unit tests
