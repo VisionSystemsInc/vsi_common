@@ -6,7 +6,7 @@ from tempfile import mkdtemp as mkdtemp_orig, gettempdir
 
 from shutil import Error, copy2, copystat, rmtree
 
-def is_subdir(path, base_dir):
+def is_subdir(path, base_dir, dereference_symlinks=True):
   ''' Determines if the path is in the base_dir
 
   Parameters
@@ -22,19 +22,20 @@ def is_subdir(path, base_dir):
       containing (True/False, and remainder (relative) of path)
 
   str
-      Remainder - Windows - If the paths are on two different drives, entire
-      path is returned
+      Remainder, the relative different between the two paths. If on Windows
+      and the paths are on two different drives, the entire path is returned
 
   Note
   ----
-  This will NOT work with Junctions in Windows... I'm not sure what else
-
+  This will NOT work with Junctions in Windows.
   '''
 
-  path = os.path.normcase(os.path.normpath(os.path.abspath(os.path.realpath(
-      path))))
-  base_dir = os.path.normcase(os.path.normpath(os.path.abspath(
-      os.path.realpath(base_dir))))
+  if dereference_symlinks:
+    path = os.path.realpath(path)
+    base_dir = os.path.realpath(base_dir)
+
+  path = os.path.normcase(os.path.normpath(os.path.abspath(path)))
+  base_dir = os.path.normcase(os.path.normpath(os.path.abspath(base_dir)))
 
   try:
     relative = os.path.relpath(path, base_dir)

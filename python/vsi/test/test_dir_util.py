@@ -2,7 +2,7 @@ import os
 import unittest
 
 from vsi.tools.dir_util import (
-  find_file_in_path
+  find_file_in_path, is_subdir
 )
 from vsi.test.utils import TestCase
 
@@ -58,3 +58,58 @@ class FindFileInPath(DirTest):
             os.path.join(self.temp_dir.name, '3')])}):
       self.assertEqual(find_file_in_path('bar.txt'),
           os.path.join(self.temp_dir.name, 'bar.txt'))
+
+  def test_is_subdir(self):
+    os.makedirs(os.path.join(self.temp_dir.name, 'a', 'b'))
+    os.makedirs(os.path.join(self.temp_dir.name, 'c', 'd'))
+
+    ans = is_subdir(os.path.join(self.temp_dir.name, 'a', 'b'),
+                    self.temp_dir.name)
+    self.assertTrue(ans[0])
+    self.assertEqual(ans[1], os.path.join('a', 'b'))
+
+    ans = is_subdir(os.path.join(self.temp_dir.name, 'a', '.', 'b'),
+                    self.temp_dir.name)
+    self.assertTrue(ans[0])
+    self.assertEqual(ans[1], os.path.join('a', 'b'))
+
+    ans = is_subdir(os.path.join(self.temp_dir.name, 'q', '..', 'a', 'b'),
+                    self.temp_dir.name)
+    self.assertTrue(ans[0])
+    self.assertEqual(ans[1], os.path.join('a', 'b'))
+
+
+    ans = is_subdir(os.path.join(self.temp_dir.name, 'a'),
+                    self.temp_dir.name)
+    self.assertTrue(ans[0])
+    self.assertEqual(ans[1], 'a')
+
+    ans = is_subdir(self.temp_dir.name,
+                    self.temp_dir.name)
+    self.assertTrue(ans[0])
+    self.assertEqual(ans[1], ".")
+
+    ans = is_subdir(self.temp_dir.name,
+                    os.path.join(self.temp_dir.name, 'a'))
+    self.assertFalse(ans[0])
+    self.assertEqual(ans[1], "..")
+
+    ans = is_subdir(os.path.join(self.temp_dir.name, 'a', 'b'),
+                    os.path.join(self.temp_dir.name, 'c', 'd'))
+    self.assertFalse(ans[0])
+    self.assertEqual(ans[1], os.path.join('..', '..', 'a', 'b'))
+
+
+    if os.name != 'nt':
+      os.symlink(os.path.join(self.temp_dir.name, 'a', 'b'),
+                 os.path.join(self.temp_dir.name, 'e'))
+
+      ans = is_subdir(os.path.join(self.temp_dir.name, 'e'),
+                      os.path.join(self.temp_dir.name, 'a'))
+      self.assertTrue(ans[0])
+      self.assertEqual(ans[1], 'b')
+
+      ans = is_subdir(os.path.join(self.temp_dir.name, 'e'),
+                      os.path.join(self.temp_dir.name, 'a'), False)
+      self.assertFalse(ans[0])
+      self.assertEqual(ans[1], os.path.join('..', 'e'))
