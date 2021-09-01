@@ -177,8 +177,7 @@ RUN if ! docker-compose --version; then \
         fi; \
       done; \
       # Patch for old linuxes
-      ldd_version="$(ldd --version 2>/dev/null | awk '{print $NF; exit}')"; \
-      # latest cryptography use abi packages that requrire glibc 2.24
+      # latest cryptography use abi wheels requrire glibc 2.24, so use an older one
       pip install cryptography==3.2; \
       pip install docker-compose; \
       docker-compose --version; \
