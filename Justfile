@@ -46,7 +46,7 @@ function caseify()
       local rv=$?
       if [ "${rv}" -ne "0" ]; then
         # This is needed for bash 3.2
-        return rv
+        return "${rv}"
       fi
       extra_args=$#
       ;;
@@ -170,7 +170,7 @@ function caseify()
       local rv=$?
       if [ "${rv}" -ne "0" ]; then
         # This is needed for bash 3.2
-        return rv
+        return "${rv}"
       fi
       extra_args=$#
       ;;
