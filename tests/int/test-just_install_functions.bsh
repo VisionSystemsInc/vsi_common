@@ -13,6 +13,8 @@ fi
 
 source "${VSI_COMMON_DIR}/tests/testlib.bsh"
 source "${VSI_COMMON_DIR}/linux/common_source.sh"
+source "${VSI_COMMON_DIR}/linux/versions.bsh"
+source "${VSI_COMMON_DIR}/linux/requirements.bsh"
 source "${VSI_COMMON_DIR}/linux/just_files/just_install_functions.bsh"
 
 
@@ -66,8 +68,12 @@ function registry_to_stdout()
 
 
 # test conda-install
-# alpine musl won't run the miniconda executable
-[ "${VSI_OS}" = "linux" ] && [ "${VSI_MUSL}" = "1" ] && [ -z "${VSI_FORCE_INSTALL_FUNCTIONS_TEST+set}" ] && skip_next_test
+if [ "${VSI_OS}" = "linux" ] && [ -z "${VSI_FORCE_INSTALL_FUNCTIONS_TEST+set}" ]; then
+  # alpine musl won't run the miniconda executable, nor will really old GLIBCs
+  if [ "${VSI_MUSL}" = "1" ] || meet_requirements "$(glibc_version)" "<2.17"; then
+    skip_next_test
+  fi
+fi
 begin_test "conda-install"
 (
   setup_test
@@ -141,8 +147,13 @@ end_test
 
 
 # test conda-python-install & pipenv-install: test in sequence according to typical usage - install python then pipenv
-# alpine musl won't run the miniconda executable
-[ "${VSI_OS}" = "linux" ] && [ "${VSI_MUSL}" = "1" ] && [ -z "${VSI_FORCE_INSTALL_FUNCTIONS_TEST+set}" ] && skip_next_test
+# test conda-install
+if [ "${VSI_OS}" = "linux" ] && [ -z "${VSI_FORCE_INSTALL_FUNCTIONS_TEST+set}" ]; then
+  # alpine musl won't run the miniconda executable, nor will really old GLIBCs
+  if [ "${VSI_MUSL}" = "1" ] || meet_requirements "$(glibc_version)" "<2.17"; then
+    skip_next_test
+  fi
+fi
 begin_test "conda-python-install and pipenv-install"
 (
   setup_test
