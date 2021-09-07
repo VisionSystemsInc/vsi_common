@@ -84,7 +84,8 @@ function load_vsi_compat()
   #
   #   sed "-${sed_flag_rE}" 's|foo(.*)|bar\1.|'
   #**
-  # Needed for CentOS 6 running sed 4.1.5
+  # We prefer r over E for older versions of GNU sed, e.g. 4.1.5
+  # Enhanced regex to find potential violations of this in source code files: sed.*-[^ ]*E([^}]|$)
   if [ "${VSI_SED_COMPAT-}" = "gnu" ]; then
     sed_flag_rE='r'
   else
@@ -477,6 +478,26 @@ function load_vsi_compat()
   #
   # :Value: * ``0`` Bash has the bug
   #         * ``1`` Unbound variables error as expected
+  #
+  # .. var  :: bash_bug_uncaught_error_compound_subshell
+  #
+  # There is a bug in bash 3.2, where ``set -e`` will not trigger an error in the parent process when a subshell command fails. The subshell does trigger the error as expected, but it is not propogated to the parent, even though the return code is.
+  #
+  # :Value: * ``0`` Bash has the bug
+  #         * ``1`` Error from subshell statements are thrown as expected
+  #
+  # .. rubric:: Example
+  #
+  # .. code-block:: bash
+  #
+  #    set -e
+  #    echo hi
+  #    (
+  #      echo inner
+  #      false
+  #      echo "you won't see this"
+  #    )
+  #    echo "You will only see this on bash 3.2: $?"
   #**
   if [ "${bash_major_version}" -ge "4" ]; then
     bash_feature_associative_array=0
@@ -484,12 +505,14 @@ function load_vsi_compat()
     bash_feature_bashpid=0
     bash_bug_unassigned_variable_set_to_null=1
     bash_bug_uncaught_unbound_on_exit_trap=1
+    bash_bug_uncaught_error_compound_subshell=1
   else
     bash_feature_associative_array=1
     bash_feature_case_modification=1
     bash_feature_bashpid=1
     bash_bug_unassigned_variable_set_to_null=0
     bash_bug_uncaught_unbound_on_exit_trap=0
+    bash_bug_uncaught_error_compound_subshell=0
   fi
 
   #**

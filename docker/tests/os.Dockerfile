@@ -163,6 +163,7 @@ RUN shopt -s nullglob; for patch in /usr/local/share/just/container_build_patch/
 # in a container_build_patch, instead here, so that would mean conda only gets
 # added to the image in that case, right now its there 100% of the time, and only
 # used for a few images.
+# This is basically only needed for pre glibc 2.14
 RUN if ! docker-compose --version; then \
       rm /usr/local/bin/docker-compose; \
       # Handle symlink dirs, grrr
@@ -175,6 +176,9 @@ RUN if ! docker-compose --version; then \
           cp -r "${d}" "/usr/local/"; \
         fi; \
       done; \
+      # Patch for old linuxes
+      # latest cryptography use abi wheels requrire glibc 2.24, so use an older one
+      pip install cryptography==3.2; \
       pip install docker-compose; \
       docker-compose --version; \
     fi

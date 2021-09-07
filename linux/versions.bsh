@@ -83,6 +83,49 @@ function bash_version()
 }
 
 #**
+# .. function:: glibc_version
+#
+# Retrieves the version number of glibc currently uses by the OS
+#
+# :Parameters: [``LDD``] - The ``ldd`` executable that will be called to determine glibc version. Can be overwritten to call a different executable. Defaults to ``/usr/glibc-compat/bin/ldd`` or ``ldd``.
+# :Output: *stdout* - The glibc version number. Blank if it failed, which probably means glibc is not the default on this operating system.
+#**
+function glibc_version()
+{
+  local default_ldd=ldd
+
+  # Compatibility for alpine with glibc installed
+  if [ -x /usr/glibc-compat/bin/ldd ]; then
+    default_ldd=/usr/glibc-compat/bin/ldd
+  fi
+
+  # Alpine ldd prints to stderr, so the result will be blank
+  ${LDD-${default_ldd}} --version 2>/dev/null | awk '{print $NF; exit}'
+}
+
+#**
+# .. function:: glibc_version_manual
+#
+# Retrieves the version number of a speific glibc library
+#
+# :Arguments: * ``$1`` - Path to glibc, usually something like `/lib64/libc.so.6`
+# :Output: *stdout* - The glibc version number.
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
+#    libc_filename="$(ldconfig -p 2>/dev/null| \grep '^\s*libc\.so' | awk '{print $NF; exit}')"
+#    echo "The glibc version is: $(glibc_version_manual "${libc_filename}")"
+#**
+function glibc_version_manual()
+{
+  local version="$("${1}" | sed -n${sed_flag_rE} '/version/{s|.*version ([^, ]*).*|\1|; p; q}')"
+  # Remove potential trailing period
+  echo "${version%.}"
+}
+
+#**
 # .. function:: tar_version_info
 #
 # Sets the vendor and version number of ``tar``.
