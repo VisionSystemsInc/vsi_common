@@ -356,7 +356,7 @@ begin_test "Test safe-submodule-update"
     output="$(safe_git_submodule_update | grep "Uncommited tracked files")"
     [ "${output}" = "Uncommited tracked files in 'ahead'" ]
     [ "$(cat ahead/readme_ahead)" = "2" ]
-    [ "$(cd ahead && git status --short readme_ahead | cut -c2)" = "M" ]
+    [ "$(cd ahead && git status --porcelain readme_ahead | cut -c2)" = "M" ]
     [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (1)" ]
   popd &> /dev/null
 
@@ -368,7 +368,7 @@ begin_test "Test safe-submodule-update"
     output="$(askcontinue=y safe_git_submodule_update <<< "a" | grep "Staged tracked files")"
     [ "${output}" = "Staged tracked files in 'ahead'" ]
     [ "$(cat ahead/readme_ahead)" = "2" ]
-    [ "$(cd ahead && git status --short readme_ahead | cut -c1)" = "M" ]
+    [ "$(cd ahead && git status --porcelain readme_ahead | cut -c1)" = "M" ]
     [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (1)" ]
   popd &> /dev/null
 
@@ -442,7 +442,7 @@ begin_test "Test safe-submodule-update"
       [[ "${output}" = *"Unable to checkout"*"in submodule path 'behind'" ]] || false
     fi
     [ "$(cat behind/readme_behind)" = "3" ]
-    [ "$(cd behind && git status --short readme_behind | cut -c2)" = "M" ]
+    [ "$(cd behind && git status --porcelain readme_behind | cut -c2)" = "M" ]
     [ "$(cd behind && git log -n1 --format="%s")" = "Behind (1)" ]
   popd &> /dev/null
 
@@ -455,7 +455,7 @@ begin_test "Test safe-submodule-update"
         grep "Staged tracked files")"
     [[ "${output}" = *"Staged tracked files in 'behind'" ]] || false
     [ "$(cat behind/readme_behind)" = "3" ]
-    [ "$(cd behind && git status --short readme_behind | cut -c1)" = "M" ]
+    [ "$(cd behind && git status --porcelain readme_behind | cut -c1)" = "M" ]
     [ "$(cd behind && git log -n1 --format="%s")" = "Behind (1)" ]
   popd &> /dev/null
 
@@ -714,6 +714,16 @@ begin_test "Test safe-submodule-update"
     [ "$(cd "${DIFFICULT_PATH}"/a_sub_sub_module && git rev-parse --abbrev-ref HEAD)" = "master" ]
     [ "$(cd behind && git rev-parse --abbrev-ref HEAD)" = "HEAD" ]
     [ "$(cd equal && git rev-parse --abbrev-ref HEAD)" = "abranch" ]
+
+    # test re-attaching to a branch name with a slash in it
+    pushd equal &> /dev/null
+      git checkout "$(git rev-parse abranch)" # Detach the head again
+      # Because this is something that you can do, and people Do it (albeit sometimes by accident)
+      git branch -m abranch 'namewith/slashes'
+    popd &> /dev/null
+
+    git_reattach_heads equal
+    [ "$(cd equal && git rev-parse --abbrev-ref HEAD)" = "namewith/slashes" ]
   popd &> /dev/null
 )
 end_test
