@@ -233,7 +233,20 @@ begin_test "Interactive just_wrap"
   session="${TRASHDIR////}"
 
   nl=$'\n'
-  echo "'${VSI_COMMON_DIR}/linux/just_files/Just_wrap'${nl}declare -p TEST_LOCAL2 TEST_VAR2 > '${TESTDIR}/output'${nl}exit" | script -q /dev/null
+  echo "'${VSI_COMMON_DIR}/linux/just_files/Just_wrap'${nl}declare -p TEST_LOCAL2 TEST_VAR2 > '${TESTDIR}/output'${nl}touch '${TESTDIR}/done'${nl}exit" | script -q /dev/null
+
+  # there's a bug in script 2.23.2 that is not there in 2.24, where it gets all
+  # weird as soon as you pipe into stdin, which is sort of the point here. It
+  # appears to run in the background (and then hang). But at least we can make
+  # this test pass by waiting for the file to be created.
+  for ((x=0; x<100; x++)); do
+    if [ -f "${TESTDIR}/done" ]; then
+      break
+    fi
+    sleep 0.01
+  done
+
+
 
   source "${TESTDIR}/output"
   if [ "${BASH_VERSINFO[0]}" -ge "4" ]; then
