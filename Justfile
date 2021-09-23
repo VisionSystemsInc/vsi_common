@@ -30,7 +30,7 @@ function sanitize_tag_name()
 
 function caseify()
 {
-  local just_arg=$1
+  local just_arg="${1}"
   shift 1
 
   case ${just_arg} in
@@ -107,9 +107,9 @@ function caseify()
 
       local x="$(docker run --rm -v ${VSI_COMMON_DIR}:/vsi "${image}" \
                    sh -euc ". /vsi/linux/common_source.sh;
-                            echo \$VSI_DISTRO - \$VSI_DISTRO_VERSION, \
-                                 \$VSI_DISTRO_LIKE - \$VSI_DISTRO_VERSION_LIKE, \
-                                 \$VSI_DISTRO_CORE - \$VSI_DISTRO_VERSION_CORE \$VSI_MUSL")"
+                            echo \${VSI_DISTRO} - \${VSI_DISTRO_VERSION}, \
+                                 \${VSI_DISTRO_LIKE} - \${VSI_DISTRO_VERSION_LIKE}, \
+                                 \${VSI_DISTRO_CORE} - \${VSI_DISTRO_VERSION_CORE} \${VSI_MUSL}")"
       if [ "${x}" = "${ans}" ]; then
         echo "${1} passed"
       else

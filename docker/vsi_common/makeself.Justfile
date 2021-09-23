@@ -97,7 +97,7 @@ function caseify()
 
       local excluded_files
       local tar_extra
-      makeself_git_prep $1
+      makeself_git_prep "${1}"
 
       # You can't put quotes in tar-extra apparently, it'll screw things up.
       tar_extra+=" ${common_vcs_excludes} --exclude=./docs"

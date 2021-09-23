@@ -27,7 +27,7 @@ function caseify()
         while (( $# )); do
           printf '%s\0' "${1}"
           shift 1
-        done | sort -z | xargs -0 -I % -P $TESTLIB_PARALLEL bashcov --root /src %
+        done | sort -z | xargs -0 -I % -P "${TESTLIB_PARALLEL}" bashcov --root /src %
       popd &> /dev/null
       ;;
     resume) # Resume running bashcov multiple, skipping already run.
@@ -49,7 +49,7 @@ function caseify()
             printf '%s\0' "${1}"
           fi
           shift 1
-        done | sort -z | xargs -0 -I % -P $TESTLIB_PARALLEL bashcov --root /src %
+        done | sort -z | xargs -0 -I % -P "${TESTLIB_PARALLEL}" bashcov --root /src %
       popd &> /dev/null
       ;;
     *) # Run command in pipenv

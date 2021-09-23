@@ -21,7 +21,7 @@ function caseify()
         split_s autodoc_output_dirs ${DOCS_AUTODOC_OUTPUT_DIRS-}
         split_s autodoc_exclude_dirs ${DOCS_AUTODOC_EXCLUDE_DIRS-}
         for x in "${!autodoc_output_dirs[@]}"; do
-          pipenv run sphinx-apidoc -o "/docs/${autodoc_output_dirs[$x]}" "${autodoc_dirs[$x]}" ${autodoc_exclude_dirs+"${autodoc_exclude_dirs[@]}"}
+          pipenv run sphinx-apidoc -o "/docs/${autodoc_output_dirs[x]}" "${autodoc_dirs[x]}" ${autodoc_exclude_dirs+"${autodoc_exclude_dirs[@]}"}
         done
       popd > /dev/null
 
@@ -42,7 +42,7 @@ function caseify()
           src_files+=("${BASH_REMATCH[1]}")
           doc_files+=("${BASH_REMATCH[2]}")
         else
-          echo "'$line'"
+          echo "'${line}'"
           echo "Pattern does not match"
           continue
         fi
