@@ -216,7 +216,10 @@ begin_test "Unwrapped test run"
 )
 end_test
 
-if not command -v script >& /dev/null; then
+if ! command -v screen >& /dev/null; then
+  skip_next_test
+elif [[ "${OSTYPE-}" = darwin* ]] && [ "$(sw_vers -buildVersion)" = "Darling" ]; then
+  # Screen doesn't work in darling
   skip_next_test
 fi
 
@@ -231,22 +234,21 @@ begin_test "Interactive just_wrap"
   chmod 755 mywrap
 
   session="${TRASHDIR////}"
+  screen -c /dev/null -dmS "${session}"
 
+  # Macos compatibility, needs a literal newline
   nl=$'\n'
-  echo "'${VSI_COMMON_DIR}/linux/just_files/Just_wrap'${nl}declare -p TEST_LOCAL2 TEST_VAR2 > '${TESTDIR}/output'${nl}touch '${TESTDIR}/done'${nl}exit" | script -q /dev/null
+  screen -S "${session}" -p 0 -X stuff "\"${VSI_COMMON_DIR}/linux/just_files/Just_wrap\"${nl}declare -p TEST_LOCAL2 TEST_VAR2 > \"${TESTDIR}/output\"${nl}touch \"${TESTDIR}/sync\"${nl}"
 
-  # there's a bug in script 2.23.2 that is not there in 2.24, where it gets all
-  # weird as soon as you pipe into stdin, which is sort of the point here. It
-  # appears to run in the background (and then hang). But at least we can make
-  # this test pass by waiting for the file to be created.
-  for ((x=0; x<100; x++)); do
-    if [ -f "${TESTDIR}/done" ]; then
+  # Wait for five second for file to be created, on windows, the overhead for a
+  # a loop like this is 23 seconds, good enough
+  for ((i=0; i < 500; i++ )); do
+    if [ -e "${TESTDIR}/sync" ]; then
       break
     fi
     sleep 0.01
   done
-
-
+  screen -S "${session}" -X quit
 
   source "${TESTDIR}/output"
   if [ "${BASH_VERSINFO[0]}" -ge "4" ]; then
@@ -256,3 +258,9 @@ begin_test "Interactive just_wrap"
   [ "${TEST_LOCAL2}" = "2:3" ]
 )
 end_test
+
+function teardown()
+{
+  # cleanup in case test fails
+  command -v screen >& /dev/null && screen -S "${TRASHDIR////}" -X quit >& /dev/null || :
+}

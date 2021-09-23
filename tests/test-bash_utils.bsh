@@ -43,7 +43,10 @@ begin_test "Print stack trace"
 )
 end_test
 
-if not command -v script >& /dev/null; then
+if ! command -v screen >& /dev/null; then
+  skip_next_test
+elif [[ "${OSTYPE-}" = darwin* ]] && [ "$(sw_vers -buildVersion)" = "Darling" ]; then
+  # Screen doesn't work in darling
   skip_next_test
 fi
 
@@ -52,35 +55,37 @@ begin_test "RC File insertion"
   setup_test
 
   session="${TRASHDIR////}"
+  screen -c /dev/null -dmS "${session}" bash
+
+  # Macos compatibility, needs a literal newline
+  nl=$'\n'
 
   stdin="$(quotemire "set -xv; touch" \
-                       "${TESTDIR}/bar")"
+                       "${TESTDIR}/bar")${nl}"
 
   # Got too complicated, use quotemire
   cmd="$(quotemire "source '${VSI_COMMON_DIR}/linux/bash_utils.bsh'; run_bash_rc_file" \
                      "set -xv; touch" \
-                       "${TESTDIR}/foo")"
+                       "${TESTDIR}/foo")${nl}"
 
-  # macOS/BSD script doesn't have the --version flag, and has different behavior than linux
-  if script --version &> /dev/null; then
-    cmd="$(quotemire "bash -c " "${cmd}")"
-    echo "${stdin}" | script -q -c "${cmd}" /dev/null
-  else
-    echo "${stdin}; exit" | script -q /dev/null bash -c "${cmd}"
-  fi
+  screen -S "${session}" -p 0 -X stuff "${cmd}"
+  screen -S "${session}" -p 0 -X stuff "${stdin}"
 
-  # there's a bug in script 2.23.2 that is not there in 2.24, where it gets all
-  # weird as soon as you pipe into stdin, which is sort of the point here. It
-  # appears to run in the background (and then hang). But at least we can make
-  # this test pass by waiting for the file to be created.
-  for ((x=0; x<100; x++)); do
-    if [ -f "${TESTDIR}/bar" ]; then
+  for ((i=0; i < 500; i++ )); do
+    if [ -e "${TESTDIR}/bar" ]; then
       break
     fi
     sleep 0.01
   done
+  screen -S "${session}" -X quit
 
   [ -f "${TESTDIR}/foo" ]
   [ -f "${TESTDIR}/bar" ]
 )
 end_test
+
+function teardown()
+{
+  # cleanup in case test fails
+  command -v screen >& /dev/null && screen -S "${TRASHDIR////}" -X quit >& /dev/null || :
+}

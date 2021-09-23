@@ -30,6 +30,8 @@ RUN apk add --no-cache \
       git \
       # For git_mirror
       git-lfs \
+      # unit test interactive shells
+      screen \
       # Make typeing in the docker easier (for debugging)
       readline; \
     command -v xxd &> /dev/null || apk add --no-cache vim
