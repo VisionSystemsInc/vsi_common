@@ -145,12 +145,6 @@ RUN set -euxv; \
               git \
               # For lfs.zip
               unzip; \
-        # One of the unit tests uses the "script" command, clear linux's custom
-        # bash uses a custom profile file, and that file does some shadey custom
-        # messing with the columns and rows in interactive shell, which cause
-        # script to eventually permenantly hang. This is no go, so just remove
-        # the offending code
-        sed -ni '/^if.*PS1.*tty/,/^fi/!p' /usr/share/defaults/etc/profile; \
       fi; \
     fi
 
