@@ -135,7 +135,7 @@ RUN set -euxv; \
     elif [ -f /etc/os-release ]; then \
       source /etc/os-release; \
       if [ "${ID}" = "clear-linux-os" ]; then \
-        swupd bundle-add \
+        swupd bundle-add --no-progress \
               # cmp for unit tests
               diffutils \
               # xxd for unit tests

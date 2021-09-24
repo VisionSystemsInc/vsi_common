@@ -8,6 +8,7 @@ source "${VSI_COMMON_DIR}/tests/testlib.bsh"
 source "${TESTLIB_DIR}/test_utils.bsh"
 source "${VSI_COMMON_DIR}/linux/bash_utils.bsh"
 source "${VSI_COMMON_DIR}/linux/string_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/quotemire"
 
 function clean_trace()
 {
@@ -41,3 +42,50 @@ begin_test "Print stack trace"
   assert_regex_eq "${tb}" "${nl}"'2\. foo\(\) *:[0-9]* *'"$(regex_escape "${BASH_SOURCE[0]}")"
 )
 end_test
+
+if ! command -v screen >& /dev/null; then
+  skip_next_test
+elif [[ "${OSTYPE-}" = darwin* ]] && [ "$(sw_vers -buildVersion)" = "Darling" ]; then
+  # Screen doesn't work in darling
+  skip_next_test
+fi
+
+begin_test "RC File insertion"
+(
+  setup_test
+
+  session="${TRASHDIR////}"
+  screen -c /dev/null -dmS "${session}" bash
+
+  # Macos compatibility, needs a literal newline
+  nl=$'\n'
+
+  stdin="$(quotemire "set -xv; touch" \
+                       "${TESTDIR}/bar")${nl}"
+
+  # Got too complicated, use quotemire
+  cmd="$(quotemire "source '${VSI_COMMON_DIR}/linux/bash_utils.bsh'; run_bash_with_rc_file" \
+                     "set -xv; touch" \
+                       "${TESTDIR}/foo")${nl}"
+
+  screen -S "${session}" -p 0 -X stuff "${cmd}"
+  screen -S "${session}" -p 0 -X stuff "${stdin}"
+
+  for ((i=0; i < 500; i++ )); do
+    if [ -e "${TESTDIR}/bar" ]; then
+      break
+    fi
+    sleep 0.01
+  done
+  screen -S "${session}" -X quit
+
+  [ -f "${TESTDIR}/foo" ]
+  [ -f "${TESTDIR}/bar" ]
+)
+end_test
+
+function teardown()
+{
+  # cleanup in case test fails
+  command -v screen >& /dev/null && screen -S "${TRASHDIR////}" -X quit >& /dev/null || :
+}

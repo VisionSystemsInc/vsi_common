@@ -556,7 +556,7 @@ case "${VSI_OS}" in
       VSI_DISTRO=darling
     fi
     if command -v sysctl >/dev/null 2>&1; then # Normal darwin
-      VSI_NUMBER_CORES="$(\sysctl -n hw.ncpu)"
+      VSI_NUMBER_CORES="$(\sysctl -n hw.logicalcpu)"
     elif [ -f /Volumes/SystemRoot/proc/cpuinfo ]; then # darling
       VSI_NUMBER_CORES="$(\grep processor /Volumes/SystemRoot/proc/cpuinfo | wc -l)"
       # Left trim white spaces
