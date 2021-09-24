@@ -373,15 +373,29 @@ load_vsi_compat ()
         bash_feature_bashpid=0;
         bash_bug_unassigned_variable_set_to_null=1;
         bash_bug_uncaught_unbound_on_exit_trap=1;
-        bash_bug_uncaught_error_compound_subshell=1;
     else
         bash_feature_associative_array=1;
         bash_feature_case_modification=1;
         bash_feature_bashpid=1;
         bash_bug_unassigned_variable_set_to_null=0;
         bash_bug_uncaught_unbound_on_exit_trap=0;
-        bash_bug_uncaught_error_compound_subshell=0;
     fi;
+    function bash_bug_uncaught_error_compound_subshell () 
+    { 
+        if [ "$(bash -ec '(:; false); echo 0')" = "0" ]; then
+            function bash_bug_uncaught_error_compound_subshell () 
+            { 
+                return 0
+            };
+            return 0;
+        else
+            function bash_bug_uncaught_error_compound_subshell () 
+            { 
+                return 1
+            };
+            return 1;
+        fi
+    };
     function bash_bug_bash_env_process_substitution () 
     { 
         if [ -z "${__bash_bug_bash_env_process_substitution+set}" ]; then
@@ -1683,11 +1697,11 @@ function new_just()
   ask_question "Use pipenv?" USE_PIPENV y
   if [ "${USE_DOCKER}" = "1" ]; then
 
-  #**
-  # .. env:: APP_NAME
-  #
-  # The name of the test app generated. Used for the name of the first service populated for you.
-  #**
+    #**
+    # .. env:: APP_NAME
+    #
+    # The name of the test app generated. Used for the name of the first service populated for you.
+    #**
     if set_default APP_NAME \
                    "$(echo "${APP_NAME-example}" | tr '[A-Z]' '[a-z]' | sed -${sed_flag_rE} 's|[^a-z0-9_.-]+||g')" \
                    "Name of the example docker-compose app"; then
@@ -1696,33 +1710,33 @@ function new_just()
 
     APP_NAME_UPPER=$(echo "${APP_NAME}" | tr '[a-z]' '[A-Z]')
 
-  #**
-  # .. env:: USE_TUTORIAL
-  #
-  # Flag to turn on tutorial comments
-  #**
-  ask_question "Add tutorial comments? (good if you are unfamiliar with just)" USE_TUTORIAL n
-
-  #**
-  # .. env:: REPO_NAME
-  #
-  # When docker images are built, they need to be named, or else the only way to
-  # access them is inconveniently though sha256 checksums.
-  #
-  # The :env:`REPO_NAME` should be an untagged docker repository name. Tag names will
-  # be added for each service. Docker image names must match the regex
-  # ``[a-zA-Z0-9][a-zA-Z0-9_.-]*`` or else docker will error
-  #
-  # The value can be customized when prompted by :file:`new_just`. The default value is
-  # lowercase of the :env:`PROJECT_NAME`. The question can be skipped by setting the
-  # environment variable :env:`REPO_NAME` to the desired value.
-  #**
+    #**
+    # .. env:: REPO_NAME
+    #
+    # When docker images are built, they need to be named, or else the only way to
+    # access them is inconveniently though sha256 checksums.
+    #
+    # The :env:`REPO_NAME` should be an untagged docker repository name. Tag names will
+    # be added for each service. Docker image names must match the regex
+    # ``[a-zA-Z0-9][a-zA-Z0-9_.-]*`` or else docker will error
+    #
+    # The value can be customized when prompted by :file:`new_just`. The default value is
+    # lowercase of the :env:`PROJECT_NAME`. The question can be skipped by setting the
+    # environment variable :env:`REPO_NAME` to the desired value.
+    #**
     if set_default REPO_NAME \
                    "$(echo "${PROJECT_NAME-}" | tr '[A-Z]' '[a-z]' | sed -${sed_flag_rE} 's|[^a-z0-9_./-]+||g')" \
                    "Docker Repo for images"; then
       REPO_NAME=$(echo "${REPO_NAME-}" | tr '[A-Z]' '[a-z]' | sed -${sed_flag_rE} 's|[^a-z0-9_./-]+||g')
     fi
   fi
+
+  #**
+  # .. env:: USE_TUTORIAL
+  #
+  # Flag to turn on tutorial comments
+  #**
+  ask_question "Add tutorial comments? (good if you are unfamiliar with just)" USE_TUTORIAL n
 
   echo "Summary"
   echo "======="
@@ -1866,7 +1880,7 @@ function new_just()
     done
 
     . "${VSI_DIR}/linux/just_files/just_version.bsh"
-    sed "${sed_flags_i[@]}" 's|^JUST_VERSION="new_just"$|JUST_VERSION="'"${JUST_VERSION}"'"|' "${PROJECT_NAME}.env"
+    sed "${sed_flags_i[@]}" 's|^JUST_VERSION=.*$|JUST_VERSION="'"${JUST_VERSION}"'"|' "${PROJECT_NAME}.env"
   fi
 
   uwecho "
