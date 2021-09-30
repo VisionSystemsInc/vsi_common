@@ -393,7 +393,7 @@ elif [ -f /etc/SuSE-release ]; then
   }< /etc/SuSE-release
 
   # simplify
-  if [[ $VSI_DISTRO =~ 'SUSE Linux Enterprise Server' ]]; then
+  if [[ ${VSI_DISTRO} =~ 'SUSE Linux Enterprise Server' ]]; then
     VSI_DISTRO=sles
   fi
   # Parse the version number out, and put it together
