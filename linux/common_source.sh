@@ -457,12 +457,12 @@ if [ "${VSI_DISTRO_CORE-}" = "debian" ]; then
   VSI_DISTRO_VERSION_CORE="${VSI_DISTRO_VERSION_CORE%/sid}"
   # turn codenames to numbers
   case "${VSI_DISTRO_VERSION_CORE-}" in
-    squeeze)  VSI_DISTRO_VERSION_CORE=6  ;; # EOL Feb 29 2016
-    wheezy)   VSI_DISTRO_VERSION_CORE=7  ;; # EEOL Dec 31 2019
-    jessie)   VSI_DISTRO_VERSION_CORE=8  ;; # EEOL ~June 6 2022
-    stretch)  VSI_DISTRO_VERSION_CORE=9  ;; # EOL 2022
-    buster)   VSI_DISTRO_VERSION_CORE=10 ;; # EOL 2022
-    bullseye) VSI_DISTRO_VERSION_CORE=11 ;; # Release ?
+    squeeze)  VSI_DISTRO_VERSION_CORE=6  ;; # LTS Feb 29 2016
+    wheezy)   VSI_DISTRO_VERSION_CORE=7  ;; # ELTS ~2022-06-30
+    jessie)   VSI_DISTRO_VERSION_CORE=8  ;; # ELTS ~2022-06-30
+    stretch)  VSI_DISTRO_VERSION_CORE=9  ;; # EOL 2020-07-06 LTS 2022-06-30
+    buster)   VSI_DISTRO_VERSION_CORE=10 ;; # EOL 2022-08
+    bullseye) VSI_DISTRO_VERSION_CORE=11 ;; # Release 2021-08-14 EOL +3years?
     bookworm) VSI_DISTRO_VERSION_CORE=12 ;; # Release ?
     trixie)   VSI_DISTRO_VERSION_CORE=13 ;; # Release ?
   esac
@@ -486,9 +486,11 @@ if [ "${VSI_DISTRO_LIKE-}" = "ubuntu" ]; then
     cosmic)  VSI_DISTRO_VERSION_LIKE=18.10 ;; # EOL Jul 18, 2019
     disco)   VSI_DISTRO_VERSION_LIKE=19.04 ;; # EOL Jan 23, 2020
     eoan)    VSI_DISTRO_VERSION_LIKE=19.10 ;; # EOL Jul 17, 2020
-    focal)   VSI_DISTRO_VERSION_LIKE=20.04 ;; # EOL Apr 2030
-    groovy)  VSI_DISTRO_VERSION_LIKE=20.10 ;; # EOL Jul 2021
-    hirsute) VSI_DISTRO_VERSION_LIKE=21.04 ;; # Release April 22, 2021 : EOL ~Jan 2022
+    focal)   VSI_DISTRO_VERSION_LIKE=20.04 ;; # EOL April 2025, ESM Apr 2030
+    groovy)  VSI_DISTRO_VERSION_LIKE=20.10 ;; # EOL July 22, 2021
+    hirsute) VSI_DISTRO_VERSION_LIKE=21.04 ;; # EOL ~Jan 2022
+    impish)  VSI_DISTRO_VERSION_LIKE=21.10 ;; # Release October 14, 2021 EOL July 2022
+    #j)      VSI_DISTRO_VERSION_LIKE=22.04 ;; # Release April 21, 2022 EOL April 2027
   esac
 fi
 
