@@ -72,6 +72,8 @@ RUN set -euxv; \
              diffutils \
              # nm for lwhich
              binutils \
+             # find and xargs
+             findutils \
              # xxd for unit tests
              vim \
              ${other} ca-certificates\
