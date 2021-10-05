@@ -118,13 +118,17 @@ begin_test "conda-install"
   # output version (removing the py38_ prefix)
   [ "${conda_version}" = "${CONDA_VER#*_}" ]
 
+  # This catches some rare scenario when the conda exe without the executable
+  # didn't report the right version. However, if the shebang is longer than 127
+  # characters, then conda will not start without the right python interpreter
+  # So a blank RESULT represent this case, and should be ignored
   # executable version
-  RESULT="$("${conda_exe}" --version)"
-  [ "$RESULT" = "${CONDA_VER_FULL}" ]
+  RESULT="$("${conda_exe}" --version || :)"
+  [ "${RESULT}" = "" ] || [ "${RESULT}" = "${CONDA_VER_FULL}" ]
 
   # activate version
-  RESULT="$(source "${conda_activate}"; "${CONDA_EXE}" --version)"
-  [ "$RESULT" = "${CONDA_VER_FULL}" ]
+  RESULT="$(source "${conda_activate}"; conda --version)"
+  [ "${RESULT}" = "${CONDA_VER_FULL}" ]
 
   # registry test
   if [ "${ENABLE_REGISTRY_TEST-}" = "1" ]; then
