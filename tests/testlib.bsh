@@ -267,6 +267,18 @@ atexit ()
 {
   test_status=$?
 
+  if [ "${TESTLIB_KEEP_TEMP_DIRS-}" != "1" ]; then
+    # Only works if stdin is connected, aka only one test file on run_tests
+    if [ "${failures}" != "0" -a "${TESTLIB_KEEP_PAUSE_AFTER_ERROR-0}" = "1" ]; then
+      read -rsn1 -p "Press any key to continue..." x
+    fi
+    rm -rf "$TRASHDIR"
+  fi
+
+  if [ "${tests}" -ne 0 ] && [ "${tracking_touched_files-}" = "1" ]; then
+    cleanup_touched_files
+  fi
+
   if [ "${__testlib_setup_started-1}" = "0" ]; then
     echo "Calling setup() ${TESTLIB_BAD_COLOR}failed${TESTLIB_RESET_COLOR}!!!" >&2
     # TODO: Add trace/stderr/stdout printout here
@@ -282,10 +294,6 @@ atexit ()
   fi
   unset test_status
 
-  if [ "${tests}" -ne 0 ] && [ "${tracking_touched_files-}" = "1" ]; then
-    cleanup_touched_files
-  fi
-
   if [ "${__testlib_ran_a_test-}" = "1" ] && \
      type -t teardown &> /dev/null && \
      [ "$(command -v teardown)" == "teardown" ]; then
@@ -296,14 +304,6 @@ atexit ()
     fi
 
     teardown
-  fi
-
-  if [ "${TESTLIB_KEEP_TEMP_DIRS-}" != "1" ]; then
-    # Only works if stdin is connected, aka only one test file on run_tests
-    if [ "${failures}" != "0" -a "${TESTLIB_KEEP_PAUSE_AFTER_ERROR-0}" = "1" ]; then
-      read -rsn1 -p "Press any key to continue..." x
-    fi
-    rm -rf "$TRASHDIR"
   fi
 
   local BOLD_COLOR

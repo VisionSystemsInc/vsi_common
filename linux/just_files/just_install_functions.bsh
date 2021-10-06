@@ -32,7 +32,6 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 # .. envvar:: JUST_INSTALL_ACTIVATE_BASENAME
 #
 # File basename for utility activation. Users may source anactivation file to create useful environment variables and add the utility to $PATH.
-#
 #**
 
 : ${JUST_INSTALL_ACTIVATE_BASENAME="just_activate.bsh"}
@@ -164,7 +163,6 @@ function cmake-install()
 #          * conda_version - conda version
 #          * conda_extra_args - number of arguments consumed
 #          * conda_activate - bash file to make conda available
-#
 #**
 
 function conda-install()
@@ -238,7 +236,9 @@ function conda-install()
 
   # output: executable & version
   conda_exe="${CONDA}"
-  conda_version="$("${CONDA}" --version | awk 'NR==1{print $2}')"
+  # Source conda.sh and use conda function to handle long paths (see No module
+  # named conda.cli error below)
+  conda_version="$(source "${conda_dir}/etc/profile.d/conda.sh"; conda --version | awk 'NR==1{print $2}')"
   echo "Conda ${conda_version} installed at \"${conda_exe}\"" >&2
 
   # Make sure version meets request
@@ -265,20 +265,13 @@ function conda-install()
           CONDA_VER=\"${conda_version}\"
           " >> "${conda_activate}"
 
-  if [ "${OS-}" = "Windows_NT" ]; then
-    uwecho '
-            # source conda.sh which contains the "conda" command as a function
-            # https://github.com/conda/conda/blob/master/CHANGELOG.md#440-2017-12-20
-            # This function will auto-update the path
-            CONDA_SH="${CONDA_DIR}/etc/profile.d/conda.sh"
-            . "${CONDA_SH}"
-            ' >> "${conda_activate}"
-  else
-    uwecho '
-            # update PATH
-            PATH="$(dirname "${CONDA_EXE}"):${PATH}"
-            ' >> "${conda_activate}"
-  fi
+  uwecho '
+          # source conda.sh which contains the "conda" command as a function
+          # https://github.com/conda/conda/blob/master/CHANGELOG.md#440-2017-12-20
+          # This function will auto-update the path
+          CONDA_SH="${CONDA_DIR}/etc/profile.d/conda.sh"
+          . "${CONDA_SH}"
+          ' >> "${conda_activate}"
 }
 
 
@@ -304,7 +297,6 @@ function conda-install()
 #          * python_version - Python version
 #          * conda_python_extra_args - number of arguments consumed
 #          * python_activate - Bash file to activate python environment
-#
 #**
 
 function conda-python-install()
@@ -315,6 +307,7 @@ function conda-python-install()
   local CONDA_INSTALLER  # conda installer
   local prefer_download=0  # prefer conda download if no CONDA|CONDA_INSTALLER
   local packages=()
+  local conda_activate
 
   parse_args conda_python_extra_args \
       --dir python_dir: \
@@ -356,7 +349,10 @@ function conda-python-install()
         --dir "${conda_temp_dir}/conda" \
         ${CONDA_INSTALLER:+ --installer "${CONDA_INSTALLER}"}
 
-    CONDA="${conda_exe}"
+    # Shebang can't be more than 128 often, so we need to source conda.sh and so
+    # and use the conda function, so the right python is found and used, else
+    # you will see "ImportError: No module named conda.cli"
+    CONDA="conda"
   fi
 
   # create output directory
@@ -365,7 +361,12 @@ function conda-python-install()
 
   # install python
   echo "Installing python..." >&2
-  "${CONDA}" create -y -p "${python_dir}" "python==${python_ver}" ${packages[@]+"${packages[@]}"}
+  (
+    if [ -r "${conda_activate-}" ]; then
+      source "${conda_activate}"
+    fi
+    "${CONDA}" create -y -p "${python_dir}" "python==${python_ver}" ${packages[@]+"${packages[@]}"}
+  )
   local python_exe_footer
   if [ "${OS-}" = "Windows_NT" ]; then
     python_exe_footer="python.exe"
@@ -430,7 +431,6 @@ function conda-python-install()
             PATH="${MORE_PATH}:${PATH}"
             ' >> "${python_activate}"
   fi
-
 }
 
 
@@ -450,7 +450,6 @@ function conda-python-install()
 #          * pipenv_version - Pipenv version
 #          * pipenv_extra_args - number of arguments consumed
 #          * pipenv_activate - Bash file to activate pipenv environment
-#
 #**
 
 function pipenv-install()
@@ -590,7 +589,6 @@ function pipenv-install()
 # .. seealso::
 #
 #   :func:`pipenv-install`
-#
 
 #**
 
