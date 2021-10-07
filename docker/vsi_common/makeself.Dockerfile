@@ -24,12 +24,12 @@ RUN apk add --no-cache --virtual .deps wget; \
     rm makeself.tar.gz; \
     #
     # Disable arg parsing by makeself executable, and make executable quietly extract
-    sed '1,/^while true/s|^while true|while \\${MAKESELF_PARSE-false}|; 1,/^quiet="n"/s|^quiet="n"|quiet="y"|' \
+    sed '1,/^while true/s|^while true|while "\\${MAKESELF_PARSE-false}"|; 1,/^quiet="n"/s|^quiet="n"|quiet="y"|' \
         "/makeself/makeself-header.sh" > "/makeself/makeself-header_just.sh"; \
     #
     # Add sourcing local.env to the header, to cover corner cases like needing to to change TMPDIR
     sed -i '2r /dev/stdin' "/makeself/makeself-header_just.sh" < \
-           <(echo 'for check_dir in "\`dirname \$0\`" "\${PWD}"; do'; \
+           <(echo 'for check_dir in "\$(dirname "\${0}")" "\${PWD}"; do'; \
              echo '  if test -f "\${check_dir}/local.env"; then'; \
              echo '    set -a'; \
              echo '    source "\${check_dir}/local.env"'; \
