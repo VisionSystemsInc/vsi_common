@@ -48,13 +48,65 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
 
 * Always quote variables
 
+  There are many conditions when you need to use quotes, and very few when you need not to, and many when quotes seem optional, until you start using (initially) unexpected input. Always using quotes vastly reduced the change of an unexpected error.
+
   .. code-block:: bash
 
-    avar=foo
-    echo "${avar}"
+     avar="foo"
+     echo "${avar}"
 
-    echo ${avar} # WRONG style. It is safer to always quote the variable,
-                 # even if it is not strictly necessary
+     # There are a few reason to not quote a variable:
+     # - One is an empty variable not be an empty sting
+
+     ${DRYRUN} some command
+     # Where DRYRUN could be "echo" or empty string
+     some_command ${optional_flag} foo bar
+     # Same, but it is preferred to do this, if it is not overly cumbersome.
+     ${DRYRUN[@]+"${DRYRUN[@]}"} some command
+     some_command ${optional_flag[@]+"${optional_flag[@]}"} foo bar
+     # But since arrays cannot be exported, this is often not viable.
+     foo="aa:bb:cc:dd"
+     IFS=":"
+     bar=(${foo}) # This is actively splitting apart a string, and must not be in quotes
+
+     bvar=${avar} # Wrong style. It simplifies the rules to say "always add quotes" header
+     cvar=foo bar # Wrong style and syntax. This is why it is simpler to say "always add quotes"
+                  # This actually executes a command called bar. If that is what you meant to do
+     cvar="foo" bar #  then do this
+     echo ${avar} # Wrong style. It is safer to always quote the variable,
+                  # even if it is not strictly necessary
+
+     # Quotes should actually not be used in [[]] expressions
+     if [ "${var}" -gt "0" ] && [[ ${foo} =~ ${pattern} ]]; then
+       echo "hi"
+     fi
+
+* Always use ${var} vs $var
+
+  The reason for this policy is consistency and to clarify that certain features in bash only work in the ``{}``, e.g. variable substitution. It's very easy for someone to mistake ``${foo+set}`` for ``$foo+set`` and not ``${foo}+set``.
+
+  .. code-block:: bash
+
+     echo "${PATH}"
+     echo "${$}"
+     echo "${-} ${?} ${*}"
+     run command "${_}" ${@+"${@}"} # @ needs some extra case, so that set -eu
+                                    # doesn't error on empty
+
+     echo "$PATH" # Wrong style
+
+* Shorthand for arithmetic expressions
+
+  .. code-block:: bash
+
+     x=(11 22 33 44)
+     y=2
+     echo "${x[y]} is perfectly acceptable"
+     echo "${x[$y]} is violated the {} policy, even though it is valid bash"
+     echo "${x[${y}]} is ok too, but the shorthand looks better"
+     echo "$((x[y] - y)) is also perfectly acceptable"
+     echo "${x:1:y} is also perfectly acceptable"
+     echo "${x:1:y+1} is also perfectly acceptable"
 
 * Prefer ``[ ]`` tests to the ``[[ ]]`` construct and = to ==
 
