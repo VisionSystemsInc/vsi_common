@@ -52,11 +52,11 @@ function caseify()
       ;;
     test) # Run unit tests
       vsi_test_env "${VSI_COMMON_DIR}/tests/run_tests" ${@+"${@}"}
-      extra_args=$#
+      extra_args=${#}
       ;;
     test_int) # Run integration tests
       TESTLIB_DISCOVERY_DIR=int vsi_test_env "${VSI_COMMON_DIR}/tests/run_tests" ${@+"${@}"}
-      extra_args=$#
+      extra_args=${#}
       ;;
     help)
       # defaultify help

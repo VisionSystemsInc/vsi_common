@@ -1,7 +1,7 @@
 #!/usr/bin/env false bash
 # Source this script to access just functionality
 
-if [[ $- != *i* ]]; then
+if [[ ${-} != *i* ]]; then
   source_once &> /dev/null && return 0
 fi
 
@@ -558,7 +558,7 @@ function set_array_default()
     else
       eval "${default}=()"
     fi
-    for (( _set_array_default_index=0; $#; _set_array_default_index++ )); do
+    for (( _set_array_default_index=0; ${#}; _set_array_default_index++ )); do
       read -r "${default}[$_set_array_default_index]" <<< "${1}"
       shift 1
     done
@@ -913,7 +913,7 @@ function defaultify()
       ;;
     --new) # Run the new just wizard
       "${VSI_COMMON_DIR}/linux/just_files/new_just" ${@+"${@}"}
-      extra_args=$#
+      extra_args=${#}
       ;;
     --latest) # Print latest juste version install instructions
       (
@@ -961,10 +961,10 @@ function defaultify()
       ;;
     --run) # Run arbitrary command in just environment
       ${@+"${@}"}
-      extra_args=$#
+      extra_args=${#}
       ;;
     --tab) # Tab complete script (takes about 300ms). Usage: source <(juste --tab)
-      if [ "$#" = "0" ]; then
+      if [ "${#}" = "0" ]; then
         echo 'function _juste()'
         echo '{'
         #WARNING: Susceptible to wildcard expansion (what if a command is literal *)
@@ -985,7 +985,7 @@ function defaultify()
 
         _just "${one}" "${two}" "${three}" ${@+"${@}"}
         echo "${COMPREPLY[*]}"
-        extra_args=$#
+        extra_args=${#}
       fi
       ;;
     -h|--help|help) # Print help
@@ -1036,7 +1036,7 @@ function unknownify()
 # There are really three situation when extra arguments are needed
 #
 # #. A fixed number of arguments. For example, if 3 arguments are needed, just use $1, $2, $3, and set ``extra_args=3``
-# #. The rest of the arguments are going to be consumed. In this case, use all the arguments (typically by $@) and set extra_args=$#
+# #. The rest of the arguments are going to be consumed. In this case, use all the arguments (typically by $@) and set extra_args=${#}
 # #. An unknown number of arguments need to be used, and maybe multiple groups of unknown arguments. This is the case where JUST_SEPARATOR is used. (See EXAMPLE)
 #
 # .. rubric:: Example
@@ -1106,7 +1106,7 @@ function justify()
   IFS="${OLD_IFS}"
 
   local index
-  while (( $# > 0 )); do
+  while (( ${#} > 0 )); do
     index=$(findin "${JUST_SEPARATOR}" "${@}")
     if [ "${index}" == "-1" ]; then
       _justify "${@}"
@@ -1122,7 +1122,7 @@ function justify()
 
 function _justify()
 {
-  while (( $# > 0 )); do
+  while (( ${#} > 0 )); do
     extra_args=0
 
     if [ "${JUST_VERBOSE-0}" -ge "1" ]; then
@@ -1136,19 +1136,19 @@ function _justify()
       _just_subtargets_from_array "${1}" ${parsed_help_a[@]+"${parsed_help_a[@]}"}
 
       # If it's a valid target, call them, else use default caseify
-      if (( $# >= 2 )) && isin "${2}" ${just_subtargets[@]+"${just_subtargets[@]}"}; then
+      if (( ${#} >= 2 )) && isin "${2}" ${just_subtargets[@]+"${just_subtargets[@]}"}; then
         local target="${1}_"
         shift 1
 
         # Execute all subtargets
-        while (( $# > 0 )) && isin "${1}" ${just_subtargets[@]+"${just_subtargets[@]}"}; do
+        while (( ${#} > 0 )) && isin "${1}" ${just_subtargets[@]+"${just_subtargets[@]}"}; do
           extra_args=0
           if command -v caseify &> /dev/null; then
             caseify "${target}${@}"
           else
             defaultify "${target}${@}"
           fi
-          if (( $extra_args+1 > $# )); then
+          if (( $extra_args+1 > ${#} )); then
             source "${VSI_COMMON_DIR}/linux/colors.bsh"
             echo "${RED}JUST ERROR${NC}: Not enough arguments for \"${target}${1-}\" target" >&2
           fi
@@ -1172,7 +1172,7 @@ function _justify()
         defaultify "${@}"
       fi
     fi
-    if (( $extra_args+1 > $# )); then
+    if (( $extra_args+1 > ${#} )); then
       source "${VSI_COMMON_DIR}/linux/colors.bsh"
       echo "${RED}JUST ERROR${NC}: Not enough arguments for \"${target}${1-}\" target" >&2
     fi
@@ -1244,13 +1244,13 @@ function get_args()
   args=()
   : ${extra_args=0}
   get_args_args_used=${pre_args_used-0}
-  if (( $# >= 1 )); then
+  if (( ${#} >= 1 )); then
       # Look to see if there is another --
       next_break=$(findin "${JUST_SEPARATOR}" ${@+"${@}"})
       if [ "${next_break}" == -1 ]; then
         args=("${@}")
-        get_args_args_used+=$#
-        extra_args+=$#
+        get_args_args_used+=${#}
+        extra_args+=${#}
       else
         # When you slice @, the default ${@:1} (which is the same as ${@})
         # becomes ${@:0:x}, so you have to specify ${@:1:x}. @ is "special".

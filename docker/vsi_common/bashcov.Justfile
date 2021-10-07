@@ -17,14 +17,14 @@ function caseify()
       run_all_tests_setup_summary_dir
       pushd /src &> /dev/null
         bashcov --root /src ${@+"${@}"}
-        extra_args=$#
+        extra_args=${#}
       popd &> /dev/null
       ;;
     multiple) # Run multiple commands through bashcov
       run_all_tests_setup_summary_dir
       pushd /src &> /dev/null
-        extra_args=$#
-        while (( $# )); do
+        extra_args=${#}
+        while (( ${#} )); do
           printf '%s\0' "${1}"
           shift 1
         done | sort -z | xargs -0 -I % -P "${TESTLIB_PARALLEL}" bashcov --root /src %
@@ -41,8 +41,8 @@ function caseify()
             sed "s|${bash} ||")
         fi
 
-        extra_args=$#
-        while (( $# )); do
+        extra_args=${#}
+        while (( ${#} )); do
           if isin "${1}" ${files[@]+"${files[@]}"}; then
             echo "Skipping ${1}..." >&2
           else
