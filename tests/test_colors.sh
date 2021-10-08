@@ -25,7 +25,7 @@
 : ${TESTLIB_BOLD_COLOR=$'\e[1m'}
 : ${TESTLIB_RESET_COLOR=$'\e[m'}
 
-if [ "${TESTLIB_NO_COLOR-0}" == 1 ]; then
+if [ "${TESTLIB_NO_COLOR-0}" == "1" ]; then
   TESTLIB_GOOD_COLOR=''
   TESTLIB_BAD_COLOR=''
   TESTLIB_BOLD_COLOR=''

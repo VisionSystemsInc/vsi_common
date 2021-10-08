@@ -119,7 +119,7 @@ _just()
   done
 
   # If the last word completed is a subcommand, only match subtargets
-  if isin "${3}" ${just_subcommands[@]+"${just_subcommands[@]}"} ]; then
+  if isin "${3}" ${just_subcommands[@]+"${just_subcommands[@]}"}; then
     _just_subtargets_from_array "${3}" ${parsed_help_a[@]+"${parsed_help_a[@]}"}
     #WARNING: Susceptible to wildcard expansion (what if a subtarget is literal *)
     COMPREPLY+=($(\compgen -W "${just_subtargets+${just_subtargets[*]}}" -- ${2}))
