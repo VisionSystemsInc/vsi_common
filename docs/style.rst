@@ -46,28 +46,14 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
 
      run_some_command >& /dev/null # WRONG style. This is dealing with filenames
 
-* Always quote variables
+* Always quote variables and complex strings
 
-  There are many conditions when you need to use quotes, and very few when you need not to, and many when quotes seem optional, until you start using (initially) unexpected input. Always using quotes vastly reduced the change of an unexpected error.
+  There are many conditions when you need to use quotes, and very few when you need not to, and many when quotes seem optional. Always using quotes vastly reduced the chance of errors from unexpected input and simplifies remembering when you need and don't need quotes
 
   .. code-block:: bash
 
-     avar="foo"
+     avar="${PATH}"
      echo "${avar}"
-
-     # There are a few reason to not quote a variable:
-     # - One is an empty variable not be an empty sting
-
-     ${DRYRUN} some command
-     # Where DRYRUN could be "echo" or empty string
-     some_command ${optional_flag} foo bar
-     # Same, but it is preferred to do this, if it is not overly cumbersome.
-     ${DRYRUN[@]+"${DRYRUN[@]}"} some command
-     some_command ${optional_flag[@]+"${optional_flag[@]}"} foo bar
-     # But since arrays cannot be exported, this is often not viable.
-     foo="aa:bb:cc:dd"
-     IFS=":"
-     bar=(${foo}) # This is actively splitting apart a string, and must not be in quotes
 
      bvar=${avar} # Wrong style. It simplifies the rules to say "always add quotes" header
      cvar=foo bar # Wrong style and syntax. This is why it is simpler to say "always add quotes"
@@ -76,10 +62,48 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
      echo ${avar} # Wrong style. It is safer to always quote the variable,
                   # even if it is not strictly necessary
 
-     # Quotes should actually not be used in [[]] expressions
+     # There are a few reason to not quote a variable. Be sure to add a "# nq"
+     # comment so code reviewers knows these are intended:
+
+     # One is an empty variable that should not be treated as an empty sting
+     ${DRYRUN} some command # nq
+     # Where DRYRUN could be "echo" or empty string
+     some_command ${optional_flag} foo bar # nq
+     # Same, but it is preferred to do this, if it is not overly cumbersome.
+     ${DRYRUN[@]+"${DRYRUN[@]}"} some command
+     some_command ${optional_flag[@]+"${optional_flag[@]}"} foo bar
+     # But since arrays cannot be exported, this is often not viable.
+
+     # Another reason quotes must not be uses, is when splitting up a string into an array
+     foo="aa:bb:cc:dd"
+     IFS=":"
+     # This is actively splitting apart a string, and must not be in quotes
+     bar=(${foo}) # nq
+
+     # Quotes should actually not be used in [[]] expressions. There are a few corner cases the will be treated literally. # nq is not needed for [[]] expressions.
      if [ "${var}" -gt "0" ] && [[ ${foo} =~ ${pattern} ]]; then
        echo "hi"
      fi
+
+     # Simple assignments can skip quotes
+     local a=1
+     b=2
+     x=(11 22 33 44 "5 5" "6  6")
+     cvar=foo
+     dvar=foo\ bar # Don't do this, it's no longer simple. Use quotes
+
+
+  There is a case where it is important not to use quotes, and that is inside of ``{}``. The expressions inside of ``{}`` can be thought of as already being implicitly quoted (``"``). Adding quotes (``'`` or ``"``) may seem to work at first, but the behavior of these added quotes will change between the different versions of bash
+
+  .. code-block:: bash
+
+     echo "${foo-bar}"            # Right
+     echo "${foo-"bar"}"          # Wrong, don't put quotes around bar
+     echo "${foo/o/O}"            # Right
+     echo "${foo/"o"/"O"}"        # Wrong, don't add the inner quotes
+     echo "${foo/  /two spaces}"  # Right
+
+  See :var:`bash_behavior_pattern_substitution_slash_escape_with_single_quote` for special cases
 
 * Always use ${var} vs $var
 
@@ -89,9 +113,8 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
 
      echo "${PATH}"
      echo "${$}"
-     echo "${-} ${?} ${*}"
-     run command "${_}" ${@+"${@}"} # @ needs some extra case, so that set -eu
-                                    # doesn't error on empty
+     echo "${-} ${?} ${*+${*}}"     # * and @ need some extra care, so that
+     run command "${_}" ${@+"${@}"} # set -eu doesn't error on empty in bash 3.2
 
      echo "$PATH" # Wrong style
 
@@ -108,13 +131,25 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
      echo "${x:1:y} is also perfectly acceptable"
      echo "${x:1:y+1} is also perfectly acceptable"
 
-* Prefer ``[ ]`` tests to the ``[[ ]]`` construct and = to ==
+     # Do no add quotes to inner expressions
+     echo "${x["y"]} ${x["${y}"]}"
+
+     # Remember, associative arrays are not bash 3.2 compatible, and are not
+     # arithmetic expressions in the []
+     declare -A z
+     y=2
+     z[y]="This is index y not 2"
+     z[${y}]="This is index 2"
+     z[${y}-1]="This is index '2-1', not 1"
+     z[$((y-1))]="This is index 1"
+
+* Prefer ``[ ]`` tests to the ``[[ ]]`` construct, prefer ``=`` to ``==``
 
   .. code-block:: bash
 
     [ "${avar}" = "foo bar" ]  # Variables are always quoted in [] tests
 
-    [[ "${avar}" == "foo bar" ]] # WRONG style. Use []
+    [[ "${avar}" == "foo bar" ]] # WRONG style. Use [] and =
 
     [[ ${avar} = foobar* ]] # Ok. Pattern matching is not possible with []
 
@@ -176,7 +211,7 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
 
        #!/usr/bin/env false bash
 
-       if [[ $- != *i* ]]; then
+       if [[ ${-} != *i* ]]; then
          source_once &> /dev/null && return 0
        fi
 
