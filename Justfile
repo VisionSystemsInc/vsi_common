@@ -24,7 +24,7 @@ cd "${VSI_COMMON_DIR}"
 function sanitize_tag_name()
 {
   local tag_name="${1//:/_}"
-  tag_name=${tag_name////_}
+  tag_name="${tag_name////_}"
   echo "${tag_name//@/_}"
 }
 
@@ -43,7 +43,7 @@ function caseify()
         shift "${extra_args}"
         vsi_test_env "${VSI_COMMON_DIR}/tests/run_tests" ${@+"${@}"}
       )
-      local rv=${?}
+      local rv="${?}"
       if [ "${rv}" -ne "0" ]; then
         # This is needed for bash 3.2
         return "${rv}"
@@ -89,7 +89,7 @@ function caseify()
       local VSI_COMMON_TEST_OS_TAG_NAME="$(sanitize_tag_name "${VSI_COMMON_TEST_OS}")"
       export VSI_COMMON_TEST_OS_TAG_NAME
       Just-docker-compose run os ${@+"${@}"}
-      extra_args+=${#}
+      extra_args+="${#}"
       ;;
     test_oses-common-source) # Test all oses for common_source
       local os
@@ -167,7 +167,7 @@ function caseify()
         cd "${VSI_COMMON_DIR}"
         TESTLIB_PARALLEL=8 vsi_test_env darling shell ./tests/run_tests ${@+"${@}"}
       )
-      local rv=${?}
+      local rv="${?}"
       if [ "${rv}" -ne "0" ]; then
         # This is needed for bash 3.2
         return "${rv}"
@@ -300,9 +300,9 @@ function caseify()
         cd /z/vsi
         source setup.env
         just test ${*}"'
-        rv=${?}
+        rv="${?}"
         read -p "Press any key to close" -r -e -n1
-        exit ${rv}'
+        exit "${rv}"'
       extra_args=${#}
       ;;
     *)

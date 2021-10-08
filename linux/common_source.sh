@@ -95,7 +95,7 @@ case "${OSTYPE}" in
     ;;
   solaris*)
     VSI_OS=solaris
-    VSI_DISTRO=${OSTYPE}
+    VSI_DISTRO="${OSTYPE}"
     read VSI_DISTRO_VERSION < /etc/release
     VSI_DISTRO_VERSION="${VSI_DISTRO_VERSION% *}"
     VSI_DISTRO_VERSION="${VSI_DISTRO_VERSION#* }"
@@ -319,7 +319,7 @@ if [ -f "/etc/os-release" ]; then
                 # Get gentoo version
                 if [ -f "/etc/gentoo-release" ]; then
                   read VERSION < /etc/gentoo-release
-                  VERSION_ID=${VERSION##* }
+                  VERSION_ID="${VERSION##* }"
                 fi
 
                 # Capture ubuntu derivatives are debian derived
@@ -327,12 +327,12 @@ if [ -f "/etc/os-release" ]; then
                   ID_CORE=debian
                 # Opensuse leap does it in the backwards order of centos
                 elif [ "${ID-}" = "opensuse-leap" ]; then
-                  ID_CORE=${ID_LIKE%% *}
-                  ID_LIKE=${ID_LIKE#* }
+                  ID_CORE="${ID_LIKE%% *}"
+                  ID_LIKE="${ID_LIKE#* }"
                 # If there is a space, this is like centos that says "rhel fedora"
                 elif [ "${ID_LIKE+set}" = "set" ] && [ "${ID_LIKE}" != "${ID_LIKE%% *}" ]; then
-                  ID_CORE=${ID_LIKE#* }
-                  ID_LIKE=${ID_LIKE%% *}
+                  ID_CORE="${ID_LIKE#* }"
+                  ID_LIKE="${ID_LIKE%% *}"
                 fi
 
                 # Some distros like mint store the like version here
@@ -403,8 +403,8 @@ elif [ -f "/etc/SuSE-release" ]; then
 # Slackware
 elif [ -f "/etc/slackware-version" ]; then
   read VSI_DISTRO < /etc/slackware-version
-  VSI_DISTRO_VERSION=${VSI_DISTRO##* }
-  VSI_DISTRO=${VSI_DISTRO% *}
+  VSI_DISTRO_VERSION="${VSI_DISTRO##* }"
+  VSI_DISTRO="${VSI_DISTRO% *}"
   VSI_DISTRO=$(echo "${VSI_DISTRO}" | tr '[A-Z]' '[a-z]')
 
 # Special case for arch linux
