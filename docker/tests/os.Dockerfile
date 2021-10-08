@@ -18,11 +18,11 @@ FROM ${OS}
 RUN set -euxv; \
     if command -v yum; then \
       # Redhat 6's git is too old, bring in outside help
-      if [ -f /etc/redhat-release ] && [[ $(cat /etc/redhat-release) =~ .*release\ 6.* ]]; then \
+      if [ -f "/etc/redhat-release" ] && [[ $(cat /etc/redhat-release) =~ .*release\ 6.* ]]; then \
         yum install -y http://opensource.wandisco.com/centos/6/git/x86_64/wandisco-git-release-6-1.noarch.rpm; \
       fi; \
       other_packages=''; \
-      if [ -f /etc/os-release ] && [ "$(source /etc/os-release; echo "${ID}")" = "fedora" ]; then \
+      if [ -f "/etc/os-release" ] && [ "$(source /etc/os-release; echo "${ID}")" = "fedora" ]; then \
         # docker-compose won't work without libcrypt.so.1
         other_packages='libxcrypt-compat'; \
       fi; \
@@ -56,7 +56,7 @@ RUN set -euxv; \
              unzip curl; \
     elif command -v zypper; then \
       other='git curl'; \
-      if [ -f /etc/os-release ] && [[ $(source /etc/os-release; echo "${ID} ${VERSION}") = sles\ 11.* ]]; then \
+      if [ -f "/etc/os-release" ] && [[ $(source /etc/os-release; echo "${ID} ${VERSION}") = sles\ 11.* ]]; then \
         zypper --gpg-auto-import-keys --non-interactive install -y \
                http://opensource.wandisco.com/suse/11/git/x86_64/wandisco-git-suse-release-11-1.noarch.rpm; \
         rpm --import http://opensource.wandisco.com/RPM-GPG-KEY-WANdisco; \
@@ -134,7 +134,7 @@ RUN set -euxv; \
                             # just dependencies
                             gawk sed git ca-certificates; \
       ln -s /opt/bin/gawk /opt/bin/awk; \
-    elif [ -f /etc/os-release ]; then \
+    elif [ -f "/etc/os-release" ]; then \
       source /etc/os-release; \
       if [ "${ID}" = "clear-linux-os" ]; then \
         swupd bundle-add --no-progress \
@@ -194,8 +194,8 @@ RUN if ! docker-compose --version; then \
 #       # Finish setting up curl, cause most likely will need it.
 #       chmod 755 /opt/curl; \
 #       mv /opt/curl `command -v curl`; \
-#       if [ ! -f /etc/ssl/cert.pem ]; then \
-#         if [ -f /etc/ssl/ca-bundle.pem ]; then \
+#       if [ ! -f "/etc/ssl/cert.pem" ]; then \
+#         if [ -f "/etc/ssl/ca-bundle.pem" ]; then \
 #           ln -s /etc/ssl/ca-bundle.pem /etc/ssl/cert.pem; \
 #         fi; \
 #       fi; \

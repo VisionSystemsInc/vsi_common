@@ -297,7 +297,7 @@ fi
 #   :envvar:`VSI_DISTRO_CORE`
 #**
 
-if [ -f /etc/os-release ]; then
+if [ -f "/etc/os-release" ]; then
   # Run in a sub-shell so I can source os-release
   VSI_DISTRO=$( . /etc/os-release;
 
@@ -317,7 +317,7 @@ if [ -f /etc/os-release ]; then
                 fi
 
                 # Get gentoo version
-                if [ -f /etc/gentoo-release ]; then
+                if [ -f "/etc/gentoo-release" ]; then
                   read VERSION < /etc/gentoo-release
                   VERSION_ID=${VERSION##* }
                 fi
@@ -371,7 +371,7 @@ if [ -f /etc/os-release ]; then
 
 # Remove this special case after 30 Nov 2020
 # Older redhats don't have os-release. Read it here
-elif [ -f /etc/redhat-release ]; then
+elif [ -f "/etc/redhat-release" ]; then
   read VSI_DISTRO < /etc/redhat-release
   VSI_DISTRO_VERSION="${VSI_DISTRO#* * }"
 
@@ -385,7 +385,7 @@ elif [ -f /etc/redhat-release ]; then
 
 # Remove this special case after 31 Mar 2022
 # Older sles doesn't have an os-release. Read it here
-elif [ -f /etc/SuSE-release ]; then
+elif [ -f "/etc/SuSE-release" ]; then
   {
     read VSI_DISTRO
     read VSI_DISTRO_VERSION
@@ -401,19 +401,19 @@ elif [ -f /etc/SuSE-release ]; then
   VSI_DISTRO_VERSION_LIKE="${VSI_DISTRO_VERSION}"
 
 # Slackware
-elif [ -f /etc/slackware-version ]; then
+elif [ -f "/etc/slackware-version" ]; then
   read VSI_DISTRO < /etc/slackware-version
   VSI_DISTRO_VERSION=${VSI_DISTRO##* }
   VSI_DISTRO=${VSI_DISTRO% *}
   VSI_DISTRO=$(echo "${VSI_DISTRO}" | tr '[A-Z]' '[a-z]')
 
 # Special case for arch linux
-elif [ -f /etc/arch-release ]; then
+elif [ -f "/etc/arch-release" ]; then
   VSI_DISTRO=arch
   VSI_DISTRO_VERSION=''
 
 # Special case for clearlinux
-elif [ -f /usr/share/clear/version ]; then
+elif [ -f "/usr/share/clear/version" ]; then
   VSI_DISTRO='clearlinux'
   read VSI_DISTRO_VERSION < /usr/share/clear/version || :
   # EOF is reached, but that's ok
@@ -559,7 +559,7 @@ case "${VSI_OS}" in
     fi
     if command -v sysctl >/dev/null 2>&1; then # Normal darwin
       VSI_NUMBER_CORES="$(\sysctl -n hw.logicalcpu)"
-    elif [ -f /Volumes/SystemRoot/proc/cpuinfo ]; then # darling
+    elif [ -f "/Volumes/SystemRoot/proc/cpuinfo" ]; then # darling
       VSI_NUMBER_CORES="$(\grep processor /Volumes/SystemRoot/proc/cpuinfo | wc -l)"
       # Left trim white spaces
       VSI_NUMBER_CORES="${VSI_NUMBER_CORES#"${VSI_NUMBER_CORES%%[![:space:]]*}"}"
@@ -574,7 +574,7 @@ case "${VSI_OS}" in
   *)
     if command -v nproc >/dev/null 2>&1; then
       VSI_NUMBER_CORES="$(\nproc)"
-    elif [ -f /proc/cpuinfo ]; then
+    elif [ -f "/proc/cpuinfo" ]; then
       VSI_NUMBER_CORES="$(\grep processor /proc/cpuinfo | wc -l)"
     else
       echo "Warning: unable to determine number of cores" >&2

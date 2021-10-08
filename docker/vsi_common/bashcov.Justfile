@@ -35,7 +35,7 @@ function caseify()
       local files=()
 
       pushd /src &> /dev/null
-        if [ -r /src/coverage/.resultset.json ]; then
+        if [ -r "/src/coverage/.resultset.json" ]; then
           IFS='' readarray -t -d $'\n' files < <(
             jq -r 'keys | .[]' /src/coverage/.resultset.json | \
             sed "s|${bash} ||")
