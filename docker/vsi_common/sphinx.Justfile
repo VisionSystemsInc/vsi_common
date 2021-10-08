@@ -53,8 +53,8 @@ function caseify()
       [ "${#src_files[@]}" = "${#doc_files[@]}" ]
 
       for idx in "${!src_files[@]}"; do
-        doc_file="${doc_files[${idx}]}"
-        src_file="${src_files[${idx}]}"
+        doc_file="${doc_files[idx]}"
+        src_file="${src_files[idx]}"
 
         # Remove newline fun, thanks to windows
         doc_file="${doc_file//[$'\r\n']}"

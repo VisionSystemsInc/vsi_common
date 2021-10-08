@@ -182,7 +182,7 @@ function docker_link_mounts()
   local link_destinations=()
   for ((x=1; x<${#JUST_DOCKER_ENTRYPOINT_LINKS[@]}; x+=2)); do
     # copy to an array of just destinations
-    link_destinations+=("${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}")
+    link_destinations+=("${JUST_DOCKER_ENTRYPOINT_LINKS[x]}")
   done
 
   # Sort the array
@@ -204,9 +204,9 @@ function docker_link_mounts()
     # strictly worse than bind mounts; don't try to make them as capable.
     for x in ${!link_destinations[@]}; do
       for ((y=0; y<x; y++)); do
-        if [ -n "${link_destinations[$y]+set}" ] && \
-          [[ ${link_destinations[$x]} == ${link_destinations[$y]}/* ]]; then
-          unset link_destinations[$x]
+        if [ -n "${link_destinations[y]+set}" ] && \
+          [[ ${link_destinations[x]} == ${link_destinations[y]}/* ]]; then
+          unset link_destinations[x]
           break
         fi
       done
@@ -216,9 +216,9 @@ function docker_link_mounts()
   for y in ${!link_destinations[@]}; do
     # Last link wins; this matches docker-compose behavior
     for ((x=${#JUST_DOCKER_ENTRYPOINT_LINKS[@]}-2; x>=0; x-=2)); do
-      if [ -n "${link_destinations[$y]+set}" ] && \
-         [ "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}" == "${link_destinations[$y]}" ]; then
-        retry_as_user mkdir -p "$(dirname "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}")"
+      if [ -n "${link_destinations[y]+set}" ] && \
+         [ "${JUST_DOCKER_ENTRYPOINT_LINKS[x+1]}" == "${link_destinations[y]}" ]; then
+        retry_as_user mkdir -p "$(dirname "${JUST_DOCKER_ENTRYPOINT_LINKS[x+1]}")"
 
         # Cannot create a symlink over a directory; this will cause the next
         # step to fail. This can occur in a very specific case where a directory
@@ -226,20 +226,20 @@ function docker_link_mounts()
         # entrypoint can run smoothly before just_entrypoint_functions is run).
         # Although it could also potentially be a mount of some sort. Consequently,
         # only delete the directory if it is part of the docker image.
-        if [ -d "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}" ] && \
-           [ ! -L "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}" ] && \
-           [ "$(mount_point "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}")" = "/" ]; then
-          rm -rf "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}"
+        if [ -d "${JUST_DOCKER_ENTRYPOINT_LINKS[x+1]}" ] && \
+           [ ! -L "${JUST_DOCKER_ENTRYPOINT_LINKS[x+1]}" ] && \
+           [ "$(mount_point "${JUST_DOCKER_ENTRYPOINT_LINKS[x+1]}")" = "/" ]; then
+          rm -rf "${JUST_DOCKER_ENTRYPOINT_LINKS[x+1]}"
         fi
 
         # Don't overwrite an existing file unless explicitly requested
-        if ! retry_as_user test -e "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]}" || \
+        if ! retry_as_user test -e "${JUST_DOCKER_ENTRYPOINT_LINKS[x+1]}" || \
            [ -n "${DOCKER_LINK_MOUNTS_FORCE+set}" ]; then
           # The gosu version covers the case when the link's destination is
           # in a subdirectory of another volume that is on an nfs mount with
           # squash root. NOTE the containing volume was previously symlink'd
           # into place via this symlink indirection.
-          retry_as_user ln -s ${options-} "${JUST_DOCKER_ENTRYPOINT_LINKS[$x]}" "${JUST_DOCKER_ENTRYPOINT_LINKS[$((x+1))]%/}"
+          retry_as_user ln -s ${options-} "${JUST_DOCKER_ENTRYPOINT_LINKS[x]}" "${JUST_DOCKER_ENTRYPOINT_LINKS[x+1]%/}"
         fi
         break
       fi
