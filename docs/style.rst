@@ -153,11 +153,17 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
 
     [[ ${avar} = foobar* ]] # Ok. Pattern matching is not possible with []
 
-    [[ ${avar} = "foo bar"* ]] # WRONG style. If quotes are needed, use a variable
+    [[ ${avar} = "foo bar"* ]] # Ok. If quotes are needed, you can use a variable
     pattern="foo bar*"
     [[ ${avar} = ${pattern} ]] # Ok. Also, never quote variables in [[ ]] as
                                # this disables pattern matching---in which case,
                                # [] can be used instead
+    If you are mixing literal and wild cards, you will use quotes
+    avar="foo*bar"
+    pattern="foo*b"
+    [[ ${avar} = "${pattern}"* ]]  # If you want the pattern to refer to a literal asterisk, you need these quotes.
+    [[ foo-bar != ${pattern}* ]]   # This would fail, because the * in the pattern would be a while card, not a
+    # This advance pattern matching is why [] is preferred when doing simple equating.
 
     [[ ${avar} =~ foobar.+ ]]  # Ok. Regex's are not possible with []
 

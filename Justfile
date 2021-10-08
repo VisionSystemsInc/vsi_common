@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 
-if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then #If being sourced
+if [ "${BASH_SOURCE[0]}" != "${0}" ]; then #If being sourced
   set -euE
 fi
 
 # VSI_COMMON_DIR is a special var, handle is carefully.
-if [ -z ${VSI_COMMON_DIR+set} ]; then
+if [ -z "${VSI_COMMON_DIR+set}" ]; then
   VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)"
 fi
 source "${VSI_COMMON_DIR}/linux/just_files/just_env" "${VSI_COMMON_DIR}/vsi_common.env"
@@ -188,7 +188,7 @@ function caseify()
     build_bash) # Build images for all bash versions or a specific version ($1)
       local version
 
-      if [ ${#} -gt 0 ]; then
+      if [ "${#}" -gt "0" ]; then
         VSI_COMMON_BASH_TEST_VERSION="${1}" Just-docker-compose build bash_test
         extra_args=1
       else
@@ -208,7 +208,7 @@ function caseify()
     background_start) # Start bash dockers in background
       local DOCKER_COMPOSE_EXTRA_RUN_ARGS
       local name
-      if [ ${#} -gt 0 ]; then
+      if [ "${#}" -gt "0" ]; then
         name="${COMPOSE_PROJECT_NAME}_bash_bg_${1}"
         if Docker inspect --type container "${name}" &> /dev/null; then
           Docker rm -f "${name}"
@@ -230,7 +230,7 @@ function caseify()
       ;;
     background_stop) # Stop background bashes
       local name
-      if [ ${#} -gt 0 ]; then
+      if [ "${#}" -gt "0" ]; then
         name="${COMPOSE_PROJECT_NAME}_bash_bg_${1}"
         if Docker inspect --type container "${name}" &> /dev/null; then
           Docker rm -f "${name}"
@@ -260,7 +260,7 @@ function caseify()
     push_bash) # Push bash images
       local version
 
-      if [ ${#} -gt 0 ]; then
+      if [ "${#}" -gt "0" ]; then
         Docker push "${VSI_COMMON_DOCKER_REPO}:bash_test_${1}"
         extra_args=1
       else
