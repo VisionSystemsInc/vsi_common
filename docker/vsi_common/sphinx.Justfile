@@ -60,7 +60,7 @@ function caseify()
         doc_file="${doc_file//[$'\r\n']}"
         src_file="${src_file//[$'\r\n']}"
 
-        if [ ${#doc_file} -eq 0 ]; then
+        if [ "${#doc_file}" -eq "0" ]; then
           continue
         fi
         if [[ ${doc_file::1} =~ ^[./] ]] || [[ ${doc_file} =~ \.\. ]]; then
