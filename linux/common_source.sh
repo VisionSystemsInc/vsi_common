@@ -128,7 +128,7 @@ if command -v ldd 2>&1 > /dev/null; then
   if ! VSI_MUSL=$(ldd --version 2>&1); then
     # Some versions of ldd fail when using the --version flag, but succeed on
     # no flag
-    VSI_MUSL=$(ldd 2>&1 || :)
+    VSI_MUSL="$(ldd 2>&1 || :)"
   fi
   # Was musl not found in first line
   if command -v awk 2>&1 > /dev/null; then
@@ -299,13 +299,13 @@ fi
 
 if [ -f "/etc/os-release" ]; then
   # Run in a sub-shell so I can source os-release
-  VSI_DISTRO=$( . /etc/os-release;
+  VSI_DISTRO="$(. /etc/os-release;
 
                 # Only Ubuntues have this file
                 # Fix bug https://bugs.launchpad.net/linuxmint/+bug/1641491
                 if [ -f "/etc/lsb-release" ]; then
                   . /etc/lsb-release
-                  DISTRIB_ID=$(echo ${DISTRIB_ID} | sed 's|.*|\L&|')
+                  DISTRIB_ID="$(echo ${DISTRIB_ID} | sed 's|.*|\L&|')"
                   if [ "${DISTRIB_ID}" != "${ID}" ]; then
                     echo "Fixing" >&2
                     ID_CORE="${ID_LIKE}"
@@ -348,7 +348,7 @@ if [ -f "/etc/os-release" ]; then
 
                 # Pass the results out out
                 echo "${ID}:${VERSION_ID-}:${ID_LIKE}:${VERSION_LIKE}:${ID_CORE}:${VERSION_CORE}"
-              )
+              )"
 
   #DISTRO:VERSION:MIDDLE_DISTRO:MIDDLE_VERSION:CORE_DISTRO:CORE_VERSION
   # Parse the answer
@@ -405,7 +405,7 @@ elif [ -f "/etc/slackware-version" ]; then
   read VSI_DISTRO < /etc/slackware-version
   VSI_DISTRO_VERSION="${VSI_DISTRO##* }"
   VSI_DISTRO="${VSI_DISTRO% *}"
-  VSI_DISTRO=$(echo "${VSI_DISTRO}" | tr '[A-Z]' '[a-z]')
+  VSI_DISTRO="$(echo "${VSI_DISTRO}" | tr '[A-Z]' '[a-z]')"
 
 # Special case for arch linux
 elif [ -f "/etc/arch-release" ]; then
