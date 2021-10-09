@@ -147,7 +147,7 @@ if command -v ldd 2>&1 > /dev/null; then
 fi
 
 # Old highly unreliable method
-# if grep -q musl $(unalias grep &> /dev/null || :; unset grep; command -v grep); then
+# if grep -q musl "$(unalias grep &> /dev/null || :; unset grep; command -v grep)"; then
 #   VSI_MUSL=1
 # else
 #   VSI_MUSL=0
