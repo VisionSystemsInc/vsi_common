@@ -14,7 +14,7 @@ function vsi_test_env()
   done
 
   for envvar in VSI_COMMON_DIR HOME TERM PATH \
-                DBUS_SESSION_BUS_ADDRESS \
+                DBUS_SESSION_BUS_ADDRESS TMPDIR \
                 DOCKER_HOST DOCKER_TLS_VERIFY DOCKER_CERT_PATH \
                 NUMBER_OF_PROCESSORS OS USERPROFILE; do
                 # VSI_COMMON_DIR_HOST \
@@ -26,6 +26,7 @@ function vsi_test_env()
   # VSI_COMMON_DIR HOME TERM PATH - Just normal things
   # VSI_COMMON_DIR_HOST - This would let the common_source integration test mount properly
   # USERPROFILE - This is for miniconda install, it fails silently without explanation
+  # TMPDIR - Some OSes want you to use a custom temp dir, and it's probably best to do so
     if [ -n "${!envvar+set}" ]; then
       test_env+=("${envvar}=${!envvar}")
     fi

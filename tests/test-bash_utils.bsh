@@ -50,11 +50,19 @@ elif [[ ${OSTYPE-} = darwin* ]] && [ "$(sw_vers -buildVersion)" = "Darling" ]; t
   skip_next_test
 fi
 
+
+function sanitize_session_name()
+{
+  local session="${1////}"
+  session="${session//[^a-zA-Z0-9-]/_}"
+  echo -n "${session}"
+}
+
 begin_test "RC File insertion"
 (
   setup_test
 
-  session="${TRASHDIR////}"
+  session="$(sanitize_session_name "${TRASHDIR}")"
   screen -c /dev/null -dmS "${session}" bash
 
   # Macos compatibility, needs a literal newline
@@ -68,8 +76,8 @@ begin_test "RC File insertion"
                      "set -xv; touch" \
                        "${TESTDIR}/foo")${nl}"
 
-  screen -S "${session}" -p 0 -X stuff "${cmd}"
-  screen -S "${session}" -p 0 -X stuff "${stdin}"
+  screen -S "${session}" -p 0 -X stuff "$(screen_stuff_escape "${cmd}")"
+  screen -S "${session}" -p 0 -X stuff "$(screen_stuff_escape "${stdin}")"
 
   for ((i=0; i < 500; i++ )); do
     if [ -e "${TESTDIR}/bar" ]; then
@@ -87,5 +95,5 @@ end_test
 function teardown()
 {
   # cleanup in case test fails
-  command -v screen >& /dev/null && screen -S "${TRASHDIR////}" -X quit >& /dev/null || :
+  command -v screen >& /dev/null && screen -S "$(sanitize_session_name "${TRASHDIR}")" -X quit >& /dev/null || :
 }

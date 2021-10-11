@@ -9,6 +9,7 @@ source "${VSI_COMMON_DIR}/linux/uwecho.bsh"
 source "${VSI_COMMON_DIR}/linux/just_files/just_version.bsh"
 source "${VSI_COMMON_DIR}/linux/compat.bsh"
 source "${VSI_COMMON_DIR}/linux/aliases.bsh"
+source "${VSI_COMMON_DIR}/linux/string_tools.bsh"
 export JUST_VERSION
 
 function setup()
@@ -40,6 +41,10 @@ function teardown()
     docker volume rm "${tmp_volume}" &> /dev/null
   fi
 }
+
+# Need to be in the original directory as when the script starts, or else
+# uwecho does not work
+CWD="$(pwd)"
 
 begin_test "New Just with defaults"
 (
@@ -90,13 +95,15 @@ begin_test "New Just"
   mkdir "${TESTDIR}/ss"
   . "set u.p  f i'l\"e"
 
-  uwecho '#!/usr/bin/env bash
-          echo mockdc "${@}"' > ss/docker-compose
-  chmod 755 ss/docker-compose
+  pushd "${CWD}"
+    uwecho '#!/usr/bin/env bash
+            echo mockdc "${@}"' > "${TESTDIR}/ss/docker-compose"
 
-  uwecho '#!/usr/bin/env bash
-          echo mockd "${@}"
-          exit 0' > ss/docker
+    uwecho '#!/usr/bin/env bash
+            echo mockd "${@}"
+            exit 0' > "${TESTDIR}/ss/docker"
+  popd
+  chmod 755 ss/docker-compose
   chmod 755 ss/docker
 
   [ "$(just build)" = "mockdc -f ${TESTDIR}/v.s.i  d i'r\"/docker/recipes/docker-compose.yml build gosu pipenv tini vsi
@@ -104,9 +111,17 @@ mockdc -f ${TESTDIR}/docker-compose.yml build
 mockd volume rm testpro_venv" ]
   [ "$(just build example)" = "mockdc -f ${TESTDIR}/docker-compose.yml build example" ]
 
-  [[ $(just -n run yaan) =~ docker-compose\ -f\ ${TESTDIR}/docker-compose\.yml\ -f\ (.*)\ run\ --rm\ --service-ports\ yaan ]] || false
+  file_name="${TESTDIR}/docker-compose.yml"
+  if [[ ${file_name} =~ ^${does_not_needs_quote_escape_regex}$ ]]; then
+    file_name="$(regex_escape "${file_name}")"
+  else
+    file_name="$(regex_escape "${file_name}")"
+    file_name="$(quote_escape "${file_name}")"
+  fi
 
-  tmp_file="${BASH_REMATCH[1]}"
+  [[ $(just -n run yaan) =~ docker-compose\ -f\ ${file_name}\ -f\ (.*)\ run\ --rm\ --service-ports\ yaan ]] || false
+
+  tmp_file="$(quote_unescape "${BASH_REMATCH[1]}")"
 
   ans="version: '2.4'
 services:
@@ -149,11 +164,14 @@ services:
   [ "$(just docker-compose clean venv)" = "mockd volume rm testpro_venv" ]
 
 
-  # Test clean venv when volume doesn't exist
-  uwecho '#!/usr/bin/env bash
-          echo mockd "${@}"
-          exit 1' > ss/docker
+  pushd "${CWD}"
+    # Test clean venv when volume doesn't exist
+    uwecho '#!/usr/bin/env bash
+            echo mockd "${@}"
+            exit 1' > "${TESTDIR}/ss/docker"
+  popd
   chmod 755 ss/docker
+
   [ "$(just docker-compose clean venv 2>&1)" = "testpro_venv already removed" ]
 )
 end_test
@@ -176,17 +194,27 @@ begin_test "New Just no pipenv"
   export PATH="${TESTDIR}:${PATH}"
   . setup.env
 
-  uwecho '#!/usr/bin/env bash
-          echo mockdc "${@}"' > docker-compose
+  pushd "${CWD}"
+    uwecho '#!/usr/bin/env bash
+            echo mockdc "${@}"' > "${TESTDIR}/docker-compose"
+  popd
   chmod 755 docker-compose
 
   [ "$(just build)" = "mockdc -f ${TESTDIR}/external/vsi_common/docker/recipes/docker-compose.yml build gosu tini vsi
 mockdc -f ${TESTDIR}/docker-compose.yml build" ]
   [ "$(just build example)" = "mockdc -f ${TESTDIR}/docker-compose.yml build example" ]
 
-  [[ $(just -n run example) =~ docker-compose\ -f\ ${TESTDIR}/docker-compose\.yml\ -f\ (.*)\ run\ --rm\ --service-ports\ example ]] || false
+  file_name="${TESTDIR}/docker-compose.yml"
+  if [[ ${file_name} =~ ^${does_not_needs_quote_escape_regex}$ ]]; then
+    file_name="$(regex_escape "${file_name}")"
+  else
+    file_name="$(regex_escape "${file_name}")"
+    file_name="$(quote_escape "${file_name}")"
+  fi
 
-  tmp_file="${BASH_REMATCH[1]}"
+  [[ $(just -n run example) =~ docker-compose\ -f\ ${file_name}\ -f\ (.*)\ run\ --rm\ --service-ports\ example ]] || false
+
+  tmp_file="$(quote_unescape "${BASH_REMATCH[1]}")"
 
   ans="version: '2.4'
 services:
@@ -245,14 +273,18 @@ begin_test "New Just no docker"
   mkdir "${TESTDIR}/ss"
   . "set u.p  f i'l\"e"
 
-  uwecho '#!/usr/bin/env bash
-          echo mockg++ "${@}"' > ss/g++
+  pushd "${CWD}"
+    uwecho '#!/usr/bin/env bash
+            echo mockg++ "${@}"' > "${TESTDIR}/ss/g++"
+  popd
   chmod 755 ss/g++
 
   [ "$(just compile)" = "mockg++ hi.cpp -o hi" ]
 
-  uwecho '#!/usr/bin/env bash
-          echo mockhi "${@}"' > hi
+  pushd "${CWD}"
+    uwecho '#!/usr/bin/env bash
+            echo mockhi "${@}"' > "${TESTDIR}/hi"
+  popd
   chmod 755 hi
 
   [ "$(just run test123)" = "mockhi test123" ]
