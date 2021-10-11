@@ -62,13 +62,13 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
      echo ${avar} # Wrong style. It is safer to always quote the variable,
                   # even if it is not strictly necessary
 
-     # There are a few reason to not quote a variable. Be sure to add a "# nq"
+     # There are a few reason to not quote a variable. Be sure to add a "# noquotes"
      # comment so code reviewers knows these are intended:
 
      # One is an empty variable that should not be treated as an empty sting
-     ${DRYRUN} some command # nq
+     ${DRYRUN} some command # noquotes
      # Where DRYRUN could be "echo" or empty string
-     some_command ${optional_flag} foo bar # nq
+     some_command ${optional_flag} foo bar # noquotes
      # Same, but it is preferred to do this, if it is not overly cumbersome.
      ${DRYRUN[@]+"${DRYRUN[@]}"} some command
      some_command ${optional_flag[@]+"${optional_flag[@]}"} foo bar
@@ -78,9 +78,9 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
      foo="aa:bb:cc:dd"
      IFS=":"
      # This is actively splitting apart a string, and must not be in quotes
-     bar=(${foo}) # nq
+     bar=(${foo}) # noquotes
 
-     # Quotes should actually not be used in [[]] expressions. There are a few corner cases the will be treated literally. # nq is not needed for [[]] expressions.
+     # Quotes should actually not be used in [[]] expressions. There are a few corner cases the will be treated literally. # noquotes is not needed for [[]] expressions.
      if [ "${var}" -gt "0" ] && [[ ${foo} =~ ${pattern} ]]; then
        echo "hi"
      fi
