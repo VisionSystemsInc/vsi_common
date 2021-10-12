@@ -205,6 +205,17 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
        do_something
      fi
 
+     # Arrays need a little extra syntactical sugar (the space is important for bash 3.2)
+
+     if [ " ""${myarray[@]+set}" = " " ]; then # If not set
+       do_something
+     fi
+
+     if [ " ""${myarray[@]+set}" = " set" ]; then # If set
+       do_something
+     fi
+
+
 * Checking to see if an array exists before accessing it
 
   .. code-block:: bash
@@ -217,7 +228,7 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
 
      ${foo[@]+"${foo[@]}"}
      ${foo[@]+"${!foo[@]}"}
-     ${foo[@]+"${foo[*]}"}
+     echo "${foo[*]+${foo[*]}}"
 
 * Scripting file naming and shebangs
 
