@@ -37,12 +37,11 @@ source "${VSI_COMMON_DIR}/linux/aliases.bsh"
 #
 #   Break the volume string up into ``BASH_REMATCH``
 #    1 - Host path
-#    3 - Docker path
-#    5 - flags
+#    2 - Docker path
+#    3 - flags
 #**
-
-DOCKER_VOLUME_PATTERN='^(([a-zA-Z]:[/\])?[^:]*):(([a-zA-Z]:[/\])?[^:]*)((:ro|:rw|:z|:Z|:r?shared|:r?slave|:r?private|:delegated|:cached|:consistent|:nocopy)*)$'
-
+# https://www.debuggex.com/r/lJRoX_sSnhOKpEER
+DOCKER_VOLUME_PATTERN='^([a-zA-Z]:[/\][^:]*|[^:]+):([a-zA-Z]:[/\][^:]*|[^:]+)((:ro|:rw|:z|:Z|:r?shared|:r?slave|:r?private|:delegated|:cached|:consistent|:nocopy)*)$'
 #**
 # .. function:: is_dir_and_not_exist
 #
@@ -318,8 +317,8 @@ function docker_parse_volume_string()
 {
   if [[ ${1} =~ ${DOCKER_VOLUME_PATTERN} ]]; then
     volume_host="${BASH_REMATCH[1]}"
-    volume_docker="${BASH_REMATCH[3]}"
-    volume_flags="${BASH_REMATCH[5]}"
+    volume_docker="${BASH_REMATCH[2]}"
+    volume_flags="${BASH_REMATCH[3]}"
     return 0
   else
     return 1
@@ -809,10 +808,11 @@ function docker-compose-volumes()
       volume_line="${volume_line:1}"
       if [[ ${volume_line} =~ ${DOCKER_VOLUME_PATTERN} ]]; then
         DOCKER_VOLUME_SOURCES[count]="${BASH_REMATCH[1]}"
-        DOCKER_VOLUME_TARGETS[count]="${BASH_REMATCH[3]}"
+        DOCKER_VOLUME_TARGETS[count]="${BASH_REMATCH[2]}"
         DOCKER_VOLUME_FORMATS[count]="short"
-        DOCKER_VOLUME_FLAGS[count]="${BASH_REMATCH[5]}"
+        DOCKER_VOLUME_FLAGS[count]="${BASH_REMATCH[3]}"
       else
+        declare -p volume_line DOCKER_VOLUME_LINES >&2
         echo "Invalid short form volume string: ${volume_line}" >&2
         return 1
       fi

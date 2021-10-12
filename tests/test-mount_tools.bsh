@@ -13,6 +13,14 @@ linux_nfs="\
 Filesystem                       1K-blocks        Used   Available Use% Mounted on
 filetodata-2:/volume1/projects 23320723712 22239875584  1080729344  96% /mnt"
 
+linux_nfs_spaces="\
+Filesystem                       1K-blocks        Used   Available Use% Mounted on
+filetodata-2:/volume1/projects 23320723712 22239875584  1080729344  96% /mnt/f o  o"
+
+linux_nfs_special="\
+Filesystem                       1K-blocks        Used   Available Use% Mounted on
+filetodata-2:/volume1/projects 23320723712 22239875584  1080729344  96% /mnt/f?o?o"
+
 windows_nfs="\
 Filesystem             1K-blocks        Used   Available Use% Mounted on
 P:                   23320723680 22239875584  1080848096  96% /p
@@ -43,6 +51,10 @@ begin_test "Test mount point"
   result="$(mount_point /mnt/test/file.txt nfs nfs3 nfs4)"
   [ "${result}" = "/mnt" ]
 
+  data="${linux_nfs_spaces}"
+  result="$(mount_point /mnt/f o  o/file.txt nfs nfs3 nfs4)"
+  assert_str_eq "${result}" "/mnt/f o  o"
+
   data="${macos_nfs}"
   OSTYPE=darwin16
   result="$(mount_point /Volumes/SystemRoot/mnt/test/file.txt nfs nfs3 nfs4)"
@@ -50,6 +62,17 @@ begin_test "Test mount point"
 
   data=""
   not mount_point /mnt/test/file.txt nfs nfs3 nfs4
+)
+end_test
+
+begin_expected_fail_test "Special character not handled yet"
+(
+  setup_test
+
+  data="${linux_nfs_special}"
+  result="$(mount_point $'/mnt/f\to\no/file.txt' nfs nfs3 nfs4)"
+  begin_fail_zone
+  assert_str_eq "${result}" $'/mnt/f\to\no'
 )
 end_test
 

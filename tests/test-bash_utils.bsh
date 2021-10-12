@@ -63,21 +63,20 @@ begin_test "RC File insertion"
   setup_test
 
   session="$(sanitize_session_name "${TRASHDIR}")"
+  export TESTDIR
   screen -c /dev/null -dmS "${session}" bash
 
   # Macos compatibility, needs a literal newline
   nl=$'\n'
 
-  stdin="$(quotemire "set -xv; touch" \
-                       "${TESTDIR}/bar")${nl}"
+  stdin='set -xv; touch "\${TESTDIR}/bar"'"${nl}"
 
   # Got too complicated, use quotemire
   cmd="$(quotemire "source '${VSI_COMMON_DIR}/linux/bash_utils.bsh'; run_bash_with_rc_file" \
-                     "set -xv; touch" \
-                       "${TESTDIR}/foo")${nl}"
+                     'set -xv; touch "\${TESTDIR}/foo"')${nl}"
 
-  screen -S "${session}" -p 0 -X stuff "$(screen_stuff_escape "${cmd}")"
-  screen -S "${session}" -p 0 -X stuff "$(screen_stuff_escape "${stdin}")"
+  screen -S "${session}" -p 0 -X stuff "${cmd}"
+  screen -S "${session}" -p 0 -X stuff "${stdin}"
 
   for ((i=0; i < 500; i++ )); do
     if [ -e "${TESTDIR}/bar" ]; then
