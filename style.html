@@ -195,48 +195,142 @@
 <li><p>Closing an open file</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">exec</span> <span class="m">3</span>&gt;<span class="p">&amp;</span>-
 
-<span class="nb">exec</span> <span class="m">3</span><span class="p">&amp;</span>&gt;- <span class="c1"># WRONG style. This is dealing with descriptors</span>
+<span class="nb">exec</span> <span class="m">3</span><span class="p">&amp;</span>&gt;- <span class="c1"># Wrong style. This is dealing with descriptors</span>
 </pre></div>
 </div>
 </li>
 <li><p>Redirecting to a file</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>run_some_command <span class="p">&amp;</span>&gt; /dev/null <span class="c1"># Spaces added around &amp;&gt;</span>
 
-run_some_command &gt;<span class="p">&amp;</span> /dev/null <span class="c1"># WRONG style. This is dealing with filenames</span>
+run_some_command &gt;<span class="p">&amp;</span> /dev/null <span class="c1"># Wrong style. This is dealing with filenames</span>
 </pre></div>
 </div>
 </li>
-<li><p>Always quote variables</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">avar</span><span class="o">=</span>foo
-<span class="nb">echo</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">avar</span><span class="si">}</span><span class="s2">&quot;</span>
+<li><p>Always quote variables and complex strings</p>
+<p>There are many conditions when you need to use quotes, very few when you need to not, and many when quotes seem optional. Always using quotes (aside from the few exceptions mentioned below) vastly reduces the chance of errors from unexpected (and erroneous) input and simplifies remembering when you do and don’t need quotes</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">bvar</span><span class="o">=</span><span class="si">${</span><span class="nv">avar</span><span class="si">}</span>   <span class="c1"># Wrong style. Always add quotes</span>
+<span class="nv">bvar</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">avar</span><span class="si">}</span><span class="s2">&quot;</span> <span class="c1"># Right</span>
+<span class="nv">cvar</span><span class="o">=</span>foo bar   <span class="c1"># Wrong style and syntax. This is a complex string, and requires quotes</span>
+               <span class="c1"># This actually executes a command called bar. Instead, make it clear:</span>
+<span class="nv">cvar</span><span class="o">=</span><span class="s2">&quot;foo&quot;</span> bar <span class="c1"># Right if you want to execute a command called bar</span>
+<span class="nv">cvar</span><span class="o">=</span><span class="s2">&quot;foo bar&quot;</span> <span class="c1"># Right if bar is part of the string</span>
+<span class="nb">echo</span> <span class="si">${</span><span class="nv">avar</span><span class="si">}</span>   <span class="c1"># Wrong style. Variables may contain whitespace that would be messed up</span>
+<span class="nb">echo</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">avar</span><span class="si">}</span><span class="s2">&quot;</span> <span class="c1"># Right</span>
 
-<span class="nb">echo</span> <span class="si">${</span><span class="nv">avar</span><span class="si">}</span> <span class="c1"># WRONG style. It is safer to always quote the variable,</span>
-             <span class="c1"># even if it is not strictly necessary</span>
+<span class="c1"># There are a few reason to not quote a variable. Be sure to add a &quot;# noquotes&quot;</span>
+<span class="c1"># comment so code reviewers knows these are intended:</span>
+
+<span class="c1"># One is an empty variable that should not be treated as an empty string</span>
+<span class="c1"># E.g., DRYRUN could be &quot;echo&quot; or empty string</span>
+<span class="si">${</span><span class="nv">DRYRUN</span><span class="si">}</span> some <span class="nb">command</span> <span class="c1"># noquotes</span>
+<span class="c1"># E.g., optional_flag could be &quot;-stuff&quot; or empty string</span>
+some_command <span class="si">${</span><span class="nv">optional_flag</span><span class="si">}</span> foo bar <span class="c1"># noquotes</span>
+<span class="c1"># The preferred way is to use arrays, if it is not overly cumbersome.</span>
+<span class="si">${</span><span class="nv">DRYRUN</span><span class="p">[@]+</span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">DRYRUN</span><span class="p">[@]</span><span class="si">}</span><span class="s2">&quot;</span><span class="si">}</span> some <span class="nb">command</span>
+some_command <span class="si">${</span><span class="nv">optional_flag</span><span class="p">[@]+</span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">optional_flag</span><span class="p">[@]</span><span class="si">}</span><span class="s2">&quot;</span><span class="si">}</span> foo bar
+<span class="c1"># Although because arrays cannot be exported, this is often not viable.</span>
+
+<span class="c1"># Another reason quotes must not be used is when splitting up a string into an array</span>
+<span class="nv">foo</span><span class="o">=</span><span class="s2">&quot;aa:bb:cc:dd&quot;</span>
+<span class="nv">IFS</span><span class="o">=</span><span class="s2">&quot;:&quot;</span>
+<span class="c1"># This is actively splitting apart a string, and must not be in quotes</span>
+<span class="nv">bar</span><span class="o">=(</span><span class="si">${</span><span class="nv">foo</span><span class="si">}</span><span class="o">)</span> <span class="c1"># noquotes</span>
+</pre></div>
+</div>
+<p>Quotes should not be used in <code class="docutils literal notranslate"><span class="pre">[[]]</span></code> expressions—there are a few corner cases where the quotes will be treated literally. <code class="docutils literal notranslate"><span class="pre">#</span> <span class="pre">noquotes</span></code> is not needed for <code class="docutils literal notranslate"><span class="pre">[[]]</span></code> expressions.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="o">[</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">var</span><span class="si">}</span><span class="s2">&quot;</span> -gt <span class="s2">&quot;0&quot;</span> <span class="o">]</span> <span class="o">&amp;&amp;</span> <span class="o">[[</span> <span class="si">${</span><span class="nv">foo</span><span class="si">}</span> <span class="o">=</span>~ <span class="si">${</span><span class="nv">pattern</span><span class="si">}</span> <span class="o">]]</span><span class="p">;</span> <span class="k">then</span>
+  <span class="nb">echo</span> <span class="s2">&quot;hi&quot;</span>
+<span class="k">fi</span>
+</pre></div>
+</div>
+<p>Simple assignments _may_ skip quotes, <code class="docutils literal notranslate"><span class="pre">#</span> <span class="pre">noquotes</span></code> is not needed as this is easy enough for a code reviewer to see</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">local</span> <span class="nv">a</span><span class="o">=</span><span class="m">1</span>
+<span class="nv">b</span><span class="o">=</span><span class="m">2</span>
+<span class="nv">x</span><span class="o">=(</span><span class="m">11</span> <span class="m">22</span> <span class="m">33</span> <span class="m">44</span> <span class="s2">&quot;5 5&quot;</span> <span class="s2">&quot;6  6&quot;</span><span class="o">)</span>
+<span class="nv">cvar</span><span class="o">=</span>foo
+<span class="nv">dvar</span><span class="o">=</span>foo<span class="se">\ </span>bar  <span class="c1"># Wrong style. This is no longer simple. Use quotes</span>
+<span class="nv">dvar</span><span class="o">=</span><span class="s2">&quot;foo bar&quot;</span> <span class="c1"># Right</span>
+</pre></div>
+</div>
+<p>It is best not to use quotes when inside of <code class="docutils literal notranslate"><span class="pre">{}</span></code>. The expressions inside of <code class="docutils literal notranslate"><span class="pre">{}</span></code> can be thought of as already being implicitly quoted (<code class="docutils literal notranslate"><span class="pre">&quot;</span></code>). Adding quotes (<code class="docutils literal notranslate"><span class="pre">'</span></code> or <code class="docutils literal notranslate"><span class="pre">&quot;</span></code>) may seem to work at first, but the behavior of explicitly quoting will change between the different versions of bash.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">echo</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">foo</span><span class="p">-</span><span class="s2">&quot;b a  r&quot;</span><span class="si">}</span><span class="s2">&quot;</span>        <span class="c1"># Wrong style</span>
+<span class="nb">echo</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">foo</span><span class="p">-b a  r</span><span class="si">}</span><span class="s2">&quot;</span>          <span class="c1"># Right</span>
+<span class="nb">echo</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">foo</span><span class="p">/</span><span class="s2">&quot;o&quot;</span><span class="p">/</span><span class="s2">&quot;O&quot;</span><span class="si">}</span><span class="s2">&quot;</span>         <span class="c1"># Wrong style</span>
+<span class="nb">echo</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">foo</span><span class="p">/o/O</span><span class="si">}</span><span class="s2">&quot;</span>             <span class="c1"># Right</span>
+<span class="nb">echo</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">foo</span><span class="p">/</span><span class="s2">&quot;  &quot;</span><span class="p">/two spaces</span><span class="si">}</span><span class="s2">&quot;</span> <span class="c1"># Wrong style</span>
+<span class="nb">echo</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">foo</span><span class="p">/  /two spaces</span><span class="si">}</span><span class="s2">&quot;</span>   <span class="c1"># Right</span>
+</pre></div>
+</div>
+<p><a class="reference internal" href="linux/compat.auto.html#function-compat.bsh bash_behavior_pattern_substitution_slash_escape_with_single_quote"><code class="xref bash bash-func docutils literal notranslate"><span class="pre">compat.bsh</span> <span class="pre">bash_behavior_pattern_substitution_slash_escape_with_single_quote</span></code></a> is a special case that still needs special care, due to differences in bash behavior between versions.</p>
+</li>
+<li><p>Always use ${var} vs $var</p>
+<p>The reason for this policy is consistency and to clarify that certain features in bash only work in the <code class="docutils literal notranslate"><span class="pre">{}</span></code>, e.g. variable substitution. It’s very easy for someone to mistake <code class="docutils literal notranslate"><span class="pre">$foo+set</span></code> for <code class="docutils literal notranslate"><span class="pre">${foo}+set</span></code> and not <code class="docutils literal notranslate"><span class="pre">${foo+set}</span></code>.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">echo</span> <span class="s2">&quot;</span><span class="nv">$PATH</span><span class="s2">&quot;</span>                   <span class="c1"># Wrong style</span>
+<span class="nb">echo</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">PATH</span><span class="si">}</span><span class="s2">&quot;</span>                 <span class="c1"># Right</span>
+<span class="nb">echo</span> <span class="s2">&quot;</span><span class="si">${</span>$<span class="si">}</span><span class="s2">&quot;</span>                    <span class="c1"># Right</span>
+<span class="c1"># Built-ins * and @ need some extra care so that set -eu doesn&#39;t error on empty in bash 3.2</span>
+<span class="nb">echo</span> <span class="s2">&quot;</span><span class="si">${</span><span class="p">-</span><span class="si">}</span><span class="s2"> </span><span class="si">${</span><span class="p">?</span><span class="si">}</span><span class="s2"> </span><span class="si">${</span><span class="p">*-</span><span class="si">}</span><span class="s2">&quot;</span>         <span class="c1"># Right</span>
+run <span class="nb">command</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">_</span><span class="si">}</span><span class="s2">&quot;</span> <span class="si">${</span><span class="p">@+</span><span class="s2">&quot;</span><span class="si">${</span><span class="p">@</span><span class="si">}</span><span class="s2">&quot;</span><span class="si">}</span> <span class="c1"># Right</span>
 </pre></div>
 </div>
 </li>
-<li><p>Prefer <code class="docutils literal notranslate"><span class="pre">[</span> <span class="pre">]</span></code> tests to the <code class="docutils literal notranslate"><span class="pre">[[</span> <span class="pre">]]</span></code> construct and = to ==</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="o">[</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">avar</span><span class="si">}</span><span class="s2">&quot;</span> <span class="o">=</span> <span class="s2">&quot;foo bar&quot;</span> <span class="o">]</span>  <span class="c1"># Variables are always quoted in [] tests</span>
+<li><p>Shorthand for arithmetic expressions</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">x</span><span class="o">=(</span><span class="m">11</span> <span class="m">22</span> <span class="m">33</span> <span class="m">44</span><span class="o">)</span>
+<span class="nv">y</span><span class="o">=</span><span class="m">2</span>
+<span class="nb">echo</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">x</span><span class="p">[y]</span><span class="si">}</span><span class="s2"> is perfectly acceptable&quot;</span>
+<span class="nb">echo</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">x</span><span class="p">[</span><span class="nv">$y</span><span class="p">]</span><span class="si">}</span><span class="s2"> violates the {} policy, even though it is valid bash&quot;</span>
+<span class="nb">echo</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">x</span><span class="p">[</span><span class="si">${</span><span class="nv">y</span><span class="si">}</span><span class="p">]</span><span class="si">}</span><span class="s2"> is ok too, but the shorthand looks better&quot;</span>
+<span class="nb">echo</span> <span class="s2">&quot;</span><span class="k">$((</span>x<span class="o">[</span>y<span class="o">]</span> <span class="o">-</span> y<span class="k">))</span><span class="s2"> is also perfectly acceptable&quot;</span>
+<span class="nb">echo</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">x</span><span class="p">:</span><span class="nv">1</span><span class="p">:</span><span class="nv">y</span><span class="si">}</span><span class="s2"> is also perfectly acceptable&quot;</span>
+<span class="nb">echo</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">x</span><span class="p">:</span><span class="nv">1</span><span class="p">:</span><span class="nv">y</span><span class="p">+1</span><span class="si">}</span><span class="s2"> is also perfectly acceptable&quot;</span>
 
-<span class="o">[[</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">avar</span><span class="si">}</span><span class="s2">&quot;</span> <span class="o">==</span> <span class="s2">&quot;foo bar&quot;</span> <span class="o">]]</span> <span class="c1"># WRONG style. Use []</span>
+<span class="c1"># Do no add quotes to inner expressions</span>
+<span class="nb">echo</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">x</span><span class="p">[</span><span class="s2">&quot;y&quot;</span><span class="p">]</span><span class="si">}</span><span class="s2"> </span><span class="si">${</span><span class="nv">x</span><span class="p">[</span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">y</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span> <span class="c1"># Wrong style</span>
 
-<span class="o">[[</span> <span class="si">${</span><span class="nv">avar</span><span class="si">}</span> <span class="o">=</span> foobar* <span class="o">]]</span> <span class="c1"># Ok. Pattern matching is not possible with []</span>
+<span class="c1"># Associative arrays are not bash 3.2 compatible, and are not</span>
+<span class="c1"># arithmetic expressions in []</span>
+<span class="nb">declare</span> -A z
+<span class="nv">y</span><span class="o">=</span><span class="m">2</span>
+z<span class="o">[</span>y<span class="o">]=</span><span class="s2">&quot;This is index y not 2&quot;</span>
+z<span class="o">[</span><span class="nv">$y</span><span class="o">]=</span><span class="s2">&quot;This is index 2&quot;</span> <span class="c1"># Wrong style, violates the {} policy</span>
+z<span class="o">[</span><span class="si">${</span><span class="nv">y</span><span class="si">}</span><span class="o">]=</span><span class="s2">&quot;This is index 2&quot;</span>
+z<span class="o">[</span><span class="si">${</span><span class="nv">y</span><span class="si">}</span>-1<span class="o">]=</span><span class="s2">&quot;This is index &#39;2-1&#39;, not 1&quot;</span>
+z<span class="o">[</span><span class="k">$((</span>y-1<span class="k">))</span><span class="o">]=</span><span class="s2">&quot;This is index 1&quot;</span>
+</pre></div>
+</div>
+</li>
+<li><p>Prefer <code class="docutils literal notranslate"><span class="pre">[</span> <span class="pre">]</span></code> tests to the <code class="docutils literal notranslate"><span class="pre">[[</span> <span class="pre">]]</span></code> construct, prefer <code class="docutils literal notranslate"><span class="pre">=</span></code> to <code class="docutils literal notranslate"><span class="pre">==</span></code></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="o">[</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">avar</span><span class="si">}</span><span class="s2">&quot;</span> <span class="o">=</span> <span class="s2">&quot;foo bar&quot;</span> <span class="o">]</span>      <span class="c1"># Variables are always quoted in [] tests</span>
 
-<span class="o">[[</span> <span class="si">${</span><span class="nv">avar</span><span class="si">}</span> <span class="o">=</span> <span class="s2">&quot;foo bar&quot;</span>* <span class="o">]]</span> <span class="c1"># WRONG style. If quotes are needed, use a variable</span>
+<span class="o">[[</span> <span class="si">${</span><span class="nv">avar</span><span class="si">}</span> <span class="o">==</span> <span class="s2">&quot;foo bar&quot;</span> <span class="o">]]</span>     <span class="c1"># Wrong style. Use [] and = for normal equality</span>
+
+<span class="o">[[</span> <span class="si">${</span><span class="nv">avar</span><span class="si">}</span> <span class="o">=</span> foobar* <span class="o">]]</span>        <span class="c1"># Right. Pattern matching is not possible with []</span>
+
+<span class="o">[[</span> <span class="si">${</span><span class="nv">avar</span><span class="si">}</span> <span class="o">=</span> <span class="s2">&quot;foo bar&quot;</span>* <span class="o">]]</span>     <span class="c1"># Right. If quotes are needed, you can use a variable</span>
 <span class="nv">pattern</span><span class="o">=</span><span class="s2">&quot;foo bar*&quot;</span>
-<span class="o">[[</span> <span class="si">${</span><span class="nv">avar</span><span class="si">}</span> <span class="o">=</span> <span class="si">${</span><span class="nv">pattern</span><span class="si">}</span> <span class="o">]]</span> <span class="c1"># Ok. Also, never quote variables in [[ ]] as</span>
-                           <span class="c1"># this disables pattern matching---in which case,</span>
-                           <span class="c1"># [] can be used instead</span>
+<span class="o">[[</span> <span class="si">${</span><span class="nv">avar</span><span class="si">}</span> <span class="o">=</span> <span class="si">${</span><span class="nv">pattern</span><span class="si">}</span> <span class="o">]]</span>     <span class="c1"># Ok. Never quote patterned variables in [[ ]] as</span>
+                               <span class="c1"># this disables pattern matching---in which case,</span>
+                               <span class="c1"># [] can be used instead</span>
+If you are mixing literal and wild cards, you will use quotes
+<span class="nv">avar</span><span class="o">=</span><span class="s2">&quot;foo*bar&quot;</span>
+<span class="nv">pattern</span><span class="o">=</span><span class="s2">&quot;foo*b&quot;</span>
+<span class="o">[[</span> <span class="si">${</span><span class="nv">avar</span><span class="si">}</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">pattern</span><span class="si">}</span><span class="s2">&quot;</span>* <span class="o">]]</span>  <span class="c1"># If you want the pattern to refer to a literal asterisk, you need these quotes.</span>
+<span class="o">[[</span> foo-bar !<span class="o">=</span> <span class="si">${</span><span class="nv">pattern</span><span class="si">}</span>* <span class="o">]]</span>   <span class="c1"># This would fail because the * in the pattern would be a wild card, not an *</span>
 
-<span class="o">[[</span> <span class="si">${</span><span class="nv">avar</span><span class="si">}</span> <span class="o">=</span>~ foobar.+ <span class="o">]]</span>  <span class="c1"># Ok. Regex&#39;s are not possible with []</span>
+<span class="o">[[</span> <span class="si">${</span><span class="nv">avar</span><span class="si">}</span> <span class="o">=</span>~ foobar.+ <span class="o">]]</span>      <span class="c1"># Right. Regex&#39;s are not possible with []</span>
 
-<span class="o">[[</span> <span class="si">${</span><span class="nv">avar</span><span class="si">}</span> <span class="o">=</span>~ <span class="s2">&quot;foo bar&quot;</span>.+ <span class="o">]]</span> <span class="c1"># WRONG style. If quotes are needed, use a variable</span>
+<span class="o">[[</span> <span class="si">${</span><span class="nv">avar</span><span class="si">}</span> <span class="o">=</span>~ <span class="s2">&quot;foo bar&quot;</span>.+ <span class="o">]]</span>   <span class="c1"># Right. If quotes are needed, you can use a variable</span>
 <span class="nv">pattern</span><span class="o">=</span><span class="s1">&#39;foo bar.+&#39;</span>
-<span class="o">[[</span> <span class="si">${</span><span class="nv">avar</span><span class="si">}</span> <span class="o">=</span>~ <span class="si">${</span><span class="nv">pattern</span><span class="si">}</span> <span class="o">]]</span>  <span class="c1"># Ok. Again, don&#39;t quote variables in [[ ]]</span>
+<span class="o">[[</span> <span class="si">${</span><span class="nv">avar</span><span class="si">}</span> <span class="o">=</span>~ <span class="s2">&quot;</span><span class="si">${</span><span class="nv">pattern</span><span class="si">}</span><span class="s2">&quot;</span> <span class="o">]]</span>  <span class="c1"># Wrong, this disables regex matching</span>
+<span class="o">[[</span> <span class="si">${</span><span class="nv">avar</span><span class="si">}</span> <span class="o">=</span>~ <span class="si">${</span><span class="nv">pattern</span><span class="si">}</span> <span class="o">]]</span>    <span class="c1"># Good. Don&#39;t quote variables in [[ ]]</span>
+<span class="nv">pattern</span><span class="o">=</span><span class="s1">&#39;f\+ bar.+&#39;</span>            <span class="c1"># The first + is an escaped literal +</span>
+<span class="o">[[</span> <span class="si">${</span><span class="nv">avar</span><span class="si">}</span> <span class="o">=</span>~ <span class="si">${</span><span class="nv">pattern</span><span class="si">}</span> <span class="o">]]</span>    <span class="c1"># Good. Don&#39;t quote variables in [[ ]]</span>
 
-<span class="o">[[</span> <span class="m">3</span> &lt; <span class="m">4</span> <span class="o">]]</span>     <span class="c1"># WRONG style. Use [ -lt ]</span>
+<span class="o">[[</span> <span class="m">3</span> &lt; <span class="m">4</span> <span class="o">]]</span>                    <span class="c1"># Wrong style</span>
+<span class="o">[</span> <span class="s2">&quot;3&quot;</span> -lt <span class="s2">&quot;4&quot;</span> <span class="o">]]</span>               <span class="c1"># Right</span>
 
-<span class="o">[[</span> <span class="m">3</span>.5 &lt; <span class="m">4</span>.0 <span class="o">]]</span> <span class="c1"># Ok. Floating point comparison not possible with []</span>
+<span class="o">[[</span> <span class="m">3</span>.5 &lt; <span class="m">4</span>.0 <span class="o">]]</span>                <span class="c1"># Wrong. Floating point comparison not possible with [], [[]] or (())</span>
+<span class="k">if</span> awk <span class="s1">&#39;{if (3.5 &lt; 4.0) {exit 0} else {exit 1}}&#39;</span><span class="p">;</span> <span class="k">then</span> <span class="c1"># Floating point is possible with awk</span>
 </pre></div>
 </div>
 </li>
@@ -256,6 +350,16 @@ run_some_command &gt;<span class="p">&amp;</span> /dev/null <span class="c1"># W
 <span class="k">if</span> <span class="o">[</span> -n <span class="s2">&quot;</span><span class="si">${</span><span class="nv">variable</span><span class="p">:+set</span><span class="si">}</span><span class="s2">&quot;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span> <span class="c1"># If set AND not null</span>
   do_something
 <span class="k">fi</span>
+
+<span class="c1"># Arrays need a little extra syntactical sugar (the space is important for bash 3.2)</span>
+
+<span class="k">if</span> <span class="o">[</span> <span class="s2">&quot; &quot;&quot;</span><span class="si">${</span><span class="nv">myarray</span><span class="p">[@]+set</span><span class="si">}</span><span class="s2">&quot;</span> <span class="o">=</span> <span class="s2">&quot; &quot;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span> <span class="c1"># If not set</span>
+  do_something
+<span class="k">fi</span>
+
+<span class="k">if</span> <span class="o">[</span> <span class="s2">&quot; &quot;&quot;</span><span class="si">${</span><span class="nv">myarray</span><span class="p">[@]+set</span><span class="si">}</span><span class="s2">&quot;</span> <span class="o">=</span> <span class="s2">&quot; set&quot;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span> <span class="c1"># If set</span>
+  do_something
+<span class="k">fi</span>
 </pre></div>
 </div>
 </li>
@@ -268,7 +372,7 @@ run_some_command &gt;<span class="p">&amp;</span> /dev/null <span class="c1"># W
 </ul>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="si">${</span><span class="nv">foo</span><span class="p">[@]+</span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">foo</span><span class="p">[@]</span><span class="si">}</span><span class="s2">&quot;</span><span class="si">}</span>
 <span class="si">${</span><span class="nv">foo</span><span class="p">[@]+</span><span class="s2">&quot;</span><span class="si">${</span><span class="p">!foo[@]</span><span class="si">}</span><span class="s2">&quot;</span><span class="si">}</span>
-<span class="si">${</span><span class="nv">foo</span><span class="p">[@]+</span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">foo</span><span class="p">[*]</span><span class="si">}</span><span class="s2">&quot;</span><span class="si">}</span>
+<span class="nb">echo</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">foo</span><span class="p">[*]+</span><span class="si">${</span><span class="nv">foo</span><span class="p">[*]</span><span class="si">}}</span><span class="s2">&quot;</span>
 </pre></div>
 </div>
 </li>
@@ -277,7 +381,7 @@ run_some_command &gt;<span class="p">&amp;</span> /dev/null <span class="c1"># W
 <li><p>Files that are only meant to be sourced should have a <code class="docutils literal notranslate"><span class="pre">.bsh</span></code> extension, and should have the following header:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="ch">#!/usr/bin/env false bash</span>
 
-<span class="k">if</span> <span class="o">[[</span> <span class="nv">$-</span> !<span class="o">=</span> *i* <span class="o">]]</span><span class="p">;</span> <span class="k">then</span>
+<span class="k">if</span> <span class="o">[[</span> <span class="si">${</span><span class="p">-</span><span class="si">}</span> !<span class="o">=</span> *i* <span class="o">]]</span><span class="p">;</span> <span class="k">then</span>
   source_once <span class="p">&amp;</span>&gt; /dev/null <span class="o">&amp;&amp;</span> <span class="k">return</span> <span class="m">0</span>
 <span class="k">fi</span>
 </pre></div>
