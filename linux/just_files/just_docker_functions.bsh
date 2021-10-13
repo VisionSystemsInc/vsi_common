@@ -1,6 +1,6 @@
 #!/usr/bin/env false bash
 
-if [[ $- != *i* ]]; then
+if [[ ${-} != *i* ]]; then
   source_once &> /dev/null && return 0
 fi
 
@@ -188,7 +188,7 @@ function _dynamic_docker-compose_restore_recipes()
 function _dynamic_docker-compose_add_cache_from()
 {
   local main_service="${1}"
-  local override_fd=${override_fd-3}
+  local override_fd="${override_fd-3}"
   local i
 
   # Anchor the main stage
@@ -199,7 +199,7 @@ function _dynamic_docker-compose_add_cache_from()
   # I can always add new services before "^version:". Start by getting the line
   # number of the version line-1
   i="$(sed -n '/^version:/=' <<< "${compose_content}")"
-  i=$((i-1))
+  i="$((i-1))"
 
   # ----------------
   # | setup stages |
@@ -244,7 +244,7 @@ function _dynamic_docker-compose_add_cache_from()
   # | setup services |
   # ------------------
   # Build services using cache
-  while (( $# )); do
+  while (( ${#} )); do
     # By adding an override file, any special build flags will be included,
     # such as build args, etc...
     echo   "  ${1}:" >&${override_fd}
@@ -338,18 +338,18 @@ function get_docker_recipes()
 #**
 function docker_defaultify()
 {
-  arg=$1
+  arg="${1}"
   shift 1
-  case $arg in
+  case ${arg} in
     build_recipes) # Build recipes
       JUST_DOCKER_COMPOSE_DIR="${VSI_COMMON_DIR}/docker/recipes" \
           COMPOSE_FILE="${VSI_COMMON_DIR}/docker/recipes/docker-compose.yml" \
           Docker-compose build ${@+"${@}"}
-      extra_args=$#
+      extra_args=${#}
       ;;
     build_recipes-auto) # Build recipes used in specified Dockerfiles. "-" for \
                         # stdin; multiple files (via wildcards) accepted
-      if [ "$#" = "0" ]; then
+      if [ "${#}" = "0" ]; then
         source "${VSI_COMMON_DIR}/linux/colors.bsh"
         echo "${RED}ERROR:${NC} You must pass at least one argument to build recipes-auto" >&2
         return 1
@@ -374,12 +374,12 @@ function docker_defaultify()
       if [ "${#recipes[@]}" != "0" ]; then
         justify build recipes "${recipes[@]}"
       fi
-      extra_args=$#
+      extra_args=${#}
       ;;
     docker_clean) # Delete a docker volume. The next container to use this \
                   # volume will automatically copy any content from the image.
       local volume_inspect_rv=0
-      # local foo="$(bar)" || rv=$? does not work as one line in bash 4.2 or older. Use two lines
+      # local foo="$(bar)" || rv="${?} does not work as one line in bash 4.2 or older. Use two lines
       local volume_inspect
       # On bash 3.2, docker volume inspect triggers the inherited trap set by
       # just in the subshell if the volume is not found.
@@ -388,7 +388,7 @@ function docker_defaultify()
       # stderr is redirected via "exec 2>/dev/null". Disabling the trap felt
       # cleaner, and was necessary so that the return value can be captured by
       # the outer shell
-      volume_inspect="$(trap -- ERR; docker volume inspect "${1}" 2>/dev/null)" || volume_inspect_rv=$?
+      volume_inspect="$(trap -- ERR; docker volume inspect "${1}" 2>/dev/null)" || volume_inspect_rv="${?}"
 
       if [ "${volume_inspect_rv}" = "0" ]; then
         local rm_rv
@@ -418,7 +418,7 @@ function docker_defaultify()
 
           pattern='"com\.vsi\.just\.clean_action": "([^"]+)"'
           local action
-          if [[ ${volume_inspect} =~ $pattern ]]; then
+          if [[ ${volume_inspect} =~ ${pattern} ]]; then
             action="${BASH_REMATCH[1]}"
           else
             action=ask
@@ -454,32 +454,32 @@ function docker_defaultify()
                           # lieu of bash
       # Not Docker-compose; no quotes
       local containers=($(docker-compose ps -q ${COMPOSE_SERVICES-} || :))
-      if [ "${#containers[@]}" == 0 ]; then
+      if [ "${#containers[@]}" == "0" ]; then
         echo "No running containers found"
-        extra_args=$#
+        extra_args=${#}
         return 0
-      elif [ "${#containers[@]}" == 1 ]; then
+      elif [ "${#containers[@]}" == "1" ]; then
         local picked=1
       else
         local picked
         local pretty=()
         for picked in "${!containers[@]}"; do
-          pretty[${picked}]="$(docker container inspect -f \
+          pretty[picked]="$(docker container inspect -f \
               '{{index .Config.Labels "com.docker.compose.service"}} - {{.Name}} ({{.Config.Hostname}})' \
-              ${containers[$picked]}) $(docker ps --format {{.Status}} -f id=${containers[$picked]})"
+              ${containers[picked]}) $(docker ps --format {{.Status}} -f id=${containers[picked]})"
         done
-        picker "${pretty[@]}" || picked=$?
+        picker "${pretty[@]}" || picked="${?}"
       fi
 
       # Give the dev a way to override the -it flags, should they ever need to
       local DOCKER_EXTRA_EXEC_ARGS=("${DOCKER_EXTRA_EXEC_ARGS[@]--it}")
 
-      if [ "$#" = "0" ]; then
-        Docker exec "${containers[$((picked-1))]}" bash
+      if [ "${#}" = "0" ]; then
+        Docker exec "${containers[picked-1]}" bash
       else
-        Docker exec "${containers[$((picked-1))]}" ${@+"${@}"}
+        Docker exec "${containers[picked-1]}" ${@+"${@}"}
       fi
-      extra_args=$#
+      extra_args=${#}
       ;;
     docker-compose_log) # Show logs from all service containers. Optionally \
          # specify service names to only log specific containers. Bug: Does \
@@ -488,7 +488,7 @@ function docker_defaultify()
       # Override the log target in your Justfile and call __docker-compose-log
       # if you need to set other parameters
       justify __docker-compose-log ${@+"${@}"}
-      extra_args=$#
+      extra_args=${#}
       ;;
     __docker-compose-log)
       function stop_logging(){ JUST_STOP_LOGGING=1; }
@@ -496,24 +496,24 @@ function docker_defaultify()
       trap stop_logging INT
       trap stop_logging TERM
       while [ "${JUST_STOP_LOGGING}" == "0" ]; do
-        Docker-compose logs --tail=20 -f ${@+"${@}"} || echo $?
+        Docker-compose logs --tail=20 -f ${@+"${@}"} || echo ${?}
         while [ "${JUST_STOP_LOGGING}" == "0" ] && ! docker_service_running | grep running > /dev/null; do
           sleep 1
         done
       done
       trap - INT
       trap - TERM
-      extra_args=$#
+      extra_args=${#}
       ;;
 
     docker) # Run generic docker command
       Docker ${@+"${@}"}
-      extra_args=$#
+      extra_args=${#}
       ;;
 
     docker-compose) # Run generic docker-compose command
       Just-docker-compose ${@+"${@}"}
-      extra_args=$#
+      extra_args=${#}
       ;;
 
     docker-compose_ci-save) # Build and tag all stages of an image. $1 - compose filename, $2 - docker-compose service to build (for final stage)
@@ -523,7 +523,7 @@ function docker_defaultify()
 
     docker-compose_ci-load) # Build all stages of an image from a pulled cache. $1 - compose filename, $2 - docker-compose service to build (for final stage), [$3...] - additional service names that might point to other stage targets in the same dockerfile.
       docker-compose_restore_from_cache "${@}"
-      extra_args=$#
+      extra_args=${#}
       ;;
 
     *)
@@ -547,7 +547,7 @@ function _docker_clean_actions()
       local action
       picker "Stop and forcefully remove these containers. Then try again" \
              "Delete all of the volume's files and repopulate it" \
-             "Do nothing. Error and resolve manually." > /dev/null || action=$?
+             "Do nothing. Error and resolve manually." > /dev/null || action="${?}"
 
       if [ "${action}" = "1" ]; then
         _docker_clean_actions "${1}" stop
@@ -565,7 +565,7 @@ function _docker_clean_actions()
 
       # If there is a com.vsi.just.clean_setup label
       pattern=$'"com\.vsi\.just\.clean_setup": "([^\n]*)"\n'
-      if [[ ${volume_inspect} =~ $pattern ]]; then
+      if [[ ${volume_inspect} =~ ${pattern} ]]; then
         # Parse \" to "
         setup_cmd="${BASH_REMATCH[1]//\\\"/\"}"
         # Evaluate this string into arguments. By definition this is arbitrary
@@ -608,9 +608,9 @@ function set_docker_compose_project_name()
     local cwd_var="${JUST_PROJECT_PREFIX}_CWD"
     local user_var="${JUST_PROJECT_PREFIX}_USERNAME"
     if [ "${!user_var:+set}" = "set" ]; then
-      COMPOSE_PROJECT_NAME=$(docker_compose_sanitize_project_name "${!cwd_var}" "${!user_var}")
+      COMPOSE_PROJECT_NAME="$(docker_compose_sanitize_project_name "${!cwd_var}" "${!user_var}")"
     else
-      COMPOSE_PROJECT_NAME=$(docker_compose_sanitize_project_name "${!cwd_var}")
+      COMPOSE_PROJECT_NAME="$(docker_compose_sanitize_project_name "${!cwd_var}")"
     fi
   fi
 }

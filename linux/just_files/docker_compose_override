@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
-if [[ $- != *i* ]]; then
+if [[ ${-} != *i* ]]; then
   source_once &> /dev/null && return 0
 fi
 
-if [ -z ${VSI_COMMON_DIR+set} ]; then
+if [ -z "${VSI_COMMON_DIR+set}" ]; then
   VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.."; pwd)"
 fi
 
@@ -215,7 +215,7 @@ function generate_docker_compose_override()
   local new_environment
 
   # Argument parsing
-  local JUST_PROJECT_PREFIX=$1
+  local JUST_PROJECT_PREFIX="${1}"
   shift 1
 
   local services_name=(${@+"${@}"})
@@ -232,7 +232,7 @@ function generate_docker_compose_override()
   done
 
   # If there is at least one config, then run docker-compose config
-  if [ ${#compose_config[@]} -gt 0 ]; then
+  if [ "${#compose_config[@]}" -gt "0" ]; then
     compose_config="$("${DOCKER_COMPOSE}" "${compose_config[@]}" config)"
   else
     # Else do not. This is a non-realistic scenario, but makes this more robust
@@ -240,11 +240,11 @@ function generate_docker_compose_override()
   fi
 
   # Parse enumerated_volumes_all
-  volumes_name_all="${JUST_PROJECT_PREFIX}_VOLUME_$i"
+  volumes_name_all="${JUST_PROJECT_PREFIX}_VOLUME_${i}"
   while declare -p "${volumes_name_all}" &> /dev/null; do
     enumerated_volumes_all+=("${!volumes_name_all}")
     i+=1
-    volumes_name_all="${JUST_PROJECT_PREFIX}_VOLUME_$i"
+    volumes_name_all="${JUST_PROJECT_PREFIX}_VOLUME_${i}"
   done
   # Indirect fun
   volumes_name_all="${JUST_PROJECT_PREFIX}_VOLUMES"
@@ -253,7 +253,7 @@ function generate_docker_compose_override()
   echo "version: '${COMPOSE_VERSION-3.2}'"
   echo "services:"
   for service_index in "${!services_name[@]}"; do
-    echo "  ${services_name[$service_index]}:"
+    echo "  ${services_name[service_index]}:"
 
     # Clear list for this service
     just_docker_entrypoint_links=()
@@ -264,17 +264,17 @@ function generate_docker_compose_override()
     # Parse enumerate_volumes
     enumerated_volumes=()
     i=1
-    volumes_name="${JUST_PROJECT_PREFIX}_${services_upper[$service_index]}_VOLUME_$i"
+    volumes_name="${JUST_PROJECT_PREFIX}_${services_upper[service_index]}_VOLUME_${i}"
     while declare -p "${volumes_name}" &> /dev/null; do
       enumerated_volumes+=("${!volumes_name}")
       i+=1
-      volumes_name="${JUST_PROJECT_PREFIX}_${services_upper[$service_index]}_VOLUME_$i"
+      volumes_name="${JUST_PROJECT_PREFIX}_${services_upper[service_index]}_VOLUME_${i}"
     done
     # Indirect fun
-    volumes_name="${JUST_PROJECT_PREFIX}_${services_upper[$service_index]}_VOLUMES"
+    volumes_name="${JUST_PROJECT_PREFIX}_${services_upper[service_index]}_VOLUMES"
     indirect="${volumes_name}[@]"
 
-    parse-docker-compose-volumes ${services_name[$service_index]} <<< "${compose_config}"
+    parse-docker-compose-volumes ${services_name[service_index]} <<< "${compose_config}"
     docker-compose-volumes
 
     # Get internal volumes of service
@@ -282,21 +282,21 @@ function generate_docker_compose_override()
 
       # If directory doesn't exist, attempt to make it as this user. Better than root
       # When the argument is a docker volume, nothing should happen.
-      docker_premkdir "${DOCKER_VOLUME_SOURCES[$volume]}"
+      docker_premkdir "${DOCKER_VOLUME_SOURCES[volume]}"
 
       # Get internal volumes of service
-      if is_internal_docker_volume "${DOCKER_VOLUME_SOURCES[$volume]}"; then
-        if [ "${DOCKER_VOLUME_FORMATS[$volume]}" == "short" ]; then
-          if is_readonly_docker_volume "${DOCKER_VOLUME_FLAGS[$volume]}"; then
-            just_docker_entrypoint_internal_ro_volumes+=("${DOCKER_VOLUME_TARGETS[${volume}]}")
+      if is_internal_docker_volume "${DOCKER_VOLUME_SOURCES[volume]}"; then
+        if [ "${DOCKER_VOLUME_FORMATS[volume]}" == "short" ]; then
+          if is_readonly_docker_volume "${DOCKER_VOLUME_FLAGS[volume]}"; then
+            just_docker_entrypoint_internal_ro_volumes+=("${DOCKER_VOLUME_TARGETS[volume]}")
           else
-            just_docker_entrypoint_internal_volumes+=("${DOCKER_VOLUME_TARGETS[${volume}]}")
+            just_docker_entrypoint_internal_volumes+=("${DOCKER_VOLUME_TARGETS[volume]}")
           fi
         else
-          if is_readonly_docker_compose_long_volume "${DOCKER_VOLUME_FLAGS[$volume]}"; then
-            just_docker_entrypoint_internal_ro_volumes+=("${DOCKER_VOLUME_TARGETS[${volume}]}")
+          if is_readonly_docker_compose_long_volume "${DOCKER_VOLUME_FLAGS[volume]}"; then
+            just_docker_entrypoint_internal_ro_volumes+=("${DOCKER_VOLUME_TARGETS[volume]}")
           else
-            just_docker_entrypoint_internal_volumes+=("${DOCKER_VOLUME_TARGETS[${volume}]}")
+            just_docker_entrypoint_internal_volumes+=("${DOCKER_VOLUME_TARGETS[volume]}")
           fi
         fi
       fi
@@ -308,7 +308,7 @@ function generate_docker_compose_override()
                   ${enumerated_volumes_all[@]+"${enumerated_volumes_all[@]}"} \
                   ${enumerated_volumes[@]+"${enumerated_volumes[@]}"}; do
 
-      docker_parse_volume_string "$volume" # sets volume_host, volume_docker, and volume_flags
+      docker_parse_volume_string "${volume}" # sets volume_host, volume_docker, and volume_flags
 
       # If it doesn't exist, attempt to make it as this user. Better than root
       docker_premkdir "${volume_host}"
@@ -330,7 +330,7 @@ function generate_docker_compose_override()
       # inheritance.
       unset_flag E
       local mp_rv=0
-      host_mount_point="$(mount_point "${volume_host}" nfs nfs3 nfs4)" || mp_rv=$?
+      host_mount_point="$(mount_point "${volume_host}" nfs nfs3 nfs4)" || mp_rv="${?}"
       reset_flag E
 
       # If the volume is not a docker volume
@@ -362,10 +362,10 @@ function generate_docker_compose_override()
     # Remove duplicates (https://unix.stackexchange.com/q/159695) because
     # docker-compose doesn't like them
     IFS=$'\n'
-    over_volumes=($(awk '!count[$0]++' <<< ${over_volumes[@]+"${over_volumes[*]}"}))
-    if [ "${over_volumes+set}" == "set" ]; then
+    over_volumes=($(awk '!count[$0]++' <<< "${over_volumes[*]+${over_volumes[*]}}"))
+    if [ " ""${over_volumes[@]+set}" = " set" ]; then
       echo "    volumes:"
-      echo ${over_volumes[@]+"${over_volumes[*]}"}
+      echo "${over_volumes[*]+${over_volumes[*]}}"
     fi
     IFS="${OLD_IFS}"
 
@@ -377,11 +377,11 @@ function generate_docker_compose_override()
       _env_echo JUST_DOCKER_ENTRYPOINT_LINKS "${just_docker_entrypoint_links[*]}"
       IFS="${OLD_IFS}"
     fi
-    if [ "${#just_docker_entrypoint_internal_volumes[@]}" -gt 0 ]; then
+    if [ "${#just_docker_entrypoint_internal_volumes[@]}" -gt "0" ]; then
       MIFS='//' join_a just_docker_entrypoint_internal_volumes "${just_docker_entrypoint_internal_volumes[@]}"
       _env_echo JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES "${just_docker_entrypoint_internal_volumes}"
     fi
-    if [ "${#just_docker_entrypoint_internal_ro_volumes[@]}" -gt 0 ]; then
+    if [ "${#just_docker_entrypoint_internal_ro_volumes[@]}" -gt "0" ]; then
       MIFS='//' join_a just_docker_entrypoint_internal_ro_volumes "${just_docker_entrypoint_internal_ro_volumes[@]}"
       _env_echo JUST_DOCKER_ENTRYPOINT_INTERNAL_RO_VOLUMES "${just_docker_entrypoint_internal_ro_volumes}"
     fi
@@ -394,7 +394,7 @@ function generate_docker_compose_override()
   ###################
   IFS=$'\n'
   # Make unique list
-  all_dynamic_internal_volumes=($(awk '!count[$0]++' <<< ${all_dynamic_internal_volumes[@]+"${all_dynamic_internal_volumes[*]}"}))
+  all_dynamic_internal_volumes=($(awk '!count[$0]++' <<< "${all_dynamic_internal_volumes[*]+${all_dynamic_internal_volumes[*]}}"))
   IFS="${OLD_IFS}"
 
   # A space is needed for older bashes (an extra null "" works only in newer bashes)

@@ -21,7 +21,7 @@ function caseify()
         split_s autodoc_output_dirs ${DOCS_AUTODOC_OUTPUT_DIRS-}
         split_s autodoc_exclude_dirs ${DOCS_AUTODOC_EXCLUDE_DIRS-}
         for x in "${!autodoc_output_dirs[@]}"; do
-          pipenv run sphinx-apidoc -o "/docs/${autodoc_output_dirs[$x]}" "${autodoc_dirs[$x]}" ${autodoc_exclude_dirs+"${autodoc_exclude_dirs[@]}"}
+          pipenv run sphinx-apidoc -o "/docs/${autodoc_output_dirs[x]}" "${autodoc_dirs[x]}" ${autodoc_exclude_dirs+"${autodoc_exclude_dirs[@]}"}
         done
       popd > /dev/null
 
@@ -42,7 +42,7 @@ function caseify()
           src_files+=("${BASH_REMATCH[1]}")
           doc_files+=("${BASH_REMATCH[2]}")
         else
-          echo "'$line'"
+          echo "'${line}'"
           echo "Pattern does not match"
           continue
         fi
@@ -53,14 +53,14 @@ function caseify()
       [ "${#src_files[@]}" = "${#doc_files[@]}" ]
 
       for idx in "${!src_files[@]}"; do
-        doc_file="${doc_files[${idx}]}"
-        src_file="${src_files[${idx}]}"
+        doc_file="${doc_files[idx]}"
+        src_file="${src_files[idx]}"
 
         # Remove newline fun, thanks to windows
         doc_file="${doc_file//[$'\r\n']}"
         src_file="${src_file//[$'\r\n']}"
 
-        if [ ${#doc_file} -eq 0 ]; then
+        if [ "${#doc_file}" -eq "0" ]; then
           continue
         fi
         if [[ ${doc_file::1} =~ ^[./] ]] || [[ ${doc_file} =~ \.\. ]]; then
@@ -129,12 +129,12 @@ function caseify()
         URL="$(find /docs -name objects.inv)"
       else
         INPUT="${1}"
-        URL=$(pipenv run python -c "if True:
+        URL="$(pipenv run python -c "if True:
             import conf, posixpath
             url = (conf.intersphinx_mapping['${INPUT}'][1] or
                    posixpath.join(conf.intersphinx_mapping['${INPUT}'][0], 'objects.inv'))
             print(url)
-            ")
+            ")"
         echo "Fetch intersphinx mapping from <${URL}>..."
       fi
       exec pipenv run python -m sphinx.ext.intersphinx "${URL}"

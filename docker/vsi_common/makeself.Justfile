@@ -85,7 +85,7 @@ function caseify()
 
     makeself) # Run makeself
       /makeself/makeself.sh ${@+"${@}"}
-      extra_args=$#
+      extra_args=${#}
       ;;
 
     just-project) # Make a self extracting executable for a just \
@@ -97,7 +97,7 @@ function caseify()
 
       local excluded_files
       local tar_extra
-      makeself_git_prep $1
+      makeself_git_prep "${1}"
 
       # You can't put quotes in tar-extra apparently, it'll screw things up.
       tar_extra+=" ${common_vcs_excludes} --exclude=./docs"
@@ -106,7 +106,7 @@ function caseify()
       fi
 
       extra_args+=1
-      if [ "$#" -ge "2" ]; then
+      if [ "${#}" -ge "2" ]; then
         tar_extra+=" ${2}"
         extra_args+=1
       fi
@@ -132,7 +132,7 @@ function caseify()
 
       extra_args=1
       tar_extra+=" ${common_vcs_excludes}"
-      if [ "$#" -ge "2" ]; then
+      if [ "${#}" -ge "2" ]; then
         tar_extra+=" ${2}"
         extra_args+=1
       fi

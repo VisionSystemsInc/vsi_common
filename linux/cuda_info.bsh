@@ -1,10 +1,10 @@
 #!/usr/bin/env false bash
 
-if [[ $- != *i* ]]; then
+if [[ ${-} != *i* ]]; then
   source_once &> /dev/null && return 0
 fi
 
-if [ -z ${VSI_COMMON_DIR+set} ]; then
+if [ -z "${VSI_COMMON_DIR+set}" ]; then
   VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 fi
 
@@ -165,12 +165,12 @@ function discover_cuda_versions()
   fi
 
   # Prevent macOS from crashing. Not sure why this is new. Might be darling
-  if [ ${#CUDA_VERSIONS[@]} -gt 1 ]; then
+  if [ "${#CUDA_VERSIONS[@]}" -gt "1" ]; then
     CUDA_VERSIONS=($(sort -uV <<< ${CUDA_VERSIONS[*]+"${CUDA_VERSIONS[*]}"}))
   fi
 
   # Get the highest cuda level
-  CUDA_VERSION=${CUDA_VERSIONS[@]+"${CUDA_VERSIONS[${#CUDA_VERSIONS[@]}-1]}"}
+  CUDA_VERSION="${CUDA_VERSIONS[@]+"${CUDA_VERSIONS[${#CUDA_VERSIONS[@]}-1]}"}"
 }
 
 #**
@@ -213,7 +213,7 @@ function device_query_cuda_capability()
   local card_info
 
   # deviceQuery may fail, for example, if running without nvidia-docker or if the CUDA driver version is insufficient for CUDA runtime version
-  card_info="$(${DEVICE_QUERY-deviceQuery} | \grep -E "CUDA Capability Major/Minor version number|^Device")" || return $?
+  card_info="$(${DEVICE_QUERY-deviceQuery} | \grep -E "CUDA Capability Major/Minor version number|^Device")" || return ${?}
   CUDA_CARD_ARCHES=($(echo "${card_info}" | \awk '/CUDA Capability Major\/Minor version number/{sub(/\./, "", $NF); print $NF}'))
   cuda_arch_to_cuda_family
 
@@ -275,14 +275,18 @@ function cuda_arch_to_cuda_family()
 if command -v pgrep &> /dev/null; then
   function __nvidia_docker_is_running()
   {
-    \pgrep -f "${1}" &> /dev/null
-    return $?
+    if \pgrep -f "${1}" &> /dev/null; then
+      return 0
+    fi
+    return 1
   }
 else
   function __nvidia_docker_is_running()
   {
-    [ $(\ps -ef | \grep "${1}" | \wc -l) -gt 1 ]
-    return $?
+    if [ "$(\ps -ef | \grep "${1}" | \wc -l)" -gt "1" ]; then
+      return 0
+    fi
+    return 1
   }
 fi
 
@@ -636,16 +640,16 @@ function suggested_architectures()
   for arch in ${CUDA_CARD_ARCHES[@]+"${CUDA_CARD_ARCHES[@]}"}; do
     for x in ${CUDA_ARCHES[@]+"${!CUDA_ARCHES[@]}"}; do
       # If it's an exact match, add it!
-      if [ "${CUDA_ARCHES[$x]}" == "${arch}" ]; then
+      if [ "${CUDA_ARCHES[x]}" == "${arch}" ]; then
         CUDA_SUGGESTED_ARCHES+=("${arch}")
         continue 2
       # If it's greater than, that means there is no exact match.
       # The last compute checked was the right answer. Use that.
-      elif [ "${CUDA_ARCHES[$x]}" -gt "${arch}" ]; then
+      elif [ "${CUDA_ARCHES[x]}" -gt "${arch}" ]; then
         # Verify the compute family matches, else you probably have a card that
         # is too old, like a Fermi???
         if [ "${x}" -gt "0" ]; then
-          CUDA_SUGGESTED_ARCHES+=("${CUDA_ARCHES[$x-1]}")
+          CUDA_SUGGESTED_ARCHES+=("${CUDA_ARCHES[x-1]}")
         else
           : #: CUDA_SUGGESTED_ARCHES+=("TOOOLD")
         fi
@@ -656,31 +660,31 @@ function suggested_architectures()
     # If you get here, either you have a newer arch of an already supported arch,
     # or you have a newer card than this version of cuda supports. Let's check
     # the first case first.
-    if [ "${CUDA_ARCHES[$x]:0:1}" == "${arch:0:1}" ]; then
-      CUDA_SUGGESTED_ARCHES+=("${CUDA_ARCHES[$x]}")
+    if [ "${CUDA_ARCHES[x]:0:1}" == "${arch:0:1}" ]; then
+      CUDA_SUGGESTED_ARCHES+=("${CUDA_ARCHES[x]}")
     else
       # If you get here, that means you have have a newer card than this version
       # of cuda supports. So the best answer is to PTX compile for it.
-      CUDA_SUGGESTED_PTX+=("${CUDA_ARCHES[$x]}")
+      CUDA_SUGGESTED_PTX+=("${CUDA_ARCHES[x]}")
     fi
   done
 
   for arch in ${CUDA_CARD_ARCHES[@]+"${CUDA_CARD_ARCHES[@]}"}; do
     for x in ${CUDA_CODES[@]+"${!CUDA_CODES[@]}"}; do
       # If it's an exact match, add it!
-      if [ "${CUDA_CODES[$x]}" == "${arch}" ]; then
+      if [ "${CUDA_CODES[x]}" == "${arch}" ]; then
         CUDA_SUGGESTED_CODES+=("${arch}")
         continue 2
       # If it's greater than, that means there is no exact match.
       # The last compute checked was the right answer. Use that.
-      elif [ "${CUDA_CODES[$x]}" -gt "${arch}" ]; then
+      elif [ "${CUDA_CODES[x]}" -gt "${arch}" ]; then
         # Verify the compute family matches, else you probably have a card that
         # is too old, like a Fermi???
         if [ "${x}" == "0" ]; then
           # Too old
           : #CUDA_SUGGESTED_CODES+=("TOOOLD")
         else # if [ "${CUDA_CODES[$x-1]:0:1}" == "${arch:0:1}" ]; This should always be true
-          CUDA_SUGGESTED_CODES+=("${CUDA_CODES[$x-1]}")
+          CUDA_SUGGESTED_CODES+=("${CUDA_CODES[x-1]}")
         fi
         continue 2
       fi
@@ -689,13 +693,13 @@ function suggested_architectures()
     # If you get here, either you have a newer arch of an already supported arch,
     # or you have a newer card than this version of cuda supports. Let's check
     # the first case first.
-    if [ "${CUDA_CODES[$x]:0:1}" == "${arch:0:1}" ]; then
-      CUDA_SUGGESTED_CODES+=("${CUDA_CODES[$x]}")
+    if [ "${CUDA_CODES[x]:0:1}" == "${arch:0:1}" ]; then
+      CUDA_SUGGESTED_CODES+=("${CUDA_CODES[x]}")
     # no else; PTX is for ARCH, not CODES
     fi
   done
 
-  CUDA_FORWARD_PTX=${CUDA_ARCHES[@]+"${CUDA_ARCHES[${#CUDA_ARCHES[@]}-1]}"}
+  CUDA_FORWARD_PTX="${CUDA_ARCHES[@]+"${CUDA_ARCHES[${#CUDA_ARCHES[@]}-1]}"}"
 
   IFS=$'\n'
   CUDA_SUGGESTED_ARCHES=($(sort -u <<< ${CUDA_SUGGESTED_ARCHES[*]+"${CUDA_SUGGESTED_ARCHES[*]}"}))
@@ -748,17 +752,17 @@ function cmake_cuda_flags()
   local OLD_IFS="${IFS}"
 
   for i in "${!CUDA_SUGGESTED_ARCHES[@]}"; do
-    if [ "${CUDA_SUGGESTED_ARCHES[$i]}" == "${CUDA_SUGGESTED_CODES[$i]}" ]; then
-      x="${CUDA_SUGGESTED_ARCHES[$i]}"
+    if [ "${CUDA_SUGGESTED_ARCHES[i]}" == "${CUDA_SUGGESTED_CODES[i]}" ]; then
+      x="${CUDA_SUGGESTED_ARCHES[i]}"
       x="${x:0:${#x}-1}.${x:${#x}-1:1}"
     else
-      x="${CUDA_SUGGESTED_CODES[$i]}"
-      y="${CUDA_SUGGESTED_ARCHES[$i]}"
+      x="${CUDA_SUGGESTED_CODES[i]}"
+      y="${CUDA_SUGGESTED_ARCHES[i]}"
       x="${x:0:${#x}-1}.${x:${#x}-1:1}"
       y="${y:0:${#y}-1}.${y:${#y}-1:1}"
       x="${x}(${y})"
     fi
-    cmake+=($x)
+    cmake+=("${x}")
   done
 
   ptx=(${CUDA_SUGGESTED_PTX[@]+"${CUDA_SUGGESTED_PTX[@]}"})
@@ -766,7 +770,7 @@ function cmake_cuda_flags()
   ptx=($(echo "${ptx[*]+"${ptx[*]}"}" | sort -u))
   IFS="${OLD_IFS}"
   for i in "${!ptx[@]}"; do
-    x="${CUDA_SUGGESTED_PTX[$i]}"
+    x="${CUDA_SUGGESTED_PTX[i]}"
     x="${x:0:${#x}-1}.${x:${#x}-1:1}"
     cmake+=("${x}+PTX")
   done

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
-if [[ $- != *i* ]]; then
+if [[ ${-} != *i* ]]; then
   source_once &> /dev/null && return 0
 fi
 
-if [ -z ${VSI_COMMON_DIR+set} ]; then
+if [ -z "${VSI_COMMON_DIR+set}" ]; then
   VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 fi
 
@@ -74,11 +74,11 @@ function read_file()
   local -i i=0
 
   # Clear array
-  unset $2
+  unset "${2}"
 
   if [ -e "${1}" ]; then
     while IFS='' read -r line || [[ -n "${line}" ]]; do
-      read -r "${2}[$i]" <<< "$line"
+      read -r "${2}[i]" <<< "${line}"
       i+=1
     done < "${1}"
   fi
@@ -139,11 +139,11 @@ function add_user()
     fi
 
     # Add the user
-    add_to_passwd "$1" x "${2-1000}" "${3-1000}" "${4-/home/$1}"
-    add_to_shadow "$1" '*'
+    add_to_passwd "${1}" x "${2-1000}" "${3-1000}" "${4-/home/${1}}"
+    add_to_shadow "${1}" '*'
   else
     # Add the user
-    add_to_passwd "$1" x "${2-1000}" "${3-1000}" "${4-/home/$1}"
+    add_to_passwd "${1}" x "${2-1000}" "${3-1000}" "${4-/home/${1}}"
   fi
 
   if [ "${LINUX_ACCOUNTS_AUTOSAVE-1}" == "1" ]; then
@@ -177,15 +177,15 @@ function add_to_passwd()
   local user_info
   local i
 
-  local new_passwd="$1:${2-x}:${3-1000}:${4-1000}::${5-/home/$1}:${6-$(command -v bash || command -v sh)}"
+  local new_passwd="${1}:${2-x}:${3-1000}:${4-1000}::${5-/home/${1}}:${6-$(command -v bash || command -v sh)}"
 
   for i in "${!passwd[@]}"; do
     # User Name[0], x[1], UID[2], GID[3], FullName,RoomNumber,WorkPhone,HomePhone,Other[4], Home Dir[5], Shell[6]
-    user_info=(${passwd[$i]})
+    user_info=(${passwd[i]})
 
     # If name already exists, replace it
-    if [ "${user_info[0]}" == "$1" ]; then
-      passwd[$i]="${new_passwd}"
+    if [ "${user_info[0]}" == "${1}" ]; then
+      passwd[i]="${new_passwd}"
       return 0
     fi
   done
@@ -211,11 +211,11 @@ function add_to_shadow()
 
   for i in "${!shadow[@]}"; do
     # User Name[0], x[1], last password change[2], min days to change password[3], max days to change password[4], password warning period[5], password inactivity period[6], account expiration date[7], reserved[8]
-    user_info=(${shadow[$i]})
+    user_info=(${shadow[i]})
 
     # If name already exists, replace it
-    if [ "${user_info[0]}" == "$1" ]; then
-      shadow[$i]="${new_shadow}"
+    if [ "${user_info[0]}" == "${1}" ]; then
+      shadow[i]="${new_shadow}"
       return 0
     fi
   done
@@ -287,13 +287,13 @@ function add_group()
     fi
 
     # Create a new group and, save group name into group_name
-    add_to_group "$1" "$2" 'x'
+    add_to_group "${1}" "${2}" 'x'
 
     # Add gshadow entry
     add_to_gshadow ${group_name} '!'
   else
     # Just add a group
-    add_to_group "$1" "$2" 'x'
+    add_to_group "${1}" "${2}" 'x'
   fi
 
   if [ "${LINUX_ACCOUNTS_AUTOSAVE-1}" == "1" ]; then
@@ -350,7 +350,7 @@ function write_group_data()
 function add_to_group()
 {
   local IFS
-  group_name=${1}${suffix-}
+  group_name="${1}${suffix-}"
 
   local group_info
   local i
@@ -358,7 +358,7 @@ function add_to_group()
   for i in "${!group[@]}"; do
     IFS=:
     # Group Name[0], password[1], GID[2], comma separates user list[3]
-    group_info=(${group[$i]})
+    group_info=(${group[i]})
 
     # If name already existed
     if [ "${group_info[0]}" == "${group_name}" ]; then
@@ -379,14 +379,14 @@ function add_to_group()
           IFS=,
           local group_users
           group_users=(${group_info[3]} ${users[@]+"${users[@]}"})
-          group_info[3]=${group_users[*]+"${group_users[*]}"}
+          group_info[3]="${group_users[*]+"${group_users[*]}"}"
           IFS=:
         fi
-        group[$i]="${group_info[*]}"
+        group[i]="${group_info[*]}"
         return 0
       fi
       # Try again with a different suffix
-      suffix=$((${suffix-0}+1)) add_to_group "${@}"
+      suffix="$((${suffix-0}+1))" add_to_group "${@}"
       return 0
     fi
   done
@@ -416,11 +416,11 @@ function add_to_gshadow()
 
   for i in "${!gshadow[@]}"; do
     # Group Name[0], password[1], admins[2], members[3]
-    group_info=(${gshadow[$i]})
+    group_info=(${gshadow[i]})
 
     # If name already exists, replace it
-    if [ "${group_info[0]}" == "$1" ]; then
-      gshadow[$i]="${new_gshadow}"
+    if [ "${group_info[0]}" == "${1}" ]; then
+      gshadow[i]="${new_gshadow}"
       return 0
     fi
   done

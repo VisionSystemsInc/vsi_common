@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 
-if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then #If being sourced
+if [ "${BASH_SOURCE[0]}" != "${0}" ]; then #If being sourced
   set -euE
 fi
 
 # VSI_COMMON_DIR is a special var, handle is carefully.
-if [ -z ${VSI_COMMON_DIR+set} ]; then
+if [ -z "${VSI_COMMON_DIR+set}" ]; then
   VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)"
 fi
 source "${VSI_COMMON_DIR}/linux/just_files/just_env" "${VSI_COMMON_DIR}/vsi_common.env"
@@ -24,13 +24,13 @@ cd "${VSI_COMMON_DIR}"
 function sanitize_tag_name()
 {
   local tag_name="${1//:/_}"
-  tag_name=${tag_name////_}
+  tag_name="${tag_name////_}"
   echo "${tag_name//@/_}"
 }
 
 function caseify()
 {
-  local just_arg=$1
+  local just_arg="${1}"
   shift 1
 
   case ${just_arg} in
@@ -43,17 +43,17 @@ function caseify()
         shift "${extra_args}"
         vsi_test_env "${VSI_COMMON_DIR}/tests/run_tests" ${@+"${@}"}
       )
-      local rv=$?
+      local rv="${?}"
       if [ "${rv}" -ne "0" ]; then
         # This is needed for bash 3.2
         return "${rv}"
       fi
-      extra_args=$#
+      extra_args=${#}
       ;;
     test_int) # Run integration tests
       local JUST_IGNORE_EXIT_CODES=123
       justify test --dir int ${@+"${@}"}
-      extra_args=$#
+      extra_args=${#}
       ;;
 
     build_oses) # Build images for other OSes
@@ -89,7 +89,7 @@ function caseify()
       local VSI_COMMON_TEST_OS_TAG_NAME="$(sanitize_tag_name "${VSI_COMMON_TEST_OS}")"
       export VSI_COMMON_TEST_OS_TAG_NAME
       Just-docker-compose run os ${@+"${@}"}
-      extra_args+=$#
+      extra_args+="${#}"
       ;;
     test_oses-common-source) # Test all oses for common_source
       local os
@@ -107,9 +107,9 @@ function caseify()
 
       local x="$(docker run --rm -v ${VSI_COMMON_DIR}:/vsi "${image}" \
                    sh -euc ". /vsi/linux/common_source.sh;
-                            echo \$VSI_DISTRO - \$VSI_DISTRO_VERSION, \
-                                 \$VSI_DISTRO_LIKE - \$VSI_DISTRO_VERSION_LIKE, \
-                                 \$VSI_DISTRO_CORE - \$VSI_DISTRO_VERSION_CORE \$VSI_MUSL")"
+                            echo \${VSI_DISTRO} - \${VSI_DISTRO_VERSION}, \
+                                 \${VSI_DISTRO_LIKE} - \${VSI_DISTRO_VERSION_LIKE}, \
+                                 \${VSI_DISTRO_CORE} - \${VSI_DISTRO_VERSION_CORE} \${VSI_MUSL}")"
       if [ "${x}" = "${ans}" ]; then
         echo "${1} passed"
       else
@@ -159,7 +159,7 @@ function caseify()
     test_recipe) # Run docker recipe tests
       local JUST_IGNORE_EXIT_CODES=123
       TESTLIB_DISCOVERY_DIR="${VSI_COMMON_DIR}/docker/recipes/tests" vsi_test_env "${VSI_COMMON_DIR}/tests/run_tests" ${@+"${@}"}
-      extra_args=$#
+      extra_args=${#}
       ;;
     test_darling) # Run unit tests using darling
       local JUST_IGNORE_EXIT_CODES=123
@@ -167,12 +167,12 @@ function caseify()
         cd "${VSI_COMMON_DIR}"
         TESTLIB_PARALLEL=8 vsi_test_env darling shell ./tests/run_tests ${@+"${@}"}
       )
-      local rv=$?
+      local rv="${?}"
       if [ "${rv}" -ne "0" ]; then
         # This is needed for bash 3.2
         return "${rv}"
       fi
-      extra_args=$#
+      extra_args=${#}
       ;;
     test_python) # Run python unit tests
       Docker-compose run python3
@@ -188,7 +188,7 @@ function caseify()
     build_bash) # Build images for all bash versions or a specific version ($1)
       local version
 
-      if [ $# -gt 0 ]; then
+      if [ "${#}" -gt "0" ]; then
         VSI_COMMON_BASH_TEST_VERSION="${1}" Just-docker-compose build bash_test
         extra_args=1
       else
@@ -200,7 +200,7 @@ function caseify()
     test_bash) # Run command (like bash) in the contain for a specific version of bash ($1)
       local bash_version="${1-5.0}"
       local JUST_IGNORE_EXIT_CODES=123
-      extra_args=$#
+      extra_args=${#}
       shift 1
       VSI_COMMON_BASH_TEST_VERSION="${bash_version}" Just-docker-compose run bash_test ${@+"${@}"}
       ;;
@@ -208,7 +208,7 @@ function caseify()
     background_start) # Start bash dockers in background
       local DOCKER_COMPOSE_EXTRA_RUN_ARGS
       local name
-      if [ $# -gt 0 ]; then
+      if [ "${#}" -gt "0" ]; then
         name="${COMPOSE_PROJECT_NAME}_bash_bg_${1}"
         if Docker inspect --type container "${name}" &> /dev/null; then
           Docker rm -f "${name}"
@@ -230,7 +230,7 @@ function caseify()
       ;;
     background_stop) # Stop background bashes
       local name
-      if [ $# -gt 0 ]; then
+      if [ "${#}" -gt "0" ]; then
         name="${COMPOSE_PROJECT_NAME}_bash_bg_${1}"
         if Docker inspect --type container "${name}" &> /dev/null; then
           Docker rm -f "${name}"
@@ -254,13 +254,13 @@ function caseify()
         echo "Bash ${name}" >&2
         Docker exec -it "${name}" ${@+"${@}"}
       done
-      extra_args=$#
+      extra_args=${#}
       ;;
 
     push_bash) # Push bash images
       local version
 
-      if [ $# -gt 0 ]; then
+      if [ "${#}" -gt "0" ]; then
         Docker push "${VSI_COMMON_DOCKER_REPO}:bash_test_${1}"
         extra_args=1
       else
@@ -288,11 +288,11 @@ function caseify()
       ;;
     run_wine) # Start a wine bash window
       Docker-compose run -e USER_ID="$(id -u)" wine ${@+"${@}"} || :
-      extra_args=$#
+      extra_args=${#}
       ;;
     run_wine-gui) # Start a wine bash window in gui mode
       Docker-compose run -e USER_ID="$(id -u)" wine_gui ${@+"${@}"}&
-      extra_args=$#
+      extra_args=${#}
       ;;
     test_wine) # Run unit tests using wine
       local JUST_IGNORE_EXIT_CODES=123
@@ -300,10 +300,10 @@ function caseify()
         cd /z/vsi
         source setup.env
         just test ${*}"'
-        rv=$?
+        rv="${?}"
         read -p "Press any key to close" -r -e -n1
-        exit ${rv}'
-      extra_args=$#
+        exit "${rv}"'
+      extra_args=${#}
       ;;
     *)
       defaultify "${just_arg}" ${@+"${@}"}

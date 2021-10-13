@@ -95,7 +95,7 @@ case "${OSTYPE}" in
     ;;
   solaris*)
     VSI_OS=solaris
-    VSI_DISTRO=${OSTYPE}
+    VSI_DISTRO="${OSTYPE}"
     read VSI_DISTRO_VERSION < /etc/release
     VSI_DISTRO_VERSION="${VSI_DISTRO_VERSION% *}"
     VSI_DISTRO_VERSION="${VSI_DISTRO_VERSION#* }"
@@ -128,7 +128,7 @@ if command -v ldd 2>&1 > /dev/null; then
   if ! VSI_MUSL=$(ldd --version 2>&1); then
     # Some versions of ldd fail when using the --version flag, but succeed on
     # no flag
-    VSI_MUSL=$(ldd 2>&1 || :)
+    VSI_MUSL="$(ldd 2>&1 || :)"
   fi
   # Was musl not found in first line
   if command -v awk 2>&1 > /dev/null; then
@@ -147,7 +147,7 @@ if command -v ldd 2>&1 > /dev/null; then
 fi
 
 # Old highly unreliable method
-# if grep -q musl $(unalias grep &> /dev/null || :; unset grep; command -v grep); then
+# if grep -q musl "$(unalias grep &> /dev/null || :; unset grep; command -v grep)"; then
 #   VSI_MUSL=1
 # else
 #   VSI_MUSL=0
@@ -297,15 +297,15 @@ fi
 #   :envvar:`VSI_DISTRO_CORE`
 #**
 
-if [ -f /etc/os-release ]; then
+if [ -f "/etc/os-release" ]; then
   # Run in a sub-shell so I can source os-release
-  VSI_DISTRO=$( . /etc/os-release;
+  VSI_DISTRO="$(. /etc/os-release;
 
                 # Only Ubuntues have this file
                 # Fix bug https://bugs.launchpad.net/linuxmint/+bug/1641491
                 if [ -f "/etc/lsb-release" ]; then
                   . /etc/lsb-release
-                  DISTRIB_ID=$(echo ${DISTRIB_ID} | sed 's|.*|\L&|')
+                  DISTRIB_ID="$(echo ${DISTRIB_ID} | sed 's|.*|\L&|')"
                   if [ "${DISTRIB_ID}" != "${ID}" ]; then
                     echo "Fixing" >&2
                     ID_CORE="${ID_LIKE}"
@@ -317,9 +317,9 @@ if [ -f /etc/os-release ]; then
                 fi
 
                 # Get gentoo version
-                if [ -f /etc/gentoo-release ]; then
+                if [ -f "/etc/gentoo-release" ]; then
                   read VERSION < /etc/gentoo-release
-                  VERSION_ID=${VERSION##* }
+                  VERSION_ID="${VERSION##* }"
                 fi
 
                 # Capture ubuntu derivatives are debian derived
@@ -327,12 +327,12 @@ if [ -f /etc/os-release ]; then
                   ID_CORE=debian
                 # Opensuse leap does it in the backwards order of centos
                 elif [ "${ID-}" = "opensuse-leap" ]; then
-                  ID_CORE=${ID_LIKE%% *}
-                  ID_LIKE=${ID_LIKE#* }
+                  ID_CORE="${ID_LIKE%% *}"
+                  ID_LIKE="${ID_LIKE#* }"
                 # If there is a space, this is like centos that says "rhel fedora"
                 elif [ "${ID_LIKE+set}" = "set" ] && [ "${ID_LIKE}" != "${ID_LIKE%% *}" ]; then
-                  ID_CORE=${ID_LIKE#* }
-                  ID_LIKE=${ID_LIKE%% *}
+                  ID_CORE="${ID_LIKE#* }"
+                  ID_LIKE="${ID_LIKE%% *}"
                 fi
 
                 # Some distros like mint store the like version here
@@ -348,7 +348,7 @@ if [ -f /etc/os-release ]; then
 
                 # Pass the results out out
                 echo "${ID}:${VERSION_ID-}:${ID_LIKE}:${VERSION_LIKE}:${ID_CORE}:${VERSION_CORE}"
-              )
+              )"
 
   #DISTRO:VERSION:MIDDLE_DISTRO:MIDDLE_VERSION:CORE_DISTRO:CORE_VERSION
   # Parse the answer
@@ -371,7 +371,7 @@ if [ -f /etc/os-release ]; then
 
 # Remove this special case after 30 Nov 2020
 # Older redhats don't have os-release. Read it here
-elif [ -f /etc/redhat-release ]; then
+elif [ -f "/etc/redhat-release" ]; then
   read VSI_DISTRO < /etc/redhat-release
   VSI_DISTRO_VERSION="${VSI_DISTRO#* * }"
 
@@ -385,7 +385,7 @@ elif [ -f /etc/redhat-release ]; then
 
 # Remove this special case after 31 Mar 2022
 # Older sles doesn't have an os-release. Read it here
-elif [ -f /etc/SuSE-release ]; then
+elif [ -f "/etc/SuSE-release" ]; then
   {
     read VSI_DISTRO
     read VSI_DISTRO_VERSION
@@ -393,7 +393,7 @@ elif [ -f /etc/SuSE-release ]; then
   }< /etc/SuSE-release
 
   # simplify
-  if [[ $VSI_DISTRO =~ 'SUSE Linux Enterprise Server' ]]; then
+  if [[ ${VSI_DISTRO} =~ 'SUSE Linux Enterprise Server' ]]; then
     VSI_DISTRO=sles
   fi
   # Parse the version number out, and put it together
@@ -401,19 +401,19 @@ elif [ -f /etc/SuSE-release ]; then
   VSI_DISTRO_VERSION_LIKE="${VSI_DISTRO_VERSION}"
 
 # Slackware
-elif [ -f /etc/slackware-version ]; then
+elif [ -f "/etc/slackware-version" ]; then
   read VSI_DISTRO < /etc/slackware-version
-  VSI_DISTRO_VERSION=${VSI_DISTRO##* }
-  VSI_DISTRO=${VSI_DISTRO% *}
-  VSI_DISTRO=$(echo "${VSI_DISTRO}" | tr '[A-Z]' '[a-z]')
+  VSI_DISTRO_VERSION="${VSI_DISTRO##* }"
+  VSI_DISTRO="${VSI_DISTRO% *}"
+  VSI_DISTRO="$(echo "${VSI_DISTRO}" | tr '[A-Z]' '[a-z]')"
 
 # Special case for arch linux
-elif [ -f /etc/arch-release ]; then
+elif [ -f "/etc/arch-release" ]; then
   VSI_DISTRO=arch
   VSI_DISTRO_VERSION=''
 
 # Special case for clearlinux
-elif [ -f /usr/share/clear/version ]; then
+elif [ -f "/usr/share/clear/version" ]; then
   VSI_DISTRO='clearlinux'
   read VSI_DISTRO_VERSION < /usr/share/clear/version || :
   # EOF is reached, but that's ok
@@ -559,7 +559,7 @@ case "${VSI_OS}" in
     fi
     if command -v sysctl >/dev/null 2>&1; then # Normal darwin
       VSI_NUMBER_CORES="$(\sysctl -n hw.logicalcpu)"
-    elif [ -f /Volumes/SystemRoot/proc/cpuinfo ]; then # darling
+    elif [ -f "/Volumes/SystemRoot/proc/cpuinfo" ]; then # darling
       VSI_NUMBER_CORES="$(\grep processor /Volumes/SystemRoot/proc/cpuinfo | wc -l)"
       # Left trim white spaces
       VSI_NUMBER_CORES="${VSI_NUMBER_CORES#"${VSI_NUMBER_CORES%%[![:space:]]*}"}"
@@ -574,7 +574,7 @@ case "${VSI_OS}" in
   *)
     if command -v nproc >/dev/null 2>&1; then
       VSI_NUMBER_CORES="$(\nproc)"
-    elif [ -f /proc/cpuinfo ]; then
+    elif [ -f "/proc/cpuinfo" ]; then
       VSI_NUMBER_CORES="$(\grep processor /proc/cpuinfo | wc -l)"
     else
       echo "Warning: unable to determine number of cores" >&2

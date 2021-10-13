@@ -17,17 +17,17 @@ function caseify()
       run_all_tests_setup_summary_dir
       pushd /src &> /dev/null
         bashcov --root /src ${@+"${@}"}
-        extra_args=$#
+        extra_args=${#}
       popd &> /dev/null
       ;;
     multiple) # Run multiple commands through bashcov
       run_all_tests_setup_summary_dir
       pushd /src &> /dev/null
-        extra_args=$#
-        while (( $# )); do
+        extra_args=${#}
+        while (( ${#} )); do
           printf '%s\0' "${1}"
           shift 1
-        done | sort -z | xargs -0 -I % -P $TESTLIB_PARALLEL bashcov --root /src %
+        done | sort -z | xargs -0 -I % -P "${TESTLIB_PARALLEL}" bashcov --root /src %
       popd &> /dev/null
       ;;
     resume) # Resume running bashcov multiple, skipping already run.
@@ -35,21 +35,21 @@ function caseify()
       local files=()
 
       pushd /src &> /dev/null
-        if [ -r /src/coverage/.resultset.json ]; then
+        if [ -r "/src/coverage/.resultset.json" ]; then
           IFS='' readarray -t -d $'\n' files < <(
             jq -r 'keys | .[]' /src/coverage/.resultset.json | \
             sed "s|${bash} ||")
         fi
 
-        extra_args=$#
-        while (( $# )); do
+        extra_args=${#}
+        while (( ${#} )); do
           if isin "${1}" ${files[@]+"${files[@]}"}; then
             echo "Skipping ${1}..." >&2
           else
             printf '%s\0' "${1}"
           fi
           shift 1
-        done | sort -z | xargs -0 -I % -P $TESTLIB_PARALLEL bashcov --root /src %
+        done | sort -z | xargs -0 -I % -P "${TESTLIB_PARALLEL}" bashcov --root /src %
       popd &> /dev/null
       ;;
     *) # Run command in pipenv

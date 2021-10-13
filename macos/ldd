@@ -31,19 +31,19 @@
 
 #set -xv
 
-if [ "$#" -eq 0 ] ; then echo "usage: $0 DYLIB" ; exit ; fi
+if [ "${#}" -eq "0" ]; then echo "usage: ${0} DYLIB" ; exit ; fi
 
-for arg in "$@" ; do
-  if [ ! -f "${arg}" ] ; then
+for arg in ${@+"${@}"} ; do
+  if [ ! -f "${arg}" ]; then
     echo ldd "${arg}:" No such file or directory
     continue
   fi
 
-  if [ "$#" -ne 1 ] ; then echo ${arg}: ; fi
+  if [ "${#}" -ne "1" ]; then echo ${arg}: ; fi
 
   basepath="$(dirname "${arg}")"
-  #abspath=$( cd "$(dirname "${arg}")" ; find $(pwd) -dpeth 1 -name "$(basename "${arg}")" ; )
-  abspath=`fp "${arg}"`
+  #abspath=$( cd "$(dirname "${arg}")" ; find "$(pwd)" -dpeth 1 -name "$(basename "${arg}")" ; )
+  abspath="$(fp "${arg}")"
 
   # create a subshell and cd to the directory of the argument so that relative
   # path's are tested corectly
@@ -52,27 +52,27 @@ for arg in "$@" ; do
   # iterator that handles spaces
   otool -L "${abspath}" | tail -n +2 | while read record ; do
 
-    file=`echo "${record}" | awk '{ print $1 }'`
-    compatibility=`echo -n "${record}" | awk '{ print substr($0, index($0,$2)) }'`
+    file="$(echo "${record}" | awk '{print $1}')"
+    compatibility="$(echo -n "${record}" | awk '{print substr($0, index($0,$2))}')"
 
     # does the dependency contain a special symbol which cannot be expanded at this time
-    if [[ "${file}" =~ '@loader_path' ]] ||
-       [[ "${file}" =~ '@executable_path' ]] ||
-       [[ "${file}" =~ '@rpath' ]] ; then
+    if [[ ${file} =~ @loader_path ]] ||
+       [[ ${file} =~ @executable_path ]] ||
+       [[ ${file} =~ @rpath ]]; then
       echo "        ${record}"
 
     # does the file exist AND is it a soft link
-    elif [ -L "${file}" ] ; then
-      r=`find -L "${file}" -type l -ls`
-      link=`ls -l "${file}" | awk '{ print substr($0, index($0,$9)) }'`
-      if [ "x${r}" == "x" ] ; then
+    elif [ -L "${file}" ]; then
+      r="$(find -L "${file}" -type l -ls)"
+      link="$(ls -l "${file}" | awk '{ print substr($0, index($0,$9)) }')"
+      if [ "x${r}" == "x" ]; then
         echo "        ${link} ${compatibility}"
       else
         echo "        (not found) ${link}"
       fi
 
     # does the file exist
-    elif [ -e "${file}" ] ; then
+    elif [ -e "${file}" ]; then
       echo "        ${record}"
 
     # TODO search the target's rpath for any dependencies defined with the special @rpath symbol
@@ -83,7 +83,7 @@ for arg in "$@" ; do
       #for path in ${DYLD_LIBRARY_PATH//:/ } ; do
 
         # does the file exist on DYLD_LIBRARY_PATH
-        if [ -e "${path}/${file}" ] ; then
+        if [ -e "${path}/${file}" ]; then
           echo "        ${file} => ${path}/${file} ${compatibility}"
           found=1
           break
@@ -95,7 +95,7 @@ for arg in "$@" ; do
       # NOTE if i dont use the <<< operator, variables dont escape the scope. no idea why.
 
       # the file doesnt exist anywhere
-      if [ ${found} -eq 0 ] ; then
+      if [ "${found}" -eq "0" ]; then
         echo "        (not found) ${file}" ;
       fi
 

@@ -1,10 +1,10 @@
 #!/usr/bin/env false bash
 
-if [[ $- != *i* ]]; then
+if [[ ${-} != *i* ]]; then
   source_once &> /dev/null && return 0
 fi
 
-if [ -z ${VSI_COMMON_DIR+set} ]; then
+if [ -z "${VSI_COMMON_DIR+set}" ]; then
   VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.."; pwd)"
 fi
 
@@ -37,12 +37,11 @@ source "${VSI_COMMON_DIR}/linux/aliases.bsh"
 #
 #   Break the volume string up into ``BASH_REMATCH``
 #    1 - Host path
-#    3 - Docker path
-#    5 - flags
+#    2 - Docker path
+#    3 - flags
 #**
-
-DOCKER_VOLUME_PATTERN='^(([a-zA-Z]:[/\])?[^:]*):(([a-zA-Z]:[/\])?[^:]*)((:ro|:rw|:z|:Z|:r?shared|:r?slave|:r?private|:delegated|:cached|:consistent|:nocopy)*)$'
-
+# https://www.debuggex.com/r/lJRoX_sSnhOKpEER
+DOCKER_VOLUME_PATTERN='^([a-zA-Z]:[/\][^:]*|[^:]+):([a-zA-Z]:[/\][^:]*|[^:]+)((:ro|:rw|:z|:Z|:r?shared|:r?slave|:r?private|:delegated|:cached|:consistent|:nocopy)*)$'
 #**
 # .. function:: is_dir_and_not_exist
 #
@@ -72,7 +71,7 @@ DOCKER_VOLUME_PATTERN='^(([a-zA-Z]:[/\])?[^:]*):(([a-zA-Z]:[/\])?[^:]*)((:ro|:rw
 
 function is_dir_and_not_exist()
 {
- local dir_name="$1"
+ local dir_name="${1}"
 
  if ( [ "${dir_name:0:1}" == "/" ] || \
       ( (( ${#dir_name} >= 2 )) && ( [ "${dir_name:0:2}" == "./" ] || [ "${dir_name:1:1}" == ":" ] ) ) ) && \
@@ -124,7 +123,7 @@ function is_internal_docker_volume()
 
 function is_readonly_docker_volume()
 {
-  if [[ $1 =~ :ro($|:) ]]; then
+  if [[ ${1} =~ :ro($|:) ]]; then
     return 0
   else
     return 1
@@ -153,7 +152,7 @@ function is_readonly_docker_volume()
 function is_readonly_docker_compose_long_volume()
 {
   local IFS=$'\n'
-  local flags=($1)
+  local flags=(${1}) # noquotes
   local flag
 
   for flag in ${flags[@]+"${flags[@]}"}; do
@@ -185,7 +184,7 @@ function is_readonly_docker_compose_long_volume()
 function container_get_label()
 { # All labels go through a perl filter that evaluate %name% using exported
   # environment variables. This won't work on unexported variables
-  local value=$(docker inspect -f "{{index .Config.Labels \"$2\"}}" $1)
+  local value="$(docker inspect -f "{{index .Config.Labels \"${2}\"}}" "${1}")"
   if [ "${value}" == "" ]; then
     return 1
   fi
@@ -214,8 +213,8 @@ function container_get_label()
 
 function container_has_label()
 {
-  if [ "$(docker inspect -f '{{json .Config.Labels }}' $1 | \
-          jq .\[\"$2\"\])" == "null" ]; then
+  if [ "$(docker inspect -f '{{json .Config.Labels }}' "${1}" | \
+          jq ".[\"${2}\"]")" == "null" ]; then
     return 1
   else
     return 0
@@ -278,14 +277,14 @@ function docker_premkdir()
 function docker_host_dir()
 {
   if [ "${OS-notwindows}" == "Windows_NT" ] && command -v cygpath &> /dev/null ; then
-    echo "$(cygpath -w "$1")"
+    echo "$(cygpath -w "${1}")"
     #Bash 4 in mingw64 includes cygpath for some reason
     #Cygpath converts / -> \
     #^/{single letter} -> {single letter}:\
     #^/{single letter}/ -> {single letter}:\\ #bug? No longer on v2.9.0!
     #else ^/ -> {git_directory}
   else
-    echo "$1"
+    echo "${1}"
   fi
 }
 
@@ -318,8 +317,8 @@ function docker_parse_volume_string()
 {
   if [[ ${1} =~ ${DOCKER_VOLUME_PATTERN} ]]; then
     volume_host="${BASH_REMATCH[1]}"
-    volume_docker="${BASH_REMATCH[3]}"
-    volume_flags="${BASH_REMATCH[5]}"
+    volume_docker="${BASH_REMATCH[2]}"
+    volume_flags="${BASH_REMATCH[3]}"
     return 0
   else
     return 1
@@ -366,8 +365,8 @@ function docker_parse_mount_string()
 
 function docker_sanitize_volume()
 {
-  if (( $# < 2 )); then
-    set -- "$1" "$1"
+  if (( ${#} < 2 )); then
+    set -- "${1}" "${1}"
   fi
 
   local host_dir
@@ -376,10 +375,10 @@ function docker_sanitize_volume()
   if [ "${OS-notwindows}" == "Windows_NT" ]; then
     host_dir="$(docker_host_dir "${1}")"
     # Add an extra / so that mingw doesn't attempt path conversion
-    docker_dir="/$2"
+    docker_dir="/${2}"
   else
-    host_dir="$1"
-    docker_dir="$2"
+    host_dir="${1}"
+    docker_dir="${2}"
   fi
 
   # Create the directory before docker
@@ -412,23 +411,23 @@ function parse-docker()
   docker_command=
   docker_command_args=()
 
-  while (( $# )); do
-    case "$1" in
+  while (( ${#} )); do
+    case ${1} in
       -H|-l|\
       --config|--context|--host|--log-level|--tlscacert|--tlscert|--tlskey)
-        docker_args+=("$1" "$2")
+        docker_args+=("${1}" "${2}")
         shift 2
         ;;
       -H*|-l*|\
       --config=*|--context=*|--host=*|--log-level=*|--tlscacert=*|--tlscert=*|--tlskey=*|\
       -D|-v|\
       --debug|--tls|--version|--tlsverify)
-        docker_args+=("$1")
+        docker_args+=("${1}")
         shift 1
         ;;
       # Anything else must be a docker compose command.
       *)
-        docker_command="$1"
+        docker_command="${1}"
         shift 1
         docker_command_args=(${@+"${@}"})
         break
@@ -476,7 +475,7 @@ function Docker()
   parse-docker ${@+"${@}"}
 
   _Docker
-  return $?
+  return ${?}
 }
 
 function _Docker()
@@ -503,7 +502,7 @@ function _Docker()
 
   if [ "${DOCKER_EXEC-}" == "" ] || [ "${DRYRUN}" != "" ]; then
     "${cmd[0]}" "${cmd[@]:1}"
-    return $?
+    return ${?}
   else
     exec "${cmd[@]}"
   fi
@@ -807,17 +806,18 @@ function docker-compose-volumes()
 
     if [ "${volume_line:0:1}" = "S" ]; then # Short format
       volume_line="${volume_line:1}"
-      if [[ $volume_line =~ ${DOCKER_VOLUME_PATTERN} ]]; then
+      if [[ ${volume_line} =~ ${DOCKER_VOLUME_PATTERN} ]]; then
         DOCKER_VOLUME_SOURCES[count]="${BASH_REMATCH[1]}"
-        DOCKER_VOLUME_TARGETS[count]="${BASH_REMATCH[3]}"
+        DOCKER_VOLUME_TARGETS[count]="${BASH_REMATCH[2]}"
         DOCKER_VOLUME_FORMATS[count]="short"
-        DOCKER_VOLUME_FLAGS[count]="${BASH_REMATCH[5]}"
+        DOCKER_VOLUME_FLAGS[count]="${BASH_REMATCH[3]}"
       else
+        declare -p volume_line DOCKER_VOLUME_LINES >&2
         echo "Invalid short form volume string: ${volume_line}" >&2
         return 1
       fi
     elif [[ ${volume_line:0:1} = [Ll] ]]; then
-      if [ ${volume_line:0:1} = L ]; then
+      if [ "${volume_line:0:1}" = "L" ]; then
         DOCKER_VOLUME_FORMATS[count]="long"
       fi
       # Remove the L/l, so the rest is simpler to parse
@@ -899,23 +899,23 @@ function parse-docker-compose()
   docker_compose_command=
   docker_compose_command_args=()
 
-  while (( $# )); do
-    case "$1" in
+  while (( ${#} )); do
+    case ${1} in
       -f|-p|-H|-c)
-        docker_compose_args+=("$1" "$2")
-        case "$1" in
+        docker_compose_args+=("${1}" "${2}")
+        case ${1} in
           -f)
-            docker_compose_files+=("$2")
+            docker_compose_files+=("${2}")
             ;;
           -p)
-            docker_compose_project_name="$2"
+            docker_compose_project_name="${2}"
             ;;
         esac
         shift 2
         ;;
       -f*|-p*|-H*|-c*)
-        docker_compose_args+=("$1")
-        case "$1" in
+        docker_compose_args+=("${1}")
+        case ${1} in
           -f*)
             docker_compose_files+=("${1:2:${#1}-2}")
             ;;
@@ -929,8 +929,8 @@ function parse-docker-compose()
       --tlscacert=*|--tlscert=*|--tlskey=*|--project-directory=*|--env-file=*|\
       --no-ansi|-v|--verbose|--tls|--skip-hostname-check|--tlsverify|\
       --compatibility)
-        docker_compose_args+=("$1")
-        case "$1" in
+        docker_compose_args+=("${1}")
+        case ${1} in
           --file=*)
             docker_compose_files+=("${1:7:${#1}-7}")
             ;;
@@ -942,8 +942,8 @@ function parse-docker-compose()
         ;;
       --file|--project-name|--host|--context|--log-level|\
       --tlscacert|--tlscert|--tlskey|--project-directory|--env-file)
-        docker_compose_args+=("$1" "$2")
-        case "$1" in
+        docker_compose_args+=("${1}" "${2}")
+        case ${1} in
           --file)
             docker_compose_files+=("${2}")
             ;;
@@ -955,7 +955,7 @@ function parse-docker-compose()
         ;;
       # Anything else must be a docker compose command
       *)
-        docker_compose_command="$1"
+        docker_compose_command="${1}"
         shift 1
         docker_compose_command_args=(${@+"${@}"})
         break
@@ -963,7 +963,7 @@ function parse-docker-compose()
     esac
   done
 
-  if [ ${#docker_compose_files[@]} -eq 0 ]; then
+  if [ "${#docker_compose_files[@]}" -eq "0" ]; then
     local OLD_IFS="${IFS}"
     local IFS="$(compose_path_separator)"
     docker_compose_files+=(${COMPOSE_FILE+${COMPOSE_FILE}})
@@ -973,7 +973,7 @@ function parse-docker-compose()
     IFS="${OLD_IFS}"
   fi
 
-  if [ ${#docker_compose_files[@]} -eq 0 ]; then
+  if [ "${#docker_compose_files[@]}" -eq "0" ]; then
     local file_matches
     # This is one of the few times the directory you are in matters. To create
     # an expected default behavior, switch to the JUSTFILE dir before searching
@@ -983,7 +983,7 @@ function parse-docker-compose()
     popd > /dev/null
 
     docker_compose_files=(${file_matches[@]+"${file_matches[@]}"})
-    if [ ${#docker_compose_files[@]} -ne 0 ]; then
+    if [ "${#docker_compose_files[@]}" -ne "0" ]; then
       local override
       for override in "$(dirname "${docker_compose_files[0]}")/docker-compose.override.yml" \
                       "$(dirname "${docker_compose_files[0]}")/docker-compose.override.yaml"; do
@@ -1003,7 +1003,7 @@ function parse-docker-compose()
     # Then environment variable
     if [ "${COMPOSE_PROJECT_NAME:+set}" = "set" ]; then
       docker_compose_project_name="${COMPOSE_PROJECT_NAME}"
-    elif [ ${#docker_compose_files[@]} -ne 0 ]; then
+    elif [ "${#docker_compose_files[@]}" -ne "0" ]; then
       docker_compose_project_name="$(basename "$(cd "$(dirname "${docker_compose_files[0]}")"; pwd)")"
     else
       docker_compose_project_name=default
@@ -1091,7 +1091,7 @@ function _Docker-compose()
   fi
 
   # Indirect: add DOCKER_COMPOSE_EXTRA_{COMMAND}_ARGS
-  extra_args_var=$(tr '[a-z]' '[A-Z]' <<< "${docker_compose_command}")
+  extra_args_var="$(tr '[a-z]' '[A-Z]' <<< "${docker_compose_command}")"
   extra_args_var="DOCKER_COMPOSE_EXTRA_${extra_args_var}_ARGS[@]"
   docker_compose_extra_command_args+=(${!extra_args_var+"${!extra_args_var}"})
 
@@ -1101,7 +1101,7 @@ function _Docker-compose()
       ${docker_compose_command} \
       ${docker_compose_extra_command_args[@]+"${docker_compose_extra_command_args[@]}"} \
       ${docker_compose_command_args[@]+"${docker_compose_command_args[@]}"}
-  return $?
+  return ${?}
 }
 
 #**
@@ -1117,9 +1117,9 @@ function get_docker_compose_version()
 {
   local COMPOSE_VERSION
 
-  while (( $# )); do
+  while (( ${#} )); do
     while IFS='' read -r line || [[ -n "${line}" ]]; do
-      if [[ $line =~ ^version\ *:\ *[\'\"](.*)[\'\"] ]]; then
+      if [[ ${line} =~ ^version\ *:\ *[\'\"](.*)[\'\"] ]]; then
         COMPOSE_VERSION="${BASH_REMATCH[1]}"
         break 2
       fi
@@ -1160,7 +1160,7 @@ function get_docker_stage_names()
 function get_dockerfile_from_compose()
 {
   local compose_yarp
-  if [ $# -lt 3 ]; then
+  if [ "${#}" -lt "3" ]; then
     compose_yarp="$(yarp < "${1}")"
   else
     compose_yarp="${3}"
@@ -1257,7 +1257,7 @@ function Just-docker-compose()
   local service_names=()
   local compose_file
   for compose_file in "${docker_compose_files[@]}"; do
-    service_names+=($(docker_compose_service_names ${compose_file}))
+    service_names+=($(docker_compose_service_names "${compose_file}"))
   done
 
   # 3. Unique service name list
@@ -1278,9 +1278,9 @@ function Just-docker-compose()
   # "Fail later" behavior for set -eu. This should guarantee the override_file
   # is deleted. If this isn't enough, investigate adding cleanup to a trap
   local rv=0
-  _Docker-compose || rv=$?
+  _Docker-compose || rv="${?}"
   ${DRYRUN} rm "${override_file}"
-  return $rv
+  return "${rv}"
 }
 
 #**
@@ -1301,7 +1301,7 @@ function Just-docker-compose()
 function docker_service_running()
 {
   "${DOCKER}" inspect -f '{{.State.Status}}' \
-              $("${DOCKER_COMPOSE}" ps -q ${@+"${@}"}) 2>/dev/null
+              $("${DOCKER_COMPOSE}" ps -q ${@+"${@}"}) 2>/dev/null # noquotes
 }
 
 #**
@@ -1383,7 +1383,7 @@ function docker_compose_sanitize_project_name()
 {
   awk '{sub(/\/*$/, "", $0)
         n=split($0,arr, /\//)
-        a=tolower("'"${2+$2}"'" arr[n])
+        a=tolower("'"${2+${2}}"'" arr[n])
         gsub(/[^a-z0-9]/,"",a)
         print a}' <<< "${1}"
 }
@@ -1403,11 +1403,11 @@ function docker_compose_sanitize_project_name()
 
 function docker_cp_image()
 {
-  local options=("${@:1:$#-3}")
-  shift $(($#-3))
-  local image_name="$1"
-  local src_path="$2"
-  local dest_path="$3"
+  local options=("${@:1:${#}-3}")
+  shift "$((${#}-3))"
+  local image_name="${1}"
+  local src_path="${2}"
+  local dest_path="${3}"
   local container_name="$(docker create ${image_name})"
 
   docker cp ${options[@]+"${options[@]}"} "${container_name}:${src_path}" "${dest_path}"

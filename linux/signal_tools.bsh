@@ -1,10 +1,10 @@
 #!/usr/bin/env false bash
 
-if [[ $- != *i* ]]; then
+if [[ ${-} != *i* ]]; then
   source_once &> /dev/null && return 0
 fi
 
-if [ -z ${VSI_COMMON_DIR+set} ]; then
+if [ -z "${VSI_COMMON_DIR+set}" ]; then
   VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 fi
 
@@ -40,17 +40,17 @@ function set_bashpid()
       # Check if "source/." was called in FUNCNAME; multiple sources only produce one "phantom" fork.
       # A source means we need the grandparent
       if [ "${f}" == "source" ]; then
-        if [ -d /proc ]; then
-          BASHPID="$(bash -c "sed -${sed_flag_rE} 's|.*\) [^ ]* ([^ ]*) .*|\1|' /proc/\${PPID}/stat")"
+        if [ -d "/proc" ]; then
+          BASHPID="$(bash -c "sed -${sed_flag_rE} 's|.*\) [^ ]* ([^ ]*) .*|\1|' \"/proc/\${PPID}/stat\"")"
           return
         else
           # Not all ps's support -fp, but this should work on macOS where these is no /proc
-          BASHPID="$(bash -c "ps -fp \${PPID} | awk '(NR>1) {print \$3}'")"
+          BASHPID="$(bash -c "ps -fp \"\${PPID}\" | awk '(NR>1) {print \$3}'")"
           return
         fi
       fi
     done
-    BASHPID=$(bash -c 'echo ${PPID}')
+    BASHPID="$(bash -c 'echo "${PPID}"')"
   fi
 }
 
@@ -77,10 +77,10 @@ function set_bashpid()
 #**
 function trap_chain()
 {
-  if [ "${2}" = "ERR" ] && [[ $- != *E* ]]; then
+  if [ "${2}" = "ERR" ] && [[ ${-} != *E* ]]; then
     echo "You must have \"set -E\" set for this to work with signal ${2}" >&2
     return 1
-  elif [ "${2}" = "DEBUG" -o "${2}" = "RETURN" ] && [[ $- != *T* ]]; then
+  elif [ "${2}" = "DEBUG" -o "${2}" = "RETURN" ] && [[ ${-} != *T* ]]; then
     echo "You must have \"set -T\" set for this to work with signal ${2}" >&2
     return 1
   fi
@@ -126,8 +126,8 @@ function trap_chain()
 
     function chainable_signal()
     {
-      if [[ ${signal_name} = ERR && $- = *E* ]] || \
-        ( [ "${signal_name}" = "DEBUG" -o "${signal_name}" = "RETURN" ] && [[ $- = *T* ]] ) || \
+      if [[ ${signal_name} = ERR && ${-} = *E* ]] || \
+        ( [ "${signal_name}" = "DEBUG" -o "${signal_name}" = "RETURN" ] && [[ ${-} = *T* ]] ) || \
           [ "${last_pid}" = "-1" ] || \
           [ "${last_pid}" = "${BASHPID}" ]; then
         return 0
@@ -180,9 +180,9 @@ function trap_chain()
 #**
 function exit_chain()
 {
-  local rv=${1-$?}
+  local rv="${1-${?}}"
   if [ "${trap_chain_active-}" = "0" ]; then
-    _trap_unchained_exit_after_trap=$rv
+    _trap_unchained_exit_after_trap="${rv}"
   else
     exit "${rv}"
   fi
@@ -207,7 +207,7 @@ function _trap_unchained()
 
   for (( i=${i}-1; i>=0; i-- )); do
     # This is SUPPOSED to be arbitrary code execution! So eval is ok
-    x="_TRAP_CHAIN_${1}[$i]"
+    x="_TRAP_CHAIN_${1}[i]"
     eval "${!x}"
   done
 
@@ -237,7 +237,7 @@ function _trap_unchained()
 #     # it should first be stored in rv
 #     # This is also the case when an error occurs (with "set -e" is enabled)
 #     # This will *not* capture an error code for unbound variables on bash 3.2
-#     local rv=$?
+#     local rv="${?}"
 #
 #     # If INT or TERM were already triggered, and EXIT is being triggered after
 #     # that, there is no need to run everything a second time, so return rv right

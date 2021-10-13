@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-if [ -z ${VSI_COMMON_DIR+set} ]; then
+if [ -z "${VSI_COMMON_DIR+set}" ]; then
   VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 fi
 
@@ -105,7 +105,7 @@ begin_test "docker_premkdir"
 
   docker_premkdir "${TESTDIR}"
   docker_premkdir internal_dir
-  [ ! -e internal_dir ]
+  [ ! -e "internal_dir" ]
 
   touch "${TESTDIR}/premkfile"
   docker_premkdir "${TESTDIR}/premkfile"
@@ -179,11 +179,11 @@ begin_test "Sanitize Volumes"
   [ ! -e "${temp_dir}" ]
 
   if [ "${OS-notwindows}" = "Windows_NT" ]; then
-    [ "$(docker_sanitize_volume ${temp_dir} 2>/dev/null)" = "$(cygpath -w "${temp_dir}"):/${temp_dir}" ]
-    [ "$(docker_sanitize_volume ${temp_dir} /foo)" = "$(cygpath -w "${temp_dir}")://foo" ]
+    [ "$(docker_sanitize_volume "${temp_dir}" 2>/dev/null)" = "$(cygpath -w "${temp_dir}"):/${temp_dir}" ]
+    [ "$(docker_sanitize_volume "${temp_dir}" /foo)" = "$(cygpath -w "${temp_dir}")://foo" ]
   else
-    [ "$(docker_sanitize_volume ${temp_dir} 2>/dev/null)" = "${temp_dir}:${temp_dir}" ]
-    [ "$(docker_sanitize_volume ${temp_dir} /bar)" = "${temp_dir}:/bar" ]
+    [ "$(docker_sanitize_volume "${temp_dir}" 2>/dev/null)" = "${temp_dir}:${temp_dir}" ]
+    [ "$(docker_sanitize_volume "${temp_dir}" /bar)" = "${temp_dir}:/bar" ]
   fi
 
   [ -e "${temp_dir}" ]
@@ -241,7 +241,7 @@ begin_test "Docker command"
   DOCKER_AUTOREMOVE=0
   a=("${DOCKER}" run -v '/test  this/:blah' 'debian:9')
   r="$(Docker run -v "/test  this/:blah" debian:9)"
-  eval "r=($r)"
+  eval "r=(${r})" # noquotes
   cmp_elements_a a r
 )
 end_test
@@ -253,13 +253,13 @@ begin_test "DOCKER_AUTOREMOVE and DOCKER_EXTRA_*_ARGS"
 
   a=("${DOCKER}" run --rm -v '/test  this/:blah' 'debian:9')
   r="$(Docker run -v "/test  this/:blah" debian:9)"
-  eval "r=($r)"
+  eval "r=(${r})" # noquotes
   cmp_elements_a a r
 
   DOCKER_EXTRA_RUN_ARGS=('aaa' 'bbb')
   a=("${DOCKER}" run --rm aaa bbb -v '/test  this/:blah' 'debian:9')
   r="$(Docker run -v "/test  this/:blah" debian:9)"
-  eval "r=($r)"
+  eval "r=(${r})" # noquotes
   cmp_elements_a a r
 )
 end_test
@@ -273,7 +273,7 @@ begin_test "DOCKER_EXTRA_ARGS"
   DOCKER_EXTRA_ARGS=(--config bl\ \ ah.json -l=debug -H 123)
   a=("${DOCKER}" --tls "${DOCKER_EXTRA_ARGS[@]}" build aaa bbb -v '/test  this/:blah' 'debian:9')
   r="$(Docker --tls build -v "/test  this/:blah" debian:9)"
-  eval "r=($r)"
+  eval "r=(${r})" # noquotes
   cmp_elements_a a r
 )
 end_test
@@ -502,43 +502,43 @@ begin_test "Parse docker compose file args"
   parse-docker-compose run alpine
   # No docker-compose
   [ "${docker_compose_project_name}" = "default" ]
-  [ "${#docker_compose_files[@]}" -eq 0 ]
+  [ "${#docker_compose_files[@]}" -eq "0" ]
 
   # Make sure COMPOSE_FILE works
   COMPOSE_FILE=docker-compose2.yml parse-docker-compose run alpine
   [ "${docker_compose_project_name}" = "$(basename "$(pwd)")" ]
-  [ "${#docker_compose_files[@]}" -eq 1 ]
+  [ "${#docker_compose_files[@]}" -eq "1" ]
   [ "${docker_compose_files[0]}" = "docker-compose2.yml" ]
 
   # Make sure COMPOSE_FILE overrides docker-compose.yml
   touch docker-compose.yml
   COMPOSE_FILE=docker-compose2.yml parse-docker-compose run alpine
   [ "${docker_compose_project_name}" = "$(basename "$(pwd)")" ]
-  [ "${#docker_compose_files[@]}" -eq 1 ]
+  [ "${#docker_compose_files[@]}" -eq "1" ]
   [ "${docker_compose_files[0]}" = "docker-compose2.yml" ]
 
   # Make sure docker-compose.yml works
   parse-docker-compose run alpine
   [ "${docker_compose_project_name}" = "$(basename "$(pwd)")" ]
-  [ "${#docker_compose_files[@]}" -eq 1 ]
+  [ "${#docker_compose_files[@]}" -eq "1" ]
   [ "${docker_compose_files[0]}" = "${TESTDIR}/docker-compose.yml" ]
 
   # Make sure override works
   touch docker-compose.override.yaml
   parse-docker-compose run alpine
   [ "${docker_compose_project_name}" = "$(basename "$(pwd)")" ]
-  [ "${#docker_compose_files[@]}" -eq 2 ]
+  [ "${#docker_compose_files[@]}" -eq "2" ]
   [ "${docker_compose_files[0]}" = "${TESTDIR}/docker-compose.yml" ]
   [ "${docker_compose_files[1]}" = "${TESTDIR}/docker-compose.override.yaml" ]
 
   # Make sure -f/--file wins
   COMPOSE_FILE=docker-compose2.yml parse-docker-compose -f test3.yml run alpine
   [ "${docker_compose_project_name}" = "$(basename "$(pwd)")" ]
-  [ "${#docker_compose_files[@]}" -eq 1 ]
+  [ "${#docker_compose_files[@]}" -eq "1" ]
   [ "${docker_compose_files[0]}" = "test3.yml" ]
 
   parse-docker-compose -f test1.yml -ftest2 --file test3 --file=test4 run debian:9 bash
-  [ "${#docker_compose_files[@]}" -eq 4 ]
+  [ "${#docker_compose_files[@]}" -eq "4" ]
 )
 end_test
 
@@ -579,7 +579,7 @@ begin_test "Docker-compose command"
   DOCKER_COMPOSE_AUTOREMOVE=0
   a=("${DOCKER_COMPOSE}" run -v '/test  this/:blah' 'debian:9')
   r="$(Docker-compose run -v "/test  this/:blah" debian:9)"
-  eval "r=($r)"
+  eval "r=(${r})" # noquotes
   cmp_elements_a a r
 )
 end_test
@@ -592,13 +592,13 @@ begin_test "DOCKER_COMPOSE_AUTOREMOVE and DOCKER_COMPOSE_EXTRA_*_ARGS"
 
   a=("${DOCKER_COMPOSE}" run --rm -v '/test  this/:blah' 'debian')
   r="$(Docker-compose run -v "/test  this/:blah" debian)"
-  eval "r=($r)"
+  eval "r=(${r})" # noquotes
   cmp_elements_a a r
 
   DOCKER_COMPOSE_EXTRA_RUN_ARGS=('aaa' 'bbb')
   a=("${DOCKER_COMPOSE}" run --rm aaa bbb -v '/test  this/:blah' 'debian')
   r="$(Docker-compose run -v "/test  this/:blah" debian)"
-  eval "r=($r)"
+  eval "r=(${r})" # noquotes
   cmp_elements_a a r
 )
 end_test
@@ -613,7 +613,7 @@ begin_test "DOCKER_COMPOSE_EXTRA_ARGS"
   DOCKER_COMPOSE_EXTRA_ARGS=(--config bl\ \ ah.json -l=debug -H 123)
   a=("${DOCKER_COMPOSE}" --tls "${DOCKER_COMPOSE_EXTRA_ARGS[@]}" build aaa bbb -v '/test  this/:blah' 'debian')
   r="$(Docker-compose --tls build -v "/test  this/:blah" debian)"
-  eval "r=($r)"
+  eval "r=(${r})" # noquotes
   cmp_elements_a a r
 )
 end_test
@@ -728,17 +728,17 @@ begin_test "docker cp image"
   function docker()
   {
     if [ "${1}" = "create" ]; then
-      echo "mock_container_name_$2"
+      echo "mock_container_name_${2}"
     else
       echo "mock_docker: ${@}"
     fi
   }
 
-  [ "$(docker_cp_image my_image:foo /bar/test.txt ${TESTDIR}/dst.txt)" = \
+  [ "$(docker_cp_image my_image:foo /bar/test.txt "${TESTDIR}/dst.txt")" = \
     "mock_docker: cp mock_container_name_my_image:foo:/bar/test.txt ${TESTDIR}/dst.txt
 mock_docker: rm mock_container_name_my_image:foo" ]
 
-  [ "$(docker_cp_image -L -a my_image:foo /bar/test.txt ${TESTDIR}/dst.txt)" = \
+  [ "$(docker_cp_image -L -a my_image:foo /bar/test.txt "${TESTDIR}/dst.txt")" = \
     "mock_docker: cp -L -a mock_container_name_my_image:foo:/bar/test.txt ${TESTDIR}/dst.txt
 mock_docker: rm mock_container_name_my_image:foo" ]
 )

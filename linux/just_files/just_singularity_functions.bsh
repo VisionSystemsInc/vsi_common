@@ -1,6 +1,6 @@
 #!/usr/bin/env false bash
 
-if [[ $- != *i* ]]; then
+if [[ ${-} != *i* ]]; then
   source_once &> /dev/null && return 0
 fi
 
@@ -29,9 +29,9 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 
 function singular_defaultify()
 {
-  arg=$1
+  arg="${1}"
   shift 1
-  case $arg in
+  case ${arg} in
     #**
     # .. command:: singularity_import
     #
@@ -67,7 +67,7 @@ function singular_defaultify()
           -e DOCKER_UID="${DOCKER_UID-$(id -u)}" -e DOCKER_GID="${DOCKER_GID-$(id -g)}" \
           ${custom_script[@]+"${custom_script[@]}"} \
           vsiri/docker2singularity:${DOCKER2SINGULARITY_VERSION-v3.5.0} "${@}"
-      extra_args=$#
+      extra_args=${#}
       ;;
     #**
     # .. command:: singularity_exec
@@ -90,7 +90,7 @@ function singular_defaultify()
       fi
       # No quotes around cmd, to allow for spaces
       Singularity ${cmd} ${@+"${@}"}
-      extra_args=$#
+      extra_args=${#}
       ;;
     #**
     # .. command:: singular-compose
@@ -173,7 +173,7 @@ function singular_defaultify()
       shift 1
 
       # Handle instance start/stop/exec
-      if [ "${subcommand}" = "instance" ] && (( $# )) ; then
+      if [ "${subcommand}" = "instance" ] && (( ${#} )) ; then
         case "${1}" in
           start|stop|exec)
             subcommand="instance_${1}"
@@ -187,10 +187,10 @@ function singular_defaultify()
       local singular_volumes singular_environment singular_flags \
             singular_image singular_mount_points
 
-      case $subcommand in
+      case ${subcommand} in
         run|shell|exec|test|instance_start|instance_stop|instance_exec)
           # TODO: parse_args here
-          local instance="$1"
+          local instance="${1}"
           shift 1
           extra_args+=1
 
@@ -220,12 +220,12 @@ function singular_defaultify()
           if [ -n "${singular_volumes+set}" ]; then
             local i
             for (( i=0; i<${#singular_volumes[@]}; i++ )); do
-              subcommand_args+=(-B "${singular_volumes[${i}]}")
+              subcommand_args+=(-B "${singular_volumes[i]}")
             done
           fi
 
           # Make Singularity call
-          case $subcommand in
+          case ${subcommand} in
             instance_start)
               # "singular-compose instance start" should have the instance name added to the end
               subcommand=instance
@@ -236,7 +236,7 @@ function singular_defaultify()
                                ${@+"${@}"}
                                "${singular_instance_name}")
               # Ignore already started by default
-              local SINGULARITY_IGNORE_EXIT_CODES=${SINGULARITY_IGNORE_EXIT_CODES-255}
+              local SINGULARITY_IGNORE_EXIT_CODES="${SINGULARITY_IGNORE_EXIT_CODES-255}"
               ;;
             instance_stop)
               # "singular-compose instance stop" should have the instance name added to the end, but no image name or singular_flags
@@ -245,7 +245,7 @@ function singular_defaultify()
                                ${@+"${@}"}
                                "${singular_instance_name}")
               # Ignore already stopped by default
-              local SINGULARITY_IGNORE_EXIT_CODES=${SINGULARITY_IGNORE_EXIT_CODES-1}
+              local SINGULARITY_IGNORE_EXIT_CODES="${SINGULARITY_IGNORE_EXIT_CODES-1}"
               ;;
             instance_exec)
               # "singular-compose instance exec" is really just singularity exec instance://{instance name} ...
@@ -260,7 +260,7 @@ function singular_defaultify()
               subcommand_args+=(${singular_flags[@]+"${singular_flags[@]}"} "${singular_image}" ${@+"${@}"})
               ;;
           esac
-          extra_args+=$#
+          extra_args+=${#}
 
           function load_singularity_env()
           {
@@ -270,7 +270,7 @@ function singular_defaultify()
             ##########################
             for (( i=0; i+1<${#singular_environment[@]}; i+=2 )); do
               # https://github.com/sylabs/singularity/issues/3686
-              singularity_env_pass "${singular_environment[${i}]}" "${singular_environment[${i}+1]}"
+              singularity_env_pass "${singular_environment[i]}" "${singular_environment[i+1]}"
             done
             container_environment_override singularity_env_pass
           }
@@ -289,7 +289,7 @@ function singular_defaultify()
           fi
           ;;
         config)
-          local instance="$1"
+          local instance="${1}"
           shift 1
           extra_args+=1
 
@@ -301,7 +301,7 @@ function singular_defaultify()
           declare -p singular_image
           ;;
         config-null)
-          local instance="$1"
+          local instance="${1}"
           shift 1
           extra_args+=1
 
@@ -318,11 +318,11 @@ function singular_defaultify()
 
         instance)
           Singularity "${subcommand}" ${@+"${@}"}
-          extra_args+=$#
+          extra_args+=${#}
           ;;
         #singular-compose_import) Create a singularity image ($1) from docker image ($2) using local docker
         import)
-          local instance="$1"
+          local instance="${1}"
           # Always create a mount point for a test app
           local mount_point_args=("/opt/test/")
           local mount_point
@@ -345,7 +345,7 @@ function singular_defaultify()
           extra_args+=2
           ;;
         *)
-          echo "I don't understand: singular-compose $subcommand" >&2
+          echo "I don't understand: singular-compose ${subcommand}" >&2
           exit 1
           ;;
       esac

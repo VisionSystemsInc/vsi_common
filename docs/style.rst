@@ -36,7 +36,7 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
 
      exec 3>&-
 
-     exec 3&>- # WRONG style. This is dealing with descriptors
+     exec 3&>- # Wrong style. This is dealing with descriptors
 
 * Redirecting to a file
 
@@ -44,43 +44,148 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
 
      run_some_command &> /dev/null # Spaces added around &>
 
-     run_some_command >& /dev/null # WRONG style. This is dealing with filenames
+     run_some_command >& /dev/null # Wrong style. This is dealing with filenames
 
-* Always quote variables
+* Always quote variables and complex strings
 
-  .. code-block:: bash
-
-    avar=foo
-    echo "${avar}"
-
-    echo ${avar} # WRONG style. It is safer to always quote the variable,
-                 # even if it is not strictly necessary
-
-* Prefer ``[ ]`` tests to the ``[[ ]]`` construct and = to ==
+  There are many conditions when you need to use quotes, very few when you need to not, and many when quotes seem optional. Always using quotes (aside from the few exceptions mentioned below) vastly reduces the chance of errors from unexpected (and erroneous) input and simplifies remembering when you do and don't need quotes
 
   .. code-block:: bash
 
-    [ "${avar}" = "foo bar" ]  # Variables are always quoted in [] tests
+     bvar=${avar}   # Wrong style. Always add quotes
+     bvar="${avar}" # Right
+     cvar=foo bar   # Wrong style and syntax. This is a complex string, and requires quotes
+                    # This actually executes a command called bar. Instead, make it clear:
+     cvar="foo" bar # Right if you want to execute a command called bar
+     cvar="foo bar" # Right if bar is part of the string
+     echo ${avar}   # Wrong style. Variables may contain whitespace that would be messed up
+     echo "${avar}" # Right
 
-    [[ "${avar}" == "foo bar" ]] # WRONG style. Use []
+     # There are a few reason to not quote a variable. Be sure to add a "# noquotes"
+     # comment so code reviewers knows these are intended:
 
-    [[ ${avar} = foobar* ]] # Ok. Pattern matching is not possible with []
+     # One is an empty variable that should not be treated as an empty string
+     # E.g., DRYRUN could be "echo" or empty string
+     ${DRYRUN} some command # noquotes
+     # E.g., optional_flag could be "-stuff" or empty string
+     some_command ${optional_flag} foo bar # noquotes
+     # The preferred way is to use arrays, if it is not overly cumbersome.
+     ${DRYRUN[@]+"${DRYRUN[@]}"} some command
+     some_command ${optional_flag[@]+"${optional_flag[@]}"} foo bar
+     # Although because arrays cannot be exported, this is often not viable.
 
-    [[ ${avar} = "foo bar"* ]] # WRONG style. If quotes are needed, use a variable
+     # Another reason quotes must not be used is when splitting up a string into an array
+     foo="aa:bb:cc:dd"
+     IFS=":"
+     # This is actively splitting apart a string, and must not be in quotes
+     bar=(${foo}) # noquotes
+
+  Quotes should not be used in ``[[]]`` expressions---there are a few corner cases where the quotes will be treated literally. ``# noquotes`` is not needed for ``[[]]`` expressions.
+
+  .. code-block:: bash
+
+     if [ "${var}" -gt "0" ] && [[ ${foo} =~ ${pattern} ]]; then
+       echo "hi"
+     fi
+
+  Simple assignments _may_ skip quotes, ``# noquotes`` is not needed as this is easy enough for a code reviewer to see
+
+  .. code-block:: bash
+
+     local a=1
+     b=2
+     x=(11 22 33 44 "5 5" "6  6")
+     cvar=foo
+     dvar=foo\ bar  # Wrong style. This is no longer simple. Use quotes
+     dvar="foo bar" # Right
+
+  It is best not to use quotes when inside of ``{}``. The expressions inside of ``{}`` can be thought of as already being implicitly quoted (``"``). Adding quotes (``'`` or ``"``) may seem to work at first, but the behavior of explicitly quoting will change between the different versions of bash.
+
+  .. code-block:: bash
+
+     echo "${foo-"b a  r"}"        # Wrong style
+     echo "${foo-b a  r}"          # Right
+     echo "${foo/"o"/"O"}"         # Wrong style
+     echo "${foo/o/O}"             # Right
+     echo "${foo/"  "/two spaces}" # Wrong style
+     echo "${foo/  /two spaces}"   # Right
+
+  :bash:func:`compat.bsh bash_behavior_pattern_substitution_slash_escape_with_single_quote` is a special case that still needs special care, due to differences in bash behavior between versions.
+
+* Always use ${var} vs $var
+
+  The reason for this policy is consistency and to clarify that certain features in bash only work in the ``{}``, e.g. variable substitution. It's very easy for someone to mistake ``$foo+set`` for ``${foo}+set`` and not ``${foo+set}``.
+
+  .. code-block:: bash
+
+     echo "$PATH"                   # Wrong style
+     echo "${PATH}"                 # Right
+     echo "${$}"                    # Right
+     # Built-ins * and @ need some extra care so that set -eu doesn't error on empty in bash 3.2
+     echo "${-} ${?} ${*-}"         # Right
+     run command "${_}" ${@+"${@}"} # Right
+
+* Shorthand for arithmetic expressions
+
+  .. code-block:: bash
+
+     x=(11 22 33 44)
+     y=2
+     echo "${x[y]} is perfectly acceptable"
+     echo "${x[$y]} violates the {} policy, even though it is valid bash"
+     echo "${x[${y}]} is ok too, but the shorthand looks better"
+     echo "$((x[y] - y)) is also perfectly acceptable"
+     echo "${x:1:y} is also perfectly acceptable"
+     echo "${x:1:y+1} is also perfectly acceptable"
+
+     # Do no add quotes to inner expressions
+     echo "${x["y"]} ${x["${y}"]}" # Wrong style
+
+     # Associative arrays are not bash 3.2 compatible, and are not
+     # arithmetic expressions in []
+     declare -A z
+     y=2
+     z[y]="This is index y not 2"
+     z[$y]="This is index 2" # Wrong style, violates the {} policy
+     z[${y}]="This is index 2"
+     z[${y}-1]="This is index '2-1', not 1"
+     z[$((y-1))]="This is index 1"
+
+* Prefer ``[ ]`` tests to the ``[[ ]]`` construct, prefer ``=`` to ``==``
+
+  .. code-block:: bash
+
+    [ "${avar}" = "foo bar" ]      # Variables are always quoted in [] tests
+
+    [[ ${avar} == "foo bar" ]]     # Wrong style. Use [] and = for normal equality
+
+    [[ ${avar} = foobar* ]]        # Right. Pattern matching is not possible with []
+
+    [[ ${avar} = "foo bar"* ]]     # Right. If quotes are needed, you can use a variable
     pattern="foo bar*"
-    [[ ${avar} = ${pattern} ]] # Ok. Also, never quote variables in [[ ]] as
-                               # this disables pattern matching---in which case,
-                               # [] can be used instead
+    [[ ${avar} = ${pattern} ]]     # Ok. Never quote patterned variables in [[ ]] as
+                                   # this disables pattern matching---in which case,
+                                   # [] can be used instead
+    If you are mixing literal and wild cards, you will use quotes
+    avar="foo*bar"
+    pattern="foo*b"
+    [[ ${avar} = "${pattern}"* ]]  # If you want the pattern to refer to a literal asterisk, you need these quotes.
+    [[ foo-bar != ${pattern}* ]]   # This would fail because the * in the pattern would be a wild card, not an *
 
-    [[ ${avar} =~ foobar.+ ]]  # Ok. Regex's are not possible with []
+    [[ ${avar} =~ foobar.+ ]]      # Right. Regex's are not possible with []
 
-    [[ ${avar} =~ "foo bar".+ ]] # WRONG style. If quotes are needed, use a variable
+    [[ ${avar} =~ "foo bar".+ ]]   # Right. If quotes are needed, you can use a variable
     pattern='foo bar.+'
-    [[ ${avar} =~ ${pattern} ]]  # Ok. Again, don't quote variables in [[ ]]
+    [[ ${avar} =~ "${pattern}" ]]  # Wrong, this disables regex matching
+    [[ ${avar} =~ ${pattern} ]]    # Good. Don't quote variables in [[ ]]
+    pattern='f\+ bar.+'            # The first + is an escaped literal +
+    [[ ${avar} =~ ${pattern} ]]    # Good. Don't quote variables in [[ ]]
 
-    [[ 3 < 4 ]]     # WRONG style. Use [ -lt ]
+    [[ 3 < 4 ]]                    # Wrong style
+    [ "3" -lt "4" ]]               # Right
 
-    [[ 3.5 < 4.0 ]] # Ok. Floating point comparison not possible with []
+    [[ 3.5 < 4.0 ]]                # Wrong. Floating point comparison not possible with [], [[]] or (())
+    if awk '{if (3.5 < 4.0) {exit 0} else {exit 1}}'; then # Floating point is possible with awk
 
 * Checking to see if a variable exists
 
@@ -102,6 +207,17 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
        do_something
      fi
 
+     # Arrays need a little extra syntactical sugar (the space is important for bash 3.2)
+
+     if [ " ""${myarray[@]+set}" = " " ]; then # If not set
+       do_something
+     fi
+
+     if [ " ""${myarray[@]+set}" = " set" ]; then # If set
+       do_something
+     fi
+
+
 * Checking to see if an array exists before accessing it
 
   .. code-block:: bash
@@ -114,7 +230,7 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
 
      ${foo[@]+"${foo[@]}"}
      ${foo[@]+"${!foo[@]}"}
-     ${foo[@]+"${foo[*]}"}
+     echo "${foo[*]+${foo[*]}}"
 
 * Scripting file naming and shebangs
 
@@ -124,7 +240,7 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
 
        #!/usr/bin/env false bash
 
-       if [[ $- != *i* ]]; then
+       if [[ ${-} != *i* ]]; then
          source_once &> /dev/null && return 0
        fi
 

@@ -89,7 +89,7 @@
 # - ``EXPECTED FAILURE SETUP ERROR`` - An expected to fail test did not call :func:`begin_fail_zone` and is considered setup incorrectly.
 #**
 
-if [ -z ${VSI_COMMON_DIR+set} ]; then
+if [ -z "${VSI_COMMON_DIR+set}" ]; then
   VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 fi
 
@@ -105,7 +105,7 @@ source "${VSI_COMMON_DIR}/linux/signal_tools.bsh"
 source "${VSI_COMMON_DIR}/linux/compat.bsh"
 
 # create a temporary work space
-TRASHDIR="$(mktemp -d -t $(basename "$0")-$$.XXXXXXXX)"
+TRASHDIR="$(mktemp -d -t $(basename "${0}")-${$}.XXXXXXXX)"
 
 # keep track of num tests and failures
 tests=0
@@ -265,14 +265,14 @@ skipped=0
 #**
 atexit ()
 {
-  test_status=$?
+  test_status="${?}"
 
   if [ "${TESTLIB_KEEP_TEMP_DIRS-}" != "1" ]; then
     # Only works if stdin is connected, aka only one test file on run_tests
     if [ "${failures}" != "0" -a "${TESTLIB_KEEP_PAUSE_AFTER_ERROR-0}" = "1" ]; then
       read -rsn1 -p "Press any key to continue..." x
     fi
-    rm -rf "$TRASHDIR"
+    rm -rf "${TRASHDIR}"
   fi
 
   if [ "${tests}" -ne 0 ] && [ "${tracking_touched_files-}" = "1" ]; then
@@ -286,7 +286,7 @@ atexit ()
   fi
 
   if [ -n "${test_description+set}" ]; then
-    end_test $test_status
+    end_test "${test_status}"
     echo "${TESTLIB_BAD_COLOR}WARNING${TESTLIB_RESET_COLOR}: end_test not added at end of last test." 1>&2
   elif [ "${test_status}" != "0" ]; then
     echo "${TESTLIB_BAD_COLOR}ERROR${TESTLIB_RESET_COLOR} Test failed outside of test. Maybe a sourced file or the test file has a problem" 1>&2
@@ -300,27 +300,27 @@ atexit ()
     # In case there is a failure in teardown, add one to the failures so the
     # summary notes this, and at least you'll which file is failing
     if [ -d "${TESTLIB_SUMMARY_DIR-}" ]; then
-      echo "${tests} $((failures+1)) ${unexpected_successes} ${expected_failures} ${required_failures} ${skipped}" > "${TESTLIB_SUMMARY_DIR}/$(basename "$0")"
+      echo "${tests} $((failures+1)) ${unexpected_successes} ${expected_failures} ${required_failures} ${skipped}" > "${TESTLIB_SUMMARY_DIR}/$(basename "${0}")"
     fi
 
     teardown
   fi
 
   local BOLD_COLOR
-  if [ "${failures}" -eq 0 ]; then
+  if [ "${failures}" -eq "0" ]; then
     BOLD_COLOR="${TESTLIB_BOLD_COLOR}"
   else
     BOLD_COLOR="${TESTLIB_BAD_COLOR}"
   fi
 
   printf "%s summary: %d tests, ${BOLD_COLOR}%d failures${TESTLIB_RESET_COLOR}, %d unexpected successes, %d expected failures, %d required failures, %d skipped\n" \
-         "$0" "${tests}" "${failures}" "${unexpected_successes}" "${expected_failures}" "${required_failures}" "${skipped}"
+         "${0}" "${tests}" "${failures}" "${unexpected_successes}" "${expected_failures}" "${required_failures}" "${skipped}"
 
   if [ -d "${TESTLIB_SUMMARY_DIR-}" ]; then
-    echo "${tests} ${failures} ${unexpected_successes} ${expected_failures} ${required_failures} ${skipped}" > "${TESTLIB_SUMMARY_DIR}/$(basename "$0")"
+    echo "${tests} ${failures} ${unexpected_successes} ${expected_failures} ${required_failures} ${skipped}" > "${TESTLIB_SUMMARY_DIR}/$(basename "${0}")"
   fi
 
-  if [ "${failures}" -gt 0 ]; then
+  if [ "${failures}" -gt "0" ]; then
     # Make the exit code 123, to be consistent with xargs' behavior
     exit 123
   else
@@ -346,12 +346,12 @@ _begin_common_test ()
 {
   TESTDIR="${TRASHDIR}/test${tests}"
   mkdir -p "${TESTDIR}"
-  pushd "$TESTDIR" &> /dev/null
+  pushd "${TESTDIR}" &> /dev/null
   # This makes calling end_test between tests "optional", but highly recommended.
   # end_test does have to be called after the last test, especially if teardown
   # is defined after the last test
   if [ -n "${test_description+set}" ]; then
-    end_test $test_status
+    end_test "${test_status}"
     echo "${TESTLIB_BAD_COLOR}WARNING${TESTLIB_RESET_COLOR}: end_test not added at end of a test." 1>&2
     declare -p BASH_SOURCE
   fi
@@ -360,17 +360,17 @@ _begin_common_test ()
   # Set flag defaults that could be overridable in certain test types.
   # This needs to be after end_test call above in order to keep end_test
   # optional
-  expected_failure=${_expected_failure-0}
-  required_fail=${_required_fail-0}
+  expected_failure="${_expected_failure-0}"
+  required_fail="${_required_fail-0}"
 
-  tests=$(( tests + 1 ))
-  local test_file_name="$(basename "$0")"
-  test_file_name=${test_file_name%.*}
-  test_file_name=${test_file_name#test-}
-  test_description="$test_file_name - $1"
+  tests="$(( tests + 1 ))"
+  local test_file_name="$(basename "${0}")"
+  test_file_name="${test_file_name%.*}"
+  test_file_name="${test_file_name#test-}"
+  test_description="${test_file_name} - ${1}"
 
   if [ "${TESTLIB_RUN_SINGLE_TEST+set}" = "set" ] && \
-     [ "$1" != "${TESTLIB_RUN_SINGLE_TEST}" ]; then
+     [ "${1}" != "${TESTLIB_RUN_SINGLE_TEST}" ]; then
     skip_next_test
   elif [ -n "${TESTLIB_SKIP_TESTS+set}" ] && [[ ${1} =~ ${TESTLIB_SKIP_TESTS} ]]; then
     skip_next_test
@@ -396,7 +396,7 @@ _begin_common_test ()
   fi
 
   if [ "${TESTLIB_SHOW_TIMING-0}" = "1" ]; then
-    __testlib_time_0=$(get_time_seconds)
+    __testlib_time_0="$(get_time_seconds)"
   fi
 
   if [ "${bash_feature_allocate_file_descriptor}" = "0" ]; then
@@ -440,10 +440,10 @@ _begin_common_test ()
 
   case "${TESTLIB_REDIRECT_OUTPUT}" in
     3)
-      exec 1>"$out" 2>"$err"
+      exec 1>"${out}" 2>"${err}"
       ;;
     2)
-      exec 2>"$err"
+      exec 2>"${err}"
       ;;
   esac
 
@@ -465,7 +465,7 @@ _begin_common_test ()
 #**
 begin_test ()
 {
-  test_status=$? # Must be first command
+  test_status="${?}" # Must be first command
   _begin_common_test ${@+"${@}"}
 }
 
@@ -485,7 +485,7 @@ begin_test ()
 #**
 begin_expected_fail_test()
 {
-  test_status=$? # Must be first command
+  test_status="${?}" # Must be first command
   # Override _begin_common_test default
   _expected_failure=1 _begin_common_test ${@+"${@}"}
 }
@@ -506,7 +506,7 @@ begin_expected_fail_test()
 #**
 begin_required_fail_test()
 {
-  test_status=$? # Must be first command
+  test_status="${?}" # Must be first command
   # Override _begin_common_test default
   _required_fail=1 _begin_common_test ${@+"${@}"}
 }
@@ -626,7 +626,7 @@ setup_test()
 #**
 end_test()
 {
-  test_status="${1:-$?}" # This MUST be the first line of this function
+  test_status="${1:-${?}}" # This MUST be the first line of this function
   set +x -e
   case "${TESTLIB_REDIRECT_OUTPUT}" in
     3) # Tested, this apparently works on bash 3.2
@@ -645,7 +645,7 @@ end_test()
 
   local time_e=''
   if [ "${TESTLIB_SHOW_TIMING-0}" = "1" ]; then
-    time_e=$(awk "BEGIN {print \"\t\" $(get_time_seconds)-${__testlib_time_0}}")
+    time_e="$(awk "BEGIN {print \"\t\" $(get_time_seconds)-${__testlib_time_0}}")"
   fi
 
   # Handle missing call to setup_test
@@ -653,63 +653,63 @@ end_test()
     # This is a "no matter what, failure". No expected/required failure work
     # around for this
     printf "%-80s ${TESTLIB_BAD_COLOR}SETUP FAILURE${TESTLIB_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
-    failures=$(( failures + 1 ))
+    failures="$(( failures + 1 ))"
   # Handle a skipped test
-  elif [ "${__testlib_skip_test-}" = "1" ] && [ "${test_status}" -eq 0 ]; then
+  elif [ "${__testlib_skip_test-}" = "1" ] && [ "${test_status}" -eq "0" ]; then
     printf "%-80s ${TESTLIB_GOOD_COLOR}SKIPPED${TESTLIB_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
-    skipped=$((skipped+1))
+    skipped="$((skipped+1))"
   # Handle a required fail
-  elif [ "${required_fail}" -eq 1 ]; then
+  elif [ "${required_fail}" -eq "1" ]; then
     if [ -f "${TRASHDIR}/.testlib_failure_zone" ]; then
       local required_failure_state="$(<"${TRASHDIR}/.testlib_failure_zone")"
-      if [ "$test_status" != 0 ]; then
+      if [ "${test_status}" != "0" ]; then
         if [ "${required_failure_state}" = "1" ]; then
           printf "%-80s ${TESTLIB_GOOD_COLOR}FAIL REQUIRED${TESTLIB_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
-          required_failures=$((required_failures+1))
+          required_failures="$((required_failures+1))"
         else
           printf "%-80s ${TESTLIB_BAD_COLOR}SHOULD HAVE FAILED ELSEWHERE${TESTLIB_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
-          failures=$(( failures + 1 ))
+          failures="$(( failures + 1 ))"
           testlib_print_test_trace
         fi
       else
-        failures=$(( failures + 1 ))
+        failures="$(( failures + 1 ))"
         printf "%-80s ${TESTLIB_BAD_COLOR}SHOULD HAVE FAILED${TESTLIB_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
         testlib_print_test_trace
       fi
     else
       # Handle missing call to begin_fail_zone
       printf "%-80s ${TESTLIB_BAD_COLOR}REQUIRED FAILURE SETUP ERROR${TESTLIB_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
-      failures=$(( failures + 1 ))
+      failures="$(( failures + 1 ))"
     fi
   # Handle an expected fail
-  elif [ "${expected_failure}" -eq 1 ]; then
+  elif [ "${expected_failure}" -eq "1" ]; then
     if [ -f "${TRASHDIR}/.testlib_failure_zone" ]; then
       local expected_failure_state="$(<"${TRASHDIR}/.testlib_failure_zone")"
       if [ "${test_status}" != "0" ]; then
         if [ "${expected_failure_state}" = "1" ]; then
           printf "%-80s ${TESTLIB_GOOD_COLOR}FAIL EXPECTED${TESTLIB_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
-          expected_failures=$(( expected_failures + 1 ))
+          expected_failures="$(( expected_failures + 1 ))"
         else
           printf "%-80s ${TESTLIB_BAD_COLOR}SHOULD HAVE FAILED ELSEWHERE${TESTLIB_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
-          failures=$(( failures + 1 ))
+          failures="$(( failures + 1 ))"
           testlib_print_test_trace
         fi
       else
         printf "%-80s ${TESTLIB_WARN_COLOR}UNEXPECTED SUCCESS${TESTLIB_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
-        unexpected_successes=$(( unexpected_successes + 1 ))
+        unexpected_successes="$(( unexpected_successes + 1 ))"
       fi
     else
       # Handle missing call to begin_fail_zone
       printf "%-80s ${TESTLIB_BAD_COLOR}EXPECTED FAILURE SETUP ERROR${TESTLIB_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
-      failures=$(( failures + 1 ))
+      failures="$(( failures + 1 ))"
     fi
     # Remove account file
     rm -f "${TRASHDIR}/.testlib_failure_zone"
-  elif [ "${required_fail}" -eq 0 ] && [ "$test_status" -eq 0 ]; then
+  elif [ "${required_fail}" -eq 0 ] && [ "${test_status}" -eq "0" ]; then
     printf "%-80s ${TESTLIB_GOOD_COLOR}OK${TESTLIB_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
   else
     printf "%-80s ${TESTLIB_BAD_COLOR}FAILED${TESTLIB_RESET_COLOR}%s\n" "${test_description}" "${time_e}"
-    failures=$(( failures + 1 ))
+    failures="$(( failures + 1 ))"
     testlib_print_test_trace
   fi
 
@@ -776,7 +776,7 @@ function testlib_print_test_trace()
       echo "-- stdout --"
       sed 's/^/    /' <"${out}"
     fi
-    echo "-- EOF $test_description --"
+    echo "-- EOF "${test_description}" --"
   ) 1>&${test_output}
 
   # Close fd test_output, which will end perl if its running
@@ -800,7 +800,9 @@ function testlib_print_test_trace()
 #
 #   For example, skip if docker command not found
 #
-#     command -v docker &> /dev/null && skip_next_test
+#     if ! command -v docker &> /dev/null; then
+#       skip_next_test
+#     fi
 #     begin_test "My test"
 #     (
 #       setup_test
@@ -875,17 +877,17 @@ ttouch()
   touch "${@}"
 
   # Skip all options
-  while [ $# -gt 0 ]; do
-    if [ "${end_options}" = "0" ] && [ "$1" = "--" ]; then
+  while [ "${#}" -gt "0" ]; do
+    if [ "${end_options}" = "0" ] && [ "${1}" = "--" ]; then
       end_options=1
       shift 1
-    elif [ "${end_options}" = "0" ] && [ ${#1} -gt 0 ] && [ "${1:0:1}" = "-" ]; then
+    elif [ "${end_options}" = "0" ] && [ "${#1}" -gt "0" ] && [ "${1:0:1}" = "-" ]; then
       shift 1
     else
-      filename="$1"
+      filename="${1}"
       # force to be absolute path
       if [ "${filename:0:1}" != "/" ]; then
-        filename="$(pwd)/$1"
+        filename="$(pwd)/${1}"
       fi
       printf "${filename}\0" >> "${track_touched_file}"
       shift 1
@@ -909,7 +911,7 @@ cleanup_touched_files()
   # This will normally get called an extra time at exit, so the existence of
   # the file acts as a check.
   if [ -f "${track_touched_file}" ]; then
-    while IFS='' read -r -d '' touched_file 2>/dev/null || [ -n "$touched_file" ]; do
+    while IFS='' read -r -d '' touched_file 2>/dev/null || [ -n "${touched_file}" ]; do
       if [ -e "${touched_file}" ] && [ ! -d "${touched_file}" ]; then
         \rm "${touched_file}"
       fi

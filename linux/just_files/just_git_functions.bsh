@@ -1,6 +1,6 @@
 #!/usr/bin/env false bash
 
-if [[ $- != *i* ]]; then
+if [[ ${-} != *i* ]]; then
   source_once &> /dev/null && return 0
 fi
 
@@ -72,11 +72,11 @@ function submodule-helper-list()
   # Loop through submodules
   local i
   for ((i=0; i<${#submodule_data[@]}; i+=2)); do
-    local submodule_name="${submodule_data[$i]}"
-    local submodule_path="${submodule_data[$i+1]}"
+    local submodule_name="${submodule_data[i]}"
+    local submodule_path="${submodule_data[i+1]}"
 
     # If there are any arguments, filter out unmatched submodules
-    if [ $# -ne 0 ]; then
+    if [ "${#}" -ne "0" ]; then
       # loop through all arguments
       local j
       for j in "${@}"; do
@@ -116,9 +116,9 @@ function submodule-helper-list()
 
 function _is_tip_reachable()
 {
-  # local foo="$(bar)" || rv=$? does not work as one line in bash 4.2 or older. Use two lines
+  # local foo="$(bar)" || rv="${?}" does not work as one line in bash 4.2 or older. Use two lines
   local rev
-  rev=$(cd "${1}" && git rev-list -n 1 "${2}" --not --all 2> /dev/null) && \
+  rev="$(cd "${1}" && git rev-list -n 1 "${2}" --not --all 2> /dev/null)" && \
   [ -z "${rev}" ]
 }
 
@@ -208,9 +208,9 @@ function _checkout_git_submodule()
 function safe_git_submodule_update()
 {
   local i
-  local show_summary_message=${show_summary_message-1}
+  local show_summary_message="${show_summary_message-1}"
   local presskey
-  if [ "${bash_bug_unassigned_variable_set_to_null}" -eq 0 ]; then
+  if [ "${bash_bug_unassigned_variable_set_to_null}" -eq "0" ]; then
     # In general, unset should NOT be used on local variables because it can
     # (with sufficient nesting of scope) result in a loss of "local" status;
     # however, because local and unset are in the same scope, we don't loose
@@ -231,13 +231,13 @@ function safe_git_submodule_update()
     for ((i=0; i<${#submodule_paths[@]}; i++)); do
       # (it seems that neither submodule name nor path can end in a trailing
       # slash)
-      name="${submodule_names[$i]}"
-      sm_path="${submodule_paths[$i]}"
+      name="${submodule_names[i]}"
+      sm_path="${submodule_paths[i]}"
 
-      if ! "${GIT}" config submodule."$name".url > /dev/null; then
+      if ! "${GIT}" config submodule."${name}".url > /dev/null; then
         if [ "$("${GIT}" ls-tree HEAD:"$(dirname "${sm_path}")"/ "$(basename "${sm_path}")" | awk '{print $2}')" == "commit" ]; then
           echo "Uninitialized submodule '${name}'...Initializing"
-          "${GIT}" submodule init $sm_path
+          "${GIT}" submodule init "${sm_path}"
         else
           # There are cases where novices remove a submodule and forget to
           # remove it from the .gitmodules files. In this case, it will show up
@@ -251,7 +251,7 @@ function safe_git_submodule_update()
       current_submodule_url="$("${GIT}" config submodule."${name}".url)"
       # Initialize (and update) the submodule if it is not already
       if [ -z "${current_submodule_url}" ] || \
-        ([ ! -d "$sm_path"/.git ] && [ ! -f "$sm_path"/.git ]); then
+        ([ ! -d "${sm_path}"/.git ] && [ ! -f "${sm_path}"/.git ]); then
         if ! [ "$("${GIT}" config -f .gitmodules "submodule.${name}.update")" == "none" ]; then
           echo "Submodule '${name}' is not checked out! Initializing and updating..."
           "${GIT}" submodule update --init "${sm_path}"
@@ -291,7 +291,7 @@ function safe_git_submodule_update()
       # sync with the .gitmodules file
       "${GIT}" submodule sync --quiet "${sm_path}"
       # Get the updated URL
-      updated_submodule_url="$("${GIT}" config submodule."$name".url)"
+      updated_submodule_url="$("${GIT}" config submodule."${name}".url)"
 
       # Arguably, if the submodule's URL changed in the .gitmodules file, we
       # should leave these changes to the remote, but we cannot differentiate
@@ -311,7 +311,7 @@ function safe_git_submodule_update()
       # git submodule sync dies if there are multiple URLs (e.g., with
       # git config --get-all submodule.<name>.url or
       # git config --get-all remote.origin.url)
-      "${GIT}" config submodule."$name".url "${current_submodule_url}"
+      "${GIT}" config submodule."${name}".url "${current_submodule_url}"
       # Reset the default remote
       pushd "${sm_path}" > /dev/null
         "${GIT}" remote set-url "${default_remote}" "${current_remote_url}"
@@ -361,9 +361,9 @@ function safe_git_submodule_update()
       echo "******************************************************************"
       echo "${YELLOW}Repository '${NC}${BOLD}${RED}${i}${NC}${YELLOW}' does not appear to be on the expected SHA${NC}!"
       echo "If you have changes that you want to track in the parent module run:"
-      echo "  'git add $i' followed by 'git commit', or if you want to reset the"
+      echo "  'git add ${i}' followed by 'git commit', or if you want to reset the"
       echo "submodule to the expected SHA run:"
-      echo "  'git submodule update $i'"
+      echo "  'git submodule update ${i}'"
       echo "However, ensure that any commits you may have made are tracked."
       message_printed=1
     done
@@ -406,7 +406,7 @@ git_reattach_heads()
   # git v1.8.3
   pushd "$("${GIT}" rev-parse --show-cdup)" &> /dev/null
     local submodule_paths
-    if [ $# -eq 0 ]; then
+    if [ "${#}" -eq "0" ]; then
       local OLD_IFS="${IFS}"
       IFS=$'\n'
       submodule_paths=($("${GIT}" submodule foreach --quiet --recursive 'echo "${prefix-${displaypath}}"'))
@@ -439,9 +439,9 @@ git_reattach_heads()
 
 function git_defaultify()
 {
-  arg=$1
+  arg="${1}"
   shift 1
-  case $arg in
+  case ${arg} in
     #**
     # .. command:: git_submodule-update
     #
@@ -461,7 +461,7 @@ function git_defaultify()
                           # Additionally, after sync and update, detached heads \
                           # are reattached if they happen to land on a local \
                           # tracking branch.
-      extra_args=$#
+      extra_args=${#}
 
       if ! command -v "${GIT}" >& /dev/null; then
         echo "Git not found, skipping submodule sync" >&2
@@ -512,8 +512,8 @@ function git_defaultify()
       fi
 
       "${GIT}" submodule foreach --recursive bash -c '
-      if [ -f .git ]; then
-        submodule_path=$(cut -d" " -f2- .git)
+      if [ -f ".git" ]; then
+        submodule_path="$(cut -d" " -f2- .git)"
         echo "gitdir: $('"${code}"')" > .git
       fi'
       ;;

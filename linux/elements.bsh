@@ -1,7 +1,7 @@
 #!/usr/bin/env false bash
 # Source this file
 
-if [[ $- != *i* ]]; then
+if [[ ${-} != *i* ]]; then
   source_once &> /dev/null && return 0
 fi
 
@@ -28,7 +28,7 @@ source "${VSI_COMMON_DIR}/linux/compat.bsh"
 #   Not intended for POSIX sh, works on bash and others like ksh
 #**
 
-if [ -z ${VSI_COMMON_DIR+set} ]; then
+if [ -z "${VSI_COMMON_DIR+set}" ]; then
   VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 fi
 source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
@@ -70,11 +70,11 @@ else
     else
       clear_a "${1}"
       local __i
-      for (( __i=2; __i<=$#; __i++ )); do
+      for (( __i=2; __i<=${#}; __i++ )); do
         # Can't use here-string because that adds an extra newline. Also, since
         # there is no extra newline, read returns false
         # If I don't use this IFS, leading and trailing whitespace are dropped
-        IFS='' read -r -d '' "${1}[$(($__i-2))]" < <(printf '%s' "${!__i}") || :
+        IFS='' read -r -d '' "${1}[__i-2]" < <(printf '%s' "${!__i}") || :
       done
     fi
   }
@@ -146,7 +146,7 @@ else
     # Do NOT use unset here. If you do that, you will lose "local" status if the
     # variable that $1 points to has it. This can have MANY unintended
     # consequences which is generally BAD! Gotta eval :(
-    # for x in 3.2 4.0 4.1 4.2 4.3 4.4 5.0 5.1-rc; do docker run -it --rm bash:${x} bash -c 'x=13; function bar(){ local x; foo; declare -p x;}; function foo(){ unset x; x=15; }; bar; declare -p x'; done
+    # for x in 3.2 4.0 4.1 4.2 4.3 4.4 5.0 5.1-rc; do docker run -it --rm "bash:${x}" bash -c 'x=13; function bar(){ local x; foo; declare -p x;}; function foo(){ unset x; x=15; }; bar; declare -p x'; done
     # https://stackoverflow.com/questions/10497425/is-it-possible-to-use-array-in-bash#comment74842477_10497539
     eval "${1}=()"
   }
@@ -200,9 +200,9 @@ function remove_element_a()
 
     local __i
     for __i in "${!__x[@]}"; do
-      if [ "${__x[$__i]}" == "${2}" ]; then
+      if [ "${__x[__i]}" == "${2}" ]; then
         # http://wiki.bash-hackers.org/syntax/arrays#destruction
-        unset "__x[$__i]"
+        unset "__x[__i]"
       fi
     done
 
@@ -227,7 +227,7 @@ function remove_element()
     # In case the user uses the name __y
     local y="${__x-}"
     remove_element y "${2}"
-    __x=${y[*]+"${y[*]}"}
+    __x="${y[*]+"${y[*]}"}"
   else
     local __x=(${!1-})
     # Use already existing function
@@ -301,7 +301,7 @@ function add_element_post()
   if [ "${1}" = "__x" ]; then
     local y=( ${__x-} )
     add_element_post_a y "${2}"
-    __x=${y[*]+"${y[*]}"}
+    __x="${y[*]+"${y[*]}"}"
   else
     local __x=(${!1-})
     add_element_post_a __x "${2}"
@@ -356,7 +356,7 @@ function add_element_pre ()
   if [ "${1}" = "__x" ]; then
     local y=( ${__x-} )
     add_element_pre_a y "${2}"
-    __x=${y[*]+"${y[*]}"}
+    __x="${y[*]+"${y[*]}"}"
   else
     local __x=(${!1-})
     add_element_pre_a __x "${2}"
@@ -400,13 +400,13 @@ function _cmp_elements_a()
   # Have to copy https://unix.stackexchange.com/a/374094/123413 Thanks darwin!
   local __x=(${!1+"${!1}"})
   local __y=(${!2+"${!2}"})
-  if [ ${#__x[@]} -ne ${#__y[@]} ]; then
+  if [ "${#__x[@]}" -ne "${#__y[@]}" ]; then
     return 1
   fi
 
   local z
   for ((z=0; z<${#__x[@]}; z++)); do
-    if [ "${__x[$z]}" != "${__y[$z]}" ]; then
+    if [ "${__x[z]}" != "${__y[z]}" ]; then
       return 1
     fi
   done
@@ -441,7 +441,7 @@ function cmp_elements()
   local __y=( ${!2} )
 
   cmp_elements_a __x __y
-  return $?
+  return ${?}
 }
 
 #**
@@ -481,7 +481,7 @@ function split_s()
     fi
 
     for __i in ${@+"${@}"}; do
-      __i+=${MIFS}
+      __i+="${MIFS}"
       # If I do this before the for loop, bash 3.2 (macOS) does not work right
       while [ -n "${__i}" ]; do
         __x+=( "${__i%%${MIFS}*}" )
@@ -517,24 +517,24 @@ function join_a()
     shift 1
     local y
     local rv=0
-    join_a y ${@+"${@}"} || rv=$?
+    join_a y ${@+"${@}"} || rv="${?}"
     dynamic_set "${array_name}" ${y+"${y}"}
     return "${rv}"
   else
-    if [ $# -eq 1 ]; then
+    if [ "${#}" -eq "1" ]; then
       # Note: I do not `unset $1` due to the same locality-is-lost-bug referenced
       # in remove_element_a
       dynamic_set "${1}"
       return 1
     fi
 
-    local __target="$1"
+    local __target="${1}"
     shift 1
 
     local __x="${1-}"
     shift 1
 
-    while (( $# )); do
+    while (( ${#} )); do
       __x+="${MIFS-//}${1}"
       shift 1
     done
@@ -599,7 +599,7 @@ function is_array()
   if [ "${bash_feature_parameter_transformation}" = "0" ]; then
     # Yes, this works with namereffing too, without having to iterate!
     # https://lists.gnu.org/archive/html/bug-bash/2020-08/msg00069.html
-    if [[ $- =~ u ]]; then
+    if [[ ${-} =~ u ]]; then
       set +u
       if [[ ${!1@a} = *${__is_a_type-a}* ]]; then
         set -u
@@ -722,7 +722,7 @@ function to_array()
       __y="${__y//\\^/^}"
 
       # %s is important, so that printf doesn't try to replace special characters
-      IFS='' read -r -d '' "${1}[$__i]" < <(printf '%s' "${__y}") || :
+      IFS='' read -r -d '' "${1}[__i]" < <(printf '%s' "${__y}") || :
       __i+=1
     done < <(xargs -n 1 printf '%s\0' <<< "${__x}")
   fi
@@ -744,7 +744,7 @@ export -fn to_array
 #**
 function array_length()
 {
-  if ! declare -p "$1" &> /dev/null; then
+  if ! declare -p "${1}" &> /dev/null; then
     echo -1
   else
     _array_length "${1}[@]"
@@ -851,7 +851,7 @@ function _subtract_array()
   done
 
   # Copy the output to the targeted name
-  dynamic_set_a "$3" ${__output[@]+"${__output[@]}"}
+  dynamic_set_a "${3}" ${__output[@]+"${__output[@]}"}
 }
 
 #**
@@ -919,7 +919,7 @@ function variables_to_array()
 {
   if [ "${2}" = "indirect" -o "${2}" = "counter" ]; then
     local copy
-    variables_to_array "${1}" copy || return $?
+    variables_to_array "${1}" copy || return ${?}
     dynamic_set_a "${2}" ${copy[@]+"${copy[@]}"}
     return 0
   fi
@@ -950,7 +950,7 @@ function all_variables_to_array()
 {
   if [ "${2}" = "indirect" ]; then
     local copy
-    all_variables_to_array "${1}" copy || return $?
+    all_variables_to_array "${1}" copy || return ${?}
     dynamic_set_a "${2}" ${copy[@]+"${copy[@]}"}
     return 0
   fi
@@ -1010,7 +1010,7 @@ function serialize_array()
   if is_array "${1}"; then
     echo -n 'a'
     for __serialize_array_index in "${__serialize_array_indexes[@]}"; do
-      __serialize_array_value="${1}[${__serialize_array_index}]"
+      __serialize_array_value="${1}[__serialize_array_index]"
       __serialize_array_value="${!__serialize_array_value}"
       echo -n "${__serialize_array_index} ${#__serialize_array_value} ${__serialize_array_value}"
     done
@@ -1096,9 +1096,9 @@ function deserialize_array()
         array["${__deserialize_array_array_index}"]="${2:__deserialize_array_str_index:__deserialize_array_length}"
       else
         # 60x Faster, but it's eval :(
-        # eval "${1}[${__deserialize_array_array_index}]="'"${2:__deserialize_array_str_index:__deserialize_array_length}"'
+        # eval "${1}[__deserialize_array_array_index]="'"${2:__deserialize_array_str_index:__deserialize_array_length}"'
         # Don't use <<< here, it inserts a \n at the end (bash "feature")
-        IFS= read -r -d '' "${1}[${__deserialize_array_array_index}]" < <(echo -n "${2:__deserialize_array_str_index:__deserialize_array_length}") || :
+        IFS= read -r -d '' "${1}[__deserialize_array_array_index]" < <(echo -n "${2:__deserialize_array_str_index:__deserialize_array_length}") || :
       fi
       __deserialize_array_str_index+=${__deserialize_array_length}
     done

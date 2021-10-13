@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-if [ -z ${VSI_COMMON_DIR+set} ]; then
+if [ -z "${VSI_COMMON_DIR+set}" ]; then
   VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 fi
 
@@ -45,9 +45,9 @@ begin_test "source_environment_files"
   setup_test
 
   echo "justtest=15" > test.env
-  [ ! -e local.env ]
+  [ ! -e "local.env" ]
   source_environment_files test.env
-  [ -e local.env ] # Verify local.env is auto generated
+  [ -e "local.env" ] # Verify local.env is auto generated
   [ "${justtest}" = "15" ]
   unset justtest
 
@@ -112,10 +112,10 @@ begin_test "local.env in read-only (#84)"
 
   echo "justtest=15" > test.env
   chmod 555 .
-  [ ! -e local.env ]
+  [ ! -e "local.env" ]
   source_environment_files test.env
   # This will be created if windows or root...
-  # [ ! -e local.env ] # Verify local.env is not auto generated
+  # [ ! -e "local.env" ] # Verify local.env is not auto generated
 
   # Fix permissions, or else testlib gets a little upset/verbose.
   chmod 755 .
@@ -516,10 +516,10 @@ begin_test "justify calls"
 
   function add()
   {
-    echo "$1) # Blah" >> file1
-    echo '  echo ":'"$1"':" ${@+"${@}"}' >> file1
+    echo "${1}) # Blah" >> file1
+    echo '  echo ":'"${1}"':" ${@+"${@}"}' >> file1
     echo "  extra=${2-0}" >> file1
-    echo '  extra_args=$(( extra > $# ? $# : extra))' >> file1
+    echo '  extra_args=$(( extra > ${#} ? ${#} : extra))' >> file1
     echo '  ;;' >> file1
   }
 
@@ -527,7 +527,7 @@ begin_test "justify calls"
 
   echo 'function caseify()' > file1
   echo '{' >> file1
-  echo '  local just_arg=$1' >> file1
+  echo '  local just_arg="${1}"' >> file1
   echo '  shift 1' >> file1
   echo '  case ${just_arg} in' >> file1
 
@@ -544,7 +544,7 @@ begin_test "justify calls"
   add '-a'
 
   echo '-jump|\' >> file1
-  add rope '$#'
+  add rope '${#}'
   add '-sea|-water|-ocean'
   echo '*)' >> file1
   echo '  echo "!${just_arg}!" ${@+"${@}"}' >> file1
@@ -627,16 +627,16 @@ begin_test "recursive justify calls #81"
 
   function caseify()
   {
-    local just_arg=$1
+    local just_arg="${1}"
     shift 1
     case ${just_arg} in
       a) # A
-        echo ":a:" $1
-        justify b $1
+        echo ":a: ${1}"
+        justify b "${1}"
         extra_args=1
         ;;
       b) # B
-        echo ":b:" $1
+        echo ":b: ${1}"
         extra_args=1
         ;;
     esac
@@ -655,7 +655,7 @@ begin_test "justify with .justplugins"
   # Create min plugin
   echo 'JUST_DEFAULTIFY_FUNCTIONS+=(my_defaultify)' > my_plugin
   echo 'JUST_HELP_FILES+=("${BASH_SOURCE[0]}")' >> my_plugin
-  echo 'my_defaultify(){ if [ "$1" = "apple" ]; then echo tree; else plugin_not_found=1; fi; }' >> my_plugin
+  echo 'my_defaultify(){ if [ "${1}" = "apple" ]; then echo tree; else plugin_not_found=1; fi; }' >> my_plugin
 
   # Set plugin
   echo 'my_plugin' > .justplugins
@@ -682,10 +682,10 @@ begin_test "callify"
 
   test1()
   {
-    # echo $# >&2
-    for x in $(seq 1 1 $#); do
+    # echo ${#} >&2
+    for x in $(seq 1 1 "${#}"); do
       # echo $x >&2
-      printf "$x:${@:$x:1} "
+      printf "${x}:${@:x:1} "
     done
   }
 
@@ -717,41 +717,41 @@ begin_test "get_args"
   # No args
   get_args
   assert_array_values args
-  [ "${get_args_args_used}" -eq 0 ]
+  [ "${get_args_args_used}" -eq "0" ]
   get_args -- 11
   assert_array_values args
-  [ "${get_args_args_used}" -eq 1 ]
+  [ "${get_args_args_used}" -eq "1" ]
   get_args -- 11 --
   assert_array_values args
-  [ "${get_args_args_used}" -eq 1 ]
+  [ "${get_args_args_used}" -eq "1" ]
 
   # One arg
   get_args 11
   assert_array_values args 11
-  [ "${get_args_args_used}" -eq 1 ]
+  [ "${get_args_args_used}" -eq "1" ]
   get_args 11 --
   assert_array_values args 11
-  [ "${get_args_args_used}" -eq 2 ]
+  [ "${get_args_args_used}" -eq "2" ]
   get_args 11 -- 22
   assert_array_values args 11
-  [ "${get_args_args_used}" -eq 2 ]
+  [ "${get_args_args_used}" -eq "2" ]
 
   # Multiple args
   get_args 11 12 13
   assert_array_values args 11 12 13
-  [ "${get_args_args_used}" -eq 3 ]
+  [ "${get_args_args_used}" -eq "3" ]
   get_args 11 12 13 14 --
   assert_array_values args 11 12 13 14
-  [ "${get_args_args_used}" -eq 5 ]
+  [ "${get_args_args_used}" -eq "5" ]
   get_args 11 12 -- 22
   assert_array_values args 11 12
-  [ "${get_args_args_used}" -eq 3 ]
+  [ "${get_args_args_used}" -eq "3" ]
 
   # Custom Separator
   JUST_SEPARATOR='$@$'
   get_args 11 -- 22 '$@$' 33
   assert_array_values args 11 -- 22
-  [ "${get_args_args_used}" -eq 4 ]
+  [ "${get_args_args_used}" -eq "4" ]
 )
 end_test
 
@@ -779,7 +779,9 @@ begin_test "get_additional_args"
 end_test
 
 # Bash 3.2 handles unset declared variables different from modern bash
-[ "${BASH_VERSINFO[0]}" -lt 4 ] && skip_next_test
+if [ "${BASH_VERSINFO[0]}" -lt "4" ]; then
+  skip_next_test
+fi
 begin_required_fail_test "get_additional_args called without get_args"
 (
   setup_test
@@ -801,7 +803,7 @@ begin_test "safe_load"
   [ "${b}" = "sixteen" ]
   [ "${c}" = 'eval $((1+15));`touch file2`' ]
 
-  [ ! -f file2 ]
+  [ ! -f "file2" ]
 
   # Custom delimiter
   JUST_SAFE_LOAD_DELIMITER=:

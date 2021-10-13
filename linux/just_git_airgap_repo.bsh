@@ -1,10 +1,10 @@
 #!/usr/bin/env false bash
 
-if [[ $- != *i* ]]; then
+if [[ ${-} != *i* ]]; then
   source_once &> /dev/null && return 0
 fi
 
-if [ -z ${VSI_COMMON_DIR+set} ]; then
+if [ -z "${VSI_COMMON_DIR+set}" ]; then
   VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 fi
 
@@ -177,7 +177,7 @@ function log_unpushed_commits()
 {
   local remote_name="${1-}"
   local branches # actually, a commit-ish
-  if [ $# -gt 1 ]; then
+  if [ "${#}" -gt "1" ]; then
     branches=("${@:2}")
   else
     branches=("--branches" "--tags")
@@ -198,14 +198,14 @@ function _log_commits_helper()
     local ncommits="$(echo "${commits}" | strip_ansi_stream | \
         grep -Eo -e '^(\| )*\*( \|)* +commit' | \
         wc -l | awk '{print $1}')"
-    if [ "${ncommits}" -eq 0 ]; then
+    if [ "${ncommits}" -eq "0" ]; then
       # REVIEW echo "There are 0 unpushed commits"
       # RE Could use JUST_VERBOSE
       : # pass
-    elif [ "${ncommits}" -eq 1 ]; then
+    elif [ "${ncommits}" -eq "1" ]; then
       echo "There is ${ncommits} "${label}" commit:"
       echo
-    elif [ "${ncommits}" -gt 1 ]; then
+    elif [ "${ncommits}" -gt "1" ]; then
       echo "There are ${ncommits} "${label}" commits:"
       echo
     fi
@@ -243,8 +243,8 @@ function git_tracking_branch()
   # Although, unfortunately, it is same error code in both cases; the stderr
   # could be parsed to differentiate though. Also, unfortunately, in the case
   # the remote-tracking branch has been pruned, it still prints to stdout
-  remote_branch="$("${GIT}" rev-parse --abbrev-ref "${branch}"@{upstream} 2> /dev/null)" || remote_branch_rv=$?
-  if [ "${remote_branch_rv}" -eq 0 ]; then
+  remote_branch="$("${GIT}" rev-parse --abbrev-ref "${branch}"@{upstream} 2> /dev/null)" || remote_branch_rv="${?}"
+  if [ "${remote_branch_rv}" -eq "0" ]; then
     echo "${remote_branch}"
   fi
 }
@@ -268,7 +268,7 @@ function git_tracking_branch()
 function git_tracking_branches()
 {
   local remote_names
-  if [ $# -eq 0 ]; then
+  if [ "${#}" -eq "0" ]; then
     remote_names=($("${GIT}" remote))
   else
     remote_names="${@}"
@@ -357,7 +357,7 @@ function log_outgoing_commits()
     args+=("${tracking_branch}@{upstream}..${tracking_branch}")
   done
   local commits
-  if [ "${#args[@]}" -gt 0 ]; then
+  if [ "${#args[@]}" -gt "0" ]; then
     commits="$("${GIT}" log --decorate --graph --format=short --color=always "${args[@]}")"
   else
     commits=""
@@ -424,8 +424,8 @@ function convert_git_remote_http_to_git()
 
   local remote_git_url_rv=0
   local remote_git_url
-  # local foo="$(bar)" || rv=$? does not work as one line in bash 4.2 or older. Use two lines
-  remote_git_url="$(_http_to_git_protocol "${remote_url}")" || remote_git_url_rv=$?
+  # local foo="$(bar)" || rv="${?}" does not work as one line in bash 4.2 or older. Use two lines
+  remote_git_url="$(_http_to_git_protocol "${remote_url}")" || remote_git_url_rv="${?}"
   if [ "${remote_git_url_rv}" == "0" ]; then
     # NOTE since git v1.8, a remote (e.g., origin) can have multiple associated
     # pushurls (see .git/config:remote)
@@ -573,27 +573,29 @@ function git_project_root_dir()
 function git_project_git_dir()
 {
   # In a bare repository or a .git directory
-  if [ "$("${GIT}" rev-parse --is-inside-git-dir)" == "true" ]; then
-    local dir="$("${GIT}" rev-parse --git-dir)"
-    if [ "${dir}" == "." ]; then
-      echo "${PWD}"
-    else
-      echo "${dir}"
-    fi
-  # In a work tree
-  elif [ "$("${GIT}" rev-parse --is-inside-work-tree)" ]; then
-    local project_dir="$(git_project_root_dir)"
+  if [ "$("${GIT}" rev-parse --is-inside-work-tree)" = "true" ]; then
+    local project_dir
+    project_dir="$(git_project_root_dir)"
     pushd "${project_dir}" &> /dev/null
-      if [ -f .git ]; then
-        echo "$(real_path "$(cat .git | awk '{print $2}')")"
-      elif [ -d .git ]; then
+      if [ -f ".git" ]; then
+        echo "$(real_path "$(sed 's|^[^ ]* ||' .git)")"
+      elif [ -d ".git" ]; then
         echo "${PWD}/.git"
       else
         false # This should never happen
       fi
     popd &> /dev/null
-  else
-    return 1
+  # TODO: fix issue #391
+  else # [ "$("${GIT}" rev-parse --is-inside-git-dir)" = "true" ]; then
+    local dir
+    dir="$("${GIT}" rev-parse --git-dir)"
+    if [ "${dir}" == "." ]; then
+      echo "${PWD}"
+    else
+      echo "${dir}"
+    fi
+  # else
+  #   return 1
   fi
   #
   # In a bare repo
@@ -750,14 +752,14 @@ function git_submodule_displaypaths()
     # In git v1.8.3, git submodule must be run in the toplevel of the working
     # tree
     # git v1.8.3 does not support git -C
-    "${GIT}" submodule foreach '[ -n "${prefix+set}" ]' &> /dev/null || submodule_foreach_rv=$?
+    "${GIT}" submodule foreach '[ -n "${prefix+set}" ]' &> /dev/null || submodule_foreach_rv="${?}"
   popd &> /dev/null
 
   local OLD_IFS="${IFS}"
   IFS=$'\n'
   # At some point, prefix was deprecated and removed in favor of displaypath
   local submodule_paths
-  if [ "${submodule_foreach_rv}" -eq 0 ]; then
+  if [ "${submodule_foreach_rv}" -eq "0" ]; then
     pushd "${up_path}" &> /dev/null
       # In git v1.8.3, git submodule must be run in the toplevel of the working
       # tree
@@ -1074,9 +1076,7 @@ function create_repo_map()
   # from the root of the project repository. Fortunately, that is the case in
   # the Justfile.
   # Alternatively, use JUST_USER_CWD or :func:`git_project_root_dir`
-  #
-  # No quotes around subshell to create array (although IFS must be correct)
-  local repo_paths=("${repo_name}" $(git_submodule_displaypaths_recursive))
+  local repo_paths=("${repo_name}" $(git_submodule_displaypaths_recursive)) # noquotes
   IFS="${OLD_IFS}"
 
   local repo_path
@@ -1085,7 +1085,7 @@ function create_repo_map()
     # The respective url for each submodule (recursively)
     # NOTE Quotes around JUST_GIT_AIRGAP_MIRROR_URL aren't necessary here because
     # the entries will be quoted when printed to file
-    repo_urls+=('${JUST_GIT_AIRGAP_MIRROR_URL}'/$(basename "${repo_path}")'.git')
+    repo_urls+=('${JUST_GIT_AIRGAP_MIRROR_URL}/'"$(basename "${repo_path}")"'.git')
   done
   # Rename the project repo to '.'
   repo_paths[0]='.'
@@ -1125,7 +1125,7 @@ function create_repo_map()
     printf 'declare -A repos\n'
     for index in "${!repo_paths[@]}"; do
       # The %s in [] is implicitly quoted by bash
-      printf 'repos[%s]="%s"\n' "${repo_paths[$index]}" "${repo_urls[$index]}"
+      printf 'repos[%s]="%s"\n' "${repo_paths[index]}" "${repo_urls[index]}"
     done
   else
     printf 'repo_paths=(\n'
@@ -1385,12 +1385,12 @@ function git_submodule_sync()
   # (If in_displaypaths is provided, then the list of submodules will be
   # filtered; however, submodule_names cannot be empty because each
   # in_displaypath must match a path to a submodule)
-  if [ "${#submodule_names[@]}" -eq 0 ]; then
+  if [ "${#submodule_names[@]}" -eq "0" ]; then
     return
   fi
 
   # Filter the submodule_names by the provided in_displaypaths
-  if [ $# -gt 1 ]; then
+  if [ "${#}" -gt "1" ]; then
     IFS=$'\n'
     # Doesn't have trailing slashes
     local submodule_displaypaths=($(git_submodule_displaypaths))
@@ -1418,7 +1418,7 @@ function git_submodule_sync()
         echo "ERROR pathspec '${2}' did not match any file(s) known to git_submodule_sync (PWD: ${PWD})"
         return 1
       fi
-      filtered_sm_names+=("${submodule_names[$index]}")
+      filtered_sm_names+=("${submodule_names[index]}")
     done
     submodule_names=("${filtered_sm_names[@]}")
   fi
@@ -1452,9 +1452,9 @@ function _git_submodule_sync()
       # Based on https://github.com/git/git/blob/v2.16.0/git-submodule.sh#L1060
       # rewrite foo/bar as ../.. to find path from
       # submodule work tree to superproject work tree
-      local up_path="$(printf '%s\n' "$sm_path" | sed "s/[^/][^/]*/../g")" # more like up_path_of_path
+      local up_path="$(printf '%s\n' "${sm_path}" | sed "s/[^/][^/]*/../g")" # more like up_path_of_path
       # guarantee a trailing /
-      up_path=${up_path%/}/
+      up_path="${up_path%/}/"
       local remote_url="$("${GIT}" config remote."${remote_name}".url)"
       # path from submodule work tree to submodule origin repo
       sub_origin_url="$(submodule-helper-relative-url "${remote_url}" "${submodule_url}" "${up_path}")"
@@ -1579,9 +1579,9 @@ function _git_submodule_is_published_recursive()
 
 function relocate_git_defaultify()
 {
-  local arg=$1
+  local arg="${1}"
   shift 1
-  case $arg in
+  case ${arg} in
     # Create a mirror of a git repository (which is not the same thing as a
     # clone) and all of its submodules (for a specific branch). The mirror is
     # based on the URL of a git remote in this clone---not directly on this
@@ -1590,7 +1590,7 @@ function relocate_git_defaultify()
     # REVIEW When just supports it, rename 'git export-repo --guided'
     git_export-repo-guided) # Walk through how to export a mirror of the git \
                             # repository, including all submodules, to a tarball
-      if [ $# -eq 0 ]; then
+      if [ "${#}" -eq "0" ]; then
         echo "Creating a mirror of a git repository (which is not the same thing as a clone)"
         echo "and all of its submodules (for a specific branch). The mirror is based on the"
         echo "URL for a git remote in this clone---not directly on this clone itself."
@@ -1617,11 +1617,11 @@ function relocate_git_defaultify()
           -r remote_name: --remote-name remote_name: -p prep_dir: --prep-dir prep_dir: \
           -o output_dir: --output-dir output_dir: -- ${@+"${@}"}
       shift "${parsed_args}"
-      if [ $# -gt 0 ]; then
-        if [[ $1 = -* ]]; then
-          echo "Unknown flag: $1"
+      if [ "${#}" -gt "0" ]; then
+        if [[ ${1} = -* ]]; then
+          echo "Unknown flag: ${1}"
         else
-          echo "Positional arguments are not allowed: $1"
+          echo "Positional arguments are not allowed: ${1}"
         fi
         return 123
       fi
@@ -1658,7 +1658,7 @@ function relocate_git_defaultify()
       # NOTE if specifying a prep_dir, this isn't needed, but should probably
       # exist
       local valid_remote_names=($("${GIT}" remote))
-      if [ "${#valid_remote_names[@]}" -eq 0 ]; then
+      if [ "${#valid_remote_names[@]}" -eq "0" ]; then
         # Either the repo is misconfigured or initialized locally.
         # REVIEW In the latter case at least, we could mirror the repo directly
         # RE We won't worry about that use case now
@@ -1672,9 +1672,9 @@ function relocate_git_defaultify()
       if [ -z "${remote_name:+set}" ] && [ -z "${prep_dir:+set}" ]; then
         echo "Would you like to:"
         picker "Create a new mirror from a remote's URL" \
-               "Base the archive off an existing airgap mirror (i.e., a PREP_DIR)" || picked=$?
+               "Base the archive off an existing airgap mirror (i.e., a PREP_DIR)" || picked="${?}"
         echo
-        if [ "${picked}" -eq 1 ]; then
+        if [ "${picked}" -eq "1" ]; then
           local OLD_IFS="${IFS}"
           IFS=$'\n'
           remote_names=("${valid_remote_names[@]}")
@@ -1722,7 +1722,7 @@ function relocate_git_defaultify()
           # No quotes around subshell to create array (although IFS must be correct)
           local remote_urls=($("${GIT}" config --get-all remote."${remote_name}".url | awk '!a[$0]++'))
           IFS="${OLD_IFS}"
-          if [ "${#remote_urls[@]}" -eq 0 ]; then
+          if [ "${#remote_urls[@]}" -eq "0" ]; then
             # This shouldn't happen; if the repo has a named remote, it should
             # have an associated remote url
             echo "ERROR This repository is misconfigured: it has no urls for remote '${remote_name}'."
@@ -1740,7 +1740,7 @@ function relocate_git_defaultify()
           return 123
         fi
 
-        if [ "${#associated_remote_urls[@]}" -eq 0 ]; then
+        if [ "${#associated_remote_urls[@]}" -eq "0" ]; then
           # This shouldn't happen; if the repo has a named remote, it should
           # have an associated remote url
           # This actually should be impossible now because we ensure each remote
@@ -1748,17 +1748,17 @@ function relocate_git_defaultify()
           echo "ERROR This repository is misconfigured: it has no remote urls."
           echo "Please fix!"
           return 123
-        elif [ "${#associated_remote_urls[@]}" -eq 1 ]; then
+        elif [ "${#associated_remote_urls[@]}" -eq "1" ]; then
           remote_name="${associated_remote_names[0]}"
           remote_url="${associated_remote_urls[0]}"
           echo "Using remote: '${remote_name}' located at"
           echo "   ${remote_url}"
           echo
-        elif [ "${#associated_remote_urls[@]}" -gt 1 ]; then
+        elif [ "${#associated_remote_urls[@]}" -gt "1" ]; then
           local remote_strings=()
           local i
           for i in "${!associated_remote_urls[@]}"; do
-            remote_strings+=("$(printf "%s\t%s\n" "${associated_remote_names[$i]}" "${associated_remote_urls[$i]}")")
+            remote_strings+=("$(printf "%s\t%s\n" "${associated_remote_names[i]}" "${associated_remote_urls[i]}")")
           done
 
           local default_remote="$(printf "%s\t%s\n" origin "$("${GIT}" config remote.origin.url)")"
@@ -1766,7 +1766,7 @@ function relocate_git_defaultify()
 
           echo "Please choose a remote:"
           local picked
-          DEFAULT_RESPONSE="${default_index}" picker "${remote_strings[@]}" || picked=$?
+          DEFAULT_RESPONSE="${default_index}" picker "${remote_strings[@]}" || picked=${?}
           echo
           remote_name="${associated_remote_names[picked-1]}"
           remote_url="${associated_remote_urls[picked-1]}"
@@ -1798,7 +1798,7 @@ function relocate_git_defaultify()
 
       # Branch names cannot have spaces
       local valid_branches=($("${GIT}" for-each-ref --format='%(refname:short)' refs/heads))
-      if [ "${#valid_branches[@]}" -eq 0 ]; then
+      if [ "${#valid_branches[@]}" -eq "0" ]; then
         echo "ERROR This repository is misconfigured: it has no branches."
         echo "Please fix!"
         return 123
@@ -1810,7 +1810,7 @@ function relocate_git_defaultify()
         local branch
         # List local branches (branch names cannot have spaces)
         branches=("${valid_branches[@]}")
-        if [ "${#branches[@]}" -eq 1 ]; then
+        if [ "${#branches[@]}" -eq "1" ]; then
           branch="${branches[0]}"
           echo "Using the only branch in this repository: '${branch}'"
           echo
@@ -1820,7 +1820,7 @@ function relocate_git_defaultify()
 
           local picked
           echo "Please choose which branch you would like to base the submodules off:"
-          DEFAULT_RESPONSE="${default_index}" picker "${branches[@]}" || picked=$?
+          DEFAULT_RESPONSE="${default_index}" picker "${branches[@]}" || picked="${?}"
           echo
           branch="${branches[picked-1]}"
         fi
@@ -1844,10 +1844,10 @@ function relocate_git_defaultify()
         local sm_status
         # Calls git fetch; connecting to the URL is required when creating the
         # mirror, so this is ok
-        # local foo="$(bar)" || rv=$? does not work as one line in bash 4.2 or older. Use two lines
+        # local foo="$(bar)" || rv="${?}" does not work as one line in bash 4.2 or older. Use two lines
         sm_status="$(git_submodule_is_published_recursive "${remote_name}")" || \
-            sm_status_rv=$?
-        if [ "${sm_status_rv}" -ne 0 ]; then
+            sm_status_rv="${?}"
+        if [ "${sm_status_rv}" -ne "0" ]; then
           echo "${sm_status}"
           echo
         fi
@@ -1862,7 +1862,7 @@ function relocate_git_defaultify()
           echo "this repository and its submodules have been pushed to their respective"
           echo "remote servers."
           ask_question "Continue?" response n
-          if [ "$response" == "0" ]; then
+          if [ "${response}" == "0" ]; then
             return 123
           fi
         fi
@@ -1902,8 +1902,8 @@ function relocate_git_defaultify()
 
       local args=(${@+"${@}"})
       # If no arguments are specified, choose origin's (last) remote URL
-      if [ "${#args[@]}" -eq 0 ]; then
-        local remote_url=$("${GIT}" config --get remote.origin.url)
+      if [ "${#args[@]}" -eq "0" ]; then
+        local remote_url="$("${GIT}" config --get remote.origin.url)"
         args=("${remote_url}")
       fi
 
@@ -1932,7 +1932,7 @@ function relocate_git_defaultify()
       # Archive the mirrored repos
       archive_mirrors "${GIT_MIRROR_PREP_DIR}"
 
-      extra_args=$#
+      extra_args=${#}
       ;;
 
     # NOTE this is tightly coupled with git_export-repo

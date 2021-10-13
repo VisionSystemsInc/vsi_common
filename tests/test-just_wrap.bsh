@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-if [ -z ${VSI_COMMON_DIR+set} ]; then
+if [ -z "${VSI_COMMON_DIR+set}" ]; then
   VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 fi
 
@@ -18,7 +18,7 @@ function setup_just_test()
         : ${TEST_LOCAL2=0}
         : ${TEST_LOCAL3=0}
         TEST_VAR2=(11 22 33)' > project1.env
-  echo 'TEST_LOCAL2=${TEST_LOCAL}:3' > local_post.env
+  echo 'TEST_LOCAL2="${TEST_LOCAL}:3"' > local_post.env
   touch mywrap
   chmod 755 mywrap
 
@@ -42,10 +42,10 @@ function check_values()
 function test_wrap_call()
 (
   echo "#!/usr/bin/env bash
-        . '${VSI_COMMON_DIR}/linux/just_files/Just_wrap'"' ${@+"${@}"}' > "$1"
+        . '${VSI_COMMON_DIR}/linux/just_files/Just_wrap'"' ${@+"${@}"}' > "${1}"
 
   # Call and copy the variables
-  eval "$("$1" declare -p TEST_VAR1 TEST_VAR2 TEST_LOCAL TEST_LOCAL2 TEST_LOCAL3)"
+  eval "$("${1}" declare -p TEST_VAR1 TEST_VAR2 TEST_LOCAL TEST_LOCAL2 TEST_LOCAL3)"
   # Test values
   check_values
 )
@@ -90,18 +90,18 @@ begin_test "Test call and new shell modes"
   done
 
   # Test all in path
-  PATH="$PATH:$(pwd)" test_wrap_call mywrap
+  PATH="${PATH}:$(pwd)" test_wrap_call mywrap
   # Same test but using a new shell on stdin
-  PATH="$PATH:$(pwd)" mywrap <<< ls | grep mywrap > /dev/null
+  PATH="${PATH}:$(pwd)" mywrap <<< ls | grep mywrap > /dev/null
 
   # Same test, unwrapped
-  PATH="$PATH:${VSI_COMMON_DIR}/linux/:${VSI_COMMON_DIR}/linux/just_files" Just_wrap <<< ls | grep mywrap > /dev/null
+  PATH="${PATH}:${VSI_COMMON_DIR}/linux/:${VSI_COMMON_DIR}/linux/just_files" Just_wrap <<< ls | grep mywrap > /dev/null
 
   # Same group of tests, in another directory
   cd other_dir
 
   test_wrap_call ../mywrap
-  test_wrap_call ${TESTDIR}/mywrap
+  test_wrap_call "${TESTDIR}/mywrap"
 
   ../mywrap ls .. | grep mywrap > /dev/null
   "${TESTDIR}/mywrap" ls "${TESTDIR}"| grep mywrap > /dev/null
@@ -111,8 +111,8 @@ begin_test "Test call and new shell modes"
   "${VSI_COMMON_DIR}/linux/just_files/Just_wrap" ls .. | grep mywrap > /dev/null
   "${VSI_COMMON_DIR}/linux/just_files/Just_wrap" <<< "ls .." | grep mywrap > /dev/null
 
-  PATH="$PATH:$(cd ..; pwd)" test_wrap_call mywrap
-  PATH="$PATH:$(cd ..; pwd)" mywrap <<< 'ls ..' | grep mywrap > /dev/null
+  PATH="${PATH}:$(cd ..; pwd)" test_wrap_call mywrap
+  PATH="${PATH}:$(cd ..; pwd)" mywrap <<< 'ls ..' | grep mywrap > /dev/null
 )
 end_test
 
@@ -128,7 +128,7 @@ begin_test "Wrap test exec mode"
 
   # Run both echo and wrap in the same subshell, and store in array
   #x=($(echo $BASHPID; ./mywrap bash -c 'echo $PPID')) # Not macOS compatible
-  x=("$(bash -c 'echo $PPID')" "$(./mywrap bash -c 'echo $PPID')")
+  x=("$(bash -c 'echo "${PPID}"')" "$(./mywrap bash -c 'echo "${PPID}"')")
 
   # Verify the parent and the subshell are the same pid
   [ "${x[0]}" == "${x[1]}" ]
@@ -142,7 +142,7 @@ begin_test "Unwrapped test exec mode"
   setup_test
 
   #y=($(echo $BASHPID; "${VSI_COMMON_DIR}/linux/just_files/Just_wrap" /dev/null bash -c 'echo $PPID'))
-  y=("$(bash -c 'echo $PPID')" "$("${VSI_COMMON_DIR}/linux/just_files/Just_wrap" bash -c 'echo $PPID')")
+  y=("$(bash -c 'echo "${PPID}"')" "$("${VSI_COMMON_DIR}/linux/just_files/Just_wrap" bash -c 'echo "${PPID}"')")
   [ "${y[0]}" == "${y[1]}" ]
 )
 end_test
@@ -218,7 +218,7 @@ end_test
 
 if ! command -v screen >& /dev/null; then
   skip_next_test
-elif [[ "${OSTYPE-}" = darwin* ]] && [ "$(sw_vers -buildVersion)" = "Darling" ]; then
+elif [[ ${OSTYPE-} = darwin* ]] && [ "$(sw_vers -buildVersion)" = "Darling" ]; then
   # Screen doesn't work in darling
   skip_next_test
 fi
@@ -234,11 +234,19 @@ begin_test "Interactive just_wrap"
   chmod 755 mywrap
 
   session="${TRASHDIR////}"
-  screen -c /dev/null -dmS "${session}"
-
-  # Macos compatibility, needs a literal newline
-  nl=$'\n'
-  screen -S "${session}" -p 0 -X stuff "\"${VSI_COMMON_DIR}/linux/just_files/Just_wrap\"${nl}declare -p TEST_LOCAL2 TEST_VAR2 > \"${TESTDIR}/output\"${nl}touch \"${TESTDIR}/sync\"${nl}"
+  # See test-bash_utils.bsh for why we use screen this way
+  function start_wrap()
+  {
+    "${VSI_COMMON_DIR}/linux/just_files/Just_wrap"
+  }
+  # Just wrap unexports functions (https://git.io/JKOZC), have to use files
+  echo 'declare -p TEST_LOCAL2 TEST_VAR2 > "${TESTDIR}/output"' > "${TESTDIR}/run_test"
+  echo 'touch "${TESTDIR}/sync"' >> "${TESTDIR}/run_test"
+  export VSI_COMMON_DIR TESTDIR
+  export -f start_wrap
+  screen -c /dev/null -dmS "${session}" -s "$(command -v bash)"
+  screen -S "${session}" -p 0 -X stuff $'start_wrap\n'
+  screen -S "${session}" -p 0 -X stuff $'source run_test\n'
 
   # Wait for five second for file to be created, on windows, the overhead for a
   # a loop like this is 23 seconds, good enough
@@ -248,7 +256,10 @@ begin_test "Interactive just_wrap"
     fi
     sleep 0.01
   done
-  screen -S "${session}" -X quit
+
+  if [ "${TESTLIB_KEEP_TEMP_DIRS-}" != "1" ]; then
+    screen -S "${session}" -X quit
+  fi
 
   source "${TESTDIR}/output"
   if [ "${BASH_VERSINFO[0]}" -ge "4" ]; then
@@ -262,5 +273,7 @@ end_test
 function teardown()
 {
   # cleanup in case test fails
-  command -v screen >& /dev/null && screen -S "${TRASHDIR////}" -X quit >& /dev/null || :
+  if [ "${TESTLIB_KEEP_TEMP_DIRS-}" != "1" ]; then
+    command -v screen >& /dev/null && screen -S "${TRASHDIR////}" -X quit >& /dev/null || :
+  fi
 }
