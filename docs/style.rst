@@ -48,38 +48,39 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
 
 * Always quote variables and complex strings
 
-  There are many conditions when you need to use quotes, and very few when you need not to, and many when quotes seem optional. Always using quotes vastly reduces the chance of errors from unexpected (and erroneous) input and simplifies remembering when you need and don't need quotes
+  There are many conditions when you need to use quotes, very few when you need to not, and many when quotes seem optional. Always using quotes (aside from the few exceptions mentioned below) vastly reduces the chance of errors from unexpected (and erroneous) input and simplifies remembering when you do and don't need quotes
 
   .. code-block:: bash
 
      bvar=${avar}   # Wrong style. Always add quotes
      bvar="${avar}" # Right
-     cvar=foo bar   # Wrong style and syntax. This is a complex string, and requires quotes/
-                    # This actually executes a command called bar. Instead, make it clear
-     cvar="foo" bar # Right
-     cvar="foo bar" # Right
-     echo ${avar}   # Wrong style. Whitespace is not replicated the same way without quotes
-     echo "${avar}"
+     cvar=foo bar   # Wrong style and syntax. This is a complex string, and requires quotes
+                    # This actually executes a command called bar. Instead, make it clear:
+     cvar="foo" bar # Right if you want to execute a command called bar
+     cvar="foo bar" # Right if bar is part of the string
+     echo ${avar}   # Wrong style. Variables may contain whitespace that would be messed up
+     echo "${avar}" # Right
 
      # There are a few reason to not quote a variable. Be sure to add a "# noquotes"
      # comment so code reviewers knows these are intended:
 
      # One is an empty variable that should not be treated as an empty string
-     # DRYRUN/optional_flag could be "echo"/"-stuff" or empty string
+     # E.g., DRYRUN could be "echo" or empty string
      ${DRYRUN} some command # noquotes
+     # E.g., optional_flag could be "-stuff" or empty string
      some_command ${optional_flag} foo bar # noquotes
      # The preferred way is to use arrays, if it is not overly cumbersome.
      ${DRYRUN[@]+"${DRYRUN[@]}"} some command
      some_command ${optional_flag[@]+"${optional_flag[@]}"} foo bar
-     # Since arrays cannot be exported, this is often not viable.
+     # Although because arrays cannot be exported, this is often not viable.
 
-     # Another reason quotes must not be used, is when splitting up a string into an array
+     # Another reason quotes must not be used is when splitting up a string into an array
      foo="aa:bb:cc:dd"
      IFS=":"
      # This is actively splitting apart a string, and must not be in quotes
      bar=(${foo}) # noquotes
 
-  Quotes should actually not be used in ``[[]]`` expressions. There are a few corner cases the will be treated literally. ``# noquotes`` is not needed for ``[[]]`` expressions.
+  Quotes should not be used in ``[[]]`` expressions---there are a few corner cases where the quotes will be treated literally. ``# noquotes`` is not needed for ``[[]]`` expressions.
 
   .. code-block:: bash
 
@@ -113,15 +114,16 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
 
 * Always use ${var} vs $var
 
-  The reason for this policy is consistency and to clarify that certain features in bash only work in the ``{}``, e.g. variable substitution. It's very easy for someone to mistake ``${foo+set}`` for ``$foo+set`` and not ``${foo}+set``.
+  The reason for this policy is consistency and to clarify that certain features in bash only work in the ``{}``, e.g. variable substitution. It's very easy for someone to mistake ``$foo+set`` for ``${foo}+set`` and not ``${foo+set}``.
 
   .. code-block:: bash
 
      echo "$PATH"                   # Wrong style
      echo "${PATH}"                 # Right
      echo "${$}"                    # Right
-     echo "${-} ${?} ${*-}"         # * and @ need some extra care, so that
-     run command "${_}" ${@+"${@}"} # set -eu doesn't error on empty in bash 3.2
+     # Built-ins * and @ need some extra care so that set -eu doesn't error on empty in bash 3.2
+     echo "${-} ${?} ${*-}"         # Right
+     run command "${_}" ${@+"${@}"} # Right
 
 * Shorthand for arithmetic expressions
 
@@ -130,17 +132,17 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
      x=(11 22 33 44)
      y=2
      echo "${x[y]} is perfectly acceptable"
-     echo "${x[$y]} is violated the {} policy, even though it is valid bash"
+     echo "${x[$y]} violates the {} policy, even though it is valid bash"
      echo "${x[${y}]} is ok too, but the shorthand looks better"
      echo "$((x[y] - y)) is also perfectly acceptable"
      echo "${x:1:y} is also perfectly acceptable"
      echo "${x:1:y+1} is also perfectly acceptable"
 
      # Do no add quotes to inner expressions
-     echo "${x["y"]} ${x["${y}"]}"
+     echo "${x["y"]} ${x["${y}"]}" # Wrong style
 
      # Associative arrays are not bash 3.2 compatible, and are not
-     # arithmetic expressions in the []
+     # arithmetic expressions in []
      declare -A z
      y=2
      z[y]="This is index y not 2"
@@ -168,7 +170,7 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
     avar="foo*bar"
     pattern="foo*b"
     [[ ${avar} = "${pattern}"* ]]  # If you want the pattern to refer to a literal asterisk, you need these quotes.
-    [[ foo-bar != ${pattern}* ]]   # This would fail, because the * in the pattern would be a wild card, not an *
+    [[ foo-bar != ${pattern}* ]]   # This would fail because the * in the pattern would be a wild card, not an *
 
     [[ ${avar} =~ foobar.+ ]]      # Right. Regex's are not possible with []
 
