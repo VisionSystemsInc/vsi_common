@@ -573,16 +573,9 @@ function git_project_root_dir()
 function git_project_git_dir()
 {
   # In a bare repository or a .git directory
-  if [ "$("${GIT}" rev-parse --is-inside-git-dir)" = "true" ]; then
-    local dir="$("${GIT}" rev-parse --git-dir)"
-    if [ "${dir}" == "." ]; then
-      echo "${PWD}"
-    else
-      echo "${dir}"
-    fi
-  # In a work tree
-  elif [ "$("${GIT}" rev-parse --is-inside-work-tree)" = "true" ]; then
-    local project_dir="$(git_project_root_dir)"
+  if [ "$("${GIT}" rev-parse --is-inside-work-tree)" = "true" ]; then
+    local project_dir
+    project_dir="$(git_project_root_dir)"
     pushd "${project_dir}" &> /dev/null
       if [ -f ".git" ]; then
         echo "$(real_path "$(sed 's|^[^ ]* ||' .git)")"
@@ -592,8 +585,17 @@ function git_project_git_dir()
         false # This should never happen
       fi
     popd &> /dev/null
-  else
-    return 1
+  # TODO: fix issue #391
+  else # [ "$("${GIT}" rev-parse --is-inside-git-dir)" = "true" ]; then
+    local dir
+    dir="$("${GIT}" rev-parse --git-dir)"
+    if [ "${dir}" == "." ]; then
+      echo "${PWD}"
+    else
+      echo "${dir}"
+    fi
+  # else
+  #   return 1
   fi
   #
   # In a bare repo
