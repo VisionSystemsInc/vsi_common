@@ -63,36 +63,56 @@ begin_test "RC File insertion"
   setup_test
 
   session="$(sanitize_session_name "${TRASHDIR}")"
-  export TESTDIR
+
+  # Setup functions to be used by screen
+  # This doesn't work as desires, as the \ escaping it interpreted differntly
+  # by different versions of screen (looking at you, mac)
+  # stdin='set -xv; touch "\${TESTDIR}/bar"'"${nl}"
+  # cmd="$(quotemire "source '${VSI_COMMON_DIR}/linux/bash_utils.bsh'; run_bash_with_rc_file" \
+  #                    'set -xv; touch "\${TESTDIR}/foo"')${nl}"
+  function sync_file()
+  {
+    set -xv
+    if [ "${FOO}" = "bar16" ]; then
+      touch "${TESTDIR}/sync"
+    fi
+  }
+  function run_test()
+  {
+    source "${VSI_COMMON_DIR}/linux/bash_utils.bsh"
+    run_bash_with_rc_file "set -xv; export FOO=bar16; touch \"${TESTDIR}/foo\""
+  }
+  # export so they are inherited by a new screen
+  export TESTDIR VSI_COMMON_DIR
+  export -f sync_file run_test
   screen -c /dev/null -dmS "${session}" bash
 
   # Macos compatibility, needs a literal newline
-  nl=$'\n'
-
-  stdin='set -xv; touch "\${TESTDIR}/bar"'"${nl}"
-
-  # Got too complicated, use quotemire
-  cmd="$(quotemire "source '${VSI_COMMON_DIR}/linux/bash_utils.bsh'; run_bash_with_rc_file" \
-                     'set -xv; touch "\${TESTDIR}/foo"')${nl}"
-
-  screen -S "${session}" -p 0 -X stuff "${cmd}"
-  screen -S "${session}" -p 0 -X stuff "${stdin}"
+  # Start new bash session
+  screen -S "${session}" -p 0 -X stuff $'run_test\n'
+  # Sync from within new bash session
+  screen -S "${session}" -p 0 -X stuff $'sync_file\n'
 
   for ((i=0; i < 500; i++ )); do
-    if [ -e "${TESTDIR}/bar" ]; then
+    if [ -e "${TESTDIR}/sync" ]; then
       break
     fi
     sleep 0.01
   done
-  screen -S "${session}" -X quit
+
+  if [ "${TESTLIB_KEEP_TEMP_DIRS-}" != "1" ]; then
+    screen -S "${session}" -X quit
+  fi
 
   [ -f "${TESTDIR}/foo" ]
-  [ -f "${TESTDIR}/bar" ]
+  [ -f "${TESTDIR}/sync" ]
 )
 end_test
 
 function teardown()
 {
-  # cleanup in case test fails
-  command -v screen >& /dev/null && screen -S "$(sanitize_session_name "${TRASHDIR}")" -X quit >& /dev/null || :
+  if [ "${TESTLIB_KEEP_TEMP_DIRS-}" != "1" ]; then
+    # cleanup in case test fails
+    command -v screen >& /dev/null && screen -S "$(sanitize_session_name "${TRASHDIR}")" -X quit >& /dev/null || :
+  fi
 }
