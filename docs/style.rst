@@ -110,7 +110,7 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
      echo "${foo/"  "/two spaces}" # Wrong style
      echo "${foo/  /two spaces}"   # Right
 
-  :var:`bash_behavior_pattern_substitution_slash_escape_with_single_quote` is a special case that still needs special care, due to differences in bash behavior between versions.
+  :bash:func:`compat.bsh bash_behavior_pattern_substitution_slash_escape_with_single_quote` is a special case that still needs special care, due to differences in bash behavior between versions.
 
 * Always use ${var} vs $var
 
