@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+
+if [[ ${-} != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
+if [ -z "${VSI_COMMON_DIR+set}" ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
+
+source "${VSI_COMMON_DIR}/linux/preisin"
+source "${VSI_COMMON_DIR}/linux/string_tools.bsh"
+
+#*# linux/portable_patch
+
+#**
+# ==============
+# Poratble Patch
+# ==============
+#
+# .. default-domain:: bash
+#
+# .. file:: portable_patch
+#
+# Patches an executable (or library) to be portable enough to run on another Linux (with equal or newer glic). This is accomplished by copying the executable and all dependent dynamic libraries to a destination directory, renaming all libraries using their hash, and patching the relevant linking information.
+#
+# :Arguments: * ``$1`` - The executable to be patched
+#             * ``$2`` - The directory to copy the executable and dynamic dependencies
+#             * [``$3``] - The rpath. Defaults to the absolute path of ``$2``
+#
+# .. note::
+#   Requires ``patchelf`` to be installed
+#**
+
+#**
+# .. var:: glibc_common_libraries
+#
+# List of libraries that do not need to be patched, based off of the manylinux lists
+#**
+glibc_common_libraries=(libgcc_s.so.1
+                        libstdc++.so.6
+                        libm.so.6
+                        libdl.so.2
+                        librt.so.1
+                        libc.so.6
+                        libnsl.so.1
+                        libutil.so.1
+                        libpthread.so.0
+                        libresolv.so.2
+                        libX11.so.6
+                        libXext.so.6
+                        libXrender.so.1
+                        libICE.so.6
+                        libSM.so.6
+                        libGL.so.1
+                        libgobject-2.0.so.0
+                        libgthread-2.0.so.0
+                        libglib-2.0.so.0)
+
+# Not 100% sure I should add these two: https://git.io/JikTN
+glibc_common_libraries+=(libexpat.so.1
+                         libz.so.1)
+
+# libcrypt.so.1 was retrospectively removed from the whitelist after Fedora 30 was released with libcrypt.so.2 instead.
+# same for libncursesw and libpanelw
+
+function _patch_single_file()
+{
+  local i
+  for i in "${!libraries[@]}"; do
+    # Patch one at a time, multiple at a time  _still_ corrupts the file
+    # https://github.com/NixOS/patchelf/issues/158
+    patchelf --replace-needed "${library_bases[i]}" "${new_names[i]}" "${1}"
+  done
+}
+
+function patch_file()
+{
+  local program
+  local destination
+
+  program="${1}"
+  destination="${2}"
+
+  mkdir -p "${destination}"
+
+  local ldd_data
+  ldd_data="$(ldd "${program}")"
+  local libraries
+  # libraries=($(patchelf --print-needed "${program}")) Not recursive, nor does it give the full path
+  libraries=($(sed -nE 's|^\s*(\S+) => (.*) \(0x[0-9a-f]*\)|\2|p' <<< "${ldd_data}"))
+  # "The linux-vdso and ld-linux shared dependencies are special;" and do not have "=>"
+
+  local library_base
+  local i
+
+  for i in "${!libraries[@]}"; do
+    library_base="${libraries[i]##*/}"
+    if preisin "${library_base}" ${glibc_common_libraries[@]+"${glibc_common_libraries[@]}"}; then
+      unset libraries[i]
+    fi
+  done
+  # Remove holes in the array
+  libraries=(${libraries[@]+"${libraries[@]}"})
+  local library_bases=()
+  local new_names=()
+  local hash
+  for library in ${libraries[@]+"${libraries[@]}"}; do
+    library_base="${library##*/}"
+    hash="$(find_any_hash_func "${library}")"
+    if [[ ${library_base} = *.* ]]; then
+      new_names+=("${library_base%%.*}-${hash::8}.${library_base#*.}")
+    else
+      new_names+=("${library_base}-${hash::8}")
+    fi
+    library_bases+=("${library_base}")
+  done
+
+  cp "${program}" "${destination}"
+  program="${destination}/$(basename "${program}")"
+  patchelf --set-rpath "${3-$(real_path "${destination}")}" "${program}"
+
+  for i in "${!libraries[@]}"; do
+    cp "${libraries[i]}" "${destination}/${new_names[i]}"
+    _patch_single_file "${destination}/${new_names[i]}"
+    patchelf --set-soname "${new_names[i]}" "${destination}/${new_names[i]}"
+  done
+
+  _patch_single_file "${program}"
+}
+
+if [ "${BASH_SOURCE[0]}" = "${0}" ] || [ "$(basename "${BASH_SOURCE[0]}")" = "${0}" ]; then
+  set -eu
+  patch_file ${@+"${@}"}
+fi
