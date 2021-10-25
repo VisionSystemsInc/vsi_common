@@ -1100,18 +1100,18 @@ function write_dockerfile()
             ' >> "${1}"
   fi
 
-  uwecho '# Install your runtime dependencies here
-          RUN apt-get update; \
-              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-                #T# Example of a package
-                #T# qbs-examples \' >> "${1}"
+  uwecho   '# Install your runtime dependencies here
+            RUN apt-get update; \
+                DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                  #T# Example of a package
+                  #T# qbs-examples \' >> "${1}"
 
   if [ "${USE_PIPENV}" != "1" ]; then
-    echo '      tzdata \' >> "${1}"
+    echo   '      tzdata \' >> "${1}"
   fi
 
-  uwecho '      ; \
-              rm -rf /var/lib/apt/lists/*
+  uwecho   '      ; \
+                rm -rf /var/lib/apt/lists/*
 
             #T# Another typical example of installing a package, using it, and then removing
             #T# it by the end of the RUN command to minimize the size of the docker image
@@ -1130,12 +1130,17 @@ function write_dockerfile()
             ' >> "${1}"
 
   if [ "${USE_PIPENV}" = "1" ]; then
-    uwecho 'COPY --from=pipenv_cache /venv /venv' >> "${1}"
+    echo   'COPY --from=pipenv_cache /venv /venv' >> "${1}"
+  fi
+  echo     'COPY --from=vsi /vsi /vsi' >> "${1}"
+
+  if [ "${USE_PIPENV}" = "1" ]; then
+    echo   'ADD ["'"$(docker_add_quote_escape "${PROJECT_NAME}.env")"'", "Pipfile", "Pipfile.lock", "/src/"]' >> "${1}"
+  else
+    echo   'ADD ["'"$(docker_add_quote_escape "${PROJECT_NAME}.env")"'", "/src/"]' >> "${1}"
   fi
 
-  uwecho   'COPY --from=vsi /vsi /vsi
-            ADD ["'"$(docker_add_quote_escape "${PROJECT_NAME}.env")"'", "Pipfile", "Pipfile.lock", "/src/"]
-            ADD ["'"$(docker_add_quote_escape docker/"${APP_NAME}.Justfile")"'", "/src/docker/"]
+  uwecho   'ADD ["'"$(docker_add_quote_escape docker/"${APP_NAME}.Justfile")"'", "/src/docker/"]
 
             ENV JUSTFILE="/src/docker/'"$(docker_env_quote_escape "${APP_NAME}.Justfile")"'" \
                 JUST_SETTINGS="/src/'"$(docker_env_quote_escape "${PROJECT_NAME}.env")"'"
@@ -1878,7 +1883,7 @@ function new_just()
   done
 
   echo ""
-  ask_question "Do you want these git commands to be executed for you now?" SETUP_GIT n
+  ask_question "Do you want these git commands to be executed for you now?" SETUP_GIT y
 
   if [ "${SETUP_GIT}" = "1" ]; then
     for cmd in "${cmds[@]}"; do
