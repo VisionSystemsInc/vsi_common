@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+
+if [ -z "${VSI_COMMON_DIR+set}" ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
+
+source "${VSI_COMMON_DIR}/tests/testlib.bsh"
+source "${TESTLIB_DIR}/test_utils.bsh"
+
+common_reisin_test()
+{
+  reisin 1 1
+  reisin 1 010
+  reisin 1 10
+  reisin 1 01
+  not reisin 1
+  reisin 1 11 22 33
+  not reisin 11 212 313 414 515 61 17
+  reisin 1 020 030 040 050 010
+  reisin 1 020 030 010 040 050
+  reisin 1 00 $'\n1\n' 00
+  not reisin $'\n22' 00 $'1\r22\n' $'1\r 22\n' $'1\t22\n' 22 00
+  reisin $'\n11' 00 $'00\n1100' 00
+  reisin $'\xE2\x98\xA0' 00 $'00\xE2\x98\xA000' 00
+  reisin 11 00 $'\xE2\x98\xA011\xE2\x98\xA0' 00
+
+  reisin '[1-3]' 00 22 44
+  reisin '[1-3].*' 00 22 44
+  reisin '^[1-3]$' 00 2 44
+  not reisin '^[1-3]$' 00 526 44
+}
+
+begin_test "reisin function"
+(
+  setup_test
+  source "${VSI_COMMON_DIR}/linux/reisin"
+
+  [ "$(type -t reisin)" = "function" ]
+
+  common_reisin_test
+)
+end_test
+
+begin_test "reisin CLI"
+(
+  setup_test
+
+  [ "$(type -t reisin)" = "file" ]
+
+  common_reisin_test
+)
+end_test

@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+
+if [ -z "${VSI_COMMON_DIR+set}" ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
+
+source "${VSI_COMMON_DIR}/tests/testlib.bsh"
+source "${TESTLIB_DIR}/test_utils.bsh"
+source "${VSI_COMMON_DIR}/linux/real_path"
+source "${VSI_COMMON_DIR}/linux/portable_patch"
+
+begin_test "Test patch file"
+(
+  setup_test
+
+  function cp()
+  {
+    echo "cp ${*}"
+  }
+
+  function ldd()
+  {
+    echo $'\tlinux-vdso.so.1 (0x00007ffd5b138000)'
+    echo $'\tlibkrb5.so.3 => ../lib/libkrb5.so.3 (0x00007fcdda3ab000)'
+    echo $'\tlibk5crypto.so.3 => ../lib/libk5crypto.so.3 (0x00007fcdda167000)'
+    echo $'\tlibcom_err.so.3 => ../lib/libcom_err.so.3 (0x00007fcdd9f63000)'
+    echo $'\tlibkrb5support.so.0 => ../lib/libkrb5support.so.0 (0x00007fcdd9d54000)'
+    echo $'\tlibkeyutils.so.1 => /lib64/libkeyutils.so.1 (0x00007fcdd9d36000)'
+    echo $'\tlibresolv.so.2 => /lib64/libresolv.so.2 (0x00007fcdd9d1c000)'
+    echo $'\tlibdl.so.2 => /lib64/libdl.so.2 (0x00007fcdd9d13000)'
+    echo $'\tlibc.so.6 => /lib64/libc.so.6 (0x00007fcdd9b48000)'
+    echo $'\t/lib64/ld-linux-x86-64.so.2 (0x00007fcdda6a7000)'
+  }
+
+  function patchelf()
+  {
+    echo "pe ${*}"
+  }
+
+  function find_any_hash_func()
+  {
+    echo "12345678"
+  }
+
+  not [ -e "${TESTDIR}/foo" ]
+  result="$(patch_file klist "${TESTDIR}/foo")"
+  [ -e "${TESTDIR}/foo" ]
+
+  # Generate what the answer should look like
+  libs=(libkrb5.so.3 libk5crypto.so.3 libcom_err.so.3 libkrb5support.so.0 libkeyutils.so.1)
+  ans=("cp klist ${TESTDIR}/foo")
+  ans+=("pe --set-rpath $(real_path "${TESTDIR}/foo") ${TESTDIR}/foo/klist")
+  for libi in "${libs[@]}"; do
+    libi_new_name="${libi%%.*}-12345678.${libi#*.}"
+    if [ "${libi}" = "libkeyutils.so.1" ]; then
+      ans+=("cp /lib64/${libi} ${TESTDIR}/foo/${libi_new_name}")
+    else
+      ans+=("cp ../lib/${libi} ${TESTDIR}/foo/${libi_new_name}")
+    fi
+    for libj in "${libs[@]}"; do
+      ans+=("pe --replace-needed ${libj} ${libj%%.*}-12345678.${libj#*.} ${TESTDIR}/foo/${libi_new_name}")
+    done
+    ans+=("pe --set-soname ${libi_new_name} ${TESTDIR}/foo/${libi_new_name}")
+  done
+  for libj in "${libs[@]}"; do
+    ans+=("pe --replace-needed ${libj} ${libj%%.*}-12345678.${libj#*.} ${TESTDIR}/foo/klist")
+  done
+
+  IFS=$'\n'
+  assert_str_eq "${result}" "${ans[*]}"
+)
+end_test
