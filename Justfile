@@ -287,11 +287,11 @@ function caseify()
       docker_cp_image "${VSI_COMMON_DOCKER_REPO}:python3_test" "/venv/Pipfile3.lock" "${VSI_COMMON_DIR}/docker/tests/Pipfile3.lock"
       ;;
     run_wine) # Start a wine bash window
-      Docker-compose run -e USER_ID="$(id -u)" wine ${@+"${@}"} || :
+      Docker-compose run -e USER_ID="${VSI_COMMON_UID}" wine ${@+"${@}"} || :
       extra_args=${#}
       ;;
     run_wine-gui) # Start a wine bash window in gui mode
-      Docker-compose run -e USER_ID="$(id -u)" wine_gui ${@+"${@}"}&
+      Docker-compose run -e USER_ID="${VSI_COMMON_UID}" wine_gui ${@+"${@}"}&
       extra_args=${#}
       ;;
     test_wine) # Run unit tests using wine
