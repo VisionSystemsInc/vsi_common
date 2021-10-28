@@ -94,12 +94,10 @@ Most vsi_common plugins have docker images to support them. This requires a few 
        export EXAMPLE_COPY_VALUE="${!EXAMPLE_COPY_VALUE:-${!id_project_cwd}}"
 
        # These are part of the "plugin_environment" section
-       local tmp="${JUST_PROJECT_PREFIX}_UID"
-       local VSI_COMMON_UID="${!tmp-1000}"
-       export VSI_COMMON_UID
-       tmp="${JUST_PROJECT_PREFIX}_GIDS"
-       local VSI_COMMON_GIDS="${!tmp-1000}"
-       export VSI_COMMON_GIDS
+       local UID_CONTAINER="${JUST_PROJECT_PREFIX}_UID"
+       export UID_CONTAINER="${!UID_CONTAINER-1000}"
+       local GIDS_CONTAINER="${JUST_PROJECT_PREFIX}_GIDS"
+       export GIDS_CONTAINER="${!GIDS_CONTAINER-1000}"
        local JUST_SETTINGS="${JUST_PATH_ESC}/src/$(basename "${JUST_SETTINGS}")"
        export JUST_SETTINGS
 
