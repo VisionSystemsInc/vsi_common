@@ -642,41 +642,18 @@
 </tr>
 </tbody>
 </table>
-<p>Compiles GDAL v3, including PROJ v6, ECW J2K 5.5, OPENJPEG 2.3</p>
+<p>Compiles GDAL v3, including OPENJPEG 2.4, ECW J2K 5.5, libtiff4.3, libgeotiff 1.7, PROJ v8</p>
 <p class="rubric">Example</p>
-<div class="highlight-Dockerfile notranslate"><div class="highlight"><pre><span></span><span class="k">FROM</span> <span class="s">python:3.6.9-slim-jessie</span> <span class="k">as</span> <span class="s">python</span>
-<span class="k">FROM</span> <span class="s">vsiri/recipe:gdal</span> <span class="k">as</span> <span class="s">gdal</span>
-<span class="k">FROM</span> <span class="s">ubuntu:16.04</span>
-
-<span class="c"># set shell to bash</span>
-<span class="k">SHELL</span> <span class="p">[</span><span class="s2">&quot;/usr/bin/env&quot;</span><span class="p">,</span> <span class="s2">&quot;/bin/bash&quot;</span><span class="p">,</span> <span class="s2">&quot;-euxvc&quot;</span><span class="p">]</span>
-
-<span class="c"># install python &amp; gdal</span>
-<span class="k">COPY</span> --from<span class="o">=</span>python /usr/local /usr/local/
+<div class="highlight-Dockerfile notranslate"><div class="highlight"><pre><span></span><span class="k">FROM</span> <span class="s">vsiri/recipe:gdal</span> <span class="k">as</span> <span class="s">gdal</span>
+<span class="k">FROM</span> <span class="s">python:3.8</span>
 <span class="k">COPY</span> --from<span class="o">=</span>gdal /usr/local /usr/local
+
+<span class="c"># numpy must be installed before GDAL python bindings</span>
+<span class="k">RUN</span> pip install numpy<span class="p">;</span> <span class="se">\</span>
+    pip install <span class="nv">GDAL</span><span class="o">==</span><span class="k">$(</span>cat /usr/local/gdal_version<span class="k">)</span><span class="p">;</span>
 
 <span class="c"># Only needs to be run once for all recipes</span>
 <span class="k">RUN</span> <span class="k">for</span> patch <span class="k">in</span> /usr/local/share/just/container_build_patch/*<span class="p">;</span> <span class="k">do</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">patch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">;</span> <span class="k">done</span>
-
-<span class="c"># additional dependencies</span>
-<span class="k">RUN</span> apt-get update -y<span class="p">;</span> <span class="se">\</span>
-   <span class="nv">DEBIAN_FRONTEND</span><span class="o">=</span>noninteractive apt-get install -y  --no-install-recommends <span class="se">\</span>
-      expat libffi6 libssl1.0.0 libtiff5 sqlite3 <span class="p">;</span> <span class="se">\</span>
-   rm -rf /var/lib/apt/lists/* <span class="p">;</span>
-
-<span class="c"># install numpy (before pypi GDAL bindings)</span>
-<span class="k">RUN</span> pip3 install numpy <span class="p">;</span>
-
-<span class="c"># pypi GDAL bindings</span>
-<span class="k">RUN</span> <span class="nb">export</span> <span class="nv">BUILD_DEPS</span><span class="o">=</span><span class="s2">&quot;g++&quot;</span> <span class="p">;</span> <span class="se">\</span>
-   apt-get update -y <span class="p">;</span> <span class="se">\</span>
-   <span class="nv">DEBIAN_FRONTEND</span><span class="o">=</span>noninteractive apt-get install -y  --no-install-recommends <span class="se">\</span>
-      <span class="si">${</span><span class="nv">BUILD_DEPS</span><span class="si">}</span> <span class="p">;</span> <span class="se">\</span>
-   pip3 install <span class="nv">GDAL</span><span class="o">==</span><span class="k">$(</span>cat /usr/local/gdal_version<span class="k">)</span> <span class="p">;</span> <span class="se">\</span>
-   apt-get clean <span class="si">${</span><span class="nv">BUILD_DEPS</span><span class="si">}</span> <span class="p">;</span> <span class="se">\</span>
-   rm -rf /var/lib/apt/lists/* <span class="p">;</span>
-
-<span class="k">CMD</span> <span class="p">[</span><span class="s2">&quot;gdalinfo&quot;</span><span class="p">,</span> <span class="s2">&quot;--version&quot;</span><span class="p">]</span>
 </pre></div>
 </div>
 </div>
