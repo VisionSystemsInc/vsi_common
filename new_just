@@ -927,7 +927,7 @@ function write_pipfile()
 
           [packages]
           #T# # Uncomment for GDAL
-          #T# gdal = "==3.2.3" # or whatever GDAL_VERSION is installed by the recipe
+          #T# gdal = {extras=["numpy"], version = "==3.2.3"} # or whatever GDAL_VERSION is installed by the recipe
           ' >> "${1}"
 }
 
@@ -1066,15 +1066,26 @@ function write_dockerfile()
             #T# 5) just shell
             #T# 6) python -c "import osgeo.gdal_array" # Should not create an error message
 
+            ARG SKIP_PIPENV_SYNC
+            #T# Sometimes you need to fix the image so that pipenv lock can be updated, but
+            #T# you can'"'"'t because pipenv sync won'"'"'t work. This chicken/egg cycle can be
+            #T# escaped by setting the build arg SKIP_PIPENV_SYNC to 1. Then, pipenv sync is
+            #T# skipped so that the image can be built allowing you to easily relock.
+            RUN if [ "${SKIP_PIPENV_SYNC-}" = "1" ]; then \
+                  #T# Create the virtualenv so that the build doesn'"'"'t potentially fail
+                  pipenv run true; \
+                else \
 
-            RUN \
             #T# # Uncomment for GDAL
-            #T#     # Get the version marker of numpy specified in the lock file, else blank
-            #T#     numpy_version="$(python -c "import json; print(json.load(open('"'"'${PIPENV_PIPFILE}.lock'"'"', '"'"'r'"'"'))['"'"'default'"'"']['"'"'numpy'"'"']['"'"'version'"'"'])" 2>/dev/null)" || :; \
-            #T#     # Install numpy first, so that the gdal install works.
-            #T#     pipenv run pip install numpy${numpy_version}; \
-                # Install all packages into the image
-                pipenv sync; \
+            #T#       # Get the version markers specified in the lock file, else blank
+            #T#       function pipfile_lock_version() { \
+            #T#         python3 -c "import json; print(json.load(open('"'"'${PIPENV_PIPFILE}.lock'"'"', '"'"'r'"'"'))['"'"'default'"'"']['"'"'$1'"'"']['"'"'version'"'"'])" 2>/dev/null || :; \
+            #T#       }; \
+            #T#       # Install numpy first, so that the gdal install works.
+            #T#       pipenv run pip install numpy$(pipfile_lock_version numpy); \
+                  # Install all packages into the image
+                  pipenv sync; \
+                fi; \
                 # Cleanup and make way for the real /src that will be mounted at runtime
                 rm -rf /src/* /tmp/pip*
 
@@ -1256,8 +1267,11 @@ function write_docker_compose_yml()
                   - DISPLAY
                   - JUSTFILE=/src/docker/'"${APP_NAME}"'.Justfile
                   - JUST_SETTINGS=/src/'"${PROJECT_NAME}"'.env
-                  - TZ
-            #     runtime: nvidia  # Uncomment for nvidia gpu support
+                  - TZ' >> "${1}"
+  if [ "${USE_PIPENV}" = "1" ]; then
+    echo   '      - SKIP_PIPENV_SYNC=${'"${PROJECT_PREFIX}"'_SKIP_PIPENV_SYNC-}' >> "${1}"
+  fi
+  uwecho   '#     runtime: nvidia  # Uncomment for nvidia gpu support
             #     cap_add:
             #       - SYS_PTRACE # Useful for gdb
                 volumes:
@@ -1820,6 +1834,7 @@ function new_just()
 
   if [ "${USE_PIPENV}" = "1" ]; then
     write_pipfile Pipfile
+    format_tutorial Pipfile
     write_pipfile_lock Pipfile.lock
   fi
 
