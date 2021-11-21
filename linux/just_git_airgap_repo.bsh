@@ -567,26 +567,50 @@ function git_project_root_dir()
 #
 # :Output: ``*stdout*`` - The absolute path to the git directory of the topmost superproject.
 #
-# If the vsi_common repository is cloned (recursively) at ``/src``, and then :func:`git_project_git_dir` will output ``/src/vsi_common/.git``. This is true regardless of where in the work-tree the function is run from, including from within submodules, sub-submodules, etc.
+# If the vsi_common repository is cloned (recursively) at ``/src``, and then :func:`git_project_git_dir` will output ``/src/vsi_common/.git``. This is true regardless of where in the work-tree the function is run from, including from within submodules (e.g., docker/recipes), sub-submodules, etc.
 #**
 
 function git_project_git_dir()
 {
-  # In a bare repository or a .git directory
+  # In a work tree
   if [ "$("${GIT}" rev-parse --is-inside-work-tree)" = "true" ]; then
     local project_dir
     project_dir="$(git_project_root_dir)"
     pushd "${project_dir}" &> /dev/null
+      # The git directory is separate (this is also how submodules work, but
+      # we are not in a submodule here)
       if [ -f ".git" ]; then
         echo "$(real_path "$(sed 's|^[^ ]* ||' .git)")"
+        # alternatively, git rev-parse --git-dir
       elif [ -d ".git" ]; then
         echo "${PWD}/.git"
       else
         false # This should never happen
       fi
     popd &> /dev/null
-  # TODO: fix issue #391
+  # NOTE --is-inside-git-dir doesn't work on separate git directories in git
+  # 1.8.3 (it returns false for some reason). It also doesn't work in a
+  # submodule of a .git directory (.git/modules/docker/recipes) even in later
+  # versions of git---again, it returns false for some reason
+  # RE Actually, it works in a subdirectory of a submodule of a .git directory
+  # (modules/docker/recipes/refs), just not in the top-level directory...
+  #
+  # If we are not in a work tree, then assume we must be in a bare repository
+  # or a .git directory (or the git command will fail and return an error code)
   else # [ "$("${GIT}" rev-parse --is-inside-git-dir)" = "true" ]; then
+    # TODO: fix issue #391
+    # RE I could use git rev-parse --git-dir to get the path to the .git dir of
+    # the repo/submodule, then git config --get core.worktree to get into the
+    # work-tree, and then re-call git_project_git_dir
+    # Alternatively, discard this else statement. Instead, test if we are
+    # somewhere in a git repo; then test if --is-inside-work-tree is false (this
+    # command is more reliable than git rev-parse --is-inside-git-dir), in which
+    # case use git rev-parse --git-dir to get the path to the .git dir of the
+    # repo/submodule, then git config --get core.worktree to get into the work-
+    # tree; finally, proceed as above: call git_project_root_dir and echo the
+    # path to the git directory
+    # RE Unfortunately, (surprisingly), core.worktree isn't set if we are
+    # already in the git directory of the project (e.g., /src/vsi_common/.git)
     local dir
     dir="$("${GIT}" rev-parse --git-dir)"
     if [ "${dir}" == "." ]; then
@@ -594,8 +618,6 @@ function git_project_git_dir()
     else
       echo "${dir}"
     fi
-  # else
-  #   return 1
   fi
   #
   # In a bare repo
@@ -606,6 +628,7 @@ function git_project_git_dir()
   #   git rev-parse --is-bare-repository == false
   # In a work tree
   #   git rev-parse --is-inside-work-tree == true
+  # NOTE this is not entirely correct; see above
 }
 
 #**
