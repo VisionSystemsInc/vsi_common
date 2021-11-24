@@ -37,22 +37,26 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 #
 # .. rubric:: Example
 #
-# Assume we have a project called project_repo stored at ``https://git-server.com/projectA/project_repo.git`` and vsi_common is a submodule of it.
+# Assume we have a ``just`` project called project_A stored at ``https://git-server.com/projectA/project_A.git`` and vsi_common is a submodule of it.
 #
 # This repository is recursively cloned to /src; it looks like
 #
 # .. code-block:: bash
 #
-#      project_repo/
+#      project_A/
 #        .gitmodules
 #        Justfile
 #        setup.env
 #        external/vsi_common/               # submodule
 #        external/vsi_common/docker/recipes # sub-submodule
 #
-# Before this repository can be mirrored (which is not the same thing as a clone) and pushed to a new air-gapped git server, first, a little setup is necessary. This is because, after the air-gapped repository is (shallow) cloned, the submodules must be re-configured before they can be updated (recursively). This is handled by the ``git_airgap-submodule-update`` ``just`` target. However, this obviously cannot be called until the vsi_common submodule is itself initialized and updated. To accomplish this, a small function, :func:`git_airgap_submodule_helper.bsh git_airgap_submodule_update`, is orphan committed to the air-gapped repository so that it is available for this task.
+# Before this repository can be mirrored (which is not the same thing as a clone) and pushed to a new air-gapped git server, first, a little setup is necessary.
 #
-# As no ``just`` functions can be called yet, this function must be called in the file specified by :envvar:`JUST_SETUP_SCRIPT` (typically called setup.env). For example, the setup.env script, which typically looks like:
+# The need for this setup is due to a chicken-and-egg problem. chicken) If a developer tried to simply clone the mirrored repository in the air-gapped environment, the submodules would fail to update because their URLs cannot be reached in that environment. Instead, the submodules must first be re-configured; then, they can be updated (recursively). This is handled by the ``git_airgap-submodule-update`` ``just`` target. egg) However, this obviously cannot be called until the vsi_common submodule is itself initialized and updated.
+#
+# To accomplish this, a small function, :func:`git_airgap_submodule_helper.bsh git_airgap_submodule_update`, is (orphan) committed to the air-gapped repository so that it is available for this task.
+#
+# As no ``just`` functions can be called yet, this function should be called in the file specified by :envvar:`JUST_SETUP_SCRIPT` (typically called setup.env). For example, the setup.env script, which typically looks like:
 #
 # .. code-block:: bash
 #
@@ -93,31 +97,40 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 #
 #     - ``JUST_GIT_AIRGAP_MIRROR_URL=https://git-airgap.com/projectA``
 #
-# 5. Initialize bare repositories on the air-gapped git server for the project_repo and its submodules. The list of all submodules can be found in the ``repo_map.env`` file, which maps between the submodule's path and its new URL. In this example, these should be located at
+# 5. Initialize bare repositories on the air-gapped git server for project_A and its submodules. The list of all submodules can be found in the ``repo_map.env`` file, which maps between the submodule's path and its new URL. In this example, these should be located at
 #
-#   - ``https://git-airgap.com/projectA/project_repo.git``
+#   - ``https://git-airgap.com/projectA/project_A.git``
 #   - ``https://git-airgap.com/projectA/vsi_common.git``
 #   - ``https://git-airgap.com/projectA/recipes.git``
 #
+# .. note::
+#   Depending on your permission level and the git client on the air-gapped server, you may be allowed to create these repositories on demand when pushing them. This is, for example, possible with GitLab.
+#
 # 6. ``source setup.env``
 # #. ``just git import-repo`` - Push the mirrored repository and all its submodules to the new git server as defined by repo_map.env
+#
+# .. note::
+#   You must have permissions on the server to (force) push to any branch; for example, in GitLab, no branches can be protected against the user doing the transfer.
+#
+# .. note::
+#   A tag is left on all branches when they are transferred so if a branch is force pushed, the old branch can be recovered if necessary.
 #
 # Subsequent updates can be pushed to the repositories using much the same process, although with a few variations:
 #
 # 1. In step 1, when prompted, choose "Base the archive off an existing airgap mirror"; in this example, ``{output_dir}``.
 #
-#     - In addition to another full archive, an incremental archive, ``transfer_{date}_transfer_{previous_date}.tgz``, is also created (if supported). This incremental archive may be significantly smaller than the full archive.
-#     - In step 2, if the incremental archive is transferred to the destination, then
+#     - In addition to another full archive, an incremental archive, ``transfer_{date}_transfer_{previous_date}.tgz``, is also created (if supported). This incremental archive may be *significantly* smaller than the full archive.
+#     - If the incremental archive is transferred to the destination in step 2, then
 #         - In step 3, move the archive into the same directory as before; in this example, ``{transfer_dir}``.
 #         - In step 4, extract this incremental archive on top of the existing mirror.
-#     - In step 2, if instead the full archive is transferred, then
-#         - In step 3, the same directory, ``{transfer_dir}``, can be re-used, although it doesn't have to be.
+#     - If instead the full archive is transferred in step 2, then
+#         - In step 3, the archive can be moved into the same directory as before, ``{transfer_dir}``, although it doesn't have to be.
 #
 # #. In step 5, unless there is a new submodule being mirrored, the repositories are already configured.
 #
 # A developer can then run:
 #
-# #. ``git clone https://git-airgap.com/projectA/project_repo.git`` - Note: non-recursive
+# 1. ``git clone https://git-airgap.com/projectA/project_A.git`` - Note: non-recursive
 # #. ``source setup.env``
 # #. ``just git airgap-submodule-update`` - Clone submodules recursively from the new mirror
 #
@@ -1100,7 +1113,7 @@ function git_submodule_toplevels()
 #
 # .. note::
 #
-#   The user can override this function if it does not suit her needs
+#   One limitation of this function occurs when two dependencies are only differentiated by their organization, e.g., projectC/dependency.git and projectD/dependency.git; then, these dependencies will both be mirrored to the same URL: "${JUST_GIT_AIRGAP_MIRROR_URL}/dependency.git". One option is to override (or extend) this function to fixup the repository map as needed. Alternatively, if significant customization of the repository map is required, it can be created manually and used directly by :func:`git_mirror git_mirror_main` and family.
 #
 # .. var:: JUST_GIT_AIRGAP_MIRROR_URL
 #
