@@ -104,16 +104,16 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 #
 # Subsequent updates can be pushed to the repositories using much the same process, although with a few variations:
 #
-#   #. In step 1, when prompted, choose "Base the archive off an existing airgap mirror"; in this example, ``{output_dir}``.
+# 1. In step 1, when prompted, choose "Base the archive off an existing airgap mirror"; in this example, ``{output_dir}``.
 #
 #     - In addition to another full archive, an incremental archive, ``transfer_{date}_transfer_{previous_date}.tgz``, is also created (if supported). This incremental archive may be significantly smaller than the full archive.
 #     - In step 2, if the incremental archive is transferred to the destination, then
-#       - In step 3, move the archive into the same directory as before; in this example, ``{transfer_dir}``.
-#       - In step 4, extract this incremental archive on top of the existing mirror.
+#         - In step 3, move the archive into the same directory as before; in this example, ``{transfer_dir}``.
+#         - In step 4, extract this incremental archive on top of the existing mirror.
 #     - In step 2, if instead the full archive is transferred, then
-#       - In step 3, the same directory, ``{transfer_dir}``, can be re-used, although it doesn't have to be.
+#         - In step 3, the same directory, ``{transfer_dir}``, can be re-used, although it doesn't have to be.
 #
-#  #. In step 5, unless there is a new submodule being mirrored, the repositories are already configured.
+# #. In step 5, unless there is a new submodule being mirrored, the repositories are already configured.
 #
 # A developer can then run:
 #
@@ -533,9 +533,9 @@ function is_submodule()
   #   The relative path from the current repository/submodule work tree to the
   #   CWD
   # git rev-parse --show-superproject-working-tree (available in git v2.13.7)
-  #   The absolute path to the superproject work tree of the current submodule;
-  #   e.g., from /src/vsi_common/docker/recipes/hooks, this command prints
-  #   /src/vsi_common
+  #   The absolute path to the working tree of the superproject of the current
+  #   submodule; e.g., from /src/vsi_common/docker/recipes/hooks, this command
+  #   prints /src/vsi_common
 
   return "${is_submod}"
 }
@@ -547,7 +547,7 @@ function is_submodule()
 #
 # .. rubric:: Example
 #
-# If the vsi_common repository is cloned (recursively) at ``/src``, and then :func:`git_project_root_dir` will output ``/src/vsi_common``. This is true regardless of where in the work-tree the function is run from, including from within submodules, sub-submodules, etc.
+# If the vsi_common repository is cloned (recursively) at ``/src``, and then :func:`git_project_root_dir` will output ``/src/vsi_common``. This is true regardless of where in the work-tree the function is run from, including from within submodules, sub-submodules, etc. Cf. git rev-parse --show-superproject-working-tree (available in git v2.13.7), which only outputs the absolute path to the working tree of the superproject of the current submodule.
 #**
 
 function git_project_root_dir()
@@ -567,36 +567,65 @@ function git_project_root_dir()
 #
 # :Output: ``*stdout*`` - The absolute path to the git directory of the topmost superproject.
 #
-# If the vsi_common repository is cloned (recursively) at ``/src``, and then :func:`git_project_git_dir` will output ``/src/vsi_common/.git``. This is true regardless of where in the work-tree the function is run from, including from within submodules, sub-submodules, etc.
+# If the vsi_common repository is cloned (recursively) at ``/src``, and then :func:`git_project_git_dir` will output ``/src/vsi_common/.git``. This is true regardless of where in the work-tree the function is run from, including from within submodules (e.g., docker/recipes), sub-submodules, etc. This function can also be run from within a bare repo (and from within a .git directory)
 #**
 
 function git_project_git_dir()
 {
-  # In a bare repository or a .git directory
-  if [ "$("${GIT}" rev-parse --is-inside-work-tree)" = "true" ]; then
-    local project_dir
-    project_dir="$(git_project_root_dir)"
-    pushd "${project_dir}" &> /dev/null
-      if [ -f ".git" ]; then
-        echo "$(real_path "$(sed 's|^[^ ]* ||' .git)")"
-      elif [ -d ".git" ]; then
-        echo "${PWD}/.git"
-      else
-        false # This should never happen
-      fi
-    popd &> /dev/null
-  # TODO: fix issue #391
-  else # [ "$("${GIT}" rev-parse --is-inside-git-dir)" = "true" ]; then
-    local dir
-    dir="$("${GIT}" rev-parse --git-dir)"
-    if [ "${dir}" == "." ]; then
-      echo "${PWD}"
-    else
-      echo "${dir}"
-    fi
-  # else
-  #   return 1
+  # Not in a git repository
+  if ! "${GIT}" rev-parse --git-dir &> /dev/null; then
+    return 1
   fi
+
+  # If we are NOT in a work tree, then assume we must be in a bare repository
+  # or a .git directory. Sadly, git rev-parse --is-inside-work-tree is more
+  # reliable than --is-inside-git-dir, which doesn't work on separate git
+  # directories in git 1.8.3 (it returns false for some reason). It also doesn't
+  # work in a submodule of a .git directory (.git/modules/docker/recipes) even
+  # in later versions of git---again, it returns false for some reason
+  # RE Actually, it works in a subdirectory of a submodule of a .git directory
+  # (modules/docker/recipes/refs), just not in the top-level directory...
+  if [ "$( "${GIT}" rev-parse --is-inside-work-tree)" = "false" ]; then
+    # If we are in a bare repository or a .git directory, but not in a submodule
+    # of a .git directory (e.g., .git/modules/docker/recipes), then this command
+    # will (unfortunately/surprisingly) not output anything. (Similarly,
+    # core.worktree isn't set). Fortunately, in this case, --git-dir is correct
+    local dir
+    dir="$("${GIT}" rev-parse --show-toplevel)"
+    if [ -z "${dir:+set}" ]; then
+      dir="$("${GIT}" rev-parse --git-dir)"
+      if [ "${dir}" == "." ]; then
+        echo "${PWD}"
+      else
+        echo "${dir}"
+      fi
+      return 0
+    fi
+
+    # Otherwise, we happen to be in a submodule of a .git directory, then
+    # git rev-parse --show-toplevel (and git config --get core.worktree,
+    # although this path is relative, at least in some versions of git), will
+    # point to the working tree for the submodule. From here, we can find the
+    # project's git directory. Thus, we can proceed as if we are in the working
+    # tree
+  fi
+
+  # In a work tree
+  local project_dir
+  project_dir="$(git_project_root_dir)"
+  pushd "${project_dir}" &> /dev/null
+    # The git directory is separate (this is also how submodules work, but
+    # we are not in a submodule here)
+    if [ -f ".git" ]; then
+      echo "$(real_path "$(sed 's|^[^ ]* ||' .git)")"
+      # alternatively, git rev-parse --git-dir
+    elif [ -d ".git" ]; then
+      echo "${PWD}/.git"
+    else
+      false # This should never happen
+    fi
+  popd &> /dev/null
+
   #
   # In a bare repo
   #   git rev-parse --is-inside-git-dir == true
@@ -606,6 +635,7 @@ function git_project_git_dir()
   #   git rev-parse --is-bare-repository == false
   # In a work tree
   #   git rev-parse --is-inside-work-tree == true
+  # NOTE this is not entirely correct; see above
 }
 
 #**
@@ -669,17 +699,32 @@ function git_submodule_summary()
   for sm_key in ${submodule_keys[@]+"${submodule_keys[@]}"}; do
     local sm_path="$("${GIT}" config --file .gitmodules --get submodule."${sm_key}".path)"
 
-    # Cf. git submodule summary - doesn't show modified/staged content [1]
-    # The implementations are actually different
-    # While both can be used to list changes to the working tree,
-    # git diff --submodule=log SHA~1..SHA (or git log --patch --submodule=log SHA)
-    # can be used to list the changes (in commits) to a submodule; however in
-    # that case, it only lists merges (unfortunately) [2]:
+    # List the changes (as commits) to the working tree of a submodule
+    # cf. git submodule summary, which doesn't show modified/staged content
+    # RE The implementation for git submodule summary [1] and this command,
+    # git diff --submodule=log sm_path [2], are not the same
+    # RE Unfortunately, both commands only list the first parents [3]
+    # REVIEW Because of these limitations, it might be nicer if this function
+    # entered into submodule and ran git log... directly (which is not too hard)
+    # RE Could even run git status --porcelain=1
+    #
     # [1] https://github.com/git/git/blob/v2.24.1/git-submodule.sh#L777
     # [2] https://github.com/git/git/blob/v2.24.1/diff.c#L3400 =>
     #     https://github.com/git/git/blob/v2.24.1/submodule.c#L613-L640
-    #     https://github.com/git/git/blob/v2.24.1/submodule.c#L586-L592
+    #     https://github.com/git/git/blob/v2.24.1/submodule.c#L554-L563
+    # [3] https://github.com/git/git/blob/v2.24.1/submodule.c#L450
     "${GIT}" diff --submodule=log "${sm_path}"
+
+
+    # git diff --submodule=log SHA~1..SHA (or equivalently
+    # git log --patch --submodule=log SHA~1..SHA) can also be used to list the
+    # changes (in commits) to a submodule, but again, only to the first parents
+    # FIXME this could also be updated in ~/.gitconfig:submodule-lhist
+    # RE For example,
+    #     git diff --submodule=log 0088b126~1..0088b126 docker/recipes
+    # vs  ( cd docker/recipes && git hist 18ca5ee9..fe4f42d4 )
+    # vs  ( cd docker/recipes && git hist 18ca5ee9..fe4f42d4 --first-parent )
+
 
     if [ -n "${_recursive_summary:+set}" ]; then
       pushd "${sm_path}" &>/dev/null

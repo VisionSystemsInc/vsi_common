@@ -72,6 +72,9 @@ begin_test "Part 1 - Setup test repo"
     # origin/master) because these are skipped during git_import-repo to the
     # air-gapped server (in a true mirror, there should be no refs/remotes;
     # they get translated to refs/heads by the refspec on push)
+    # This will fail with:
+    #   error: Server does not allow request for unadvertised object ...
+    #   Fetched in submodule path 'docker/recipes', but it did not contain
     # RE Could checkout each ref/remotes, but we only need the current SHA
     # RE This should not be a problem on CI
     git branch local "${VSI_COMMON_SHA}"
@@ -180,6 +183,7 @@ begin_test "Part 5 - Cloning from mirror"
 
     source "${AIRGAP_CLONE_DIR}/vsi_common/linux/just_git_airgap_repo.bsh"
 
+    # NOTE if an "error: Server does not allow" failure occurs here, see above
     JUST_USER_CWD="${PWD}" relocate_git_defaultify git_airgap-submodule-update
   popd &> /dev/null
 
@@ -423,7 +427,7 @@ begin_test "Check for unpushed tracked commits in submodules"
     git submodule add --name "${DIFFICULT_NAME}" "${PRETEND_URL}_sub" "${DIFFICULT_PATH}"
     git submodule update --init --recursive
     git commit -m "Added submodules"
-    # doesn't actually have to be tracked by the repo
+    # subdir doesn't actually have to be tracked by the repo
     mkdir -p "${DIFFICULT_PATH}"/a_sub_sub_module/subdir
   popd &> /dev/null
 
@@ -872,9 +876,22 @@ remote URL tracked by the parent repository:
   [ "$(cd "${PRETEND_URL}" && real_path "$(git_project_git_dir)")" = "${ans}" ]
   [ "$(cd "${PRETEND_URL}/hooks" && real_path "$(git_project_git_dir)")" = "${ans}" ]
 
+  # Test from within a .git directory
+  ans="$(real_path "${BUILD_REPO}/.git")"
+  [ "$(cd "${BUILD_REPO}/.git" && real_path "$(git_project_git_dir)")" = "${ans}" ]
+  # Test from within a subdirectory of a .git directory
+  [ "$(cd "${BUILD_REPO}/.git/objects" && real_path "$(git_project_git_dir)")" = "${ans}" ]
+  # Test from within a sub-submodule of a .git directory (.git/modules/...)
+  [ "$(cd "${BUILD_REPO}/.git/modules/${DIFFICULT_NAME}/modules/a_sub_sub_module" && \
+      real_path "$(git_project_git_dir)")" = "${ans}" ]
+
   # Test from within the separate .git directory
   ans="$(real_path "${SEPARATE_GITDIR}")"
   [ "$(cd "${SEPARATE_GITDIR}" && real_path "$(git_project_git_dir)")" = "${ans}" ]
+  # Test from within a sub-submodule of a separate .git directory
+  # (separate_git/modules/...)
+  [ "$(cd "${SEPARATE_GITDIR}/modules/${DIFFICULT_NAME}/modules/a_sub_sub_module" && \
+      real_path "$(git_project_git_dir)")" = "${ans}" ]
 )
 end_test
 
