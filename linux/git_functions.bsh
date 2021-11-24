@@ -1,0 +1,1246 @@
+#!/usr/bin/env false bash
+
+if [[ ${-} != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
+if [ -z "${VSI_COMMON_DIR+set}" ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
+
+source "${VSI_COMMON_DIR}/linux/uwecho.bsh"
+source "${VSI_COMMON_DIR}/linux/parser.bsh"
+source "${VSI_COMMON_DIR}/linux/requirements.bsh"
+source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/findin"
+source "${VSI_COMMON_DIR}/linux/command_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/string_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/aliases.bsh"
+
+#*# just/git_functions
+
+#**
+# .. function:: log_unpushed_commits
+#
+# List all unpushed commits to stdout
+#
+# List all commits on branches/tags that have not been pushed to a remote. This is a set operation: it lists all the commits from a branch in the DAG except those reachable by a remote-tracking branch. It does not require an *associated* remote-tracking branch
+#
+# :Arguments: - [``$1``] - A name of a remote to filter by; e.g., origin. If unset, then don't filter
+#             - [``$2...``] - A branch/tag to filter by (or multiple branches/tags); e.g., master. If unset, then don't filter
+#
+# :Output: - ``*stdout*`` - Print all unpushed commits for tracking branches to stdout
+#
+# .. seealso::
+#
+#   :func:`log_outgoing_commits`
+#**
+
+# REVIEW Simply output the number of unpushed commits, not the graph of unpushed
+# commits; much easier with --format=%H
+function log_unpushed_commits()
+{
+  local remote_name="${1-}"
+  local branches # actually, a commit-ish
+  if [ "${#}" -gt "1" ]; then
+    branches=("${@:2}")
+  else
+    branches=("--branches" "--tags")
+  fi
+
+  local commits="$("${GIT}" log --decorate --graph --format=short --color=always \
+      "${branches[@]}" --not --remotes="${remote_name}")"
+
+  _log_commits_helper "unpushed" "${commits}"
+}
+
+function _log_commits_helper()
+{
+  local label="${1}"
+  local commits="${2}"
+
+  if [ "${commits}" != "" ]; then
+    local ncommits="$(echo "${commits}" | strip_ansi_stream | \
+        grep -Eo -e '^(\| )*\*( \|)* +commit' | \
+        wc -l | awk '{print $1}')"
+    if [ "${ncommits}" -eq "0" ]; then
+      # REVIEW echo "There are 0 unpushed commits"
+      # RE Could use JUST_VERBOSE
+      : # pass
+    elif [ "${ncommits}" -eq "1" ]; then
+      echo "There is ${ncommits} "${label}" commit:"
+      echo
+    elif [ "${ncommits}" -gt "1" ]; then
+      echo "There are ${ncommits} "${label}" commits:"
+      echo
+    fi
+    echo "${commits}"
+  fi
+}
+
+#**
+# .. function:: git_tracking_branch
+#
+# Get the corresponding remote-tracking branch for a local-tracking branch
+#
+# :Arguments: - ``$1`` - A local-tracking branch; e.g., master
+#
+# :Output: - ``*stdout*`` - The corresponding remote-tracking branch, or the empty string if there is no tracking branch
+#
+# .. note::
+#
+#   - A branch that you create locally and then push to a remote is not configured as a local-tracking branch by default. You must use the -u flag with ``git push`` or ``git branch``.
+#   - A branch cannot track multiple remotes.
+#**
+
+function git_tracking_branch()
+{
+  # Supporting multiple branches (as a variadic argument) is hard because if
+  # the branch is not a tracking branch there is nothing to print out. I tried
+  # to print a newline, but it seems that bash arrays don't capture newlines.
+  # Could just fail, but then you would have to know your list of branches are
+  # already tracking branches
+  local branch="${1}"
+
+  local remote_branch_rv=0
+  local remote_branch
+  # git rev-parse will error if the branch doesn't exist or has been pruned.
+  # Although, unfortunately, it is same error code in both cases; the stderr
+  # could be parsed to differentiate though. Also, unfortunately, in the case
+  # the remote-tracking branch has been pruned, it still prints to stdout
+  remote_branch="$("${GIT}" rev-parse --abbrev-ref "${branch}"@{upstream} 2> /dev/null)" || remote_branch_rv="${?}"
+  if [ "${remote_branch_rv}" -eq "0" ]; then
+    echo "${remote_branch}"
+  fi
+}
+
+#**
+# .. function:: git_tracking_branches
+#
+# Find all local- and corresponding remote-tracking branches
+#
+# :Arguments: - [``$1...``] - The name of a remote to filter by (or multiple remotes); e.g., origin. If unset, then don't filter
+#
+# :Output: - ``just_git_tracking_branches`` - An array of local-tracking branch names
+#          - ``just_git_remote_tracking_branches`` - A corresponding array of remote-tracking branch names
+#
+# .. note::
+#
+#   - A branch that you create locally and then push to a remote is not configured as a local-tracking branch by default. You must use the -u flag with ``git push`` or ``git branch``.
+#   - A branch cannot track multiple remotes.
+#**
+
+function git_tracking_branches()
+{
+  local remote_names
+  if [ "${#}" -eq "0" ]; then
+    remote_names=($("${GIT}" remote))
+  else
+    remote_names="${@}"
+  fi
+
+  local OLD_IFS="${IFS}"
+  IFS=$'\n'
+  local branches=($("${GIT}" for-each-ref --format='%(refname:short)' refs/heads))
+  IFS="${OLD_IFS}"
+
+  just_git_tracking_branches=()
+  just_git_remote_tracking_branches=()
+  local branch
+  for branch in ${branches[@]+"${branches[@]}"}; do
+    local remote_branch="$(git_tracking_branch "${branch}")"
+    if [ -z "${remote_branch:+set}" ]; then
+      continue
+    fi
+    local remote_name
+    for remote_name in ${remote_names[@]+"${remote_names[@]}"}; do
+      if [[ ${remote_branch} = ${remote_name}/* ]]; then
+        just_git_tracking_branches+=("${branch}")
+        just_git_remote_tracking_branches+=("${remote_branch}")
+        break
+      fi
+    done
+  done
+  #
+  # Alternatively,
+  #   git for-each-ref --format='%(upstream:short) %(refname) %(upstream:track)' refs/heads
+  # where, for example, upstream:short=origin/master, refname=refs/heads/master
+  # and upstream:track=[ahead 3] or [gone] if the remote-tracking branch has
+  # been pruned. upstream:short is a blank space (' ') if upstream is unset,
+  # i.e., there is no remote-tracking branch setup
+  # NOTE %(upstream:track) requires git >= v1.9.0
+  #
+  # Alternatively: git branch -vv provides the same tracking information as
+  # upstream:track, even in git v1.8.3
+  # RE this is the only command to get this info in git v1.8.3; although it can
+  # be calculated manually with git log --format='%H' branch..branch@{upstream}
+  # for incoming commits and git log --format='%H' branch@{upstream}..branch
+  # for outgoing (see log_outgoing_commits)
+  # RE git rev-list --left-right --boundary branch@{upstream}...branch lists
+  # both incoming and outgoing changes as well (the symmetric difference) [1]
+  # RE This is not strictly relevant to what I'm doing here though
+  #
+  # git remote show origin actually queries the remote; however, it doesn't
+  # provide the same level of tracking detail
+  #
+  # Finally,
+  #   remote="$(git config --get branch."${branch}".remote)" and
+  #   tracking="$(git config --get branch."${branch}".merge | cut -d'/' -f3-)"
+  # can be combined to provide the local-tracking branch, and then
+  #   git show-ref refs/remotes/"${remote}/${tracking}"
+  # can be used to see if the remote-tracking branch has been pruned
+  # RE git show-rev will error if the branch doesn't exist or has been pruned;
+  # although unfortunately, it is same error code in both cases
+  #
+  # [1] https://git-scm.com/docs/git-rev-list/2.28.0#_description
+}
+
+#**
+# .. function:: log_outgoing_commits
+#
+# List all unpushed commits for a tracking branch to stdout
+#
+# :Arguments: - ``$1...`` - A local-tracking branch (or multiple branches); e.g., master
+#
+# :Output: - ``*stdout*`` - Print all unpushed commits for the tracking branch to stdout
+#
+# .. seealso::
+#
+#   :func:`log_all_outgoing_commits` and :func:`log_unpushed_commits`
+#**
+
+# REVIEW Simply output the number of outgoing commits, not the graph of outgoing
+# commits; much easier with --format=%H
+function log_outgoing_commits()
+{
+  local tracking_branches=(${@+"${@}"})
+
+  # This will list only the outgoing commits for a local-tracking branch
+  local tracking_branch
+  local args=()
+  for tracking_branch in ${tracking_branches[@]+"${tracking_branches[@]}"}; do
+    args+=("${tracking_branch}@{upstream}..${tracking_branch}")
+  done
+  local commits
+  if [ "${#args[@]}" -gt "0" ]; then
+    commits="$("${GIT}" log --decorate --graph --format=short --color=always "${args[@]}")"
+  else
+    commits=""
+  fi
+  #
+  # Alternatively,
+  # git cherry -v remote/branch branch
+
+  _log_commits_helper "outgoing" "${commits}"
+}
+
+#**
+# .. function:: log_all_outgoing_commits
+#
+# List all unpushed commits for tracking branches to stdout
+#
+# :Arguments: - [``$1...``] - The name of a remote to filter by (or multiple remotes); e.g., origin. If unset, then don't filter
+#
+# :Output: - ``*stdout*`` - Print all unpushed commits for tracking branches to stdout
+#
+# .. seealso::
+#
+#   :func:`log_outgoing_commits` and :func:`log_unpushed_commits`
+#**
+
+# REVIEW Simply output the number of outgoing commits, not the graph of outgoing
+# commits; much easier with --format=%H
+function log_all_outgoing_commits()
+{
+  local remote_names=(${@+"${@}"})
+
+  local just_git_tracking_branches
+  local just_git_remote_tracking_branches
+  git_tracking_branches ${remote_names[@]+"${remote_names[@]}"} # Sets just_git_[remote_]tracking_branches
+
+  log_outgoing_commits ${just_git_tracking_branches[@]+"${just_git_tracking_branches[@]}"}
+}
+
+#**
+# .. function:: convert_git_remote_http_to_git
+#
+# Change the remote url of a git repo to use the git@ syntax instead of https
+#
+# In a git repository (or submodule), if the (last) URL of the remote is specified using the the ``https://`` protocol, convert it to the ssh transfer protocol (git@..) to make pushing changes to a private remote server easier. Assume a very basic url format: ``https://git-server.com/co/project.git`` without port, query, or fragment sections. Warn if these exist. Do nothing if a pushurl is already configured
+#
+# :Arguments: - [``$1``] - The name of a remote to convert. Default: origin
+#
+# .. note::
+#
+#   This does not change a submodule's tracked URL (i.e., the URL in the .gitmodules file) nor a submodule's URL (i.e., .git/config:submodule), only the URL of the remote in .git/\*\*/config (e.g., .git/modules/docker/recipes/config:remote)
+#**
+
+function convert_git_remote_http_to_git()
+{
+  local remote_name="${1-origin}"
+
+  # Don't do anything if a pushurl is already configured
+  if "${GIT}" config --get remote."${remote_name}".pushurl &> /dev/null; then
+    echo "Skipping: pushurl already configured"
+    return
+  fi
+
+  local remote_url="$("${GIT}" config --get remote."${remote_name}".url)"
+
+  local remote_git_url_rv=0
+  local remote_git_url
+  # local foo="$(bar)" || rv="${?}" does not work as one line in bash 4.2 or older. Use two lines
+  remote_git_url="$(_http_to_git_protocol "${remote_url}")" || remote_git_url_rv="${?}"
+  if [ "${remote_git_url_rv}" == "0" ]; then
+    # NOTE since git v1.8, a remote (e.g., origin) can have multiple associated
+    # pushurls (see .git/config:remote)
+    # RE providing the old url (remote_url) will update the correct url
+    #"${GIT}" remote set-url "${remote_name}" --push "${remote_git_url}" "${remote_url}"
+    # RE If a pushurl is configured, this function returns early; therefore,
+    # assume a pushurl is not configured
+    "${GIT}" remote set-url "${remote_name}" --push "${remote_git_url}"
+  else # See if URL is already in the expected format
+    # This is very simple; basically undo the simple transform done here.
+    # Perhaps one day we will have a git remote url parser in parser.bsh
+    local remote_https_url="$(echo "${remote_url}" | sed -e 's#^git@#https://#' -e 's#:#/#3')"
+    if ! parse_url "${remote_https_url}"; then
+      echo "WARNING URL is non-standard. Skipping ${remote_url}"
+    fi
+  fi
+}
+
+function _http_to_git_protocol()
+{
+  local remote_url="${1}"
+
+  # Be very conservative about which URLs will convert
+  # NOTE If the git server has a non-standard port (which would not be the
+  # same as https port), you have to do ssh://git@server:port/...
+  local parsed_url_scheme
+  local parsed_url_authority
+  local parsed_url_host
+  local parsed_url_port
+  local parsed_url_rpath
+  local parsed_url_query
+  local parsed_url_fragment
+  if parse_url "${remote_url}"; then # Sets parsed_url_host, parsed_url_rpath, etc.
+    if [ "${parsed_url_port}" != "" ] || \
+       [ "${parsed_url_query}" != "" ] || \
+       [ "${parsed_url_fragment}" != "" ]; then
+      echo "${remote_url}"
+      return 1
+    elif [ "${parsed_url_scheme}" == "http" ] || \
+         [ "${parsed_url_scheme}" == "https" ]; then
+      local remote_git_url="git@${parsed_url_host}:${parsed_url_rpath}"
+      echo "${remote_git_url}"
+    fi
+  else
+    echo "${remote_url}"
+    return 1
+  fi
+}
+
+#**
+# .. function:: is_submodule
+#
+# :Output: - Returns ``0`` if the PWD is in a submodule, ``1`` for it is not
+#**
+
+function is_submodule()
+{
+  local toplevel="$("${GIT}" rev-parse --show-toplevel 2> /dev/null)"
+  # Strip trailing / (this may be guaranteed by --show-toplevel)
+  toplevel="${toplevel%/}"
+  local sm_basename="$(basename "${toplevel}")"
+  local is_submod=1
+  pushd "${toplevel}/../" &> /dev/null
+    # Are we still in a git repo
+    local superlevel="$("${GIT}" rev-parse --show-toplevel 2> /dev/null)"
+    if [ -n "${superlevel:+set}" ]; then
+      local prefix="$("${GIT}" rev-parse --show-prefix)"
+      # Guarantee a trailing / or empty string (this may be guaranteed by
+      # --show-prefix)
+      prefix="${prefix:+"${prefix%/}/"}"
+      pushd "${superlevel}" &> /dev/null
+        # In git v1.8.3, git submodule must be run in the toplevel of the
+        # working tree
+        # git v1.8.3 does not support git -C
+        #
+        # Strip trailing / (this may be guaranteed by sm_path)
+        # real_path may be necessary to ensure the grep succeeds
+        if "${GIT}" submodule foreach 'echo "${sm_path%/}"' | \
+            grep "${prefix}${sm_basename}" &> /dev/null; then
+          is_submod=0
+        fi
+        #
+        # Alternatively, use get_config_submodule_names and then git config to
+        # query the sm_path (as git_submodule_sync does)
+        # RE Shouldn't be necessary in this case, as the submodule should
+        # always be init'd and updated since we are recursing up through it
+      popd &> /dev/null
+    fi
+  popd &> /dev/null
+  #
+  # git rev-parse --git-dir | awk -F '/.git' '{print $1}')"
+  #   The (usually) absolute path to the repository's .git directory or the
+  #   submodule's equivalent (e.g., .git/modules/docker/recipes); e.g., from
+  #   /src/vsi_common/linux, this command prints /src/vsi_common/.git
+  # git rev-parse --show-toplevel
+  #   The absolute path to the current repository/submodule work tree; e.g.,
+  #   from /src/vsi_common/docker/recipes/hooks, this command prints
+  #   /src/vsi_common/docker/recipes
+  # git rev-parse --show-cdup
+  #   The relative path from the CWD to the current repository/submodule
+  #   work tree; e.g., from /src/vsi_common/docker/recipes/hooks, this command
+  #   prints ../ Although, from /src/vsi_common/docker/recipes, this
+  #   command prints '' (unfortunately)
+  # git rev-parse --show-prefix
+  #   The relative path from the current repository/submodule work tree to the
+  #   CWD
+  # git rev-parse --show-superproject-working-tree (available in git v2.13.7)
+  #   The absolute path to the working tree of the superproject of the current
+  #   submodule; e.g., from /src/vsi_common/docker/recipes/hooks, this command
+  #   prints /src/vsi_common
+
+  return "${is_submod}"
+}
+
+#**
+# .. function:: git_project_root_dir
+#
+# :Output: ``*stdout*`` - The absolute path to the root of the topmost superproject’s working tree.
+#
+# .. rubric:: Example
+#
+# If the vsi_common repository is cloned (recursively) at ``/src``, and then :func:`git_project_root_dir` will output ``/src/vsi_common``. This is true regardless of where in the work-tree the function is run from, including from within submodules, sub-submodules, etc. Cf. git rev-parse --show-superproject-working-tree (available in git v2.13.7), which only outputs the absolute path to the working tree of the superproject of the current submodule.
+#**
+
+function git_project_root_dir()
+{
+  local toplevel="$("${GIT}" rev-parse --show-toplevel 2> /dev/null)"
+  if is_submodule; then
+    pushd "${toplevel}/../" &> /dev/null
+      git_project_root_dir
+    popd &> /dev/null
+  else
+    echo "${toplevel}"
+  fi
+}
+
+#**
+# .. function:: git_project_git_dir
+#
+# :Output: ``*stdout*`` - The absolute path to the git directory of the topmost superproject.
+#
+# If the vsi_common repository is cloned (recursively) at ``/src``, and then :func:`git_project_git_dir` will output ``/src/vsi_common/.git``. This is true regardless of where in the work-tree the function is run from, including from within submodules (e.g., docker/recipes), sub-submodules, etc. This function can also be run from within a bare repo (and from within a .git directory)
+#**
+
+function git_project_git_dir()
+{
+  # Not in a git repository
+  if ! "${GIT}" rev-parse --git-dir &> /dev/null; then
+    return 1
+  fi
+
+  # If we are NOT in a work tree, then assume we must be in a bare repository
+  # or a .git directory. Sadly, git rev-parse --is-inside-work-tree is more
+  # reliable than --is-inside-git-dir, which doesn't work on separate git
+  # directories in git 1.8.3 (it returns false for some reason). It also doesn't
+  # work in a submodule of a .git directory (.git/modules/docker/recipes) even
+  # in later versions of git---again, it returns false for some reason
+  # RE Actually, it works in a subdirectory of a submodule of a .git directory
+  # (modules/docker/recipes/refs), just not in the top-level directory...
+  if [ "$( "${GIT}" rev-parse --is-inside-work-tree)" = "false" ]; then
+    # If we are in a bare repository or a .git directory, but not in a submodule
+    # of a .git directory (e.g., .git/modules/docker/recipes), then this command
+    # will (unfortunately/surprisingly) not output anything. (Similarly,
+    # core.worktree isn't set). Fortunately, in this case, --git-dir is correct
+    local dir
+    dir="$("${GIT}" rev-parse --show-toplevel)"
+    if [ -z "${dir:+set}" ]; then
+      dir="$("${GIT}" rev-parse --git-dir)"
+      if [ "${dir}" == "." ]; then
+        echo "${PWD}"
+      else
+        echo "${dir}"
+      fi
+      return 0
+    fi
+
+    # Otherwise, we happen to be in a submodule of a .git directory, then
+    # git rev-parse --show-toplevel (and git config --get core.worktree,
+    # although this path is relative, at least in some versions of git), will
+    # point to the working tree for the submodule. From here, we can find the
+    # project's git directory. Thus, we can proceed as if we are in the working
+    # tree
+  fi
+
+  # In a work tree
+  local project_dir
+  project_dir="$(git_project_root_dir)"
+  pushd "${project_dir}" &> /dev/null
+    # The git directory is separate (this is also how submodules work, but
+    # we are not in a submodule here)
+    if [ -f ".git" ]; then
+      echo "$(real_path "$(sed 's|^[^ ]* ||' .git)")"
+      # alternatively, git rev-parse --git-dir
+    elif [ -d ".git" ]; then
+      echo "${PWD}/.git"
+    else
+      false # This should never happen
+    fi
+  popd &> /dev/null
+
+  #
+  # In a bare repo
+  #   git rev-parse --is-inside-git-dir == true
+  #   git rev-parse --is-bare-repository == true
+  # In a .git dir
+  #   git rev-parse --is-inside-git-dir == true
+  #   git rev-parse --is-bare-repository == false
+  # In a work tree
+  #   git rev-parse --is-inside-work-tree == true
+  # NOTE this is not entirely correct; see above
+}
+
+#**
+# .. function:: git_submodule_summary_recursive
+#
+# Recursively log the commits differing between each submodule's tracked commit and its current working tree
+#
+# .. seealso::
+#
+#   :func:`git_submodule_summary`
+#**
+
+function git_submodule_summary_recursive()
+{
+  _recursive_summary=0 git_submodule_summary ${@+"${@}"}
+}
+
+#**
+# .. function:: git_submodule_summary
+#
+# Log the commits differing between each submodule's tracked commit and its current working tree
+#
+# Using ``git diff --submodule=log``, compare the working tree of each submodule to the version committed to HEAD of the super project, and list any commits that are missing and/or now present in the submodule. For example, if an earlier commit in the submodule is checked out, there will be missing commits in the submodule according to the super project. Similarly, if a commit is made to the submodule, there will be new commits present in the submodule according to the super project. Of course, the commit graph could diverge in more complicated ways.
+#
+# :Output: - ``*stdout*`` - Each submodule's differences in terms of commits
+#
+# .. note::
+#
+#   This function iterates through each submodule in a depth-first traversal
+#
+# .. seealso::
+#
+#   https://git-scm.com/docs/git-diff#Documentation/git-diff.txt---submoduleltformatgt
+#
+# .. seealso::
+#
+#   :func:`git_submodule_summary_recursive`
+#**
+
+function git_submodule_summary()
+{
+  # If we are not in the top-level directory of the repo, change to it and
+  # re-call this function
+  # Alternatively, re-write using git_submodule_displaypaths
+  local up_path="$("${GIT}" rev-parse --show-cdup)"
+  if [ -n "${up_path:+set}" ]; then
+    pushd "${up_path}" &> /dev/null
+      git_submodule_summary
+    popd &> /dev/null
+    return
+  fi
+
+  echo "Entering ${PWD}"
+
+  local OLD_IFS="${IFS}"
+  IFS=$'\n'
+  local submodule_keys=($(git_submodule_names))
+  IFS="${OLD_IFS}"
+
+  local sm_key
+  for sm_key in ${submodule_keys[@]+"${submodule_keys[@]}"}; do
+    local sm_path="$("${GIT}" config --file .gitmodules --get submodule."${sm_key}".path)"
+
+    # List the changes (as commits) to the working tree of a submodule
+    # cf. git submodule summary, which doesn't show modified/staged content
+    # RE The implementation for git submodule summary [1] and this command,
+    # git diff --submodule=log sm_path [2], are not the same
+    # RE Unfortunately, both commands only list the first parents [3]
+    # REVIEW Because of these limitations, it might be nicer if this function
+    # entered into submodule and ran git log... directly (which is not too hard)
+    # RE Could even run git status --porcelain=1
+    #
+    # [1] https://github.com/git/git/blob/v2.24.1/git-submodule.sh#L777
+    # [2] https://github.com/git/git/blob/v2.24.1/diff.c#L3400 =>
+    #     https://github.com/git/git/blob/v2.24.1/submodule.c#L613-L640
+    #     https://github.com/git/git/blob/v2.24.1/submodule.c#L554-L563
+    # [3] https://github.com/git/git/blob/v2.24.1/submodule.c#L450
+    "${GIT}" diff --submodule=log "${sm_path}"
+
+
+    # git diff --submodule=log SHA~1..SHA (or equivalently
+    # git log --patch --submodule=log SHA~1..SHA) can also be used to list the
+    # changes (in commits) to a submodule, but again, only to the first parents
+    # FIXME this could also be updated in ~/.gitconfig:submodule-lhist
+    # RE For example,
+    #     git diff --submodule=log 0088b126~1..0088b126 docker/recipes
+    # vs  ( cd docker/recipes && git hist 18ca5ee9..fe4f42d4 )
+    # vs  ( cd docker/recipes && git hist 18ca5ee9..fe4f42d4 --first-parent )
+
+
+    if [ -n "${_recursive_summary:+set}" ]; then
+      pushd "${sm_path}" &>/dev/null
+        # Depth-first traversal
+        git_submodule_summary
+      popd &>/dev/null
+    fi
+  done
+}
+
+#**
+# .. function:: git_submodule_displaypaths_recursive
+#
+# Recursively get the displaypath to each submodule
+#
+# .. seealso::
+#
+#   :func:`git_submodule_displaypaths`
+#**
+
+function git_submodule_displaypaths_recursive()
+{
+  _recursive_displaypaths=0 git_submodule_displaypaths ${@+"${@}"}
+}
+
+#**
+# .. function:: git_submodule_displaypaths
+#
+# Get the displaypath to each submodule
+#
+# Get what git refers to as the displaypath of the submodule: the relative path from the current working directory to the root of the containing repository and then to each submodule. This path is defined by the git-specified environment variable, displaypath (or prefix in and before git v1.8.3).
+#
+# :Output: *stdout* - The displaypath to each submodule (recursively); e.g., docker/recipes
+#
+# .. note::
+#
+#   Submodule paths are not the same thing as submodule names.
+#
+# .. note::
+#
+#   This function iterates through each submodule in the same order as :func:`git_submodule_urls`, :func:`git_submodule_names` and :func:`git_submodule_toplevels` (i.e., a depth-first traversal)
+#
+# .. note::
+#
+#   Because this function uses ``git submodule foreach``, it skips submodules that have been init'd but not updated.
+#
+# .. seealso::
+#
+#   :func:`git_submodule_displaypaths_recursive` and :func:`git_submodule_urls`
+#**
+
+function git_submodule_displaypaths()
+{
+  local recursive_flag=()
+  if [ -n "${_recursive_displaypaths:+set}" ]; then
+    recursive_flag=("--recursive")
+  fi
+
+  # Relative path from the CWD to the root of the current repository
+  local up_path="$("${GIT}" rev-parse --show-cdup)"
+  # Relative path from the root of the current repository to the CWD
+  local relative_cwd="$("${GIT}" rev-parse --show-prefix)"
+  # Guarantee a trailing / or empty string (this probably is guaranteed by
+  # --show-cdup)
+  up_path="${up_path:+"${up_path%/}"/}"
+  relative_cwd="${relative_cwd:+"${relative_cwd%/}/"}"
+
+  local submodule_foreach_rv=0
+  pushd "${up_path}" &> /dev/null
+    # In git v1.8.3, git submodule must be run in the toplevel of the working
+    # tree
+    # git v1.8.3 does not support git -C
+    "${GIT}" submodule foreach '[ -n "${prefix+set}" ]' &> /dev/null || submodule_foreach_rv="${?}"
+  popd &> /dev/null
+
+  local OLD_IFS="${IFS}"
+  IFS=$'\n'
+  # At some point, prefix was deprecated and removed in favor of displaypath
+  local submodule_paths
+  if [ "${submodule_foreach_rv}" -eq "0" ]; then
+    pushd "${up_path}" &> /dev/null
+      # In git v1.8.3, git submodule must be run in the toplevel of the working
+      # tree
+      # git v1.8.3 does not support git -C
+      submodule_paths=($(up_path="${up_path}" relative_cwd="${relative_cwd}" \
+          "${GIT}" submodule foreach --quiet ${recursive_flag[@]+"${recursive_flag[@]}"} \
+              'export prefix
+               bash -c '\''faux_displaypath="${up_path}${prefix}"; \
+                           echo "${faux_displaypath/"${up_path}${relative_cwd}"/}"'\'))
+    popd &> /dev/null
+  else
+    # displaypath is built-up from sm_path by ``git submodule foreach`` as it
+    # iterates through the submodules using ``git submodule--helper list``,
+    # which queries info from .git/index; see
+    # https://github.com/git/git/blob/v2.16.0/git-submodule.sh#L304
+    submodule_paths=($("${GIT}" submodule foreach --quiet \
+        ${recursive_flag[@]+"${recursive_flag[@]}"} 'echo "${displaypath}"'))
+  fi
+  IFS="${OLD_IFS}"
+  local submodule_path
+  for submodule_path in ${submodule_paths[@]+"${submodule_paths[@]}"}; do
+    # Remove trailing slashes because on some versions of git (v1.8.3, v2.17.1)
+    # prefix has a trailing slash
+    # RE It may be that prefix always has a trailing slash and displaypath does not
+    echo "${submodule_path%/}"
+  done
+  #
+  # Similarly, git submodule foreach 'echo "${toplevel}/${sm_path}"' will print
+  # the absolute path to all the submodules. (As will passing 'echo "${PWD}"' as
+  # the sh command.)
+  #
+  # Alternatively, the path (aka sm_path) for the submodule can be queried with
+  # git config (although, by itself, not recursively):
+  #   git config submodule.docker/recipes.path
+  # which looks up the (sm\_)path using the submodule's name (which here is the
+  # same as the sm_path...although that does not have to be the case) in the
+  # parent repository's git config file (if set), and
+  #   git config -f .gitmodules submodule.docker/recipes.path
+  # which reads what is in the parent repository's .gitmodules file.
+  #
+  # Admittedly, by themselves, these commands not very useful.
+  # git_mirror:get_config_submodule_names uses
+  #   git config --name-only --get-regexp '^submodule\..*\.url$' | sed 's|.url$||'
+  # to first query the submodule names and then lookup their paths.
+  #
+  # NOTE Updating a submodule's path (as recorded in the .gitmodules file) is
+  # tricky to get right; git basically treats it like a new submodule
+}
+
+#**
+# .. function:: git_submodule_urls_recursive
+#
+# Recursively get all submodule URLs
+#
+# .. seealso::
+#
+#   :func:`git_submodule_urls`
+#**
+
+function git_submodule_urls_recursive()
+{
+  _recursive_urls=0 git_submodule_urls ${@+"${@}"}
+}
+
+#**
+# .. function:: git_submodule_urls
+#
+# Get all submodule URLs
+#
+# Get the (last) URL for each submodule (recursively) from its .git/\*\*/config file (e.g., .git/modules/docker/recipes/config) for the specified remote (origin by default). Note: Since git v1.8, a remote can have multiple associated URLs (and pushurls) (see .git/config).
+#
+# :Arguments: [``$1``] - The name of a remote. Note: this same remote must exist in all submodules. Default: origin
+# :Output: *stdout* - The URL of each submodule (recursively); e.g., https://github.com/VisionSystemsInc/docker_recipes.git
+#
+# .. note::
+#
+#    The ultimate source-of-truth of a submodule's URL is in its .gitmodules file. If the URL is updated in this file, then the repository's and submodule's configurations will be out-of-date. ``git submodule sync`` will update these configurations using the .gitmodules file and the default remote of the current branch, if set; otherwise origin. :func:`git_submodule_sync` will do the same but using the specified remote.
+#
+# .. note::
+#
+#   This function iterates through each submodule in the same order as :func:`git_submodule_displaypaths`, :func:`git_submodule_names` and :func:`git_submodule_toplevels` (i.e., a depth-first traversal)
+#
+# .. note::
+#
+#   Because this function uses ``git submodule foreach``, it skips submodules that have been init'd but not updated. Cf. :func:`git_mirror get_config_submodule_names`, which will (non-recursively) list submodules that have only been init'd. The associated URL can then be queried for a given submodule name with ``git config --get submodule.<name>.url`` as :func:`git_mirror clone_submodules` does.
+#
+# .. seealso::
+#
+#   :func:`git_submodule_urls_recursive` and :func:`git_submodule_displaypaths`
+#**
+
+function git_submodule_urls()
+{
+  local remote_name="${1-origin}"
+
+  local recursive_flag=()
+  if [ -n "${_recursive_urls:+set}" ]; then
+    recursive_flag=("--recursive")
+  fi
+
+  # git submodule foreach must be run from the top-level working tree in
+  # git v1.8.3
+  pushd "$("${GIT}" rev-parse --show-cdup)" &> /dev/null
+    # Query the URL from the submodule's repository configuration
+    # (e.g., .git/modules/docker/recipes/config)
+    # REVIEW Should i unset GIT_DIR?
+    "${GIT}" submodule foreach --quiet ${recursive_flag[@]+"${recursive_flag[@]}"} \
+        "export GIT; bash -euc 'echo \"\$("${GIT}" config --get remote."${remote_name}".url)\"'"
+  popd &> /dev/null
+  #
+  # Alternatively, the repository's configuration can be queried for the
+  # submodule's URL with git config (although, by itself, not recursively):
+  #   git config submodule.docker/recipes.url
+  # which looks up the URL in the parent repository's git config file, and
+  #   git config -f .gitmodules submodule.docker/recipes.url
+  # which reads what is in the parent repository's .gitmodules file.
+  #
+  # git submodule sync will synchronize these two configurations using the
+  # primary source-of-truth, the .gitmodules file (and, if a relative URL, the
+  # default remote of the current branch of the parent repository, if set;
+  # otherwise origin), for the default remote of the current branch in the
+  # submodule, if set; otherwise origin.
+  # (Source: see the note in the documentation of submodule-helper-relative-url)
+  # git_submodule_sync will do the same but using the specified remote.
+  #
+  # A repository's configuration can also have multiple associated URLs for a
+  # submodule (see .git/config:submodule)
+  #   git config --get-all submodule.docker/recipes.url
+  # Similarly, a submodule's configuration can have multiple associated URLs
+  # (and pushurls) for a named remote (e.g., origin) (see
+  # .git/modules/docker/recipes/config:remote)
+  #   git config --get-all remote.origin.url
+  #   git remote get-url --all origin
+  # However, if there are multiple URLs in either config, git submodule sync
+  # will die
+}
+
+#**
+# .. function:: git_submodule_names_recursive
+#
+# Recursively get the name of each submodule
+#
+# .. seealso::
+#
+#   :func:`git_submodule_names`
+#**
+
+function git_submodule_names_recursive()
+{
+  _recursive_names=0 git_submodule_names ${@+"${@}"}
+}
+
+#**
+# .. function:: git_submodule_names
+#
+# Get the name of each submodule
+#
+# Get the name of the submodule as defined in the .gitmodules file. This name is, by default, the same as the path to the submodule; however, this is not necessarily the case.
+#
+# :Output: *stdout* - The name of each submodule (recursively); e.g., docker/recipes
+#
+# .. note::
+#
+#   Submodule names are not the same thing as submodule paths.
+#
+# .. note::
+#
+#   This function iterates through each submodule in the same order as :func:`git_submodule_displaypaths`, :func:`git_submodule_urls` and :func:`git_submodule_toplevels` (i.e., a depth-first traversal)
+#
+# .. note::
+#
+#   Because this function uses ``git submodule foreach``, it skips submodules that have been init'd but not updated. Cf. :func:`git_mirror get_config_submodule_names` (it queries the current repository's submodule names from its configuration), which will list submodules that have been init'd but not updated, and :func:`just_git_functions.bsh submodule-helper-list`, which will list all submodules, even those not init'd (it queries the current repository's submodule names and paths from the .gitmodules file). Although these functions are not recursive, they both are used to recurse manually through all the submodules (albeit, in a different order than this function).
+#
+# .. seealso::
+#
+#   :func:`git_submodule_names_recursive` and :func:`git_submodule_toplevels`
+#**
+
+function git_submodule_names()
+{
+  local recursive_flag=()
+  if [ -n "${_recursive_names:+set}" ]; then
+    recursive_flag=("--recursive")
+  fi
+
+  # git submodule foreach must be run from the top-level working tree in
+  # git v1.8.3
+  pushd "$("${GIT}" rev-parse --show-cdup)" &> /dev/null
+    "${GIT}" submodule foreach --quiet ${recursive_flag[@]+"${recursive_flag[@]}"} 'echo "${name}"'
+  popd &> /dev/null
+  #
+  # Alternatively, the names of a repository's submodules can be queried with
+  # git config (although, by itself, not recursively):
+  #   git config --name-only --get-regexp '^submodule\..*\.url$' | \
+  #       sed -e 's|.url$||' -e 's|^submodule.||'
+  #
+  # git submodule--helper name docker/recipes will also return the name of a
+  # submodule given an sm_path (available at least after git v2.7)
+  #
+  # NOTE Updating a submodule's name (as recorded in the .gitmodules file) is
+  # tricky to get right; git basically treats it as a new submodule
+}
+
+#**
+# .. function:: git_submodule_toplevels_recursive
+#
+# Recursively get the path to the top-level directory of each submodule
+#
+# .. seealso::
+#
+#   :func:`git_submodule_toplevels`
+#
+#**
+
+function git_submodule_toplevels_recursive()
+{
+  _recursive_toplevels=0 git_submodule_toplevels ${@+"${@}"}
+
+}
+
+#**
+# .. function:: git_submodule_toplevels
+#
+# Get the path to the top-level directory of each submodule
+#
+# Get the path to what git refers to as the top-level directory of the submodule; i.e., the absolute path to the top-level of the immediate superproject. For example, the vsi_common repository has a submodule at ``docker/recipes``. If the repository is cloned in ``/src``, then the top-level directory for the submodule docker/recipes is ``/src/vsi_common``.
+#
+# This function, along with :func:`git_submodule_names`, could be used to, for example, cd to the top-level of each immediate superproject and then query the repository's submodule configuration using ``git config submodule.<name>.<key>``; e.g., ``git config submodule.docker/recipes.url``.
+#
+# :Output: *stdout* - The top-level directory of each submodule (recursively); e.g., /src/vsi_common
+#
+# .. note::
+#
+#   This function iterates through each submodule in the same order as :func:`git_submodule_displaypaths`, :func:`git_submodule_urls` and :func:`git_submodule_names` (i.e., a depth-first traversal)
+#
+# .. note::
+#
+#   Because this function uses ``git submodule foreach``, it skips submodules that have been init'd but not updated.
+#
+# .. seealso::
+#
+#   :func:`git_submodule_toplevels_recursive` and :func:`git_submodule_names`
+#**
+
+function git_submodule_toplevels()
+{
+  local recursive_flag=()
+  if [ -n "${_recursive_toplevels:+set}" ]; then
+    recursive_flag=("--recursive")
+  fi
+
+  # git submodule foreach must be run from the top-level working tree in
+  # git v1.8.3
+  pushd "$("${GIT}" rev-parse --show-cdup)" &> /dev/null
+    "${GIT}" submodule foreach --quiet ${recursive_flag[@]+"${recursive_flag[@]}"} 'echo "${toplevel}"'
+  popd &> /dev/null
+}
+
+#**
+# .. function:: submodule-helper-relative-url
+#
+# Essentially ``git submodule--helper relative-url`` (if it existed)
+#
+# Resolve a submodule's relative URL based on the parent URL. This function works by creating a dummy git repository and submodule and then running ``git submodule init`` (which runs a process similar to ``git submodule sync``), after which, the resolved URL can be queried with ``git config submodule.submod.url``. We do this to avoid modifying the existing repository's git configuration (e.g., ``git config submodule.docker/recipes.url``).
+#
+# :Arguments: * ``$1`` - URL of the parent repository; e.g., https://github.com/VisionSystemsInc/vsi_common.git per ``git config remote.origin.url``
+#             * ``$2`` - A relative submodule URL---typically from the .gitmodules file; e.g., ../../VisionSystemsInc/docker_recipes.git per ``git config -f .gitmodules submodule.docker/recipes.url``
+#             * [``$3``] - Up path: path from the submodule to the parent repository; e.g., ``../../``. Must have a trailing slash. (Not strictly necessary if ``$1`` is an absolute path)
+#
+# :Output: *stdout* - Resolved URL; e.g., https://github.com/VisionSystemsInc/docker_recipes.git
+#
+# .. note::
+#
+#   This is essentially a bash port of the function `relative_url() <https://github.com/git/git/blob/v2.16.0/builtin/submodule--helper.c#L117>`_ (called from `resolve_relative_url() <https://github.com/git/git/blob/v2.16.0/builtin/submodule--helper.c#L180>`_, aka ``git submodule--helper resolve-relative-url``, which itself is called from `cmd_sync() <https://github.com/git/git/blob/v2.16.0/git-submodule.sh#L1014>`_, aka ``git submodule sync``. ``git submodule--helper resolve-relative-url``, which is available in git v2.9 and after, does not allow us to specify (directly) the remote URL from which to resolve a relative URL: it resolves relative URLs based on the remote URL, ``git config remote.${remote_name}.url``, where remote_name is the default remote of the current branch, if set; otherwise origin.
+#**
+
+function submodule-helper-relative-url()
+{
+  local remote_url="${1}"
+  local gitmodules_url="${2}"
+  local up_path="${3-}" # If set, guaranteed by git to have a trailing slash
+
+  # Replace ../../ with subdir/subdir/
+  local sm_path="${up_path//..\//subdir/}submod"
+  # Strip off one level
+  sm_path="${sm_path/subdir\//}"
+
+  # Work in an automatically deleting temporary directory
+  local temp_repo
+  make_temp_path temp_repo -d
+  pushd "${temp_repo}" 1>/dev/null
+    # Fake out a git repo and submodule. I need to know the URL tracked by
+    # the .gitmodules file (because that is what is used when cloning the
+    # repo). However, I can't use git config -f .gitmodules because the
+    # path can (annoyingly) be a relative URL (either to a web address or
+    # filesystem path) and I can't figure out any other way to expand it
+    # other then running git submodule sync (or init if not already).
+    # However, this will also "synchronize the submodules' remote URL
+    # configuration setting to the value specified in .gitmodules". That is
+    # to say, it updates the value in .git/config as well as the value in
+    # .git/modules/docker/recipes/config, which is a problem we've run into
+    # before: issue #186
+    # RE In git v2.9.0, git submodule--helper resolve-relative-url, was added
+    # to do this for an existing submodule, but relative URLs exist as far back
+    # as v1.8.3 and it does not support the third parameter, up_path
+    # RE Actually, it seems the behavior of
+    #   git submodule--helper resolve-relative-url
+    # is less sophisticated than I expected (basically just a norm_path if
+    # the host & rpath of the URL could be extracted easily. While
+    # parser.bsh:parse_url exists, it doesn't handle the various URL formats
+    # supported by git: e.g., ssh://git@, git@, etc.)
+    "${GIT}" init 1>/dev/null
+    "${GIT}" config remote.origin.url "${remote_url}"
+    uwecho "[submodule \"${sm_path}\"]
+              path = "${sm_path}"
+              url = ${gitmodules_url}" > .gitmodules
+    mkdir -p "${sm_path}" .git/modules/"${sm_path}"/{objects,refs/heads}
+    # Strip trailing slash (not necessary, but easy)
+    echo "gitdir: ${up_path%/}/.git/modules/${sm_path}" > "${sm_path}"/.git
+    echo "ref: refs/heads/master" > .git/modules/"${sm_path}"/HEAD
+    echo "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" > .git/modules/"${sm_path}"/refs/heads/master
+
+    # from https://stackoverflow.com/a/37378302
+    "${GIT}" update-index --add --cacheinfo 160000 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "${sm_path}" 1>/dev/null
+    # git submodule init sometimes outputs to stdout, sometimes to stderr
+    "${GIT}" submodule init "${sm_path}" &>/dev/null
+    "${GIT}" submodule sync "${sm_path}" 1>/dev/null
+
+    if [ -n "${up_path}" ]; then
+      pushd "${sm_path}" 1> /dev/null
+        "${GIT}" config --get remote.origin.url
+      popd 1> /dev/null
+    else
+      "${GIT}" config --get submodule.submod.url
+    fi
+  popd 1>/dev/null
+}
+
+#**
+# .. function:: git_submodule_sync_recursive
+#
+# ``git submodule sync --recursive`` but using a specific remote (``just_upstream`` by default)
+#
+# .. seealso::
+#
+#   :func:`git_submodule_sync`
+#**
+
+function git_submodule_sync_recursive()
+{
+  _recursive_sync=0 git_submodule_sync ${@+"${@}"}
+}
+
+#**
+# .. function:: git_submodule_sync
+#
+# ``git submodule sync`` but using a specific remote (``just_upstream`` by default)
+#
+# Like ``git submodule sync``, synchronize the configured URL of each submodule in a repository (recursively) to the value specified in .gitmodules; however, instead of overwriting the default remote (origin), update the remote specified by JUST_GIT_UPSTREAM (``just_upstream`` by default).
+#
+# :Arguments: [``$1``] - The project-repository's remote. Default: origin
+#             [``$2...``] - The submodule path to sync (or multiple submodules). Default: all submodules of the current repository (non-recursively)
+# :Parameters: - [``JUST_GIT_UPSTREAM``] - The submodules' remote to sync. When updating the URL in the submodules' configuration, use this remote. Default: ``just_upstream``
+#
+# .. note::
+#
+#   Because this function uses ``git submodule foreach``, it skips submodules that have been init'd but not updated.
+#
+# .. note::
+#
+#   Creates the just_upstream remote just like, and using the same procedure as, :func:`just_git_functions.bsh safe_git_submodule_update`; however, importantly, it does not try to update the submodule to the expected SHA.
+#
+# .. seealso::
+#
+#   :func:`git_submodule_sync_recursive`
+#**
+
+function git_submodule_sync()
+{
+  local remote_name="${1-origin}"
+
+  local OLD_IFS="${IFS}"
+  IFS=$'\n'
+  local submodule_names=($(git_submodule_names))
+  IFS="${OLD_IFS}"
+  # If there are no submodules, then there is nothing to sync
+  # (If in_displaypaths is provided, then the list of submodules will be
+  # filtered; however, submodule_names cannot be empty because each
+  # in_displaypath must match a path to a submodule)
+  if [ "${#submodule_names[@]}" -eq "0" ]; then
+    return
+  fi
+
+  # Filter the submodule_names by the provided in_displaypaths
+  if [ "${#}" -gt "1" ]; then
+    IFS=$'\n'
+    # Doesn't have trailing slashes
+    local submodule_displaypaths=($(git_submodule_displaypaths))
+    IFS="${OLD_IFS}"
+    # NOTE Array-slice copying doesn't work in bash 3.2 if IFS is set to $'\n'.
+    # Set IFS to $' \t\n' instead.
+    # See compat.bsh:bash_bug_ifs_array_slice_expansion
+    # RE IFS is no longer being changed to $'\n', but I'm leaving this comment
+    # for posterity
+    # REVIEW Should I specify the IFS around all array-slice copying?
+    local in_displaypaths=("${@:2}")
+    local in_displaypath
+    local filtered_sm_names=()
+    # Select the submodule name for each displaypath
+    for in_displaypath in "${in_displaypaths[@]}"; do
+      # Remove trailing slash
+      # NOTE To match git's behavior, would need to replace findin with
+      # something that supports a partial match or pattern so that we can relax
+      # in_displaypath (i.e., a relative path to a submodule) to simply be a
+      # path to a directory containing submodules (an in_path, normalized with,
+      # e.g., dir_tools.bsh:normpath)
+      local index="$(findin "${in_displaypath%/}" \
+          ${submodule_displaypaths[@]+"${submodule_displaypaths[@]}"})"
+      if [ "${index}" = "-1" ]; then
+        echo "ERROR pathspec '${2}' did not match any file(s) known to git_submodule_sync (PWD: ${PWD})"
+        return 1
+      fi
+      filtered_sm_names+=("${submodule_names[index]}")
+    done
+    submodule_names=("${filtered_sm_names[@]}")
+  fi
+
+  # If we are not in the top-level directory of the repo, change to it
+  # Alternatively, strip the 'git rev-parse --show-cdup' prefix off of each
+  # in_displaypath
+  local up_path="$("${GIT}" rev-parse --show-cdup)"
+  pushd "${up_path}" &> /dev/null
+    _git_submodule_sync "${remote_name}" "${submodule_names[@]}"
+  popd &> /dev/null
+}
+
+function _git_submodule_sync()
+{
+  local remote_name="${1}"
+  local submodule_names=("${@:2}") # empty array if unset
+
+  local JUST_GIT_UPSTREAM="${JUST_GIT_UPSTREAM-just_upstream}"
+
+  local sm_name
+  for sm_name in ${submodule_names[@]+"${submodule_names[@]}"}; do
+    local sm_path="$("${GIT}" config -f .gitmodules submodule."${sm_name}".path)"
+    # Remove trailing slash
+    sm_path="${sm_path%/}"
+    local submodule_url="$("${GIT}" config -f .gitmodules submodule."${sm_name}".url)"
+    # URLs/paths relative to the CWD must either start with ./ or ../
+    # according to git. This is how git-submodule.sh checks for this:
+    # https://github.com/git/git/blob/v2.16.0/git-submodule.sh#L1059
+    if [[ ${submodule_url} = ./* ]] || [[ ${submodule_url} = ../* ]]; then
+      # Based on https://github.com/git/git/blob/v2.16.0/git-submodule.sh#L1060
+      # rewrite foo/bar as ../.. to find path from
+      # submodule work tree to superproject work tree
+      local up_path="$(printf '%s\n' "${sm_path}" | sed "s/[^/][^/]*/../g")" # more like up_path_of_path
+      # guarantee a trailing /
+      up_path="${up_path%/}/"
+      local remote_url="$("${GIT}" config remote."${remote_name}".url)"
+      # path from submodule work tree to submodule origin repo
+      sub_origin_url="$(submodule-helper-relative-url "${remote_url}" "${submodule_url}" "${up_path}")"
+      # path from superproject work tree to submodule origin repo
+      # super_config_url=$(submodule-helper-relative-url "${remote_url}" "${submodule_url}")
+      # No need to set this:
+      # git config submodule."${sm_name}".url "${super_config_url}"
+
+      submodule_url="${sub_origin_url}"
+    fi
+
+    pushd "${sm_path}" &>/dev/null
+      # See just_git_functions.bsh:safe_git_submodule_update:
+      # This is my equivalent to "git submodule sync". It uses a specific remote
+      # that it not one of the defaults to handle issue #186
+      "${GIT}" remote add "${JUST_GIT_UPSTREAM}" "${submodule_url}" &> /dev/null || \
+        "${GIT}" remote set-url "${JUST_GIT_UPSTREAM}" "${submodule_url}"
+
+      # Depth-first traversal
+      if [ -n "${_recursive_sync:+set}" ]; then
+          local OLD_IFS="${IFS}"
+          IFS=$'\n'
+          submodule_names=($(git_submodule_names))
+          IFS="${OLD_IFS}"
+
+        _git_submodule_sync "${JUST_GIT_UPSTREAM}" ${submodule_names[@]+"${submodule_names[@]}"}
+      fi
+    popd &>/dev/null
+  done
+}
+
+#**
+# .. function:: git_submodule_is_published_recursive
+#
+# Ensure all submodules have pushed the necessary changes to their public repo
+#
+# Check each submodule (recursively) to see if the SHA tracked by its parent repository has been pushed to the URL tracked by the parent repository (per its .gitmodules file). Must be run from the root of a repository.
+#
+# :Arguments: [``$1``] - The project-repository's remote. Default: origin
+# :Parameters: - [``JUST_GIT_UPSTREAM``] - The submodule's remote to sync. When fetching, use this remote's URL. Default: ``just_upstream``
+#
+# :Output: Return 0 if, for each submodule (recursively), the changes tracked by the parent repository have been made public; otherwise, return 1
+#
+# .. note::
+#
+#   Creates a JUST_GIT_UPSTREAM remote. See :func:`git_submodule_sync`.
+#
+# .. note::
+#
+#   Cf. ``git push --recurse-submodules=check`` (available since git v1.8.0) will check for unpushed commits in a submodule for its current committed state in the parent project. However, this only seems to work if it is used with a set of outgoing commits that contains a change to a submodule. And, despite its name, it does not seem to recurse into submodules.
+#**
+
+function git_submodule_is_published_recursive()
+{
+  # The quoting of the variable substitution here is intentional. This causes
+  # the parameter to not exist at all if $1 is not defined
+  git_submodule_sync_recursive ${1+"${1}"}
+
+  local is_tracked_change_private=0
+
+  # If we are not in the top-level directory of the repo, change to it
+  local up_path="$("${GIT}" rev-parse --show-cdup)"
+  pushd "${up_path}" &> /dev/null
+    _git_submodule_is_published_recursive
+  popd &> /dev/null
+
+  return "${is_tracked_change_private}"
+}
+
+function _git_submodule_is_published_recursive()
+{
+  local JUST_GIT_UPSTREAM="${JUST_GIT_UPSTREAM-just_upstream}"
+
+  local OLD_IFS="${IFS}"
+  IFS=$'\n'
+  # NOTE This function could be refactored so that it is not recursive by using
+  # git_submodule_toplevels_recursive and git_submodule_displaypaths_recursive
+  local submodule_names=($(git_submodule_names))
+  IFS="${OLD_IFS}"
+
+  local sm_name
+  for sm_name in ${submodule_names[@]+"${submodule_names[@]}"}; do
+    local sm_path="$("${GIT}" config -f .gitmodules submodule."${sm_name}".path)"
+    # Remove trailing slash
+    sm_path="${sm_path%/}"
+    # This seems faster than git submodule status --cached
+    # RE This must be run from the toplevel (root) directory of the repository
+    local tracked_sha="$("${GIT}" ls-tree HEAD:"$(dirname "${sm_path}")"/ "$(basename "${sm_path}")" | \
+        awk '{print $3}')"
+    local submodule_url="$("${GIT}" config -f .gitmodules submodule."${sm_name}".url)"
+
+    pushd "${sm_path}" &>/dev/null
+      "${GIT}" fetch "${JUST_GIT_UPSTREAM}"
+
+      # git branch -r --contains SHA will show a list of remote/branch refs
+      # that contain a SHA. If no remote/branch refs are returned, this means
+      # the commit has not been pushed
+      if [ "$("${GIT}" branch -r --color=never --contains "${tracked_sha}" | grep "^  ${JUST_GIT_UPSTREAM}")" = "" ]; then
+        echo "WARNING The commit tracked by the parent repository of the"
+        echo "submodule, '${sm_name}', has not been pushed to the"
+        echo "remote URL tracked by the parent repository:"
+        echo "  ${submodule_url}"
+        # REVIEW Print the unpushed commits for the remote/tracked_sha
+        echo
+        is_tracked_change_private=1
+      fi
+
+      # Depth-first traversal
+      _git_submodule_is_published_recursive "${JUST_GIT_UPSTREAM}"
+    popd &>/dev/null
+  done
+
+  # NOTE All submodules are checked before returning
+  # RE Alternatively, short circuit and return early
+}
