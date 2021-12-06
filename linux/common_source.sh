@@ -458,7 +458,7 @@ if [ "${VSI_DISTRO_CORE-}" = "debian" ]; then
   # turn codenames to numbers
   case "${VSI_DISTRO_VERSION_CORE-}" in
     squeeze)  VSI_DISTRO_VERSION_CORE=6  ;; # LTS Feb 29 2016
-    wheezy)   VSI_DISTRO_VERSION_CORE=7  ;; # ELTS ~2022-06-30
+    wheezy)   VSI_DISTRO_VERSION_CORE=7  ;; # ELTS ~2020-06-30
     jessie)   VSI_DISTRO_VERSION_CORE=8  ;; # ELTS ~2022-06-30
     stretch)  VSI_DISTRO_VERSION_CORE=9  ;; # EOL 2020-07-06 LTS 2022-06-30
     buster)   VSI_DISTRO_VERSION_CORE=10 ;; # EOL 2022-08
@@ -490,7 +490,7 @@ if [ "${VSI_DISTRO_LIKE-}" = "ubuntu" ]; then
     groovy)  VSI_DISTRO_VERSION_LIKE=20.10 ;; # EOL July 22, 2021
     hirsute) VSI_DISTRO_VERSION_LIKE=21.04 ;; # EOL ~Jan 2022
     impish)  VSI_DISTRO_VERSION_LIKE=21.10 ;; # Release October 14, 2021 EOL July 2022
-    #j)      VSI_DISTRO_VERSION_LIKE=22.04 ;; # Release April 21, 2022 EOL April 2027
+    jammy)   VSI_DISTRO_VERSION_LIKE=22.04 ;; # Release April 21, 2022 EOL April 2027, ESM Apr 2032
   esac
 fi
 
