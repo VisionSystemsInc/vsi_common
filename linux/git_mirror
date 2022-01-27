@@ -949,14 +949,17 @@ function git_push_main()
           # RE as recommended by https://stackoverflow.com/a/54413257, I could
           # do git clone --bare instead of git clone --mirror in git_clone_main,
           # which only clones refs/heads/* and refs/tags/* (although the latter
-          # is not clear from the documentation); but irritatingly, it does not
-          # create a refspec in the config file, which prevents future fetches,
-          # so we would have to add one (which is easy enough).
+          # is not clear from the documentation, and surprisingly it is not the
+          # result of [3]); but irritatingly, it does not create a refspec in
+          # the config file, which prevents future fetches, so we would have to
+          # add one (which is easy enough).
           # RE RE Perhaps we should do git clone --bare instead of --mirror in
           # git_clone_main, add the refspec, and add a parameter to pass in a
           # list of additional refspecs-of-interest; e.g., refs/qa or whatever,
           # which can be included using the git clone -c remote.origin.fetch
-          # option
+          # option [2]
+          # RE RE NOTE in this case, the refspec should be symmetric, e.g.,
+          # refs/heads/*:refs/heads/*
           # RE RE The problem with this is that if an additional refspec
           # overlaps with the default refspec, it causes an error; ensuring this
           # does not happen (short of running the command) is hard; negative
@@ -966,15 +969,28 @@ function git_push_main()
           # refspec, which could either be appended to the default refspec (as
           # overlapping refspecs are allowed with fetch) or alternatively
           # replace it
-          # QUESTION What is the problem with mirroring the repo, but only
-          # pushing the refspec? Or even tag (in a namespace) all the refs but
-          # only push the refspec (which would include all of these tags, but
-          # they will not cause problems in this case because they are tags
-          # (refs/tags), not some other ref (aka branch). Although it would
-          # create a lot of tags)
-          # RE One problem with this is tags are treated a little differently
-          # than other refs; i.e., all tags are not cloned by default. Only
-          # those that are reachable from a head
+          # Alternatively, is there a problem with mirroring the repo as we
+          # currently do, but only pushing the refspec? Or even tag (in a
+          # namespace) ALL the refs but only push the refspec (which would
+          # include all of these new tags, but they would never need to be
+          # force pushed (since I namespace them by datetime). Although this
+          # would create a lot of tags)
+          # RE One quirk here is tags are treated a little differently than
+          # other refs; i.e., all tags are not cloned by default; however,
+          # those that are reachable from a head ARE cloned [3].
+          # RE Alternatively, create (a copy) of ALL the refs in a namespace
+          # (as we do when tagging, e.g., refs/heads, in git_tag_main), push
+          # them so the SHA exists on the remote, and then push other refs
+          # according to the provided refspec; that way we don't clutter up
+          # tags, just branches...
+          # RE One problem is where to put this namespace; it would have to be
+          # something like refs/just_git_mirror since the refspec could include
+          # anything (refs/heads refs/tags refs/qa, etc.), but this would not
+          # be cloned by the default refspec...
+          # RE Another problem with this is what to do with tags; I guess these
+          # can just be treated as any other ref (albeit technically moveable)
+          # NOTE With any approach, need to ensure that incremental transfers
+          # untar correctly
           #
           # Ultimately, the server could reject a ref for any number of reasons.
           # The problem is that unpushable refs cause the repo to be in an
@@ -986,11 +1002,13 @@ function git_push_main()
           # of the refs that were force pushed and those that failed to push
           #
           # NOTE By default, when fetching refs/heads, any reachable tag is also
-          # fetched [2]
+          # fetched [3]
           #
           # [1] https://git-scm.com/docs/git-config/2.17.0# ...
           #             Documentation/git-config.txt-transferhideRefs
-          # [2] https://git-scm.com/docs/git-fetch/2.25.0
+          # [2] https://git-scm.com/docs/git-config/2.17.0# ...
+          #             Documentation/git-config.txt-remoteltnamegtfetch
+          # [3] https://git-scm.com/docs/git-fetch/2.25.0
           # oye, this is a comment...
 
 
@@ -1085,7 +1103,7 @@ function git_push_main()
 #
 # Tag the refs in the mirrored repository and all submodules
 #
-# Before pushing the mirrored repository and all of its submodules to the new git server with :func:`git_push_main`, tag the refs so that if, during the **next** transfer, they become dereferenced (due to a force push, which is sometimes necessary), they are not lost. For a ref of the form refs/heads/main, this (annotated) tag takes the (long) form of refs/tags/just_git_mirror/{datetime}/heads/main
+# Before pushing the mirrored repository and all of its submodules to the new git server with :func:`git_push_main`, tag the refs so that if, during the **next** transfer, they become dereferenced (due to a force push, which is sometimes necessary), they are not lost. For a ref of the form refs/heads/main, this tag takes the (long) form of refs/tags/just_git_mirror/{datetime}/heads/main
 #
 # :Arguments: ``$1`` - A file specifying the mapping between each repository and its mirror URL; see :func:`_git_mirror_load_info`
 #             ``$2`` - The mirrored repositories (extracted from the archive) created by :func:`git_mirror_main`
