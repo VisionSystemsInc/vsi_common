@@ -312,6 +312,7 @@ function conda-install()
 #             * [``--conda-installer {INSTALLER}``] - Conda installer
 #             * [``--download``] - Download miniconda
 #             * [``--package {package}``] - An additional package to be installed, may be called multiple times
+#             * [``--list``] - List all possible versions of python, then return. Does not install
 #
 # :Output: * python_exe - Python executable
 #          * python_version - Python version
@@ -328,6 +329,7 @@ function conda-python-install()
   local prefer_download=0  # prefer conda download if no CONDA|CONDA_INSTALLER
   local packages=()
   local conda_activate
+  local list_versions=0
 
   parse_args conda_python_extra_args \
       --dir python_dir: \
@@ -336,7 +338,15 @@ function conda-python-install()
       --conda-installer CONDA_INSTALLER: \
       --download prefer_download \
       --package +packages: \
+      --list list_versions \
       -- ${@+"${@}"}
+
+  if [ "${list_versions}" != "0" ]; then
+    # This has worked since at least 2016, so fairly stable
+    download_to_stdout https://anaconda.org/anaconda/python/files | sed -n${sed_flag_rE} 's|^ *<a href=".*/anaconda/python/files\?version=([0-9.]*)">|\1|p'
+    JUST_IGNORE_EXIT_CODES=11
+    return 11
+  fi
 
   # directory check
   if [ -z "${python_dir-}" ]; then
@@ -349,7 +359,7 @@ function conda-python-install()
   if [ -n "${CONDA:+set}" ]; then
     # use provided conda
     :
-  elif [ "${prefer_download}" == "1" ]; then
+  elif [ "${prefer_download}" != "0" ]; then
     # download fresh installer
     CONDA_INSTALLER=
   elif [ -n "${CONDA_INSTALLER:+set}" ]; then
