@@ -54,7 +54,7 @@ extensions = [
 # Link to other documentation (e.g., numpy, python, etc.)
 intersphinx_mapping = {
     'ipython': ('https://ipython.readthedocs.io/en/stable/', None),
-    'matplotlib': ('https://matplotlib.org/', None),
+    'matplotlib': ('https://matplotlib.org/stable', None),
     'numpy': ('https://numpy.org/doc/stable', None),
     'python': ('https://docs.python.org/3.7', None),
 }
