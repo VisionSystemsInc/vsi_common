@@ -592,14 +592,20 @@ function git_submodule_summary()
   for sm_key in ${submodule_keys[@]+"${submodule_keys[@]}"}; do
     local sm_path="$("${GIT}" config --file .gitmodules --get submodule."${sm_key}".path)"
 
-    # List the changes (as commits) to the working tree of a submodule
-    # cf. git submodule summary, which doesn't show modified/staged content
-    # RE The implementation for git submodule summary [1] and this command,
-    # git diff --submodule=log sm_path [2], are not the same
+    # List the changes (in commits) to the working tree of a submodule
+    # cf. git submodule summary, which doesn't show that there is modified or
+    # staged content
+    # RE The implementation for git submodule summary sm_path [1] and this
+    # command, git diff --submodule=log sm_path [2], are not the same
     # RE Unfortunately, both commands only list the first parents [3]
+    # Alternatively, git -c status.submoduleSummary=True status sm_path is
+    # similar as well
     # REVIEW Because of these limitations, it might be nicer if this function
-    # entered into submodule and ran git log... directly (which is not too hard)
-    # RE Could even run git status --porcelain=1
+    # entered into each submodule and ran git log... directly (which is not too
+    # hard, see below), which could show the full set of changes (in commits)
+    # to the working tree (not only the first parents)
+    # RE Could even run git status --porcelain=1 to show changes in the working
+    # tree
     #
     # [1] https://github.com/git/git/blob/v2.24.1/git-submodule.sh#L777
     # [2] https://github.com/git/git/blob/v2.24.1/diff.c#L3400 =>
@@ -609,13 +615,15 @@ function git_submodule_summary()
     "${GIT}" diff --submodule=log "${sm_path}"
 
 
-    # git diff --submodule=log SHA~1..SHA (or equivalently
-    # git log --patch --submodule=log SHA~1..SHA) can also be used to list the
-    # changes (in commits) to a submodule, but again, only to the first parents
+    # git diff --submodule=log SHA~1..SHA sm_path (or equivalently
+    # git log --patch --submodule=log SHA~1..SHA sm_path) can also be used to
+    # list the changes (in commits) to a submodule (but again, only the first
+    # parents) between two commits in the enclosing repository
     # RE For example,
     #     git diff --submodule=log 0088b126~1..0088b126 docker/recipes
-    # vs  ( cd docker/recipes && git hist 18ca5ee9..fe4f42d4 )
-    # vs  ( cd docker/recipes && git hist 18ca5ee9..fe4f42d4 --first-parent )
+    # ~=  git log --patch --submodule=log 0088b126~1..0088b126 docker/recipes
+    # vs  ( cd docker/recipes && git log --graph 18ca5ee9..fe4f42d4 --first-parent )
+    # cf. ( cd docker/recipes && git log --graph 18ca5ee9..fe4f42d4 )
 
 
     if [ -n "${_recursive_summary:+set}" ]; then
