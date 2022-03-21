@@ -46,7 +46,7 @@ class CiLoad:
     output = pid.communicate()[0]
 
     self.compose_yaml = yaml.load(output, Loader=yaml.Loader)
-    self.compose_version = self.compose_yaml['version']
+    self.compose_version = self.compose_yaml.get('version', None)
 
     # Get dockerfile name
     build = self.compose_yaml['services'][self.main_service]['build']
