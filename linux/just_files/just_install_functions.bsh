@@ -167,11 +167,12 @@ function cmake-install()
 #**
 # .. function:: conda-install
 #
-# Install miniconda
+# Install miniconda/miniforge
 #
 # :Arguments: * [``--dir {dir}``] - conda install directory
 #             * [``--version {version}``] - conda version for install (default= ``${CONDA_VERSION:-latest}``)
-#             * [``--installer {INSTALLER}``] - Conda installer
+#             * [``--installer {INSTALLER}``] - Conda installer (default= ``${CONDA_INSTALLER:-}``)
+#             * [``--miniforge``] - Use miniforge installer (rather than miniconda)
 #
 # :Output: * conda_exe - conda executable
 #          * conda_version - conda version
@@ -183,12 +184,14 @@ function conda-install()
 {
   local conda_dir  # install directory
   local conda_ver="${CONDA_VERSION:-latest}"  # conda version
-  local CONDA_INSTALLER  # optional conda installer
+  local CONDA_INSTALLER="${CONDA_INSTALLER:-}"  # optional conda installer
+  local download_miniforge=0  # use miniforge (rather than miniconda)
 
   parse_args conda_extra_args \
       --dir conda_dir: \
       --version conda_ver: \
       --installer CONDA_INSTALLER: \
+      --miniforge download_miniforge \
       -- ${@+"${@}"}
 
   # directory check
@@ -199,22 +202,54 @@ function conda-install()
   fi
 
   # download conda installer to self-deleting temporary directory
-  if [ -z "${CONDA_INSTALL-}" ]; then
+  if [ -z "${CONDA_INSTALLER-}" ]; then
 
-    local conda_url="https://repo.anaconda.com/miniconda/"
-    if [ "${OS-}" = "Windows_NT" ]; then
-      conda_url+="Miniconda3-${conda_ver}-Windows-x86_64.exe"
-    elif [[ ${OSTYPE-} = darwin* ]]; then
-      if [ "${HOSTTYPE}" = "x86_64" ]; then
-        conda_url+="Miniconda3-${conda_ver}-MacOSX-x86_64.sh"
+    # miniforge url
+    if [ "${download_miniforge}" != "0" ]; then
+
+      local conda_url="https://github.com/conda-forge/miniforge/releases/"
+      local conda_ver_str
+      if [ "${conda_ver}" == "latest" ]; then
+        conda_ver_str="-"
+        conda_url+="latest/download/"
       else
-        conda_url+="Miniconda3-${conda_ver}-MacOSX-arm64.sh"
+        conda_ver_str="-${conda_ver}-"
+        conda_url+="download/${conda_ver}/"
       fi
-    else
-      conda_url+="Miniconda3-${conda_ver}-Linux-x86_64.sh"
-    fi
-    echo "Downloading miniconda <${conda_url}>..." >&2
 
+      if [ "${OS-}" = "Windows_NT" ]; then
+        conda_url+="Miniforge3${conda_ver_str}Windows-x86_64.exe"
+      elif [[ ${OSTYPE-} = darwin* ]]; then
+        if [ "${HOSTTYPE}" = "x86_64" ]; then
+          conda_url+="Miniforge3${conda_ver_str}MacOSX-x86_64.sh"
+        else
+          conda_url+="Miniforge3${conda_ver_str}MacOSX-arm64.sh"
+        fi
+      else
+        conda_url+="Miniforge3${conda_ver_str}Linux-x86_64.sh"
+      fi
+      echo "Downloading miniforge <${conda_url}>..." >&2
+
+    # miniconda url
+    else
+
+      local conda_url="https://repo.anaconda.com/miniconda/"
+      if [ "${OS-}" = "Windows_NT" ]; then
+        conda_url+="Miniconda3-${conda_ver}-Windows-x86_64.exe"
+      elif [[ ${OSTYPE-} = darwin* ]]; then
+        if [ "${HOSTTYPE}" = "x86_64" ]; then
+          conda_url+="Miniconda3-${conda_ver}-MacOSX-x86_64.sh"
+        else
+          conda_url+="Miniconda3-${conda_ver}-MacOSX-arm64.sh"
+        fi
+      else
+        conda_url+="Miniconda3-${conda_ver}-Linux-x86_64.sh"
+      fi
+      echo "Downloading miniconda <${conda_url}>..." >&2
+
+    fi
+
+    # download installer
     local conda_installer_dir
     make_temp_path conda_installer_dir -d
     CONDA_INSTALLER="${conda_installer_dir}/$(basename "${conda_url}")"
@@ -222,13 +257,13 @@ function conda-install()
   fi
 
   # install conda
-  echo "Installing miniconda..." >&2
+  echo "Installing conda using \"$(basename ${CONDA_INSTALLER})\"..." >&2
 
   # windows
   if [ "${OS-}" = "Windows_NT" ]; then
 
     # manual specification of NoRegistry, AddToPath, & RegisterPython
-    # ensure the temporary miniconda is not added to the system registry
+    # ensure the conda install is not added to the system registry
     # at <HKEY_CURRENT_USER\SOFTWARE\Python\PythonCore>
     MSYS2_ARG_CONV_EXCL="*" "${CONDA_INSTALLER}" \
         /NoRegistry=1 /AddToPath=0 /RegisterPython=0 \
@@ -239,7 +274,7 @@ function conda-install()
     CONDA="${conda_dir}/${conda_exe_footer}"
 
     # cleanup shortcuts
-    "${CONDA}" remove --offline -y -p "${conda_dir}" console_shortcut powershell_shortcut
+    "${CONDA}" remove --offline -y -p "${conda_dir}" *_shortcut
 
   # linux & darwin
   else
@@ -262,9 +297,10 @@ function conda-install()
   echo "Conda ${conda_version} installed at \"${conda_exe}\"" >&2
 
   # Make sure version meets request
-  # note we remove any any "py??_" prefix during version comparison
   if [ "${conda_ver}" != "latest" ]; then
-    if ! meet_requirements "${conda_version}" "==${conda_ver#*_}"; then
+    local conda_ver_match="${conda_ver#*_}"  # remove any "py??_" prefix
+    conda_ver_match="${conda_ver_match%-*}"  # remove any "-??" suffix (as in miniforge 4.3.10-1)
+    if ! meet_requirements "${conda_version}" "==${conda_ver_match}"; then
       echo "Conda version ${conda_version} is not the requested version ${conda_ver}" >&2
       local JUST_IGNORE_EXIT_CODES=1
       return 1
