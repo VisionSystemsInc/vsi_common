@@ -70,106 +70,124 @@ function registry_to_stdout()
 }
 
 
-# test conda-install
-if [ "${VSI_OS}" = "linux" ] && [ -z "${VSI_FORCE_INSTALL_FUNCTIONS_TEST+set}" ]; then
-  # alpine musl won't run the miniconda executable, nor will really old GLIBCs
-  if [ "${VSI_MUSL}" = "1" ] || meet_requirements "$(glibc_version)" "<2.17"; then
+# helper function: check if conda-based test should be skipped
+function check_skip_conda_test()
+{
+  if [ "${VSI_OS}" = "linux" ] && [ -z "${VSI_FORCE_INSTALL_FUNCTIONS_TEST+set}" ]; then
+    # alpine musl won't run the miniconda executable, nor will really old GLIBCs
+    if [ "${VSI_MUSL}" = "1" ] || meet_requirements "$(glibc_version)" "<2.17"; then
+      skip_next_test
+    fi
+  fi
+  if [ -n "${TRASHDIR+set}" ] && [[ ! ${TRASHDIR} =~ ^${does_not_needs_quote_escape_regex}$ ]]; then
+    # Conda is sad https://superuser.com/a/1495827/352118
     skip_next_test
   fi
-fi
-if [ -n "${TRASHDIR+set}" ] && [[ ! ${TRASHDIR} =~ ^${does_not_needs_quote_escape_regex}$ ]]; then
-  # Conda is sad https://superuser.com/a/1495827/352118
-  skip_next_test
-fi
+}
 
-begin_test "conda-install"
-(
-  setup_test
 
-  # redirect mktemp commands to $TESTDIR (does not work on a mac)
-  [ "${VSI_OS}" != "darwin" ] && export TMPDIR="${TESTDIR}"
-
-  # environment
-  export JUST_INSTALL_ACTIVATE_BASENAME="test_just_activate.bsh"
-
-  # for windows, perform additional test if possible confirming no change to windows registry.
-  # For example, when misconfigured conda may add an unwanted entry to <HKEY_CURRENT_USER\SOFTWARE\Python>
-  if [ "${VSI_OS}" = "windows" ]; then
-
-    # registry keys for comparison
-    REGISTRY_KEYS=( "HKEY_CURRENT_USER\SOFTWARE\Python" )
-
-    # before/after registry files
-    REGISTRY_BEFORE="${TESTDIR}/before.reg"
-    REGISTRY_AFTER="${TESTDIR}/after.reg"
-
-    # registry comparison requires "reg" and "cmp" commands
-    ENABLE_REGISTRY_TEST="$( command -v reg &> /dev/null && \
-                             command -v cmp &> /dev/null && \
-                             echo "1" )"
-  fi
-
-  # store registry
-  if [ "${ENABLE_REGISTRY_TEST-}" = "1" ]; then
-    registry_to_stdout "${REGISTRY_KEYS[@]}" > "${REGISTRY_BEFORE}"
-  fi
-
-  # version info
-  CONDA_VER="py38_4.10.3"
-  CONDA_VER_FULL="conda 4.10.3"
-
-  # install
-  conda-install \
-      --dir "${TESTDIR}/conda" \
-      --version "${CONDA_VER}"
-
-  # output version (removing the py38_ prefix)
-  [ "${conda_version}" = "${CONDA_VER#*_}" ]
-
-  # This catches some rare scenario when the conda exe without the executable
-  # didn't report the right version. However, if the shebang is longer than 127
-  # characters, then conda will not start without the right python interpreter
-  # So a blank RESULT represent this case, and should be ignored
-  # executable version
-  RESULT="$("${conda_exe}" --version || :)"
-  [ "${RESULT}" = "" ] || [ "${RESULT}" = "${CONDA_VER_FULL}" ]
-
-  # activate version
-  RESULT="$(source "${conda_activate}"; conda --version)"
-  [ "${RESULT}" = "${CONDA_VER_FULL}" ]
-
-  # registry test
-  if [ "${ENABLE_REGISTRY_TEST-}" = "1" ]; then
-    registry_to_stdout "${REGISTRY_KEYS[@]}" > "${REGISTRY_AFTER}"
-
-    # echo to stderr for debugging
-    { echo "Registry comparison of [${REGISTRY_KEYS[@]}]" ;
-      echo "Initial state:" ;
-      cat "${REGISTRY_BEFORE}" ;
-      echo "Final state:" ;
-      cat "${REGISTRY_AFTER}" ;
-      echo ; } >&2
-
-    # compare
-    cmp "${REGISTRY_BEFORE}" "${REGISTRY_AFTER}"
-  fi
-
+# test conda-install with different options
+CONDA_TEST_ID_ARRAY=(
+    "miniconda"
+    "miniforge"
 )
-end_test
+CONDA_EXTRA_ARGS_ARRAY=(
+    "--version py38_4.10.3"
+    "--miniforge --version 4.11.0-4"
+)
+CONDA_VER_FULL_ARRAY=(
+    "conda 4.10.3"
+    "conda 4.11.0"
+)
+CONDA_VER_SHORT_ARRAY=(
+    "4.10.3"
+    "4.11.0"
+)
+
+for i in "${!CONDA_EXTRA_ARGS_ARRAY[@]}"; do
+
+  # test options
+  CONDA_TEST_ID="${CONDA_TEST_ID_ARRAY[$i]}"
+  CONDA_EXTRA_ARGS="${CONDA_EXTRA_ARGS_ARRAY[$i]}"
+  CONDA_VER_FULL="${CONDA_VER_FULL_ARRAY[$i]}"
+  CONDA_VER_SHORT="${CONDA_VER_SHORT_ARRAY[$i]}"
+
+  # run test
+  check_skip_conda_test
+  begin_test "conda-install ${CONDA_TEST_ID}"
+  (
+    setup_test
+
+    # redirect mktemp commands to $TESTDIR (does not work on a mac)
+    [ "${VSI_OS}" != "darwin" ] && export TMPDIR="${TESTDIR}"
+
+    # environment
+    export JUST_INSTALL_ACTIVATE_BASENAME="test_just_activate.bsh"
+
+    # for windows, perform additional test if possible confirming no change to windows registry.
+    # For example, when misconfigured conda may add an unwanted entry to <HKEY_CURRENT_USER\SOFTWARE\Python>
+    if [ "${VSI_OS}" = "windows" ]; then
+
+      # registry keys for comparison
+      REGISTRY_KEYS=( "HKEY_CURRENT_USER\SOFTWARE\Python" )
+
+      # before/after registry files
+      REGISTRY_BEFORE="${TESTDIR}/before.reg"
+      REGISTRY_AFTER="${TESTDIR}/after.reg"
+
+      # registry comparison requires "reg" and "cmp" commands
+      ENABLE_REGISTRY_TEST="$( command -v reg &> /dev/null && \
+                              command -v cmp &> /dev/null && \
+                              echo "1" )"
+    fi
+
+    # store registry
+    if [ "${ENABLE_REGISTRY_TEST-}" = "1" ]; then
+      registry_to_stdout "${REGISTRY_KEYS[@]}" > "${REGISTRY_BEFORE}"
+    fi
+
+    # install
+    conda-install --dir "${TESTDIR}/conda" ${CONDA_EXTRA_ARGS}
+
+    # output version
+    [ "${conda_version}" = "${CONDA_VER_SHORT}" ]
+
+    # This catches some rare scenario when the conda exe without the executable
+    # didn't report the right version. However, if the shebang is longer than 127
+    # characters, then conda will not start without the right python interpreter
+    # So a blank RESULT represent this case, and should be ignored
+    # executable version
+    RESULT="$("${conda_exe}" --version || :)"
+    [ "${RESULT}" = "" ] || [ "${RESULT}" = "${CONDA_VER_FULL}" ]
+
+    # activate version
+    RESULT="$(source "${conda_activate}"; conda --version)"
+    [ "${RESULT}" = "${CONDA_VER_FULL}" ]
+
+    # registry test
+    if [ "${ENABLE_REGISTRY_TEST-}" = "1" ]; then
+      registry_to_stdout "${REGISTRY_KEYS[@]}" > "${REGISTRY_AFTER}"
+
+      # echo to stderr for debugging
+      { echo "Registry comparison of [${REGISTRY_KEYS[@]}]" ;
+        echo "Initial state:" ;
+        cat "${REGISTRY_BEFORE}" ;
+        echo "Final state:" ;
+        cat "${REGISTRY_AFTER}" ;
+        echo ; } >&2
+
+      # compare
+      cmp "${REGISTRY_BEFORE}" "${REGISTRY_AFTER}"
+    fi
+
+  )
+  end_test
+
+done # test conda-install
 
 
 # test conda-python-install & pipenv-install: test in sequence according to typical usage - install python then pipenv
-# test conda-install
-if [ "${VSI_OS}" = "linux" ] && [ -z "${VSI_FORCE_INSTALL_FUNCTIONS_TEST+set}" ]; then
-  # alpine musl won't run the miniconda executable, nor will really old GLIBCs
-  if [ "${VSI_MUSL}" = "1" ] || meet_requirements "$(glibc_version)" "<2.17"; then
-    skip_next_test
-  fi
-fi
-if [ -n "${TRASHDIR+set}" ] && [[ ! ${TRASHDIR} =~ ^${does_not_needs_quote_escape_regex}$ ]]; then
-  # Conda is sad https://superuser.com/a/1495827/352118
-  skip_next_test
-fi
+check_skip_conda_test
 begin_test "conda-python-install and pipenv-install"
 (
   setup_test
