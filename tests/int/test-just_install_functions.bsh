@@ -70,18 +70,24 @@ function registry_to_stdout()
 }
 
 
-# test conda-install
-if [ "${VSI_OS}" = "linux" ] && [ -z "${VSI_FORCE_INSTALL_FUNCTIONS_TEST+set}" ]; then
-  # alpine musl won't run the miniconda executable, nor will really old GLIBCs
-  if [ "${VSI_MUSL}" = "1" ] || meet_requirements "$(glibc_version)" "<2.17"; then
+# helper function: check if conda-based test should be skipped
+function check_skip_conda_test()
+{
+  if [ "${VSI_OS}" = "linux" ] && [ -z "${VSI_FORCE_INSTALL_FUNCTIONS_TEST+set}" ]; then
+    # alpine musl won't run the miniconda executable, nor will really old GLIBCs
+    if [ "${VSI_MUSL}" = "1" ] || meet_requirements "$(glibc_version)" "<2.17"; then
+      skip_next_test
+    fi
+  fi
+  if [ -n "${TRASHDIR+set}" ] && [[ ! ${TRASHDIR} =~ ^${does_not_needs_quote_escape_regex}$ ]]; then
+    # Conda is sad https://superuser.com/a/1495827/352118
     skip_next_test
   fi
-fi
-if [ -n "${TRASHDIR+set}" ] && [[ ! ${TRASHDIR} =~ ^${does_not_needs_quote_escape_regex}$ ]]; then
-  # Conda is sad https://superuser.com/a/1495827/352118
-  skip_next_test
-fi
+}
 
+
+# test conda-install
+check_skip_conda_test
 begin_test "conda-install"
 (
   setup_test
@@ -159,17 +165,7 @@ end_test
 
 
 # test conda-python-install & pipenv-install: test in sequence according to typical usage - install python then pipenv
-# test conda-install
-if [ "${VSI_OS}" = "linux" ] && [ -z "${VSI_FORCE_INSTALL_FUNCTIONS_TEST+set}" ]; then
-  # alpine musl won't run the miniconda executable, nor will really old GLIBCs
-  if [ "${VSI_MUSL}" = "1" ] || meet_requirements "$(glibc_version)" "<2.17"; then
-    skip_next_test
-  fi
-fi
-if [ -n "${TRASHDIR+set}" ] && [[ ! ${TRASHDIR} =~ ^${does_not_needs_quote_escape_regex}$ ]]; then
-  # Conda is sad https://superuser.com/a/1495827/352118
-  skip_next_test
-fi
+check_skip_conda_test
 begin_test "conda-python-install and pipenv-install"
 (
   setup_test
