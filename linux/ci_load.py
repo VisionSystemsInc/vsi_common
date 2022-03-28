@@ -107,9 +107,13 @@ class CiLoad:
   # 2 docker-compose pull
   def pull_images(self):
     if self.pull:
-      Popen2([self.docker_compose_exe,
-             '-f', self.push_pull_file.name,
-             'pull'])
+      pull_cmd = [self.docker_compose_exe,
+                  '-f', self.push_pull_file.name,
+                  'pull']
+      try:
+        Popen2(pull_cmd)
+      except AssertionError:
+        print(f"<{' '.join(pull_cmd)}> failed; images may not exist yet")
 
   # 3. _dynamic_docker-compose_restore_recipes
   def write_restore_recipe(self):
