@@ -113,7 +113,8 @@ class CiLoad:
         pull_file.write(yaml.dump(self.pull_dict))
         pull_file.flush()
 
-        pull_cmd = [self.docker_compose_exe, '-f', pull_file.name, 'pull']
+        pull_cmd = [self.docker_compose_exe, '-f', pull_file.name, 'pull',
+                    '--ignore-pull-failures']
         if self.quiet_pull:
           pull_cmd.append('-q')
 
