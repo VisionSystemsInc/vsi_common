@@ -110,6 +110,10 @@ class CiLoad:
       pull_cmd = [self.docker_compose_exe,
                   '-f', self.push_pull_file.name,
                   'pull']
+      if self.quiet_pull:
+        print("Pulling images...")
+        pull_cmd.append('-q')
+
       try:
         Popen2(pull_cmd)
       except AssertionError:
@@ -286,6 +290,9 @@ class CiLoad:
     aa('--no-build', dest='build', action='store_false',
        default=True, help='Disable building images')
 
+    aa('--quiet-pull', dest='quiet_pull', action='store_true',
+       default=False, help='Quiet pull (no progress bars)')
+
     aa('compose', type=str, help='Docker compose yaml file')
     aa('main_service', type=str, help='Main docker-compose service')
     aa('services', type=str, nargs='*',
@@ -306,6 +313,8 @@ class CiLoad:
     self.push = args.push
     self.pull = args.pull
     self.build = args.build
+
+    self.quiet_pull = args.quiet_pull
 
     if args.project_dir is None:
       self.project_dir = os.path.dirname(self.compose)
