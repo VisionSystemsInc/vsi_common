@@ -104,12 +104,20 @@ class CiLoad:
     self.push_pull_file.write(yaml.dump(doc))
     self.push_pull_file.flush()
 
+    if self.print_push_pull:
+      print('PUSH/PULL CONFIGURATION:')
+      print(yaml.dump(doc))
+
   # 2 docker-compose pull
   def pull_images(self):
     if self.pull:
       pull_cmd = [self.docker_compose_exe,
                   '-f', self.push_pull_file.name,
                   'pull']
+      if self.quiet_pull:
+        print("Pulling images...")
+        pull_cmd.append('-q')
+
       try:
         Popen2(pull_cmd)
       except AssertionError:
@@ -210,6 +218,10 @@ class CiLoad:
                              Loader=yaml.Loader)
     main_image = self.compose_yaml['services'][self.main_service].get('image')
 
+    if self.print_build:
+      print('BUILD CONFIGURATION:')
+      print(yaml.dump(yaml_content))
+
     def build_stage(stage_name):
       build = yaml_content['services'][f'{stage_name}']['build']
       image_name = yaml_content['services'][f'{stage_name}']['image']
@@ -286,6 +298,14 @@ class CiLoad:
     aa('--no-build', dest='build', action='store_false',
        default=True, help='Disable building images')
 
+    aa('--quiet-pull', dest='quiet_pull', action='store_true',
+       default=False, help='Quiet pull (no progress bars)')
+
+    aa('--print-push-pull', dest='print_push_pull', action='store_true',
+       default=False, help='Print push/pull configuration')
+    aa('--print-build', dest='print_build', action='store_true',
+       default=False, help='Print build configuration')
+
     aa('compose', type=str, help='Docker compose yaml file')
     aa('main_service', type=str, help='Main docker-compose service')
     aa('services', type=str, nargs='*',
@@ -306,6 +326,10 @@ class CiLoad:
     self.push = args.push
     self.pull = args.pull
     self.build = args.build
+
+    self.quiet_pull = args.quiet_pull
+    self.print_push_pull = args.print_push_pull
+    self.print_build = args.print_build
 
     if args.project_dir is None:
       self.project_dir = os.path.dirname(self.compose)
