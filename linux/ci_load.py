@@ -218,6 +218,10 @@ class CiLoad:
                              Loader=yaml.Loader)
     main_image = self.compose_yaml['services'][self.main_service].get('image')
 
+    if self.print_build:
+      print('BUILD CONFIGURATION:')
+      print(yaml.dump(yaml_content))
+
     def build_stage(stage_name):
       build = yaml_content['services'][f'{stage_name}']['build']
       image_name = yaml_content['services'][f'{stage_name}']['image']
@@ -299,6 +303,8 @@ class CiLoad:
 
     aa('--print-push-pull', dest='print_push_pull', action='store_true',
        default=False, help='Print push/pull configuration')
+    aa('--print-build', dest='print_build', action='store_true',
+       default=False, help='Print build configuration')
 
     aa('compose', type=str, help='Docker compose yaml file')
     aa('main_service', type=str, help='Main docker-compose service')
@@ -323,6 +329,7 @@ class CiLoad:
 
     self.quiet_pull = args.quiet_pull
     self.print_push_pull = args.print_push_pull
+    self.print_build = args.print_build
 
     if args.project_dir is None:
       self.project_dir = os.path.dirname(self.compose)
