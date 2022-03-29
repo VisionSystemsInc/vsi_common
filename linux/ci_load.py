@@ -104,6 +104,10 @@ class CiLoad:
     self.push_pull_file.write(yaml.dump(doc))
     self.push_pull_file.flush()
 
+    if self.print_push_pull:
+      print('PUSH/PULL CONFIGURATION:')
+      print(yaml.dump(doc))
+
   # 2 docker-compose pull
   def pull_images(self):
     if self.pull:
@@ -293,6 +297,9 @@ class CiLoad:
     aa('--quiet-pull', dest='quiet_pull', action='store_true',
        default=False, help='Quiet pull (no progress bars)')
 
+    aa('--print-push-pull', dest='print_push_pull', action='store_true',
+       default=False, help='Print push/pull configuration')
+
     aa('compose', type=str, help='Docker compose yaml file')
     aa('main_service', type=str, help='Main docker-compose service')
     aa('services', type=str, nargs='*',
@@ -315,6 +322,7 @@ class CiLoad:
     self.build = args.build
 
     self.quiet_pull = args.quiet_pull
+    self.print_push_pull = args.print_push_pull
 
     if args.project_dir is None:
       self.project_dir = os.path.dirname(self.compose)
