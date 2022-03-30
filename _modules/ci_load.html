@@ -197,8 +197,6 @@
   <span class="k">assert</span> <span class="n">pid</span><span class="o">.</span><span class="n">returncode</span> <span class="o">==</span> <span class="mi">0</span></div>
 
 <div class="viewcode-block" id="CiLoad"><a class="viewcode-back" href="../linux/python_scripts/ci_load.html#ci_load.CiLoad">[docs]</a><span class="k">class</span> <span class="nc">CiLoad</span><span class="p">:</span>
-  <span class="k">def</span> <span class="fm">__del__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">push_pull_file</span> <span class="o">=</span> <span class="kc">None</span>
 
 <div class="viewcode-block" id="CiLoad.setup"><a class="viewcode-back" href="../linux/python_scripts/ci_load.html#ci_load.CiLoad.setup">[docs]</a>  <span class="k">def</span> <span class="nf">setup</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
     <span class="n">pid</span> <span class="o">=</span> <span class="n">Popen</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">docker_compose_exe</span><span class="p">,</span> <span class="s1">&#39;-f&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">compose</span><span class="p">,</span> <span class="s1">&#39;config&#39;</span><span class="p">],</span>
@@ -237,51 +235,72 @@
 
     <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">normpath</span><span class="p">(</span><span class="n">dockerfile</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="CiLoad.cache_image"><a class="viewcode-back" href="../linux/python_scripts/ci_load.html#ci_load.CiLoad.cache_image">[docs]</a>  <span class="k">def</span> <span class="nf">cache_image</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">extra_tags</span><span class="p">):</span>
-    <span class="n">tags</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">cache_version</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">main_service</span><span class="p">,</span> <span class="o">*</span><span class="n">extra_tags</span><span class="p">]</span>
-    <span class="n">cache_tag</span> <span class="o">=</span> <span class="s1">&#39;_&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">t</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">tags</span> <span class="k">if</span> <span class="n">t</span><span class="p">])</span>
-    <span class="k">return</span> <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">cache_repo</span><span class="si">}</span><span class="s1">:</span><span class="si">{</span><span class="n">cache_tag</span><span class="si">}</span><span class="s1">&#39;</span></div>
+<div class="viewcode-block" id="CiLoad.cache_image"><a class="viewcode-back" href="../linux/python_scripts/ci_load.html#ci_load.CiLoad.cache_image">[docs]</a>  <span class="k">def</span> <span class="nf">cache_image</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">extra_tags</span><span class="p">,</span> <span class="n">cache_loc</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 
-  <span class="c1"># 1 Write out pull file _dynamic_docker-compose_push_pull</span>
-<div class="viewcode-block" id="CiLoad.write_push_pull_file"><a class="viewcode-back" href="../linux/python_scripts/ci_load.html#ci_load.CiLoad.write_push_pull_file">[docs]</a>  <span class="k">def</span> <span class="nf">write_push_pull_file</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">push_pull_file</span> <span class="o">=</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">NamedTemporaryFile</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s1">&#39;w&#39;</span><span class="p">)</span>
+    <span class="c1"># default cache_location</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">cache_loc</span><span class="p">:</span>
+      <span class="n">cache_loc</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache_repo</span>
 
-    <span class="n">doc</span> <span class="o">=</span> <span class="p">{}</span>
-    <span class="n">doc</span><span class="p">[</span><span class="s1">&#39;version&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;3.5&#39;</span>
-    <span class="n">services</span> <span class="o">=</span> <span class="p">{}</span>
-    <span class="n">services</span><span class="p">[</span><span class="sa">f</span><span class="s1">&#39;final_</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">main_service</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;build&#39;</span><span class="p">:</span> <span class="s2">&quot;.&quot;</span><span class="p">,</span>
-        <span class="s1">&#39;image&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache_image</span><span class="p">(</span><span class="s1">&#39;final&#39;</span><span class="p">)}</span>
-    <span class="k">for</span> <span class="n">stage</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">stages</span><span class="p">:</span>
-      <span class="n">services</span><span class="p">[</span><span class="sa">f</span><span class="s1">&#39;stage_</span><span class="si">{</span><span class="n">stage</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;build&#39;</span><span class="p">:</span> <span class="s1">&#39;.&#39;</span><span class="p">,</span>
-          <span class="s1">&#39;image&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache_image</span><span class="p">(</span><span class="s1">&#39;stage&#39;</span><span class="p">,</span> <span class="n">stage</span><span class="p">)}</span>
+    <span class="c1"># cache_loc of the form &quot;vsiri/cache:tag_header&quot;</span>
+    <span class="k">if</span> <span class="s1">&#39;:&#39;</span> <span class="ow">in</span> <span class="n">cache_loc</span><span class="p">:</span>
+      <span class="n">cache_repo</span><span class="p">,</span> <span class="n">tag</span> <span class="o">=</span> <span class="n">cache_loc</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;:&#39;</span><span class="p">)</span>
+      <span class="n">cache_tags</span> <span class="o">=</span> <span class="p">[</span><span class="n">tag</span><span class="p">]</span>
 
-    <span class="k">for</span> <span class="n">recipe</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">recipes</span><span class="p">:</span>
-      <span class="n">services</span><span class="p">[</span><span class="sa">f</span><span class="s1">&#39;recipe_</span><span class="si">{</span><span class="n">recipe</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;build&#39;</span><span class="p">:</span> <span class="s1">&#39;.&#39;</span><span class="p">,</span>
-          <span class="s1">&#39;image&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache_image</span><span class="p">(</span><span class="s1">&#39;recipe&#39;</span><span class="p">,</span> <span class="n">recipe</span><span class="p">)}</span>
+    <span class="c1"># cache_loc of the form &quot;vsiri/cache&quot;</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="n">cache_repo</span> <span class="o">=</span> <span class="n">cache_loc</span>
+      <span class="n">cache_tags</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">cache_version</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">main_service</span><span class="p">]</span>
 
-    <span class="n">doc</span><span class="p">[</span><span class="s1">&#39;services&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">services</span>
+    <span class="c1"># assemble cache image string</span>
+    <span class="n">cache_tag</span> <span class="o">=</span> <span class="s1">&#39;_&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">t</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">cache_tags</span> <span class="o">+</span> <span class="nb">list</span><span class="p">(</span><span class="n">extra_tags</span><span class="p">)</span> <span class="k">if</span> <span class="n">t</span><span class="p">])</span>
+    <span class="k">return</span> <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">cache_repo</span><span class="si">}</span><span class="s1">:</span><span class="si">{</span><span class="n">cache_tag</span><span class="si">}</span><span class="s1">&#39;</span></div>
 
-    <span class="bp">self</span><span class="o">.</span><span class="n">push_pull_file</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">yaml</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">doc</span><span class="p">))</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">push_pull_file</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+  <span class="c1"># 1 Generate push &amp; pull config _dynamic_docker-compose_push_pull</span>
+<div class="viewcode-block" id="CiLoad.generate_push_pull_config"><a class="viewcode-back" href="../linux/python_scripts/ci_load.html#ci_load.CiLoad.generate_push_pull_config">[docs]</a>  <span class="k">def</span> <span class="nf">generate_push_pull_config</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cache_id</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">cache_loc</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 
-    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">print_push_pull</span><span class="p">:</span>
-      <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;PUSH/PULL CONFIGURATION:&#39;</span><span class="p">)</span>
-      <span class="nb">print</span><span class="p">(</span><span class="n">yaml</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">doc</span><span class="p">))</span></div>
+    <span class="k">def</span> <span class="nf">_service_dict</span><span class="p">(</span><span class="n">cache_id</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">cache_loc</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+      <span class="n">services</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+      <span class="n">services</span><span class="p">[</span><span class="sa">f</span><span class="s1">&#39;final_</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">main_service</span><span class="si">}</span><span class="s1">_</span><span class="si">{</span><span class="n">cache_id</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;build&#39;</span><span class="p">:</span> <span class="s1">&#39;.&#39;</span><span class="p">,</span>
+          <span class="s1">&#39;image&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache_image</span><span class="p">(</span><span class="s1">&#39;final&#39;</span><span class="p">,</span> <span class="n">cache_loc</span><span class="o">=</span><span class="n">cache_loc</span><span class="p">)}</span>
+      <span class="k">for</span> <span class="n">stage</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">stages</span><span class="p">:</span>
+        <span class="n">services</span><span class="p">[</span><span class="sa">f</span><span class="s1">&#39;stage_</span><span class="si">{</span><span class="n">stage</span><span class="si">}</span><span class="s1">_</span><span class="si">{</span><span class="n">cache_id</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;build&#39;</span><span class="p">:</span> <span class="s1">&#39;.&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;image&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache_image</span><span class="p">(</span><span class="s1">&#39;stage&#39;</span><span class="p">,</span> <span class="n">stage</span><span class="p">,</span> <span class="n">cache_loc</span><span class="o">=</span><span class="n">cache_loc</span><span class="p">)}</span>
+      <span class="k">for</span> <span class="n">recipe</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">recipes</span><span class="p">:</span>
+        <span class="n">services</span><span class="p">[</span><span class="sa">f</span><span class="s1">&#39;recipe_</span><span class="si">{</span><span class="n">recipe</span><span class="si">}</span><span class="s1">_</span><span class="si">{</span><span class="n">cache_id</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;build&#39;</span><span class="p">:</span> <span class="s1">&#39;.&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;image&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">cache_image</span><span class="p">(</span><span class="s1">&#39;recipe&#39;</span><span class="p">,</span> <span class="n">recipe</span><span class="p">,</span> <span class="n">cache_loc</span><span class="o">=</span><span class="n">cache_loc</span><span class="p">)}</span>
+      <span class="k">return</span> <span class="n">services</span>
 
-  <span class="c1"># 2 docker-compose pull</span>
+    <span class="c1"># pull dictionary</span>
+    <span class="n">services</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">cache_id</span><span class="p">,</span> <span class="n">cache_loc</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">cache_repo</span><span class="p">]</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">other_repos</span><span class="p">):</span>
+      <span class="n">services</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">_service_dict</span><span class="p">(</span><span class="n">cache_id</span><span class="p">,</span> <span class="n">cache_loc</span><span class="p">))</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">pull_dict</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;version&#39;</span><span class="p">:</span> <span class="s1">&#39;3.5&#39;</span><span class="p">,</span> <span class="s1">&#39;services&#39;</span><span class="p">:</span> <span class="n">services</span><span class="p">}</span>
+
+    <span class="c1"># push dictionary</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">push_dict</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;version&#39;</span><span class="p">:</span> <span class="s1">&#39;3.5&#39;</span><span class="p">,</span> <span class="s1">&#39;services&#39;</span><span class="p">:</span> <span class="n">_service_dict</span><span class="p">()}</span></div>
+
+  <span class="c1"># 2 pull images</span>
 <div class="viewcode-block" id="CiLoad.pull_images"><a class="viewcode-back" href="../linux/python_scripts/ci_load.html#ci_load.CiLoad.pull_images">[docs]</a>  <span class="k">def</span> <span class="nf">pull_images</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
     <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">pull</span><span class="p">:</span>
-      <span class="n">pull_cmd</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">docker_compose_exe</span><span class="p">,</span>
-                  <span class="s1">&#39;-f&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">push_pull_file</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
-                  <span class="s1">&#39;pull&#39;</span><span class="p">]</span>
-      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">quiet_pull</span><span class="p">:</span>
-        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Pulling images...&quot;</span><span class="p">)</span>
-        <span class="n">pull_cmd</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;-q&#39;</span><span class="p">)</span>
 
-      <span class="k">try</span><span class="p">:</span>
-        <span class="n">Popen2</span><span class="p">(</span><span class="n">pull_cmd</span><span class="p">)</span>
-      <span class="k">except</span> <span class="ne">AssertionError</span><span class="p">:</span>
-        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&lt;</span><span class="si">{</span><span class="s1">&#39; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">pull_cmd</span><span class="p">)</span><span class="si">}</span><span class="s2">&gt; failed; images may not exist yet&quot;</span><span class="p">)</span></div>
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">print_push_pull</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;PULL CONFIGURATION:&#39;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">yaml</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pull_dict</span><span class="p">))</span>
+
+      <span class="k">with</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">NamedTemporaryFile</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">pull_file</span><span class="p">:</span>
+        <span class="n">pull_file</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">yaml</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pull_dict</span><span class="p">))</span>
+        <span class="n">pull_file</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+
+        <span class="n">pull_cmd</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">docker_compose_exe</span><span class="p">,</span> <span class="s1">&#39;-f&#39;</span><span class="p">,</span> <span class="n">pull_file</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="s1">&#39;pull&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;--ignore-pull-failures&#39;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">quiet_pull</span><span class="p">:</span>
+          <span class="n">pull_cmd</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;-q&#39;</span><span class="p">)</span>
+
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Pulling available images...&quot;</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+          <span class="n">Popen2</span><span class="p">(</span><span class="n">pull_cmd</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">AssertionError</span><span class="p">:</span>
+          <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&lt;</span><span class="si">{</span><span class="s1">&#39; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">pull_cmd</span><span class="p">)</span><span class="si">}</span><span class="s2">&gt; failed; images may not exist yet&quot;</span><span class="p">)</span></div>
 
   <span class="c1"># 3. _dynamic_docker-compose_restore_recipes</span>
 <div class="viewcode-block" id="CiLoad.write_restore_recipe"><a class="viewcode-back" href="../linux/python_scripts/ci_load.html#ci_load.CiLoad.write_restore_recipe">[docs]</a>  <span class="k">def</span> <span class="nf">write_restore_recipe</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -328,12 +347,16 @@
       <span class="n">image</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">compose_yaml</span><span class="p">[</span><span class="s1">&#39;services&#39;</span><span class="p">][</span><span class="n">service</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;image&#39;</span><span class="p">)</span>
       <span class="k">if</span> <span class="n">image</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">cf</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
-    <span class="n">cf</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cache_image</span><span class="p">(</span><span class="s1">&#39;final&#39;</span><span class="p">))</span>
-    <span class="k">for</span> <span class="n">stage_from</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">stages</span><span class="p">:</span>
-      <span class="n">cf</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cache_image</span><span class="p">(</span><span class="s1">&#39;stage&#39;</span><span class="p">,</span> <span class="n">stage_from</span><span class="p">))</span>
     <span class="k">for</span> <span class="n">recipe</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">recipes</span><span class="p">:</span>
-      <span class="n">cf</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cache_image</span><span class="p">(</span><span class="s1">&#39;recipe&#39;</span><span class="p">,</span> <span class="n">recipe</span><span class="p">))</span>
       <span class="n">cf</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">recipe_repo</span><span class="si">}</span><span class="s1">:</span><span class="si">{</span><span class="n">recipe</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">cache_loc</span> <span class="ow">in</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">cache_repo</span><span class="p">]</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">other_repos</span><span class="p">:</span>
+      <span class="n">cf</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cache_image</span><span class="p">(</span><span class="s1">&#39;final&#39;</span><span class="p">,</span> <span class="n">cache_loc</span><span class="o">=</span><span class="n">cache_loc</span><span class="p">))</span>
+      <span class="k">for</span> <span class="n">stage_from</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">stages</span><span class="p">:</span>
+        <span class="n">cf</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cache_image</span><span class="p">(</span><span class="s1">&#39;stage&#39;</span><span class="p">,</span> <span class="n">stage_from</span><span class="p">,</span> <span class="n">cache_loc</span><span class="o">=</span><span class="n">cache_loc</span><span class="p">))</span>
+      <span class="k">for</span> <span class="n">recipe</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">recipes</span><span class="p">:</span>
+        <span class="n">cf</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cache_image</span><span class="p">(</span><span class="s1">&#39;recipe&#39;</span><span class="p">,</span> <span class="n">recipe</span><span class="p">,</span> <span class="n">cache_loc</span><span class="o">=</span><span class="n">cache_loc</span><span class="p">))</span>
+
     <span class="k">return</span> <span class="n">cf</span></div>
 
 
@@ -427,9 +450,15 @@
   <span class="c1"># 8 push</span>
 <div class="viewcode-block" id="CiLoad.push_images"><a class="viewcode-back" href="../linux/python_scripts/ci_load.html#ci_load.CiLoad.push_images">[docs]</a>  <span class="k">def</span> <span class="nf">push_images</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
     <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">push</span><span class="p">:</span>
-      <span class="n">Popen2</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">docker_compose_exe</span><span class="p">,</span>
-             <span class="s1">&#39;-f&#39;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">push_pull_file</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
-             <span class="s1">&#39;push&#39;</span><span class="p">])</span></div>
+
+      <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">print_push_pull</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;PUSH CONFIGURATION:&#39;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">yaml</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">push_dict</span><span class="p">))</span>
+
+      <span class="k">with</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">NamedTemporaryFile</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">push_file</span><span class="p">:</span>
+        <span class="n">push_file</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="n">yaml</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">push_dict</span><span class="p">))</span>
+        <span class="n">push_file</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+        <span class="n">Popen2</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">docker_compose_exe</span><span class="p">,</span> <span class="s1">&#39;-f&#39;</span><span class="p">,</span> <span class="n">push_file</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="s1">&#39;push&#39;</span><span class="p">])</span></div>
 
 <div class="viewcode-block" id="CiLoad.setup_parser"><a class="viewcode-back" href="../linux/python_scripts/ci_load.html#ci_load.CiLoad.setup_parser">[docs]</a>  <span class="k">def</span> <span class="nf">setup_parser</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">()</span>
@@ -442,6 +471,8 @@
        <span class="n">help</span><span class="o">=</span><span class="s1">&#39;The compose project dir. Default: docker-compose.yml dir&#39;</span><span class="p">)</span>
     <span class="n">aa</span><span class="p">(</span><span class="s1">&#39;--cache-repo&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s1">&#39;vsiri/ci_cache&#39;</span><span class="p">,</span>
        <span class="n">help</span><span class="o">=</span><span class="s1">&#39;Docker repo for storing cache images&#39;</span><span class="p">)</span>
+    <span class="n">aa</span><span class="p">(</span><span class="s1">&#39;--other-repos&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">nargs</span><span class="o">=</span><span class="s1">&#39;+&#39;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="p">[],</span>
+       <span class="n">help</span><span class="o">=</span><span class="s1">&#39;Additional docker repo(s) to check for cache images&#39;</span><span class="p">)</span>
     <span class="n">aa</span><span class="p">(</span><span class="s1">&#39;--cache-version&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
        <span class="n">help</span><span class="o">=</span><span class="s1">&#39;Cache version&#39;</span><span class="p">)</span>
     <span class="n">aa</span><span class="p">(</span><span class="s1">&#39;--recipe-repo&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="s1">&#39;vsiri/recipe&#39;</span><span class="p">,</span>
@@ -477,6 +508,7 @@
     <span class="bp">self</span><span class="o">.</span><span class="n">main_service</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">main_service</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">other_services</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">services</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">cache_repo</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">cache_repo</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">other_repos</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">other_repos</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">cache_version</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">cache_version</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">recipe_repo</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">recipe_repo</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">recipe_compose</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">recipe_compose</span>
@@ -506,7 +538,7 @@
 
   <span class="n">ci_load</span><span class="o">.</span><span class="n">setup</span><span class="p">()</span>
 
-  <span class="n">ci_load</span><span class="o">.</span><span class="n">write_push_pull_file</span><span class="p">()</span>
+  <span class="n">ci_load</span><span class="o">.</span><span class="n">generate_push_pull_config</span><span class="p">()</span>
   <span class="n">ci_load</span><span class="o">.</span><span class="n">pull_images</span><span class="p">()</span>
 
   <span class="n">ci_load</span><span class="o">.</span><span class="n">write_restore_recipe</span><span class="p">()</span>
