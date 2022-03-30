@@ -37,8 +37,6 @@ def Popen2(*args, **kwargs):
   assert pid.returncode == 0
 
 class CiLoad:
-  def __del__(self):
-    self.push_pull_file = None
 
   def setup(self):
     pid = Popen([self.docker_compose_exe, '-f', self.compose, 'config'],
@@ -77,51 +75,72 @@ class CiLoad:
 
     return os.path.normpath(dockerfile)
 
-  def cache_image(self, *extra_tags):
-    tags = [self.cache_version, self.main_service, *extra_tags]
-    cache_tag = '_'.join([t for t in tags if t])
-    return f'{self.cache_repo}:{cache_tag}'
+  def cache_image(self, *extra_tags, cache_loc=None):
 
-  # 1 Write out pull file _dynamic_docker-compose_push_pull
-  def write_push_pull_file(self):
-    self.push_pull_file = tempfile.NamedTemporaryFile(mode='w')
+    # default cache_location
+    if not cache_loc:
+      cache_loc = self.cache_repo
 
-    doc = {}
-    doc['version'] = '3.5'
-    services = {}
-    services[f'final_{self.main_service}'] = {'build': ".",
-        'image': self.cache_image('final')}
-    for stage in self.stages:
-      services[f'stage_{stage}'] = {'build': '.',
-          'image': self.cache_image('stage', stage)}
+    # cache_loc of the form "vsiri/cache:tag_header"
+    if ':' in cache_loc:
+      cache_repo, tag = cache_loc.split(':')
+      cache_tags = [tag]
 
-    for recipe in self.recipes:
-      services[f'recipe_{recipe}'] = {'build': '.',
-          'image': self.cache_image('recipe', recipe)}
+    # cache_loc of the form "vsiri/cache"
+    else:
+      cache_repo = cache_loc
+      cache_tags = [self.cache_version, self.main_service]
 
-    doc['services'] = services
+    # assemble cache image string
+    cache_tag = '_'.join([t for t in cache_tags + list(extra_tags) if t])
+    return f'{cache_repo}:{cache_tag}'
 
-    self.push_pull_file.write(yaml.dump(doc))
-    self.push_pull_file.flush()
+  # 1 Generate push & pull config _dynamic_docker-compose_push_pull
+  def generate_push_pull_config(self, cache_id=0, cache_loc=None):
 
-    if self.print_push_pull:
-      print('PUSH/PULL CONFIGURATION:')
-      print(yaml.dump(doc))
+    def _service_dict(cache_id=0, cache_loc=None):
+      services = dict()
+      services[f'final_{self.main_service}_{cache_id}'] = {'build': '.',
+          'image': self.cache_image('final', cache_loc=cache_loc)}
+      for stage in self.stages:
+        services[f'stage_{stage}_{cache_id}'] = {'build': '.',
+            'image': self.cache_image('stage', stage, cache_loc=cache_loc)}
+      for recipe in self.recipes:
+        services[f'recipe_{recipe}_{cache_id}'] = {'build': '.',
+            'image': self.cache_image('recipe', recipe, cache_loc=cache_loc)}
+      return services
 
-  # 2 docker-compose pull
+    # pull dictionary
+    services = dict()
+    for cache_id, cache_loc in enumerate([self.cache_repo] + self.other_repos):
+      services.update(_service_dict(cache_id, cache_loc))
+    self.pull_dict = {'version': '3.5', 'services': services}
+
+    # push dictionary
+    self.push_dict = {'version': '3.5', 'services': _service_dict()}
+
+  # 2 pull images
   def pull_images(self):
     if self.pull:
-      pull_cmd = [self.docker_compose_exe,
-                  '-f', self.push_pull_file.name,
-                  'pull']
-      if self.quiet_pull:
-        print("Pulling images...")
-        pull_cmd.append('-q')
 
-      try:
-        Popen2(pull_cmd)
-      except AssertionError:
-        print(f"<{' '.join(pull_cmd)}> failed; images may not exist yet")
+      if self.print_push_pull:
+        print('PULL CONFIGURATION:')
+        print(yaml.dump(self.pull_dict))
+
+      with tempfile.NamedTemporaryFile(mode='w') as pull_file:
+        pull_file.write(yaml.dump(self.pull_dict))
+        pull_file.flush()
+
+        pull_cmd = [self.docker_compose_exe, '-f', pull_file.name, 'pull',
+                    '--ignore-pull-failures']
+        if self.quiet_pull:
+          pull_cmd.append('-q')
+
+        print("Pulling available images...")
+        try:
+          Popen2(pull_cmd)
+        except AssertionError:
+          print(f"<{' '.join(pull_cmd)}> failed; images may not exist yet")
 
   # 3. _dynamic_docker-compose_restore_recipes
   def write_restore_recipe(self):
@@ -168,12 +187,16 @@ class CiLoad:
       image = self.compose_yaml['services'][service].get('image')
       if image is not None:
         cf.append(image)
-    cf.append(self.cache_image('final'))
-    for stage_from in self.stages:
-      cf.append(self.cache_image('stage', stage_from))
     for recipe in self.recipes:
-      cf.append(self.cache_image('recipe', recipe))
       cf.append(f'{self.recipe_repo}:{recipe}')
+
+    for cache_loc in [self.cache_repo] + self.other_repos:
+      cf.append(self.cache_image('final', cache_loc=cache_loc))
+      for stage_from in self.stages:
+        cf.append(self.cache_image('stage', stage_from, cache_loc=cache_loc))
+      for recipe in self.recipes:
+        cf.append(self.cache_image('recipe', recipe, cache_loc=cache_loc))
+
     return cf
 
 
@@ -267,9 +290,15 @@ class CiLoad:
   # 8 push
   def push_images(self):
     if self.push:
-      Popen2([self.docker_compose_exe,
-             '-f', self.push_pull_file.name,
-             'push'])
+
+      if self.print_push_pull:
+        print('PUSH CONFIGURATION:')
+        print(yaml.dump(self.push_dict))
+
+      with tempfile.NamedTemporaryFile(mode='w') as push_file:
+        push_file.write(yaml.dump(self.push_dict))
+        push_file.flush()
+        Popen2([self.docker_compose_exe, '-f', push_file.name, 'push'])
 
   def setup_parser(self):
     self.parser = argparse.ArgumentParser()
@@ -282,6 +311,8 @@ class CiLoad:
        help='The compose project dir. Default: docker-compose.yml dir')
     aa('--cache-repo', type=str, default='vsiri/ci_cache',
        help='Docker repo for storing cache images')
+    aa('--other-repos', type=str, nargs='+', default=[],
+       help='Additional docker repo(s) to check for cache images')
     aa('--cache-version', type=str, default=None,
        help='Cache version')
     aa('--recipe-repo', type=str, default='vsiri/recipe',
@@ -317,6 +348,7 @@ class CiLoad:
     self.main_service = args.main_service
     self.other_services = args.services
     self.cache_repo = args.cache_repo
+    self.other_repos = args.other_repos
     self.cache_version = args.cache_version
     self.recipe_repo = args.recipe_repo
     self.recipe_compose = args.recipe_compose
@@ -346,7 +378,7 @@ if __name__ == '__main__':
 
   ci_load.setup()
 
-  ci_load.write_push_pull_file()
+  ci_load.generate_push_pull_config()
   ci_load.pull_images()
 
   ci_load.write_restore_recipe()
