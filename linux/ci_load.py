@@ -322,12 +322,26 @@ class CiLoad:
                             "docker/recipes/docker-compose.yml"),
        help='Recipe compose file')
 
-    aa('--no-push', dest='push', action='store_false',
-       default=True, help='Disable pushing images')
-    aa('--no-pull', dest='pull', action='store_false',
-       default=True, help='Disable pulling images')
-    aa('--no-build', dest='build', action='store_false',
-       default=True, help='Disable building images')
+    group = self.parser.add_mutually_exclusive_group()
+    group.add_argument('--pull', dest='pull', action='store_true',
+                       help='Enable pulling images (default)')
+    group.add_argument('--no-pull', dest='pull', action='store_false',
+                       help='Disable pulling images')
+    self.parser.set_defaults(pull=True)
+
+    group = self.parser.add_mutually_exclusive_group()
+    group.add_argument('--build', dest='build', action='store_true',
+                       help='Enable building images (default)')
+    group.add_argument('--no-build', dest='build', action='store_false',
+                       help='Disable building images')
+    self.parser.set_defaults(build=True)
+
+    group = self.parser.add_mutually_exclusive_group()
+    group.add_argument('--push', dest='push', action='store_true',
+                       help='Enable pushing images')
+    group.add_argument('--no-push', dest='push', action='store_false',
+                       help='Disable pushing images (default)')
+    self.parser.set_defaults(push=False)
 
     aa('--quiet-pull', dest='quiet_pull', action='store_true',
        default=False, help='Quiet pull (no progress bars)')
