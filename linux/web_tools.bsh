@@ -4,6 +4,12 @@ if [[ ${-} != *i* ]]; then
   source_once &> /dev/null && return 0
 fi
 
+if [ -z "${VSI_COMMON_DIR+set}" ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
+
+source "${VSI_COMMON_DIR}/linux/isin"
+
 #*# linux/web_tools
 
 #**
@@ -252,4 +258,68 @@ function download_to_file()
     found="${rv}"
   fi
   return "${found}"
+}
+
+function _get_listening_ports()
+{
+  if command -v ss &> /dev/null; then
+    ss ${VSI_LIST_PROTO--t} -Hln | sed -${sed_flag_rE} 's/^(\S+\s+){3}\S*:(\S+).*/\2/'
+  elif command -v netstat &> /dev/null; then
+    netstat ${VSI_LIST_PROTO--t} -nnnl | sed -${sed_flag_rE} '/^Active/d; /^Proto/d; s/^(\S+\s+){3}\S*:(\S+).*/\2/'
+  else
+    # lsof doesn't work well unprivileged
+    echo "ss or netstat not found. Cannot auto detect ports" >&2
+    return 1
+  fi
+}
+
+#**
+# .. function:: is_port_listening
+#
+# Checks to see if the port is currently listening.
+#
+# :Arguments: - ``$1`` - Port to check
+#             - ``VSI_LIST_PROTO`` - The protocol to check, default is ``-t`` (TCP).
+# :Return Value: - ``0`` - Port is listening
+#                - ``1`` - Port is not listening
+# :Uses: ``ss`` or ``netstat``
+#**
+function is_port_listening()
+{
+  local ports=($(_get_listening_ports))
+
+  if isin "${1}" ${ports[@]+"${ports[@]}"}; then
+    return 0
+  else
+    return 1
+  fi
+}
+
+#**
+# .. function:: find_available_port
+#
+# Find the first available port for listening
+#
+# :Arguments: - ``$1`` - Minimal port number to check
+#             - ``[$2]`` - Max port number to check
+# :Output: **stdout** - Port number found
+# :Return Value: - ``0`` - Available port found in the specified range
+#                - ``1`` - No port found in the specified range
+#
+# .. seealso::
+#   :func:`is_port_listening`
+#**
+function find_available_port()
+{
+  local -i port="${1}"
+
+  while (( port <= ${2-65535} )); do
+    if ! is_port_listening "${port}"; then
+      echo "${port}"
+      return 0
+    fi
+    port+=1
+  done
+
+  return 1
 }
