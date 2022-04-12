@@ -100,6 +100,7 @@ napoleon_include_special_with_doc = True
 
 autodoc_mock_imports = [
     "numpy",
+    "scipy",
     "matplotlib",
     "rpdb",
     "rpdb2",
