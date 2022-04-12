@@ -10,15 +10,16 @@ def read(fname):
 
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), 'python'))
-#Helps silly crap. Not standard, but oh well
-#try:
-#  os.chdir(os.path.join(os.path.dirname(__file__), 'python'))
-#except OSError:
-#  pass
+
+extra_requires = {
+  'gdal': ["gdal", "shapely", "numpy"],
+  'rasterio': ["rasterio", "shapely", "numpy"]
+}
 
 setup(
     name='vsi_common',
     version='0.0.1',
+    extra_requires=extra_requires,
     packages=find_packages(where='python'),
     package_dir={'': 'python'},
     author = 'Andy Neff',
