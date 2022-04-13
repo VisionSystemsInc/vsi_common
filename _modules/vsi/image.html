@@ -1,0 +1,396 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  
+  <title>vsi.image &mdash; VSI Common 0.2.2+1dev documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+
+  
+  
+
+  
+  
+
+  
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/doctools.js"></script>
+    
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+
+    
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../../index.html" class="icon icon-home"> VSI Common
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../just/index.html">J.U.S.T. Useful Simple Tasking</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../linux/index.html">Linux Utilities</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../windows/index.html">Windows Utilities</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tests/index.html">Unit Tests</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../python/modules.html">vsi</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../docker/recipes/get-pipenv.auto.html">Get Pipenv</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../docker/recipes/index.html">Docker recipes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../style.html">Contributing Style Guide</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">VSI Common</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../index.html" class="icon icon-home"></a> &raquo;</li>
+        
+          <li><a href="../index.html">Module code</a> &raquo;</li>
+        
+      <li>vsi.image</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <h1>Source code for vsi.image</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">math</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">TypeVar</span><span class="p">,</span> <span class="n">Union</span><span class="p">,</span> <span class="n">Sequence</span><span class="p">,</span> <span class="n">Tuple</span>
+<span class="kn">from</span> <span class="nn">collections.abc</span> <span class="kn">import</span> <span class="n">Iterable</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">numpy.typing</span> <span class="k">as</span> <span class="nn">npt</span>
+<span class="kn">import</span> <span class="nn">scipy.signal</span>
+
+
+<span class="c1"># Annotation crap</span>
+<span class="n">T</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">&quot;T&quot;</span><span class="p">,</span> <span class="n">bound</span><span class="o">=</span><span class="n">npt</span><span class="o">.</span><span class="n">NBitBase</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="normalized_cross_correlation_2d"><a class="viewcode-back" href="../../python/vsi.html#vsi.image.normalized_cross_correlation_2d">[docs]</a><span class="k">def</span> <span class="nf">normalized_cross_correlation_2d</span><span class="p">(</span><span class="n">template</span><span class="p">:</span> <span class="s2">&quot;np.floating[T]&quot;</span><span class="p">,</span>
+                                    <span class="n">image</span><span class="p">:</span> <span class="s2">&quot;np.floating[T]&quot;</span><span class="p">,</span>
+                                    <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span><span class="o">=</span><span class="s2">&quot;full&quot;</span><span class="p">):</span> <span class="c1"># -&gt;  &quot;np.floating[T]&quot;:</span>
+  <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">  Computes the 2-D normalized cross correlation (Aka: ``normxcorr2``) between</span>
+<span class="sd">  the template and image.</span>
+
+<span class="sd">  Parameters</span>
+<span class="sd">  ----------</span>
+<span class="sd">  template: :obj:`numpy.ndarray`</span>
+<span class="sd">    N-D array of template or filter you are using for cross-correlation. Must</span>
+<span class="sd">    be less or equal dimensions to image. Length of each dimension must be less</span>
+<span class="sd">    than length of image. Array should be floating point numbers.</span>
+<span class="sd">  image: :obj:`numpy.ndarray`</span>
+<span class="sd">    Image array should be floating point numbers.</span>
+<span class="sd">  mode: :obj:`str`, optional</span>
+<span class="sd">    * `full` (Default): The output of fftconvolve is the full discrete linear</span>
+<span class="sd">      convolution of the inputs. Output size will be image size + 1/2 template</span>
+<span class="sd">      size in each dimension.</span>
+<span class="sd">    * `valid`: The output consists only of those elements that do not rely on</span>
+<span class="sd">      the zero-padding.</span>
+<span class="sd">    * `same`: The output is the same size as image, centered with respect to</span>
+<span class="sd">      the &quot;full&quot; output.</span>
+
+<span class="sd">  Returns</span>
+<span class="sd">  -------</span>
+<span class="sd">  :obj:`numpy.ndarray`</span>
+<span class="sd">    N-D array of same dimensions as image. Size depends on mode parameter.</span>
+<span class="sd">  &quot;&quot;&quot;</span>
+
+  <span class="c1"># If this happens, it is probably a mistake</span>
+  <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">ndim</span><span class="p">(</span><span class="n">template</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndim</span><span class="p">(</span><span class="n">image</span><span class="p">):</span>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Template has more dimenstions than img. &quot;</span>
+                     <span class="s2">&quot;Arguments probably need to be swapped.&quot;</span><span class="p">)</span>
+  <span class="k">if</span> <span class="nb">len</span><span class="p">([</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ndim</span><span class="p">(</span><span class="n">template</span><span class="p">))</span>
+                     <span class="k">if</span> <span class="n">template</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">image</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="n">i</span><span class="p">]])</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Template is larger than img. &quot;</span>
+                     <span class="s2">&quot;Arguments probably need to be swapped.&quot;</span><span class="p">)</span>
+
+  <span class="n">template</span> <span class="o">=</span> <span class="n">template</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">template</span><span class="p">)</span>
+  <span class="n">image</span> <span class="o">=</span> <span class="n">image</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">image</span><span class="p">)</span>
+
+  <span class="n">a1</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">template</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+  <span class="c1"># Faster to flip up down and left right then use convolve (fft domain)</span>
+  <span class="c1"># instead of scipy&#39;s correlate in the space domain</span>
+  <span class="n">ar</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">flipud</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">fliplr</span><span class="p">(</span><span class="n">template</span><span class="p">))</span>
+  <span class="n">out</span> <span class="o">=</span> <span class="n">scipy</span><span class="o">.</span><span class="n">signal</span><span class="o">.</span><span class="n">fftconvolve</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">ar</span><span class="o">.</span><span class="n">conj</span><span class="p">(),</span> <span class="n">mode</span><span class="o">=</span><span class="n">mode</span><span class="p">)</span>
+
+  <span class="n">image</span> <span class="o">=</span> <span class="n">scipy</span><span class="o">.</span><span class="n">signal</span><span class="o">.</span><span class="n">fftconvolve</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">square</span><span class="p">(</span><span class="n">image</span><span class="p">),</span> <span class="n">a1</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="n">mode</span><span class="p">)</span> <span class="o">-</span> \
+          <span class="n">np</span><span class="o">.</span><span class="n">square</span><span class="p">(</span><span class="n">scipy</span><span class="o">.</span><span class="n">signal</span><span class="o">.</span><span class="n">fftconvolve</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">a1</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="n">mode</span><span class="p">))</span> <span class="o">/</span> \
+          <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span><span class="n">template</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
+
+  <span class="c1"># Remove small machine precision errors after subtraction</span>
+  <span class="n">image</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">image</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)]</span> <span class="o">=</span> <span class="mi">0</span>
+
+  <span class="n">template</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">square</span><span class="p">(</span><span class="n">template</span><span class="p">))</span>
+  <span class="n">out</span> <span class="o">=</span> <span class="n">out</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">image</span> <span class="o">*</span> <span class="n">template</span><span class="p">)</span>
+
+  <span class="c1"># Remove any divisions by 0 or very close to 0</span>
+  <span class="n">out</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">logical_not</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">out</span><span class="p">)))]</span> <span class="o">=</span> <span class="mi">0</span>
+
+  <span class="k">return</span> <span class="n">out</span></div>
+
+
+<div class="viewcode-block" id="find_template_offset"><a class="viewcode-back" href="../../python/vsi.html#vsi.image.find_template_offset">[docs]</a><span class="k">def</span> <span class="nf">find_template_offset</span><span class="p">(</span><span class="n">template</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">,</span>
+                         <span class="n">image</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+  <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">  Uses 2-D normalized cross correlation to find the offset of the upper right</span>
+<span class="sd">  corners of the template and image</span>
+
+<span class="sd">  Parameters</span>
+<span class="sd">  ----------</span>
+<span class="sd">  template: :obj:`numpy.ndarray`</span>
+<span class="sd">    N-D array of template or filter you are using for cross-correlation. Must</span>
+<span class="sd">    be less or equal dimensions to image. Length of each dimension must be less</span>
+<span class="sd">    than length of image. Array should be floating point numbers.</span>
+<span class="sd">  image: :obj:`numpy.ndarray`</span>
+<span class="sd">    Image array should be floating point numbers.</span>
+
+<span class="sd">  Returns</span>
+<span class="sd">  -------</span>
+<span class="sd">  :obj:`int`</span>
+<span class="sd">    y offset in pixels</span>
+<span class="sd">  :obj:`int`</span>
+<span class="sd">    x offset in pixels</span>
+<span class="sd">  :obj:`float`</span>
+<span class="sd">    The quality of the fit (scale of -1 to 1), where ``1`` is a perfect 100%</span>
+<span class="sd">    match, and ``-1`` is a perfect negative match. ``0`` is no match</span>
+<span class="sd">  &quot;&quot;&quot;</span>
+  <span class="n">xc</span> <span class="o">=</span> <span class="n">normalized_cross_correlation_2d</span><span class="p">(</span><span class="n">template</span><span class="p">,</span> <span class="n">image</span><span class="p">)</span>
+
+  <span class="n">fit</span> <span class="o">=</span> <span class="n">xc</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
+  <span class="n">y_peak</span><span class="p">,</span> <span class="n">x_peak</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nonzero</span><span class="p">(</span><span class="n">xc</span><span class="o">==</span><span class="n">fit</span><span class="p">)</span>
+
+  <span class="n">y_offset</span> <span class="o">=</span> <span class="n">y_peak</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">-</span><span class="n">template</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span>
+  <span class="n">x_offset</span> <span class="o">=</span> <span class="n">x_peak</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">-</span><span class="n">template</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span>
+
+  <span class="k">return</span> <span class="n">y_offset</span><span class="p">,</span> <span class="n">x_offset</span><span class="p">,</span> <span class="n">fit</span></div>
+
+
+<div class="viewcode-block" id="find_template_offset_centered"><a class="viewcode-back" href="../../python/vsi.html#vsi.image.find_template_offset_centered">[docs]</a><span class="k">def</span> <span class="nf">find_template_offset_centered</span><span class="p">(</span><span class="n">template_image</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">,</span>
+                                  <span class="n">image</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">,</span>
+                                  <span class="n">template_center</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span>
+                                  <span class="n">image_center</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span>
+                                  <span class="n">template_radius</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span><span class="nb">int</span><span class="p">]]</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+                                  <span class="n">image_radius</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span><span class="nb">int</span><span class="p">]]</span><span class="o">=</span><span class="mi">200</span><span class="p">):</span>
+
+  <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">  Uses 2-D normalized cross correlation to find the offset of a point of</span>
+<span class="sd">  interest between in two images. This is a convenient form of the</span>
+<span class="sd">  :func:`find_template_offset` function, that will handle boundary conditions</span>
+<span class="sd">  and do the math to tell you the offset of specific point of interest at the</span>
+<span class="sd">  centers</span>
+
+<span class="sd">  Parameters</span>
+<span class="sd">  ----------</span>
+<span class="sd">  template_image: :obj:`numpy.ndarray`</span>
+<span class="sd">    The image containing the template patch</span>
+<span class="sd">  image: :obj:`numpy.ndarray`</span>
+<span class="sd">    Image array should be floating point numbers.</span>
+<span class="sd">  template_center: :obj:`tuple`</span>
+<span class="sd">    The location of the POI in the template image, (y,x) coordinate</span>
+<span class="sd">  image_center::obj:`tuple`</span>
+<span class="sd">    The location of the POI in the image, (y,x) coordinate</span>
+<span class="sd">  template_radius: :obj:`int` or :obj:`tuple`, optional</span>
+<span class="sd">    The radius around the template used for the cross correlation. Can be a</span>
+<span class="sd">    single number (in which case the same number is used in both the x and y</span>
+<span class="sd">    direction), or a tuple of two numbers (y radius, x radius). E.g.: ``50``</span>
+<span class="sd">    will create a patch 101 by 101, unless it is too close to the edge in which</span>
+<span class="sd">    case it will be smaller. Default is ``50``, and must be smaller than</span>
+<span class="sd">    image_radius.</span>
+<span class="sd">  image_radius: :obj:`int` or :obj:`tuple`, optional</span>
+<span class="sd">    The radius around the image. Default: ``200``</span>
+
+
+<span class="sd">  Returns</span>
+<span class="sd">  -------</span>
+<span class="sd">  :obj:`int`</span>
+<span class="sd">    y offset in pixels</span>
+<span class="sd">  :obj:`int`</span>
+<span class="sd">    x offset in pixels</span>
+<span class="sd">  :obj:`float`</span>
+<span class="sd">    The quality of the fit (scale of -1 to 1), where ``1`` is a perfect 100%</span>
+<span class="sd">    match, and ``-1`` is a perfect negative match. ``0`` is no match</span>
+<span class="sd">  &quot;&quot;&quot;</span>
+
+  <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">template_radius</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">):</span>
+    <span class="n">template_radius</span> <span class="o">=</span> <span class="p">(</span><span class="n">template_radius</span><span class="p">,</span> <span class="n">template_radius</span><span class="p">)</span>
+  <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">image_radius</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">):</span>
+    <span class="n">image_radius</span> <span class="o">=</span> <span class="p">(</span><span class="n">image_radius</span><span class="p">,</span> <span class="n">image_radius</span><span class="p">)</span>
+
+  <span class="k">def</span> <span class="nf">get_bounds</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">center</span><span class="p">,</span> <span class="n">radius</span><span class="p">):</span>
+    <span class="n">min_y</span> <span class="o">=</span> <span class="n">center</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">radius</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">max_y</span> <span class="o">=</span> <span class="n">center</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">radius</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">min_x</span> <span class="o">=</span> <span class="n">center</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">radius</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span>
+    <span class="n">max_x</span> <span class="o">=</span> <span class="n">center</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">radius</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span>
+
+    <span class="n">min_y</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">min_y</span><span class="p">))</span>
+    <span class="n">min_x</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">min_x</span><span class="p">))</span>
+
+    <span class="n">max_y</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="n">image</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">max_y</span><span class="p">))</span>
+    <span class="n">max_x</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="n">image</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">max_x</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">min_y</span><span class="p">,</span> <span class="n">max_y</span><span class="p">,</span> <span class="n">min_x</span><span class="p">,</span> <span class="n">max_x</span>
+
+  <span class="n">min_y1</span><span class="p">,</span> <span class="n">max_y1</span><span class="p">,</span> <span class="n">min_x1</span><span class="p">,</span> <span class="n">max_x1</span> <span class="o">=</span> <span class="n">get_bounds</span><span class="p">(</span><span class="n">template_image</span><span class="p">,</span> <span class="n">template_center</span><span class="p">,</span> <span class="n">template_radius</span><span class="p">)</span>
+  <span class="n">min_y2</span><span class="p">,</span> <span class="n">max_y2</span><span class="p">,</span> <span class="n">min_x2</span><span class="p">,</span> <span class="n">max_x2</span> <span class="o">=</span> <span class="n">get_bounds</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">image_center</span><span class="p">,</span> <span class="n">image_radius</span><span class="p">)</span>
+
+
+  <span class="n">offset_y</span><span class="p">,</span> <span class="n">offset_x</span><span class="p">,</span> <span class="n">fit</span> <span class="o">=</span> <span class="n">find_template_offset</span><span class="p">(</span>
+      <span class="n">template_image</span><span class="p">[</span><span class="n">min_y1</span><span class="p">:</span><span class="n">max_y1</span><span class="p">,</span> <span class="n">min_x1</span><span class="p">:</span><span class="n">max_x1</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
+      <span class="n">image</span><span class="p">[</span><span class="n">min_y2</span><span class="p">:</span><span class="n">max_y2</span><span class="p">,</span> <span class="n">min_x2</span><span class="p">:</span><span class="n">max_x2</span><span class="p">,</span> <span class="o">...</span><span class="p">])</span>
+
+  <span class="n">offset_y</span> <span class="o">=</span> <span class="n">offset_y</span> <span class="o">-</span> <span class="n">image_center</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">min_y2</span> <span class="o">-</span> <span class="n">min_y1</span> <span class="o">+</span> <span class="n">template_center</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+  <span class="n">offset_x</span> <span class="o">=</span> <span class="n">offset_x</span> <span class="o">-</span> <span class="n">image_center</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">min_x2</span> <span class="o">-</span> <span class="n">min_x1</span> <span class="o">+</span> <span class="n">template_center</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+
+  <span class="k">return</span> <span class="n">offset_y</span><span class="p">,</span> <span class="n">offset_x</span><span class="p">,</span> <span class="n">fit</span></div>
+</pre></div>
+
+           </div>
+           
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &#169; Copyright 2020, Vision Systems, Inc.
+
+    </p>
+  </div>
+    
+    
+    
+    Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    
+    provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>
