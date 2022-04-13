@@ -13,7 +13,7 @@ T = TypeVar("T", bound=npt.NBitBase)
 
 def normalized_cross_correlation_2d(template: "np.floating[T]",
                                     image: "np.floating[T]",
-                                    mode: str="full") ->  "np.floating[T]":
+                                    mode: str="full"): # ->  "np.floating[T]":
   """
   Computes the 2-D normalized cross correlation (Aka: ``normxcorr2``) between
   the template and image.
