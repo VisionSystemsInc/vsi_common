@@ -342,7 +342,6 @@ begin_test "Strip copy"
   touch "${TESTDIR}/foo/dir1/file12"
 
   mkdir -p "${TESTDIR}/foo/dir1/dir_common"
-  mkdir -p "${TESTDIR}/foo/dir1/dir_common/dirc"
   echo 111 > "${TESTDIR}/foo/dir1/file_common"
   touch "${TESTDIR}/foo/dir1/dir_common/filec1"
 
@@ -351,7 +350,7 @@ begin_test "Strip copy"
   touch "${TESTDIR}/foo/dir2/file21"
 
   mkdir -p "${TESTDIR}/foo/dir2/dir_common"
-  mkdir -p "${TESTDIR}/foo/dir2/dir_common/dirc"
+  mkdir -p "${TESTDIR}/foo/dir2/dir_common/dir2"
   echo 222 > "${TESTDIR}/foo/dir2/file_common"
 
   touch "${TESTDIR}/foo/file1"
@@ -359,11 +358,49 @@ begin_test "Strip copy"
 
   mkdir "${TESTDIR}/bar1"
 
-  strip_copy "${TESTDIR}/foo" "${TESTDIR}/bar0" 0
-  strip_copy "${TESTDIR}/foo" "${TESTDIR}/bar1" 1
-  cd "${TESTDIR}/foo"
-  strip_copy . "${TESTDIR}/bar2" 2
+  strip_copy "${TESTDIR}/foo" "${TESTDIR}/bar0a" 0
+  pushd "${TESTDIR}/foo" &> /dev/null
+  strip_copy . "${TESTDIR}/bar0b" 0
+  strip_copy . "${TESTDIR}/bar1" 1
+  popd  &> /dev/null
+  strip_copy "${TESTDIR}/foo" "${TESTDIR}/bar2" 2
 
-  [ -d "${TESTDIR}/bar0/foo" ]
+  # Verify no stripping works (level 0) and level 1 stripping
+  for d in bar0a/foo bar0b/foo bar1; do
+    [ -f "${TESTDIR}/${d}/file1" ]
+    [ -f "${TESTDIR}/${d}/file2" ]
+
+    [ -d "${TESTDIR}/${d}/dir1/dir11" ]
+    [ -d "${TESTDIR}/${d}/dir1/dir12" ]
+    [ -f "${TESTDIR}/${d}/dir1/file11" ]
+    [ -f "${TESTDIR}/${d}/dir1/file12" ]
+
+    [ -d "${TESTDIR}/${d}/dir2/dir21" ]
+    [ -d "${TESTDIR}/${d}/dir2/dir22" ]
+    [ -f "${TESTDIR}/${d}/dir2/file21" ]
+
+
+    [ -f "${TESTDIR}/${d}/dir1/dir_common/filec1" ]
+    [ -d "${TESTDIR}/${d}/dir2/dir_common/dir2" ]
+
+    [ "$(cat "${TESTDIR}/${d}/dir1/file_common")" == "111" ]
+    [ "$(cat "${TESTDIR}/${d}/dir2/file_common")" == "222" ]
+  done
+
+  # Verify Collision case at level 2
+  [ -d "${TESTDIR}/bar2/dir11" ]
+  [ -d "${TESTDIR}/bar2/dir12" ]
+  [ -f "${TESTDIR}/bar2/file11" ]
+  [ -f "${TESTDIR}/bar2/file12" ]
+
+  [ -d "${TESTDIR}/bar2/dir21" ]
+  [ -d "${TESTDIR}/bar2/dir22" ]
+  [ -f "${TESTDIR}/bar2/file21" ]
+
+  [ -f "${TESTDIR}/bar2/dir_common/filec1" ]
+  [ -d "${TESTDIR}/bar2/dir_common/dir2" ]
+
+  contents="$(cat "${TESTDIR}/bar2/file_common")"
+  [ "${contents}" = "111" ] || [ "${contents}" = "222" ]
 )
 end_test

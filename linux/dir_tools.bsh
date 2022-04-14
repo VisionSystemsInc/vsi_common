@@ -10,6 +10,7 @@ fi
 
 source "${VSI_COMMON_DIR}/linux/signal_tools.bsh"
 source "${VSI_COMMON_DIR}/linux/compat.bsh"
+source "${VSI_COMMON_DIR}/linux/real_path"
 
 #*# linux/dir_tools
 
@@ -479,11 +480,15 @@ function relative_path()
 #             * ``$2`` - The destination directory
 #             * ``$3`` - Strip this many leading components from file names on ``cp``
 #
-# Replicated the behavior of ``tar --strip-components``, but when applied to a ``cp`` scenario.
+# Replicates the behavior of ``tar --strip-components``, but when applied to a ``cp`` scenario.
+#
+# .. note:
+#
+#    ``cp`` will process files in a different order than ``tar --strip-components``. In case there are multiple files with the same name at a stripped depth,files may be overwritten differently than ``tar --strip-components`` would have. While ``tar`` keeps the first one in the archive order, ``cp`` will keep the last one in ``cp`` order. And as both order and behaviors are different, the result could be the same, or different.
 #**
 function strip_copy()
 {
-  local source_dir=$(normpath "${1}")
+  local source_dir=$(real_path "${1}")
   local destination=${2}
   local depth=${3}
 
@@ -493,9 +498,18 @@ function strip_copy()
   # formation internal the find command, however it turns out everyone's
   # implementation of xargs/find adds such a large safety buffer that that
   # discrepancy doesn't matter
+  #
+  # Newer versions of cp refused to overwrite a file it copied in the same
+  # command, "cp: will not overwrite just-created". However the behavior of
+  # --strip-components doesn't care, so we won't either
+  # This is slightly different from the tar behavior, where the first one is
+  # kept, while cp will override. But seeing as order isn't guaranteed to be
+  # maintained, this different in behavior hardly matters. Trying to disable
+  # this "error message" with --backup=none did not work, so just ignore cp
+  # exit code with || :
   DEST="${destination}" find "${source_dir}" \
                             -mindepth "${depth}" -maxdepth "${depth}" \
-                            -exec sh -c 'cp -fa "${@}" "${DEST}/"' sh \{\} \+
+                            -exec sh -c 'cp -fa "${@}" "${DEST}/" || :' sh \{\} \+
 
   # if [ "${depth}" = "0" ]; then
   #   cp -a "${source_dir}" "${destination}/"
