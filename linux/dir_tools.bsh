@@ -10,6 +10,7 @@ fi
 
 source "${VSI_COMMON_DIR}/linux/signal_tools.bsh"
 source "${VSI_COMMON_DIR}/linux/compat.bsh"
+source "${VSI_COMMON_DIR}/linux/real_path"
 
 #*# linux/dir_tools
 
@@ -470,4 +471,69 @@ function relative_path()
   else
     echo "${ans[*]}"
   fi
+}
+
+#**
+# .. function:: strip_copy
+#
+# :Arguments: * ``$1`` - The source directory
+#             * ``$2`` - The destination directory
+#             * ``$3`` - Strip this many leading components from file names on ``cp``
+#
+# Replicates the behavior of ``tar --strip-components``, but when applied to a ``cp`` scenario.
+#
+# .. note:
+#
+#    ``cp`` will process files in a different order than ``tar --strip-components``. In the case where there are multiple files with the same name at a stripped depth, the file may be overwritten in a different order than ``tar --strip-components`` would have. While ``tar`` keeps the first one in the archive order, ``cp`` will keep the last one in ``cp`` order. Consequently, the order is not guaranteed.
+#**
+function strip_copy()
+{
+  local source_dir=$(real_path "${1}")
+  local destination=${2}
+  local depth=${3}
+
+  mkdir -p "${destination}"
+
+  # Based on https://stackoverflow.com/a/47645560/4166604
+  #
+  # Technically, the length of the destination, DEST, is not included in the xargs
+  # line formation because it is internal the find command, however it turns out
+  # everyone's implementation of xargs/find adds such a large safety buffer that
+  # the discrepancy doesn't matter
+  #
+  # Newer versions of cp refuse to overwrite a file it copied in the same
+  # command, "cp: will not overwrite just-created". However the behavior of
+  # --strip-components doesn't care, so we won't either
+  # This is slightly different from the tar behavior, where the first one is
+  # kept, while cp will override. This difference in behavior hardly matters;
+  # consequently, we are not guaranteeing order. Trying to disable this
+  # "error message" with --backup=none did not work, so just ignore cp
+  # exit code with || : and ignore the "cp: will not overwrite just-created"
+  # message if it is spewed to the screen.
+  DEST="${destination}" find "${source_dir}" \
+                            -mindepth "${depth}" -maxdepth "${depth}" \
+                            -exec sh -c 'cp -fa "${@}" "${DEST}/" || :' sh \{\} \+
+
+  # Kept for reference/posterity
+  # if [ "${depth}" = "0" ]; then
+  #   cp -a "${source_dir}" "${destination}/"
+  #   return 0
+  # elif [ "${depth}" -lt "0" ]; then
+  #   echo "Something went wrong" &> 2
+  #   return 1
+  # fi
+
+  # while IFS= read -r -d '' filename || [ -n "${filename}" ]; do
+  #   if [ -d "${filename}" ]; then
+  #     if [ "${depth}" = "1" ]; then
+  #       cp -a "${filename}" "${destination}/"
+  #     else
+  #       strip_copy "${filename}" "${destination}" $((depth-1))
+  #     fi
+  #   else
+  #     if [ "${depth}" = "1" ]; then
+  #       cp -a "${filename}" "${destination}/"
+  #     fi
+  #   fi
+  # done < <(find "${source_dir}" -mindepth 1 -maxdepth 1 -print0)
 }
