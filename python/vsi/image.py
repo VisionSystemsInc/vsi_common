@@ -21,9 +21,9 @@ def normalized_cross_correlation_2d(template: "np.floating[T]",
   Parameters
   ----------
   template: :obj:`numpy.ndarray`
-    N-D array of template or filter you are using for cross-correlation. Must
-    be less or equal dimensions to image. Length of each dimension must be less
-    than length of image. Array should be floating point numbers.
+    N-D array of template or filter you are using for cross-correlation. Length
+    of each dimension must be less than equal to the corresponding dimension of
+    the image. Array should be floating point numbers.
   image: :obj:`numpy.ndarray`
     Image array should be floating point numbers.
   mode: :obj:`str`, optional
@@ -116,7 +116,8 @@ def find_template_offset_centered(template_image: np.floating,
                                   template_center: Tuple[int, int],
                                   image_center: Tuple[int, int],
                                   template_radius: Union[int, Tuple[int,int]]=50,
-                                  image_radius: Union[int, Tuple[int,int]]=200):
+                                  image_radius: Union[int, Tuple[int,int]]=200,
+                                  adjust_template=None):
 
   """
   Uses 2-D normalized cross correlation to find the offset of a point of
@@ -179,6 +180,12 @@ def find_template_offset_centered(template_image: np.floating,
   min_y1, max_y1, min_x1, max_x1 = get_bounds(template_image, template_center, template_radius)
   min_y2, max_y2, min_x2, max_x2 = get_bounds(image, image_center, image_radius)
 
+  if adjust_template:
+    adjustment = adjust_template(template_image, min_y1, max_y1, min_x1, max_x1)
+    min_y1 += adjustment[0]
+    max_y1 -= adjustment[1]
+    min_x1 += adjustment[2]
+    max_x1 -= adjustment[3]
 
   offset_y, offset_x, fit = find_template_offset(
       template_image[min_y1:max_y1, min_x1:max_x1, ...],
