@@ -36,7 +36,7 @@ def share_xy_custom(ax1, ax2,
   sharey : :class:`bool`, optional
       Should the y axis be shared
   **kwargs
-      Arbitrary keyword arguments passed to ``forward`` and ``backward``
+      Additional keyword arguments passed to ``forward`` and ``backward``
   '''
 
   def wrap_call(func, ax, dest_ax):
@@ -99,7 +99,7 @@ def imshow_chip(axes, img, origin, size, *args, **kwargs):
   *args :
       Additional parameters passed to :func:`matplotlib.pyplot.imshow`
   **kwargs
-      Additional parameters passed to :func:`matplotlib.pyplot.imshow`
+      Additional keyword arguments passed to :func:`matplotlib.pyplot.imshow`
   '''
   img_chip = img[origin[0]:(origin[0]+size[0]),
                  origin[1]:(origin[1]+size[1])]
@@ -132,7 +132,7 @@ def imshow_chip_from_raster(axes, raster, origin, size, *args, **kwargs):
   *args :
       Additional parameters passed to :func:`matplotlib.pyplot.imshow`
   **kwargs
-      Additional parameters passed to :func:`matplotlib.pyplot.imshow`
+      Additional keyword arguments passed to :func:`matplotlib.pyplot.imshow`
   '''
 
   img_chip = raster.read(1,
@@ -165,7 +165,7 @@ def surf(z, cmap='jet', ax=None, x=None, y=None, c=None, **kwargs):
       A custom array that is fed into the colormap for coloring. Default uses
       ``z``
   **kwargs : dict
-      Additional parameters passed to :meth:`mpl_toolkits.mplot3d.axes3d.Axes3D.plot_surface`
+      Additional keyword arguments passed to :meth:`mpl_toolkits.mplot3d.axes3d.Axes3D.plot_surface`
 
 
   By default, :meth:`mpl_toolkits.mplot3d.axes3d.Axes3D.plot_surface` does not
@@ -202,13 +202,13 @@ def surf(z, cmap='jet', ax=None, x=None, y=None, c=None, **kwargs):
 
 class SimpleBubblePicker:
   '''
-  Simple class to add add a picker with your own text function
+  Simple class to add a picker with your own text function
 
   Currently supports plots (Line2D), scatter (PathCollection), images
   (AxesImage) and PatchCollection
 
-  With :class:`SimpleBubblePicker`, comes with a default text function that
-  will display basic information about any point you click.
+  :class:`SimpleBubblePicker` comes with a default text function that will
+  display basic information about any point you click.
   '''
   def __init__(self, fig=None, text_function=None,
                x_offset=10, y_offset=15, offset_units='dots',
@@ -222,14 +222,14 @@ class SimpleBubblePicker:
         fig : :class:`matplotlib.figure.Figure`, optional
             Default to using the :func:`matplotlib.pyplot.gcf`
         text_function : :class:`py::function`, optional
-            A Defaults to :func:`SimpleBubblePicker.default_text`
+            Defaults to :func:`SimpleBubblePicker.default_text`
         x_offset : float, optional
         y_offset : float, optional
             Offset location of bubble from actual point
         offset_units : 'str', optional
             Default: ``dots``
         **kwargs :
-            Additional argument to be passed to text initializer
+            Additional keyword arguments to be passed to text initializer
     '''
 
     if fig is None:
