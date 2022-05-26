@@ -25,11 +25,11 @@ def share_xy_custom(ax1, ax2,
       The first Axes
   ax2 : :class:`matplotlib.axes.Axes`
       The second Axes
-  forward : :class:`py::function`
+  forward : Callable
       A function that takes the arguments ``x0``, ``x1``, ``y0``, ``y1`` for
       ``ax1`` and returns ``(x0, x1, y0, y1)`` for ``ax2``. Return ``None`` to
       indicate that no update to ``ax2`` should be performed.
-  backward : :class:`py::function`
+  backward : Callable
       Same as ``forward`` except maps ``ax2`` to ``ax1``
   sharex : :class:`bool`, optional
       Should the x axis be shared
@@ -123,7 +123,7 @@ def imshow_chip_from_raster(axes, raster, origin, size, *args, **kwargs):
   ----------
   axes : :class:`matplotlib.axes.Axes`
       The first Axes
-  raster : :class:`rasterio.io.Dataset`
+  raster : :class:`rasterio.io.DatasetReader`
       rasterio dataset object
   origin :
       The origin of the chip to load, in y, x, order
@@ -165,10 +165,10 @@ def surf(z, cmap='jet', ax=None, x=None, y=None, c=None, **kwargs):
       A custom array that is fed into the colormap for coloring. Default uses
       ``z``
   **kwargs : dict
-      Additional parameters passed to :func:`mpl_toolkits.mplot3d.axes3d.Axes3D.plot_surface`
+      Additional parameters passed to :meth:`mpl_toolkits.mplot3d.axes3d.Axes3D.plot_surface`
 
 
-  By default, :func:`mpl_toolkits.mplot3d.axes3d.Axes3D.plot_surface` does not
+  By default, :meth:`mpl_toolkits.mplot3d.axes3d.Axes3D.plot_surface` does not
   draw the entire mesh, it downsamples it to 50 points instead (for
   efficiency). To disable downsampling, consider setting ``rstride`` and
   ``cstride`` to ``1``.
@@ -296,6 +296,9 @@ class SimpleBubblePicker:
       return event.artist.get_text()
     elif isinstance(event.artist, mpl.collections.PatchCollection):
       return '\n'.join([f'patch: {self.patch}'])
+    elif isinstance(event.artist, mpl.patches.Rectangle):
+      return '\n'.join([f'x: {self.bbox.x0} - {self.bbox.x1}',
+                        f'y: {self.bbox.y0} - {self.bbox.y1}'])
     else:
       return 'Todo'
 
@@ -360,15 +363,18 @@ class SimpleBubblePicker:
         self.text_y = self.y
       elif isinstance(event.artist, mpl.collections.PatchCollection):
         self.ind = event.ind
-        self.patchs = event.artist.get_paths()
-        self.patch = self.patchs[self.ind[0]]
+        self.patches = event.artist.get_paths()
+        self.patch = self.patches[self.ind[0]]
         self.text_x, self.text_y = self.patch.get_extents().corners().mean(axis=0)
       elif isinstance(event.artist, mpl.text.Text):
         self.x, self.y = event.artist.get_position()
         self.text_x = self.x
         self.text_y = self.y
       elif isinstance(event.artist, mpl.patches.Rectangle):
-        plt.gca().set_title('todo')
+        self.bbox = event.artist.get_bbox()
+        # self.x, self.y = event.artist.get_bbox()
+        self.text_x = (self.bbox.x0 + self.bbox.x1)/2
+        self.text_y = (self.bbox.y0 + self.bbox.y1)/2
       else:
         plt.gca().set_title('oops')
         return

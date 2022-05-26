@@ -57,6 +57,7 @@ intersphinx_mapping = {
     'matplotlib': ('https://matplotlib.org/stable', None),
     'numpy': ('https://numpy.org/doc/stable', None),
     'python': ('https://docs.python.org/3.7', None),
+    'rasterio': ('https://rasterio.readthedocs.io/en/stable/', None),
 }
 
 # Add any paths that contain templates here, relative to this directory.
