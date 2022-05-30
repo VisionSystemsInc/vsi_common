@@ -160,6 +160,8 @@
   <h1>Source code for vsi.tools.file_util</h1><div class="highlight"><pre>
 <span></span><span class="kn">import</span> <span class="nn">os</span>
 <span class="kn">import</span> <span class="nn">shutil</span>
+<span class="kn">import</span> <span class="nn">tempfile</span>
+<span class="kn">import</span> <span class="nn">functools</span>
 
 <div class="viewcode-block" id="lncp"><a class="viewcode-back" href="../../../python/vsi.tools.html#vsi.tools.file_util.lncp">[docs]</a><span class="k">def</span> <span class="nf">lncp</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">dest</span><span class="p">):</span>
   <span class="sd">&#39;&#39;&#39; Symlink or copy if that fails. Should work for Linux and Windows</span>
@@ -180,6 +182,32 @@
     <span class="n">os</span><span class="o">.</span><span class="n">symlink</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">dest</span><span class="p">)</span>
   <span class="k">except</span><span class="p">:</span>
     <span class="n">shutil</span><span class="o">.</span><span class="n">copyfile</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">dest</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="_path_or_temp"><a class="viewcode-back" href="../../../python/vsi.tools.html#vsi.tools.file_util._path_or_temp">[docs]</a><span class="k">def</span> <span class="nf">_path_or_temp</span><span class="p">(</span><span class="n">kwarg_key</span><span class="p">,</span> <span class="n">kwarg_func</span><span class="o">=</span><span class="k">lambda</span> <span class="n">temp_dir</span><span class="p">:</span> <span class="n">temp_dir</span><span class="p">):</span>
+  <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  Decorator to replace a missing kwarg (missing, empty, or ``None``) that</span>
+<span class="sd">  defines a path with a valid temporary path.</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+  <span class="k">def</span> <span class="nf">inner</span><span class="p">(</span><span class="n">func</span><span class="p">):</span>
+
+    <span class="nd">@functools</span><span class="o">.</span><span class="n">wraps</span><span class="p">(</span><span class="n">func</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">wrapper</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+
+      <span class="c1"># named kwarg key</span>
+      <span class="n">kwarg_value</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">kwarg_key</span><span class="p">)</span>
+
+      <span class="c1"># temporary file</span>
+      <span class="k">if</span> <span class="ow">not</span> <span class="n">kwarg_value</span><span class="p">:</span>
+        <span class="k">with</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">TemporaryDirectory</span><span class="p">()</span> <span class="k">as</span> <span class="n">temp_dir</span><span class="p">:</span>
+          <span class="n">kwargs</span><span class="p">[</span><span class="n">kwarg_key</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwarg_func</span><span class="p">(</span><span class="n">temp_dir</span><span class="p">)</span>
+          <span class="k">return</span> <span class="n">func</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+      <span class="c1"># defined file - call with original kwargs</span>
+      <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">func</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">wrapper</span>
+  <span class="k">return</span> <span class="n">inner</span></div>
 
 <div class="viewcode-block" id="file_or_temp"><a class="viewcode-back" href="../../../python/vsi.tools.html#vsi.tools.file_util.file_or_temp">[docs]</a><span class="k">def</span> <span class="nf">file_or_temp</span><span class="p">(</span><span class="n">kwarg_key</span><span class="p">,</span> <span class="n">filename</span><span class="p">):</span>
   <span class="sd">&#39;&#39;&#39;</span>
