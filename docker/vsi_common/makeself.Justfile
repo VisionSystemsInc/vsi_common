@@ -4,7 +4,7 @@ source "${VSI_COMMON_DIR}/linux/command_tools.bsh"
 source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
 
 #**
-# .. function: makeself_git_prep
+# .. function:: makeself_git_prep
 #
 # Helper function for running makeself on git repos
 #

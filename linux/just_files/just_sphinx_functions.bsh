@@ -9,6 +9,9 @@ source "${VSI_COMMON_DIR}/linux/elements.bsh"
 source "${VSI_COMMON_DIR}/linux/set_flags.bsh"
 source "${VSI_COMMON_DIR}/linux/ask_question"
 
+# TODO: Look into why this created an infinite source loop on appveyor
+# source "${VSI_COMMON_DIR}/linux/just_files/just_docker_functions.bsh"
+
 #*# just/plugins/just_sphinx_functions
 
 JUST_DEFAULTIFY_FUNCTIONS+=(docs_defaultify)
@@ -96,6 +99,10 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 
 function _docs_serialize_dirs()
 {
+  if [ "${#}" == "0" ]; then
+    return 0
+  fi
+
   local tmp="${1-}"
   shift 1
 
@@ -288,7 +295,7 @@ function docs_defaultify()
 
     sphinx_setup) # Setup a new sphinx project
       mkdir -p "${docs_dir}"
-      _sphinx_docker_compose run --rm \
+      _sphinx_docker_compose run \
           sphinx bash -c "cd /docs; sphinx-quickstart"
       ;;
     sphinx_shell) # Enter the sphinx container
@@ -353,7 +360,7 @@ function docs_defaultify()
       git clean -ndX "${docs_dir}"
       ask_question "Would you like to delete these files?" sphinx_clean y
       if [ "${sphinx_clean}" = "1" ]; then
-        git clean -fdX "${docs_dir}"
+        ${DRYRUN} git clean -fdX "${docs_dir}"
       fi
       ;;
     sphinx_intersphinx) # Show links from intersphinx mapping

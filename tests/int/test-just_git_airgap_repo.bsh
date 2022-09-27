@@ -31,6 +31,7 @@ function setup_variables()
 {
   VSI_COMMON_URL="${TRASHDIR}/git/VisionSystemsInc/vsi_common.git" # bare repo
   RECIPES_URL="${TRASHDIR}/git/VisionSystemsInc/docker_recipes.git" # bare repo
+  BLUEPRINTS_URL="${TRASHDIR}/git/VisionSystemsInc/docker_blueprints.git" # bare repo
   PRETEND_URL="${TRASHDIR}/git/pretend_repo.git" # bare repo
   BUILD_REPO="${TRASHDIR}/build"
   PREP_DIR="${TRASHDIR}/pretend_prep"
@@ -40,6 +41,7 @@ function setup_variables()
 
   mkdir -p "${VSI_COMMON_URL}"
   mkdir -p "${RECIPES_URL}"
+  mkdir -p "${BLUEPRINTS_URL}"
   mkdir -p "${PRETEND_URL}"
   mkdir -p "${BUILD_REPO}"
   mkdir -p "${TRANSFER_DIR}"
@@ -53,6 +55,7 @@ begin_test "Part 1 - Setup test repo"
 
   VSI_COMMON_SHA="$(cd "${VSI_COMMON_DIR}" && git rev-parse HEAD)"
   RECIPES_SHA="$(cd "${VSI_COMMON_DIR}/docker/recipes" && git rev-parse HEAD)"
+  BLUEPRINTS_SHA="$(cd "${VSI_COMMON_DIR}/docker/blueprints" && git rev-parse HEAD)"
 
   # Create faux-urls for the repo and its submodules
 
@@ -87,6 +90,13 @@ begin_test "Part 1 - Setup test repo"
     # local branch at the current SHA to ensure the commit is properly mirrored
     # (see above)
     git branch local "${RECIPES_SHA}"
+  popd &> /dev/null
+
+  # repeat recipes pattern for blueprints
+  pushd "${BLUEPRINTS_URL}" &> /dev/null
+    git clone --mirror "${VSI_COMMON_DIR}"/docker/blueprints .
+    [ "${BLUEPRINTS_SHA}" = "$(git rev-parse HEAD)" ]
+    git branch local "${BLUEPRINTS_SHA}"
   popd &> /dev/null
 
   # Main repo
@@ -150,7 +160,7 @@ begin_test "Part 4 - Pushing to mirror"
   setup_test
   setup_variables
 
-  for d in pretend_repo.git vsi_common.git recipes.git; do
+  for d in pretend_repo.git vsi_common.git recipes.git blueprints.git; do
     mkdir -p "${AIRGAP_MIRROR_DIR}/${d}"
     pushd "${AIRGAP_MIRROR_DIR}/${d}" &> /dev/null
       git init --bare
@@ -190,6 +200,8 @@ begin_test "Part 5 - Cloning from mirror"
   [ "$(cd "${AIRGAP_CLONE_DIR}" && git rev-parse HEAD)" = "${ans}" ]
   ans="$(cd "${BUILD_REPO}"/vsi_common/docker/recipes&& git rev-parse HEAD)"
   [ "$(cd "${AIRGAP_CLONE_DIR}"/vsi_common/docker/recipes && git rev-parse HEAD)" = "${ans}" ]
+  ans="$(cd "${BUILD_REPO}"/vsi_common/docker/blueprints&& git rev-parse HEAD)"
+  [ "$(cd "${AIRGAP_CLONE_DIR}"/vsi_common/docker/blueprints && git rev-parse HEAD)" = "${ans}" ]
 
   # NOTE More complicated scenarios are tested in test-git_mirror.bsh
 )

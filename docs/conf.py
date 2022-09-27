@@ -57,6 +57,7 @@ intersphinx_mapping = {
     'matplotlib': ('https://matplotlib.org/stable', None),
     'numpy': ('https://numpy.org/doc/stable', None),
     'python': ('https://docs.python.org/3.7', None),
+    'rasterio': ('https://rasterio.readthedocs.io/en/stable/', None),
 }
 
 # Add any paths that contain templates here, relative to this directory.
@@ -100,12 +101,18 @@ napoleon_include_special_with_doc = True
 
 autodoc_mock_imports = [
     "numpy",
+    "scipy",
     "matplotlib",
     "rpdb",
     "rpdb2",
     "mpl_toolkits",
     "IPython",
     "brl_init",
+    "shapely",
+    "rasterio",
+    "osgeo",
+    "cv2",
+    "pvl",
     "boxm2_adaptor",
     "boxm2_scene_adaptor",
     "vpgl_adaptor_boxm2_batch",
