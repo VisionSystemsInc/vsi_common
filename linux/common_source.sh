@@ -1,4 +1,4 @@
-#*# linux/common_source
+7#*# linux/common_source
 
 # Use the sh POSIX compliant version of source_once
 source_once > /dev/null 2>&1 && return 0
@@ -491,6 +491,7 @@ if [ "${VSI_DISTRO_LIKE-}" = "ubuntu" ]; then
     hirsute) VSI_DISTRO_VERSION_LIKE=21.04 ;; # EOL ~Jan 2022
     impish)  VSI_DISTRO_VERSION_LIKE=21.10 ;; # Release October 14, 2021 EOL July 2022
     jammy)   VSI_DISTRO_VERSION_LIKE=22.04 ;; # Release April 21, 2022 EOL April 2027, ESM Apr 2032
+    kinetic) VSI_DISTRO_VERSION_LIKE=22.10 ;; # Release October 20, 2022 EOL ~July 2023
   esac
 fi
 
