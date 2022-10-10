@@ -1,8 +1,7 @@
 ARG OS
-ARG DOCKER_COMPOSE_VERSION=1.26.2
+ARG DOCKER_COMPOSE_VERSION=2.11.2
+ARG DOCKER_VERSION=20.10.18
 
-FROM docker/compose:alpine-${DOCKER_COMPOSE_VERSION} as docker-compose_musl
-FROM docker/compose:debian-${DOCKER_COMPOSE_VERSION} as docker-compose_glib
 FROM vsiri/recipe:docker as docker
 FROM vsiri/recipe:docker-compose as docker-compose
 FROM vsiri/recipe:git-lfs as git-lfs
@@ -155,8 +154,6 @@ SHELL ["/usr/bin/env", "bash", "-euxvc"]
 COPY --from=conda-python /usr/local /opt/python
 COPY --from=docker /usr/local /usr/local
 COPY --from=docker-compose /usr/local /usr/local
-COPY --from=docker-compose_musl /usr/local/bin/docker-compose /usr/local/bin/docker-compose_musl
-COPY --from=docker-compose_glib /usr/local/bin/docker-compose /usr/local/bin/docker-compose_glib
 COPY --from=git-lfs /usr/local /usr/local
 COPY --from=jq /usr/local /usr/local
 RUN shopt -s nullglob; for patch in /usr/local/share/just/container_build_patch/*; do "${patch}"; done
