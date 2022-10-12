@@ -1,12 +1,12 @@
 ARG OS
-ARG DOCKER_COMPOSE_VERSION=2.11.2
-ARG DOCKER_VERSION=20.10.18
+ARG DOCKER_BUILDX_VERSION=0.9.1
 
 FROM vsiri/recipe:docker as docker
 FROM vsiri/recipe:docker-compose as docker-compose
 FROM vsiri/recipe:git-lfs as git-lfs
 FROM vsiri/recipe:jq as jq
 FROM vsiri/recipe:conda-python as conda-python
+FROM docker/buildx-bin:${DOCKER_BUILDX_VERSION} as buildx
 
 # FROM busybox:latest as wget
 
@@ -156,6 +156,7 @@ COPY --from=docker /usr/local /usr/local
 COPY --from=docker-compose /usr/local /usr/local
 COPY --from=git-lfs /usr/local /usr/local
 COPY --from=jq /usr/local /usr/local
+
 RUN shopt -s nullglob; for patch in /usr/local/share/just/container_build_patch/*; do "${patch}"; done
 
 # TODO: I want to (use just install functions? and) "fix" docker-compose using conda,
