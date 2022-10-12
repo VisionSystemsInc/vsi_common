@@ -56,6 +56,22 @@ function caseify()
       extra_args=${#}
       ;;
 
+    build)
+      justify build recipes-auto "${VSI_COMMON_DIR}"/docker/tests/bash_test.Dockerfile "${VSI_COMMON_DIR}"/docker/tests/os.Dockerfile
+      justify build oses
+      justify build bash
+      ;;
+
+    push)
+      justify push oses
+      justify push bash
+      ;;
+
+    pull)
+      justify pull oses
+      justify pull bash
+      ;;
+
     build_oses) # Build images for other OSes
       local os
       for os in ${VSI_COMMON_TEST_OSES[@]+"${VSI_COMMON_TEST_OSES[@]}"}; do
