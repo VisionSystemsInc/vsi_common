@@ -156,7 +156,7 @@ COPY --from=docker /usr/local /usr/local
 COPY --from=docker-compose /usr/local /usr/local
 COPY --from=git-lfs /usr/local /usr/local
 COPY --from=jq /usr/local /usr/local
-
+COPY --from=buildx /buildx /usr/local/libexec/docker/cli-plugins/docker-buildx
 RUN shopt -s nullglob; for patch in /usr/local/share/just/container_build_patch/*; do "${patch}"; done
 
 # TODO: I want to (use just install functions? and) "fix" docker-compose using conda,
