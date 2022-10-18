@@ -92,8 +92,9 @@ function caseify()
       local os
       for os in ${VSI_COMMON_TEST_OSES[@]+"${VSI_COMMON_TEST_OSES[@]}"}; do
         echo "Testing ${os}" >&2
-        justify test os "${os}"
+        justify test os "${os}" ${@+"${@}"}
       done
+      extra_args="${#}"
       ;;
     test_os) # Run test in docker images on specific OS, $1 - base OS image name
       local JUST_IGNORE_EXIT_CODES=123
@@ -219,6 +220,15 @@ function caseify()
       extra_args=${#}
       shift 1
       VSI_COMMON_BASH_TEST_VERSION="${bash_version}" Just-docker-compose run bash_test ${@+"${@}"}
+      ;;
+
+    test_bashes) # Run test in docker image on bashes
+      local bash_version
+      for bash_version in ${VSI_COMMON_BASH_TEST_VERSIONS[@]+"${VSI_COMMON_BASH_TEST_VERSIONS[@]}"}; do
+        echo "Testing  bash ${bash_version}" >&2
+        justify test bash "${bash_version}" ${@+"${@}"}
+      done
+      extra_args="${#}"
       ;;
 
     background_start) # Start bash dockers in background
