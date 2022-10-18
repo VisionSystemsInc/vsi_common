@@ -38,6 +38,9 @@ RUN apk add --no-cache \
       readline; \
     command -v xxd &> /dev/null || apk add --no-cache vim
 
+# Disable this check, it gets in the way of running tests locally on git 2.31.2 and newer
+RUN git config --global --add safe.directory '*'
+
 ENV JUSTFILE=/vsi/docker/tests/bash_test.Justfile \
     JUST_SETTINGS=/vsi/vsi_common.env
 COPY --from=tini /usr/local /usr/local

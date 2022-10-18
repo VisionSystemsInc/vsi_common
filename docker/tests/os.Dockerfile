@@ -204,6 +204,9 @@ RUN if ! docker-compose --version; then \
 #       chmod 755 /usr/local/bin/docker-compose_glib; \
 #     fi
 
+# Disable this check, it gets in the way of running tests locally on git 2.31.2 and newer
+RUN git config --global --add safe.directory '*'
+
 ENV JUSTFILE=/vsi/Justfile
 
 ENTRYPOINT ["/usr/bin/env", "bash", "-c", "cd /vsi; source setup.env; \"${@}\"", "bash"]
