@@ -117,10 +117,73 @@ function caseify()
       ;;
     test_os-common-source) # Run VSI Common source test - $1 name of image to check
       local ans
-      extra_args=1
-      ans="$(findin "${1}" "${VSI_COMMON_TEST_OSES[@]}")"
-      ans="${VSI_COMMON_TEST_OSES_ANS[ans]}"
       local image="${VSI_COMMON_DOCKER_REPO}:os_$(sanitize_tag_name "${1}")"
+      local version
+
+      extra_args=1
+
+      case "${1}" in
+        clearlinux*)
+          version=$(docker run -it --rm "${1}" bash -c 'source /etc/os-release; echo -n ${BUILD_ID}')
+          ans="clear-linux-os - ${version}, clear-linux-os - ${version}, clear-linux-os - ${version} 0"
+          ;;
+        amazonlinux*)
+          ans="amzn - 2, centos - 2, rhel fedora - 2 0"
+          ;;
+        debian*)
+          ans="debian - ${1##*:}, debian - ${1##*:}, debian - ${1##*:} 0"
+          ;;
+        ubuntu*)
+          version=${1##*:}
+          # https://askubuntu.com/a/445496/730839
+          # Accurate from 10 to 22
+          if [ "${version}" == "11.10" ]; then
+            version=7
+          else
+            version=${version%%.*}
+            version=$((version/2+1))
+          fi
+          ans="ubuntu - ${1##*:}, debian - ${version}, debian - ${version} 0"
+          ;;
+        fedora:rawhide)
+          version=$(docker run --rm --entrypoint= "${image}" bash -c "sed -E 's|.* ([0-9.]*) .*|\1|' /etc/redhat-release")
+          ans="fedora - ${version}, fedora - ${version}, fedora - ${version} 0"
+          ;;
+        fedora*)
+          ans="fedora - ${1##*:}, fedora - ${1##*:}, fedora - ${1##*:} 0"
+          ;;
+        centos:7)
+          ans="centos - 7, rhel - 7, fedora - 19 0"
+          ;;
+        rockylinux:8)
+          ans="rocky - 8, rhel - 8, fedora - 28 0"
+          ;;
+        redhat/ubi9:latest)
+          ans="rhel - 9, fedora - 34, fedora - 34 0"
+          ;;
+        opensuse/leap*)
+          ans="opensuse-leap - ${1##*:}, opensuse - ${1##*:}, suse - ${1##*:} 0"
+          ;;
+        opensuse/tumbleweed*)
+          version=$(docker run --rm --entrypoint= "${image}" bash -c "sed -nE 's| *<version>([0-9]*)</version>|\1|p'  /etc/products.d/openSUSE.prod")
+          ans="opensuse-tumbleweed - ${version}, opensuse - ${version}, suse - ${version} 0"
+          ;;
+        vbatts/slackware*)
+          version=$(docker run --rm --entrypoint= "${image}" sed 's|Slackware ||' /etc/slackware-version)
+          ans="slackware - ${version}, slackware - ${version}, slackware - ${version} 0"
+          ;;
+        gentoo/stage3*)
+          version=$(docker run --rm --entrypoint= "${image}" sed 's|.*release ||' /etc/gentoo-release)
+          ans="gentoo - ${version}, gentoo - ${version}, gentoo - ${version} 0"
+          ;;
+        binhex/arch-base*)
+          ans="arch - , arch - , arch - 0" # Arch, like gentoo is a rolling release
+          ;;
+        *)
+          echo "OS ${image} not recognized"
+          return 1
+          ;;
+      esac
 
       local x="$(docker run --rm -v ${VSI_COMMON_DIR}:/vsi "${image}" \
                    sh -euc ". /vsi/linux/common_source.sh;
