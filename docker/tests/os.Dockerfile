@@ -16,10 +16,6 @@ FROM ${OS}
 
 RUN set -euxv; \
     if command -v yum; then \
-      # Redhat 6's git is too old, bring in outside help
-      if [ -f "/etc/redhat-release" ] && [[ $(cat /etc/redhat-release) =~ .*release\ 6.* ]]; then \
-        yum install -y http://opensource.wandisco.com/centos/6/git/x86_64/wandisco-git-release-6-1.noarch.rpm; \
-      fi; \
       other_packages=''; \
       if [ -f "/etc/os-release" ] && [ "$(source /etc/os-release; echo "${ID}")" = "fedora" ]; then \
         # docker-compose won't work without libcrypt.so.1
