@@ -124,7 +124,7 @@ function caseify()
 
       case "${1}" in
         clearlinux*)
-          version=$(docker run -it --rm "${1}" bash -c 'source /etc/os-release; echo -n ${BUILD_ID}')
+          version=$(docker run -it --rm --entrypoint= "${image}" bash -c 'source /etc/os-release; echo -n ${BUILD_ID}')
           ans="clear-linux-os - ${version}, clear-linux-os - ${version}, clear-linux-os - ${version} 0"
           ;;
         amazonlinux*)
