@@ -201,7 +201,9 @@ RUN if ! docker-compose --version; then \
 #     fi
 
 # Disable this check, it gets in the way of running tests locally on git 2.31.2 and newer
-RUN git config --global --add safe.directory '*'
+RUN git config --global --add safe.directory '*'; \
+    # Fix for https://bugs.launchpad.net/ubuntu/+source/git/+bug/1993586
+    git config --global protocol.file.allow always
 
 ENV JUSTFILE=/vsi/Justfile
 
