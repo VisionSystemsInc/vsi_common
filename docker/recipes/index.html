@@ -107,9 +107,15 @@
 <li class="toctree-l3"><a class="reference internal" href="#git-large-file-support">git Large File Support</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#cmake">CMake</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#pipenv">Pipenv</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#rocky-repos">Rocky Repos</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#cuda">CUDA</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#environment-variables">Environment variables</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#build-args">Build Args</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#cuda-gl">CUDA GL</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#amanda-debian-packages">Amanda debian packages</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#one-true-awk">One True Awk</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#gdal">GDAL</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#conda-s-python">Conda’s python</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#proj-data">PROJ-data</a></li>
 </ul>
@@ -575,6 +581,175 @@
 </pre></div>
 </div>
 </div>
+<div class="section" id="rocky-repos">
+<h3>Rocky Repos<a class="headerlink" href="#rocky-repos" title="Permalink to this headline">¶</a></h3>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 39%" />
+<col style="width: 61%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><p>Name</p></td>
+<td><p>Rocky Linux Repos</p></td>
+</tr>
+<tr class="row-even"><td><p>Output dir</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/usr/local</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<p>Rocky Linux is a subscription free RHEL alternative. Often adding Rocky packages to a UBI image is useful.</p>
+<p>Since this is installs specific packages based on the base image, you can’t just move <code class="docutils literal notranslate"><span class="pre">/usr/local/pipenv</span></code> to anywhere in the destination image, it is a script that must run in the image.</p>
+<p>This recipe is a little different from other recipes in that it’s just a script to install repos (and corresponding gpg keys).</p>
+<p class="rubric">Example</p>
+<div class="highlight-Dockerfile notranslate"><div class="highlight"><pre><span></span><span class="k">FROM</span> <span class="s">vsiri/recipe:rocky</span> <span class="k">as</span> <span class="s">rocky</span>
+<span class="k">FROM</span> <span class="s">redhat/ubi8</span>
+<span class="k">COPY</span> --from<span class="o">=</span>rocky /usr/local /usr/local
+<span class="c"># Only needs to be run once for all recipes</span>
+<span class="k">RUN</span> <span class="k">for</span> patch <span class="k">in</span> /usr/local/share/just/container_build_patch/*<span class="p">;</span> <span class="k">do</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">patch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">;</span> <span class="k">done</span>
+
+<span class="k">RUN</span> dnf install -y --enablerepo<span class="o">=</span>rocky-appstream telnet # This line is just an example
+...
+</pre></div>
+</div>
+</div>
+<div class="section" id="cuda">
+<h3>CUDA<a class="headerlink" href="#cuda" title="Permalink to this headline">¶</a></h3>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 12%" />
+<col style="width: 88%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><p>Name</p></td>
+<td><p>CUDA</p></td>
+</tr>
+<tr class="row-even"><td><p>Build Args</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">CUDA_REPO_REF</span></code> - The ref of the CUDA container repo parsed</p></td>
+</tr>
+<tr class="row-odd"><td><p>Build Args</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">CUDA_VERSION</span></code> - Version of CUDA to install (e.g. <code class="docutils literal notranslate"><span class="pre">10.2</span></code> or <code class="docutils literal notranslate"><span class="pre">11.0.7</span></code>)</p></td>
+</tr>
+<tr class="row-even"><td><p>Build Args</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">CUDNN_VERSION</span></code> - Optional: Version of CUDNN to install. (e.g. <code class="docutils literal notranslate"><span class="pre">7</span></code> or <code class="docutils literal notranslate"><span class="pre">8</span></code>)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Build Args</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">CUDA_RECIPE_TARGET</span></code> - Optional: Specifies how much of the CUDA stack to install (explained below). Default: <code class="docutils literal notranslate"><span class="pre">runtime</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Environment Variable</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">NVIDIA_VISIBLE_DEVICES</span></code> - Required: Sets which nvidia devices are visible in the container. Default: <code class="docutils literal notranslate"><span class="pre">all</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Environment Variable</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">NVIDIA_DRIVER_CAPABILITIES</span></code> - Optional: Which device capabilities are enabled in the container. Default: <cite>compute,utility</cite>, which is also the value the runtime assumes if this environment variable is unset.</p></td>
+</tr>
+<tr class="row-even"><td><p>Environment Variable</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">NVIDIA_REQUIRE_*</span></code> - Optional: Sets test conditions to prevent running on incompatible systems</p></td>
+</tr>
+<tr class="row-odd"><td><p>Output dir</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/usr/local</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Minimum Dockerfile frontend:</p></td>
+<td><p>docker/dockerfile:1.3-labs or docker/dockerfile:1.4</p></td>
+</tr>
+</tbody>
+</table>
+<p>While starting from a base image with CUDA already setup for docker is ideal, when we have to be based on a specific image (e.g. hardened images), this becomes impossible or impractical. Instead we need to start with a particular image and add CUDA support to it.</p>
+<p>Currently, only RHEL and Ubuntu based images are supported (not Fedora or Debian).</p>
+<p>There are many steps to setting up CUDA in an image:</p>
+<ul class="simple">
+<li><p>Setting up the CUDA repo and GPG key</p></li>
+<li><p>Installing the right packages, so that we limit the amount of bloat to the image</p></li>
+<li><p>Setting certain environment variables at container create time</p></li>
+<li><p>Setting various environment variables at container run time</p></li>
+</ul>
+<p>This recipe will attempt to do all of these things in as few steps as possible, except setting environment variables at container create time which you will have to do manually.</p>
+<div class="section" id="environment-variables">
+<h4>Environment variables<a class="headerlink" href="#environment-variables" title="Permalink to this headline">¶</a></h4>
+<p>Because of how the nvidia runtime operates, it needs certain variables set at container create time. Some ways this can be accomplished include:</p>
+<ul class="simple">
+<li><p>Adding an <code class="docutils literal notranslate"><span class="pre">ENV</span></code> to the Dockerfile</p></li>
+<li><p>Adding to the <code class="docutils literal notranslate"><span class="pre">environment:</span></code> section in <code class="docutils literal notranslate"><span class="pre">docker-compose.yml</span></code></p></li>
+<li><p>Adding the <code class="docutils literal notranslate"><span class="pre">-e</span></code> flag to the <code class="docutils literal notranslate"><span class="pre">docker</span> <span class="pre">run</span></code> call</p></li>
+</ul>
+<p><code class="docutils literal notranslate"><span class="pre">NVIDIA_VISIBLE_DEVICES</span></code> must be set, or else the nvidia runtime will not activate, and you will have no GPU support. It’s suggested to set <code class="docutils literal notranslate"><span class="pre">NVIDIA_VISIBLE_DEVICES</span></code> to <code class="docutils literal notranslate"><span class="pre">all</span></code> and allow for an environment variable on the host (i.e. in <code class="docutils literal notranslate"><span class="pre">local.env</span></code>) to override the value to use specific GPUs as needed.</p>
+<p><code class="docutils literal notranslate"><span class="pre">NVIDIA_DRIVER_CAPABILITIES</span></code> is usually set, but it is optional because unset and set to null means the <code class="docutils literal notranslate"><span class="pre">compute,utility</span></code> capabilities are passed in. This is enough for most CUDA capabilities.</p>
+<p>You can optionally add <code class="docutils literal notranslate"><span class="pre">NVIDIA_REQUIRE_*</span></code> environment variables (Commonly: <code class="docutils literal notranslate"><span class="pre">NVIDIA_REQUIRE_CUDA</span></code>) as a set of rules to declare what version of cuda, drivers, architecture, and brand. You only need to set this if you want docker to refuse to run when constraints are not met (e.g. driver doesn’t support CUDA 11.6). See the <a class="reference external" href="https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/user-guide.html#constraints">documentation</a> and an <a class="reference external" href="https://gitlab.com/nvidia/container-images/cuda/-/blob/5bc8c5483115b8e9c68d4f1280acb8d56196d681/dist/11.6.2/ubi8/base/Dockerfile#L6">example</a> for more information.</p>
+</div>
+<div class="section" id="build-args">
+<h4>Build Args<a class="headerlink" href="#build-args" title="Permalink to this headline">¶</a></h4>
+<p>The <code class="docutils literal notranslate"><span class="pre">CUDA_VERSION</span></code>/<code class="docutils literal notranslate"><span class="pre">CUDNN_VERSION</span></code> build args must be limited to the versions of CUDA in the <a class="reference external" href="https://developer.download.nvidia.com/compute/cuda/repos/">nvidia package repos</a>. Attempting combinations of OS versions and CUDA versions not in the nvidia <a class="reference external" href="https://gitlab.com/nvidia/container-images/cuda/-/tree/master/dist">codebase</a> will probably fail because those versions of CUDA most likely do not exist in the nvidia package repos. Currently the end-of-life directory is not supported.</p>
+<p><code class="docutils literal notranslate"><span class="pre">CUDA_RECIPE_TARGET</span></code> is used to specify how much of the CUDA stack to install (devel vs runtime):</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">runtime</span></code>: Only installs the runtime packages for CUDA</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">devel</span></code>: Installs both the runtime and development packages for CUDA</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">devel-only</span></code>: Only installs the devel packages. This is intended to be used on an image that already has the CUDA runtime installed.</p></li>
+</ul>
+<p class="rubric">Example</p>
+<div class="highlight-Dockerfile notranslate"><div class="highlight"><pre><span></span><span class="c"># syntax=docker/dockerfile:1.4</span>
+<span class="k">FROM</span> <span class="s">vsiri/recipe:cuda</span> <span class="k">as</span> <span class="s">cuda</span>
+
+<span class="k">FROM</span> <span class="s">redhat/ubi8</span>
+<span class="k">COPY</span> --from<span class="o">=</span>cuda /usr/local /usr/local
+<span class="c"># Only needs to be run once for all recipes</span>
+<span class="k">RUN</span> <span class="k">for</span> patch <span class="k">in</span> /usr/local/share/just/container_build_patch/*<span class="p">;</span> <span class="k">do</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">patch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">;</span> <span class="k">done</span>
+<span class="c"># Required for this recipe</span>
+<span class="k">ENV</span> <span class="nv">NVIDIA_VISIBLE_DEVICES</span><span class="o">=</span>all
+<span class="c"># NVIDIA_DRIVER_CAPABILITIES is optional, but not setting it results in compute,utility</span>
+<span class="k">ENV</span> <span class="nv">NVIDIA_DRIVER_CAPABILITIES</span><span class="o">=</span>compute,utility
+
+<span class="c"># Source this file when building packages from source in docker build.</span>
+<span class="c"># It loads all the nvidia environment variables</span>
+<span class="k">RUN</span> <span class="nb">source</span> /usr/local/share/just/user_run_patch/10_load_cuda_env<span class="p">;</span> <span class="se">\</span>
+    cmake . # This line is just an example
+...
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="cuda-gl">
+<h3>CUDA GL<a class="headerlink" href="#cuda-gl" title="Permalink to this headline">¶</a></h3>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 17%" />
+<col style="width: 83%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><p>Name</p></td>
+<td><p>CUDA GL</p></td>
+</tr>
+<tr class="row-even"><td><p>Build Args</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">CUDA_RECIPE_TARGET</span></code> - Specifies how much of the CUDA stack to install (explained further above in the CUDA recipe). Default: <code class="docutils literal notranslate"><span class="pre">runtime</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Build Args</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">LIBGLVND_VERSION</span></code> - The version of the GLVND used. Default: <code class="docutils literal notranslate"><span class="pre">v1.2.0</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Environment Variable</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">NVIDIA_DRIVER_CAPABILITIES</span></code> - For OpenGL offscreen rendering, you at least need <cite>graphics,compute,utility</cite></p></td>
+</tr>
+<tr class="row-odd"><td><p>Output dir</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/usr/local</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Minimum Dockerfile frontend:</p></td>
+<td><p>docker/dockerfile:1.3-labs or docker/dockerfile:1.4</p></td>
+</tr>
+</tbody>
+</table>
+<p>Similar to the CUDA recipe, <code class="docutils literal notranslate"><span class="pre">CUDA_RECIPE_TARGET</span></code> tells the recipe whether to install runtime or development dependencies, although <code class="docutils literal notranslate"><span class="pre">devel-only</span></code> installs both runtime and devel packages, due to how the recipe is structured.</p>
+<p><code class="docutils literal notranslate"><span class="pre">LIBGLVND_VERSION</span></code> sets the version of <a class="reference external" href="https://github.com/NVIDIA/libglvnd.git">glvnd repo</a> that is compiled and used.</p>
+<p>You will need to set the environment variable <code class="docutils literal notranslate"><span class="pre">NVIDIA_DRIVER_CAPABILITIES</span></code> to allow graphics capabilities which most GL applications will need.</p>
+<p class="rubric">Example</p>
+<div class="highlight-Dockerfile notranslate"><div class="highlight"><pre><span></span><span class="c"># syntax=docker/dockerfile:1.4</span>
+<span class="k">FROM</span> <span class="s">vsiri/recipe:cudagl</span> <span class="k">as</span> <span class="s">cudagl</span>
+
+<span class="k">FROM</span> <span class="s">redhat/ubi8</span>
+<span class="k">COPY</span> --from<span class="o">=</span>cudagl /usr/local /usr/local
+<span class="c"># Only needs to be run once for all recipes</span>
+<span class="k">RUN</span> <span class="k">for</span> patch <span class="k">in</span> /usr/local/share/just/container_build_patch/*<span class="p">;</span> <span class="k">do</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">patch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">;</span> <span class="k">done</span>
+
+<span class="k">ENV</span> <span class="nv">NVIDIA_DRIVER_CAPABILITIES</span><span class="o">=</span>graphics,compute,utility
+...
+</pre></div>
+</div>
+</div>
 <div class="section" id="amanda-debian-packages">
 <h3>Amanda debian packages<a class="headerlink" href="#amanda-debian-packages" title="Permalink to this headline">¶</a></h3>
 <table class="docutils align-default">
@@ -625,40 +800,6 @@
 <span class="k">FROM</span> <span class="s">debian:9</span>
 <span class="k">RUN</span> apt-get update<span class="p">;</span> apt-get install -y vim  # This line is just an example
 <span class="k">COPY</span> --from<span class="o">=</span>onetrueawk /usr/local /usr/local
-</pre></div>
-</div>
-</div>
-<div class="section" id="gdal">
-<h3>GDAL<a class="headerlink" href="#gdal" title="Permalink to this headline">¶</a></h3>
-<table class="docutils align-default">
-<colgroup>
-<col style="width: 21%" />
-<col style="width: 79%" />
-</colgroup>
-<tbody>
-<tr class="row-odd"><td><p>Name</p></td>
-<td><p>GDAL</p></td>
-</tr>
-<tr class="row-even"><td><p>Build Args</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">GDAL_VERSION</span></code> - Version of GDAL to download</p></td>
-</tr>
-<tr class="row-odd"><td><p>Output dir</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">/usr/local</span></code></p></td>
-</tr>
-</tbody>
-</table>
-<p>Compiles GDAL v3, including OPENJPEG 2.4, ECW J2K 5.5, libtiff4.3, libgeotiff 1.7, PROJ v8</p>
-<p class="rubric">Example</p>
-<div class="highlight-Dockerfile notranslate"><div class="highlight"><pre><span></span><span class="k">FROM</span> <span class="s">vsiri/recipe:gdal</span> <span class="k">as</span> <span class="s">gdal</span>
-<span class="k">FROM</span> <span class="s">python:3.8</span>
-<span class="k">COPY</span> --from<span class="o">=</span>gdal /usr/local /usr/local
-
-<span class="c"># numpy must be installed before GDAL python bindings</span>
-<span class="k">RUN</span> pip install numpy<span class="p">;</span> <span class="se">\</span>
-    pip install <span class="nv">GDAL</span><span class="o">==</span><span class="k">$(</span>cat /usr/local/gdal_version<span class="k">)</span><span class="p">;</span>
-
-<span class="c"># Only needs to be run once for all recipes</span>
-<span class="k">RUN</span> <span class="k">for</span> patch <span class="k">in</span> /usr/local/share/just/container_build_patch/*<span class="p">;</span> <span class="k">do</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">patch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">;</span> <span class="k">done</span>
 </pre></div>
 </div>
 </div>
