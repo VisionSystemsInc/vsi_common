@@ -5,6 +5,7 @@ if [ -z "${VSI_COMMON_DIR+set}" ]; then
 fi
 
 source "${VSI_COMMON_DIR}/tests/testlib.bsh"
+source "${VSI_COMMON_DIR}/tests/test_utils.bsh"
 source "${VSI_COMMON_DIR}/linux/uwecho.bsh"
 source "${VSI_COMMON_DIR}/linux/just_files/just_version.bsh"
 source "${VSI_COMMON_DIR}/linux/compat.bsh"
@@ -106,7 +107,7 @@ begin_test "New Just"
   chmod 755 ss/docker-compose
   chmod 755 ss/docker
 
-  [ "$(just build)" = "mockdc -f ${TESTDIR}/v.s.i  d i'r\"/docker/recipes/docker-compose.yml build gosu pipenv tini vsi
+  [ "$(just build)" = "mockd buildx bake gosu pipenv tini vsi
 mockdc -f ${TESTDIR}/docker-compose.yml build
 mockd volume rm testpro_venv" ]
   [ "$(just build example)" = "mockdc -f ${TESTDIR}/docker-compose.yml build example" ]
@@ -126,6 +127,7 @@ mockd volume rm testpro_venv" ]
   ans="version: '2.4'
 services:
   yaan:
+    x-bugfix:
 "
   if [ -d "/tmp/.X11-unix" ]; then
     ans+="    volumes:
@@ -141,6 +143,7 @@ services:
       - JTEST_SOURCE_DIR_HOST=${TESTDIR}
       - JTEST_SOURCE_DIR=${JUST_PATH_ESC}/src
   yaan_pipenv:
+    x-bugfix:
 "
   if [ -d "/tmp/.X11-unix" ]; then
     ans+="    volumes:
@@ -156,12 +159,12 @@ services:
       - JTEST_SOURCE_DIR_HOST=${TESTDIR}
       - JTEST_SOURCE_DIR=${JUST_PATH_ESC}/src"
 
-  [ "$(cat "${tmp_file}")" = "${ans}" ]
+  assert_str_eq "$(cat "${tmp_file}")" "${ans}"
 
   rm "${tmp_file}"
 
   # Test clean venv when volume exists
-  [ "$(just docker-compose clean venv)" = "mockd volume rm testpro_venv" ]
+  assert_str_eq "$(just docker-compose clean venv)" "mockd volume rm testpro_venv"
 
 
   pushd "${CWD}"
@@ -172,7 +175,7 @@ services:
   popd
   chmod 755 ss/docker
 
-  [ "$(just docker-compose clean venv 2>&1)" = "testpro_venv already removed" ]
+  assert_str_eq "$(just docker-compose clean venv 2>&1)" "testpro_venv already removed"
 )
 end_test
 
@@ -191,16 +194,21 @@ begin_test "New Just no pipenv"
 
   [ "$(. setup.env; just --wrap bash -c 'echo "${JTEST_CWD}"')" = "${TESTDIR}" ]
 
-  export PATH="${TESTDIR}:${PATH}"
+  export PATH="${TESTDIR}/ss:${PATH}"
+  mkdir "${TESTDIR}/ss"
   . setup.env
 
   pushd "${CWD}"
     uwecho '#!/usr/bin/env bash
-            echo mockdc "${@}"' > "${TESTDIR}/docker-compose"
-  popd
-  chmod 755 docker-compose
+            echo mockdc "${@}"' > "${TESTDIR}/ss/docker-compose"
 
-  [ "$(just build)" = "mockdc -f ${TESTDIR}/external/vsi_common/docker/recipes/docker-compose.yml build gosu tini vsi
+    uwecho '#!/usr/bin/env bash
+            echo mockd "${@}"
+            exit 0' > "${TESTDIR}/ss/docker"
+  popd
+  chmod 755 ${TESTDIR}/ss/docker*
+
+  [ "$(just build)" = "mockd buildx bake gosu tini vsi
 mockdc -f ${TESTDIR}/docker-compose.yml build" ]
   [ "$(just build example)" = "mockdc -f ${TESTDIR}/docker-compose.yml build example" ]
 
@@ -219,6 +227,7 @@ mockdc -f ${TESTDIR}/docker-compose.yml build" ]
   ans="version: '2.4'
 services:
   example:
+    x-bugfix:
 "
   if [ -d "/tmp/.X11-unix" ]; then
     ans+="    volumes:
@@ -234,7 +243,7 @@ services:
       - JTEST_SOURCE_DIR_HOST=${TESTDIR}
       - JTEST_SOURCE_DIR=${JUST_PATH_ESC}/src"
 
-  [ "$(cat "${tmp_file}")" = "${ans}" ]
+  assert_str_eq "$(cat "${tmp_file}")" "${ans}"
 
   rm "${tmp_file}"
 )

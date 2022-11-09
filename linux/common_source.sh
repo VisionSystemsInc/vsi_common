@@ -431,8 +431,11 @@ fi
 
 # Handle rhel intricacies
 if [ "${VSI_DISTRO}" = "centos" ] || \
+   [ "${VSI_DISTRO}" = "rocky" ] || \
    [ "${VSI_DISTRO}" = "rhel" ]; then
   VSI_DISTRO_CORE=fedora
+  VSI_DISTRO_VERSION=${VSI_DISTRO_VERSION%%.*}
+  VSI_DISTRO_VERSION_LIKE="${VSI_DISTRO_VERSION_LIKE%%.*}"
 
   # https://access.redhat.com/support/policy/updates/errata
   case "${VSI_DISTRO_VERSION}" in
@@ -441,6 +444,7 @@ if [ "${VSI_DISTRO}" = "centos" ] || \
     6*) VSI_DISTRO_VERSION_CORE="13 14" ;; # ELS Jun 30, 2020
     7*) VSI_DISTRO_VERSION_CORE=19      ;; # EOL Jun 30, 2024
     8*) VSI_DISTRO_VERSION_CORE=28      ;; # EOL May 31, 2029
+    9*) VSI_DISTRO_VERSION_CORE=34      ;; # EOL May 31, 2032
   esac
 
   if [ "${VSI_DISTRO}" = "centos" ]; then
@@ -489,8 +493,9 @@ if [ "${VSI_DISTRO_LIKE-}" = "ubuntu" ]; then
     focal)   VSI_DISTRO_VERSION_LIKE=20.04 ;; # EOL April 2025, ESM Apr 2030
     groovy)  VSI_DISTRO_VERSION_LIKE=20.10 ;; # EOL July 22, 2021
     hirsute) VSI_DISTRO_VERSION_LIKE=21.04 ;; # EOL ~Jan 2022
-    impish)  VSI_DISTRO_VERSION_LIKE=21.10 ;; # Release October 14, 2021 EOL July 2022
-    jammy)   VSI_DISTRO_VERSION_LIKE=22.04 ;; # Release April 21, 2022 EOL April 2027, ESM Apr 2032
+    impish)  VSI_DISTRO_VERSION_LIKE=21.10 ;; # EOL July 2022
+    jammy)   VSI_DISTRO_VERSION_LIKE=22.04 ;; # EOL April 2027, ESM Apr 2032
+    kinetic) VSI_DISTRO_VERSION_LIKE=22.10 ;; # Release October 20, 2022 EOL ~July 2023
   esac
 fi
 
