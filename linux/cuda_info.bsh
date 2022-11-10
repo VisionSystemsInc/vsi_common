@@ -326,7 +326,9 @@ function discover_cuda_info()
 #
 # :Output: * :var:`cuda_info.bsh CUDA_ARCHES`
 #          * :var:`cuda_info.bsh CUDA_CODES`
-#          * :var:`cuda_info.bsh CUDA_MINIMAL_DRIVER_VERSION`
+#          * :var:`cuda_info.bsh CUDA_LTOS` - Starting in CUDA 11, Link Time Optimization architectures were added
+#          * :var:`cuda_info.bsh CUDA_MINIMAL_DRIVER_VERSION` - Minimal required Nvidia Driver needed to run this version of CUDA
+#          * :var:`cuda_info.bsh CUDA_COMPATIBLE_DRIVER_VERSION` - Starting in CUDA 10, you can install a ``cuda-compat`` packages to run a different CUDA library that runs on older drivers up to this version
 #          * :var:`cuda_info.bsh CUDA_DEPRECATED`
 #
 # Determine compiler capabilities for specific CDK
@@ -341,21 +343,19 @@ function cuda_capabilities()
 
   CUDA_DEPRECATED=()
   CUDA_LTOS=()
+  CUDA_CODES=()
 
   case "${1}" in
     1.*)
       CUDA_ARCHES=(10 11)
-      CUDA_CODES=("${CUDA_ARCHES[@]}")
       ;;
 
     2.*)
       CUDA_ARCHES=(10 11 12 13)
-      CUDA_CODES=("${CUDA_ARCHES[@]}")
       ;;
 
     3.0*)
       CUDA_ARCHES=(10 11 12 13 20)
-      CUDA_CODES=("${CUDA_ARCHES[@]}")
       ;;
     3.1*)
       CUDA_ARCHES=(10 11 12 13 20 30)
@@ -403,67 +403,54 @@ function cuda_capabilities()
 
     9.0*)
       CUDA_ARCHES=(30 32 35 37 50 52 53 60 61 62 70)
-      CUDA_CODES=("${CUDA_ARCHES[@]}")
       ;;
-    9.1*|9.2*)
+    9.[1-2]*)
       CUDA_ARCHES=(30 32 35 37 50 52 53 60 61 62 70 72)
-      CUDA_CODES=("${CUDA_ARCHES[@]}")
       ;;
 
     10.2*)
       CUDA_ARCHES=(30 32 35 37 50 52 53 60 61 62 70 72 75)
-      CUDA_CODES=("${CUDA_ARCHES[@]}")
       CUDA_DEPRECATED=(30 32 35 37 50)
       ;;
     10.*)
       CUDA_ARCHES=(30 32 35 37 50 52 53 60 61 62 70 72 75)
-      CUDA_CODES=("${CUDA_ARCHES[@]}")
       ;;
 
+    # RC 11.0.167 technically allowed sm/compute 30, but that didn't make it to release
     11.0*)
       CUDA_ARCHES=(35 37 50 52 53 60 61 62 70 72 75 80)
-      CUDA_CODES=("${CUDA_ARCHES[@]}")
       CUDA_DEPRECATED=(35 37 50)
       ;;
-    11.1*|11.2*|11.3*)
+    11.[1-3].*|11.[1-3]) # Do it this way in case there is 11.10
       CUDA_ARCHES=(35 37 50 52 53 60 61 62 70 72 75 80 86)
-      CUDA_CODES=("${CUDA_ARCHES[@]}")
       CUDA_DEPRECATED=(35 37 50)
       ;;
     11.4*)
       CUDA_ARCHES=(35 37 50 52 53 60 61 62 70 72 75 80 87 86) # Added undocumented sm_87
-      CUDA_CODES=("${CUDA_ARCHES[@]}")
-      CUDA_LTOS=("${CUDA_ARCHES[@]}")
       CUDA_DEPRECATED=(35 37 50)
       ;;
-    11.5*|11.6*|11.7*)
+    11.[5-7]*)
       CUDA_ARCHES=(35 37 50 52 53 60 61 62 70 72 75 80 86 87)
-      CUDA_CODES=("${CUDA_ARCHES[@]}")
-      CUDA_LTOS=("${CUDA_ARCHES[@]}")
       CUDA_DEPRECATED=(35 37 50)
       ;;
     11.8*)
-      CUDA_ARCHES=(35 37 50 52 53 60 61 62 70 72 75 80 86 87)
-      CUDA_CODES=("${CUDA_ARCHES[@]}")
-      CUDA_LTOS=("${CUDA_ARCHES[@]}")
+      CUDA_ARCHES=(35 37 50 52 53 60 61 62 70 72 75 80 86 87 89 90)
       CUDA_DEPRECATED=(35 37 50)
       ;;
-      ;;
-    # 11.7*) ?
+
+    # 11.9*) ?
     #   # run "strings `which nvcc` | grep compute_" (ARCHES) and "sm_" (CODES) and you'll get a complete list
     #   # The strings output typically has a "are deprecated and may be removed in a future release" message
     #   #
     #   # strings `command -v nvcc` | \grep '^sm_' | sed 's|sm_||' | tr '\n' ' '; echo
     #   # strings `command -v nvcc` | \grep '^compute_' | sed 's|compute_||' | tr '\n' ' '; echo
+    #   # strings `command -v nvcc` | \grep '^lto_' | sed 's|compute_||' | tr '\n' ' '; echo
     #
     #   CUDA_ARCHES=(?)
-    #   CUDA_CODES=("${CUDA_ARCHES}")
+    #   CUDA_CODES=(?) # only if different, else skip this
+    #   CUDA_LTOS=(?) # only if different, else skip this
     #   # strings `command -v nvcc` | \grep '\(sm\|compute\).*deprecate'
     #   CUDA_DEPRECATED=(?)
-    #
-    #   # https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html
-    #   # https://docs.nvidia.com/deploy/cuda-compatibility/index.html also shows the actual minimal versions
-    #
 
     *)
       echo "CUDA Version ${CUDA_VERSION} is not programmed in here yet..." >&2
@@ -472,194 +459,219 @@ function cuda_capabilities()
       ;;
   esac
 
+  if [ "${#CUDA_CODES[@]}" = "0" ]; then
+    CUDA_CODES=("${CUDA_ARCHES[@]}")
+  fi
 
-  # This seems to be updated regularly
-  # [1] https://stackoverflow.com/a/30820690/4166604
-  # [2] https://gist.github.com/ax3l/9489132
+  # Starting in 11.0, lto architectures were added
+  if [[ ${1} = 11.* ]] && [ "${#CUDA_LTOS[@]}" = "0" ]; then
+    CUDA_LTOS=("${CUDA_ARCHES[@]}")
+  fi
+
+  local versions
+
   case "${1}" in
     1.0*)
-      if [ "${OS-}" == "Windows_NT" ]; then
-        CUDA_MINIMAL_DRIVER_VERSION=162.01 #~
-      else
-        CUDA_MINIMAL_DRIVER_VERSION=100.14 #~
-      fi
+      versions=(100.14 162.01) #~
       ;;
     1.1*)
-      CUDA_MINIMAL_DRIVER_VERSION=169.01
+      versions=(169.01 169.01)
       ;;
     2.0*)
-      CUDA_MINIMAL_DRIVER_VERSION=177.70 #~
+      versions=(177.70 177.70) #~
       ;;
     2.1*)
-      CUDA_MINIMAL_DRIVER_VERSION=180.22 #~
+      versions=(180.22 180.22) #~
       ;;
     2.2*)
-      CUDA_MINIMAL_DRIVER_VERSION=185.18.14 #~
+      versions=(185.18.14 185.18.14) #~
       ;;
     2.3*)
-      CUDA_MINIMAL_DRIVER_VERSION=190.53 #~
+      versions=(190.53 190.53) #~
       ;;
     3.0*)
-      CUDA_MINIMAL_DRIVER_VERSION=195.36.15
+      versions=(195.36.15 195.36.15)
       ;;
     3.1*)
-      CUDA_MINIMAL_DRIVER_VERSION=256.40
+      versions=(256.40 256.40)
       ;;
     3.2*) # CUDA .16
-      CUDA_MINIMAL_DRIVER_VERSION=260.19.26
+      versions=(260.19.26 260.19.26)
       ;;
     4.0*) # CUDA .17
-      CUDA_MINIMAL_DRIVER_VERSION=270.41.19
+      versions=(270.41.19 270.41.19)
       ;;
     4.1*) # CUDA .28
-      CUDA_MINIMAL_DRIVER_VERSION=285.05.33
+      versions=(285.05.33 285.05.33)
       ;;
     4.2*) # CUDA .9
-      CUDA_MINIMAL_DRIVER_VERSION=295.41
+      versions=(295.41 295.41)
       ;;
     5.0*) # CUDA .35
-      CUDA_MINIMAL_DRIVER_VERSION=304
+      versions=(304 304)
       ;;
     5.5*) # .0, CUDA .22
-      CUDA_MINIMAL_DRIVER_VERSION=319
+      versions=(319 319)
       ;;
     6.0*) # .1, CUDA .37
-      CUDA_MINIMAL_DRIVER_VERSION=331
+      versions=(331 331)
       ;;
     6.5*) # .12, CUDA .14
-      CUDA_MINIMAL_DRIVER_VERSION=340
+      versions=(340 340)
       ;;
     7.0*) # .27, CUDA .28
-      if [ "${OS-}" == "Windows_NT" ]; then
-        CUDA_MINIMAL_DRIVER_VERSION=347.62
-      else
-        CUDA_MINIMAL_DRIVER_VERSION=346.46
-      fi
+      versions=(346.46 347.62)
       ;;
     7.5*) # .17, CUDA .18
-      if [ "${OS-}" == "Windows_NT" ]; then
-        CUDA_MINIMAL_DRIVER_VERSION=353.66
-      else
-        CUDA_MINIMAL_DRIVER_VERSION=352.31
-      fi
+      versions=(352.31 353.66)
       ;;
     8.0.44)
-      if [ "${OS-}" == "Windows_NT" ]; then
-        CUDA_MINIMAL_DRIVER_VERSION=369.30
-      else
-        CUDA_MINIMAL_DRIVER_VERSION=367.48
-      fi
+      versions=(367.48 369.30)
       ;;
     8.0*) # .61 GA2
-      if [ "${OS-}" == "Windows_NT" ]; then
-        CUDA_MINIMAL_DRIVER_VERSION=376.51
-      else
-        CUDA_MINIMAL_DRIVER_VERSION=375.26
-      fi
+      versions=(375.26 376.51)
       ;;
     9.0*) # .76 and RC2 .103 and 0.176 and maybe RC .69 [2]
-      if [ "${OS-}" == "Windows_NT" ]; then
-        CUDA_MINIMAL_DRIVER_VERSION=385.54
-      else
-        CUDA_MINIMAL_DRIVER_VERSION=384.81
-      fi
+      versions=(384.81 385.54)
       #https://devtalk.nvidia.com/default/topic/1023719/cuda-setup-and-installation/-solved-cuda-9-0rc-and-nvidia-384-69-but-driver-version-is-insufficient-for-cuda-runtime-version/
       ;;
     9.1*) # .85
-      if [ "${OS-}" == "Windows_NT" ]; then
-        CUDA_MINIMAL_DRIVER_VERSION=391.29
-      else
-        CUDA_MINIMAL_DRIVER_VERSION=390.46
-      fi
+      versions=(390.46 391.29)
       # https://devtalk.nvidia.com/default/topic/1028802/cuda-setup-and-installation/problems-with-cuda-9-1-in-ubuntu-16-04/
       ;;
     9.2.88)
-      if [ "${OS-}" == "Windows_NT" ]; then
-        CUDA_MINIMAL_DRIVER_VERSION=397.44
-      else
-        CUDA_MINIMAL_DRIVER_VERSION=396.26
-      fi
+      versions=(396.26 397.44)
       ;;
     9.2*) # .148 Update 1
-      if [ "${OS-}" == "Windows_NT" ]; then
-        CUDA_MINIMAL_DRIVER_VERSION=398.26
-      else
-        CUDA_MINIMAL_DRIVER_VERSION=396.37
-      fi
+      versions=(396.37 398.26)
       ;;
     10.0*) #.130
-      if [ "${OS-}" == "Windows_NT" ]; then
-        CUDA_MINIMAL_DRIVER_VERSION=411.31
-      else
-        CUDA_MINIMAL_DRIVER_VERSION=410.48
-      fi
+      versions=(410.48 411.31)
       ;;
     10.1*) #.105/.168 U1/.243 U2
-      if [ "${OS-}" == "Windows_NT" ]; then
-        CUDA_MINIMAL_DRIVER_VERSION=418.96
-      else
-        CUDA_MINIMAL_DRIVER_VERSION=418.39
-      fi
+      versions=(418.39 418.96)
       ;;
     10.2*) #.89
-      if [ "${OS-}" == "Windows_NT" ]; then
-        CUDA_MINIMAL_DRIVER_VERSION=441.22
-      else
-        CUDA_MINIMAL_DRIVER_VERSION=440.33
-      fi
+      versions=(440.33 441.22)
       ;;
 
-    # 11.0.194|11.0.207|11.0.2) # docs .207, CUDA .2 GA
-    # 11.0.221|11.0.228|11.0.3) # docs .228, CUDA .3 Update 1
-    # 11.0.189) # also 11.0.1 RC, there were multiple RCs
-    # RC 11.0.167 technically allowed sm/compute 30, but that didn't make it to release
-    11.0*)
-      if [ "${OS-}" == "Windows_NT" ]; then
-        CUDA_MINIMAL_DRIVER_VERSION=451.22 # Actual min may be lower
-      else
-        CUDA_MINIMAL_DRIVER_VERSION=450.36.06 # Actual min may be lower
-      fi
+    11.0.189|11.0.1) # there were multiple RCs, don't have all the info
+      versions=(450.36.06 451.22)
+      ;;
+    11.0.194|11.0.207|11.0.2) # docs .207, CUDA .2 GA
+      versions=(450.51.05 451.48)
+      ;;
+    11.0*) # .221, docs .228, CUDA .3 Update 1 + catch all for 11.0
+      versions=(450.51.06 451.82)
       ;;
 
-    # 11.1.74|11.1.0) # CUDA .0 GA
-    # 11.1*) # .105, CUDA .1 Update 1
-    # 11.2.67|11.2.0) # CUDA .0
-    # 11.2.142|11.2.1) # CUDA .1 Update 1
-    # 11.2*) # .152, CUDA .2 Update 2
-    # 11.3.58|11.3.0|11.3.109|11.3.1)
-    11.1*|11.2*|11.3*)
-      if [ "${OS-}" == "Windows_NT" ]; then
-        CUDA_MINIMAL_DRIVER_VERSION=452.39
-      else
-        CUDA_MINIMAL_DRIVER_VERSION=450.80.02
-      fi
+    11.1.74|11.1.0) # CUDA .0 GA
+      versions=(455.23 456.38)
+      ;;
+    11.1*) # .105, CUDA .1 Update 1 + catch all
+      versions=(455.32 456.81)
       ;;
 
-    11.4*|11.5*|11.6*)
-      if [ "${OS-}" == "Windows_NT" ]; then
-        CUDA_MINIMAL_DRIVER_VERSION=452.39
-      else
-        CUDA_MINIMAL_DRIVER_VERSION=450.80.02
-      fi
+    11.2.67|11.2.0) # CUDA .0
+      versions=(460.27.03 460.82)
+      ;;
+    11.2.142|11.2.1) # CUDA .1 Update 1
+      versions=(460.32.03 461.09)
+      ;;
+    11.2*) # .152, CUDA .2 Update 2
+      versions=(460.32.03 461.33)
       ;;
 
-    # 11.7.1
-    # 11.7.0
-    # 11.8.0
+    # 11.3.58|11.3.0) # GA
+    # 11.3.109|11.3.1) # Update 1
+    11.3*)
+      versions=(465.19.0 465.89)
+      ;;
 
-    # 11.7*) ?
-    #   if [ "${OS-}" == "Windows_NT" ]; then
-    #     CUDA_MINIMAL_DRIVER_VERSION=?
-    #   else
-    #     CUDA_MINIMAL_DRIVER_VERSION=?
-    #   fi
+    11.4.0|11.4.48)
+      versions=(470.42.01 471.11)
+      ;;
+    11.4.1|11.4.100|11.4.2|11.4.120)
+      versions=(470.57.02 471.41)
+      ;;
+    # 11.4.3|11.4.152)
+    # 11.4.4|11.4.152)
+    11.4*)
+      versions=(470.57.2 472.50)
+      ;;
+
+    11.5.0|11.5.50)
+      versions=(495.29.05 496.04)
+      ;;
+    # 11.5.1|11.5.119)
+    # 11.5.2|11.5.119)
+    11.5*)
+      versions=(495.29.05 496.13)
+      ;;
+
+    11.6.0|11.6.55)
+      versions=(510.39.01 511.23)
+      ;;
+    # 11.6.1|11.6.112)
+    # 11.6.2|11.6.124)
+    11.6*)
+      versions=(510.47.03 511.65)
+      ;;
+
+    11.7.0|11.7.64)
+      versions=(515.43.04 516.01)
+      ;;
+    # 11.7.1|11.7.99)
+    11.7*)
+      versions=(515.48.07 516.31)
+      ;;
+
+    # 11.8.0|11.8.89)
+    11.8*)
+      versions=(520.61.05 522.06)
+      ;;
+
+    # 11.9*)
+    #   versions=(linux windows)
     #   ;;
+
+    # These seem to be updated regularly
+    # - https://stackoverflow.com/a/30820690/4166604
+    # - https://gist.github.com/ax3l/9489132
+    # - https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html
+    # - https://docs.nvidia.com/deploy/cuda-compatibility/index.html also shows the minimal compatible versions
 
     *)
       echo "CUDA Version ${CUDA_VERSION} is not programmed in here yet..." >&2
-      CUDA_MINIMAL_DRIVER_VERSION=0
+      versions=(0 0)
       ;;
   esac
+
+  if [ "${OS-}" == "Windows_NT" ]; then
+    CUDA_MINIMAL_DRIVER_VERSION="${versions[1]}"
+  else
+    CUDA_MINIMAL_DRIVER_VERSION="${versions[0]}"
+  fi
+
+  versions=()
+
+  case "${1}" in
+    11.0*)
+      versions=(450.36.06 451.22) # Actual min may be lower
+      ;;
+    11.*) # 11.1-11.8
+      versions=(450.80.02 452.39)
+      ;;
+    # 12.*)
+  esac
+
+  if [ "${#versions[@]}" = "2" ]; then
+    if [ "${OS-}" == "Windows_NT" ]; then
+      CUDA_COMPATIBLE_DRIVER_VERSION="${versions[1]}"
+    else
+      CUDA_COMPATIBLE_DRIVER_VERSION="${versions[0]}"
+    fi
+  fi
 }
 
 #**
