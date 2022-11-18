@@ -35,6 +35,11 @@ begin_test "Test safe-submodule-update"
   BUILD_REPO="${TESTDIR}"/build/repo
   TEST_REPO="${TESTDIR}"/clone
   PRETEND_URL="${TESTDIR}/git/pretend_repo" # bare repo
+  if [ "${OS-}" = "Windows_NT" ]; then
+    PRETEND_URL_INTERNAL="$(cygpath -m "${PRETEND_URL}")"
+  else
+    PRETEND_URL_INTERNAL="${PRETEND_URL}"
+  fi
   # Test if git supports difficult submodule paths
   if git_bug_submodule_path_with_special_characters; then
     DIFFICULT_PATH='external/diff  i cult'
@@ -50,6 +55,7 @@ begin_test "Test safe-submodule-update"
     touch readme_sub_sub
     git add readme_sub_sub
     git commit -m "Initial commit"
+    git branch -m master
   popd &> /dev/null
   mkdir -p "${PRETEND_URL}_sub_sub"
   pushd "${PRETEND_URL}_sub_sub" &> /dev/null
@@ -71,6 +77,7 @@ begin_test "Test safe-submodule-update"
     git add readme_sub
     git submodule add "${PRETEND_URL}_sub_sub" "a_sub_sub_module"
     git commit -m "Initial commit"
+    git branch -m master
   popd &> /dev/null
   mkdir -p "${PRETEND_URL}_sub"
   pushd "${PRETEND_URL}_sub" &> /dev/null
@@ -89,6 +96,7 @@ begin_test "Test safe-submodule-update"
     touch readme_behind
     git add readme_behind
     git commit -m "Behind (1)"
+    git branch -m master
   popd &> /dev/null
   mkdir -p "${PRETEND_URL}_behind"
   pushd "${PRETEND_URL}_behind" &> /dev/null
@@ -102,6 +110,7 @@ begin_test "Test safe-submodule-update"
     touch readme_equal
     git add readme_equal
     git commit -m "Equal (1)"
+    git branch -m master
     echo 2 >> readme_equal
     git add readme_equal
     git commit -m "Equal (2)"
@@ -118,6 +127,7 @@ begin_test "Test safe-submodule-update"
     touch readme_ahead
     git add readme_ahead
     git commit -m "Ahead (1)"
+    git branch -m master
   popd &> /dev/null
   mkdir -p "${PRETEND_URL}_ahead"
   pushd "${PRETEND_URL}_ahead" &> /dev/null
@@ -140,6 +150,7 @@ begin_test "Test safe-submodule-update"
   mkdir -p "${PRETEND_URL}"
   pushd "${PRETEND_URL}" &> /dev/null
     git init --bare .
+    git symbolic-ref HEAD refs/heads/master
   popd &> /dev/null
   mkdir -p "${BUILD_REPO}"
   pushd "${BUILD_REPO}" &> /dev/null
@@ -149,6 +160,7 @@ begin_test "Test safe-submodule-update"
     touch subdir/a_file
     git add readme subdir/a_file
     git commit -m "Initial commit"
+    git branch -m master
 
     git submodule add --name "${DIFFICULT_NAME}" "${PRETEND_URL}_sub" "${DIFFICULT_PATH}"
     # Git itself can't handle newlines, although the config file actually can
@@ -244,106 +256,111 @@ begin_test "Test safe-submodule-update"
 
   # Test the initial configuration
   pushd "${TEST_REPO}" &> /dev/null
-    [ "$(git config submodule."${DIFFICULT_NAME}".url)" = "${PRETEND_URL}_sub" ]
-    [ "$(cd "${DIFFICULT_PATH}" && git config submodule.a_sub_sub_module.url)" = "${PRETEND_URL}_sub_sub" ]
-    [ "$(git config submodule.behind.url)" = "${PRETEND_URL}_behind" ]
+    assert_str_eq "$(git config submodule."${DIFFICULT_NAME}".url)" "${PRETEND_URL_INTERNAL}_sub"
+    assert_str_eq "$(cd "${DIFFICULT_PATH}" && git config submodule.a_sub_sub_module.url)" "${PRETEND_URL_INTERNAL}_sub_sub"
+    assert_str_eq "$(git config submodule.behind.url)" "${PRETEND_URL_INTERNAL}_behind"
     not git config submodule.equal.url
-    [ "$(git config submodule.ahead.url)" = "${PRETEND_URL}_ahead" ]
-    [ "$(cd "${DIFFICULT_PATH}" && git config remote.origin.url)" = "${PRETEND_URL}_sub" ]
-    [ "$(cd "${DIFFICULT_PATH}/a_sub_sub_module" && git config remote.origin.url)" = \
-        "${PRETEND_URL}_sub_sub" ]
-    [ "$(cd behind && git config remote.origin.url)" = "${PRETEND_URL}_behind" ]
+    assert_str_eq "$(git config submodule.ahead.url)" "${PRETEND_URL_INTERNAL}_ahead"
+    assert_str_eq "$(cd "${DIFFICULT_PATH}" && git config remote.origin.url)" "${PRETEND_URL_INTERNAL}_sub"
+    assert_str_eq "$(cd "${DIFFICULT_PATH}/a_sub_sub_module" && git config remote.origin.url)" \
+                  "${PRETEND_URL_INTERNAL}_sub_sub"
+    assert_str_eq "$(cd behind && git config remote.origin.url)" "${PRETEND_URL_INTERNAL}_behind"
     #[ "$(cd equal && git config remote.origin.url)" = "" ] # Can't do this test yet
-    [ "$(cd ahead && git config remote.origin.url)" = "${PRETEND_URL}_ahead" ]
+    assert_str_eq "$(cd ahead && git config remote.origin.url)" "${PRETEND_URL_INTERNAL}_ahead"
   popd &> /dev/null
 
   # Update a single submodule using a specified named remote
   pushd "${TEST_REPO}" &> /dev/null
     output="$(JUST_GIT_UPSTREAM=foo_upstream safe_git_submodule_update equal | grep "Uninitialized submodule")"
     # Test an un-init'd submodule
-    [ "${output}" = "Uninitialized submodule 'equal'...Initializing" ]
+    assert_str_eq "${output}" "Uninitialized submodule 'equal'...Initializing"
 
     # Verify initial configuration is still correct
-    [ "$(git config submodule."${DIFFICULT_NAME}".url)" = "${PRETEND_URL}_sub" ]
-    [ "$(cd "${DIFFICULT_PATH}" && git config submodule.a_sub_sub_module.url)" = "${PRETEND_URL}_sub_sub" ]
-    [ "$(git config submodule.behind.url)" = "${PRETEND_URL}_behind" ]
-    [ "$(git config submodule.equal.url)" = "${PRETEND_URL}_equal" ]
-    [ "$(git config submodule.ahead.url)" = "${PRETEND_URL}_ahead" ]
-    [ "$(cd "${DIFFICULT_PATH}" && git config remote.origin.url)" = "${PRETEND_URL}_sub" ]
-    [ "$(cd "${DIFFICULT_PATH}/a_sub_sub_module" && git config remote.origin.url)" = \
-        "${PRETEND_URL}_sub_sub" ]
-    [ "$(cd behind && git config remote.origin.url)" = "${PRETEND_URL}_behind" ]
-    [ "$(cd equal && git config remote.origin.url)" = "${PRETEND_URL}_equal" ]
-    [ "$(cd ahead && git config remote.origin.url)" = "${PRETEND_URL}_ahead" ]
+    assert_str_eq "$(git config submodule."${DIFFICULT_NAME}".url)" "${PRETEND_URL_INTERNAL}_sub"
+    assert_str_eq "$(cd "${DIFFICULT_PATH}" && git config submodule.a_sub_sub_module.url)" "${PRETEND_URL_INTERNAL}_sub_sub"
+    assert_str_eq "$(git config submodule.behind.url)" "${PRETEND_URL_INTERNAL}_behind"
+    assert_str_eq "$(git config submodule.equal.url)" "${PRETEND_URL_INTERNAL}_equal"
+    assert_str_eq "$(git config submodule.ahead.url)" "${PRETEND_URL_INTERNAL}_ahead"
+    assert_str_eq "$(cd "${DIFFICULT_PATH}" && git config remote.origin.url)" "${PRETEND_URL_INTERNAL}_sub"
+    assert_str_eq "$(cd "${DIFFICULT_PATH}/a_sub_sub_module" && git config remote.origin.url)" \
+                  "${PRETEND_URL_INTERNAL}_sub_sub"
+    assert_str_eq "$(cd behind && git config remote.origin.url)" "${PRETEND_URL_INTERNAL}_behind"
+    assert_str_eq "$(cd equal && git config remote.origin.url)" "${PRETEND_URL_INTERNAL}_equal"
+    assert_str_eq "$(cd ahead && git config remote.origin.url)" "${PRETEND_URL_INTERNAL}_ahead"
 
     pushd behind &> /dev/null
       not git config remote.foo_upstream.url
       not git config remote.just_upstream.url
-      [ "$(git log -n1 --format="%s")" = "Behind (1)" ]
+      assert_str_eq "$(git log -n1 --format="%s")" "Behind (1)"
     popd &> /dev/null
     # Test that the foo_upstream remote was created in the equal submodule
     pushd equal &> /dev/null
-      [ "$(git config remote.foo_upstream.url)" = "${PRETEND_URL}_equal" ]
+      assert_str_eq "$(git config remote.foo_upstream.url)" "${PRETEND_URL_INTERNAL}_equal"
       not git config remote.just_upstream.url
-      [ "$(git log -n1 --format="%s")" = "Equal (1)" ]
+      assert_str_eq "$(git log -n1 --format="%s")" "Equal (1)"
       # alternatively
-      #[ "$(git show HEAD | git patch-id | awk '{print $1}')" = "${aSHA}" ]
+      # assert_str_eq "$(git show HEAD | git patch-id | awk '{print $1}')" "${aSHA}"
     popd &> /dev/null
     pushd "ahead" &> /dev/null
       not git config remote.foo_upstream.url
       not git config remote.just_upstream.url
-      [ "$(git log -n1 --format="%s")" = "Ahead (1)" ]
+      assert_str_eq "$(git log -n1 --format="%s")" "Ahead (1)"
     popd &> /dev/null
   popd &> /dev/null
+
+  # Do this to preload git_feature_submodule_update_with_custom_command and not pollute the debug trace
+  set +xv
+  git_feature_submodule_update_with_custom_command || :
+  set -xv
 
   # Update all submodules using a specified named remote
   pushd "${TEST_REPO}" &> /dev/null
     JUST_GIT_UPSTREAM=foo_upstream safe_git_submodule_update
     # Verify initial configuration is still correct
-    [ "$(git config submodule."${DIFFICULT_NAME}".url)" = "${PRETEND_URL}_sub" ]
-    [ "$(cd "${DIFFICULT_PATH}" && git config submodule.a_sub_sub_module.url)" = "${PRETEND_URL}_sub_sub" ]
-    [ "$(git config submodule.behind.url)" = "${PRETEND_URL}_behind" ]
-    [ "$(git config submodule.equal.url)" = "${PRETEND_URL}_equal" ]
-    [ "$(git config submodule.ahead.url)" = "${PRETEND_URL}_ahead" ]
-    [ "$(cd "${DIFFICULT_PATH}" && git config remote.origin.url)" = "${PRETEND_URL}_sub" ]
-    [ "$(cd "${DIFFICULT_PATH}/a_sub_sub_module" && git config remote.origin.url)" = \
-        "${PRETEND_URL}_sub_sub" ]
-    [ "$(cd behind && git config remote.origin.url)" = "${PRETEND_URL}_behind" ]
-    [ "$(cd equal && git config remote.origin.url)" = "${PRETEND_URL}_equal" ]
-    [ "$(cd ahead && git config remote.origin.url)" = "${PRETEND_URL}_ahead" ]
+    assert_str_eq "$(git config submodule."${DIFFICULT_NAME}".url)" "${PRETEND_URL_INTERNAL}_sub"
+    assert_str_eq "$(cd "${DIFFICULT_PATH}" && git config submodule.a_sub_sub_module.url)" "${PRETEND_URL_INTERNAL}_sub_sub"
+    assert_str_eq "$(git config submodule.behind.url)" "${PRETEND_URL_INTERNAL}_behind"
+    assert_str_eq "$(git config submodule.equal.url)" "${PRETEND_URL_INTERNAL}_equal"
+    assert_str_eq "$(git config submodule.ahead.url)" "${PRETEND_URL_INTERNAL}_ahead"
+    assert_str_eq "$(cd "${DIFFICULT_PATH}" && git config remote.origin.url)" "${PRETEND_URL_INTERNAL}_sub"
+    assert_str_eq "$(cd "${DIFFICULT_PATH}/a_sub_sub_module" && git config remote.origin.url)" \
+                  "${PRETEND_URL_INTERNAL}_sub_sub"
+    assert_str_eq "$(cd behind && git config remote.origin.url)" "${PRETEND_URL_INTERNAL}_behind"
+    assert_str_eq "$(cd equal && git config remote.origin.url)" "${PRETEND_URL_INTERNAL}_equal"
+    assert_str_eq "$(cd ahead && git config remote.origin.url)" "${PRETEND_URL_INTERNAL}_ahead"
 
     # Test that the foo_upstream remote was created
-    [ "$(cd "${DIFFICULT_PATH}" && git config remote.foo_upstream.url)" = "${PRETEND_URL}_sub" ]
-    [ "$(cd "${DIFFICULT_PATH}/a_sub_sub_module" && git config remote.foo_upstream.url)" = \
-        "${PRETEND_URL}_sub_sub" ]
-    [ "$(cd behind && git config remote.foo_upstream.url)" = "${PRETEND_URL}_behind" ]
-    [ "$(cd equal && git config remote.foo_upstream.url)" = "${PRETEND_URL}_equal" ]
-    [ "$(cd ahead && git config remote.foo_upstream.url)" = "${PRETEND_URL}_ahead" ]
+    assert_str_eq "$(cd "${DIFFICULT_PATH}" && git config remote.foo_upstream.url)" "${PRETEND_URL_INTERNAL}_sub"
+    assert_str_eq "$(cd "${DIFFICULT_PATH}/a_sub_sub_module" && git config remote.foo_upstream.url)" \
+                  "${PRETEND_URL_INTERNAL}_sub_sub"
+    assert_str_eq "$(cd behind && git config remote.foo_upstream.url)" "${PRETEND_URL_INTERNAL}_behind"
+    assert_str_eq "$(cd equal && git config remote.foo_upstream.url)" "${PRETEND_URL_INTERNAL}_equal"
+    assert_str_eq "$(cd ahead && git config remote.foo_upstream.url)" "${PRETEND_URL_INTERNAL}_ahead"
 
-    [ "$(cd behind && git log -n1 --format="%s")" = "Behind (1)" ]
-    [ "$(cd equal && git log -n1 --format="%s")" = "Equal (1)" ]
-    [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (1)" ]
+    assert_str_eq "$(cd behind && git log -n1 --format="%s")" "Behind (1)"
+    assert_str_eq "$(cd equal && git log -n1 --format="%s")" "Equal (1)"
+    assert_str_eq "$(cd ahead && git log -n1 --format="%s")" "Ahead (1)"
   popd &> /dev/null
 
 
   # Update all submodules using the default named remote (just_upstream)
   pushd "${TEST_REPO}" &> /dev/null
     safe_git_submodule_update
-    [ "$(cd "${DIFFICULT_PATH}" && git config remote.just_upstream.url)" = "${PRETEND_URL}_sub" ]
-    [ "$(cd "${DIFFICULT_PATH}/a_sub_sub_module" && git config remote.just_upstream.url)" = \
-        "${PRETEND_URL}_sub_sub" ]
-    [ "$(cd behind && git config remote.just_upstream.url)" = "${PRETEND_URL}_behind" ]
-    [ "$(cd equal && git config remote.just_upstream.url)" = "${PRETEND_URL}_equal" ]
-    [ "$(cd ahead && git config remote.just_upstream.url)" = "${PRETEND_URL}_ahead" ]
+    assert_str_eq "$(cd "${DIFFICULT_PATH}" && git config remote.just_upstream.url)" "${PRETEND_URL_INTERNAL}_sub"
+    assert_str_eq "$(cd "${DIFFICULT_PATH}/a_sub_sub_module" && git config remote.just_upstream.url)" \
+        "${PRETEND_URL_INTERNAL}_sub_sub"
+    assert_str_eq "$(cd behind && git config remote.just_upstream.url)" "${PRETEND_URL_INTERNAL}_behind"
+    assert_str_eq "$(cd equal && git config remote.just_upstream.url)" "${PRETEND_URL_INTERNAL}_equal"
+    assert_str_eq "$(cd ahead && git config remote.just_upstream.url)" "${PRETEND_URL_INTERNAL}_ahead"
   popd &> /dev/null
 
   # Create an untracked file that will not conflict with the submodule update
   pushd "${TEST_REPO}" &> /dev/null
     echo 1 >> ahead/file
     output="$(safe_git_submodule_update | grep "Untracked files")"
-    [ "${output}" = "Untracked files in 'ahead'" ]
-    [ "$(cat ahead/file)" = "1" ]
-    [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (1)" ]
+    assert_str_eq "${output}" "Untracked files in 'ahead'"
+    assert_str_eq "$(cat ahead/file)" "1"
+    assert_str_eq "$(cd ahead && git log -n1 --format="%s")" "Ahead (1)"
     rm ahead/file
   popd &> /dev/null
 
@@ -354,10 +371,10 @@ begin_test "Test safe-submodule-update"
       echo 2 >> readme_ahead
     popd &> /dev/null
     output="$(safe_git_submodule_update | grep "Uncommited tracked files")"
-    [ "${output}" = "Uncommited tracked files in 'ahead'" ]
-    [ "$(cat ahead/readme_ahead)" = "2" ]
-    [ "$(cd ahead && git status --porcelain readme_ahead | cut -c2)" = "M" ]
-    [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (1)" ]
+    assert_str_eq "${output}" "Uncommited tracked files in 'ahead'"
+    assert_str_eq "$(cat ahead/readme_ahead)" "2"
+    assert_str_eq "$(cd ahead && git status --porcelain readme_ahead | cut -c2)" "M"
+    assert_str_eq "$(cd ahead && git log -n1 --format="%s")" "Ahead (1)"
   popd &> /dev/null
 
   # Stage the change in the ahead submodule of the test repo
@@ -366,10 +383,10 @@ begin_test "Test safe-submodule-update"
       git add readme_ahead
     popd &> /dev/null
     output="$(askcontinue=y safe_git_submodule_update <<< "a" | grep "Staged tracked files")"
-    [ "${output}" = "Staged tracked files in 'ahead'" ]
-    [ "$(cat ahead/readme_ahead)" = "2" ]
-    [ "$(cd ahead && git status --porcelain readme_ahead | cut -c1)" = "M" ]
-    [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (1)" ]
+    assert_str_eq "${output}" "Staged tracked files in 'ahead'"
+    assert_str_eq "$(cat ahead/readme_ahead)" "2"
+    assert_str_eq "$(cd ahead && git status --porcelain readme_ahead | cut -c1)" "M"
+    assert_str_eq "$(cd ahead && git log -n1 --format="%s")" "Ahead (1)"
   popd &> /dev/null
 
   # Commit the change in the ahead submodule of the test repo
@@ -383,7 +400,7 @@ begin_test "Test safe-submodule-update"
       # Warns that the repository 'ahead' is not on the expected SHA; prompts
       # the user to continue
       askcontinue=y safe_git_submodule_update
-      [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (2)" ]
+      assert_str_eq "$(cd ahead && git log -n1 --format="%s")" "Ahead (2)"
     else
       pushd ahead &> /dev/null
         lost_commit="$(git rev-parse HEAD)"
@@ -396,7 +413,7 @@ begin_test "Test safe-submodule-update"
       # RE This commit is really only lost if there was not a branch tracking
       # it. However, forgetting to checkout a branch is pretty easy in a
       # submodule.
-      [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (1)" ]
+      assert_str_eq "$(cd ahead && git log -n1 --format="%s")" "Ahead (1)"
 
       # Manually recover this commit
       pushd ahead &> /dev/null
@@ -441,9 +458,9 @@ begin_test "Test safe-submodule-update"
     else
       [[ ${output} = *"Unable to checkout"*"in submodule path 'behind'" ]] || false
     fi
-    [ "$(cat behind/readme_behind)" = "3" ]
-    [ "$(cd behind && git status --porcelain readme_behind | cut -c2)" = "M" ]
-    [ "$(cd behind && git log -n1 --format="%s")" = "Behind (1)" ]
+    assert_str_eq "$(cat behind/readme_behind)" "3"
+    assert_str_eq "$(cd behind && git status --porcelain readme_behind | cut -c2)" "M"
+    assert_str_eq "$(cd behind && git log -n1 --format="%s")" "Behind (1)"
   popd &> /dev/null
 
   # Stage the change in the behind submodule of the test repo
@@ -454,9 +471,9 @@ begin_test "Test safe-submodule-update"
     output="$(askcontinue=y safe_git_submodule_update <<< "a" 2>&1 | \
         grep "Staged tracked files")"
     [[ ${output} = *"Staged tracked files in 'behind'" ]] || false
-    [ "$(cat behind/readme_behind)" = "3" ]
-    [ "$(cd behind && git status --porcelain readme_behind | cut -c1)" = "M" ]
-    [ "$(cd behind && git log -n1 --format="%s")" = "Behind (1)" ]
+    assert_str_eq "$(cat behind/readme_behind)" "3"
+    assert_str_eq "$(cd behind && git status --porcelain readme_behind | cut -c1)" "M"
+    assert_str_eq "$(cd behind && git log -n1 --format="%s")" "Behind (1)"
   popd &> /dev/null
 
   # Test non-ff merge
@@ -473,7 +490,7 @@ begin_test "Test safe-submodule-update"
           grep "failed in submodule  \?path")"
       [[ ${output} = *"failed in submodule  path 'behind'" ]] || \
       [[ ${output} = *"failed in submodule path 'behind'" ]] || false
-      [ "$(cd behind && git log -n1 --format="%s")" = "Behind (3)" ]
+      assert_str_eq "$(cd behind && git log -n1 --format="%s")" "Behind (3)"
       # drop last commit in the behind submodule (so we don't get errors going
       # forward)
       pushd "behind" &> /dev/null
@@ -483,7 +500,7 @@ begin_test "Test safe-submodule-update"
       safe_git_submodule_update
       # git is too old to do a safe submodule update; does a normal submodule
       # update, which forcefully moves HEAD, loosing the new commit
-      [ "$(cd behind && git log -n1 --format="%s")" = "Behind (2)" ]
+      assert_str_eq "$(cd behind && git log -n1 --format="%s")" "Behind (2)"
       # drop last commit in the behind submodule (so we don't get errors going
       # forward)
       pushd "behind" &> /dev/null
@@ -497,9 +514,9 @@ begin_test "Test safe-submodule-update"
   # All submodules are now on the correct SHA
   pushd "${TEST_REPO}" &> /dev/null
     safe_git_submodule_update
-    [ "$(cd behind && git log -n1 --format="%s")" = "Behind (2)" ]
-    [ "$(cd equal && git log -n1 --format="%s")" = "Equal (1)" ]
-    [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (2)" ]
+    assert_str_eq "$(cd behind && git log -n1 --format="%s")" "Behind (2)"
+    assert_str_eq "$(cd equal && git log -n1 --format="%s")" "Equal (1)"
+    assert_str_eq "$(cd ahead && git log -n1 --format="%s")" "Ahead (2)"
   popd &> /dev/null
 
 
@@ -514,7 +531,7 @@ begin_test "Test safe-submodule-update"
     git merge origin/master
     git submodule update --init --recursive
     sed "${sed_flags_i[@]}" -e \
-         "s|url = ${PRETEND_URL}_behind|url = ${PRETEND_URL}_behind2|" .gitmodules
+         "s|url = ${PRETEND_URL_INTERNAL}_behind|url = ${PRETEND_URL_INTERNAL}_behind2|" .gitmodules
     git add .gitmodules
     git commit -m "Update submodule behind's URL"
     git submodule sync behind
@@ -525,7 +542,7 @@ begin_test "Test safe-submodule-update"
       git add readme_behind
       git commit -m "Behind (4)"
       # We sync'd so this should be true
-      [ "$(git config remote.origin.url)" = "${PRETEND_URL}_behind2" ]
+      assert_str_eq "$(git config remote.origin.url)" "${PRETEND_URL_INTERNAL}_behind2"
       git push origin master
     popd &> /dev/null
     # Track the new commit at the new URL
@@ -536,9 +553,9 @@ begin_test "Test safe-submodule-update"
 
   pushd "${TEST_REPO}" &> /dev/null
     # Ensure submodule behind's URL hasn't been updated yet
-    [ "$(git config submodule.behind.url)" = "${PRETEND_URL}_behind" ]
-    [ "$(cd behind && git config remote.origin.url)" = "${PRETEND_URL}_behind" ]
-    [ "$(cd behind && git config remote.just_upstream.url)" = "${PRETEND_URL}_behind" ]
+    assert_str_eq "$(git config submodule.behind.url)" "${PRETEND_URL_INTERNAL}_behind"
+    assert_str_eq "$(cd behind && git config remote.origin.url)" "${PRETEND_URL_INTERNAL}_behind"
+    assert_str_eq "$(cd behind && git config remote.just_upstream.url)" "${PRETEND_URL_INTERNAL}_behind"
 
     # The tracked SHA in submodule behind will not be in the repository because
     # the URL changed. safe_git_submodule_update will update just_upstream and
@@ -565,11 +582,11 @@ begin_test "Test safe-submodule-update"
     # Sync the submodules, fetches new commits, and update
     safe_git_submodule_update
 
-    [ "$(git config submodule.behind.url)" = "${PRETEND_URL}_behind" ]
-    [ "$(cd behind && git config remote.origin.url)" = "${PRETEND_URL}_behind" ]
+    assert_str_eq "$(git config submodule.behind.url)" "${PRETEND_URL_INTERNAL}_behind"
+    assert_str_eq "$(cd behind && git config remote.origin.url)" "${PRETEND_URL_INTERNAL}_behind"
     # just_upstream sync'd to the updated URL in the .gitmodules file
-    [ "$(cd behind && git config remote.just_upstream.url)" = "${PRETEND_URL}_behind2" ]
-    [ "$(cd behind && git log -n1 --format="%s")" = "Behind (4)" ]
+    assert_str_eq "$(cd behind && git config remote.just_upstream.url)" "${PRETEND_URL_INTERNAL}_behind2"
+    assert_str_eq "$(cd behind && git log -n1 --format="%s")" "Behind (4)"
   popd &> /dev/null
 
 
@@ -578,9 +595,9 @@ begin_test "Test safe-submodule-update"
   # but go ahead and test it explicitly)
   pushd "${TEST_REPO}" &> /dev/null
     sed "${sed_flags_i[@]}" -e \
-         "s|url = ${PRETEND_URL}_equal|url = "../$(basename "${PRETEND_URL}_equal")"|" .gitmodules
+         "s|url = ${PRETEND_URL_INTERNAL}_equal|url = "../$(basename "${PRETEND_URL_INTERNAL}_equal")"|" .gitmodules
     sed "${sed_flags_i[@]}" -e \
-         "s|url = ${PRETEND_URL}_ahead|url = "../$(basename "${PRETEND_URL}_ahead")"|" .gitmodules
+         "s|url = ${PRETEND_URL_INTERNAL}_ahead|url = "../$(basename "${PRETEND_URL_INTERNAL}_ahead")"|" .gitmodules
     git add .gitmodules
     git commit -m "Update submodule behind's URL"
     # Modify the remotes of submodule equal and ahead
@@ -588,7 +605,7 @@ begin_test "Test safe-submodule-update"
     # called by safe_git_submodule_update's helper function
     # _checkout_git_submodule) does not fetch if the tracked commit can be
     # found in the submodule
-    updated_pretend_url="${PRETEND_URL/git\/pretend_repo/git1/pretend_repo}"
+    updated_pretend_url="${PRETEND_URL_INTERNAL/git\/pretend_repo/git1/pretend_repo}"
     git config remote.origin.url "${updated_pretend_url}"
     git config submodule.equal.url "${PRETEND_URL}_equal3"
     git config submodule.ahead.url "${PRETEND_URL}_ahead3"
@@ -616,13 +633,13 @@ begin_test "Test safe-submodule-update"
 
     pushd ahead &> /dev/null
       ahead_remote_origin_url="$(git config remote.origin.url)"
-      [ "${ahead_remote_origin_url}" = "${updated_pretend_url}_ahead" ]
+      assert_str_eq "${ahead_remote_origin_url}" "${updated_pretend_url}_ahead"
     popd &> /dev/null
     pushd equal &> /dev/null
       # (unchanged)
-      [ "$(git config remote.origin.url)" = "${PRETEND_URL}_equal4" ]
+      assert_str_eq "$(git config remote.origin.url)" "${PRETEND_URL_INTERNAL}_equal4"
       equal_remote_foo_upstream_url="$(git config remote.foo_upstream.url)"
-      [ "${equal_remote_foo_upstream_url}" = "${updated_pretend_url}_equal" ]
+      assert_str_eq "${equal_remote_foo_upstream_url}" "${updated_pretend_url}_equal"
     popd &> /dev/null
   popd &> /dev/null
 
@@ -630,23 +647,23 @@ begin_test "Test safe-submodule-update"
     # Sync the submodules, fetches new commits, and update
     safe_git_submodule_update
 
-    [ "$(git config submodule.ahead.url)" = "${PRETEND_URL}_ahead3" ]
+    assert_str_eq "$(git config submodule.ahead.url)" "${PRETEND_URL_INTERNAL}_ahead3"
     # I'm not sure how to be sure that git used this remote to sync as opposed
     # to origin. However, if the function being tested assumed origin, this
     # would fail
-    [ "$(cd ahead && git config remote.origin.url)" = "${PRETEND_URL}_ahead4" ]
-    [ "$(cd ahead && git config remote.just_upstream.url)" = "${ahead_remote_origin_url}" ]
-    [ "$(cd ahead && git config remote.foo_upstream.url)" = "${PRETEND_URL}_ahead6" ]
-    [ "$(cd ahead && git log -n1 --format="%s")" = "Ahead (2)" ] # Still on a detached head
+    assert_str_eq "$(cd ahead && git config remote.origin.url)" "${PRETEND_URL_INTERNAL}_ahead4"
+    assert_str_eq "$(cd ahead && git config remote.just_upstream.url)" "${ahead_remote_origin_url}"
+    assert_str_eq "$(cd ahead && git config remote.foo_upstream.url)" "${PRETEND_URL_INTERNAL}_ahead6"
+    assert_str_eq "$(cd ahead && git log -n1 --format="%s")" "Ahead (2)" # Still on a detached head
 
-    [ "$(git config submodule.equal.url)" = "${PRETEND_URL}_equal3" ]
-    [ "$(cd equal && git config remote.origin.url)" = "${PRETEND_URL}_equal4" ]
-    [ "$(cd equal && git config remote.just_upstream.url)" = "${equal_remote_foo_upstream_url}" ]
+    assert_str_eq "$(git config submodule.equal.url)" "${PRETEND_URL_INTERNAL}_equal3"
+    assert_str_eq "$(cd equal && git config remote.origin.url)" "${PRETEND_URL_INTERNAL}_equal4"
+    assert_str_eq "$(cd equal && git config remote.just_upstream.url)" "${equal_remote_foo_upstream_url}"
     # I'm not sure how to be sure that git used this remote to sync as opposed
     # to origin. However, if the function being tested assumed origin, this
     # would fail
-    [ "$(cd equal && git config remote.foo_upstream.url)" = "${PRETEND_URL}_equal6" ]
-    [ "$(cd equal && git log -n1 --format="%s")" = "Equal (1)" ] # Now on a detached head
+    assert_str_eq "$(cd equal && git config remote.foo_upstream.url)" "${PRETEND_URL_INTERNAL}_equal6"
+    assert_str_eq "$(cd equal && git log -n1 --format="%s")" "Equal (1)" # Now on a detached head
   popd &> /dev/null
 
   # Verify that if the submodule's URL is relative, sync'ing resolves it using
@@ -656,8 +673,8 @@ begin_test "Test safe-submodule-update"
   pushd "${TEST_REPO}_ex2" &> /dev/null
     git checkout -b new_branch
     # Shouldn't be used by this test
-    [ "$(git config remote.origin.url)" = "${updated_pretend_url}" ] # .../git1
-    updated_pretend_url="${PRETEND_URL/git\/pretend_repo/git2/pretend_repo}"
+    assert_str_eq "$(git config remote.origin.url)" "${updated_pretend_url}" # .../git1
+    updated_pretend_url="${PRETEND_URL_INTERNAL/git\/pretend_repo/git2/pretend_repo}"
     git remote add upstream "${updated_pretend_url}"
     git config branch.new_branch.remote upstream
   popd &> /dev/null
@@ -668,11 +685,11 @@ begin_test "Test safe-submodule-update"
 
     pushd ahead &> /dev/null
       ahead_remote_origin_url="$(git config remote.origin.url)"
-      [ "${ahead_remote_origin_url}" = "${updated_pretend_url}_ahead" ]
+      assert_str_eq "${ahead_remote_origin_url}" "${updated_pretend_url}_ahead"
     popd &> /dev/null
     pushd equal &> /dev/null
       equal_remote_foo_upstream_url="$(git config remote.foo_upstream.url)"
-      [ "${equal_remote_foo_upstream_url}" = "${updated_pretend_url}_equal" ]
+      assert_str_eq "${equal_remote_foo_upstream_url}" "${updated_pretend_url}_equal"
     popd &> /dev/null
   popd &> /dev/null
 
@@ -680,8 +697,8 @@ begin_test "Test safe-submodule-update"
     # Sync the submodules, fetches new commits, and update
     safe_git_submodule_update
 
-    [ "$(cd ahead && git config remote.just_upstream.url)" = "${ahead_remote_origin_url}" ]
-    [ "$(cd equal && git config remote.just_upstream.url)" = "${equal_remote_foo_upstream_url}" ]
+    assert_str_eq "$(cd ahead && git config remote.just_upstream.url)" "${ahead_remote_origin_url}"
+    assert_str_eq "$(cd equal && git config remote.just_upstream.url)" "${equal_remote_foo_upstream_url}"
   popd &> /dev/null
 
 
@@ -704,16 +721,16 @@ begin_test "Test safe-submodule-update"
     popd &> /dev/null
 
     git_reattach_heads "${DIFFICULT_PATH}"
-    [ "$(cd "${DIFFICULT_PATH}" && git rev-parse --abbrev-ref HEAD)" = "master" ]
-    [ "$(cd "${DIFFICULT_PATH}"/a_sub_sub_module && git rev-parse --abbrev-ref HEAD)" = "master" ]
-    [ "$(cd behind && git rev-parse --abbrev-ref HEAD)" = "HEAD" ]
-    [ "$(cd equal && git rev-parse --abbrev-ref HEAD)" = "HEAD" ]
+    assert_str_eq "$(cd "${DIFFICULT_PATH}" && git rev-parse --abbrev-ref HEAD)" "master"
+    assert_str_eq "$(cd "${DIFFICULT_PATH}"/a_sub_sub_module && git rev-parse --abbrev-ref HEAD)" "master"
+    assert_str_eq "$(cd behind && git rev-parse --abbrev-ref HEAD)" "HEAD"
+    assert_str_eq "$(cd equal && git rev-parse --abbrev-ref HEAD)" "HEAD"
 
     git_reattach_heads
-    [ "$(cd "${DIFFICULT_PATH}" && git rev-parse --abbrev-ref HEAD)" = "master" ]
-    [ "$(cd "${DIFFICULT_PATH}"/a_sub_sub_module && git rev-parse --abbrev-ref HEAD)" = "master" ]
-    [ "$(cd behind && git rev-parse --abbrev-ref HEAD)" = "HEAD" ]
-    [ "$(cd equal && git rev-parse --abbrev-ref HEAD)" = "abranch" ]
+    assert_str_eq "$(cd "${DIFFICULT_PATH}" && git rev-parse --abbrev-ref HEAD)" "master"
+    assert_str_eq "$(cd "${DIFFICULT_PATH}"/a_sub_sub_module && git rev-parse --abbrev-ref HEAD)" "master"
+    assert_str_eq "$(cd behind && git rev-parse --abbrev-ref HEAD)" "HEAD"
+    assert_str_eq "$(cd equal && git rev-parse --abbrev-ref HEAD)" "abranch"
 
     # test re-attaching to a branch name with a slash in it
     pushd equal &> /dev/null
@@ -723,7 +740,7 @@ begin_test "Test safe-submodule-update"
     popd &> /dev/null
 
     git_reattach_heads equal
-    [ "$(cd equal && git rev-parse --abbrev-ref HEAD)" = "namewith/slashes" ]
+    assert_str_eq "$(cd equal && git rev-parse --abbrev-ref HEAD)" "namewith/slashes"
   popd &> /dev/null
 )
 end_test
