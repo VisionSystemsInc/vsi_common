@@ -3,6 +3,7 @@
 #*# tests/test_utils
 
 source "${VSI_COMMON_DIR}/linux/string_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/compat.bsh"
 
 #**
 # ==============
@@ -408,6 +409,77 @@ function assert_regex_eq()
     echo "${ERR_C}ASSERT ERROR: regex eq${NC}" >&2
     echo         "======================" >&2
     echo "${INFO_C}FAILED:${NC} [[ ${1} =~ ${2} ]]" >&2
+    set -xv
+    return 1
+  fi
+}
+
+#**
+# .. function:: assert_set
+#
+# Asserts that a variable is set
+#
+# :Arguments: * ``$1`` - The variable name being checked
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
+#   assert_unset a
+#   a=15
+#   assert_set a
+#   a =(11 22 33)
+#   assert_set a[0]
+#   assert_set a[@]
+#   unset a[0]
+#   assert_unset a[0]
+#   assert_set a[@]
+#
+# .. note::
+#   Checking ``assert_set a`` on an array is the same as ``a[0]``. So you should use ``a[@]`` instead
+#**
+function assert_set()
+{
+  set +xv
+  if [ " ""${!1+set}" != " " ]; then
+    set -xv
+    return 0
+  else
+    echo "${ERR_C}ASSERT ERROR: set${NC}" >&2
+    echo         "=================" >&2
+    echo "${INFO_C}FAILED:${NC} ${1} is not set" >&2
+    set -xv
+    return 1
+  fi
+}
+
+#**
+# .. function:: assert_unset
+#
+# Asserts that a variable is unset
+#
+# :Arguments: * ``$1`` - The variable name being checked
+#
+# .. note::
+#   On bash 3.2, an empty variable is indistinguishable from a null variable, so ``assert_unset`` will return true when it is null.
+#**
+function assert_unset()
+{
+  set +xv
+  # Handled [@] notation
+  if [ " ""${!1+set}" = " " ]; then
+    set -xv
+    return 0
+  # Even though this will allow for "assert_set" and "assert_unset" to be true
+  # at the same time, it's for the sake of bash 3.2 compatibility, and will
+  # only behave that way on bash 3.2
+  elif [ "${bash_bug_unassigned_variable_set_to_null}" = "0" -a "${!1-}" = "" ]; then
+    set -xv
+    return 0
+  else
+    echo "${ERR_C}ASSERT ERROR: unset${NC}" >&2
+    echo         "===================" >&2
+    echo "${INFO_C}FAILED:${NC} ${1} is set" >&2
     set -xv
     return 1
   fi

@@ -236,10 +236,18 @@ begin_test "Cuda 7.5 test"
   # Test it
   assert_array_values CUDA_ARCHES 20 30 32 35 37 50 52 53
   assert_array_values CUDA_CODES 20 21 30 32 35 37 50 52 53
-  [ "${CUDA_VERSION}" = "7.5.01" ]
+  assert_str_eq "${CUDA_VERSION}" "7.5.01"
   assert_array_values CUDA_SUGGESTED_ARCHES 30 35 52
   assert_array_values CUDA_SUGGESTED_CODES 30 35 52
-  [ "$(cmake_cuda_flags)" = "3.0 3.5 5.2 5.3+PTX" ]
+  assert_str_eq "$(cmake_cuda_flags)" "3.0 3.5 5.2 5.3+PTX"
+
+  if [ "${OS-}" = "Windows_NT" ]; then
+    assert_str_eq "${CUDA_MINIMAL_DRIVER_VERSION}" 353.66
+  else
+    assert_str_eq "${CUDA_MINIMAL_DRIVER_VERSION}" 352.31
+  fi
+
+  assert_unset CUDA_COMPATIBLE_DRIVER_VERSION
 )
 end_test
 
@@ -258,14 +266,56 @@ begin_test "Cuda 9 test"
   # Test it
   assert_array_values CUDA_ARCHES 30 32 35 37 50 52 53 60 61 62 70
   assert_array_values CUDA_CODES 30 32 35 37 50 52 53 60 61 62 70
-  [ "${CUDA_VERSION}" = "9.0.01" ]
+  assert_str_eq "${CUDA_VERSION}" "9.0.01"
   assert_array_values CUDA_SUGGESTED_ARCHES 37 52 70
   assert_array_values CUDA_SUGGESTED_CODES 37 52 70
-  [ "$(cmake_cuda_flags)" = "3.7 5.2 7.0" ]
+  assert_str_eq "$(cmake_cuda_flags)" "3.7 5.2 7.0"
 
   # Test the future flag
   CUDA_SUGGESTED_PTX+=(${CUDA_SUGGESTED_PTX+"${CUDA_SUGGESTED_PTX[@]}"} "${CUDA_FORWARD_PTX}")
-  [ "$(cmake_cuda_flags)" = "3.7 5.2 7.0 7.0+PTX" ]
+  assert_str_eq "$(cmake_cuda_flags)" "3.7 5.2 7.0 7.0+PTX"
+
+  if [ "${OS-}" = "Windows_NT" ]; then
+    assert_str_eq "${CUDA_MINIMAL_DRIVER_VERSION}" 385.54
+  else
+    assert_str_eq "${CUDA_MINIMAL_DRIVER_VERSION}" 384.81
+  fi
+
+  assert_unset CUDA_COMPATIBLE_DRIVER_VERSION
+)
+end_test
+
+begin_test "Cuda 11.8 test"
+(
+  setup_test
+
+  # Setup
+  CUDA_VERSION=11.8.89
+  CUDA_CARD_ARCHES=(37 52 70)
+
+  # Run code
+  cuda_capabilities "${CUDA_VERSION}"
+  suggested_architectures
+
+  # Test it
+  assert_array_values CUDA_ARCHES 35 37 50 52 53 60 61 62 70 72 75 80 86 87 89 90
+  assert_array_values CUDA_CODES 35 37 50 52 53 60 61 62 70 72 75 80 86 87 89 90
+  assert_str_eq "${CUDA_VERSION}" "11.8.89"
+  assert_array_values CUDA_SUGGESTED_ARCHES 37 52 70
+  assert_array_values CUDA_SUGGESTED_CODES 37 52 70
+  assert_str_eq "$(cmake_cuda_flags)" "3.7 5.2 7.0"
+
+  # Test the future flag
+  CUDA_SUGGESTED_PTX+=(${CUDA_SUGGESTED_PTX+"${CUDA_SUGGESTED_PTX[@]}"} "${CUDA_FORWARD_PTX}")
+  assert_str_eq "$(cmake_cuda_flags)" "3.7 5.2 7.0 9.0+PTX"
+
+  if [ "${OS-}" = "Windows_NT" ]; then
+    assert_str_eq "${CUDA_MINIMAL_DRIVER_VERSION}" 522.06
+    assert_str_eq "${CUDA_COMPATIBLE_DRIVER_VERSION}" 452.39
+  else
+    assert_str_eq "${CUDA_MINIMAL_DRIVER_VERSION}" 520.61.05
+    assert_str_eq "${CUDA_COMPATIBLE_DRIVER_VERSION}" 450.80.02
+  fi
 )
 end_test
 
