@@ -1,13 +1,12 @@
 ARG OS
-ARG DOCKER_COMPOSE_VERSION=1.26.2
+ARG DOCKER_BUILDX_VERSION=0.9.1
 
-FROM docker/compose:alpine-${DOCKER_COMPOSE_VERSION} as docker-compose_musl
-FROM docker/compose:debian-${DOCKER_COMPOSE_VERSION} as docker-compose_glib
 FROM vsiri/recipe:docker as docker
 FROM vsiri/recipe:docker-compose as docker-compose
 FROM vsiri/recipe:git-lfs as git-lfs
 FROM vsiri/recipe:jq as jq
 FROM vsiri/recipe:conda-python as conda-python
+FROM docker/buildx-bin:${DOCKER_BUILDX_VERSION} as buildx
 
 # FROM busybox:latest as wget
 
@@ -17,10 +16,6 @@ FROM ${OS}
 
 RUN set -euxv; \
     if command -v yum; then \
-      # Redhat 6's git is too old, bring in outside help
-      if [ -f "/etc/redhat-release" ] && [[ $(cat /etc/redhat-release) =~ .*release\ 6.* ]]; then \
-        yum install -y http://opensource.wandisco.com/centos/6/git/x86_64/wandisco-git-release-6-1.noarch.rpm; \
-      fi; \
       other_packages=''; \
       if [ -f "/etc/os-release" ] && [ "$(source /etc/os-release; echo "${ID}")" = "fedora" ]; then \
         # docker-compose won't work without libcrypt.so.1
@@ -155,10 +150,9 @@ SHELL ["/usr/bin/env", "bash", "-euxvc"]
 COPY --from=conda-python /usr/local /opt/python
 COPY --from=docker /usr/local /usr/local
 COPY --from=docker-compose /usr/local /usr/local
-COPY --from=docker-compose_musl /usr/local/bin/docker-compose /usr/local/bin/docker-compose_musl
-COPY --from=docker-compose_glib /usr/local/bin/docker-compose /usr/local/bin/docker-compose_glib
 COPY --from=git-lfs /usr/local /usr/local
 COPY --from=jq /usr/local /usr/local
+COPY --from=buildx /buildx /usr/local/libexec/docker/cli-plugins/docker-buildx
 RUN shopt -s nullglob; for patch in /usr/local/share/just/container_build_patch/*; do "${patch}"; done
 
 # TODO: I want to (use just install functions? and) "fix" docker-compose using conda,
@@ -205,6 +199,11 @@ RUN if ! docker-compose --version; then \
 #         https://github.com/docker/compose/releases/download/1.19.0/docker-compose-Linux-x86_64; \
 #       chmod 755 /usr/local/bin/docker-compose_glib; \
 #     fi
+
+# Disable this check; it gets in the way of running tests locally on git 2.31.2 and newer
+RUN git config --global --add safe.directory '*'; \
+    # Fix for https://bugs.launchpad.net/ubuntu/+source/git/+bug/1993586
+    git config --global protocol.file.allow always
 
 ENV JUSTFILE=/vsi/Justfile
 

@@ -75,34 +75,68 @@ begin_test "make temp paths cleanup"
 (
   setup_test
 
+  # This should never be set external unit tests. That would be messy O_o
+  [ -z "${DIR_TOOLS_KEEP_TEMP_PATHS+set}" ]
+
   # Find out where all the tempdirs go when they are born
   base_temp="$(dirname "$(mktemp -u -d)")"
 
   # Create random filename
   temp_file="$(basename "$(mktemp -u -t XXXXXXXXXXXXXXXX)")"
 
-  (
+  function subshell_make_temp_test
+  {
     make_temp_path temp_dir -d
-    touch "${temp_dir}/${temp_file}"
+    echo "${temp_dir}" > "${TESTDIR}/dir1"
+    DIR_TOOLS_KEEP_TEMP_PATHS=1 make_temp_path temp_dir -d
+    echo "${temp_dir}" > "${TESTDIR}/dir2"
     make_temp_path temp_dir -d
-    touch "${temp_dir}/${temp_file}"
+    echo "${temp_dir}" > "${TESTDIR}/dir3"
 
-    declare -i count=0
-    for x in "${base_temp}/"*"/${temp_file}"; do
-      count+=1
-    done
+    # Make sure both exist
+    [ -d "$(cat "${TESTDIR}/dir1")" ]
+    [ -d "$(cat "${TESTDIR}/dir2")" ]
+    [ -d "$(cat "${TESTDIR}/dir3")" ]
+  }
 
-    # Verify I have two different dirs with this same random file name in it
-    [ "${count}" = "2" ]
+  ( # Test A
+    subshell_make_temp_test
   )
 
-  # Verify I have no dirs with this random file name in it
-  not ls "${base_temp}/"*"/${temp_file}" &> /dev/null
+  # Only the second one should still exist
+  [ ! -d "$(cat "${TESTDIR}/dir1")" ]
+  [ -d "$(cat "${TESTDIR}/dir2")" ]
+  [ ! -d "$(cat "${TESTDIR}/dir3")" ]
 
-  make_temp_path temp_file
-  [ -e "${temp_file}" ]
-  _make_temp_path_cleanup
-  [ ! -e "${temp_file}" ]
+  ( # Test B
+    make_temp_path temp_file
+    [ -e "${temp_file}" ]
+    _make_temp_path_cleanup
+    [ ! -e "${temp_file}" ]
+  )
+
+  ( # Test C
+    subshell_make_temp_test
+    DIR_TOOLS_KEEP_TEMP_PATHS=1
+    [ "${#_VSI_TEMP_PATHS[@]}" = 2 ]
+  )
+
+  # All three should exist
+  [ -d "$(cat "${TESTDIR}/dir1")" ]
+  [ -d "$(cat "${TESTDIR}/dir2")" ]
+  [ -d "$(cat "${TESTDIR}/dir3")" ]
+
+  ( # Test D
+    DIR_TOOLS_KEEP_TEMP_PATHS=1
+    subshell_make_temp_test
+    [ "${#_VSI_TEMP_PATHS[@]}" = "0" ]
+    unset DIR_TOOLS_KEEP_TEMP_PATHS
+  )
+
+  # All three should still exist
+  [ -d "$(cat "${TESTDIR}/dir1")" ]
+  [ -d "$(cat "${TESTDIR}/dir2")" ]
+  [ -d "$(cat "${TESTDIR}/dir3")" ]
 )
 end_test
 
