@@ -127,6 +127,7 @@ nitpick_ignore = [
     ('py:class', 're.Pattern'),
     ('py:obj', 'BasicDecorator'), # Using decorator currently blocks sphinx
     ('py:class', 'IPython.terminal.debugger.'), # Decorator screws things up
+    ('py:class', 'HANDLE') # Represents win32 HANDLE
 ]
 
 # -- Options for HTML output -------------------------------------------------

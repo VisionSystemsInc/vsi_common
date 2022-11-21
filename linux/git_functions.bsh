@@ -433,7 +433,11 @@ function git_project_root_dir()
       git_project_root_dir
     popd &> /dev/null
   else
-    echo "${toplevel}"
+    if [ "${OS-}" = "Windows_NT" ]; then
+      cygpath "${toplevel}"
+    else
+      echo "${toplevel}"
+    fi
   fi
 }
 
@@ -472,7 +476,11 @@ function git_project_git_dir()
       if [ "${dir}" == "." ]; then
         echo "${PWD}"
       else
-        echo "${dir}"
+        if [ "${OS-}" = "Windows_NT" ]; then
+          cygpath "${dir}"
+        else
+          echo "${dir}"
+        fi
       fi
       return 0
     fi
@@ -492,8 +500,13 @@ function git_project_git_dir()
     # The git directory is separate (this is also how submodules work, but
     # we are not in a submodule here)
     if [ -f ".git" ]; then
-      echo "$(real_path "$(sed 's|^[^ ]* ||' .git)")"
+      dir="$(real_path "$(sed 's|^[^ ]* ||' .git)")"
       # alternatively, git rev-parse --git-dir
+      if [ "${OS-}" = "Windows_NT" ]; then
+        cygpath "${dir}"
+      else
+        echo "${dir}"
+      fi
     elif [ -d ".git" ]; then
       echo "${PWD}/.git"
     else
@@ -787,7 +800,13 @@ function git_submodule_urls()
     # (e.g., .git/modules/docker/recipes/config)
     # REVIEW Should i unset GIT_DIR?
     "${GIT}" submodule foreach --quiet ${recursive_flag[@]+"${recursive_flag[@]}"} \
-        "export GIT; bash -euc 'echo \"\$("${GIT}" config --get remote."${remote_name}".url)\"'"
+        "export GIT; bash -euc '
+        if [ \"${OS-}\" = \"Windows_NT\" ]; then
+          cygpath \"\$("${GIT}" config --get remote."${remote_name}".url)\"
+        else
+          echo \"\$("${GIT}" config --get remote."${remote_name}".url)\"
+        fi
+        '"
   popd &> /dev/null
   #
   # Alternatively, the repository's configuration can be queried for the
@@ -934,7 +953,12 @@ function git_submodule_toplevels()
   # git submodule foreach must be run from the top-level working tree in
   # git v1.8.3
   pushd "$("${GIT}" rev-parse --show-cdup)" &> /dev/null
-    "${GIT}" submodule foreach --quiet ${recursive_flag[@]+"${recursive_flag[@]}"} 'echo "${toplevel}"'
+    "${GIT}" submodule foreach --quiet ${recursive_flag[@]+"${recursive_flag[@]}"} \
+      'if [ "${OS-}" = "Windows_NT" ]; then
+         cygpath "${toplevel}"
+       else
+         echo "${toplevel}"
+       fi'
   popd &> /dev/null
 }
 
@@ -961,6 +985,7 @@ function submodule-helper-relative-url()
   local remote_url="${1}"
   local gitmodules_url="${2}"
   local up_path="${3-}" # If set, guaranteed by git to have a trailing slash
+  local dir
 
   # Replace ../../ with subdir/subdir/
   local sm_path="${up_path//..\//subdir/}submod"
@@ -1010,12 +1035,18 @@ function submodule-helper-relative-url()
 
     if [ -n "${up_path}" ]; then
       pushd "${sm_path}" 1> /dev/null
-        "${GIT}" config --get remote.origin.url
+        dir="$("${GIT}" config --get remote.origin.url)"
       popd 1> /dev/null
     else
-      "${GIT}" config --get submodule.submod.url
+      dir="$("${GIT}" config --get submodule.submod.url)"
     fi
   popd 1>/dev/null
+
+  if [ "${OS-}" = "Windows_NT" ]; then
+    cygpath "${dir}"
+  else
+    echo "${dir}"
+  fi
 }
 
 # REVIEW Perhaps the following functions, git_submodule_sync[_recursive] and
