@@ -44,6 +44,8 @@ def main(args=[]):
     # Attempt to discover cuda runtime
     common_dirs = glob('/usr/local/cuda*') + glob('/usr/cuda*') + ['/usr'] \
                   + [os.path.dirname(__file__)]
+    if os.environ.get('LD_LIBRARY_PATH'):
+      common_dirs += os.environ['LD_LIBRARY_PATH'].split(os.pathsep)
     cudart = find_cudart(common_dirs)
 
   if not cudart:
