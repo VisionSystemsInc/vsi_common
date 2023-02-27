@@ -234,6 +234,8 @@ function device_query_cuda_capability()
 #**
 # .. function:: nvidia_smi_cuda_capability
 #
+# Starting at NVIDIA Driver version >500, ``nvidia-smi`` provides the ``compute_cap`` query property. This function can be used to parse that.
+#
 # :Output: * :var:`cuda_info.bsh CUDA_CARD_FAMILIES`
 #          * :var:`cuda_info.bsh CUDA_CARD_ARCHES`
 #          * :var:`cuda_info.bsh CUDA_CARDS`
@@ -364,14 +366,18 @@ function discover_cuda_info()
 
   CUDA_CARD_FAMILIES=()
 
+  # Attempt to use ``nvidia-smi --query-gpus=compute_cap ...``
+  if nvidia_smi_cuda_capability &> /dev/null; then
+    :
   # Attempt to use deviceQuery
-  if command -v "${DEVICE_QUERY-deviceQuery}" &> /dev/null && device_query_cuda_capability; then
+  elif command -v "${DEVICE_QUERY-deviceQuery}" &> /dev/null && device_query_cuda_capability; then
     :
   # Else attempt to use the nvidia-docker daemon
   elif __nvidia_docker_is_running nvidia-docker-plugin || declare -p NV_HOST &> /dev/null; then
     nvidia_docker_plugin_cuda_capability
   else
-    echo "deviceQuery not found and nvidia-docker v1 plugin not running"
+    echo "nvidia-smi not available or does not have 'compute_cap' query, "
+    echo "deviceQuery not found, and nvidia-docker v1 plugin not running."
     echo "deviceQuery can be downloaded from https://www.vsi-ri.com/bin/deviceQuery"
     echo "or https://goo.gl/equvX3"
     echo "(Use https://www.vsi-ri.com/bin/deviceQuery.exe for Windows)"
