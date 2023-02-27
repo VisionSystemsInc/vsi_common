@@ -232,6 +232,54 @@ function device_query_cuda_capability()
 }
 
 #**
+# .. function:: nvidia_smi_cuda_capability
+#
+# :Output: * :var:`cuda_info.bsh CUDA_CARD_FAMILIES`
+#          * :var:`cuda_info.bsh CUDA_CARD_ARCHES`
+#          * :var:`cuda_info.bsh CUDA_CARDS`
+#
+# :Parameters: * ``NVIDIA_SMI`` - Optional path to a specific ``nvidia-smi``. Default: ``nvidia-smi`` (using the system path)
+#
+# :Return Value: * ``0`` - No errors
+#                * Non-zero - If the output of ``nvidia-smi`` does not contain any CUDA cards, then something likely failed.
+#**
+function nvidia_smi_cuda_capability()
+{
+  local card_info
+  card_info="$(${NVIDIA_SMI-nvidia-smi} --query-gpu=gpu_name,compute_cap --format=csv,noheader)" || return ${?}
+
+  local IFS=$'\n'
+  CUDA_CARDS=( $(echo "${card_info}" | \awk -F', ' '{print $1}') )
+
+  # remove dots from nvidia-smi architectures (e.g., "7.5"->"75")
+  CUDA_CARD_ARCHES=( $(echo "${card_info}" | \awk -F', ' '{print $2}' | \sed 's/\.//g') )
+  cuda_arch_to_cuda_family
+}
+
+#**
+# .. function:: wmic_cuda_capability
+#
+# :Output: * :var:`cuda_info.bsh CUDA_CARDS`
+#
+# :Parameters: * ``WMIC`` - Optional path to a specific ``wmic``. Default: ``wmic.exe`` (using the system path)
+#
+# :Return Value: * ``0`` - No errors
+#                * Non-zero - If the output of ``wmic.exe`` does not contain any CUDA cards, then something likely failed.
+#**
+function wmic_cuda_capability()
+{
+  local card_info
+  card_info="$(${WMIC-wmic.exe} PATH win32_VideoController GET AdapterCompatibility,Name /format:csv)"  || return ${?}
+
+  # replace all /r with /n
+  card_info=$(echo "${card_info}" | sed 's/\r/\n/g')
+
+  # line format is "Node,AdapterCompatibility,Name", e.g., "DUMMY,NVIDIA,NVIDIA GeForce GTX 1650 Ti"
+  local IFS=$'\n'
+  CUDA_CARDS=( $(echo "${card_info}" | \awk -F',' '$2=="NVIDIA" {print $3}') )
+}
+
+#**
 # .. function:: nvidia_docker_plugin_cuda_capability
 #
 # The deprecated nvidia-docker v1 API actually hosted GPU information, which was useful for determining the CUDA Arches. This is rarely used now.

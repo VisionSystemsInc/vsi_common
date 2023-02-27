@@ -151,6 +151,12 @@ nvidia_smi_new='Wed Mar 17 19:10:41 2021
 |                               |                      |                  N/A |
 +-------------------------------+----------------------+----------------------+'
 
+# ``nvidia-smi --query-gpu=gpu_name,compute_cap --format=csv,noheader``
+nvidia_smi_query_string=$'TITAN X (Pascal), 6.1\nTITAN X (Pascal), 6.1\nNVIDIA GeForce GTX 1650 Ti, 7.5'
+
+# ``wmic.exe PATH win32_VideoController GET AdapterCompatibility,Name /format:csv``
+wmic_query_string=$'\r\r\nNode,AdapterCompatibility,Name\r\r\DUMMY,Intel Corporation,Intel(R) UHD Graphics\r\r\DUMMY,NVIDIA,NVIDIA GeForce GTX 1650 Ti\r\r'
+
 nvidia_docker_gpu_info='
 Driver version:          455.28
 Supported CUDA version:  11.1
@@ -376,6 +382,39 @@ begin_test "Use deviceQuery to get cuda version"
 
   assert_array_values CUDA_CARD_ARCHES 61 61 30
   assert_array_values CUDA_CARDS "TITAN X (Pascal)" "TITAN X (Pascal)" "Quadro K600"
+)
+end_test
+
+begin_test "Use nvidia-smi to get cuda capabilities"
+(
+  setup_test
+
+  function nvidia-smi() { return 1; }
+  not nvidia_smi_cuda_capability
+
+  function nvidia-smi2()
+  {
+    echo "${nvidia_smi_query_string}"
+  }
+  NVIDIA_SMI=nvidia-smi2 nvidia_smi_cuda_capability
+  assert_array_values CUDA_CARD_ARCHES 61 61 75
+  assert_array_values CUDA_CARDS "TITAN X (Pascal)" "TITAN X (Pascal)" "NVIDIA GeForce GTX 1650 Ti"
+)
+end_test
+
+begin_test "Use wmic to get cuda capabilities"
+(
+  setup_test
+
+  function wmic.exe() { return 1; }
+  not wmic_cuda_capability
+
+  function wmic2()
+  {
+    echo "${wmic_query_string}"
+  }
+  WMIC=wmic2 wmic_cuda_capability
+  assert_array_values CUDA_CARDS "NVIDIA GeForce GTX 1650 Ti"
 )
 end_test
 
