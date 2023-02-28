@@ -43,6 +43,18 @@ function envi()
   echo $'\n'"      - ${1}"
 }
 
+function nvidia()
+{
+  echo $'\n'"    deploy:"
+  echo "      resources:"
+  echo "        reservations:"
+  echo "          devices:"
+  echo "            - capabilities: [gpu]"
+  echo "              driver: \"nvidia\""
+  echo "              device_ids:"
+  echo "              - \"${1// /, }\""
+}
+
 begin_test "Docker compose override variable substitution"
 (
   setup_test
@@ -207,6 +219,29 @@ begin_test "Just docker compose dynamic environment"
 )
 end_test
 
+begin_test "Just docker compose dynamic nvidia"
+(
+  setup_test
+
+  # Basic test
+  ans="$(head)$(service test1)"
+  override="$(generate_docker_compose_override TEST test1)"
+  assert_str_eq "${override}" "${ans}"
+
+  # TEST_NVIDIA_INDICES
+  indices="0 1 2 3"
+  ans+=$(nvidia "${indices}")
+  override="$(TEST_NVIDIA_INDICES="${indices}" \
+              generate_docker_compose_override TEST test1)"
+  assert_str_eq "${override}" "${ans}"
+
+  # Ignores non-project variables
+  override="$(TEST_NVIDIA_INDICES="${indices}" TEST2_NVIDIA_INDICES="0 1" \
+              generate_docker_compose_override TEST test1)"
+  assert_str_eq "${override}" "${ans}"
+)
+end_test
+
 linux_nfs="\
 Filesystem                       1K-blocks        Used   Available Use% Mounted on
 filetodata-2:/volume1/projects 23320723712 22239875584  1080729344  96%"
@@ -233,6 +268,7 @@ begin_test "Generate docker-compose override"
   TEST_VOLUMES+=("vol1:/test1")
   TEST_VOLUMES+=("vol2:/test2")
   TEST_VOLUMES+=("vol3:/test3:ro")
+  TEST_NVIDIA_INDICES="0 1 2 3"
 
   override="$(generate_docker_compose_override TEST test1)"
 
@@ -251,6 +287,7 @@ begin_test "Generate docker-compose override"
   if [ "${OS-}" = "Windows_NT" ]; then
     ans+="$(envi "JUST_HOST_WINDOWS=1")"
   fi
+  ans+="$(nvidia "${TEST_NVIDIA_INDICES}")"
   ans+=$'\nvolumes:'
   ans+=$'\n  vol1:'
   ans+=$'\n  vol2:'
@@ -289,6 +326,7 @@ begin_test "Generate docker-compose override on nfs"
   TEST_VOLUMES+=("${TESTDIR}/a/c:/this is  a   test")
   TEST_VOLUMES+=("${TESTDIR}/a/d:/this is  a   test/subdir")
   TEST_VOLUMES+=("${TESTDIR}/b/a:/foo/bar")
+  TEST_NVIDIA_INDICES="0 1 2 3"
 
   override="$(generate_docker_compose_override TEST test1)"
 
@@ -311,6 +349,7 @@ begin_test "Generate docker-compose override on nfs"
   if [ "${OS-}" = "Windows_NT" ]; then
     ans+="$(envi "JUST_HOST_WINDOWS=1")"
   fi
+  ans+="$(nvidia "${TEST_NVIDIA_INDICES}")"
 
   assert_str_eq "${override}" "${ans}"
 )
