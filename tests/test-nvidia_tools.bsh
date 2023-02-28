@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+
+if [ -z "${VSI_COMMON_DIR+set}" ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
+
+source "${VSI_COMMON_DIR}/tests/testlib.bsh"
+source "${TESTLIB_DIR}/test_utils.bsh"
+source "${VSI_COMMON_DIR}/linux/nvidia_tools.bsh"
+
+# ``nvidia-smi --list-gpus``
+nvidia_smi_list_gpus_string='GPU 0: Tesla V100-PCIE-32GB (UUID: GPU-12345678-1234-1234-1234-123456789012)
+GPU 1: Tesla V100-PCIE-32GB (UUID: GPU-12345678-1234-1234-1234-123456789012)
+GPU 2: Tesla V100-PCIE-32GB (UUID: GPU-12345678-1234-1234-1234-123456789012)
+GPU 3: Tesla V100-PCIE-32GB (UUID: GPU-12345678-1234-1234-1234-123456789012)'
+
+# CUDA_CARDS result
+cuda_cards_array=('Tesla V100-PCIE-32GB' 'Tesla V100-PCIE-32GB')
+
+
+begin_test "Get GPU count"
+(
+  setup_test
+
+  # test nvidia-smi failure
+  function nvidia-smi() { return 1; }
+  not nvidia_count
+
+  # mock nvidia-smi
+  function nvidia-smi2()
+  {
+    echo "${nvidia_smi_list_gpus_string}"
+  }
+  result=$(NVIDIA_SMI=nvidia-smi2 nvidia_count)
+  [ "${result}" == "4" ]
+
+  # test with CUDA_CARDS
+  CUDA_CARDS=( "${cuda_cards_array[@]}" )
+  result=$(nvidia_count)
+  [ "${result}" == "2" ]
+)
+end_test
+
+
+begin_test "Get GPU indices"
+(
+  setup_test
+
+  # test nvidia-smi failure
+  function nvidia-smi() { return 1; }
+  not nvidia_device_indices
+
+  # mock nvidia-smi
+  function nvidia-smi2()
+  {
+    echo "${nvidia_smi_list_gpus_string}"
+  }
+  result=$(NVIDIA_SMI=nvidia-smi2 nvidia_device_indices)
+  [ "${result}" == "0 1 2 3" ]
+
+  # test with CUDA_CARDS
+  CUDA_CARDS=( "${cuda_cards_array[@]}" )
+  result=$(nvidia_device_indices)
+  [ "${result}" == "0 1" ]
+)
+end_test
