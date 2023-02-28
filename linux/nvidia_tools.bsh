@@ -1,0 +1,71 @@
+#!/usr/bin/env false bash
+
+if [[ ${-} != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
+if [ -z "${VSI_COMMON_DIR+set}" ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
+
+source "${VSI_COMMON_DIR}/linux/web_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/compat.bsh"
+source "${VSI_COMMON_DIR}/linux/aliases.bsh"
+source "${VSI_COMMON_DIR}/linux/versions.bsh"
+
+#*# linux/cuda_info
+
+#**
+# ============
+# NVIDIA TOOLS
+# ============
+#
+# .. default-domain:: bash
+#
+# .. file:: nvidia_tools.bsh
+#
+# Tools that deal with NVIDIA functionality.
+#**
+
+#**
+# .. function:: nvidia_count
+#
+# Count number of available NVIDIA GPUs
+#
+# :Output: *stdout* - echo number of NVIDIA GPUs
+#**
+function nvidia_count()
+{
+  local _count
+
+  # count CUDA_CARDS, suggesting the user has already run discovery functions from ``cuda_info.bsh``
+  if [ -n ""${CUDA_CARDS[@]+set} ] && [ "${#CUDA_CARDS[@]}" -gt "0" ]; then
+    echo "${#CUDA_CARDS[@]}"
+
+  # count ``nvidia-smi --list-gpus``
+  elif command -v "${NVIDIA_SMI-nvidia-smi}" &> /dev/null; then
+    local _gpus
+    _gpus="$(${NVIDIA_SMI-nvidia-smi} --list-gpus)" || return ${?}
+    echo "$(echo "${_gpus}" | wc -l)"
+
+  # report zero GPUs
+  else
+    echo "0"
+  fi
+}
+
+#**
+# .. function:: nvidia_device_indices
+#
+#  NVIDIA GPU device indices, ranging from zero to the device count
+#
+# :Output: *stdout* - echo space-delimited set of device indices
+#**
+function nvidia_device_indices()
+{
+  local _count
+  _count=$(nvidia_count) || return ${?}
+
+  local _indices=($( seq 0 $(($_count-1)) ))
+  echo "${_indices[*]}"
+}
