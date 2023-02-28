@@ -132,6 +132,16 @@ function _env_echo()
 #       * ``${1}_.*_DOCKER`` is copied exactly as is
 #       * ``${1}_.*`` is copied exactly as is if it exists
 #
+# * NVIDIA GPU features:
+#
+#   * NVIDIA GPU support can be added to the services listed in ``$2``...
+#
+#     * GPU support in docker-compose is specified in https://docs.docker.com/compose/gpu-support/
+#     * GPUs are identified via ``${1}_NVIDIA_DEVICE_INDICES``, a space-delimited string of GPU indices
+#     * GPU index ordering is as reported by ``nvidia-smi --list-gpus``
+#     * An empty or unset ``${1}_NVIDIA_DEVICE_INDICES`` results in no GPU support
+#     * Default indices can be obtained using :func:`nvidia_tools.bsh nvidia_device_indices`
+#
 # .. var:: COMPOSE_VERSION
 #
 #   :Default: ``3.2``
@@ -199,6 +209,10 @@ function generate_docker_compose_override()
   local enumerated_volumes
   local -i i=1
 
+  # nvidia gpu
+  local nvidia_name
+  local nvidia_indices
+
   # misc
   local host_mount_point
   local volume_host
@@ -249,6 +263,10 @@ function generate_docker_compose_override()
   # Indirect fun
   volumes_name_all="${JUST_PROJECT_PREFIX}_VOLUMES"
   indirect_all="${volumes_name_all}[@]"
+
+  # parse GPU info
+  nvidia_name="${JUST_PROJECT_PREFIX}_NVIDIA_DEVICE_INDICES"
+  nvidia_indices="${!nvidia_name-}"
 
   echo "version: '${COMPOSE_VERSION-3.2}'"
   echo "services:"
@@ -392,6 +410,20 @@ function generate_docker_compose_override()
     fi
 
     container_environment_override _env_echo
+
+    # GPU indices
+    # https://docs.docker.com/compose/gpu-support/
+    if [ -n "${nvidia_indices:+set}" ]; then
+      echo "    deploy:"
+      echo "      resources:"
+      echo "        reservations:"
+      echo "          devices:"
+      echo "            - capabilities: [gpu]"
+      echo "              driver: \"nvidia\""
+      echo "              device_ids:"
+      echo "              - \"${nvidia_indices// /, }\""
+    fi
+
   done
 
   ###################
