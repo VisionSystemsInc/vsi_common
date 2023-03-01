@@ -137,10 +137,16 @@ function _env_echo()
 #   * NVIDIA GPU support can be added to the services listed in ``$2``...
 #
 #     * GPU support in docker-compose is specified in https://docs.docker.com/compose/gpu-support/
-#     * GPUs are identified via ``${1}_NVIDIA_DEVICE_INDICES``, a space-delimited string of GPU indices
-#     * GPU index ordering is as reported by ``nvidia-smi --list-gpus``
-#     * An empty or unset ``${1}_NVIDIA_DEVICE_INDICES`` results in no GPU support
-#     * Default indices can be obtained using :func:`nvidia_tools.bsh nvidia_device_indices`
+#     * ``${1}_NVIDIA_VISIBLE_DEVICES`` a space or comma delimited string controls which GPUs are mounted into the container
+#
+#       * GPU index ordering is as reported by ``nvidia-smi --list-gpus``
+#       * An empty or unset ``${1}_NVIDIA_VISIBLE_DEVICES`` results in no GPU support
+#       * A list of available indices can be obtained using :func:`nvidia_tools.bsh nvidia_device_indices`
+#
+#     * ``${1}_NVIDIA_DRIVER_CAPABILITIES`` a space or comma delimited string controls which driver libraries/binaries will be mounted inside the container
+#
+#       * Driver capabilities default to ``gpu`` as per the docker-compose specification
+#       * https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/user-guide.html#driver-capabilities
 #
 # .. var:: COMPOSE_VERSION
 #
@@ -210,8 +216,10 @@ function generate_docker_compose_override()
   local -i i=1
 
   # nvidia gpu
-  local nvidia_name
-  local nvidia_indices
+  local nvidia_devices_name
+  local nvidia_devices
+  local nvidia_capabilities_name
+  local nvidia_capabilities
 
   # misc
   local host_mount_point
@@ -265,8 +273,10 @@ function generate_docker_compose_override()
   indirect_all="${volumes_name_all}[@]"
 
   # parse GPU info
-  nvidia_name="${JUST_PROJECT_PREFIX}_NVIDIA_DEVICE_INDICES"
-  nvidia_indices="${!nvidia_name-}"
+  nvidia_devices_name="${JUST_PROJECT_PREFIX}_NVIDIA_VISIBLE_DEVICES"
+  nvidia_devices="${!nvidia_devices_name-}"
+  nvidia_capabilities_name="${JUST_PROJECT_PREFIX}_NVIDIA_DRIVER_CAPABILITIES"
+  nvidia_capabilities="${!nvidia_capabilities_name:-gpu}"
 
   echo "version: '${COMPOSE_VERSION-3.2}'"
   echo "services:"
@@ -411,17 +421,16 @@ function generate_docker_compose_override()
 
     container_environment_override _env_echo
 
-    # GPU indices
+    # Add NVIDIA GPU devices
     # https://docs.docker.com/compose/gpu-support/
-    if [ -n "${nvidia_indices:+set}" ]; then
+    if [ -n "${nvidia_devices:+set}" ]; then
       echo "    deploy:"
       echo "      resources:"
       echo "        reservations:"
       echo "          devices:"
-      echo "            - capabilities: [gpu]"
-      echo "              driver: \"nvidia\""
-      echo "              device_ids:"
-      echo "              - \"${nvidia_indices// /, }\""
+      echo "            - driver: nvidia"
+      echo "              capabilities: [${nvidia_capabilities// /,}]"
+      echo "              device_ids: [\"${nvidia_devices// /,}\"]"
     fi
 
   done
