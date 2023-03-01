@@ -49,10 +49,9 @@ function nvidia()
   echo "      resources:"
   echo "        reservations:"
   echo "          devices:"
-  echo "            - capabilities: [gpu]"
-  echo "              driver: \"nvidia\""
-  echo "              device_ids:"
-  echo "              - \"${1// /, }\""
+  echo "            - driver: nvidia"
+  echo "              capabilities: [${2// /,}]"
+  echo "              device_ids: [\"${1// /,}\"]"
 }
 
 begin_test "Docker compose override variable substitution"
@@ -228,16 +227,20 @@ begin_test "Just docker compose dynamic nvidia"
   override="$(generate_docker_compose_override TEST test1)"
   assert_str_eq "${override}" "${ans}"
 
-  # TEST_NVIDIA_DEVICE_INDICES
+  # *_NVIDIA_VISIBLE_DEVICES & *_NVIDIA_DRIVER_CAPABILITIES
   indices="0 1 2 3"
-  ans+=$(nvidia "${indices}")
-  override="$(TEST_NVIDIA_DEVICE_INDICES="${indices}" \
+  capabilities="compute utility"
+  ans+=$(nvidia "${indices}" "${capabilities}")
+  override="$(TEST_NVIDIA_VISIBLE_DEVICES="${indices}" \
+              TEST_NVIDIA_DRIVER_CAPABILITIES="${capabilities}" \
               generate_docker_compose_override TEST test1)"
   assert_str_eq "${override}" "${ans}"
 
   # Ignores non-project variables
-  override="$(TEST_NVIDIA_DEVICE_INDICES="${indices}" \
-              TEST2_NVIDIA_DEVICE_INDICES="0 1" \
+  override="$(TEST_NVIDIA_VISIBLE_DEVICES="${indices}" \
+              TEST_NVIDIA_DRIVER_CAPABILITIES="${capabilities}" \
+              TEST2_NVIDIA_VISIBLE_DEVICES="0 1" \
+              TEST2_NVIDIA_DRIVER_CAPABILITIES="gpu" \
               generate_docker_compose_override TEST test1)"
   assert_str_eq "${override}" "${ans}"
 )
@@ -269,7 +272,8 @@ begin_test "Generate docker-compose override"
   TEST_VOLUMES+=("vol1:/test1")
   TEST_VOLUMES+=("vol2:/test2")
   TEST_VOLUMES+=("vol3:/test3:ro")
-  TEST_NVIDIA_DEVICE_INDICES="0 1 2 3"
+  TEST_NVIDIA_VISIBLE_DEVICES="0 1 2 3"
+  TEST_NVIDIA_DRIVER_CAPABILITIES="compute utility"
 
   override="$(generate_docker_compose_override TEST test1)"
 
@@ -288,7 +292,8 @@ begin_test "Generate docker-compose override"
   if [ "${OS-}" = "Windows_NT" ]; then
     ans+="$(envi "JUST_HOST_WINDOWS=1")"
   fi
-  ans+="$(nvidia "${TEST_NVIDIA_DEVICE_INDICES}")"
+  ans+="$(nvidia "${TEST_NVIDIA_VISIBLE_DEVICES}" \
+                 "${TEST_NVIDIA_DRIVER_CAPABILITIES}")"
   ans+=$'\nvolumes:'
   ans+=$'\n  vol1:'
   ans+=$'\n  vol2:'
@@ -327,7 +332,8 @@ begin_test "Generate docker-compose override on nfs"
   TEST_VOLUMES+=("${TESTDIR}/a/c:/this is  a   test")
   TEST_VOLUMES+=("${TESTDIR}/a/d:/this is  a   test/subdir")
   TEST_VOLUMES+=("${TESTDIR}/b/a:/foo/bar")
-  TEST_NVIDIA_DEVICE_INDICES="0 1 2 3"
+  TEST_NVIDIA_VISIBLE_DEVICES="0 1 2 3"
+  TEST_NVIDIA_DRIVER_CAPABILITIES="compute utility"
 
   override="$(generate_docker_compose_override TEST test1)"
 
@@ -350,7 +356,8 @@ begin_test "Generate docker-compose override on nfs"
   if [ "${OS-}" = "Windows_NT" ]; then
     ans+="$(envi "JUST_HOST_WINDOWS=1")"
   fi
-  ans+="$(nvidia "${TEST_NVIDIA_DEVICE_INDICES}")"
+  ans+="$(nvidia "${TEST_NVIDIA_VISIBLE_DEVICES}" \
+                 "${TEST_NVIDIA_DRIVER_CAPABILITIES}")"
 
   assert_str_eq "${override}" "${ans}"
 )
