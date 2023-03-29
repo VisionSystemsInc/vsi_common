@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+
+set -eu
+
+# function unwrap ()
+# {
+#     sed ':x
+# /\\$/{N; s|\\''\n||; tx
+# }' ${1+"${1}"}
+# }
+
+function isin()
+{
+  local val
+  local x
+
+  val="${1}"
+  shift 1
+  for x in ${@+"${@}"}; do
+    if [ "${x}" == "${val}" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# function ancestry()
+# {
+#   # only works for one liner deps
+#   local requirements=$(unwrap "${1}")
+#   local deps=()
+#   local IFS=$'\n'
+
+#   ancestry_inner "${2}"
+
+#   echo ${deps[@]+"${deps[*]}"}
+# }
+
+# function get_deps()
+# {
+#   # Incomplete
+#   awk -F== '/^ *# via '"${1}"'$/ {print x}; {x=$1}' ${2+"${2}"}
+# }
+
+# function ancestry_inner()
+# {
+#   local new_deps=($(get_deps "${1}" <<< "${requirements}"))
+#   local new_dep
+#   for new_dep in ${new_deps[@]+"${new_deps[@]}"}; do
+#     # prevent circular dependencies from blowing up
+#     if ! isin "${new_dep}" ${deps[@]+"${deps[@]}"}; then
+#       deps+=("${new_dep}")
+#       ancestry_inner "${new_dep}"
+#     fi
+#   done
+# }
+
+function parse-requirements()
+{
+  local line
+  declare -gA dep_graph
+  # I don't know how to deal with empty aarrays
+  dep_graph['-r requirements.in']=PIP_GRAPH_DEP_0
+  local package
+  local is_via_multi=0
+  local package_pattern1='^([^ ]+)==.*$'
+  local package_pattern2='^([^ ]+) @ .*'
+  # local package_pattern='^([^ ]+)==.*$'
+  local editable_pattern='^(-e .+)'
+  local via_1='^ *# via (.+)'
+  local via_header='^ *# via$'
+  local via_multi='^ *#   (.+)'
+  while IFS='' read -r line || [[ -n "${line}" ]]; do
+    if [[ ${line} =~ ${package_pattern1} ]] || [[ ${line} =~ ${package_pattern2} ]]; then
+      package=${BASH_REMATCH[1]}
+      is_via_multi=0
+    elif [[ ${line} =~ ${editable_pattern}  ]]; then
+      # This is wrong, but whatev
+      package=${BASH_REMATCH[1]}
+    elif [[ ${line} =~ ${via_header} ]]; then
+      is_via_multi=1
+    elif [ "${is_via_multi}" == "1" ] && [[ ${line} =~ ${via_multi} ]] || [[ ${line} =~ ${via_1} ]]; then
+      if [ -z "${dep_graph[${BASH_REMATCH[1]}]+set}" ]; then
+        dep_graph["${BASH_REMATCH[1]}"]="PIP_GRAPH_DEP_${#dep_graph[@]}"
+      fi
+      local -n x="${dep_graph[${BASH_REMATCH[1]}]}"
+      x+=("${package}")
+      if [[ ${line} =~ ${via_1} ]]; then
+        is_via_multi=0
+      fi
+    else
+      is_via_multi=0
+    fi
+  done < "${1}"
+}
+
+function pip-graph()
+{
+  local package=${1--r requirements.in}
+  local depth=${2-0}
+  shift 1 || :
+  shift 1 || :
+
+  if [ "${depth}" = "0" ]; then
+    echo "${package}"
+  else
+    printf -- ' %.0s' $(seq 1 $((depth)))
+    if isin "${package}" ${@+"${@}"}; then
+      echo $'\x1b[3m*** Circular *** ⇒ \x1b[0m'"${package}"
+      return
+    else
+      echo "⤷ ${package}"
+    fi
+  fi
+
+  if [ -n "${dep_graph[${package}]+set}" ]; then
+    local -n arr=${dep_graph[${package}]}
+    for x in "${arr[@]}"; do
+      # echo "${@}"
+      pip-graph "${x}" "$((depth+2))" "${package}" ${@+"${@}"}
+    done
+  fi
+}
+
+function pip-deps()
+{
+  local package=${1--r requirements.in}
+
+  if isin "${package}" ${pip_deps_found[@]+"${pip_deps_found[@]}"}; then
+    return
+  fi
+  pip_deps_found=(${pip_deps_found[@]+"${pip_deps_found[@]}"} "${package}")
+
+  if [ -n "${dep_graph[${package}]+set}" ]; then
+    local -n arr=${dep_graph[${package}]}
+    for x in "${arr[@]}"; do
+      pip-deps "${x}" "${package}"
+    done
+  fi
+}
+
+# ancestry "${@}"
+parse-requirements "${1}"
+pip-deps ${2-}
+pip-graph ${2-}
