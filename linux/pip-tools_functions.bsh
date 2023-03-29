@@ -125,16 +125,15 @@ function pip-graph()
 function pip-deps()
 {
   local package=${1--r requirements.in}
-
-  if isin "${package}" ${pip_deps_found[@]+"${pip_deps_found[@]}"}; then
-    return
-  fi
-  pip_deps_found=(${pip_deps_found[@]+"${pip_deps_found[@]}"} "${package}")
+  local original_pip_dep_package=${original_pip_dep_package-${package}}
 
   if [ -n "${dep_graph[${package}]+set}" ]; then
     local -n arr=${dep_graph[${package}]}
     for x in "${arr[@]}"; do
-      pip-deps "${x}" "${package}"
+      if ! isin "${x}" ${pip_deps_found[@]+"${pip_deps_found[@]}"} "${original_pip_dep_package}"; then
+        pip_deps_found=(${pip_deps_found[@]+"${pip_deps_found[@]}"} "${x}")
+        pip-deps "${x}"
+      fi
     done
   fi
 }
@@ -142,4 +141,5 @@ function pip-deps()
 # ancestry "${@}"
 parse-requirements "${1}"
 pip-deps ${2-}
+declare -p pip_deps_found
 pip-graph ${2-}
