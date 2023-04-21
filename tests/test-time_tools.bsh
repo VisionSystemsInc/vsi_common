@@ -5,6 +5,7 @@ if [ -z "${VSI_COMMON_DIR+set}" ]; then
 fi
 
 source "${VSI_COMMON_DIR}/tests/testlib.bsh"
+source "${VSI_COMMON_DIR}/tests/test_utils.bsh"
 source "${VSI_COMMON_DIR}/linux/time_tools.bsh"
 
 if [[ ! $(date +%N) =~ ^[0-9]+$ ]]; then
@@ -103,5 +104,75 @@ begin_test "tic toc"
   [ "${toc_time}" -ge "1" ]
   [ "${toc_time}" -le "2" ]
 
+)
+end_test
+
+begin_test "get timezone"
+(
+  setup_test
+
+  function [ ()
+  {
+    if builtin [ "${1}" = "-L" -a "${2}" = "/etc/localtime" ]; then
+      return $link_not_found
+    fi
+    builtin [ "${@}"
+  }
+
+  function get_posix_timezone()
+  {
+    echo "POSIX"
+  }
+
+  link_not_found=1
+  assert_str_eq "$(get_timezone)" "POSIX"
+
+  function readlink()
+  {
+    echo "${link}"
+  }
+  link_not_found=0
+  link=/usr/share/zoneinfo/America/New_York
+  assert_str_eq "$(get_timezone)" "America/New_York"
+
+  link=/var/db/timezone/zoneinfo/Iran
+  assert_str_eq "$(get_timezone)" "Iran"
+)
+end_test
+
+begin_test "get posix timezone"
+(
+  setup_test
+
+  function date()
+  {
+    if [ "${1-}" = "+%z" ]; then
+      echo "${tz_offset}"
+    elif [ "${1-}" = "+%Z" ]; then
+      echo "${tz_name}"
+    fi
+  }
+
+  tz_offset=-0400
+  tz_name=EDT
+  assert_str_eq "$(get_posix_timezone)" "EDT+04:00"
+
+  tz_offset=-0400
+  tz_name=-0400
+  assert_str_eq "$(get_posix_timezone)" "UNK+04:00"
+
+  tz_offset=+0330
+  tz_name=IRST
+  assert_str_eq "$(get_posix_timezone)" "IRST-03:30"
+
+  tz_offset=0100
+  tz_name=DST
+  assert_str_eq "$(get_posix_timezone)" "DST-01:00"
+
+  function command()
+  {
+    return false
+  }
+  assert_str_eq "$(get_posix_timezone)" "UTC"
 )
 end_test
