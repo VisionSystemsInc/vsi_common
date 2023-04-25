@@ -112,7 +112,7 @@ if [ -d "/.singularity.d" ] || [ ! -f "/.dockerenv" ] || [ "$(id -u)" != "0" ]; 
      command -v awk &> /dev/null && \
      command -v grep &> /dev/null && \
      ldconfig_list=$(ldconfig -p 2>/dev/null); then
-    # Find every library mounted in /.singularity.d/libs without the works cuda, nvidia, or nv.
+    # Find every library mounted in /.singularity.d/libs without the words cuda, nvidia, or nv.
     # These are the problem .so files that should never have been mounted
     library_list=($(mount |  awk '/\.singularity\.d\/libs\// && !($3~/nvidia|nv|cuda/) {
                                     split($3, a, "/");
