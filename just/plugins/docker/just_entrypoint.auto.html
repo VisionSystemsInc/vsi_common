@@ -282,6 +282,34 @@
 
 <span class="k">if</span> <span class="o">[</span> -d <span class="s2">&quot;/.singularity.d&quot;</span> <span class="o">]</span> <span class="o">||</span> <span class="o">[</span> ! -f <span class="s2">&quot;/.dockerenv&quot;</span> <span class="o">]</span> <span class="o">||</span> <span class="o">[</span> <span class="s2">&quot;</span><span class="k">$(</span>id -u<span class="k">)</span><span class="s2">&quot;</span> !<span class="o">=</span> <span class="s2">&quot;0&quot;</span> <span class="o">]</span><span class="p">;</span> <span class="k">then</span>
   <span class="nb">export</span> <span class="nv">ALREADY_RUN_ONCE</span><span class="o">=</span><span class="m">1</span>
+
+  <span class="c1"># Singularity specific fix. In old versions with no --nvccli, we have to use --nv and it&#39;s broken</span>
+  <span class="nv">ld_dirs</span><span class="o">=(</span>/lib /usr/local/lib /usr/lib<span class="o">)</span> <span class="c1"># default from alpine, no 64</span>
+  <span class="k">if</span> <span class="o">[</span> -e <span class="s2">&quot;/etc/ld.so.cache&quot;</span> <span class="o">]</span> <span class="o">&amp;&amp;</span> <span class="se">\</span>
+     <span class="nb">command</span> -v mount <span class="p">&amp;</span>&gt; /dev/null <span class="o">&amp;&amp;</span> <span class="se">\</span>
+     <span class="nb">command</span> -v awk <span class="p">&amp;</span>&gt; /dev/null <span class="o">&amp;&amp;</span> <span class="se">\</span>
+     <span class="nb">command</span> -v grep <span class="p">&amp;</span>&gt; /dev/null <span class="o">&amp;&amp;</span> <span class="se">\</span>
+     <span class="nv">ldconfig_list</span><span class="o">=</span><span class="k">$(</span>ldconfig -p <span class="m">2</span>&gt;/dev/null<span class="k">)</span><span class="p">;</span> <span class="k">then</span>
+    <span class="c1"># Find every library mounted in /.singularity.d/libs without the words cuda, nvidia, or nv.</span>
+    <span class="c1"># These are the problem .so files that should never have been mounted</span>
+    <span class="nv">library_list</span><span class="o">=(</span><span class="k">$(</span>mount <span class="p">|</span>  awk <span class="s1">&#39;/\.singularity\.d\/libs\// &amp;&amp; !($3~/nvidia|nv|cuda/) {</span>
+<span class="s1">                                    split($3, a, &quot;/&quot;);</span>
+<span class="s1">                                    split(a[4], b, &quot;\\.so&quot;);</span>
+<span class="s1">                                    print b[1]}&#39;</span><span class="k">)</span><span class="o">)</span>
+
+    <span class="c1"># Find the directory names of these problem .so files</span>
+    <span class="nv">ld_dirs</span><span class="o">=(</span><span class="k">$(for</span> library <span class="k">in</span> <span class="si">${</span><span class="nv">library_list</span><span class="p">[@]+</span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">library_list</span><span class="p">[@]</span><span class="si">}</span><span class="s2">&quot;</span><span class="si">}</span><span class="p">;</span> <span class="k">do</span>
+                  <span class="nv">libs</span><span class="o">=(</span><span class="k">$(</span><span class="nb">echo</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">ldconfig_list</span><span class="si">}</span><span class="s2">&quot;</span> <span class="p">|</span> awk <span class="s2">&quot;/</span><span class="si">${</span><span class="nv">library</span><span class="si">}</span><span class="s2">\.so/&quot;</span><span class="s1">&#39; { print $NF }&#39;</span><span class="k">))</span>
+                  <span class="k">for</span> lib <span class="k">in</span> <span class="si">${</span><span class="nv">libs</span><span class="p">[@]+</span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">libs</span><span class="p">[@]</span><span class="si">}</span><span class="s2">&quot;</span><span class="si">}</span><span class="p">;</span> <span class="k">do</span>
+                    dirname <span class="s2">&quot;</span><span class="si">${</span><span class="nv">lib</span><span class="si">}</span><span class="s2">&quot;</span>
+                  <span class="k">done</span>
+                <span class="k">done</span> <span class="p">|</span> sort -u<span class="o">))</span>
+  <span class="k">fi</span>
+  <span class="k">if</span> <span class="o">((</span> <span class="si">${#</span><span class="nv">ld_dirs</span><span class="p">[@]</span><span class="si">}</span> <span class="o">))</span><span class="p">;</span> <span class="k">then</span>
+    <span class="c1"># Add these directories to LD_LIBRARY_PATH to override singularity</span>
+    <span class="nv">IFS</span><span class="o">=</span>: remove_element LD_LIBRARY_PATH /.singularity.d/libs
+    <span class="nb">export</span> <span class="nv">LD_LIBRARY_PATH</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">LD_LIBRARY_PATH</span><span class="p">-</span><span class="si">}${</span><span class="nv">LD_LIBRARY_PATH</span><span class="p">:+:</span><span class="si">}</span><span class="k">$(</span><span class="nv">IFS</span><span class="o">=</span>:<span class="p">;</span> <span class="nb">echo</span> <span class="s2">&quot;</span><span class="si">${</span><span class="nv">ld_dirs</span><span class="p">[*]</span><span class="si">}</span><span class="s2">&quot;</span><span class="k">)</span><span class="s2">:/.singularity.d/libs&quot;</span>
+  <span class="k">fi</span>
 <span class="k">fi</span>
 
 <span class="k">function</span> load_just_settings<span class="o">()</span>
