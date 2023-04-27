@@ -104,6 +104,34 @@ fi
 # TODO: what does podman need?
 if [ -d "/.singularity.d" ] || [ ! -f "/.dockerenv" ] || [ "$(id -u)" != "0" ]; then
   export ALREADY_RUN_ONCE=1
+
+  # Singularity specific fix. In old versions with no --nvccli, we have to use --nv and it's broken
+  ld_dirs=(/lib /usr/local/lib /usr/lib) # default from alpine, no 64
+  if [ -e "/etc/ld.so.cache" ] && \
+     command -v mount &> /dev/null && \
+     command -v awk &> /dev/null && \
+     command -v grep &> /dev/null && \
+     ldconfig_list=$(ldconfig -p 2>/dev/null); then
+    # Find every library mounted in /.singularity.d/libs without the words cuda, nvidia, or nv.
+    # These are the problem .so files that should never have been mounted
+    library_list=($(mount |  awk '/\.singularity\.d\/libs\// && !($3~/nvidia|nv|cuda/) {
+                                    split($3, a, "/");
+                                    split(a[4], b, "\\.so");
+                                    print b[1]}'))
+
+    # Find the directory names of these problem .so files
+    ld_dirs=($(for library in ${library_list[@]+"${library_list[@]}"}; do
+                  libs=($(echo "${ldconfig_list}" | awk "/${library}\.so/"' { print $NF }'))
+                  for lib in ${libs[@]+"${libs[@]}"}; do
+                    dirname "${lib}"
+                  done
+                done | sort -u))
+  fi
+  if (( ${#ld_dirs[@]} )); then
+    # Add these directories to LD_LIBRARY_PATH to override singularity
+    IFS=: remove_element LD_LIBRARY_PATH /.singularity.d/libs
+    export LD_LIBRARY_PATH="${LD_LIBRARY_PATH-}${LD_LIBRARY_PATH:+:}$(IFS=:; echo "${ld_dirs[*]}"):/.singularity.d/libs"
+  fi
 fi
 
 function load_just_settings()

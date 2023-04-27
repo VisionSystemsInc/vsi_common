@@ -242,3 +242,94 @@ function toc_ns()
   toc_time="$(($(get_time_nanoseconds)-_time0))"
   echo "${toc_time} ns"
 }
+
+#**
+# .. function:: get_timezone
+#
+# Retrieves the Olson compliant timezone for the system. If this is not easily obtained, a POSIX compliant timezone will be returned instead.
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
+#   $ get_timezone
+#   America/New_York
+#   # Windows
+#   $ get_timezone
+#   EDT+04:00
+#**
+
+function get_timezone()
+{
+  local timezone
+  if [ -n "${TZ:+set}" ]; then
+    timezone="${TZ}"
+  elif [ -L "/etc/localtime" ]; then
+    if [[ ${OSTYPE-} = darwin* ]]; then
+      timezone=$(readlink /etc/localtime)
+    else
+      timezone=$(readlink -f /etc/localtime)
+    fi
+  else
+    timezone=$(get_posix_timezone)
+  fi
+
+  # Olson database location, not needed in the end.
+  # if [[ ${OSTYPE-} = darwin* ]]; then
+  #   local base_dir=/var/db/timezone/zoneinfo
+  # else
+  #   local base_dir=/usr/share/zoneinfo
+  # fi
+
+  # Remove dirs from the timezone: America/New_York is more universal than /usr/share/zoneinfo/America/New_York
+  echo "${timezone#*/zoneinfo/}"
+}
+
+#**
+# .. function:: get_posix_timezone
+#
+# Retrieves a POSIX compliant timezone for the system. This POSIX timezone will not encapsulate daylight saving times change rules, however if the computer is currently in daylight saving time, the offset will be applied.
+#
+# If all the methods to determine the timezone file, it will return ``UTC`` with no ``+/-``
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
+#   $ get_posix_timezone
+#   UTC+00:00
+#   $ get_posix_timezone
+#   EDT+04:00
+#   $ get_posix_timezone
+#   UTC
+#**
+
+function get_posix_timezone()
+{
+  local timezone
+  if command -v date &> /dev/null; then
+    timezone=$(date +%z) # Eg. returns -0400 when I need UNK+04:00
+    local tzname=$(date +%Z)
+    # If the name has +,-, or digit, it's not a name
+    if [[ ${tzname} =~ [0-9+/-] ]]; then
+      tzname=UNK
+    fi
+    if [ "${timezone::1}" = "-" ]; then
+      timezone="${tzname}+${timezone:1:2}:${timezone:3:2}"
+    elif [ "${timezone::1}" = "+" ]; then
+      timezone="${tzname}-${timezone:1:2}:${timezone:3:2}"
+    else
+      timezone="${tzname}-${timezone:0:2}:${timezone:2:2}"
+    fi
+  # Windows python inside of Cygwin gives the wrong timezone by +5, makes no sense
+  # elif command -v python &> /dev/null; then
+  #   timezone=$(python -c 'import time; print("UNK%+03d:%02d" % (int(time.altzone/3600), int(abs(time.altzone)/60) % 60))')
+  # elif command -v perl &> /dev/null; then
+  #   # Determine a UTC offset in perl. UTC+04:00 is apparently UTC - 4...
+  #   timezone=$(perl -MPOSIX -e 'my $tz = (localtime time)[8] * 60 - mktime(gmtime 0) / 60; printf "UNK%+03d:%02d\n", -$tz / 60, abs($tz) % 60;')
+  else
+    # Just give up
+    timezone=UTC
+  fi
+  echo "${timezone}"
+}

@@ -974,6 +974,131 @@ function load_vsi_compat()
 
     return "${__readlink_behavior_nonexistent_path}"
   }
+
+  #**
+  # singularity
+  # ===========
+  # The following variables will help cope with the difference in singularity versions as seamlessly as possible.
+  #
+  # .. function:: singularity_feature_nvccli
+  #
+  # Determines if singularity has the nvccli flag feature. This does not guarantee nvidia-container-cli_path is set in singularity.conf
+  #
+  # :Return Value: * ``0`` - ``singularity`` supports the --nvccli feature
+  #                * ``1`` - ``singularity`` does not support the --nvccli feature
+  #**
+  function singularity_feature_nvccli()
+  {
+    if [ -z "${__singularity_feature_nvccli+set}" ]; then
+      source "${VSI_COMMON_DIR}/linux/requirements.bsh"
+
+      if [ -z "${singularity_version+set}" -o -z "${singularity_vendor+set}" ]; then
+        local singularity_version
+        local singularity_vendor
+        source "${VSI_COMMON_DIR}/linux/versions.bsh"
+        singularity_version_info
+      fi
+
+      __singularity_feature_nvccli=1
+      case "${singularity_vendor}" in
+        apptainer)
+          if meet_requirements "${singularity_version}" '>=1'; then
+            __singularity_feature_nvccli=0
+          fi
+          ;;
+        singularity-ce)
+          if meet_requirements "${singularity_version}" '>=3.9'; then
+            __singularity_feature_nvccli=0
+          fi
+          ;;
+      esac
+    fi
+
+    return "${__singularity_feature_nvccli}"
+  }
+
+  #**
+  # .. function:: singularity_feature_nvccli_wsl2_gpu
+  #
+  # Determines if the singularity ``--nvccli`` flag supports WSL2 GPUs. This does not guarantee ``nvidia-container-cli_path`` is set in ``singularity.conf``
+  #
+  # :Return Value: * ``0`` - ``singularity`` ``--nvccli`` supports WSL2 GPUs
+  #                * ``1`` - ``singularity`` does not support WSL2 GPUS
+  #
+  # .. seealso::
+  #
+  #   :func:`singularity_bug_writable_tmpfs_without_root`:
+  #      While WSL2 GPUs may work, this bug may prevent WSL from running successfully without root
+  #**
+  function singularity_feature_nvccli_wsl2_gpu()
+  {
+    if [ -z "${__singularity_feature_nvccli_wsl2_gpu+set}" ]; then
+      source "${VSI_COMMON_DIR}/linux/requirements.bsh"
+
+      if [ -z "${singularity_version+set}" -o -z "${singularity_vendor+set}" ]; then
+        local singularity_version
+        local singularity_vendor
+        source "${VSI_COMMON_DIR}/linux/versions.bsh"
+        singularity_version_info
+      fi
+
+      __singularity_feature_nvccli_wsl2_gpu=1
+      case "${singularity_vendor}" in
+        # Currently apptainer's --nvccli does not appear to support WSL2
+        # FATAL: container creation failed: /usr/bin not writable in the container
+        apptainer)
+          if meet_requirements "${singularity_version}" '>=1.1.0'; then
+            __singularity_feature_nvccli_wsl2_gpu=0
+          fi
+          ;;
+        singularity-ce)
+          if meet_requirements "${singularity_version}" '>=3.9.7'; then
+            __singularity_feature_nvccli_wsl2_gpu=0
+          fi
+          ;;
+      esac
+    fi
+
+    return "${__singularity_feature_nvccli_wsl2_gpu}"
+  }
+
+  #**
+  # .. function:: singularity_bug_writable_tmpfs_without_root
+  #
+  # In Apptainer 1.1.0, they stared using ``fuse-overlay`` filesystems for non-root users. This introduced a bug that made using ``--writable-tmpfs`` as non-root error out (at least on WSL). This was fixed finally in 1.1.3. Singularity-CE is unaffected by this bug, as they only ever use ``overlay``.
+  #
+  # :Value: * ``0`` Apptainer has the bug
+  #         * ``1`` Singularity works as expected
+  #
+  # .. seealso::
+  #
+  #    `Apptainer bug <https://github.com/apptainer/apptainer/blob/main/CHANGELOG.md#v113---2022-10-25>`_
+  #       Avoid failures with ``--writable-tmpfs`` in non-setuid mode when using fuse-overlayfs versions 1.8 or greater by adding the fuse-overlayfs noacl mount option to disable support for POSIX Access Control Lists.
+  #**
+  function singularity_bug_writable_tmpfs_without_root()
+  {
+    if [ -z "${__singularity_bug_writable_tmpfs_without_root+set}" ]; then
+      source "${VSI_COMMON_DIR}/linux/requirements.bsh"
+      if [ -z "${singularity_version+set}" -o -z "${singularity_vendor+set}" ]; then
+        local singularity_version
+        local singularity_vendor
+        source "${VSI_COMMON_DIR}/linux/versions.bsh"
+        singularity_version_info
+      fi
+
+      __singularity_bug_writable_tmpfs_without_root=1
+      case "${singularity_vendor}" in
+        # FATAL:   container creation failed: mount /var/apptainer/mnt/session/var/tmp->/var/tmp error: while mounting /var/apptainer/mnt/session/var/tmp: could not mount /var/apptainer/mnt/session/var/tmp: operation not supported
+        apptainer)
+          if meet_requirements "${singularity_version}" '>=1.1.0' '<1.1.3'; then
+            __singularity_bug_writable_tmpfs_without_root=0
+          fi
+          ;;
+      esac
+    fi
+
+    return "${__singularity_bug_writable_tmpfs_without_root}"
+  }
 }
 
 # The purpose of this file is to set all these flag. Make it a function to help
