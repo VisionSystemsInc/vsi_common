@@ -3,7 +3,7 @@ FROM vsiri/recipe:tini as tini
 FROM vsiri/recipe:pipenv as pipenv
 FROM vsiri/recipe:vsi as vsi
 
-FROM python:3.7.0
+FROM python:3.10.11
 
 SHELL ["/usr/bin/env", "bash", "-euxvc"]
 
@@ -24,7 +24,8 @@ ADD sphinx.Pipfile sphinx.Pipfile.lock /vsi/docker/vsi_common/
 
 RUN pipenv sync; \
     # Hack for vsi_domain
-    ln -s /vsi/docs/vsi_domains.py "$(pipenv --venv)/lib/python3.7/site-packages/"; \
+    SITE_PACKAGES_DIR="$(find "$(pipenv --venv)" -type d -name 'site-packages' | head -n1)"; \
+    ln -s /vsi/docs/vsi_domains.py "${SITE_PACKAGES_DIR}/"; \
     rm -rf "${PIPENV_PIPFILE}*" /tmp/pip*
 
 COPY --from=tini /usr/local /usr/local
