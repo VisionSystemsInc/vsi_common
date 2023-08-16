@@ -12,7 +12,7 @@ SHELL ["/usr/bin/env", "bash", "-euxvc"]
 #     rm -r /var/lib/apt/lists/*
 
 COPY --from=pipenv /usr/local /usr/local
-RUN for patch in /usr/local/share/just/container_build_patch/*; do "${patch}"; done
+RUN shopt -s nullglob; for patch in /usr/local/share/just/container_build_patch/*; do "${patch}"; done
 
 ENV WORKON_HOME=/venv \
     PIPENV_PIPFILE=/vsi/docker/tests/Pipfile3 \

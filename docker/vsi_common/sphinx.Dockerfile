@@ -16,7 +16,7 @@ ENV WORKON_HOME=/venv \
     JUSTFILE=/vsi/docker/vsi_common/sphinx.Justfile
 
 COPY --from=pipenv /usr/local /usr/local
-RUN for patch in /usr/local/share/just/container_build_patch/*; do "${patch}"; done
+RUN shopt -s nullglob; for patch in /usr/local/share/just/container_build_patch/*; do "${patch}"; done
 
 # I need these Pipfiles before the rest of VSI below. This way the cache is only
 # invalidated by the Pipfiles, not the rest of vsi_common
