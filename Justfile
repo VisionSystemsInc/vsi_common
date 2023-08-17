@@ -236,6 +236,12 @@ function caseify()
         justify test int "${tests[@]}"
       )
       ;;
+    build_recipe-tests) # Build recipes tests
+      pushd "${VSI_COMMON_DIR}/docker/recipes/tests" &> /dev/null
+        Docker buildx bake ${@+"${@}"}
+      popd &> /dev/null
+      extra_args=${#}
+      ;;
     test_recipe) # Run docker recipe tests
       local JUST_IGNORE_EXIT_CODES=123
       TESTLIB_DISCOVERY_DIR="${VSI_COMMON_DIR}/docker/recipes/tests" vsi_test_env "${VSI_COMMON_DIR}/tests/run_tests" ${@+"${@}"}

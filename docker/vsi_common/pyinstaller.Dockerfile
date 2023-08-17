@@ -25,7 +25,7 @@ ENV WORKON_HOME=/venv \
     JUSTFILE=/vsi/docker/vsi_common/pyinstaller.Justfile
 
 COPY --from=pipenv /usr/local /usr/local
-RUN for patch in /usr/local/share/just/container_build_patch/*; do "${patch}"; done
+RUN shopt -s nullglob; for patch in /usr/local/share/just/container_build_patch/*; do "${patch}"; done
 
 ARG PYINSTALLER_VERSION=3.6
 RUN pip3 install pyinstaller=="${PYINSTALLER_VERSION}"
