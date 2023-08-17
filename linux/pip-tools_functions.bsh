@@ -1,0 +1,69 @@
+#!/usr/bin/env false bash
+
+if [[ ${-} != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
+#*# linux/pip-tools_functions
+
+#**
+# .. default-domain:: bash
+#
+# ===================
+# Pip-tools Functions
+# ===================
+#
+# .. file:: pip-tools_functions.bsh
+#
+# Functions for working with pip-tools files
+#**
+
+#**
+# .. function:: remove_pip_requirements_hashes
+#
+# Removes all the hashes from a requirements.txt files
+#
+# ``pip-sync`` and ``pip`` cannot handle partially hashed files. So occasionally we need to manipulate the files to remove the hashes in order to ``pip install`` with the ``-r`` or ``-c`` flag.
+#
+# :Arguments: ``$1`` - requirements.txt filename
+# :Output: ``stdout`` - hashless requirements file
+#
+# .. seealso::
+#4
+#   :func:`???`
+#**
+
+function remove_pip_requirements_hashes()
+{
+  #          # Skip (d) all lines until services: is matched
+  # sed -${sed_flag_rE} \
+  #         '# Remove the hashes
+  #          /^ *--hash/d
+  #          # Remove comments
+  #          /^ *#/d
+  #          # Remove empty lines
+  #          /^$/d
+  #          # Remove the \ at the end of the line
+  #          s|^([^ ]*) \\|\1|' "${1}"
+
+  sed -${sed_flag_rE} \
+    '
+    :combine
+    # These next 5 lines combine lines ending in \ and remove leading spaces on next line
+    /\\$/{
+      # Read and append next line
+      N
+      # If the pattern buffer matches the case pattern, ends in a
+      # \ and the comment continues on the next line, then combine
+      /^ *#? *[ ?*_0-9|a-zA-Z{}-]*\) *#.*\\\n *#/{
+        # Combine the two lines, removing the extra #, replacing it
+        # with a single space
+        s| *\\\n *# *| |
+        t combine
+      }
+      s|\\\n *||''
+      t combine
+    }
+    /^( *#|$)/d
+    ' "${1}"
+}
