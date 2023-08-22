@@ -978,3 +978,67 @@ function discover_cuda_all()
     echo "Could not determine a CUDA version, please set CUDA_VERSION and call again" >&2
   fi
 }
+
+#**
+# .. function:: has_gpu_device
+#
+# Tells you if the computer has any NVIDIA GPUs. This is checking if they physically exist, not if they are currently working or have working drivers. This is usually used to determine if you need to install drivers, not if you have GPUs ready to use.
+#
+# :Return Value: * ``0`` - The machine has an NVIDIA GPU.
+#                * ``1`` - No NVIDIA GPUs were found.
+#
+# .. seealso::
+#   :func:`is_gpu_setup`
+#**
+function has_gpu_device()
+{
+  if [ -n "${WSL_INTEROP+set}" -o "${OS-}" = "Windows_NT" ]; then
+    if [ "$(powershell.exe -NoProfile -InputFormat None '(Get-WMIObject win32_pnpEntity -Filter {PNPClass = "Display" and Manufacturer like "nvidia"} | Measure-Object).Count')" -gt 0 ]; then
+      return 0
+    fi
+  else
+    local dev vendor config
+    # 1. Loop over /sys/bus/pci/devices/*
+    for dev in /sys/bus/pci/devices/*; do
+      # 2. Read vendor, == "0x10de"
+      vendor=$(cat "${dev}/vendor")
+      if [ "${vendor}" = "0x10de" ]; then
+        # 3. Read the 10th and 11th byte of config == 00 03, say "gpu" if it is
+        # Note: This sed expression does not work on BSD (mac) sed, but that won't be an issue here
+        if [ "$(LC_ALL=C sed -nE $'/^.{10}\\x00\\x03/i gpu\nq' "${dev}/config")" == "gpu" ]; then
+        # Awk version of same check: LC_ALL=C awk 'NR=2{ x=substr($0, 11, 2); if ( x == "\x00\x03") {exit 0} else {exit 1} }'
+          return 0
+        fi
+      fi
+    done
+  fi
+  return 1
+}
+
+#**
+# .. function:: has_gpu_device
+#
+# Checks to see if you have any GPUs installed and working.
+#
+# :Return Value: * ``0`` - There is at least one NVIDIA GPU available to use.
+#                * ``1`` - No NVIDIA GPUs were available.
+#
+# - If there is a problem with the NVIDIA drivers resulting in the kernel module not loading, then this check will return false.
+# - If you are in a docker and did not route the GPU in correctly, it will return false.
+#
+# .. seealso::
+#   :func:`has_gpu_device`
+#**
+function is_gpu_setup()
+{
+  if [ "${OS-}" = "Windows_NT" -a -z "${WSL_INTEROP+set}" ]; then
+    # Check on linux
+    if wmic path win32_VideoController get name | grep -qi nvidia; then
+      return 0
+    fi
+  # Check in WSL/WSL docker or linux comptuer
+  elif [ -c "/dev/dxg" ] || compgen -G "/dev/nvidia[0-9]*" &> /dev/null ; then
+    return 0
+  fi
+  return 1
+}
