@@ -282,28 +282,10 @@ begin_test "Test DOCKER_COMPOSE var"
 (
   setup_test
   DRYRUN=echo
-  DOCKER_COMPOSE="DoCkEr-CoMpOsE"
-  [ "$(JUSTFILE="${TESTDIR}/Justfile" Docker-compose run test)" = "DoCkEr-CoMpOsE run --rm test" ]
-)
-end_test
-
-begin_test "docker compose parse volumes old"
-(
-  setup_test
-
-  ans=(-v "/tmp:/mnt" -v "test:/opt")
-  docker-compose-volumes-old nb <<< "${compose_file}"
-  cmp_elements_a DOCKER_VOLUME_FLAGS ans
-
-  ans=()
-  docker-compose-volumes-old foo <<< "${compose_file}"
-  cmp_elements_a DOCKER_VOLUME_FLAGS ans
-
-  docker-compose-volumes-old bar <<< "${compose_file}"
-  cmp_elements_a DOCKER_VOLUME_FLAGS ans
-
-  docker-compose-volumes-old none <<< "${compose_file}"
-  cmp_elements_a DOCKER_VOLUME_FLAGS ans
+  DOCKER_COMPOSE="DoCkErCoMpOsE"
+  [ "$(JUSTFILE="${TESTDIR}/Justfile" Docker-compose run test)" = "DoCkErCoMpOsE run --rm test" ]
+  DOCKER_COMPOSE=("DoCkEr" "CoMpOsE")
+  [ "$(JUSTFILE="${TESTDIR}/Justfile" Docker-compose run test)" = "DoCkEr CoMpOsE run --rm test" ]
 )
 end_test
 
@@ -316,7 +298,7 @@ begin_test "parse docker compose volumes"
        "Stest:/opt"
        "Lsource: internal" "ltarget: /src" "ltype: volume"
        "Ltarget: /tmp2" "ltype: tmpfs")
-  parse-docker-compose-volumes nb <<< "${compose_file_long}"
+  parse_docker_compose_volumes nb <<< "${compose_file_long}"
   cmp_elements_a DOCKER_VOLUME_LINES ans
 
   ans=("S/tmp:/mnt"
@@ -324,17 +306,17 @@ begin_test "parse docker compose volumes"
        "Stest_prefix_test:/opt"
        "Lsource: test_prefix_internal" "ltarget: /src" "ltype: volume"
        "Ltarget: /tmp2" "ltype: tmpfs")
-  parse-docker-compose-volumes nb test_prefix_ <<< "${compose_file_long}"
+  parse_docker_compose_volumes nb test_prefix_ <<< "${compose_file_long}"
   cmp_elements_a DOCKER_VOLUME_LINES ans
 
   ans=()
-  parse-docker-compose-volumes foo <<< "${compose_file_long}"
+  parse_docker_compose_volumes foo <<< "${compose_file_long}"
   cmp_elements_a DOCKER_VOLUME_LINES ans
 
-  parse-docker-compose-volumes bar <<< "${compose_file_long}"
+  parse_docker_compose_volumes bar <<< "${compose_file_long}"
   cmp_elements_a DOCKER_VOLUME_LINES ans
 
-  parse-docker-compose-volumes none <<< "${compose_file_long}"
+  parse_docker_compose_volumes none <<< "${compose_file_long}"
   cmp_elements_a DOCKER_VOLUME_LINES ans
 )
 end_test
@@ -348,7 +330,7 @@ begin_test "docker compose volumes"
        "Stest:/opt"
        "Lsource: internal" "ltarget: /src" "ltype: volume"
        "Ltarget: /tmp2" "ltype: tmpfs")
-  docker-compose-volumes
+  docker_compose_volumes
   sources=("/tmp" "/home/user/src" "test" "internal" "")
   targets=("/mnt" "/src" "/opt" "/src" "/tmp2")
   flags=("" "" "" "" "")
@@ -365,7 +347,7 @@ begin_test "docker compose volumes"
                          "ltype: volume"
                          "lvolume:"
                          "l  nocopy: true")
-  docker-compose-volumes
+  docker_compose_volumes
   sources=("/test1" "test3" "internal")
   targets=("/test2" "/test4" "/src")
   flags=(":ro" ":Z" $'volume:\n  nocopy: true')
@@ -374,7 +356,7 @@ begin_test "docker compose volumes"
   cmp_elements_a DOCKER_VOLUME_FLAGS flags
 
   DOCKER_VOLUME_LINES+=("S/test5:/test6:rw")
-  docker-compose-volumes
+  docker_compose_volumes
   sources+=("/test5")
   targets+=("/test6")
   flags+=(":rw")
@@ -400,7 +382,7 @@ begin_test "docker compose volumes with missing fields"
 
   DOCKER_VOLUME_LINES=("${DOCKER_VOLUME_LINES_ORIG[@]}")
   unset DOCKER_VOLUME_LINES[2]
-  docker-compose-volumes
+  docker_compose_volumes
 
   assert_array_values DOCKER_VOLUME_SOURCES "${sources[@]}"
   assert_array_values DOCKER_VOLUME_TARGETS "/mnt" "" "/opt" "/src" "/tmp2"
@@ -408,7 +390,7 @@ begin_test "docker compose volumes with missing fields"
   assert_array_values DOCKER_VOLUME_FORMATS "${formats[@]}"
 
   DOCKER_VOLUME_LINES[1]='Ltarget: /src'
-  docker-compose-volumes
+  docker_compose_volumes
 
   assert_array_values DOCKER_VOLUME_SOURCES "/tmp" "" "test" "internal" ""
   assert_array_values DOCKER_VOLUME_TARGETS "${targets[@]}"
@@ -418,13 +400,13 @@ begin_test "docker compose volumes with missing fields"
 )
 end_test
 
-begin_test "Parse docker-compose args"
+begin_test "Parse docker compose args"
 (
   setup_test
 
   export JUSTFILE="${TESTDIR}/Justfile"
 
-  parse-docker-compose run test
+  parse_docker_compose run test
   assert_array_values docker_compose_args
   [ "${docker_compose_command}" = "run" ]
   assert_array_values docker_compose_command_args test
@@ -432,13 +414,13 @@ begin_test "Parse docker-compose args"
   # Test all args that take an argument
   for arg in -f -p -H -c --file --project-name --host --context --log-level \
              --tlscacert --tlscert --tlskey --project-directory --env-file; do
-    parse-docker-compose "${arg}" foobar
+    parse_docker_compose "${arg}" foobar
     assert_array_values docker_compose_args "${arg}" foobar
     [ "${docker_compose_command-}" = "" ]
     assert_array_values docker_compose_command_args
 
     # Test = notation
-    parse-docker-compose "${arg}=foobar"
+    parse_docker_compose "${arg}=foobar"
     assert_array_values docker_compose_args "${arg}=foobar"
     [ "${docker_compose_command-}" = "" ]
     assert_array_values docker_compose_command_args
@@ -446,7 +428,7 @@ begin_test "Parse docker-compose args"
 
   # Test single letter combine notation too
   for arg in -f -p -H -c; do
-    parse-docker-compose "${arg}foobar"
+    parse_docker_compose "${arg}foobar"
     assert_array_values docker_compose_args "${arg}foobar"
     [ "${docker_compose_command-}" = "" ]
     assert_array_values docker_compose_command_args
@@ -454,13 +436,13 @@ begin_test "Parse docker-compose args"
 
   # Test all flags
   for arg in --no-ansi -v --verbose --tls --skip-hostname-check --tlsverify --compatibility; do
-    parse-docker-compose "${arg}"
+    parse_docker_compose "${arg}"
     assert_array_values docker_compose_args "${arg}"
     [ "${docker_compose_command-}" = "" ]
     assert_array_values docker_compose_command_args
   done
 
-  parse-docker-compose --no-ansi -H=blah.json --verbose run -v /foo:/bar debian bash
+  parse_docker_compose --no-ansi -H=blah.json --verbose run -v /foo:/bar debian bash
   assert_array_values docker_compose_args --no-ansi -H=blah.json --verbose
   [ "${docker_compose_command}" = "run" ]
   assert_array_values docker_compose_command_args -v /foo:/bar debian bash
@@ -471,18 +453,18 @@ begin_test "Parse docker compose project name"
 (
   setup_test
 
-  parse-docker-compose --project-name foo
+  parse_docker_compose --project-name foo
   [ "${docker_compose_project_name}" = "foo" ]
 
-  parse-docker-compose --project-name foo run alpine
+  parse_docker_compose --project-name foo run alpine
   [ "${docker_compose_project_name}" = "foo" ]
-  parse-docker-compose -p bar run alpine
+  parse_docker_compose -p bar run alpine
   [ "${docker_compose_project_name}" = "bar" ]
-  parse-docker-compose -p foobar run alpine
+  parse_docker_compose -p foobar run alpine
   [ "${docker_compose_project_name}" = "foobar" ]
 
   # Make sure -p/--project-name wins
-  COMPOSE_PROJECT_NAME=foo parse-docker-compose -p bar run alpine
+  COMPOSE_PROJECT_NAME=foo parse_docker_compose -p bar run alpine
   [ "${docker_compose_project_name}" = "bar" ]
 )
 end_test
@@ -494,50 +476,50 @@ begin_test "Parse docker compose file args"
 
   touch docker-compose2.yml
 
-  # parse-docker-compose uses the location of the Justfile as the starting
-  # point for looking for docker-compose files to prevent "different results
+  # parse_docker_compose uses the location of the Justfile as the starting
+  # point for looking for docker compose files to prevent "different results
   # when running just from a different CWD"
   export JUSTFILE="${TESTDIR}/Justfile"
 
-  parse-docker-compose run alpine
-  # No docker-compose
+  parse_docker_compose run alpine
+  # No docker compose
   [ "${docker_compose_project_name}" = "default" ]
   [ "${#docker_compose_files[@]}" -eq "0" ]
 
   # Make sure COMPOSE_FILE works
-  COMPOSE_FILE=docker-compose2.yml parse-docker-compose run alpine
+  COMPOSE_FILE=docker-compose2.yml parse_docker_compose run alpine
   [ "${docker_compose_project_name}" = "$(basename "$(pwd)")" ]
   [ "${#docker_compose_files[@]}" -eq "1" ]
   [ "${docker_compose_files[0]}" = "docker-compose2.yml" ]
 
   # Make sure COMPOSE_FILE overrides docker-compose.yml
   touch docker-compose.yml
-  COMPOSE_FILE=docker-compose2.yml parse-docker-compose run alpine
+  COMPOSE_FILE=docker-compose2.yml parse_docker_compose run alpine
   [ "${docker_compose_project_name}" = "$(basename "$(pwd)")" ]
   [ "${#docker_compose_files[@]}" -eq "1" ]
   [ "${docker_compose_files[0]}" = "docker-compose2.yml" ]
 
   # Make sure docker-compose.yml works
-  parse-docker-compose run alpine
+  parse_docker_compose run alpine
   [ "${docker_compose_project_name}" = "$(basename "$(pwd)")" ]
   [ "${#docker_compose_files[@]}" -eq "1" ]
   [ "${docker_compose_files[0]}" = "${TESTDIR}/docker-compose.yml" ]
 
   # Make sure override works
   touch docker-compose.override.yaml
-  parse-docker-compose run alpine
+  parse_docker_compose run alpine
   [ "${docker_compose_project_name}" = "$(basename "$(pwd)")" ]
   [ "${#docker_compose_files[@]}" -eq "2" ]
   [ "${docker_compose_files[0]}" = "${TESTDIR}/docker-compose.yml" ]
   [ "${docker_compose_files[1]}" = "${TESTDIR}/docker-compose.override.yaml" ]
 
   # Make sure -f/--file wins
-  COMPOSE_FILE=docker-compose2.yml parse-docker-compose -f test3.yml run alpine
+  COMPOSE_FILE=docker-compose2.yml parse_docker_compose -f test3.yml run alpine
   [ "${docker_compose_project_name}" = "$(basename "$(pwd)")" ]
   [ "${#docker_compose_files[@]}" -eq "1" ]
   [ "${docker_compose_files[0]}" = "test3.yml" ]
 
-  parse-docker-compose -f test1.yml -ftest2 --file test3 --file=test4 run debian:9 bash
+  parse_docker_compose -f test1.yml -ftest2 --file test3 --file=test4 run debian:9 bash
   [ "${#docker_compose_files[@]}" -eq "4" ]
 )
 end_test
@@ -618,7 +600,7 @@ begin_test "DOCKER_COMPOSE_EXTRA_ARGS"
 )
 end_test
 
-begin_test "docker-compose service names"
+begin_test "docker compose service names"
 (
   setup_test
   service_names="$(docker_compose_service_names <(echo "${compose_file}"))"
@@ -628,7 +610,7 @@ begin_test "docker-compose service names"
 )
 end_test
 
-begin_test "docker-compose service names2"
+begin_test "docker compose service names2"
 (
   setup_test
   service_names="$(docker_compose_service_names2 <(echo "${compose_file}"))"
@@ -673,7 +655,7 @@ services:
   ttouch "${override_file}"
   [ "$(cat "${override_file}")" = "${ans}" ]
 
-  # Test when two docker-compose files reference the same service
+  # Test when two docker compose files reference the same service
   echo "${compose_file_hay}" > "${TESTDIR}/dc2.yml"
   override_file="$(Just-docker-compose -f "${TESTDIR}/dc.yml" -f "${TESTDIR}/dc2.yml" run test_hay|tail -n1)"
   override_file="${override_file#rm *}"
@@ -745,19 +727,19 @@ mock_docker: rm mock_container_name_my_image:foo" ]
 )
 end_test
 
-begin_test "docker-compose list internal volumes"
+begin_test "docker compose list internal volumes"
 (
   setup_test
-  docker-compose-list-internal-volumes <<< "${compose_file}"
+  docker_compose_list_internal_volumes <<< "${compose_file}"
   assert_array_values DOCKER_INTERNAL_VOLUMES test
 
   unset DOCKER_INTERNAL_VOLUMES
-  docker-compose-list-internal-volumes <<< "${compose_file_long}"
+  docker_compose_list_internal_volumes <<< "${compose_file_long}"
   assert_array_values DOCKER_INTERNAL_VOLUMES test
 
   # None case
   unset DOCKER_INTERNAL_VOLUMES
-  docker-compose-list-internal-volumes <<< ""
+  docker_compose_list_internal_volumes <<< ""
   assert_array_values DOCKER_INTERNAL_VOLUMES
 
   # Multiple case
@@ -769,7 +751,7 @@ begin_test "docker-compose list internal volumes"
   test3:"
 
   unset DOCKER_INTERNAL_VOLUMES
-  docker-compose-list-internal-volumes <<< "${file_test}"
+  docker_compose_list_internal_volumes <<< "${file_test}"
   declare -p DOCKER_INTERNAL_VOLUMES
   assert_array_values DOCKER_INTERNAL_VOLUMES test1 test2 test3
 
@@ -777,13 +759,13 @@ begin_test "docker-compose list internal volumes"
 notvolumes:
   test4:"
   unset DOCKER_INTERNAL_VOLUMES
-  docker-compose-list-internal-volumes <<< "${file_test}"
+  docker_compose_list_internal_volumes <<< "${file_test}"
   declare -p DOCKER_INTERNAL_VOLUMES
   assert_array_values DOCKER_INTERNAL_VOLUMES test1 test2 test3
 )
 end_test
 
-begin_test "get docker-compose version"
+begin_test "get docker compose version"
 (
   setup_test
 

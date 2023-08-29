@@ -161,7 +161,7 @@ RUN shopt -s nullglob; for patch in /usr/local/share/just/container_build_patch/
 # used for a few images.
 # This is basically only needed for pre glibc 2.14
 RUN if ! docker-compose --version; then \
-      rm /usr/local/bin/docker-compose; \
+      rm /usr/local/bin/docker-compose /usr/local/libexec/docker/cli-plugins/docker-compose; \
       # Handle symlink dirs, grrr
       cd /opt/python; \
       for d in *; do \

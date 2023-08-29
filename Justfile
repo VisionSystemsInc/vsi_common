@@ -217,7 +217,7 @@ function caseify()
       ;;
 
     ci_load) # Load ci
-      justify docker-compose_ci-load "${VSI_COMMON_DIR}/docker-compose.yml" "bash_test_${1}"
+      justify docker compose ci-load "${VSI_COMMON_DIR}/docker-compose.yml" "bash_test_${1}"
       extra_args=1
       ;;
     test_int_appveyor) # Run integration tests for windows appveyor
@@ -267,7 +267,7 @@ function caseify()
       ;;
     build_docker) # Build docker image
       Docker-compose build
-      justify docker-compose clean venv2 docker-compose clean venv3
+      justify docker compose clean venv2 docker compose clean venv3
       justify _post_build_docker
       ;;
 

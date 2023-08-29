@@ -89,7 +89,7 @@ Most vsi_common plugins have docker images to support them. This requires a few 
      {
        local id_project_cwd="${JUST_PROJECT_PREFIX}_CWD"
 
-       # Export variables for docker-compose file
+       # Export variables for docker compose file
        local EXAMPLE_COPY_VALUE="${JUST_PROJECT_PREFIX}_EXAMPLE_COPY_VALUE"
        export EXAMPLE_COPY_VALUE="${!EXAMPLE_COPY_VALUE:-${!id_project_cwd}}"
 
