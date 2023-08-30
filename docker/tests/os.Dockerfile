@@ -183,7 +183,7 @@ RUN if ! docker-compose --version; then \
 # # A statically linked curl will support tls3 on older OSes
 # ADD https://github.com/dtschan/curl-static/releases/download/v7.63.0/curl /opt/curl
 #
-#     # Docker-compose starting 1.20 is compiled using a glibc that is too new
+#     # docker-compose starting 1.20 is compiled using a glibc that is too new
 # RUN if ! docker-compose --version; then \
 #       # Finish setting up curl, cause most likely will need it.
 #       chmod 755 /opt/curl; \

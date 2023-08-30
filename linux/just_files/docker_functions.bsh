@@ -437,14 +437,6 @@ function parse-docker()
 }
 
 #**
-# .. function:: Exec-Docker
-#
-# Version of Docker that ``exec``'s the command rather than call
-#**
-
-function Exec-Docker(){ DOCKER_EXEC=1 Docker "${@}";}
-
-#**
 # .. function:: Docker
 #
 # :Arguments: ``$1``.. - Arguments to be sent to docker command
@@ -468,6 +460,12 @@ function Exec-Docker(){ DOCKER_EXEC=1 Docker "${@}";}
 
 function Docker()
 {
+  if [ "${1-}" == "compose" ]; then
+    shift 1
+    Docker_compose ${@+"${@}"}
+    return ${?}
+  fi
+
   local docker_args
   local docker_command
   local docker_command_args
@@ -500,12 +498,8 @@ function _Docker()
       ${docker_extra_command_args[@]+"${docker_extra_command_args[@]}"}
       ${docker_command_args[@]+"${docker_command_args[@]}"})
 
-  if [ "${DOCKER_EXEC-}" == "" ] || [ "${DRYRUN}" != "" ]; then
-    "${cmd[0]}" "${cmd[@]:1}"
-    return ${?}
-  else
-    exec "${cmd[@]}"
-  fi
+  "${cmd[0]}" "${cmd[@]:1}"
+  return ${?}
 }
 
 ######################
@@ -626,7 +620,7 @@ function parse_docker_compose_volumes()
 #**
 # .. function:: docker_compose_list_internal_volumes
 #
-# :Input: **stdin** - Docker-compose yaml file
+# :Input: **stdin** - Docker compose yaml file
 # :Output: ``DOCKER_INTERNAL_VOLUMES`` - Array of the docker volumes
 #
 # Parses the output from ``docker compose config`` to get the list of all internal volumes
@@ -964,35 +958,23 @@ function compose_path_separator()
 }
 
 #**
-# .. function:: Docker-compose
+# .. function:: Docker_compose
 #
 # :Arguments: ``$1``.. - Arguments to be sent to docker compose command
 # :Parameters: * ``DOCKER_COMPOSE_EXTRA_ARGS`` - Array of extra arguments inserted after ``docker compose`` but before the docker subcommand
 #              * ``DOCKER_COMPOSE_EXTRA_{subcommand}_ARGS`` - Array of extra arguments inserted right after the docker subcommand
-#              * [``DOCKER_COMPOSE_AUTOREMOVE``] - Automatically add the --rm flag to ``docker compose`` run commands when using the Docker-compose helper function. Default: 1
+#              * [``DOCKER_COMPOSE_AUTOREMOVE``] - Automatically add the --rm flag to ``docker compose`` run commands when using the Docker_compose helper function. Default: 1
 #              * ``DRYRUN``] - Optional variable inserted at the beginning of all docker commands. Useful for setting to "echo" or similar for dryrun mode
 # :Output: Runs docker compose command
 #
 # Helper function to execute (dryrun) the right command
 #
-# Instead of calling the ``docker compose`` command directly, the ``Docker-compose``
-# command should be called instead (for all dryrun-able activities. Simple
-# commands like ps, etc. don't make as much sense to dryrun, as the reset of
-# the script will never be executed, thus rendering dryrun useless.)
+# Instead of calling the ``docker compose`` command directly, the ``Docker_compose`` command should be called instead (for all dryrun-able activities. Simple commands like ps, etc. don't make as much sense to dryrun, as the reset of the script will never be executed, thus rendering dryrun useless.)
 #
 # .. rubric:: Bugs
 #
-# ``Docker-compose`` should not be exec'd like Docker was. Since fifo buffers are
-# created in common usage of ``Docker-compose``, `exec Docker-compose` would
-# result in fifo buffers being left behind in /tmp
+# ``Docker_compose`` should not be exec'd like ``Docker`` was. Since fifo buffers are created in common usage of ``Docker_compose``, `exec Docker_compose` would result in fifo buffers being left behind in /tmp
 #**
-
-# Backwards compatibility with just 0.2.x
-function Docker-compose()
-{
-  Docker_compose ${@+"${@}"}
-}
-
 function Docker_compose()
 {
   local docker_compose_args
@@ -1006,10 +988,16 @@ function Docker_compose()
   _Docker_compose
 }
 
+# Backwards compatibility with just 0.2.x
+function Docker-compose()
+{
+  Docker_compose ${@+"${@}"}
+}
+
 function _Docker_compose()
 {
   local docker_compose_extra_command_args=()
-  local cmd=(${DRYRUN} "${DOCKER_COMPOSE}")
+  local cmd=(${DRYRUN} "${DOCKER_COMPOSE[@]}")
   local extra_args_var
 
   if [ "${docker_compose_command}" = "run" ] && [ "${DOCKER_COMPOSE_AUTOREMOVE-1}" == "1" ]; then
@@ -1117,7 +1105,7 @@ function get_dockerfile_from_compose()
 # :Parameters: * ``JUST_PROJECT_PREFIX`` - Typically, the project name that is prepended to all the variables. EXAMPLE would cover EXAMPLE_VARIABLE
 #              * [``COMPOSE_VERSION``] - The docker compose yaml version number is auto determined by parsing the existing files, and is used in the auto generated files. In order to bypass this, you can specify the version number manually using this variable.
 #
-# ``Docker-compose`` with advance just features
+# ``Docker_compose`` with advance just features
 #
 # To provide a smoother just experience, advanced features are baked into
 # ``Just-docker-compose`` to work with Just and :file:`just_entrypoint_functions` to cover the
@@ -1204,7 +1192,7 @@ function Just-docker-compose()
   # "Fail later" behavior for set -eu. This should guarantee the override_file
   # is deleted. If this isn't enough, investigate adding cleanup to a trap
   local rv=0
-  _Docker-compose || rv="${?}"
+  _Docker_compose || rv="${?}"
   ${DRYRUN} rm "${override_file}"
   return "${rv}"
 }
@@ -1227,7 +1215,7 @@ function Just-docker-compose()
 function docker_service_running()
 {
   "${DOCKER}" inspect -f '{{.State.Status}}' \
-              $("${DOCKER_COMPOSE}" ps -q ${@+"${@}"}) 2>/dev/null # noquotes
+              $("${DOCKER_COMPOSE[@]}" ps -q ${@+"${@}"}) 2>/dev/null # noquotes
 }
 
 #**
