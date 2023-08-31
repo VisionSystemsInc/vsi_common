@@ -128,7 +128,8 @@ function caseify()
           ans="clear-linux-os - ${version}, clear-linux-os - ${version}, clear-linux-os - ${version} 0"
           ;;
         amazonlinux*)
-          ans="amzn - 2, centos - 2, rhel fedora - 2 0"
+          version=$(docker run --rm --entrypoint= "${image}" awk '{print $4}' /etc/amazon-linux-release)
+          ans="amzn - ${version}, fedora - ${version}, fedora - ${version} 0"
           ;;
         debian*)
           ans="debian - ${1##*:}, debian - ${1##*:}, debian - ${1##*:} 0"
