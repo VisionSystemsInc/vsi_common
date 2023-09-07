@@ -124,7 +124,7 @@ begin_test "Just docker compose dynamic volumes"
   fi
   TEST_VOLUMES=(".:/trash:z")
   override="$(generate_docker_compose_override TEST test1)"
-  [ "${override}" = "${ans1}" ]
+  assert_str_eq "${override}" "${ans1}"
 
   TEST_VOLUMES=("/tmp:/temp:ro")
   ans+="$(vol "$(real_path "/tmp")" /temp:ro)"
@@ -174,6 +174,15 @@ begin_test "Just docker compose dynamic volumes"
 
   TEST_TEST1_VOLUME_2="${TESTDIR}/bar2:/foo5"
   ans+="$(vol "$(real_path "${TESTDIR}/bar2")" /foo5)"
+  override="$(generate_docker_compose_override TEST test1)"
+  if [ "${OS-}" = "Windows_NT" ]; then
+    [ "${override}" = "${ans}$(environment)$(envi "JUST_HOST_WINDOWS=1")" ]
+  else
+    assert_str_eq "${override}" "${ans}"
+  fi
+
+  # Make sure readonly doesn't shadow a read-write
+  TEST_TEST1_VOLUME_3="${TESTDIR}/bar2:/foo5:ro"
   override="$(generate_docker_compose_override TEST test1)"
   if [ "${OS-}" = "Windows_NT" ]; then
     [ "${override}" = "${ans}$(environment)$(envi "JUST_HOST_WINDOWS=1")" ]
