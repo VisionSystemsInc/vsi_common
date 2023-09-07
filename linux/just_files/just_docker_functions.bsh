@@ -25,7 +25,7 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 #**
 # .. function:: docker-compose_restore_from_cache
 #
-# :Arguments: - ``$1`` - Docker-compose filename
+# :Arguments: - ``$1`` - Docker compose filename
 #             - ``$2`` - Main service name to restore and rebuild. This needs to be the last (unnamed) stage
 #             - ``[$3...]`` - Addition services based on same dockerfile to restore and rebuild
 # :Parameters: - ``JUST_DOCKER_COMPOSE_CACHE_REPO`` - Default value: ``vsiri/ci_cache``
@@ -47,6 +47,7 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 #
 # Even though all the stages are restored, only the services specified (``$2`` ...) are retagged so that they can be used. If you need more than one service's images restored, you will need to specify them all. If multiple services use the same image tag, they do not need to be specified. For example, service ``foo`` uses image ``stuff:foo``, service ``bar`` uses image ``stuff:bar``, and service ``car`` uses image ``stuff:bar`, only services ``foo`` and ``bar`` need to be passed in.
 #**
+# DEPRECATED
 function docker-compose_restore_from_cache()
 {
   local compose_file="${1}"
@@ -78,7 +79,7 @@ function docker-compose_restore_from_cache()
 
   if [ "${JUST_DOCKER_COMPOSE_PULL-1}" = "1" ]; then
     # Let it fail, since the first time the images won't exist
-    Docker-compose -f "${temp_push_pull}" pull || :
+    Docker compose -f "${temp_push_pull}" pull || :
   fi
 
   ##############################
@@ -89,7 +90,7 @@ function docker-compose_restore_from_cache()
   _dynamic_docker-compose_restore_recipes "${1}" > "${temp_override}"
 
   if [ "${JUST_DOCKER_COMPOSE_BUILD-1}" = "1" ]; then
-    Docker-compose -f "${recipes_compose_file}" -f "${temp_override}" build ${recipes[@]+"${recipes[@]}"}
+    Docker compose -f "${recipes_compose_file}" -f "${temp_override}" build ${recipes[@]+"${recipes[@]}"}
     # retag recipes for push
     for i in ${recipes[@]+"${recipes[@]}"}; do
       Docker tag "vsiri/recipe:${i}" "${JUST_DOCKER_COMPOSE_CACHE_REPO}:recipe_${1}_${i}"
@@ -115,7 +116,7 @@ function docker-compose_restore_from_cache()
 
   # Build images
   if [ "${JUST_DOCKER_COMPOSE_BUILD-1}" = "1" ]; then
-    Docker-compose -f "${temp_file}" -f "${temp_override}" --project-directory "$(dirname "${compose_file}")" build "${services[@]}"
+    Docker compose -f "${temp_file}" -f "${temp_override}" --project-directory "$(dirname "${compose_file}")" build "${services[@]}"
   fi
 
   # Tag the final image for push
@@ -137,13 +138,14 @@ function docker-compose_restore_from_cache()
   # done
 
   if [ "${JUST_DOCKER_COMPOSE_PUSH-1}" = "1" ]; then
-    Docker-compose -f "${temp_push_pull}" push
+    Docker compose -f "${temp_push_pull}" push
   fi
 
   # Cleanup
   ${DRYRUN-} rm "${temp_file}" "${temp_override}" "${temp_push_pull}"
 }
 
+# DEPRECATED
 # docker-compose_restore_from_cache helper function
 function _dynamic_docker-compose_push_pull()
 {
@@ -166,6 +168,7 @@ function _dynamic_docker-compose_push_pull()
   done
 }
 
+# DEPRECATED
 # docker-compose_restore_from_cache helper function
 function _dynamic_docker-compose_restore_recipes()
 {
@@ -185,6 +188,7 @@ function _dynamic_docker-compose_restore_recipes()
 # stdout - patched docker-compose file
 # fid 3 out - docker-compose override file, 3 by default, unless set by override_fd
 # arguments - Services to use cache
+# DEPRECATED
 function _dynamic_docker-compose_add_cache_from()
 {
   local main_service="${1}"
@@ -288,7 +292,7 @@ function get_docker_recipes()
 #
 # :Arguments: [``$1``]... - Recipe names to run
 #
-# Runs ``docker-compose build`` for the docker recipes. Useful command to call before ``docker build`` on your own project that uses recipes in vsi_common, to keep them synced with your build.
+# Runs ``docker compose build`` for the docker recipes. Useful command to call before ``docker build`` on your own project that uses recipes in vsi_common, to keep them synced with your build.
 #
 # .. command:: build_recipes-auto
 #
@@ -306,7 +310,7 @@ function get_docker_recipes()
 #
 #   Does not pick up containers that didn't exist when starting ``just`` log
 #
-# Override the log target in your ``Justfile`` and call ``__docker-compose-log`` if you need to set other parameters.
+# Override the log target in your ``Justfile`` and call ``__docker-compose_log`` if you need to set other parameters.
 #
 # .. command:: docker_clean
 #
@@ -432,14 +436,14 @@ function docker_defaultify()
 
       extra_args=1
       ;;
-    docker-compose_clean) # Delete a docker-compose volume. The next container \
+    docker-compose_clean) # Delete a docker compose volume. The next container \
                           # to use this volume will automatically copy any \
                           # content from the image. Use --all to clean all \
                           # volumes listed in the docker-compose.yml file
       if [ "${1}" = "--all" ]; then
         local DOCKER_INTERNAL_VOLUMES
         local volume
-        docker-compose-list-internal-volumes < <(Just-docker-compose config)
+        docker_compose_list_internal_volumes < <(Just-docker-compose config)
         for volume in ${DOCKER_INTERNAL_VOLUMES[@]+"${DOCKER_INTERNAL_VOLUMES[@]}"}; do
           justify docker_clean "${COMPOSE_PROJECT_NAME}_${volume}"
         done
@@ -452,8 +456,8 @@ function docker_defaultify()
                           # bash session. Set COMPOSE_SERVICES to limit to a
                           # specific service. Additional arguments are run in
                           # lieu of bash
-      # Not Docker-compose; no quotes
-      local containers=($(docker-compose ps -q -a --status running ${COMPOSE_SERVICES-} || :))
+      # Not Docker compose; no quotes
+      local containers=($(docker compose ps -q -a --status running ${COMPOSE_SERVICES-} || :))
       if [ "${#containers[@]}" == "0" ]; then
         echo "No running containers found"
         extra_args=${#}
@@ -485,18 +489,18 @@ function docker_defaultify()
          # specify service names to only log specific containers. Bug: Does \
          # not pick up containers that didn't exist when starting just log
 
-      # Override the log target in your Justfile and call __docker-compose-log
+      # Override the log target in your Justfile and call __docker-compose_log
       # if you need to set other parameters
-      justify __docker-compose-log ${@+"${@}"}
+      justify __docker-compose_log ${@+"${@}"}
       extra_args=${#}
       ;;
-    __docker-compose-log)
+    __docker-compose_log)
       function stop_logging(){ JUST_STOP_LOGGING=1; }
       JUST_STOP_LOGGING=0
       trap stop_logging INT
       trap stop_logging TERM
       while [ "${JUST_STOP_LOGGING}" == "0" ]; do
-        Docker-compose logs --tail=20 -f ${@+"${@}"} || echo ${?}
+        Docker compose logs --tail=20 -f ${@+"${@}"} || echo ${?}
         while [ "${JUST_STOP_LOGGING}" == "0" ] && ! docker_service_running | grep running > /dev/null; do
           sleep 1
         done
@@ -511,16 +515,23 @@ function docker_defaultify()
       extra_args=${#}
       ;;
 
-    docker-compose) # Run generic docker-compose command
+    # This pair maintains backwards compatibility and lets things like "just docker compose clean" work
+    docker_compose) # Run generic docker compose command
+      justify docker-compose ${@+"${@}"}
+      extra_args=${#}
+      ;;
+    docker-compose)
       Just-docker-compose ${@+"${@}"}
       extra_args=${#}
       ;;
 
+    # DEPRECATED
     docker-compose_ci-save) # Build and tag all stages of an image. $1 - compose filename, $2 - docker-compose service to build (for final stage)
       docker-compose_tag_all_stages "${1}" "${2}"
       extra_args=2
       ;;
 
+    # DEPRECATED
     docker-compose_ci-load) # Build all stages of an image from a pulled cache. $1 - compose filename, $2 - docker-compose service to build (for final stage), [$3...] - additional service names that might point to other stage targets in the same dockerfile.
       docker-compose_restore_from_cache "${@}"
       extra_args=${#}

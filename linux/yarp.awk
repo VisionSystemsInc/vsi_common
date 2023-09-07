@@ -133,12 +133,12 @@ function pre_process_line()
   # Add compatibility for handling Windows line endings on Linux
   # (Still works in Windows with \r removed)
   if (length($0) && substr($0, length($0)) == "\r" )
-    $0 = substr($0, 0, length($0)-1)
+    $0 = substr($0, 1, length($0)-1)
 
-  # Handle multiline output from docker-compose config
+  # Handle multiline output from docker compose config
   while (match($0, /\\$/))
   {
-    $0 = substr($0, 0, length($0)-1)
+    $0 = substr($0, 1, length($0)-1)
     getline line
     line = lstrip(line)
     $0 = $0 line
@@ -166,7 +166,7 @@ function pre_process_line()
   #      of the multiline, and start the main awk loop all over again with that
   #      value. This part is try, since I can only do next in the main loop
 
-  # However... docker-compose parses this for you, so there's no need to do
+  # However... docker compose parses this for you, so there's no need to do
   # this anymore :)
 
   # Detect multiline (|)

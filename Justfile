@@ -128,7 +128,8 @@ function caseify()
           ans="clear-linux-os - ${version}, clear-linux-os - ${version}, clear-linux-os - ${version} 0"
           ;;
         amazonlinux*)
-          ans="amzn - 2, centos - 2, rhel fedora - 2 0"
+          version=$(docker run --rm --entrypoint= "${image}" awk '{print $4}' /etc/amazon-linux-release)
+          ans="amzn - ${version}, fedora - ${version}, fedora - ${version} 0"
           ;;
         debian*)
           ans="debian - ${1##*:}, debian - ${1##*:}, debian - ${1##*:} 0"
@@ -217,7 +218,7 @@ function caseify()
       ;;
 
     ci_load) # Load ci
-      justify docker-compose_ci-load "${VSI_COMMON_DIR}/docker-compose.yml" "bash_test_${1}"
+      justify docker compose ci-load "${VSI_COMMON_DIR}/docker-compose.yml" "bash_test_${1}"
       extra_args=1
       ;;
     test_int_appveyor) # Run integration tests for windows appveyor
@@ -261,13 +262,13 @@ function caseify()
       extra_args=${#}
       ;;
     test_python) # Run python unit tests
-      Docker-compose run python3
-      # Docker-compose run python2
+      Docker compose run python3
+      # Docker compose run python2
       # python3 -B -m unittest discover -s "${VSI_COMMON_DIR}/python/vsi/test"
       ;;
     build_docker) # Build docker image
-      Docker-compose build
-      justify docker-compose clean venv2 docker-compose clean venv3
+      Docker compose build
+      justify docker compose clean venv2 docker compose clean venv3
       justify _post_build_docker
       ;;
 
@@ -382,11 +383,11 @@ function caseify()
       docker_cp_image "${VSI_COMMON_DOCKER_REPO}:python3_test" "/venv/Pipfile3.lock" "${VSI_COMMON_DIR}/docker/tests/Pipfile3.lock"
       ;;
     run_wine) # Start a wine bash window
-      Docker-compose run -e USER_ID="${VSI_COMMON_UID}" wine ${@+"${@}"} || :
+      Docker compose run -e USER_ID="${VSI_COMMON_UID}" wine ${@+"${@}"} || :
       extra_args=${#}
       ;;
     run_wine-gui) # Start a wine bash window in gui mode
-      Docker-compose run -e USER_ID="${VSI_COMMON_UID}" wine_gui ${@+"${@}"}&
+      Docker compose run -e USER_ID="${VSI_COMMON_UID}" wine_gui ${@+"${@}"}&
       extra_args=${#}
       ;;
     test_wine) # Run unit tests using wine

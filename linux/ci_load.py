@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+# DEPRECATED #
+
 import argparse
 import tempfile
 from subprocess import Popen, PIPE

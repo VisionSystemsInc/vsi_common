@@ -51,7 +51,7 @@ RUN set -euxv; \
              unzip curl; \
     elif command -v zypper; then \
       other='git curl'; \
-      if [ -f "/etc/os-release" ] && [[ $(source /etc/os-release; echo "${ID} ${VERSION}") = sles\ 11.* ]]; then \
+      if [ -f "/etc/os-release" ] && [[ $(source /etc/os-release; echo "${ID} ${VERSION-}") = sles\ 11.* ]]; then \
         zypper --gpg-auto-import-keys --non-interactive install -y \
                http://opensource.wandisco.com/suse/11/git/x86_64/wandisco-git-suse-release-11-1.noarch.rpm; \
         rpm --import http://opensource.wandisco.com/RPM-GPG-KEY-WANdisco; \
@@ -71,6 +71,8 @@ RUN set -euxv; \
              findutils \
              # xxd for unit tests
              vim \
+             # Huh, an OS removed awk
+             awk \
              ${other} ca-certificates\
              gzip tar unzip; \
     elif command -v apk; then \
@@ -161,7 +163,7 @@ RUN shopt -s nullglob; for patch in /usr/local/share/just/container_build_patch/
 # used for a few images.
 # This is basically only needed for pre glibc 2.14
 RUN if ! docker-compose --version; then \
-      rm /usr/local/bin/docker-compose; \
+      rm /usr/local/bin/docker-compose /usr/local/libexec/docker/cli-plugins/docker-compose; \
       # Handle symlink dirs, grrr
       cd /opt/python; \
       for d in *; do \
@@ -183,7 +185,7 @@ RUN if ! docker-compose --version; then \
 # # A statically linked curl will support tls3 on older OSes
 # ADD https://github.com/dtschan/curl-static/releases/download/v7.63.0/curl /opt/curl
 #
-#     # Docker-compose starting 1.20 is compiled using a glibc that is too new
+#     # docker-compose starting 1.20 is compiled using a glibc that is too new
 # RUN if ! docker-compose --version; then \
 #       # Finish setting up curl, cause most likely will need it.
 #       chmod 755 /opt/curl; \
@@ -201,9 +203,9 @@ RUN if ! docker-compose --version; then \
 #     fi
 
 # Disable this check; it gets in the way of running tests locally on git 2.31.2 and newer
-RUN git config --global --add safe.directory '*'; \
+RUN git config --system --add safe.directory '*'; \
     # Fix for https://bugs.launchpad.net/ubuntu/+source/git/+bug/1993586
-    git config --global protocol.file.allow always
+    git config --system protocol.file.allow always
 
 ENV JUSTFILE=/vsi/Justfile
 
