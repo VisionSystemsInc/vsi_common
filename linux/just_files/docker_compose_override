@@ -228,6 +228,10 @@ function generate_docker_compose_override()
   local volume_flags
   local compose_config
 
+  local volumes_host=()
+  local volumes_docker=()
+  local volumes_flags=()
+
   # parse_docker_compose_volumes/docker_compose_volumes vars
   local DOCKER_VOLUME_LINES
   local DOCKER_VOLUME_SOURCES
@@ -388,8 +392,41 @@ function generate_docker_compose_override()
         volume_host="$(cygpath -w "${volume_host}")"
       fi
 
+      volumes_host+=("${volume_host}")
+      volumes_docker+=("${volume_docker}")
+      volumes_flags+=("${volume_flags}")
+
+    done
+
+    # Deduplicate. Only need to remove from volumes_host, as that is what is used
+    # for indexing.
+    for i in "${!volumes_host[@]}"; do
+      local -i j=1
+      for j in "${!volumes_host[@]}"; do
+        # only search one sided and just entries already removed
+        if [ "${i}" -ge "${j}" -o -z "${volumes_host[i]+set}" ]; then
+          continue
+        fi
+
+        # Remove duplicates because docker compose doesn't like them
+        if [ "${volumes_host[i]}" = "${volumes_host[j]}" -a \
+             "${volumes_docker[i]}" = "${volumes_docker[j]}" ]; then
+          if [ "${volumes_flags[i]}" = "${volumes_flags[j]}" ]; then
+            unset volumes_host[j]
+          else
+            if [[ ${volumes_flags[j]} =~ :ro ]]; then
+              unset volumes_host[j]
+            else
+              unset volumes_host[i]
+            fi
+          fi
+        fi
+      done
+    done
+
+    for i in "${!volumes_host[@]}"; do
       IFS=:
-      over_volumes+=("      - ${volume_host}:${volume_docker}${volume_flags}")
+      over_volumes+=("      - ${volumes_host[i]}:${volumes_docker[i]}${volumes_flags[i]}")
       IFS="${OLD_IFS}"
     done
     IFS=$'\n'
@@ -400,31 +437,31 @@ function generate_docker_compose_override()
     # the order, the read only would take precedence, and you would be unable to
     # write where you needed to, and get unexpected failures due to using NFS.
     # So the solution for now is to just prefer the read-write over read-only.
-    over_volumes=($(awk -F: '
-      # Deduplicate fully identical lines
-      !count[$0]++ {
-        # Save the order of the original lines.
-        original_order[NR]=$0
-        key=$1":"$2
-        deduplicate_keys[NR]=key
-        if ( key in deduplicate ) {
-          # Do nothing if already there, Always prefer not :ro
-          if (deduplicate[key] != $0 && deduplicate[key] ~ /:ro/) {
-            deduplicate[key]=$0
-          }
-        } else {
-          deduplicate[key]=$0
-        }
-      }
-      END{
-        # Print out deduplicated list in order
-        for (key in original_order) {
-          # If the line matches exactly, print it
-          if ( deduplicate[deduplicate_keys[key]] == original_order[key] ) {
-            print original_order[key]
-          }
-        }
-      }' <<< "${over_volumes[*]}"))
+    # over_volumes=($(awk -F: '
+    #   # Deduplicate fully identical lines
+    #   {
+    #     # Save the order of the original lines.
+    #     original_order[NR]=$0
+    #     key=$1":"$2
+    #     deduplicate_keys[NR]=key
+    #     if ( key in deduplicate ) {
+    #       # Do nothing if already there, Always prefer not :ro
+    #       if (deduplicate[key] != $0 && deduplicate[key] ~ /:ro/) {
+    #         deduplicate[key]=$0
+    #       }
+    #     } else {
+    #       deduplicate[key]=$0
+    #     }
+    #   }
+    #   END{
+    #     # Print out deduplicated list in order
+    #     for (key in original_order) {
+    #       # If the line matches exactly, print it
+    #       if ( deduplicate[deduplicate_keys[key]] == original_order[key] ) {
+    #         print original_order[key]
+    #       }
+    #     }
+    #   }' <<< "${over_volumes[*]}"))
 
     if [ " ""${over_volumes[@]+set}" = " set" ]; then
       echo "    volumes:"
