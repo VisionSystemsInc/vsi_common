@@ -408,12 +408,18 @@ function generate_docker_compose_override()
           continue
         fi
 
-        # Remove duplicates because docker compose doesn't like them
+        # Look for identical host:container pairs
         if [ "${volumes_host[i]}" = "${volumes_host[j]}" -a \
              "${volumes_docker[i]}" = "${volumes_docker[j]}" ]; then
           if [ "${volumes_flags[i]}" = "${volumes_flags[j]}" ]; then
+            # Remove exact duplicates because docker compose doesn't like them
             unset volumes_host[j]
           else
+            # This is really crude. The following flags are not being considered:
+            # [z|Z]
+            # [[r]shared|[r]slave|[r]private]
+            # [delegated|cached|consistent]
+            # [nocopy]
             if [[ ${volumes_flags[j]} =~ :ro ]]; then
               unset volumes_host[j]
             else
@@ -430,38 +436,6 @@ function generate_docker_compose_override()
       IFS="${OLD_IFS}"
     done
     IFS=$'\n'
-    # Remove duplicates (https://unix.stackexchange.com/q/159695) because
-    # docker compose doesn't like them
-    # Originally this just had to remove duplicate entries, but the nfs code could
-    # easily create pairs of mounts that were some :ro and some :rw. Depending on
-    # the order, the read only would take precedence, and you would be unable to
-    # write where you needed to, and get unexpected failures due to using NFS.
-    # So the solution for now is to just prefer the read-write over read-only.
-    # over_volumes=($(awk -F: '
-    #   # Deduplicate fully identical lines
-    #   {
-    #     # Save the order of the original lines.
-    #     original_order[NR]=$0
-    #     key=$1":"$2
-    #     deduplicate_keys[NR]=key
-    #     if ( key in deduplicate ) {
-    #       # Do nothing if already there, Always prefer not :ro
-    #       if (deduplicate[key] != $0 && deduplicate[key] ~ /:ro/) {
-    #         deduplicate[key]=$0
-    #       }
-    #     } else {
-    #       deduplicate[key]=$0
-    #     }
-    #   }
-    #   END{
-    #     # Print out deduplicated list in order
-    #     for (key in original_order) {
-    #       # If the line matches exactly, print it
-    #       if ( deduplicate[deduplicate_keys[key]] == original_order[key] ) {
-    #         print original_order[key]
-    #       }
-    #     }
-    #   }' <<< "${over_volumes[*]}"))
 
     if [ " ""${over_volumes[@]+set}" = " set" ]; then
       echo "    volumes:"
