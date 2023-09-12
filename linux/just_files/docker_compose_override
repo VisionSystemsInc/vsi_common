@@ -214,6 +214,7 @@ function generate_docker_compose_override()
   local enumerated_volumes_all=()
   local enumerated_volumes
   local -i i=1
+  local -i j=1
 
   # nvidia gpu
   local nvidia_devices_name
@@ -227,6 +228,10 @@ function generate_docker_compose_override()
   local volume_docker
   local volume_flags
   local compose_config
+
+  local volumes_host=()
+  local volumes_docker=()
+  local volumes_flags=()
 
   # parse_docker_compose_volumes/docker_compose_volumes vars
   local DOCKER_VOLUME_LINES
@@ -388,14 +393,50 @@ function generate_docker_compose_override()
         volume_host="$(cygpath -w "${volume_host}")"
       fi
 
+      volumes_host+=("${volume_host}")
+      volumes_docker+=("${volume_docker}")
+      volumes_flags+=("${volume_flags}")
+
+    done
+
+    # Deduplicate. Only need to remove from volumes_host, as that is what is used
+    # for indexing.
+    for i in "${!volumes_host[@]}"; do
+      for j in "${!volumes_host[@]}"; do
+        # only search one sided and just entries already removed
+        if [ "${i}" -ge "${j}" -o -z "${volumes_host[i]+set}" ]; then
+          continue
+        fi
+
+        # Look for identical host:container pairs
+        if [ "${volumes_host[i]}" = "${volumes_host[j]}" -a \
+             "${volumes_docker[i]}" = "${volumes_docker[j]}" ]; then
+          if [ "${volumes_flags[i]}" = "${volumes_flags[j]}" ]; then
+            # Remove exact duplicates because docker compose doesn't like them
+            unset volumes_host[j]
+          else
+            # This is really crude. The following flags are not being considered:
+            # [z|Z]
+            # [[r]shared|[r]slave|[r]private]
+            # [delegated|cached|consistent]
+            # [nocopy]
+            if [[ ${volumes_flags[j]} =~ :ro ]]; then
+              unset volumes_host[j]
+            else
+              unset volumes_host[i]
+            fi
+          fi
+        fi
+      done
+    done
+
+    for i in "${!volumes_host[@]}"; do
       IFS=:
-      over_volumes+=("      - ${volume_host}:${volume_docker}${volume_flags}")
+      over_volumes+=("      - ${volumes_host[i]}:${volumes_docker[i]}${volumes_flags[i]}")
       IFS="${OLD_IFS}"
     done
-    # Remove duplicates (https://unix.stackexchange.com/q/159695) because
-    # docker compose doesn't like them
     IFS=$'\n'
-    over_volumes=($(awk '!count[$0]++' <<< "${over_volumes[*]+${over_volumes[*]}}"))
+
     if [ " ""${over_volumes[@]+set}" = " set" ]; then
       echo "    volumes:"
       echo "${over_volumes[*]+${over_volumes[*]}}"
