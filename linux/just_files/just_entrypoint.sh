@@ -88,9 +88,9 @@ set -eu
 : ${VSI_COMMON_DIR=/vsi}
 : ${DOCKER_USERNAME=user}
 
-# In the case where docker_link_mounts causes /src and /vsi to be replaces with
-# symlinks, /vsi is needed for the initial entrypoint, but is replaces mid way
-# through. Which this is not really an issue, the pwd of the PID becomes stale
+# In the case where docker_link_mounts causes /src and /vsi to be replaced with
+# symlinks, /vsi is still needed for the initial entrypoint, but is replaced mid-way
+# through it. While this is not really an issue, the pwd of the PID becomes stale
 # and warnings pop up:
 # shell-init: error retrieving current directory: getcwd: cannot access parent directories: No such file or directory
 # chdir: error retrieving current directory: getcwd: cannot access parent directories: No such file or directory
