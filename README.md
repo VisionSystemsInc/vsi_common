@@ -2,7 +2,7 @@
 
 |Linux|Windows|macOS|docs|
 |--|--|--|--|
-|[![CircleCI](https://circleci.com/gh/VisionSystemsInc/vsi_common.svg?style=shield)](https://circleci.com/gh/VisionSystemsInc/vsi_common)|[![Build status](https://ci.appveyor.com/api/projects/status/3a3hd3m41clxd5gw/branch/master?svg=true)](https://ci.appveyor.com/project/andyneff/vsi-common/branch/master)|[![Build Status](https://github.com/visionsystemsinc/vsi_common/actions/workflows/macos.yml/badge.svg?branch=master)](https://github.com/VisionSystemsInc/vsi_common/actions)|[![Docs](https://img.shields.io/circleci/build/gh/VisionSystemsInc/vsi_common/master?label=docs)](https://visionsystemsinc.github.io/vsi_common)|
+|[![CircleCI](https://circleci.com/gh/VisionSystemsInc/vsi_common.svg?style=shield)](https://circleci.com/gh/VisionSystemsInc/vsi_common)|[![Build status](https://ci.appveyor.com/api/projects/status/3a3hd3m41clxd5gw/branch/main?svg=true)](https://ci.appveyor.com/project/andyneff/vsi-common/branch/main)|[![Build Status](https://github.com/visionsystemsinc/vsi_common/actions/workflows/macos.yml/badge.svg?branch=main)](https://github.com/VisionSystemsInc/vsi_common/actions)|[![Docs](https://img.shields.io/circleci/build/gh/VisionSystemsInc/vsi_common/main?label=docs)](https://visionsystemsinc.github.io/vsi_common)|
 
 In order to use these directories, all you have to do is
 
@@ -20,7 +20,7 @@ In order to use these directories, all you have to do is
 
 * Python
 
-  * Prefered
+  * Preferred
 
     ```bash
     pip install git+https://github.com/visionsystemsinc/vsi_common.git
