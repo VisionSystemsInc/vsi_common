@@ -80,7 +80,7 @@ We like to use `>&` for file descriptors (numbers), and `&>` for filenames
      # This is actively splitting apart a string, and must not be in quotes
      bar=(${foo}) # noquotes
 
-  Quotes should not be used in ``[[]]`` expressions---there are a few corner cases where the quotes will be treated literally. ``# noquotes`` is not needed for ``[[]]`` expressions.
+  Quotes should not be used on the LHS in ``[[]]`` expressions---there are a few corner cases where the quotes will be treated literally. ``# noquotes`` is not needed for ``[[]]`` expressions. The RHS should use quotes for literal strings, and no quotes for wildcard or regex patterns.
 
   .. code-block:: bash
 
