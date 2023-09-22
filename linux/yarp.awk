@@ -1,9 +1,11 @@
+# Standard left strip string
 function lstrip(str)
 {
   strip = match(str, /[^ ]/)
   return substr(str, strip)
 }
 
+# Standard max function
 function max(a, b)
 {
   if ( a > b )
@@ -11,68 +13,58 @@ function max(a, b)
   return b
 }
 
+# Turn sequence_indexes and paths into a "yaml path"
 function get_path()
 {
   result=""
   sep="" # Make it so the first key doesn't have a period before it
   for (join_i = 0; join_i < path_depth; ++join_i)
   {
+    # If it is a sequence, add [#]. This comes before a key because a key in a
+    # sequence represents a sequence of maps
     if (sequence_indexes[join_i] != -1)
     {
       result = result"["sequence_indexes[join_i]"]"
     }
+    # If there is a non-empty key, display it
     if (paths[join_i] != "\"\"" )
     {
-      result = result sep paths[join_i]
-      # Make addition keys separated by a period
-      sep="."
+      result = result "." paths[join_i]
     }
   }
+
+  if (match(result, "^\\."))
+    result = substr(result, 2)
 
   return result
 }
 
-function process_sequence(is_sequence, key, indents, paths, sequence_indexes)
-{
-  if ( is_sequence )
-  {
-    sequence_indexes[path_depth-1]++
-
-    if ( key != "\"\"" )
-    {
-      # indent += 2
-      indents[path_depth] = indent
-      paths[path_depth] = key
-      sequence_indexes[path_depth] = -1
-      ++path_depth
-    }
-  }
-  else
-    sequence_indexes[path_depth-1] = -1
-}
-
+# Calculate the amount of indent
 function get_indent(str)
 {
   match(str, /^ */)
-  return RLENGTH
+  indent = RLENGTH
+
+  # 0 no match, 1 match
+  is_sequence = match(str, /^ *- */)
+  if (is_sequence)
+  {
+    # "- " counts as an indent of 2
+    indent += 2
+  }
+
+  return indent
 }
 
 function process_line(str)
 {
   #### Parse line ####
-  # Calculate the amount of indent on the current line ✅
+  # Calculate the amount of indent on the current line
   indent = get_indent(str)
-  # 0 no match, 1 match ✅
-  is_sequence = match(str, /^ *- */)
 
-  if (is_sequence)
-  {
-    indent += 2 # ✅
-  }
-
-  # Splint the line into key and the remainder after the colon ✅
+  # Splint the line into key and the remainder after the colon
   remain = substr(str, 1+max(RLENGTH, indent))
-  key = match(remain, /^[^ '":]+ *: */)
+  key = match(remain, /^[^ '":]+ *: */)   #"# VS Code parser error
   if ( key )
   {
     tmp = RLENGTH
@@ -88,12 +80,11 @@ function process_line(str)
   # Unindenting - Remove (now) unused paths from the stack
   if ( indent < last_indent )
   {
-    # Add sequence, because in the sequence case, it's > not >=
-    while ( path_depth && indents[path_depth-1] > indent) # + is_sequence )
+    while ( path_depth && indents[path_depth-1] > indent)
     {
-      delete indents[path_depth-1] # remove?
-      delete paths[path_depth-1] # remove?
-      delete sequence_indexes[path_depth-1] # remove?
+      # delete indents[path_depth-1]
+      # delete paths[path_depth-1]
+      # delete sequence_indexes[path_depth-1]
       --path_depth
     }
     last_indent = indent
@@ -106,31 +97,25 @@ function process_line(str)
     paths[path_depth] = key
     if (is_sequence)
     {
-      sequence_indexes[path_depth] = sequence_indexes[path_depth-1]+1
+      if(path_depth)
+        sequence_indexes[path_depth] = sequence_indexes[path_depth-1]+1
+      else
+        # If the top level node is a sequesnce, then sequence_indexes[-1]+1
+        # would erroneously return 1 instead of 0
+        sequence_indexes[path_depth] = 0
     }
     else
+      # -1 means not an sequence
       sequence_indexes[path_depth] = -1
     ++path_depth
-
-    # process_sequence(is_sequence, key, indents, paths, sequence_indexes)
   } # Same indent
   else if (indent == last_indent )
   {
-    # Corner case to handle the root node
-    if ( path_depth == 0)
-    {
-      paths[0] = ""
-      sequence_indexes[0] = -1
-      indents[0] = 0
-      path_depth = 1
-    }
-
     paths[path_depth-1] = key
     if (is_sequence)
     {
       sequence_indexes[path_depth-1]++
     }
-    # process_sequence(is_sequence, key, indents, paths, sequence_indexes)
   }
   last_indent = indent
 }
@@ -143,6 +128,7 @@ function print_line()
     print get_path(), "=", remain
 }
 
+# Skip blank line and comment, and combine multiple line expressions
 function pre_process_line()
 {
   # Add compatibility for handling Windows line endings on Linux
@@ -197,6 +183,11 @@ function pre_process_line()
   # Doesn't handle # comment, since they might be quoted, and I just don't want
   # to deal with that
 
+  # Doesn't handle varying/multiple spaces after the - in a sequence:
+  # -   food: 1
+  #     loot: 2
+  # - good: 3
+
   return 0
 }
 
@@ -211,8 +202,9 @@ BEGIN {
   # Tracks length of theses three arrays
   path_depth = 0
 
-  # Indent of the last line
-  last_indent = 0
+  # Indent of the last line. Start at -1 so that the root node trigger as the
+  # first indent
+  last_indent = -1
 }
 
 # Main
@@ -221,17 +213,17 @@ BEGIN {
     next
   process_line($0)
 
+# # Debug for next time I need to debug this
+# print "remainder: " remain | "cat 1>&2"
+# print "key: " key | "cat 1>&2"
+# print "indent: " indent | "cat 1>&2"
+# print "is_sequence: " is_sequence | "cat 1>&2"
 
-print "remainder: " remain | "cat 1>&2"
-print "key: " key | "cat 1>&2"
-print "indent: " indent | "cat 1>&2"
-print "is_sequence: " is_sequence | "cat 1>&2"
-
-for (join_i = 0; join_i < path_depth; ++join_i)
-{
-  print sequence_indexes[join_i] "|" paths[join_i] "|" indents[join_i] | "cat 1>&2"
-}
-print "---" | "cat 1>&2"
+# for (join_i = 0; join_i < path_depth; ++join_i)
+# {
+#   print sequence_indexes[join_i] "|" paths[join_i] "|" indents[join_i] | "cat 1>&2"
+# }
+# print "---" | "cat 1>&2"
 
   print_line()
 }
