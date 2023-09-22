@@ -15,13 +15,13 @@ function get_path()
 {
   result=""
   sep="" # Make it so the first key doesn't have a period before it
-  for (join_i = 0; join_i < length_sequences; ++join_i)
+  for (join_i = 0; join_i < path_depth; ++join_i)
   {
-    if (sequences[join_i] != -1)
+    if (sequence_indexes[join_i] != -1)
     {
-      result = result"["sequences[join_i]"]"
+      result = result"["sequence_indexes[join_i]"]"
     }
-    else if (paths[join_i] != "" )
+    if (paths[join_i] != "\"\"" )
     {
       result = result sep paths[join_i]
       # Make addition keys separated by a period
@@ -32,23 +32,23 @@ function get_path()
   return result
 }
 
-function process_sequence(sequence, key, indents, paths, sequences)
+function process_sequence(is_sequence, key, indents, paths, sequence_indexes)
 {
-  if ( sequence )
+  if ( is_sequence )
   {
-    sequences[length_sequences-1]++
+    sequence_indexes[path_depth-1]++
 
     if ( key != "\"\"" )
     {
-      indent += 2
-      indents[length_sequences] = indent
-      paths[length_sequences] = key
-      sequences[length_sequences] = -1
-      ++length_sequences
+      # indent += 2
+      indents[path_depth] = indent
+      paths[path_depth] = key
+      sequence_indexes[path_depth] = -1
+      ++path_depth
     }
   }
   else
-    sequences[length_sequences-1] = -1
+    sequence_indexes[path_depth-1] = -1
 }
 
 function get_indent(str)
@@ -60,11 +60,18 @@ function get_indent(str)
 function process_line(str)
 {
   #### Parse line ####
+  # Calculate the amount of indent on the current line ✅
   indent = get_indent(str)
-  # 0 no match, 1 match
-  sequence = match(str, /^ *- */)
-  remain = substr(str, 1+max(RLENGTH, indent))
+  # 0 no match, 1 match ✅
+  is_sequence = match(str, /^ *- */)
 
+  if (is_sequence)
+  {
+    indent += 2 # ✅
+  }
+
+  # Splint the line into key and the remainder after the colon ✅
+  remain = substr(str, 1+max(RLENGTH, indent))
   key = match(remain, /^[^ '":]+ *: */)
   if ( key )
   {
@@ -78,16 +85,16 @@ function process_line(str)
 
   #### Process line ####
 
-  # Unindenting
+  # Unindenting - Remove (now) unused paths from the stack
   if ( indent < last_indent )
   {
     # Add sequence, because in the sequence case, it's > not >=
-    while ( length_sequences && indents[length_sequences-1] > indent) # + sequence )
+    while ( path_depth && indents[path_depth-1] > indent) # + is_sequence )
     {
-      delete indents[length_sequences-1]
-      delete paths[length_sequences-1]
-      delete sequences[length_sequences-1]
-      --length_sequences
+      delete indents[path_depth-1] # remove?
+      delete paths[path_depth-1] # remove?
+      delete sequence_indexes[path_depth-1] # remove?
+      --path_depth
     }
     last_indent = indent
   }
@@ -95,27 +102,35 @@ function process_line(str)
   # Indenting
   if ( indent > last_indent )
   {
-    indents[length_sequences] = indent
-    paths[length_sequences] = key
-    sequences[length_sequences] = -1
-    ++length_sequences
+    indents[path_depth] = indent
+    paths[path_depth] = key
+    if (is_sequence)
+    {
+      sequence_indexes[path_depth] = sequence_indexes[path_depth-1]+1
+    }
+    else
+      sequence_indexes[path_depth] = -1
+    ++path_depth
 
-    process_sequence(sequence, key, indents, paths, sequences)
+    # process_sequence(is_sequence, key, indents, paths, sequence_indexes)
   } # Same indent
   else if (indent == last_indent )
   {
-    # Corner case
-    if ( length_sequences == 0)
+    # Corner case to handle the root node
+    if ( path_depth == 0)
     {
       paths[0] = ""
-      sequences[0] = -1
+      sequence_indexes[0] = -1
       indents[0] = 0
-      length_sequences = 1
+      path_depth = 1
     }
 
-    paths[length_sequences-1] = key
-
-    process_sequence(sequence, key, indents, paths, sequences)
+    paths[path_depth-1] = key
+    if (is_sequence)
+    {
+      sequence_indexes[path_depth-1]++
+    }
+    # process_sequence(is_sequence, key, indents, paths, sequence_indexes)
   }
   last_indent = indent
 }
@@ -187,12 +202,16 @@ function pre_process_line()
 
 BEGIN {
   # Initialize empty arrays
+  # Stores the individual parts of the yaml path
   delete paths[0]
+  # How much an an indent each path detph has
   delete indents[0]
-  delete sequences[0]
+  # The index in a sequence. -1 is not a sequence, then 0, 1, ... for an sequence
+  delete sequence_indexes[0]
+  # Tracks length of theses three arrays
+  path_depth = 0
 
-  length_sequences = 0
-
+  # Indent of the last line
   last_indent = 0
 }
 
@@ -201,5 +220,18 @@ BEGIN {
   if (pre_process_line())
     next
   process_line($0)
+
+
+print "remainder: " remain | "cat 1>&2"
+print "key: " key | "cat 1>&2"
+print "indent: " indent | "cat 1>&2"
+print "is_sequence: " is_sequence | "cat 1>&2"
+
+for (join_i = 0; join_i < path_depth; ++join_i)
+{
+  print sequence_indexes[join_i] "|" paths[join_i] "|" indents[join_i] | "cat 1>&2"
+}
+print "---" | "cat 1>&2"
+
   print_line()
 }
