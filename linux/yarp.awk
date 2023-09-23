@@ -62,7 +62,7 @@ function process_line(str)
   # Calculate the amount of indent on the current line
   indent = get_indent(str)
 
-  # Splint the line into key and the remainder after the colon
+  # Split the line into key and the remainder after the colon
   remain = substr(str, 1+max(RLENGTH, indent))
   key = match(remain, /^[^ '":]+ *: */)   #"# VS Code parser error
   if ( key )
@@ -105,11 +105,11 @@ function process_line(str)
         sequence_indexes[path_depth] = 0
     }
     else
-      # -1 means not an sequence
+      # -1 means not a sequence
       sequence_indexes[path_depth] = -1
     ++path_depth
   } # Same indent
-  else if (indent == last_indent )
+  else if ( indent == last_indent )
   {
     paths[path_depth-1] = key
     if (is_sequence)
@@ -195,14 +195,14 @@ BEGIN {
   # Initialize empty arrays
   # Stores the individual parts of the yaml path
   delete paths[0]
-  # How much an an indent each path detph has
+  # How much of an indent each path depth has
   delete indents[0]
-  # The index in a sequence. -1 is not a sequence, then 0, 1, ... for an sequence
+  # Track the index in the sequence for this path element. -1 means this path segment is not a sequence, then 0, 1, ... for an sequence
   delete sequence_indexes[0]
-  # Tracks length of theses three arrays
+  # Tracks length of these three arrays
   path_depth = 0
 
-  # Indent of the last line. Start at -1 so that the root node trigger as the
+  # Indent of the last line. Start at -1 so that the root node triggers as the
   # first indent
   last_indent = -1
 }
