@@ -9,9 +9,12 @@ if [ -z "${VSI_COMMON_DIR+set}" ]; then
   VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.."; pwd)"
 fi
 
+# TODO: Add sphinx by default
+# TODO: Add CI by default
+
 # Use a command like true, so that when I comment, it still works
-# COMMENT NEXT LINE when developing, uncomment before commiting.
-cat - << 'true' > "${temp_file}"
+# COMMENT NEXT LINE when developing, uncomment before committing.
+# cat - << 'true' > "${temp_file}"
 
 #*# just/new_just
 
@@ -220,16 +223,49 @@ function write_project_env()
             '  >> "${1}"
 
   if [ "${USE_DOCKER}" = "1" ]; then
-    uwecho ': ${'"${PROJECT_PREFIX}"'_AUTO_ESCAPE='"${PROJECT_PREFIX}"'_.*_DIR_DOCKER}
+    uwecho '##########
+            # Docker #
+            # Setup  #
+            ##########
 
-            : ${'"${PROJECT_PREFIX}"'_DOCKER_REPO='"${REPO_NAME}"'}
+            : ${'"${PROJECT_PREFIX}"'_AUTO_ESCAPE='"${PROJECT_PREFIX}"'_.*_DIR_DOCKER}
 
-            : ${'"${PROJECT_PREFIX}"'_HOME=/home/user}
+            # Docker user info
             : ${'"${PROJECT_PREFIX}"'_USERNAME=$(id -u -n)}
+            #T# : ${'"${PROJECT_PREFIX}"'_USERNAME_DOCKER=${'"${PROJECT_PREFIX}"'_USERNAME}} to mimic the username in the container
+            : ${'"${PROJECT_PREFIX}"'_USERNAME_DOCKER=user}
             : ${'"${PROJECT_PREFIX}"'_UID=$(id -u)}
             : ${'"${PROJECT_PREFIX}"'_GIDS=$(id -G)}
             : ${'"${PROJECT_PREFIX}"'_GID=${'"${PROJECT_PREFIX}"'_GIDS%% *}}
             : ${'"${PROJECT_PREFIX}"'_GROUP_NAMES=$(group_names)}
+            : ${'"${PROJECT_PREFIX}"'_HOME=/home/${'"${PROJECT_PREFIX}"'_USERNAME_DOCKER}}
+
+            # Docker image names
+            : ${'"${PROJECT_PREFIX}"'_BASE_IMAGE=ubuntu:22.04}
+            : ${'"${PROJECT_PREFIX}"'_DOCKER_REPO='"${REPO_NAME}"'}
+            : ${VSI_RECIPE_REPO=${'"${PROJECT_PREFIX}"'_DOCKER_REPO}_recipes}
+            : ${'"${PROJECT_PREFIX}"'_IMAGE_FOOTER=_${'"${PROJECT_PREFIX}"'_USERNAME}}
+            : ${'"${PROJECT_PREFIX}"'_RUNNER_IMAGE=${'"${PROJECT_PREFIX}"'_DOCKER_REPO}:runner${'"${PROJECT_PREFIX}"'_IMAGE_FOOTER}}
+            : ${'"${PROJECT_PREFIX}"'_PYTHON_CACHE_IMAGE=${'"${PROJECT_PREFIX}"'_DOCKER_REPO}:python_cache${'"${PROJECT_PREFIX}"'_IMAGE_FOOTER}}
+            : ${'"${PROJECT_PREFIX}"'_DEPLOY_IMAGE=${'"${PROJECT_PREFIX}"'_DOCKER_REPO}:deploy${'"${PROJECT_PREFIX}"'_IMAGE_FOOTER}}
+
+            # Package versions
+            : ${'"${PROJECT_PREFIX}"'_PYTHON_VERSION="3.10.12"}
+
+            # Primary service runner
+            if [ "${JUST_RODEO-}" = "1" ]; then
+              : ${'"${PROJECT_PREFIX}"'_COMPOSE_SERVICE_RUNNER=deploy}
+            else
+              : ${'"${PROJECT_PREFIX}"'_COMPOSE_SERVICE_RUNNER=runner}
+            fi
+
+            # Remove development packages from deploy image
+            : ${'"${PROJECT_PREFIX}"'_REMOVE_DEV_PACKAGES=0}
+
+            ###########
+            # Docker  #
+            # Volumes #
+            ###########
 
             #T# This directory is added to the container using the docker compose file. This mechanism
             #T# should only be used when the directory is guaranteed to exist
@@ -244,14 +280,20 @@ function write_project_env()
             fi
 
             #T# Example of a Dynamic Volume that is created programmatically instead of
-            #T# always there. This directory is added to the container using '"${PROJECT_PREFIX}"'_'"${APP_NAME_UPPER}"'_VOLUMES.
+            #T# always there. This directory is added to the container using '"${PROJECT_PREFIX}_${APP_NAME_UPPER}"'_VOLUMES.
             #T# This mechanism is better when the directory doesn'"'"'t exist, as the directory
             #T# will be created and owned properly, unlike docker'"'"'s default behavior
             #T# : ${'"${PROJECT_PREFIX}"'_DATA_DIR=${'"${PROJECT_PREFIX}"'_SOURCE_DIR}/new-data}
             #T# : ${'"${PROJECT_PREFIX}"'_DATA_DIR_DOCKER=/data}
-            #T# '"${PROJECT_PREFIX}"'_'"${APP_NAME_UPPER}"'_VOLUMES=(
+            #T# '"${PROJECT_PREFIX}_${APP_NAME_UPPER}"'_VOLUMES=(
             #T#     "${'"${PROJECT_PREFIX}"'_DATA_DIR}:${'"${PROJECT_PREFIX}"'_DATA_DIR_DOCKER}"
-            #T#     ${'"${PROJECT_PREFIX}"'_'"${APP_NAME_UPPER}"'_VOLUMES+"${'"${PROJECT_PREFIX}"'_'"${APP_NAME_UPPER}"'_VOLUMES[@]}"})
+            #T#     ${'"${PROJECT_PREFIX}_${APP_NAME_UPPER}"'_VOLUMES+"${'"${PROJECT_PREFIX}_${APP_NAME_UPPER}"'_VOLUMES[@]}"})
+
+            #########
+            # Other #
+            #########
+
+            #T# Start adding your own '"${PROJECT_PREFIX}"'_ variables here
 
             ###############################################################################
             # Non-'"${PROJECT_PREFIX}"' Settings
@@ -324,10 +366,16 @@ function write_justfile()
 
   if [ "${USE_DOCKER}" = "1" ]; then
     uwecho   '# Plugins
+              source "${VSI_COMMON_DIR}/linux/ask_question"
               source "${VSI_COMMON_DIR}/linux/just_files/docker_functions.bsh"
               source "${VSI_COMMON_DIR}/linux/just_files/just_docker_functions.bsh"
-              source "${VSI_COMMON_DIR}/linux/just_files/just_git_functions.bsh"
+              source "${VSI_COMMON_DIR}/linux/just_files/just_git_functions.bsh"' >> "${1}"
 
+    if [ "${USE_PIP_TOOLS}" = "1" ]; then
+      echo   'source "${VSI_COMMON_DIR}/linux/just_files/just_pip-tools_functions.bsh"' >> "${1}"
+    fi
+
+    uwecho   '
               cd "${'"${PROJECT_PREFIX}"'_CWD}"
 
               # Main function
@@ -338,20 +386,22 @@ function write_justfile()
                 case ${just_arg} in
                   build) # Build Docker image
                     if [ "${#}" -gt "0" ]; then
-                      Docker compose "${just_arg}" ${@+"${@}"}
+                      Docker buildx bake "${just_arg}" ${@+"${@}"}
               ' >> "${1}"
-    if [ "${USE_PIPENV}" = "1" ]; then
+    if [ "${USE_PIP_TOOLS}" = "1" ]; then
       uwecho '        if isin '"${APP_NAME}"' ${@+"${@}"}; then
                         justify docker compose clean venv
                       fi' >> "${1}"
     fi
     uwecho   '        extra_args=${#}
                     else
-                      justify build recipes-auto "${'"${PROJECT_PREFIX}"'_CWD}/docker"/*.Dockerfile
-                      Docker compose build
-              ' >> "${1}"
-    if [ "${USE_PIPENV}" = "1" ]; then
-      uwecho '        justify docker compose clean venv' >> "${1}"
+                      justify build recipes-auto "${'"${PROJECT_PREFIX}"'_CWD}/docker"/*.Dockerfile' >> "${1}"
+    if [ "${USE_PIP_TOOLS}" = "1" ]; then
+      uwecho '        Docker buildx bake runner python_cache
+                      justify docker compose clean venv' >> "${1}"
+    else
+      uwecho '        Docker buildx bake runner
+                      justify docker compose clean venv' >> "${1}"
     fi
     uwecho   '      fi
                     ;;' >> "${1}"
@@ -378,20 +428,40 @@ function write_justfile()
                     justify build
                     ;;
               ' >> "${1}"
-    if [ "${USE_PIPENV}" = "1" ]; then
-      uwecho '    pipenv) # Run pipenv commands in pipenv container. Useful for \
-                          # installing/updating pipenv packages
-                    Just-docker-compose run '"${APP_NAME}"'_pipenv pipenv ${@+"${@}"}
-                    extra_args=${#}
-                    ;;
-                  clean_all) # Delete all local volumes
+    if [ "${USE_PIP_TOOLS}" = "1" ]; then
+      uwecho '    clean_all) # Delete all local volumes
                     #T# Confirm action to protect accidental deletion. Can be removed if you don'"'"'t want it.
-                    ask_question "Are you sure you want to delete all docker volumes?" n
-                    justify docker compose clean --all
+                    ask_question "Are you sure you want to delete all docker volumes?" answer_clean_venv n
+                    if [ "${answer_clean_venv}" = "1" ]; then
+                      justify docker compose clean --all
+                    fi
                     ;;
               ' >> "${1}"
     fi
-    uwecho   '    *)
+    uwecho   '    purge) # Purges everything, as if starting over anew.
+                    #T# Confirm action to protect accidental deletion. Can be removed if you don'"'"'t want it.
+                    echo "${RED} *** DANGER *** This will delete everything in your source code dir, including data${NC}"
+                    ask_question "Are you sure you want to purge all local image, volumes, downloads, local.env, etc?" answer_purge_all n
+                    if [ "${answer_purge_all}" == "1" ]; then
+                      Docker compose down --remove-orphans --volumes
+                      justify docker compose clean --all
+                      image_names=(
+                        $(
+                          (
+                            docker compose config
+                            docker compose -f external/vsi_common/docker/blueprints/docker-compose.yml config
+                            docker compose -f external/vsi_common/docker/recipes/docker-compose.yml config
+                          ) | yarp | grep '"'"'^services.[^.]\+\.image = '"'"' | awk '"'"'{print $3}'"'"'
+                        )
+                      )
+                      Docker image -f rm ${image_names[@]+"${image_names[@]}"} "${'"${PROJECT_PREFIX}"'_BASE_IMAGE}"
+                      git clean -dxvf
+
+                      echo "You may want to run: '"'"'docker buildx prune'"'"' to clear the entire computer'"'"'s build cache"
+                    fi
+                    ;;
+
+                  *)
                     #T# Forward targets to all other plugins when they do not match any
                     #T# targets in this caseify.
                     defaultify "${just_arg}" ${@+"${@}"}
@@ -428,54 +498,59 @@ function write_justfile()
   fi
 }
 
-###############
-### Pipfile ###
-###############
-function write_pipfile()
+#######################
+### requirements.in ###
+#######################
+function write_requirements_in()
 {
   exists "${1}" && return 0
 
-  uwecho '[[source]]
-          url = "https://pypi.org/simple"
-          verify_ssl = true
-          name = "pypi"
-
-          [requires]
-          # python_version = "*"
-
-          [dev-packages]
-
-          [packages]
-          #T# # Uncomment for GDAL
-          #T# gdal = {extras=["numpy"], version = "==3.2.3"} # or whatever GDAL_VERSION is installed by the recipe
-          ' >> "${1}"
+  uwecho '# Local packages
+          -e /src' >> "${1}"
 }
 
-####################
-### Pipfile.lock ###
-####################
-function write_pipfile_lock()
+########################
+### requirements.txt ###
+########################
+function write_requirements_txt()
 {
   exists "${1}" && return 0
 
-  uwecho '{
-              "_meta": {
-                  "hash": {
-                      "sha256": "415dfdcb118dd9bdfef17671cb7dcd78dbd69b6ae7d4f39e8b44e71d60ca72e7"
-                  },
-                  "pipfile-spec": 6,
-                  "requires": {},
-                  "sources": [
-                      {
-                          "name": "pypi",
-                          "url": "https://pypi.org/simple",
-                          "verify_ssl": true
-                      }
-                  ]
-              },
-              "default": {},
-              "develop": {}
-          }' >> "${1}"
+  uwecho '
+          -e /src
+          # requirements.in' >> "${1}"
+}
+
+################
+### setup.py ###
+################
+function write_setup_py()
+{
+  exists "${1}" && return 0
+
+  uwecho "import os
+
+          from setuptools import setup
+
+          setup(
+              name='${APP_NAME}',
+              version='0.0.1',
+              packages=['${APP_NAME}'],
+              author = 'VSI Author',
+              author_email = 'vsi@visionsystemsinc.com',
+              license='MIT License',
+              description='${APP_NAME} Short description',
+              long_description='${APP_NAME} Long description',
+              url='https://example.com/${APP_NAME}',
+              install_requires=[
+                # Put python dependencies here
+              ],
+              entry_points={
+              #    '${APP_NAME}.something': [
+              #        '${APP_NAME} = ${APP_NAME}.something:SomeMethod'
+              #    ]
+              }
+          )" >> "${1}"
 }
 
 ##################
@@ -485,25 +560,33 @@ function write_dockerfile()
 {
   exists "${1}" && return 0
 
-  uwecho   '#T# Dockers use gosu instead of sudo because sudo is a poor fit for docker.
-            #T# Note: A function "sudo" is added to call "gosu root" for convenience
-            FROM vsiri/recipe:gosu as gosu
-            #T# Dockers do not reap zombies by default, tini does this
-            FROM vsiri/recipe:tini as tini
-            #T# Just dockers use vsi common
-            FROM vsiri/recipe:vsi as vsi' >> "${1}"
+  uwecho   '# syntax=docker/dockerfile:1.4
+            ARG VSI_RECIPE_REPO
+            ARG BASE_IMAGE
 
-  if [ "${USE_PIPENV}" = "1" ]; then
-    uwecho '#T# pipenv manages the python virtual env and installs a consistent set of packages
-            FROM vsiri/recipe:pipenv as pipenv
+            #T# Dockers use gosu instead of sudo because sudo is a poor fit for docker.
+            #T# Note: A function "sudo" is added to call "gosu root" for convenience
+            FROM ${VSI_RECIPE_REPO}:gosu as gosu
+            #T# Dockers do not reap zombies by default, tini does this
+            FROM ${VSI_RECIPE_REPO}:tini as tini
+            #T# Just dockers use vsi common
+            FROM ${VSI_RECIPE_REPO}:vsi as vsi' >> "${1}"
+
+  if [ "${USE_PIP_TOOLS}" = "1" ]; then
+    uwecho '#T# pip-tools manages the python virtual env and installs a consistent set of packages
+            FROM ${VSI_RECIPE_REPO}:pip-tools as pip-tools
+
+            #T# Installs a python for pip-tools to use. pip-tools manages the python virtual
+            #T# env and installs a consistent set of packages
+            FROM ${VSI_RECIPE_REPO}:conda-python as python
             #T# # Uncomment for GDAL
-            #T# FROM vsiri/recipe:gdal as gdal
+            #T# FROM ${VSI_RECIPE_REPO}:gdal as gdal
 
             ###############################################################################
 
             #T# The dep_stage stage is the common stage that all other stages can use. You
             #T# can install and setup any programs that are common to all of the other stages
-            FROM debian:bullseye as dep_stage
+            FROM ${BASE_IMAGE} as dep_stage
 
             #T# Unlike normal docker shells, this shell will stop after any error, so you
             #T# no longer need to end command lines with "&& \", you can just use a "; \"
@@ -512,60 +595,60 @@ function write_dockerfile()
             # Install your common dependencies here
             RUN apt-get update; \
                 DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-                  python3 python3-distutils tzdata ca-certificates; \
+                  tzdata ca-certificates; \
                 rm -r /var/lib/apt/lists/*
 
             ENV \
-                #T# Move all virtualenvs to /venv
-                WORKON_HOME=/venv \
-                #T# Make pipenv work from any directory in the container
-                PIPENV_PIPFILE=/src/Pipfile \
-                #T# The pipenv cache is how we avoid recompiling packages at runtime
-                #T# when the build dependencies are no longer available
-                PIPENV_CACHE_DIR=/venv/cache \
-                #T# Needed for pipenv shell
-                PYENV_SHELL=/bin/bash \
-                #T# pipenv recommends that these env variables be set to en_US.UTF-8.
+                #T# Point pip to use this for cache
+                XDG_CACHE_HOME=/venv/cache \
+                #T# Some tools recommends that these env variables be set to en_US.UTF-8.
                 #T# On debian, C.UTF-8 exists by default instead, and seems to work.
                 #T# More detail: https://stackoverflow.com/a/38553499
                 #T# Note: en_US.UTF-8 exists by default in Centos/Fedora base images
                 LC_ALL=C.UTF-8 \
                 LANG=C.UTF-8
 
+            #T# Additional dep stage recipes
             #T# # Uncomment for GDAL
             #T# COPY --from=gdal /usr/local /usr/local
-            COPY --from=pipenv /usr/local /usr/local
+            COPY --from=python /usr/local /usr/local/conda-python
+            RUN ln -s /usr/local/conda-python/bin/* /usr/local/bin; \
+                #T# required for matplotlib TkAgg backend
+                ln -s /usr/local/conda-python/lib/{tcl,tk}*/ /usr/local/lib;
+            COPY --from=pip-tools /usr/local /usr/local
+            COPY --from=tini /usr/local /usr/local
+            #T# Do not use gosu in a production environment, it should be removed by then
+            COPY --from=gosu /usr/local/bin/gosu /usr/local/bin/gosu
+            RUN chmod u+s /usr/local/bin/gosu
 
-            #T# Run post-install scripts for docker recipes (like pipevn).
+            #T# Run post-install scripts for docker recipes (like pip-tools).
             #T# Should be run after all of the "COPY --from" commands.
             #T# See https://git.io/JOcp6 for more details about docker recipes
-            RUN for patch in /usr/local/share/just/container_build_patch/*; do "${patch}"; done
+            RUN shopt -s nullglob; for patch in /usr/local/share/just/container_build_patch/*; do "${patch}"; done
 
             ###############################################################################
 
-            #T# The pipenv_cache stage is a build stage intended to make the operation of the
-            #T# "pipenv sync" and "pipenv install" commands more efficient. It also helps to
+            #T# The python_cache stage is a build stage intended to make the operation of the
+            #T# "pip-sync" and "pip-compile" commands more efficient. It also helps to
             #T# minimize the size of the final build stage, which does not require any build
             #T# dependencies needed by this stage to compile python packages during
-            #T# "pipenv sync" that, for example, do not have a pre-built wheels
-            FROM dep_stage as pipenv_cache
+            #T# "pip-sync" that, for example, do not have a pre-built wheels
+            FROM dep_stage as python_cache
 
             # Install your build dependencies for python packages here
-            RUN apt-get update; \
-                DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-                  python3-dev; \
-                rm -r /var/lib/apt/lists/*
+            #T# This is an example of installing g++ and git as dependencies. Your dependencies
+            #T# Will depend on what your python packages require
+            # RUN apt-get update; \
+            #     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            #       g++ git; \
+            #     rm -r /var/lib/apt/lists/*
 
-            ADD Pipfile Pipfile.lock /src/
+            ADD requirements.txt /src/
+
             #T# Simple packages can be added as dependencies to your project by:
-            #T# - Running the container and installing them directly with pipenv; e.g.,
-            #T#     just pipenv install scipy
-            #T#     # installs scipy (Note: all other packages will be updated. Avoiding
-            #T#     # this is difficult; the --keep-outdated flag is currently buggy)
-            #T#     just sync # (optionally updates the docker image)
-            #T# - Or editing your Pipfile manually (https://pipenv.pypa.io/en/latest/advanced/)
-            #T#   and then running
-            #T#     just sync
+            #T# - Editing your requirements.in file
+            #T# - just pip-compile
+            #T# - just sync # (optionally updates the docker image)
 
             #T# A more complicated python package, for example, is GDAL
             #T# - The GDAL Docker recipe will build the GDAL C Library for you
@@ -576,7 +659,8 @@ function write_dockerfile()
             #T# To test this out:
             #T# 1) Uncomment all the "Uncomment for GDAL" sections
             #T# 2) just sync # Update the image
-            #T# 3) just pipenv install numpy gdal==3.2.1 # Or edit the Pipfile manually
+            #T# 3) Editing your requirements.in file and add numpy and gdal==3.2.1
+            #T# 4) just pip-compile
             #T#    This will add the latest version of numpy (although a specific version can
             #T#    be specified) and a version of the pypi package GDAL compatible with the
             #T#    GDAL C Library from the recipe.
@@ -586,34 +670,39 @@ function write_dockerfile()
             #T# 5) just shell
             #T# 6) python -c "import osgeo.gdal_array" # Should not create an error message
 
-            ARG SKIP_PIPENV_SYNC
-            #T# Sometimes you need to fix the image so that pipenv lock can be updated, but
-            #T# you can'"'"'t because pipenv sync won'"'"'t work. This chicken/egg cycle can be
-            #T# escaped by setting the build arg SKIP_PIPENV_SYNC to 1. Then, pipenv sync is
-            #T# skipped so that the image can be built allowing you to easily relock.
-            RUN if [ "${SKIP_PIPENV_SYNC-}" = "1" ]; then \
-                  #T# Create the virtualenv so that the build doesn'"'"'t potentially fail
-                  pipenv run true; \
-                else \
+            #T# Call vsi::pip-tools::fake_package for each editable package
+            RUN function mcd(){ mkdir -p "${1}"; cd "${1}"; }; \
+                (mcd "'"$(docker_add_quote_escape "/src/${RELATIVE_PATH}")"'"; vsi::pip-tools::fake_package vsi python/vsi); \
+                #T# (mcd /src/external/editable_package; vsi::pip-tools::fake_package package_name); \
+                (mcd /src; vsi::pip-tools::fake_package '"${PROJECT_NAME}"');
 
+            ARG SKIP_PIP_SYNC
+            #T# Sometimes you need to fix the image so that pip-compile can be run, but
+            #T# you can'"'"'t because pip-sync won'"'"'t work. This chicken/egg cycle can be
+            #T# escaped by setting the build arg SKIP_PIP_SYNC to 1. Then, pip-sync is
+            #T# skipped so that the image can be built allowing you to easily relock.
+            RUN /usr/local/conda-python/bin/python3 -m venv /venv/src; \
+                if [ "${SKIP_PIP_SYNC-}" != "1" ]; then \
+                  . /venv/src/bin/activate; \
             #T# # Uncomment for GDAL
             #T#       # Get the version markers specified in the lock file, else blank
             #T#       function pipfile_lock_version() { \
             #T#         python3 -c "import json; print(json.load(open('"'"'${PIPENV_PIPFILE}.lock'"'"', '"'"'r'"'"'))['"'"'default'"'"']['"'"'$1'"'"']['"'"'version'"'"'])" 2>/dev/null || :; \
             #T#       }; \
-            #T#       # Install numpy first, so that the gdal install works.
-            #T#       pipenv run pip install numpy$(pipfile_lock_version numpy); \
+            #T#       # Add numpy to the prinstall line to install numpy first,
+            #T#       # so that the gdal install works.
+            #T#       vsi::pip-tools::preinstall /src/requirements.txt numpy; \
+                  vsi::pip-tools::preinstall /src/requirements.txt; \
                   # Install all packages into the image
-                  pipenv sync; \
+                  pip-sync -v /src/requirements.txt; \
                 fi; \
                 # Cleanup and make way for the real /src that will be mounted at runtime
                 rm -rf /src/* /tmp/pip*
 
             # These recipes are added here instead of in the dep_stage so that docker
-            # is not constantly rerunning pipenv sync everytime the slightest change
+            # is not constantly rerunning pip-sync every time the slightest change
             # to vsi_common is made.
-            COPY --from=gosu /usr/local/bin/gosu /usr/local/bin/gosu
-            COPY --from=vsi /vsi /vsi
+            COPY "'"$(docker_add_quote_escape "${RELATIVE_PATH}")"'" /vsi
 
             ENTRYPOINT ["/usr/bin/env", "bash", "/vsi/linux/just_files/just_entrypoint.sh"]
 
@@ -643,7 +732,7 @@ function write_dockerfile()
                   #T# Example of a package
                   #T# qbs-examples \' >> "${1}"
 
-  if [ "${USE_PIPENV}" != "1" ]; then
+  if [ "${USE_PIP_TOOLS}" != "1" ]; then
     echo   '      tzdata \' >> "${1}"
   fi
 
@@ -666,18 +755,14 @@ function write_dockerfile()
             RUN chmod u+s /usr/local/bin/gosu
             ' >> "${1}"
 
-  if [ "${USE_PIPENV}" = "1" ]; then
-    echo   'COPY --from=pipenv_cache /venv /venv' >> "${1}"
+  if [ "${USE_PIP_TOOLS}" = "1" ]; then
+    echo   'COPY --from=python_cache /venv /venv' >> "${1}"
   fi
-  echo     'COPY --from=vsi /vsi /vsi' >> "${1}"
+  uwecho   'COPY "'"$(docker_add_quote_escape "${RELATIVE_PATH}")"'" /vsi
 
-  if [ "${USE_PIPENV}" = "1" ]; then
-    echo   'ADD ["'"$(docker_add_quote_escape "${PROJECT_NAME}.env")"'", "Pipfile", "Pipfile.lock", "/src/"]' >> "${1}"
-  else
-    echo   'ADD ["'"$(docker_add_quote_escape "${PROJECT_NAME}.env")"'", "/src/"]' >> "${1}"
-  fi
+            ADD ["'"$(docker_add_quote_escape "${PROJECT_NAME}.env")"'", "/src/"]
 
-  uwecho   'ADD ["'"$(docker_add_quote_escape docker/"${APP_NAME}.Justfile")"'", "/src/docker/"]
+            ADD ["'"$(docker_add_quote_escape docker/"${APP_NAME}.Justfile")"'", "/src/docker/"]
 
             ENV JUSTFILE="/src/docker/'"$(docker_env_quote_escape "${APP_NAME}.Justfile")"'" \
                 JUST_SETTINGS="/src/'"$(docker_env_quote_escape "${PROJECT_NAME}.env")"'"
@@ -688,6 +773,157 @@ function write_dockerfile()
 
             #T# Update the default '"${APP_NAME}.Justfile"' target
             CMD ["'"${APP_NAME}"'-cmd"]' >> "${1}"
+}
+
+#########################
+### deploy.Dockerfile ###
+#########################
+function write_deploy_dockerfile()
+{
+  exists "${1}" && return 0
+
+  uwecho   '# syntax=docker/dockerfile:1.4
+            ARG SOURCE_IMAGE
+            ARG RUNNER_IMAGE' >> "${1}"
+  if [ "${USE_PIP_TOOLS}" = "1" ]; then
+    echo   'ARG PIP_IMAGE
+
+            # --------------------
+            # Pipenv cache: /venv
+            # -- terra virtualenv into /venv/terra*
+            # --------------------
+            FROM ${PIP_IMAGE} as pip_terra_cache
+
+            # clear the way
+            RUN rm -rf /terra /vsi
+
+            # vsi_common
+            COPY external/terra/external/vsi_common/setup.py /vsi/
+
+            # terra
+            COPY external/terra/setup.py external/terra/Pipfile* /terra/
+
+            # link terra, vsi, & src
+            RUN mkdir -p /vsi /terra/external /src/external; \
+                ln -s /vsi /terra/external/vsi_common; \
+                ln -s /terra /src/external/terra;
+
+            # pipenv/bin/fake_package for local packages (vsi_common & terra)
+            # https://github.com/VisionSystemsInc/docker_recipes/blob/48a66d512f4e6075e42a08668f1a59027800323a/30_get-pipenv#L120-L135
+            # including only setup.py files results in fewer cache misses
+            RUN FAKE_PACKAGE="/usr/local/bin/fake_package"; \
+                (cd /vsi; "${FAKE_PACKAGE}" vsi python/vsi); \
+                (cd /terra; "${FAKE_PACKAGE}" terra terra);
+
+            # terra pipenv setup
+            COPY external/terra/Pipfile* /terra/
+            ENV WORKON_HOME=/venv \
+                PIPENV_CACHE_DIR=/venv/cache \
+                PYENV_SHELL=/bin/bash
+
+            RUN mkdir /usr/local/pipenv; \
+                /usr/local/conda-python/bin/python -m venv /usr/local/pipenv; \
+                /usr/local/pipenv/bin/pip install pipenv; \
+                PIPENV_PIPFILE=/terra/Pipfile /usr/local/pipenv/bin/pipenv --python /usr/local/pipenv/bin/python sync
+
+            # entrypoint & command are reused from PIP_IMAGE
+            ' >> "${1}"
+  fi
+
+  uwecho   '# --------------------
+            # Source cache: /src /vsi /terra /nerfstudio
+            # -- add vsi_common, terra, nerfstudio files
+            # -- add source files & folders
+            # -- link terra, vsi, nerfstudio, src
+            # -- add install volume from tar file
+            # --------------------
+            FROM ${SOURCE_IMAGE} as source_cache
+
+            # clear the way
+            RUN rm -rf /src /vsi /terra /nerfstudio /wriva_metrics /wrivalib
+
+            # vsi_common
+            COPY external/terra/external/vsi_common /vsi
+
+            # terra
+            COPY external/terra/Pipfile* external/terra/setup.py \
+                 external/terra/Justfile external/terra/terra.env \
+                 /terra/
+            COPY external/terra/terra /terra/terra
+
+            # nerfstudio
+            COPY external/nerfstudio /nerfstudio
+
+            # wriva_metrics
+            COPY external/wriva_metrics /wriva_metrics
+
+            # wrivalib
+            COPY external/wrivalib /wrivalib
+
+            # link terra, vsi, & src
+            RUN mkdir -p /terra/external /src/external; \
+                ln -s /vsi /terra/external/vsi_common; \
+                ln -s /terra /src/external/terra; \
+                ln -s /nerfstudio /src/external/nerfstudio; \
+                ln -s /wriva_metrics /src/external/wriva_metrics; \
+                ln -s /wrivalib /src/external/wrivalib;
+
+            # files & folders
+            COPY requirements.txt wriva.env setup.py /src/
+            COPY docker/wriva.Justfile /src/docker/
+
+            # apps & scripts
+            COPY scenicnerf /src/scenicnerf
+            COPY scripts /src/scripts
+            COPY wriva /src/wriva
+
+            # entrypoint & command are reused from SOURCE_IMAGE
+
+
+            # --------------------
+            # Final deployment
+            # --------------------
+            FROM ${RUNNER_IMAGE}
+
+            # clear the way
+            RUN rm -rf /src /venv /vsi /terra /nerfstudio /wriva_metrics /wrivalib
+
+            # environment
+            ENV JUSTFILE="/src/docker/wriva.Justfile" \
+                JUST_SETTINGS="/src/wriva.env" \
+                # PYTHONPATH="${PYTHONPATH:+${PYTHONPATH}:}/install/lib/python3/site-packages" \
+                TERRA_CWD="/terra" \
+                WORKON_HOME=/venv \
+                PIPENV_CACHE_DIR=/venv/cache \
+                PYENV_SHELL=/bin/bash
+
+            # Copy from pip_terra_cache
+            COPY --from=pip_terra_cache /venv /venv
+
+            # Copy from source_cache
+            COPY --from=source_cache /vsi /vsi
+            COPY --from=source_cache /terra /terra
+            COPY --from=source_cache /nerfstudio /nerfstudio
+            COPY --from=source_cache /wriva_metrics /wriva_metrics
+            COPY --from=source_cache /wrivalib /wrivalib
+            COPY --from=source_cache /src /src
+            COPY docker/deploy_config.json /src/docker/deploy_config.json
+
+            # default working directory
+            WORKDIR /src
+
+            # optionally remove development packages
+            ARG REMOVE_DEV_PACKAGES=0
+            RUN if [ "${REMOVE_DEV_PACKAGES}" = "1" ]; then \
+                  dnf -y remove \
+                      gdb \
+                      openssl \
+                      python3 \
+                      vim-minimal \
+                      ; \
+                fi
+
+            # entrypoint & command are reused from RUNNER_IMAGE' >> "${1}"
 }
 
 ####################
@@ -703,46 +939,28 @@ function write_app_justfile()
             #T# script and use the proper syntax highlighting
 
             source "${VSI_COMMON_DIR}/linux/just_files/just_default_run_functions.bsh"
+            source "${VSI_COMMON_DIR}/linux/just_files/just_pip-tools_functions.bsh"
 
             function caseify()
             {
               local cmd="${1}"
               shift 1
               case "${cmd}" in
-            ' >> "${1}"
-
-  if [ "${USE_PIPENV}" = "1" ]; then
-    uwecho '    #T# default CMD
+                #T# default CMD
                 '"${APP_NAME}"'-cmd) # Run '"${APP_NAME}"'
                   echo "Run '"${APP_NAME}"' here: ${cmd} ${@+${@}}"
                   ;;
 
-                shell) # Start interactive shell
-                  pipenv shell
-                  ;;
+                shell) # Start interactive shell' >> "${1}"
 
-                nopipenv) # Run command without pipenv
-                  exec "${@}"
-                  ;;
-
-                pipenv) # Run pipenv command
-                  exec "${cmd}" ${@+"${@}"}
-                  ;;
-            ' >> "${1}"
+  if [ "${USE_PIP_TOOLS}" = "1" ]; then
+    echo   '      bash --rcfile /venv/src/bin/activate ${@+"${@}"}' >> "${1}"
   else
-    uwecho '    #T# default CMD
-                '"${APP_NAME}"'-cmd) # Run example
-                  echo "Run '"${APP_NAME}"' here: ${cmd} ${@+${@}}"
-                  extra_args=${#}
-                  ;;
-
-                shell) # Start interactive shell
-                  bash
-                  ;;
-            ' >> "${1}"
+    echo   '      bash' >> "${1}"
   fi
 
-  uwecho '    *)
+  uwecho '      ;;
+              *)
                 #T# When a container runs, its docker "command" is passed to this Justfile.
                 #T# This command is matched to the just targets above. When none of those
                 #T# targets are matched, this defaultify will run the command exactly as is
@@ -753,6 +971,50 @@ function write_app_justfile()
           }' >> "${1}"
 }
 
+######################################
+ ### deploy.Dockerfile.dockerignore ###
+######################################
+
+function deploy_Dockerfile_dockerignore()
+{
+  exists "${1}" && return 0
+
+  uwecho   '# ignore everything...
+            *
+
+            # except for these files & folders...
+            !docker
+            # !requirements.in
+            !requirements.txt
+            !wriva.env
+            !setup.py
+
+            # apps & scripts
+            !scenicnerf
+            !scripts
+            !wriva
+
+            # vsi_common
+            !external/terra/external/vsi_common
+
+            # terra
+            !external/terra/Justfile
+            !external/terra/Pipfile
+            !external/terra/Pipfile.lock
+            !external/terra/setup.py
+            !external/terra/terra.env
+            !external/terra/terra
+
+            # nerfstudio
+            !external/nerfstudio
+
+            # wriva_metrics
+            !external/wriva_metrics
+
+            # wrivalib
+            !external/wrivalib' >> "${1}"
+}
+
 ##########################
 ### docker-compose.yml ###
 ##########################
@@ -760,67 +1022,118 @@ function write_docker_compose_yml()
 {
   exists "${1}" && return 0
 
-  uwecho   'version: "2.4"
+  uwecho   '# Common environment
+            x-common-environment: &common_environment
+              DISPLAY:
+              TZ:
+              #T# Variables for just_entrypoint_functions
+              DOCKER_UID: ${'"${PROJECT_PREFIX}"'_UID}
+              DOCKER_GIDS: ${'"${PROJECT_PREFIX}"'_GIDS}
+              DOCKER_GROUP_NAMES: ${'"${PROJECT_PREFIX}"'_GROUP_NAMES}
+              DOCKER_USERNAME: ${'"${PROJECT_PREFIX}"'_USERNAME_DOCKER}
+              #T# Uncomment to add a persistent home directory. This is nice
+              #T# for bash history and some applications that store files in home
+              # DOCKER_HOME: ${'"${PROJECT_PREFIX}"'_HOME}
 
-            services:' >> "${1}"
-
-  if [ "${USE_PIPENV}" = "1" ]; then
-    uwecho '  '"${APP_NAME}"': &'"${APP_NAME}"'
-                build: &'"${APP_NAME}"'_build' >> "${1}"
-  else
-    uwecho '  '"${APP_NAME}"':
-                build:' >> "${1}"
-  fi
-  uwecho   '      context: .
-                  dockerfile: docker/'"${APP_NAME}"'.Dockerfile
-                #T# prevent different users from clobbering each others images
-                image: ${'"${PROJECT_PREFIX}"'_DOCKER_REPO}:'"${APP_NAME}"'_${'"${PROJECT_PREFIX}"'_USERNAME}
-                environment:
-                  #T# Variables for just_entrypoint_functions
-                  - DOCKER_UID=${'"${PROJECT_PREFIX}"'_UID}
-                  - DOCKER_GIDS=${'"${PROJECT_PREFIX}"'_GIDS}
-                  - DOCKER_GROUP_NAMES=${'"${PROJECT_PREFIX}"'_GROUP_NAMES}
-                  - DOCKER_USERNAME=user
-
-            #       - DOCKER_HOME=${'"${PROJECT_PREFIX}"'_HOME}
-
-                  - DISPLAY
-                  - JUSTFILE=/src/docker/'"${APP_NAME}"'.Justfile
-                  - JUST_SETTINGS=/src/'"${PROJECT_NAME}"'.env
-                  - TZ' >> "${1}"
-  if [ "${USE_PIPENV}" = "1" ]; then
-    echo   '      - SKIP_PIPENV_SYNC=${'"${PROJECT_PREFIX}"'_SKIP_PIPENV_SYNC-}' >> "${1}"
-  fi
-  uwecho   '#     runtime: nvidia  # Uncomment for nvidia gpu support
-            #     cap_add:
-            #       - SYS_PTRACE # Useful for gdb
-                volumes:
-                  - type: ${'"${PROJECT_PREFIX}"'_SOURCE_DIR_TYPE}
+            x-volumes:
+                  - &source_volume
+                    type: ${'"${PROJECT_PREFIX}"'_SOURCE_DIR_TYPE}
                     source: ${'"${PROJECT_PREFIX}"'_SOURCE_DIR}
                     target: ${'"${PROJECT_PREFIX}"'_SOURCE_DIR_DOCKER}' >> "${1}"
-  if [ "${USE_PIPENV}" = "1" ]; then
-    uwecho '      - type: volume
+  if [ "${USE_PIP_TOOLS}" = "1" ]; then
+    uwecho '      - &venv_volume
+                    type: volume
                     source: venv
                     target: /venv' >> "${1}"
   fi
-  uwecho   '#       - type: volume
+  uwecho   '#       - &home_volume
+            #         type: volume
             #         source: home-volume
-            #         target: ${'"${PROJECT_PREFIX}"'_HOME} # home-volume should be overridable' >> "${1}"
-  if [ "${USE_PIPENV}" = "1" ]; then
-    uwecho '  '"${APP_NAME}"'_pipenv:
-                <<: *'"${APP_NAME}"'
+            #         target: ${'"${PROJECT_PREFIX}"'_HOME} # home-volume should be overridable
+
+            services:
+              runner: &runner
+                build: &runner_build
+                  context: .
+                  dockerfile: docker/'"${APP_NAME}"'.Dockerfile
+                  args:
+                    VSI_RECIPE_REPO:
+                    SKIP_PIP_SYNC: ${'"${PROJECT_PREFIX}"'_SKIP_PIP_SYNC-}
+                    PYTHON_VERSION: ${'"${PROJECT_PREFIX}"'_PYTHON_VERSION}
+                    BASE_IMAGE: "${'"${PROJECT_PREFIX}"'_BASE_IMAGE}"
+
+                #T# prevent different users from clobbering each others images
+                image: ${'"${PROJECT_PREFIX}"'_RUNNER_IMAGE}
+                environment:
+                  <<: *common_environment
+                  JUSTFILE: /src/docker/'"${APP_NAME}"'.Justfile
+                  JUST_SETTINGS: /src/'"${PROJECT_NAME}"'.env
+            #     runtime: nvidia  # Uncomment for nvidia gpu support
+            #     cap_add:
+            #       - SYS_PTRACE # Useful for gdb
+                volumes:
+                  - <<: *source_volume
+            #       - <<: *home_volume' >> "${1}"
+
+
+  if [ "${USE_PIP_TOOLS}" = "1" ]; then
+    uwecho '      - <<: *venv_volume
+
+              python_cache:
+                <<: *runner
                 build:
-                  <<: *'"${APP_NAME}"'_build
-                  target: pipenv_cache
-                image: ${'"${PROJECT_PREFIX}"'_DOCKER_REPO}:'"${APP_NAME}"'_pipenv_${'"${PROJECT_PREFIX}"'_USERNAME}
+                  <<: *runner_build
+                  target: python_cache
+                image: ${'"${PROJECT_PREFIX}"'_PYTHON_CACHE_IMAGE}
+                volumes:
+                  - <<: *venv_volume
+                    read_only: ${'"${PROJECT_PREFIX}"'_VENV_DIR_READONLY-false}
+                  # - *home_volume' >> "${1}"
+  fi
+  uwecho   '
+              # Deploy image
+              deploy: &deploy
+                <<: *runner
+                build:
+                  context: .
+                  dockerfile: docker/deploy.Dockerfile
+                  args:' >> "${1}"
+  if [ "${USE_PIP_TOOLS}" = "1" ]; then
+    echo   '        PYTHON_IMAGE: ${'"${PROJECT_PREFIX}"'_PYTHON_CACHE_IMAGE}' >> "${1}"
+  fi
+  uwecho   '        SOURCE_IMAGE: ${'"${PROJECT_PREFIX}"'_RUNNER_IMAGE}
+                    RUNNER_IMAGE: ${'"${PROJECT_PREFIX}"'_RUNNER_IMAGE}
+                    REMOVE_DEV_PACKAGES: ${'"${PROJECT_PREFIX}"'_REMOVE_DEV_PACKAGES}
+                image: ${'"${PROJECT_PREFIX}"'_DEPLOY_IMAGE}
+                environment:
+                  <<: *common_environment
+                volumes: []
+
             volumes:
-              venv:
+            #   x-bugfix:
+            #   home-volume:' >> "${1}"
+
+  if [ "${USE_PIP_TOOLS}" = "1" ]; then
+    uwecho '  venv:
                 labels:
                   com.vsi.just.clean_action: ask' >> "${1}"
-  else
-    echo   '# volumes:' >> "${1}"
   fi
-  echo     '#   home-volume:' >> "${1}"
+}
+
+############################
+### singular-compose.env ###
+############################
+
+##########################
+### docker-compose.yml ###
+##########################
+function write_singular_compose_env()
+{
+  exists "${1}" && return 0
+
+  uwecho 'instances+=(runner)
+          runner_singular_flags=(-c -e)
+          : ${runner_image=${'"${PROJECT_PREFIX}"'_RUN_DIR}/build/'"${APP_NAME}"'_runner.simg}' >> "${1}"
 }
 
 #####################
@@ -853,12 +1166,9 @@ function write_dockerignore()
     echo   '!'"${PROJECT_NAME}.env" >> "${1}"
   fi
 
-  if [ "${USE_PIPENV}" = "1" ]; then
-    if ! grep -q '!Pipfile$' "${1}" 2>/dev/null; then
-      echo '!Pipfile' >> "${1}"
-    fi
-    if ! grep -q '!Pipfile.lock$' "${1}" 2>/dev/null; then
-      echo '!Pipfile.lock' >> "${1}"
+  if [ "${USE_PIP_TOOLS}" = "1" ]; then
+    if ! grep -q '!requirements.txt$' "${1}" 2>/dev/null; then
+      echo '!requirements.txt' >> "${1}"
     fi
   fi
 }
@@ -981,7 +1291,7 @@ function new_just()
         echo "  --vsi-dir DIR - VSI common submodule dir"
         echo "  --[no-]vsi - Enable/[disable] using the vsi submodule"
         echo "  --[no-]docker - Enable/[disable] setting up docker"
-        echo "  --[no-]pipenv - Enable/[disable] using pipenv in docker"
+        echo "  --[no-]pip-tools - Enable/[disable] using pip-tools in docker"
         echo "  --[no-]tutorial - Enable/[disable] adding tutorial comments"
         echo "  --app APP - Application name for docker compose service"
         echo "  --repo REPO - Docker repo name for compiled images"
@@ -994,7 +1304,7 @@ function new_just()
       --defaults)
         USE_DEFAULTS=1
         : ${USE_DOCKER=y}
-        : ${USE_PIPENV=y}
+        : ${USE_PIP_TOOLS=y}
         : ${USE_TUTORIAL=n}
         : ${SETUP_GIT=n}
         ;;
@@ -1034,11 +1344,11 @@ function new_just()
       --no-docker)
         USE_DOCKER=n
         ;;
-      --pipenv)
-        USE_PIPENV=y
+      --pip-tools)
+        USE_PIP_TOOLS=y
         ;;
-      --no-pipenv)
-        USE_PIPENV=n
+      --no-pip-tools)
+        USE_PIP_TOOLS=n
         ;;
       --app)
         APP_NAME="${1}"
@@ -1240,12 +1550,12 @@ function new_just()
   ask_question "Use docker?" USE_DOCKER y
 
   #**
-  # .. env:: USE_PIPENV
+  # .. env:: USE_PIP_TOOLS
   #
-  # Flag to turn on setting up pipenv
+  # Flag to turn on setting up pip-tools
   #**
 
-  ask_question "Use pipenv?" USE_PIPENV y
+  ask_question "Use pip-tools?" USE_PIP_TOOLS y
   if [ "${USE_DOCKER}" = "1" ]; then
 
     #**
@@ -1254,8 +1564,8 @@ function new_just()
     # The name of the test app generated. Used for the name of the first service populated for you.
     #**
     if set_default APP_NAME \
-                   "$(echo "${APP_NAME-example}" | tr '[A-Z]' '[a-z]' | sed -${sed_flag_rE} 's|[^a-z0-9_.-]+||g')" \
-                   "Name of the example docker compose app"; then
+                   "$(echo "${APP_NAME-runner}" | tr '[A-Z]' '[a-z]' | sed -${sed_flag_rE} 's|[^a-z0-9_.-]+||g')" \
+                   "Name of the first docker compose service"; then
       APP_NAME="$(echo "${APP_NAME}" | tr '[A-Z]' '[a-z]' | sed -${sed_flag_rE} 's|[^a-z0-9_.-]+||g')"
     fi
 
@@ -1300,7 +1610,7 @@ function new_just()
   fi
 
   printf "%-40s | %-40s\n" "Use docker" "${USE_DOCKER}"
-  printf "%-40s | %-40s\n" "Use pipenv" "${USE_PIPENV}"
+  printf "%-40s | %-40s\n" "Use pip-tools" "${USE_PIP_TOOLS}"
   printf "%-40s | %-40s\n" "Include vsi_common" "${USE_VSI_COMMON}"
   if [ "${USE_DOCKER}" = "1" ]; then
 
@@ -1352,10 +1662,16 @@ function new_just()
   write_justfile "${JUSTFILE}"
   format_tutorial "${JUSTFILE}"
 
-  if [ "${USE_PIPENV}" = "1" ]; then
-    write_pipfile Pipfile
-    format_tutorial Pipfile
-    write_pipfile_lock Pipfile.lock
+  if [ "${USE_PIP_TOOLS}" = "1" ]; then
+    write_requirements_in requirements.in
+    format_tutorial requirements.in
+    write_requirements_txt requirements.txt
+    format_tutorial requirements.txt
+    write_setup_py setup.py
+    format_tutorial setup.py
+
+    mkdir -p "${APP_NAME}"
+    touch "${APP_NAME}/__init__.py"
   fi
 
   if [ "${USE_DOCKER}" = "1" ]; then
@@ -1366,6 +1682,12 @@ function new_just()
 
     write_app_justfile "docker/${APP_NAME}.Justfile"
     format_tutorial "docker/${APP_NAME}.Justfile"
+
+    write_deploy_dockerfile "docker/deploy.Dockerfile"
+    format_tutorial "docker/deploy.Dockerfile"
+
+    deploy_Dockerfile_dockerignore "docker/deploy.Dockerfile.dockerignore"
+    format_tutorial "docker/deploy.Dockerfile"
 
     write_docker_compose_yml docker-compose.yml
     format_tutorial docker-compose.yml
@@ -1406,15 +1728,17 @@ function new_just()
           "git add $(quote_escape "${SETUPFILE}") .gitmodules")
   fi
 
+  cmds+=('sed "${sed_flags_i[@]}" '"'"'s|^JUST_VERSION=.*$|JUST_VERSION='"'"'"$(. '"${RELATIVE_PATH}"'/linux/just_files/just_version.bsh; echo "${JUST_VERSION}")|" foo.env')
+
   cmds+=("git add .gitignore README.md $(quote_escape "${JUSTFILE}") $(quote_escape "${PROJECT_NAME}").env")
 
   if [ "${USE_DOCKER}" = "1" ]; then
-    cmds+=("git add .gitattributes .dockerignore docker-compose.yml docker/${APP_NAME}.Dockerfile docker/${APP_NAME}.Justfile")
+    cmds+=("git add .gitattributes .dockerignore docker-compose.yml docker/${APP_NAME}.Dockerfile docker/${APP_NAME}.Justfile docker/deploy.Dockerfile docker/deploy.Dockerfile.dockerignore")
   else
     cmds+=("git add hi.cpp")
   fi
-  if [ "${USE_PIPENV}" = "1" ]; then
-    cmds+=("git add Pipfile Pipfile.lock")
+  if [ "${USE_PIP_TOOLS}" = "1" ]; then
+    cmds+=("git add '${APP_NAME}' requirements.in requirements.txt setup.py")
   fi
 
   cmds+=("git commit -m 'Initial commit'")
@@ -1430,9 +1754,6 @@ function new_just()
     for cmd in "${cmds[@]}"; do
       eval "${cmd}"
     done
-
-    . "${VSI_DIR}/linux/just_files/just_version.bsh"
-    sed "${sed_flags_i[@]}" 's|^JUST_VERSION=.*$|JUST_VERSION="'"${JUST_VERSION}"'"|' "${PROJECT_NAME}.env"
   fi
 
   uwecho "
