@@ -49,13 +49,44 @@ function just::pip-tools::shell()
   local service_name="${JUST_PROJECT_PREFIX}_PIP_TOOLS_SERVICE"
   service_name=${!service_name-python_cache}
   local venv_dir="${JUST_PROJECT_PREFIX}_PIP_TOOLS_DIR"
+  local source_dir="${JUST_PROJECT_PREFIX}_SOURCE_DIR"
+  source_dir="${!source_dir}"
 
-  if [ -n "${JUST_IN_CONTAINER+set}" ]; then
-    venv_dir=${!venv_dir-/venv/src}
-    bash --rcfile "${venv_dir}/bin/activate" ${@+"${@}"}
-  elif [ "${pip_tools_env}" = "local" ]; then
-    venv_dir=${!venv_dir-${!id_project_cwd}/build/python}
-    bash --rcfile "${venv_dir}/bin/activate" ${@+"${@}"}
+  if [ -n "${JUST_IN_CONTAINER+set}" ] || [ "${pip_tools_env}" = "local" ]; then
+    if [ -n "${JUST_IN_CONTAINER+set}" ]; then
+      venv_dir=${!venv_dir-/venv/src}
+    else
+      venv_dir=${!venv_dir-${!id_project_cwd}/build/python}
+
+      if [ ! -x "${venv_dir}/bin/python" ] && [ ! -e "${venv_dir}/Scripts/python.exe" &> /dev/null ]; then
+        justify pip-setup
+      fi
+    fi
+    ls -la "${venv_dir}/bin"
+    case "${1}" in
+      pip-sync|pip-compile)
+        # Make sure pip-tools is installed (e.g. if SKIP_PIP_SYNC was used)
+        if ! command -v "${venv_dir}/bin/${1}" &> /dev/null; then
+          source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
+          local tmp_requirements
+          make_temp_path tmp_requirements
+          grep -v '^-e\|\[' "${source_dir}/requirements.txt" > "${tmp_requirements}"
+          ${venv_dir}/bin/pip install -c "${tmp_requirements}" pip-tools
+        fi
+    esac
+
+    if [ "${1}" = "pip-shell" ]; then
+      # Just run a bash shell for pip-shell
+      bash --rcfile "${venv_dir}/bin/activate" ${@+"${@}"}
+    elif [ "${1}" = "pip-compile" -a "${#}" = "1" ]; then
+      "${venv_dir}/bin/pip-compile" -v --allow-unsafe --resolver=backtracking -o "${source_dir}/requirements.txt" "${source_dir}/requirements.in"
+      # We can't do hashes until https://github.com/VisionSystemsInc/vsi_common/issues/437 is solved
+      # exec pip-compile --allow-unsafe --generate-hashes --resolver=backtracking -o "${source_dir}/requirements.txt" "${source_dir}/requirements.in"
+    elif [ "${1}" = "pip-sync" -a "${#}" = "1" ]; then
+      "${venv_dir}/bin/pip-sync" -v "${source_dir}/requirements.txt"
+    else
+      bash --rcfile "${venv_dir}/bin/activate" -c '${@+"${@}"}' -- ${@+"${@}"}
+    fi
   elif [ "${pip_tools_env}" = "docker" ]; then
     Just-docker-compose run "${service_name}" ${@+"${@}"}
   elif [ "${pip_tools_env}" = "singularity" ]; then
@@ -83,69 +114,98 @@ function just::defaultify::pip-tools()
 
   local id_project_cwd="${JUST_PROJECT_PREFIX}_CWD"
 
-  case ${arg} in
-    pip-shell) # Start a bash shell in your runtime environment
-      just::pip-tools::shell pip-shell ${@+"${@}"}
+  case "${arg}" in
+    pip-shell) # Start a bash shell in pip-tools managed environment
+      just::pip-tools::shell pip-shell
+      ;;
+    # pip) # Run pip in pip-tools managed environment
+    # pip-sync) # Run pip-sync for project
+    # pip-compile) # Run pip-compile for project
+    pip|pip-sync|pip-compile)
+      just::pip-tools::shell "${arg}" ${@+"${@}"}
       extra_args=${#}
       ;;
-    pip) # Pip
-      if [ -z "${JUST_IN_CONTAINER+set}" ]; then
-        Just-docker-compose run python_cache pip ${@+"${@}"}
+    # pip-sync)
+    #   if [ -z "${JUST_IN_CONTAINER+set}" ]; then
+    #     Just-docker-compose run python_cache pip-sync ${@+"${@}"}
+    #   else
+    #     source /venv/src/bin/activate
+
+    #     # Make sure pip-sync works if SKIP_PIP_SYNC was used
+    #     if ! command -v pip-sync &> /dev/null; then
+    #       grep -v '^-e\|\[' /src/requirements.txt > /tmp/requirements.8210
+    #       pip install -c /tmp/requirements.8210 pip-tools
+    #     fi
+
+    #     if [ "${#}" = "0" ]; then
+    #       exec pip-sync -v /src/requirements.txt
+    #     else
+    #       exec pip-sync ${@+"${@}"}
+    #     fi
+    #   fi
+    #   # just::pip-tools::shell pip-sync ${@+"${@}"}
+    #   # extra_args=${#}
+    #   ;;
+    # pip-compile)
+    #   if [ -z "${JUST_IN_CONTAINER+set}" ]; then
+    #     Just-docker-compose run python_cache pip-compile ${@+"${@}"}
+    #   else
+    #     . /venv/src/bin/activate
+    #     # Make sure pip-compile works if SKIP_PIP_SYNC was used
+    #     if ! command -v pip-compile &> /dev/null; then
+    #       grep -v '^-e\|\[' /src/requirements.txt > /tmp/requirements.8210
+    #       pip install -c /tmp/requirements.8210 pip-tools
+    #     fi
+    #     if [ "${#}" = "0" ]; then
+    #       exec pip-compile -v --allow-unsafe --resolver=backtracking -o /src/requirements.txt /src/requirements.in
+    #       # We can't do hashes until https://github.com/VisionSystemsInc/vsi_common/issues/437 is solved
+    #       # exec pip-compile --allow-unsafe --generate-hashes --resolver=backtracking -o /src/requirements.txt /src/requirements.in
+    #     else
+    #       exec pip-compile ${@+"${@}"}
+    #     fi
+    #   fi
+    #   # just::pip-tools::shell pip-compile ${@+"${@}"}
+    #   # extra_args=${#}
+    #   ;;
+    pip-setup) # Setup python and a virtualend for local pip-tools environments
+      source "${VSI_COMMON_DIR}/linux/just_files/just_install_functions.bsh"
+
+      local venv_dir="${JUST_PROJECT_PREFIX}_PIP_TOOLS_ENVIRONMENT"
+      if [ "${!venv_dir-local}" != "local" ]; then
+        echo "${RED}Error: This is for local environments only. ${venv_dir} is set to \"${!venv_dir}\"${NC}" >&2
+        return 1
+      fi
+      venv_dir="${JUST_PROJECT_PREFIX}_PIP_TOOLS_DIR"
+      venv_dir=${!venv_dir-${!id_project_cwd}/build/python}
+
+      # Setup python interpreter
+      local python_version="${JUST_PROJECT_PREFIX}_PYTHON_VERSION"
+      : ${PYTHON_VERSION=${TERRA_PYTHON_VERSION:-3.10.12}}
+      if (( ${#} )); then
+        conda-python-install --dir "${venv_dir}/.python" ${@+"${@}"}
       else
-        just::pip-tools::shell pip ${@+"${@}"}
+        conda-python-install --dir "${venv_dir}/.python" --download ${@+"${@}"}
       fi
       extra_args=${#}
-      ;;
-    pip-sync)
-      if [ -z "${JUST_IN_CONTAINER+set}" ]; then
-        Just-docker-compose run python_cache pip-sync ${@+"${@}"}
+
+      # Setup the virtualenv
+      local platform_bin
+      if [ "${OS-}" = "Windows_NT" ]; then
+        platform_bin=Scripts
       else
-        source /venv/src/bin/activate
+        platform_bin=bin
+      fi
 
-        # Make sure pip-sync works if SKIP_PIP_SYNC was used
-        if ! command -v pip-sync &> /dev/null; then
-          grep -v '^-e\|\[' /src/requirements.txt > /tmp/requirements.8210
-          pip install -c /tmp/requirements.8210 pip-tools
-        fi
+      "${venv_dir}/.python/${platform_bin}/python" -m venv "${venv_dir}"
 
-        if [ "${#}" = "0" ]; then
-          exec pip-sync -v /src/requirements.txt
-        else
-          exec pip-sync ${@+"${@}"}
-        fi
+      # Setup local.env
+      local add_to_local="${add_to_local-}"
+      echo "" >&2
+      ask_question "Do you want to add \"${venv_dir}/${platform_bin}\" to your local.env automatically?" add_to_local y
+      if [ "${add_to_local}" == "1" ]; then
+        echo $'\n'"PATH=\"${venv_dir}/${platform_bin}:\${PATH}\"" >> "${!id_project_cwd}/local.env"
       fi
       ;;
-    pip-compile)
-      if [ -z "${JUST_IN_CONTAINER+set}" ]; then
-        Just-docker-compose run python_cache pip-compile ${@+"${@}"}
-      else
-        . /venv/src/bin/activate
-        # Make sure pip-compile works if SKIP_PIP_SYNC was used
-        if ! command -v pip-compile &> /dev/null; then
-          grep -v '^-e\|\[' /src/requirements.txt > /tmp/requirements.8210
-          pip install -c /tmp/requirements.8210 pip-tools
-        fi
-        if [ "${#}" = "0" ]; then
-          exec pip-compile -v --allow-unsafe --resolver=backtracking -o /src/requirements.txt /src/requirements.in
-          # We can't do hashes until https://github.com/VisionSystemsInc/vsi_common/issues/437 is solved
-          # exec pip-compile --allow-unsafe --generate-hashes --resolver=backtracking -o /src/requirements.txt /src/requirements.in
-        else
-          exec pip-compile ${@+"${@}"}
-        fi
-      fi
-      ;;
-    pip-setup) #?
-      ;;
-
-    # pip-shell) # Start a bash shell in your runtime environment
-    #   Just-docker-compose run python_cache shell
-    #   ;;
-
-    # pip|pip-sync|pip-compile) # Run pip-compile/pip-sync commands in pip container. \
-    #         # Useful for installing/updating pip-tools controlled packages
-    #   Just-docker-compose run python_cache "${just_arg}" ${@+"${@}"}
-    #   extra_args=${#}
-    #   ;;
 
     *)
       plugin_not_found=1
