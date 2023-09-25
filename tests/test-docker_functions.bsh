@@ -67,7 +67,7 @@ begin_test "Test DOCKER var"
   setup_test
   DRYRUN=echo
   DOCKER="DoCkEr"
-  [ "$(Docker run test)" = "DoCkEr run --rm test" ]
+  assert_str_eq "$(Docker run test)" "DoCkEr run --rm -e JUST_IN_CONTAINER=docker test"
 )
 end_test
 
@@ -123,9 +123,9 @@ begin_test "docker host dir"
   setup_test
 
   if [ "${OS-}" = "Windows_NT" ]; then
-    [ "$(docker_host_dir /tmp)" = "$(cygpath -w /tmp)" ]
+    assert_str_eq "$(docker_host_dir /tmp)" "$(cygpath -w /tmp)"
   else
-    [ "$(docker_host_dir /tmp)" = "/tmp" ]
+    assert_str_eq "$(docker_host_dir /tmp)" "/tmp"
   fi
 )
 end_test
@@ -161,9 +161,9 @@ begin_test "Docker volume string parsing"
     for docker_path in "${docker_paths[@]}"; do
       for test_volume_flag in "${test_volume_flags[@]}"; do
         docker_parse_volume_string "${host_path}:${docker_path}${test_volume_flag}"
-        [ "${volume_host}" = "${host_path}" ]
-        [ "${volume_docker}" = "${docker_path}" ]
-        [ "${volume_flags}" = "${test_volume_flag}" ]
+        assert_str_eq "${volume_host}" "${host_path}"
+        assert_str_eq "${volume_docker}" "${docker_path}"
+        assert_str_eq "${volume_flags}" "${test_volume_flag}"
       done
     done
   done
@@ -179,11 +179,11 @@ begin_test "Sanitize Volumes"
   [ ! -e "${temp_dir}" ]
 
   if [ "${OS-notwindows}" = "Windows_NT" ]; then
-    [ "$(docker_sanitize_volume "${temp_dir}" 2>/dev/null)" = "$(cygpath -w "${temp_dir}"):/${temp_dir}" ]
-    [ "$(docker_sanitize_volume "${temp_dir}" /foo)" = "$(cygpath -w "${temp_dir}")://foo" ]
+    assert_str_eq "$(docker_sanitize_volume "${temp_dir}" 2>/dev/null)" "$(cygpath -w "${temp_dir}"):/${temp_dir}"
+    assert_str_eq "$(docker_sanitize_volume "${temp_dir}" /foo)" "$(cygpath -w "${temp_dir}")://foo"
   else
-    [ "$(docker_sanitize_volume "${temp_dir}" 2>/dev/null)" = "${temp_dir}:${temp_dir}" ]
-    [ "$(docker_sanitize_volume "${temp_dir}" /bar)" = "${temp_dir}:/bar" ]
+    assert_str_eq "$(docker_sanitize_volume "${temp_dir}" 2>/dev/null)" "${temp_dir}:${temp_dir}"
+    assert_str_eq "$(docker_sanitize_volume "${temp_dir}" /bar)" "${temp_dir}:/bar"
   fi
 
   [ -e "${temp_dir}" ]
@@ -197,7 +197,7 @@ begin_test "Parse docker args"
   # Normal case
   parse-docker --config=blah.json -D -v run -v /foo:/bar debian:9 bash
   assert_array_values docker_args --config=blah.json -D -v
-  [ "${docker_command}" = "run" ]
+  assert_str_eq "${docker_command}" "run"
   assert_array_values docker_command_args -v /foo:/bar debian:9 bash
 
   # Test all args that take an argument
@@ -205,13 +205,13 @@ begin_test "Parse docker args"
     parse-docker "${arg}" foobar
     declare -p docker_args docker_command docker_command_args
     assert_array_values docker_args "${arg}" foobar
-    [ "${docker_command-}" = "" ]
+    assert_str_eq "${docker_command-}" ""
     assert_array_values docker_command_args
 
     # Test = notation
     parse-docker "${arg}=foobar"
     assert_array_values docker_args "${arg}=foobar"
-    [ "${docker_command-}" = "" ]
+    assert_str_eq "${docker_command-}" ""
     assert_array_values docker_command_args
   done
 
@@ -219,7 +219,7 @@ begin_test "Parse docker args"
   for arg in -H -l; do
     parse-docker "${arg}foobar"
     assert_array_values docker_args "${arg}foobar"
-    [ "${docker_command-}" = "" ]
+    assert_str_eq "${docker_command-}" ""
     assert_array_values docker_command_args
   done
 
@@ -227,7 +227,7 @@ begin_test "Parse docker args"
   for arg in -v --version --tls -D --debug --tlsverify; do
     parse-docker "${arg}"
     assert_array_values docker_args "${arg}"
-    [ "${docker_command-}" = "" ]
+    assert_str_eq "${docker_command-}" ""
     assert_array_values docker_command_args
   done
 )
@@ -239,10 +239,10 @@ begin_test "Docker command"
   export DRYRUN=print_command
 
   DOCKER_AUTOREMOVE=0
-  a=("${DOCKER}" run -v '/test  this/:blah' 'debian:9')
+  a=("${DOCKER}" run '-e' 'JUST_IN_CONTAINER=docker' -v '/test  this/:blah' 'debian:9')
   r="$(Docker run -v "/test  this/:blah" debian:9)"
   eval "r=(${r})" # noquotes
-  cmp_elements_a a r
+  assert_array_eq a r
 )
 end_test
 
@@ -251,16 +251,16 @@ begin_test "DOCKER_AUTOREMOVE and DOCKER_EXTRA_*_ARGS"
   setup_test
   export DRYRUN=print_command
 
-  a=("${DOCKER}" run --rm -v '/test  this/:blah' 'debian:9')
+  a=("${DOCKER}" run --rm '-e' 'JUST_IN_CONTAINER=docker' -v '/test  this/:blah' 'debian:9')
   r="$(Docker run -v "/test  this/:blah" debian:9)"
   eval "r=(${r})" # noquotes
-  cmp_elements_a a r
+  assert_array_eq a r
 
   DOCKER_EXTRA_RUN_ARGS=('aaa' 'bbb')
-  a=("${DOCKER}" run --rm aaa bbb -v '/test  this/:blah' 'debian:9')
+  a=("${DOCKER}" run --rm '-e' 'JUST_IN_CONTAINER=docker' aaa bbb -v '/test  this/:blah' 'debian:9')
   r="$(Docker run -v "/test  this/:blah" debian:9)"
   eval "r=(${r})" # noquotes
-  cmp_elements_a a r
+  assert_array_eq a r
 )
 end_test
 
@@ -274,7 +274,7 @@ begin_test "DOCKER_EXTRA_ARGS"
   a=("${DOCKER}" --tls "${DOCKER_EXTRA_ARGS[@]}" build aaa bbb -v '/test  this/:blah' 'debian:9')
   r="$(Docker --tls build -v "/test  this/:blah" debian:9)"
   eval "r=(${r})" # noquotes
-  cmp_elements_a a r
+  assert_array_eq a r
 )
 end_test
 
@@ -284,9 +284,9 @@ begin_test "Test DOCKER_COMPOSE var"
   DRYRUN=echo
   unset DOCKER_COMPOSE
   DOCKER_COMPOSE="DoCkErCoMpOsE"
-  [ "$(JUSTFILE="${TESTDIR}/Justfile" Docker compose run test)" = "DoCkErCoMpOsE run --rm test" ]
+  assert_str_eq "$(JUSTFILE="${TESTDIR}/Justfile" Docker compose run test)" "DoCkErCoMpOsE run --rm test"
   DOCKER_COMPOSE=("DoCkEr" "CoMpOsE")
-  [ "$(JUSTFILE="${TESTDIR}/Justfile" Docker compose run test)" = "DoCkEr CoMpOsE run --rm test" ]
+  assert_str_eq "$(JUSTFILE="${TESTDIR}/Justfile" Docker compose run test)" "DoCkEr CoMpOsE run --rm test"
 )
 end_test
 
@@ -300,7 +300,7 @@ begin_test "parse docker compose volumes"
        "Lsource: internal" "ltarget: /src" "ltype: volume"
        "Ltarget: /tmp2" "ltype: tmpfs")
   parse_docker_compose_volumes nb <<< "${compose_file_long}"
-  cmp_elements_a DOCKER_VOLUME_LINES ans
+  assert_array_eq DOCKER_VOLUME_LINES ans
 
   ans=("S/tmp:/mnt"
        "Lsource: /home/user/src" "ltarget: /src" "ltype: bind"
@@ -308,17 +308,17 @@ begin_test "parse docker compose volumes"
        "Lsource: test_prefix_internal" "ltarget: /src" "ltype: volume"
        "Ltarget: /tmp2" "ltype: tmpfs")
   parse_docker_compose_volumes nb test_prefix_ <<< "${compose_file_long}"
-  cmp_elements_a DOCKER_VOLUME_LINES ans
+  assert_array_eq DOCKER_VOLUME_LINES ans
 
   ans=()
   parse_docker_compose_volumes foo <<< "${compose_file_long}"
-  cmp_elements_a DOCKER_VOLUME_LINES ans
+  assert_array_eq DOCKER_VOLUME_LINES ans
 
   parse_docker_compose_volumes bar <<< "${compose_file_long}"
-  cmp_elements_a DOCKER_VOLUME_LINES ans
+  assert_array_eq DOCKER_VOLUME_LINES ans
 
   parse_docker_compose_volumes none <<< "${compose_file_long}"
-  cmp_elements_a DOCKER_VOLUME_LINES ans
+  assert_array_eq DOCKER_VOLUME_LINES ans
 )
 end_test
 
@@ -349,21 +349,22 @@ begin_test "docker compose volumes"
                          "lvolume:"
                          "l  nocopy: true")
   docker_compose_volumes
-  sources=("/test1" "test3" "internal")
-  targets=("/test2" "/test4" "/src")
-  flags=(":ro" ":Z" $'volume:\n  nocopy: true')
-  cmp_elements_a DOCKER_VOLUME_SOURCES sources
-  cmp_elements_a DOCKER_VOLUME_TARGETS targets
-  cmp_elements_a DOCKER_VOLUME_FLAGS flags
+  sources=("" "/test1" "test3" "internal")
+  targets=("" "/test2" "/test4" "/src")
+  flags=("" ":ro" ":Z" $'volume:\n  nocopy: true')
+  unset sources[0] targets[0] flags[0]
+  assert_array_eq DOCKER_VOLUME_SOURCES sources
+  assert_array_eq DOCKER_VOLUME_TARGETS targets
+  assert_array_eq DOCKER_VOLUME_FLAGS flags
 
   DOCKER_VOLUME_LINES+=("S/test5:/test6:rw")
   docker_compose_volumes
   sources+=("/test5")
   targets+=("/test6")
   flags+=(":rw")
-  cmp_elements_a DOCKER_VOLUME_SOURCES sources
-  cmp_elements_a DOCKER_VOLUME_TARGETS targets
-  cmp_elements_a DOCKER_VOLUME_FLAGS flags
+  assert_array_eq DOCKER_VOLUME_SOURCES sources
+  assert_array_eq DOCKER_VOLUME_TARGETS targets
+  assert_array_eq DOCKER_VOLUME_FLAGS flags
 )
 end_test
 
@@ -409,7 +410,7 @@ begin_test "Parse docker compose args"
 
   parse_docker_compose run test
   assert_array_values docker_compose_args
-  [ "${docker_compose_command}" = "run" ]
+  assert_str_eq "${docker_compose_command}" "run"
   assert_array_values docker_compose_command_args test
 
   # Test all args that take an argument
@@ -417,13 +418,13 @@ begin_test "Parse docker compose args"
              --tlscacert --tlscert --tlskey --project-directory --env-file; do
     parse_docker_compose "${arg}" foobar
     assert_array_values docker_compose_args "${arg}" foobar
-    [ "${docker_compose_command-}" = "" ]
+    assert_str_eq "${docker_compose_command-}" ""
     assert_array_values docker_compose_command_args
 
     # Test = notation
     parse_docker_compose "${arg}=foobar"
     assert_array_values docker_compose_args "${arg}=foobar"
-    [ "${docker_compose_command-}" = "" ]
+    assert_str_eq "${docker_compose_command-}" ""
     assert_array_values docker_compose_command_args
   done
 
@@ -431,7 +432,7 @@ begin_test "Parse docker compose args"
   for arg in -f -p -H -c; do
     parse_docker_compose "${arg}foobar"
     assert_array_values docker_compose_args "${arg}foobar"
-    [ "${docker_compose_command-}" = "" ]
+    assert_str_eq "${docker_compose_command-}" ""
     assert_array_values docker_compose_command_args
   done
 
@@ -439,13 +440,13 @@ begin_test "Parse docker compose args"
   for arg in --no-ansi -v --verbose --tls --skip-hostname-check --tlsverify --compatibility; do
     parse_docker_compose "${arg}"
     assert_array_values docker_compose_args "${arg}"
-    [ "${docker_compose_command-}" = "" ]
+    assert_str_eq "${docker_compose_command-}" ""
     assert_array_values docker_compose_command_args
   done
 
   parse_docker_compose --no-ansi -H=blah.json --verbose run -v /foo:/bar debian bash
   assert_array_values docker_compose_args --no-ansi -H=blah.json --verbose
-  [ "${docker_compose_command}" = "run" ]
+  assert_str_eq "${docker_compose_command}" "run"
   assert_array_values docker_compose_command_args -v /foo:/bar debian bash
 )
 end_test
@@ -455,18 +456,18 @@ begin_test "Parse docker compose project name"
   setup_test
 
   parse_docker_compose --project-name foo
-  [ "${docker_compose_project_name}" = "foo" ]
+  assert_str_eq "${docker_compose_project_name}" "foo"
 
   parse_docker_compose --project-name foo run alpine
-  [ "${docker_compose_project_name}" = "foo" ]
+  assert_str_eq "${docker_compose_project_name}" "foo"
   parse_docker_compose -p bar run alpine
-  [ "${docker_compose_project_name}" = "bar" ]
+  assert_str_eq "${docker_compose_project_name}" "bar"
   parse_docker_compose -p foobar run alpine
-  [ "${docker_compose_project_name}" = "foobar" ]
+  assert_str_eq "${docker_compose_project_name}" "foobar"
 
   # Make sure -p/--project-name wins
   COMPOSE_PROJECT_NAME=foo parse_docker_compose -p bar run alpine
-  [ "${docker_compose_project_name}" = "bar" ]
+  assert_str_eq "${docker_compose_project_name}" "bar"
 )
 end_test
 
@@ -484,44 +485,44 @@ begin_test "Parse docker compose file args"
 
   parse_docker_compose run alpine
   # No docker compose
-  [ "${docker_compose_project_name}" = "default" ]
-  [ "${#docker_compose_files[@]}" -eq "0" ]
+  assert_str_eq "${docker_compose_project_name}" "default"
+  assert_str_eq "${#docker_compose_files[@]}" "0"
 
   # Make sure COMPOSE_FILE works
   COMPOSE_FILE=docker-compose2.yml parse_docker_compose run alpine
-  [ "${docker_compose_project_name}" = "$(basename "$(pwd)")" ]
-  [ "${#docker_compose_files[@]}" -eq "1" ]
-  [ "${docker_compose_files[0]}" = "docker-compose2.yml" ]
+  assert_str_eq "${docker_compose_project_name}" "$(basename "$(pwd)")"
+  assert_str_eq "${#docker_compose_files[@]}" "1"
+  assert_str_eq "${docker_compose_files[0]}" "docker-compose2.yml"
 
   # Make sure COMPOSE_FILE overrides docker-compose.yml
   touch docker-compose.yml
   COMPOSE_FILE=docker-compose2.yml parse_docker_compose run alpine
-  [ "${docker_compose_project_name}" = "$(basename "$(pwd)")" ]
-  [ "${#docker_compose_files[@]}" -eq "1" ]
-  [ "${docker_compose_files[0]}" = "docker-compose2.yml" ]
+  assert_str_eq "${docker_compose_project_name}" "$(basename "$(pwd)")"
+  assert_str_eq "${#docker_compose_files[@]}" "1"
+  assert_str_eq "${docker_compose_files[0]}" "docker-compose2.yml"
 
   # Make sure docker-compose.yml works
   parse_docker_compose run alpine
-  [ "${docker_compose_project_name}" = "$(basename "$(pwd)")" ]
-  [ "${#docker_compose_files[@]}" -eq "1" ]
-  [ "${docker_compose_files[0]}" = "${TESTDIR}/docker-compose.yml" ]
+  assert_str_eq "${docker_compose_project_name}" "$(basename "$(pwd)")"
+  assert_str_eq "${#docker_compose_files[@]}" "1"
+  assert_str_eq "${docker_compose_files[0]}" "${TESTDIR}/docker-compose.yml"
 
   # Make sure override works
   touch docker-compose.override.yaml
   parse_docker_compose run alpine
-  [ "${docker_compose_project_name}" = "$(basename "$(pwd)")" ]
-  [ "${#docker_compose_files[@]}" -eq "2" ]
-  [ "${docker_compose_files[0]}" = "${TESTDIR}/docker-compose.yml" ]
-  [ "${docker_compose_files[1]}" = "${TESTDIR}/docker-compose.override.yaml" ]
+  assert_str_eq "${docker_compose_project_name}" "$(basename "$(pwd)")"
+  assert_str_eq "${#docker_compose_files[@]}" "2"
+  assert_str_eq "${docker_compose_files[0]}" "${TESTDIR}/docker-compose.yml"
+  assert_str_eq "${docker_compose_files[1]}" "${TESTDIR}/docker-compose.override.yaml"
 
   # Make sure -f/--file wins
   COMPOSE_FILE=docker-compose2.yml parse_docker_compose -f test3.yml run alpine
-  [ "${docker_compose_project_name}" = "$(basename "$(pwd)")" ]
-  [ "${#docker_compose_files[@]}" -eq "1" ]
-  [ "${docker_compose_files[0]}" = "test3.yml" ]
+  assert_str_eq "${docker_compose_project_name}" "$(basename "$(pwd)")"
+  assert_str_eq "${#docker_compose_files[@]}" "1"
+  assert_str_eq "${docker_compose_files[0]}" "test3.yml"
 
   parse_docker_compose -f test1.yml -ftest2 --file test3 --file=test4 run debian:9 bash
-  [ "${#docker_compose_files[@]}" -eq "4" ]
+  assert_str_eq "${#docker_compose_files[@]}" "4"
 )
 end_test
 
@@ -529,7 +530,7 @@ begin_test "Compose IFS non-Windows"
 (
   setup_test
   unset OS
-  [ "$(compose_path_separator)" = ":" ]
+  assert_str_eq "$(compose_path_separator)" ":"
 )
 end_test
 
@@ -537,7 +538,7 @@ begin_test "Compose IFS Windows"
 (
   setup_test
   OS="Windows_NT"
-  [ "$(compose_path_separator)" = ";" ]
+  assert_str_eq "$(compose_path_separator)" ";"
 )
 end_test
 
@@ -546,9 +547,9 @@ begin_test "Custom IFS"
   setup_test
   COMPOSE_PATH_SEPARATOR='|'
   OS="Windows_NT"
-  [ "$(compose_path_separator)" = "|" ]
+  assert_str_eq "$(compose_path_separator)" "|"
   unset OS
-  [ "$(compose_path_separator)" = "|" ]
+  assert_str_eq "$(compose_path_separator)" "|"
 )
 end_test
 
@@ -563,7 +564,7 @@ begin_test "Docker compose command"
   a=("${DOCKER_COMPOSE[@]}" run -v '/test  this/:blah' 'debian:9')
   r="$(Docker compose run -v "/test  this/:blah" debian:9)"
   eval "r=(${r})" # noquotes
-  cmp_elements_a a r
+  assert_array_eq a r
 )
 end_test
 
@@ -576,13 +577,13 @@ begin_test "DOCKER_COMPOSE_AUTOREMOVE and DOCKER_COMPOSE_EXTRA_*_ARGS"
   a=("${DOCKER_COMPOSE[@]}" run --rm -v '/test  this/:blah' 'debian')
   r="$(Docker compose run -v "/test  this/:blah" debian)"
   eval "r=(${r})" # noquotes
-  cmp_elements_a a r
+  assert_array_eq a r
 
   DOCKER_COMPOSE_EXTRA_RUN_ARGS=('aaa' 'bbb')
   a=("${DOCKER_COMPOSE[@]}" run --rm aaa bbb -v '/test  this/:blah' 'debian')
   r="$(Docker compose run -v "/test  this/:blah" debian)"
   eval "r=(${r})" # noquotes
-  cmp_elements_a a r
+  assert_array_eq a r
 )
 end_test
 
@@ -597,7 +598,7 @@ begin_test "DOCKER_COMPOSE_EXTRA_ARGS"
   a=("${DOCKER_COMPOSE[@]}" --tls "${DOCKER_COMPOSE_EXTRA_ARGS[@]}" build aaa bbb -v '/test  this/:blah' 'debian')
   r="$(Docker compose --tls build -v "/test  this/:blah" debian)"
   eval "r=(${r})" # noquotes
-  cmp_elements_a a r
+  assert_array_eq a r
 )
 end_test
 
@@ -627,9 +628,9 @@ begin_test "Docker compose sanitize project names"
 (
   setup_test
 
-  [ "$(docker_compose_sanitize_project_name 'project/A@1.1_2')" = "a112" ]
-  [ "$(docker_compose_sanitize_project_name 'project/A@1.1_2' 'auser:7')" = "auser7a112" ]
-  [ "$(docker_compose_sanitize_project_name '' 'a-user:7')" = "auser7" ]
+  assert_str_eq "$(docker_compose_sanitize_project_name 'project/A@1.1_2')"  "a112"
+  assert_str_eq "$(docker_compose_sanitize_project_name 'project/A@1.1_2' 'auser:7')"  "auser7a112"
+  assert_str_eq "$(docker_compose_sanitize_project_name '' 'a-user:7')"  "auser7"
 )
 end_test
 
@@ -641,10 +642,10 @@ begin_test "Just docker compose override files"
   ans="version: '3.2'
 services:
   test_hay:
-    x-bugfix:"
+    environment:
+      - JUST_IN_CONTAINER=docker"
   if [ "${OS-}" = "Windows_NT" ]; then
     ans+="
-    environment:
       - JUST_HOST_WINDOWS=1"
   fi
 
@@ -654,14 +655,14 @@ services:
   override_file="$(Just-docker-compose -f "${TESTDIR}/dc.yml" run test_hay|tail -n1)"
   override_file="${override_file#rm *}"
   ttouch "${override_file}"
-  [ "$(cat "${override_file}")" = "${ans}" ]
+  assert_str_eq "$(cat "${override_file}")" "${ans}"
 
   # Test when two docker compose files reference the same service
   echo "${compose_file_hay}" > "${TESTDIR}/dc2.yml"
   override_file="$(Just-docker-compose -f "${TESTDIR}/dc.yml" -f "${TESTDIR}/dc2.yml" run test_hay|tail -n1)"
   override_file="${override_file#rm *}"
   ttouch "${override_file}"
-  [ "$(cat "${override_file}")" = "${ans}" ]
+  assert_str_eq "$(cat "${override_file}")" "${ans}"
 )
 end_test
 
@@ -718,11 +719,11 @@ begin_test "docker cp image"
     fi
   }
 
-  [ "$(docker_cp_image my_image:foo /bar/test.txt "${TESTDIR}/dst.txt")" = \
+  assert_str_eq "$(docker_cp_image my_image:foo /bar/test.txt "${TESTDIR}/dst.txt")" \
     "mock_docker: cp mock_container_name_my_image:foo:/bar/test.txt ${TESTDIR}/dst.txt
 mock_docker: rm mock_container_name_my_image:foo" ]
 
-  [ "$(docker_cp_image -L -a my_image:foo /bar/test.txt "${TESTDIR}/dst.txt")" = \
+  assert_str_eq "$(docker_cp_image -L -a my_image:foo /bar/test.txt "${TESTDIR}/dst.txt")" \
     "mock_docker: cp -L -a mock_container_name_my_image:foo:/bar/test.txt ${TESTDIR}/dst.txt
 mock_docker: rm mock_container_name_my_image:foo" ]
 )
@@ -774,12 +775,12 @@ begin_test "get docker compose version"
   echo "noversion:" > file2
   echo "version: \"3.5\"" > file3
 
-  [ "$(get_docker_compose_version file1)" = "2.3" ]
-  [ "$(get_docker_compose_version file2)" = "" ]
-  [ "$(get_docker_compose_version file3)" = "3.5" ]
+  assert_str_eq "$(get_docker_compose_version file1)" "2.3"
+  assert_str_eq "$(get_docker_compose_version file2)" ""
+  assert_str_eq "$(get_docker_compose_version file3)" "3.5"
 
-  [ "$(get_docker_compose_version file2 file1)" = "2.3" ]
-  [ "$(get_docker_compose_version file3 file1)" = "3.5" ]
+  assert_str_eq "$(get_docker_compose_version file2 file1)" "2.3"
+  assert_str_eq "$(get_docker_compose_version file3 file1)" "3.5"
 )
 end_test
 
@@ -791,14 +792,14 @@ begin_test "get docker stage names"
 FROM foo
 EOF
   stage_names=($(get_docker_stage_names Dockerfile))
-  [ "${stage_names[*]-}" = "" ]
+  assert_str_eq "${stage_names[*]-}" ""
 
   cat - << EOF > Dockerfile
 FROM image1 as foo
 FROM foo
 EOF
   stage_names=($(get_docker_stage_names Dockerfile))
-  [ "${stage_names[*]}" = "foo" ]
+  assert_str_eq "${stage_names[*]}" "foo"
 
   cat - << EOF > Dockerfile
 FROM image1 as foo
@@ -806,7 +807,7 @@ FROM image2 as bar
 FROM foo
 EOF
   stage_names=($(get_docker_stage_names Dockerfile))
-  [ "${stage_names[*]}" = "foo bar" ]
+  assert_str_eq "${stage_names[*]}" "foo bar"
 
   # Comments and spaces
   cat - << EOF > Dockerfile
@@ -816,7 +817,7 @@ FROM image1 as foo
  FROM foo
 EOF
   stage_names=($(get_docker_stage_names Dockerfile))
-  [ "${stage_names[*]}" = "foo" ]
+  assert_str_eq "${stage_names[*]}" "foo"
 )
 end_test
 
@@ -830,7 +831,7 @@ services:
   foo:
     build: boo
 EOF
-  [ "$(get_dockerfile_from_compose /some/dir/file.yml foo "$(yarp < compose.yml)")" = "/some/dir/boo/Dockerfile" ]
+  assert_str_eq "$(get_dockerfile_from_compose /some/dir/file.yml foo "$(yarp < compose.yml)")" "/some/dir/boo/Dockerfile"
 
     cat - << EOF > compose.yml
 version: '2.2'
@@ -839,7 +840,7 @@ services:
     build:
       context: /bar
 EOF
-  [ "$(get_dockerfile_from_compose "${TESTDIR}/compose.yml" foo)" = "/bar/Dockerfile" ]
+  assert_str_eq "$(get_dockerfile_from_compose "${TESTDIR}/compose.yml" foo)" "/bar/Dockerfile"
 
     cat - << EOF > compose.yml
 version: '2.2'
@@ -850,7 +851,7 @@ services:
       contest: .
 EOF
 
-  [ "$(get_dockerfile_from_compose compose.yml foo)" = "./some.Dockerfile" ]
-  [ "$(get_dockerfile_from_compose "${TESTDIR}/compose.yml" foo)" = "${TESTDIR}/some.Dockerfile" ]
+  assert_str_eq "$(get_dockerfile_from_compose compose.yml foo)" "./some.Dockerfile"
+  assert_str_eq "$(get_dockerfile_from_compose "${TESTDIR}/compose.yml" foo)" "${TESTDIR}/some.Dockerfile"
 )
 end_test
