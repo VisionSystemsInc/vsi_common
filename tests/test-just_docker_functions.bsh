@@ -23,8 +23,8 @@ begin_test "build recipes"
   echo "${VSI_COMMON_DIR}/linux/just_files/just_docker_functions.bsh" > .justplugins
 
   path="${VSI_COMMON_DIR}/docker/recipes"
-  [ "$(just -n build recipes)" = "(cd ${path}; just --wrap docker buildx bake)" ] || \
-  [ "$(just -n build recipes)" = "(cd $(quote_escape "${path}"); just --wrap docker buildx bake)" ]
+  assert_str_eq "$(just -n build recipes)" "(cd ${path}; just --wrap docker buildx bake)" || \
+  assert_str_eq "$(just -n build recipes)" "(cd $(quote_escape "${path}"); just --wrap docker buildx bake)"
 )
 end_test
 
@@ -70,8 +70,8 @@ begin_test "docker-compose restore from cache"
       dockerfile: foo.Dockerfile
 version: '2.5'"
 
-  echo "FROM vsiri/recipe:foo as bar
-from vsiri/recipe:boo AS far
+  echo "FROM \${VSI_RECIPE_REPO}:foo as bar
+from \${VSI_RECIPE_REPO}:boo AS far
 FROM alpine:3 as stuff
 RUN something
 FROM stuff
@@ -83,19 +83,18 @@ RUN more things
   # Normal test
   ans="D compose -f ${TESTDIR}/tmp3 pull
 D compose -f ${VSI_COMMON_DIR}/docker/recipes/docker-compose.yml -f ${TESTDIR}/tmp2 build boo foo
-D tag vsiri/recipe:boo vsiri/ci_cache:recipe_foos_boo
-D tag vsiri/recipe:foo vsiri/ci_cache:recipe_foos_foo
+D tag vsiri/test_recipe:boo vsiri/ci_cache:recipe_foos_boo
+D tag vsiri/test_recipe:foo vsiri/ci_cache:recipe_foos_foo
 D compose -f ${TESTDIR}/tmp1 -f ${TESTDIR}/tmp2 --project-directory . build foos_auto_gen_bar foos_auto_gen_far foos_auto_gen_stuff foos
 D compose -f ${TESTDIR}/tmp3 push"
-  cmd="$(docker-compose_restore_from_cache compose.yml foos)"
-  [ "${cmd}" = "${ans}" ]
-  # [ "$(xxd <<< "${cmd}")" = "$(xxd <<< "${ans}")" ]
+  cmd="$(VSI_RECIPE_REPO=vsiri/test_recipe docker-compose_restore_from_cache compose.yml foos)"
+  assert_str_eq "${cmd}" "${ans}"
 
   # Test JUST_DOCKER_COMPOSE_CACHE_REPO
   echo 1 > "${TESTDIR}/tmpcount"
-  cmd="$(JUST_DOCKER_COMPOSE_CACHE_REPO=foo/bar docker-compose_restore_from_cache compose.yml foos)"
+  cmd="$(VSI_RECIPE_REPO=vsiri/test_recipe JUST_DOCKER_COMPOSE_CACHE_REPO=foo/bar docker-compose_restore_from_cache compose.yml foos)"
   ans="${ans//vsiri\/ci_cache/foo/bar}"
-  [ "${cmd}" = "${ans}" ]
+  assert_str_eq "${cmd}" "${ans}"
 
   # No recipes
   echo "FROM alpine:3 as stuff
@@ -109,7 +108,7 @@ D compose -f ${TESTDIR}/tmp1 -f ${TESTDIR}/tmp2 --project-directory . build foos
 D compose -f ${TESTDIR}/tmp3 push"
   echo 1 > "${TESTDIR}/tmpcount"
   cmd="$(docker-compose_restore_from_cache compose.yml foos)"
-  [ "${cmd}" = "${ans}" ]
+  assert_str_eq "${cmd}" "${ans}"
 
   # No extra stages
   echo "FROM stuff
@@ -121,7 +120,7 @@ D compose -f ${TESTDIR}/tmp1 -f ${TESTDIR}/tmp2 --project-directory . build foos
 D compose -f ${TESTDIR}/tmp3 push"
   echo 1 > "${TESTDIR}/tmpcount"
   cmd="$(docker-compose_restore_from_cache compose.yml foos)"
-  [ "${cmd}" = "${ans}" ]
+  assert_str_eq "${cmd}" "${ans}"
 
   # Test with dockerfile in different context directory
 
@@ -145,7 +144,7 @@ D compose -f ${TESTDIR}/tmp1 -f ${TESTDIR}/tmp2 --project-directory . build bars
 D compose -f ${TESTDIR}/tmp3 push"
   echo 1 > "${TESTDIR}/tmpcount"
   cmd="$(docker-compose_restore_from_cache compose.yml bars)"
-  [ "${cmd}" = "${ans}" ]
+  assert_str_eq "${cmd}" "${ans}"
 )
 end_test
 
@@ -158,18 +157,18 @@ begin_test "auto gen push pull file"
 
   JUST_DOCKER_COMPOSE_CACHE_REPO=a/cache
   pushpull="$(_dynamic_docker-compose_push_pull foobar)"
-  [ "$(grep -c "^  [^ ]" <<< "${pushpull}")" = "1" ]
+  assert_str_eq "$(grep -c "^  [^ ]" <<< "${pushpull}")" "1"
   grep -q "^    image: a/cache:final_foobar$" <<< "${pushpull}"
 
   stage_names=(foo bar)
   pushpull="$(_dynamic_docker-compose_push_pull foobar)"
-  [ "$(grep -c "^  [^ ]" <<< "${pushpull}")" = "3" ]
+  assert_str_eq "$(grep -c "^  [^ ]" <<< "${pushpull}")" "3"
   grep -q "^  stage_foo:$" <<< "${pushpull}"
   grep -q "^    image: a/cache:foobar_foo$" <<< "${pushpull}"
 
   recipes=(boo far)
   pushpull="$(_dynamic_docker-compose_push_pull foobar)"
-  [ "$(grep -c "^  [^ ]" <<< "${pushpull}")" = "5" ]
+  assert_str_eq "$(grep -c "^  [^ ]" <<< "${pushpull}")" "5"
   grep -q "^  recipe_boo:$" <<< "${pushpull}"
   grep -q "^    image: a/cache:recipe_foobar_boo$" <<< "${pushpull}"
 )
@@ -188,7 +187,7 @@ services:" ]
 
   recipes=(boo far)
   pushpull="$(_dynamic_docker-compose_restore_recipes foobar)"
-  [ "$(grep -c "^      cache_from:" <<< "${pushpull}")" = "2" ]
+  assert_str_eq "$(grep -c "^      cache_from:" <<< "${pushpull}")" "2"
   grep -q "^  boo:$" <<< "${pushpull}"
   grep -q "^        - some/ci_cache:recipe_foobar_boo$" <<< "${pushpull}"
 )
@@ -252,13 +251,13 @@ ${configv}"
   main_image_name=some/image:time
 
   _dynamic_docker-compose_add_cache_from foobar <<< "${config}" > "${TESTDIR}/tmp1" 3>"${TESTDIR}/tmp2"
-  [ "$(cat tmp1)" = "${config}" ]
+  assert_str_eq "$(cat tmp1)" "${config}"
   ans2="$(mktmp2 foobar "- -" the/cache:final_foobar)"
-  [ "$(cat tmp2)" = "${ans2}" ]
+  assert_str_eq "$(cat tmp2)" "${ans2}"
 
   # Test override_fd
   override_fd=4 _dynamic_docker-compose_add_cache_from foobar <<< "${config}" > "${TESTDIR}/tmp1" 4>"${TESTDIR}/tmp3"
-  [ "$(cat tmp3)" = "${ans2}" ]
+  assert_str_eq "$(cat tmp3)" "${ans2}"
 
   stage_names=(foo bar)
     _dynamic_docker-compose_add_cache_from foobar <<< "${config}" > "${TESTDIR}/tmp1" 3>"${TESTDIR}/tmp2"
@@ -270,15 +269,15 @@ ans1="${config0}
     <<: *main_stage
     image: the/cache:foobar_bar
 ${configv}"
-  [ "$(cat tmp1)" = "${ans1}" ]
+  assert_str_eq "$(cat tmp1)" "${ans1}"
   ans2="$(mktmp2 foobar_auto_gen_foo foobar_auto_gen_bar foobar "- -" the/cache:final_foobar the/cache:foobar_foo the/cache:foobar_bar)"
-  [ "$(cat tmp2)" = "${ans2}" ]
+  assert_str_eq "$(cat tmp2)" "${ans2}"
 
   recipes=(boo far)
   _dynamic_docker-compose_add_cache_from foobar <<< "${config}" > "${TESTDIR}/tmp1" 3>"${TESTDIR}/tmp2"
-  [ "$(cat tmp1)" = "${ans1}" ]
+  assert_str_eq "$(cat tmp1)" "${ans1}"
   ans2="$(mktmp2 foobar_auto_gen_foo foobar_auto_gen_bar foobar "- -" the/cache:final_foobar the/cache:foobar_foo the/cache:foobar_bar the/cache:recipe_foobar_boo the/cache:recipe_foobar_far)"
-  [ "$(cat tmp2)" = "${ans2}" ]
+  assert_str_eq "$(cat tmp2)" "${ans2}"
 )
 end_test
 
@@ -286,14 +285,14 @@ begin_test "get docker recipes"
 (
   setup_test
     cat - << EOF > Something.Dockerfile
-FROM vsiri/recipe:gosu as foo
-# FROM vsiri/recipe:commented as out
+FROM \${VSI_RECIPE_REPO}:gosu as foo
+# FROM \${VSI_RECIPE_REPO}:commented as out
 RUN stuff
-from vsiri/recipe:tini as bar
+from \${VSI_RECIPE_REPO}:tini as bar
 FROM alpine
 EOF
 
-  [ "$(get_docker_recipes Something.Dockerfile)" = $'gosu\ntini' ]
+  assert_str_eq "$(get_docker_recipes Something.Dockerfile)" $'gosu\ntini'
 
     cat - << EOF > Something.Dockerfile
 FROM not_recipe:gosu as foo
@@ -302,9 +301,9 @@ from not_recipe:tini as bar
 FROM alpine
 EOF
 
-  [ "$(get_docker_recipes Something.Dockerfile)" = "" ]
+  assert_str_eq "$(get_docker_recipes Something.Dockerfile)" ""
 
-  [ "$(JUST_RECIPE_REPO=not_recipe get_docker_recipes Something.Dockerfile)" = $'gosu\ntini' ]
+  assert_str_eq "$(JUST_RECIPE_REPO=not_recipe get_docker_recipes Something.Dockerfile)" $'gosu\ntini'
 
 
 )
