@@ -318,8 +318,18 @@ function write_project_env()
 
             # Put variables that do not begin with '"${PROJECT_PREFIX}"' here.
 
-            : ${TZ=/usr/share/zoneinfo/UTC}
+            if [ -e "/etc/localtime" ]; then
+              : ${TZ=$(real_path /etc/localtime)}
+            else
+              #T# Fallback default zone
+              #T# : ${TZ=/usr/share/zoneinfo/UTC}
+              : ${TZ=/usr/share/zoneinfo/America/New_York}
+            fi
 
+            #T# When volumes get large enough, some docker compose commands will take longer
+            #T# than the default 60 seconds timeout, and error out when nothing is wrong.
+            #T# 10 minutes is a more reasonable timeline. This only really matters everytime
+            #T# the venv volume is cleaned
             : ${COMPOSE_HTTP_TIMEOUT=600}
 
             # Use this to add the user name to the docker compose project name. This is
@@ -425,6 +435,9 @@ function write_justfile()
                       justify docker compose clean venv' >> "${1}"
     fi
     uwecho   '      fi
+                    ;;
+                  build_deploy) # Build the deploy docker image
+                    Docker buildx bake deploy
                     ;;' >> "${1}"
     uwecho   '    run_'"${APP_NAME}"') # Run '"${APP_NAME}"' 1
                     # These commands should run your app
@@ -470,8 +483,8 @@ function write_justfile()
                         $(
                           (
                             docker compose config
-                            docker compose -f external/vsi_common/docker/blueprints/docker-compose.yml config
-                            docker compose -f external/vsi_common/docker/recipes/docker-compose.yml config
+                            docker compose -f '"${RELATIVE_PATH}"'/docker/blueprints/docker-compose.yml config
+                            docker compose -f '"${RELATIVE_PATH}"'/docker/recipes/docker-compose.yml config
                           ) | yarp | grep '"'"'^services.[^.]\+\.image = '"'"' | awk '"'"'{print $3}'"'"'
                         )
                       )
@@ -559,24 +572,40 @@ function write_setup_py()
           from setuptools import setup
 
           setup(
-              name='${APP_NAME}',
+              name='${PROJECT_NAME}',
               version='0.0.1',
-              packages=['${APP_NAME}'],
+              packages=['${PYTHON_PACKAGE}'],
               author = 'VSI Author',
               author_email = 'vsi@visionsystemsinc.com',
               license='MIT License',
-              description='${APP_NAME} Short description',
-              long_description='${APP_NAME} Long description',
-              url='https://example.com/${APP_NAME}',
+              description='${PROJECT_NAME} Short description',
+              long_description='${PROJECT_NAME} Long description',
+              url='https://example.com/${PROJECT_NAME}',
               install_requires=[
                 # Put python dependencies here
               ],
               entry_points={
-              #    '${APP_NAME}.something': [
-              #        '${APP_NAME} = ${APP_NAME}.something:SomeMethod'
+              #    '${PYTHON_PACKAGE}.something': [
+              #        '${PYTHON_PACKAGE} = ${PYTHON_PACKAGE}.something:SomeMethod'
               #    ]
               }
           )" >> "${1}"
+}
+
+function standard_env()
+{
+  # This has to be handled in a separate function to be DRY, cause uwecho can't
+  # handle multiline string expansion, it throws off the line counting
+  uwecho 'ENV JUSTFILE="/src/docker/'"$(docker_env_quote_escape "${APP_NAME}.Justfile")"'" \
+              JUST_SETTINGS="/src/'"$(docker_env_quote_escape "${PROJECT_NAME}.env")"'" \
+              #T# Points many linux tools to use this for cache
+              XDG_CACHE_HOME=/cache \
+              #T# Some tools recommends that these env variables be set to en_US.UTF-8.
+              #T# On debian, C.UTF-8 exists by default instead, and seems to work.
+              #T# More detail: https://stackoverflow.com/a/38553499
+              #T# Note: en_US.UTF-8 exists by default in Centos/Fedora base images
+              LC_ALL=C.UTF-8 \
+              LANG=C.UTF-8'
 }
 
 ##################
@@ -599,7 +628,8 @@ function write_dockerfile()
             FROM ${VSI_RECIPE_REPO}:vsi as vsi' >> "${1}"
 
   if [ "${USE_PIP_TOOLS}" = "1" ]; then
-    uwecho '#T# pip-tools manages the python virtual env and installs a consistent set of packages
+    uwecho '
+            #T# pip-tools manages the python virtual env and installs a consistent set of packages
             FROM ${VSI_RECIPE_REPO}:pip-tools as pip-tools
 
             #T# Installs a python for pip-tools to use. pip-tools manages the python virtual
@@ -623,16 +653,9 @@ function write_dockerfile()
                 DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
                   tzdata ca-certificates; \
                 rm -r /var/lib/apt/lists/*
-
-            ENV \
-                #T# Point pip to use this for cache
-                XDG_CACHE_HOME=/venv/cache \
-                #T# Some tools recommends that these env variables be set to en_US.UTF-8.
-                #T# On debian, C.UTF-8 exists by default instead, and seems to work.
-                #T# More detail: https://stackoverflow.com/a/38553499
-                #T# Note: en_US.UTF-8 exists by default in Centos/Fedora base images
-                LC_ALL=C.UTF-8 \
-                LANG=C.UTF-8
+            ' >> "${1}"
+    standard_env >> "${1}"
+    uwecho '    # PYTHONPATH="${PYTHONPATH:+${PYTHONPATH}:}/install/lib/python3/site-packages"
 
             #T# Additional dep stage recipes
             #T# # Uncomment for GDAL
@@ -697,10 +720,9 @@ function write_dockerfile()
             #T# 6) python -c "import osgeo.gdal_array" # Should not create an error message
 
             #T# Call vsi::pip-tools::fake_package for each editable package
-            RUN function mcd(){ mkdir -p "${1}"; cd "${1}"; }; \
-                (mcd "'"$(docker_add_quote_escape "/src/${RELATIVE_PATH}")"'"; vsi::pip-tools::fake_package vsi python/vsi); \
-                #T# (mcd /src/external/editable_package; vsi::pip-tools::fake_package package_name); \
-                (mcd /src; vsi::pip-tools::fake_package '"${PROJECT_NAME}"');
+            RUN vsi::pip-tools::fake_package "'"$(docker_add_quote_escape "/src/${RELATIVE_PATH}")"'" vsi python/vsi; \
+                #T# vsi::pip-tools::fake_package /src/external/editable_package package_name {optional_modules_subdir_paths}; \
+                vsi::pip-tools::fake_package /src '"${PROJECT_NAME}"';
 
             ARG SKIP_PIP_SYNC
             #T# Sometimes you need to fix the image so that pip-compile can be run, but
@@ -790,8 +812,9 @@ function write_dockerfile()
 
             ADD ["'"$(docker_add_quote_escape docker/"${APP_NAME}.Justfile")"'", "/src/docker/"]
 
-            ENV JUSTFILE="/src/docker/'"$(docker_env_quote_escape "${APP_NAME}.Justfile")"'" \
-                JUST_SETTINGS="/src/'"$(docker_env_quote_escape "${PROJECT_NAME}.env")"'"
+            ' >> "${1}"
+    standard_env >> "${1}"
+    uwecho '
 
             ENTRYPOINT ["/usr/local/bin/tini", "--", "/usr/bin/env", "bash", "/vsi/linux/just_files/just_entrypoint.sh"]
             #T# Does not require execute permissions, unlike:
@@ -810,130 +833,57 @@ function write_deploy_dockerfile()
 
   uwecho   '# syntax=docker/dockerfile:1.4
             ARG SOURCE_IMAGE
-            ARG RUNNER_IMAGE' >> "${1}"
-  if [ "${USE_PIP_TOOLS}" = "1" ]; then
-    echo   'ARG PIP_IMAGE
+            ARG RUNNER_IMAGE
 
             # --------------------
-            # Pipenv cache: /venv
-            # -- terra virtualenv into /venv/terra*
-            # --------------------
-            FROM ${PIP_IMAGE} as pip_terra_cache
-
-            # clear the way
-            RUN rm -rf /terra /vsi
-
-            # vsi_common
-            COPY external/terra/external/vsi_common/setup.py /vsi/
-
-            # terra
-            COPY external/terra/setup.py external/terra/Pipfile* /terra/
-
-            # link terra, vsi, & src
-            RUN mkdir -p /vsi /terra/external /src/external; \
-                ln -s /vsi /terra/external/vsi_common; \
-                ln -s /terra /src/external/terra;
-
-            # pipenv/bin/fake_package for local packages (vsi_common & terra)
-            # https://github.com/VisionSystemsInc/docker_recipes/blob/48a66d512f4e6075e42a08668f1a59027800323a/30_get-pipenv#L120-L135
-            # including only setup.py files results in fewer cache misses
-            RUN FAKE_PACKAGE="/usr/local/bin/fake_package"; \
-                (cd /vsi; "${FAKE_PACKAGE}" vsi python/vsi); \
-                (cd /terra; "${FAKE_PACKAGE}" terra terra);
-
-            # terra pipenv setup
-            COPY external/terra/Pipfile* /terra/
-            ENV WORKON_HOME=/venv \
-                PIPENV_CACHE_DIR=/venv/cache \
-                PYENV_SHELL=/bin/bash
-
-            RUN mkdir /usr/local/pipenv; \
-                /usr/local/conda-python/bin/python -m venv /usr/local/pipenv; \
-                /usr/local/pipenv/bin/pip install pipenv; \
-                PIPENV_PIPFILE=/terra/Pipfile /usr/local/pipenv/bin/pipenv --python /usr/local/pipenv/bin/python sync
-
-            # entrypoint & command are reused from PIP_IMAGE
-            ' >> "${1}"
-  fi
-
-  uwecho   '# --------------------
-            # Source cache: /src /vsi /terra /nerfstudio
-            # -- add vsi_common, terra, nerfstudio files
+            # Source cache: /src /vsi
+            # -- add vsi_common
             # -- add source files & folders
-            # -- link terra, vsi, nerfstudio, src
+            # -- link vsi, src
             # -- add install volume from tar file
             # --------------------
             FROM ${SOURCE_IMAGE} as source_cache
 
             # clear the way
-            RUN rm -rf /src /vsi /terra /nerfstudio /wriva_metrics /wrivalib
+            RUN rm -rf /src /vsi
 
             # vsi_common
-            COPY external/terra/external/vsi_common /vsi
+            COPY "'"$(docker_add_quote_escape "${RELATIVE_PATH}")"'" /vsi
 
-            # terra
-            COPY external/terra/Pipfile* external/terra/setup.py \
-                 external/terra/Justfile external/terra/terra.env \
-                 /terra/
-            COPY external/terra/terra /terra/terra
+            # link src, vsi, etc...
+            RUN mkdir -p "/src/'"$(docker_add_quote_escape "$(dirname "${RELATIVE_PATH}")")"'"; \
+                ln -s /vsi "/src/'"$(docker_add_quote_escape "${RELATIVE_PATH}")"'";
 
-            # nerfstudio
-            COPY external/nerfstudio /nerfstudio
+            # files & folders' >> "${1}"
+  if [ "${USE_PIP_TOOLS}" = "1" ]; then
+    echo   'COPY '"${PROJECT_NAME}"'.env /src/' >> "${1}"
+  fi
+  uwecho   'COPY docker/runner.Justfile /src/docker/
 
-            # wriva_metrics
-            COPY external/wriva_metrics /wriva_metrics
-
-            # wrivalib
-            COPY external/wrivalib /wrivalib
-
-            # link terra, vsi, & src
-            RUN mkdir -p /terra/external /src/external; \
-                ln -s /vsi /terra/external/vsi_common; \
-                ln -s /terra /src/external/terra; \
-                ln -s /nerfstudio /src/external/nerfstudio; \
-                ln -s /wriva_metrics /src/external/wriva_metrics; \
-                ln -s /wrivalib /src/external/wrivalib;
-
-            # files & folders
-            COPY requirements.txt wriva.env setup.py /src/
-            COPY docker/wriva.Justfile /src/docker/
-
-            # apps & scripts
-            COPY scenicnerf /src/scenicnerf
-            COPY scripts /src/scripts
-            COPY wriva /src/wriva
+            # apps & scripts' >> "${1}"
+  if [ "${USE_PIP_TOOLS}" = "1" ]; then
+    echo   'COPY '"${PYTHON_PACKAGE}"' /src/'"${PYTHON_PACKAGE}" >> "${1}"
+  fi
+  uwecho   'COPY scripts /src/scripts
 
             # entrypoint & command are reused from SOURCE_IMAGE
+            ' >> "${1}"
 
-
-            # --------------------
+  uwecho   '# --------------------
             # Final deployment
             # --------------------
             FROM ${RUNNER_IMAGE}
 
-            # clear the way
-            RUN rm -rf /src /venv /vsi /terra /nerfstudio /wriva_metrics /wrivalib
-
-            # environment
-            ENV JUSTFILE="/src/docker/wriva.Justfile" \
-                JUST_SETTINGS="/src/wriva.env" \
-                # PYTHONPATH="${PYTHONPATH:+${PYTHONPATH}:}/install/lib/python3/site-packages" \
-                TERRA_CWD="/terra" \
-                WORKON_HOME=/venv \
-                PIPENV_CACHE_DIR=/venv/cache \
-                PYENV_SHELL=/bin/bash
-
-            # Copy from pip_terra_cache
-            COPY --from=pip_terra_cache /venv /venv
-
+            # clear the way' >> "${1}"
+  if [ "${USE_PIP_TOOLS}" = "1" ]; then
+    echo   'RUN rm -rf /src /cache /vsi' >> "${1}"
+  else
+    echo   'RUN rm -rf /src /vsi' >> "${1}"
+  fi
+  uwecho   '
             # Copy from source_cache
-            COPY --from=source_cache /vsi /vsi
-            COPY --from=source_cache /terra /terra
-            COPY --from=source_cache /nerfstudio /nerfstudio
-            COPY --from=source_cache /wriva_metrics /wriva_metrics
-            COPY --from=source_cache /wrivalib /wrivalib
             COPY --from=source_cache /src /src
-            COPY docker/deploy_config.json /src/docker/deploy_config.json
+            COPY --from=source_cache /vsi /vsi
 
             # default working directory
             WORKDIR /src
@@ -1014,33 +964,15 @@ function deploy_Dockerfile_dockerignore()
             !docker
             # !requirements.in
             !requirements.txt
-            !wriva.env
+            !'"${PROJECT_NAME}.env"'
             !setup.py
 
             # apps & scripts
-            !scenicnerf
             !scripts
-            !wriva
+            !'"${PYTHON_PACKAGE}"'
 
             # vsi_common
-            !external/terra/external/vsi_common
-
-            # terra
-            !external/terra/Justfile
-            !external/terra/Pipfile
-            !external/terra/Pipfile.lock
-            !external/terra/setup.py
-            !external/terra/terra.env
-            !external/terra/terra
-
-            # nerfstudio
-            !external/nerfstudio
-
-            # wriva_metrics
-            !external/wriva_metrics
-
-            # wrivalib
-            !external/wrivalib' >> "${1}"
+            !'"${RELATIVE_PATH}" >> "${1}"
 }
 
 ##########################
@@ -1071,7 +1003,11 @@ function write_docker_compose_yml()
                   - &vsi_volume
                     type: ${'"${PROJECT_PREFIX}"'_VSI_COMMON_DIR_TYPE}
                     source: ${'"${PROJECT_PREFIX}"'_VSI_COMMON_DIR}
-                    target: ${'"${PROJECT_PREFIX}"'_VSI_COMMON_DIR_DOCKER}' >> "${1}"
+                    target: ${'"${PROJECT_PREFIX}"'_VSI_COMMON_DIR_DOCKER}
+                  - &cache_volume
+                    type: volume
+                    source: cache
+                    target: /cache' >> "${1}"
   if [ "${USE_PIP_TOOLS}" = "1" ]; then
     uwecho '      - &venv_volume
                     type: volume
@@ -1106,6 +1042,7 @@ function write_docker_compose_yml()
                 volumes:
                   - <<: *source_volume
                   - <<: *vsi_volume
+                  - <<: *cache_volume
             #       - <<: *home_volume' >> "${1}"
 
 
@@ -1122,6 +1059,7 @@ function write_docker_compose_yml()
                   - <<: *source_volume
                     read_only: ${'"${PROJECT_PREFIX}"'_SOURCE_DIR_READONLY-false}
                   - <<: *vsi_volume
+                  - <<: *cache_volume
                   - <<: *venv_volume
                     read_only: ${'"${PROJECT_PREFIX}"'_VENV_DIR_READONLY-false}
                   # - *home_volume' >> "${1}"
@@ -1133,11 +1071,8 @@ function write_docker_compose_yml()
                 build:
                   context: .
                   dockerfile: docker/deploy.Dockerfile
-                  args:' >> "${1}"
-  if [ "${USE_PIP_TOOLS}" = "1" ]; then
-    echo   '        PYTHON_IMAGE: ${'"${PROJECT_PREFIX}"'_PYTHON_CACHE_IMAGE}' >> "${1}"
-  fi
-  uwecho   '        SOURCE_IMAGE: ${'"${PROJECT_PREFIX}"'_RUNNER_IMAGE}
+                  args:
+                    SOURCE_IMAGE: ${'"${PROJECT_PREFIX}"'_RUNNER_IMAGE}
                     RUNNER_IMAGE: ${'"${PROJECT_PREFIX}"'_RUNNER_IMAGE}
                     REMOVE_DEV_PACKAGES: ${'"${PROJECT_PREFIX}"'_REMOVE_DEV_PACKAGES}
                 image: ${'"${PROJECT_PREFIX}"'_DEPLOY_IMAGE}
@@ -1152,7 +1087,10 @@ function write_docker_compose_yml()
   if [ "${USE_PIP_TOOLS}" = "1" ]; then
     uwecho '  venv:
                 labels:
-                  com.vsi.just.clean_action: ask' >> "${1}"
+                  com.vsi.just.clean_action: ask
+              cache:
+                labels:
+                  com.vsi.just.clean_action: delete' >> "${1}"
   fi
 }
 
@@ -1277,6 +1215,19 @@ function write_gitignore()
   fi
 }
 
+########################
+### scripts/test.bsh ###
+########################
+function test_script()
+{
+  exists "${1}" && return 0
+
+  uwecho '#!/usr/bin/env python
+          import runner
+          print(runner.__file__)' >> "${1}"
+}
+
+
 function format_tutorial()
 {
   if [ "${USE_TUTORIAL-}" = "1" ]; then
@@ -1324,6 +1275,7 @@ function new_just()
         echo "  --[no-]vsi - Enable/[disable] using the vsi submodule"
         echo "  --[no-]docker - Enable/[disable] setting up docker"
         echo "  --[no-]pip-tools - Enable/[disable] using pip-tools in docker"
+        echo "  --python-package - Starter python package name"
         echo "  --[no-]tutorial - Enable/[disable] adding tutorial comments"
         echo "  --app APP - Application name for docker compose service"
         echo "  --repo REPO - Docker repo name for compiled images"
@@ -1381,6 +1333,10 @@ function new_just()
         ;;
       --no-pip-tools)
         USE_PIP_TOOLS=n
+        ;;
+      --python-package)
+        PYTHON_PACKAGE="${1}"
+        shift 1
         ;;
       --app)
         APP_NAME="${1}"
@@ -1624,6 +1580,19 @@ function new_just()
     fi
   fi
 
+  if [ "${USE_PIP_TOOLS}" = "1" ]; then
+    #**
+    # .. env:: PYTHON_PACKAGE
+    #
+    # Name of the default python package created
+    #**
+    if set_default PYTHON_PACKAGE \
+                   "$(echo "${PROJECT_NAME-}" | tr '[A-Z]' '[a-z]' | sed -${sed_flag_rE} 's|[^a-z0-9_]+||g')" \
+                   "Docker Repo for images"; then
+      PYTHON_PACKAGE="$(echo "${PYTHON_PACKAGE-}" | tr '[A-Z]' '[a-z]' | sed -${sed_flag_rE} 's|[^a-z0-9_]+||g')"
+    fi
+  fi
+
   #**
   # .. env:: USE_TUTORIAL
   #
@@ -1643,6 +1612,9 @@ function new_just()
 
   printf "%-40s | %-40s\n" "Use docker" "${USE_DOCKER}"
   printf "%-40s | %-40s\n" "Use pip-tools" "${USE_PIP_TOOLS}"
+  if [ "${USE_PIP_TOOLS}" = "1" ]; then
+    printf "%-40s | %-40s\n" "Python package name" "${PYTHON_PACKAGE}"
+  fi
   printf "%-40s | %-40s\n" "Include vsi_common" "${USE_VSI_COMMON}"
   if [ "${USE_DOCKER}" = "1" ]; then
 
@@ -1702,8 +1674,12 @@ function new_just()
     write_setup_py setup.py
     format_tutorial setup.py
 
-    mkdir -p "${APP_NAME}"
-    touch "${APP_NAME}/__init__.py"
+    mkdir -p "${PYTHON_PACKAGE}"
+    touch "${PYTHON_PACKAGE}/__init__.py"
+
+    mkdir -p scripts
+    test_script scripts/test_script.py
+    chmod 755 scripts/test_script.py
   fi
 
   if [ "${USE_DOCKER}" = "1" ]; then
@@ -1770,7 +1746,7 @@ function new_just()
     cmds+=("git add hi.cpp")
   fi
   if [ "${USE_PIP_TOOLS}" = "1" ]; then
-    cmds+=("git add '${APP_NAME}' requirements.in requirements.txt setup.py")
+    cmds+=("git add '${PYTHON_PACKAGE}' requirements.in requirements.txt setup.py scripts/test_script.py")
   fi
 
   cmds+=("git commit -m 'Initial commit'")

@@ -6,6 +6,7 @@ fi
 
 # source "${VSI_COMMON_DIR}/linux/just_files/just_singularity_functions.bsh" # Don't import here
 # source "${VSI_COMMON_DIR}/linux/just_files/docker_functions.bsh" # Don't import here
+source "${VSI_COMMON_DIR}/linux/ask_question"
 
 #*# just/plugins/just_pip-tools_functions
 
@@ -70,7 +71,8 @@ function just::pip-tools::shell()
           source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
           local tmp_requirements
           make_temp_path tmp_requirements
-          grep -v '^-e\|\[' "${source_dir}/requirements.txt" > "${tmp_requirements}"
+          # Strip editables. extras are already stripped via --strip-extras
+          grep -v '^-e' "${source_dir}/requirements.txt" > "${tmp_requirements}"
           ${venv_dir}/bin/pip install -c "${tmp_requirements}" pip-tools
         fi
     esac
@@ -79,9 +81,9 @@ function just::pip-tools::shell()
       # Just run a bash shell for pip-shell
       bash --rcfile "${venv_dir}/bin/activate" ${@+"${@}"}
     elif [ "${1}" = "pip-compile" -a "${#}" = "1" ]; then
-      "${venv_dir}/bin/pip-compile" -v --allow-unsafe --resolver=backtracking -o "${source_dir}/requirements.txt" "${source_dir}/requirements.in"
+      "${venv_dir}/bin/pip-compile" -v --strip-extras --allow-unsafe --resolver=backtracking -o "${source_dir}/requirements.txt" "${source_dir}/requirements.in"
       # We can't do hashes until https://github.com/VisionSystemsInc/vsi_common/issues/437 is solved
-      # exec pip-compile --allow-unsafe --generate-hashes --resolver=backtracking -o "${source_dir}/requirements.txt" "${source_dir}/requirements.in"
+      # exec pip-compile --strip-extras --allow-unsafe --generate-hashes --resolver=backtracking -o "${source_dir}/requirements.txt" "${source_dir}/requirements.in"
     elif [ "${1}" = "pip-sync" -a "${#}" = "1" ]; then
       "${venv_dir}/bin/pip-sync" -v "${source_dir}/requirements.txt"
     else
@@ -125,49 +127,8 @@ function just::defaultify::pip-tools()
       just::pip-tools::shell "${arg}" ${@+"${@}"}
       extra_args=${#}
       ;;
-    # pip-sync)
-    #   if [ -z "${JUST_IN_CONTAINER+set}" ]; then
-    #     Just-docker-compose run python_cache pip-sync ${@+"${@}"}
-    #   else
-    #     source /venv/src/bin/activate
 
-    #     # Make sure pip-sync works if SKIP_PIP_SYNC was used
-    #     if ! command -v pip-sync &> /dev/null; then
-    #       grep -v '^-e\|\[' /src/requirements.txt > /tmp/requirements.8210
-    #       pip install -c /tmp/requirements.8210 pip-tools
-    #     fi
-
-    #     if [ "${#}" = "0" ]; then
-    #       exec pip-sync -v /src/requirements.txt
-    #     else
-    #       exec pip-sync ${@+"${@}"}
-    #     fi
-    #   fi
-    #   # just::pip-tools::shell pip-sync ${@+"${@}"}
-    #   # extra_args=${#}
-    #   ;;
-    # pip-compile)
-    #   if [ -z "${JUST_IN_CONTAINER+set}" ]; then
-    #     Just-docker-compose run python_cache pip-compile ${@+"${@}"}
-    #   else
-    #     . /venv/src/bin/activate
-    #     # Make sure pip-compile works if SKIP_PIP_SYNC was used
-    #     if ! command -v pip-compile &> /dev/null; then
-    #       grep -v '^-e\|\[' /src/requirements.txt > /tmp/requirements.8210
-    #       pip install -c /tmp/requirements.8210 pip-tools
-    #     fi
-    #     if [ "${#}" = "0" ]; then
-    #       exec pip-compile -v --allow-unsafe --resolver=backtracking -o /src/requirements.txt /src/requirements.in
-    #       # We can't do hashes until https://github.com/VisionSystemsInc/vsi_common/issues/437 is solved
-    #       # exec pip-compile --allow-unsafe --generate-hashes --resolver=backtracking -o /src/requirements.txt /src/requirements.in
-    #     else
-    #       exec pip-compile ${@+"${@}"}
-    #     fi
-    #   fi
-    #   # just::pip-tools::shell pip-compile ${@+"${@}"}
-    #   # extra_args=${#}
-    #   ;;
-    pip-setup) # Setup python and a virtualend for local pip-tools environments
+    pip-setup) # Setup python and a venv for local pip-tools environments
       source "${VSI_COMMON_DIR}/linux/just_files/just_install_functions.bsh"
 
       local venv_dir="${JUST_PROJECT_PREFIX}_PIP_TOOLS_ENVIRONMENT"
