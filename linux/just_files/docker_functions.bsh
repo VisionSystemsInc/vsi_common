@@ -785,6 +785,8 @@ function vsi::docker::get_compose_volumes()
   vsi_compose_volume_types=()
   local -i count=0
 
+  local short_flag
+
   local pattern="services\\.${1}\\.volumes\\[([0-9]+)](\\.[^ ]*)? = (.*)"
   #BASH_REMATCH 0 - line, 1 - index, 2 - .key 3 - value/short format
 
@@ -809,28 +811,28 @@ function vsi::docker::get_compose_volumes()
         # the config command, so this is largely for backwards compatibility and
         # corner cases
         "")
-          if [[ ${BASH_REMATCH[3]} =~ x${vsi_docker_short_format_volume_pattern} ]]; then
-            if is_internal_docker_volume "${BASH_REMATCH[1]:0:1}"; then
+          if [[ ${BASH_REMATCH[3]} =~ ${vsi_docker_short_format_volume_pattern} ]]; then
+            declare -p BASH_REMATCH >&2
+            vsi_compose_volume_sources[index]=${BASH_REMATCH[1]}
+            vsi_compose_volume_targets[index]=${BASH_REMATCH[2]}
+            short_flag=${BASH_REMATCH[3]}
+
+            if is_internal_docker_volume "${vsi_compose_volume_sources[index]}"; then
               vsi_compose_volume_types[index]=volume
             else
               vsi_compose_volume_types[index]=bind
             fi
 
-            vsi_compose_volume_sources[index]=${BASH_REMATCH[3]%%:*}
-            line=${BASH_REMATCH[3]#*:}
-            vsi_compose_volume_targets[index]=${BASH_REMATCH[3]%%:*}
-            line=${BASH_REMATCH[3]#*:}
-            vsi_compose_volume_sources[index]=${BASH_REMATCH[3]%%:*}
-            line=${BASH_REMATCH[3]#*:}
             vsi_compose_volume_flags[index]="bind.create_host_path = true"
 
             # These are the only 3 mentioned in https://docs.docker.com/compose/compose-file/05-services/#short-syntax-5 that need addressing
-            if [[ line = *:ro* ]]; then
+            if [[ ${short_flag} = *:ro* ]]; then
               vsi_compose_volume_flags[index]+=$'\nread_only = true'
             fi
-            if [[ line = *:Z* ]]; then
+            # Cannot be z and Z at the same time
+            if [[ ${short_flag} = *:Z* ]]; then
               vsi_compose_volume_flags[index]+=$'\nbind.selinux = Z'
-            elif [[ line = *:z* ]]; then
+            elif [[ ${short_flag} = *:z* ]]; then
               vsi_compose_volume_flags[index]+=$'\nbind.selinux = z'
             fi
           else
@@ -840,7 +842,7 @@ function vsi::docker::get_compose_volumes()
 
         # All other flags are added to vsi_compose_volume_flags, new line separated
         *)
-          vsi_compose_volume_flags[index]="${vsi_compose_volume_flags[index]-${vsi_compose_volume_flags[index]}}${vsi_compose_volume_flags[index]:+$'\n'}${BASH_REMATCH[2]#.} = ${BASH_REMATCH[3]}"
+          vsi_compose_volume_flags[index]="${vsi_compose_volume_flags[index]+${vsi_compose_volume_flags[index]}}${vsi_compose_volume_flags[index]:+$'\n'}${BASH_REMATCH[2]#.} = ${BASH_REMATCH[3]}"
           ;;
       esac
     fi
