@@ -27,7 +27,7 @@ source "${VSI_COMMON_DIR}/linux/aliases.bsh"
 #
 # Set of functions to make using dockers easier
 #
-# .. var:: DOCKER_VOLUME_PATTERN
+# .. var:: vsi_docker_short_format_volume_pattern
 #
 # Regex pattern for matching docker volume short form
 #
@@ -41,7 +41,7 @@ source "${VSI_COMMON_DIR}/linux/aliases.bsh"
 #    3 - flags
 #**
 # https://www.debuggex.com/r/lJRoX_sSnhOKpEER
-DOCKER_VOLUME_PATTERN='^([a-zA-Z]:[/\][^:]*|[^:]+):([a-zA-Z]:[/\][^:]*|[^:]+)((:ro|:rw|:z|:Z|:r?shared|:r?slave|:r?private|:delegated|:cached|:consistent|:nocopy)*)$'
+vsi_docker_short_format_volume_pattern='^([a-zA-Z]:[/\][^:]*|[^:]+):([a-zA-Z]:[/\][^:]*|[^:]+)((:ro|:rw|:z|:Z|:r?shared|:r?slave|:r?private|:delegated|:cached|:consistent|:nocopy)*)$'
 #**
 # .. function:: is_dir_and_not_exist
 #
@@ -315,7 +315,7 @@ function docker_host_dir()
 
 function docker_parse_volume_string()
 {
-  if [[ ${1} =~ ${DOCKER_VOLUME_PATTERN} ]]; then
+  if [[ ${1} =~ ${vsi_docker_short_format_volume_pattern} ]]; then
     volume_host="${BASH_REMATCH[1]}"
     volume_docker="${BASH_REMATCH[2]}"
     volume_flags="${BASH_REMATCH[3]}"
@@ -560,6 +560,7 @@ function _Docker()
 
 function parse_docker_compose_volumes()
 {
+  echo "${FUNCNAME[0]} is deprecated: Use vsi::docker::get_compose_volumes instead" >&2
   local PREFIX="${2-}"
   local IFS=$'\n'
   DOCKER_VOLUME_LINES=(\
@@ -723,7 +724,7 @@ function docker_compose_volumes()
 
     if [ "${volume_line:0:1}" = "S" ]; then # Short format
       volume_line="${volume_line:1}"
-      if [[ ${volume_line} =~ ${DOCKER_VOLUME_PATTERN} ]]; then
+      if [[ ${volume_line} =~ ${vsi_docker_short_format_volume_pattern} ]]; then
         DOCKER_VOLUME_SOURCES[count]="${BASH_REMATCH[1]}"
         DOCKER_VOLUME_TARGETS[count]="${BASH_REMATCH[2]}"
         DOCKER_VOLUME_FORMATS[count]="short"
@@ -753,6 +754,123 @@ function docker_compose_volumes()
     fi
   done
 }
+
+#**
+# :Arguments: * ``$1`` - Name of service of interest
+#             * [``$2``] - Prefix to volume names
+# :Input: **stdin** - Yarped docker compose yaml file
+# :Output: * ``DOCKER_VOLUME_SOURCES`` - List of sources
+#          * ``DOCKER_VOLUME_TARGETS`` - Corresponding list of targets
+#          * ``DOCKER_VOLUME_FLAGS`` - Corresponding list of flags. Can be a mix of short and long format flags. Needs more parsing before this mix is useful.
+#          * ``DOCKER_VOLUME_FORMATS`` - Corresponding list specifying either "long" or "short" as the format of each volume
+#
+# Get volume lists from ``DOCKER_VOLUME_LINES``
+#
+# .. rubric:: Usage
+#
+# .. code-block:: bash
+#
+#    vsi::docker::get_compose_volumes nb < <(docker compose config | yarp)
+#    docker_compose_volumes
+#
+# .. seealso::
+#    yarp
+#**
+function vsi::docker::get_compose_volumes()
+{
+  local volume_line
+  vsi_compose_volume_sources=()
+  vsi_compose_volume_targets=()
+  vsi_compose_volume_flags=()
+  vsi_compose_volume_types=()
+  local -i count=0
+
+  local pattern="services\\.${1}\\.volumes\\[([0-9]+)](\\.[^ ]*)? = (.*)"
+  #BASH_REMATCH 0 - line, 1 - index, 2 - .key 3 - value/short format
+
+  local line
+  local index
+  while read -r line; do
+    if [[ ${line} =~ ${pattern} ]]; then
+      index=${BASH_REMATCH[1]}
+
+      case "${BASH_REMATCH[2]#.}" in
+        source)
+          vsi_compose_volume_sources[index]=${BASH_REMATCH[3]}
+          ;;
+        target)
+          vsi_compose_volume_targets[index]=${BASH_REMATCH[3]}
+          ;;
+        type)
+          vsi_compose_volume_types[index]=${BASH_REMATCH[3]}
+          ;;
+
+        # short format - Docker-compose 2 never outputs short format when you call
+        # the config command, so this is largely for backwards compatibility and
+        # corner cases
+        "")
+          if [[ ${BASH_REMATCH[3]} =~ x${vsi_docker_short_format_volume_pattern} ]]; then
+            if is_internal_docker_volume "${BASH_REMATCH[1]:0:1}"; then
+              vsi_compose_volume_types[index]=volume
+            else
+              vsi_compose_volume_types[index]=bind
+            fi
+
+            vsi_compose_volume_sources[index]=${BASH_REMATCH[3]%%:*}
+            line=${BASH_REMATCH[3]#*:}
+            vsi_compose_volume_targets[index]=${BASH_REMATCH[3]%%:*}
+            line=${BASH_REMATCH[3]#*:}
+            vsi_compose_volume_sources[index]=${BASH_REMATCH[3]%%:*}
+            line=${BASH_REMATCH[3]#*:}
+            vsi_compose_volume_flags[index]="bind.create_host_path = true"
+
+            # These are the only 3 mentioned in https://docs.docker.com/compose/compose-file/05-services/#short-syntax-5 that need addressing
+            if [[ line = *:ro* ]]; then
+              vsi_compose_volume_flags[index]+=$'\nread_only = true'
+            fi
+            if [[ line = *:Z* ]]; then
+              vsi_compose_volume_flags[index]+=$'\nbind.selinux = Z'
+            elif [[ line = *:z* ]]; then
+              vsi_compose_volume_flags[index]+=$'\nbind.selinux = z'
+            fi
+          else
+            echo "${FUNCNAME[0]}: Unrecognized short volume format: ${line}" >&2
+          fi
+          ;;
+
+        # All other flags are added to vsi_compose_volume_flags, new line separated
+        *)
+          vsi_compose_volume_flags[index]="${vsi_compose_volume_flags[index]-${vsi_compose_volume_flags[index]}}${vsi_compose_volume_flags[index]:+$'\n'}${BASH_REMATCH[2]#.} = ${BASH_REMATCH[3]}"
+          ;;
+      esac
+    fi
+  done
+
+  # The flags array can be discontiguous. Fill in empty holes, to prevent unbound variable errors
+  if [ "${#vsi_compose_volume_flags[@]}" != "${#vsi_compose_volume_sources[@]}" ]; then
+    for index in "${!vsi_compose_volume_sources[@]}"; do
+      if [ -z "${vsi_compose_volume_flags[index]+set}" ]; then
+        vsi_compose_volume_flags[index]=""
+      fi
+    done
+  fi
+}
+
+
+#     Expected: Element 4 (DOCKER_VOLUME_LINES[4]) is different:
+#     Ltest:/opt != Stest:/opt
+#     declare -a Reference=([0]="S/tmp:/mnt" [1]="Lsource: /home/user/src" [2]="ltarget: /src" [3]="ltype: bind" [4]="Stest:/opt" [5]="Lsource: internal" [6]="ltarget: /src" [7]="ltype: volume" [8]="Ltarget: /tmp2" [9]="ltype: tmpfs")
+#     Actual: declare -a DOCKER_VOLUME_LINES=([0]="S/tmp:/mnt" [1]="Lsource: /home/user/src" [2]="ltarget: /src" [3]="ltype: bind" [4]="Ltest:/opt" [5]="Lsource: internal" [6]="ltarget: /src" [7]="ltype: volume" [8]="Ltarget: /tmp2" [9]="ltype: tmpfs")
+
+#   104:services.wine.volumes =
+# 105:services.wine.volumes[0].type = volume
+# 106:services.wine.volumes[0].source = wine_home
+# 107:services.wine.volumes[0].target = /home/.user_wine
+# 108:services.wine.volumes[1].type = bind
+# 109:services.wine.volumes[1].source = /home/andy/src/terra_dsm/external/terra/external/vsi_common
+# 110:services.wine.volumes[1].target = /vsi
+# 111:services.wine.volumes[1].read_only = true
+
 
 #**
 # .. function:: parse_docker_compose
