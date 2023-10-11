@@ -229,10 +229,8 @@ function generate_docker_compose_override()
   local volumes_docker
   local volumes_flags
 
-  # parse_docker_compose_volumes/docker_compose_volumes vars
-  local DOCKER_VOLUME_SOURCES
-  local DOCKER_VOLUME_TARGETS
-  local DOCKER_VOLUME_FLAGS
+  # docker_compose_volumes vars
+  local vsi_compose_volume_sources vsi_compose_volume_targets vsi_compose_volume_flags vsi_compose_volume_types
   # _env_echo
   local new_environment
 
@@ -302,30 +300,21 @@ function generate_docker_compose_override()
     volumes_name="${JUST_PROJECT_PREFIX}_${services_upper[service_index]}_VOLUMES"
     indirect="${volumes_name}[@]"
 
-    docker_compose_volumes  ${services_name[service_index]} <<< "$(yarp <<< "${compose_config}")"
+    vsi::docker::get_compose_volumes ${services_name[service_index]} < <(yarp <<< "${compose_config}")
 
     # Get internal volumes of service
-    for volume in "${!DOCKER_VOLUME_SOURCES[@]}"; do
-
-      # If directory doesn't exist, attempt to make it as this user. Better than root
-      # When the argument is a docker volume, nothing should happen.
-      docker_premkdir "${DOCKER_VOLUME_SOURCES[volume]}"
-
+    for volume in "${!vsi_compose_volume_sources[@]}"; do
       # Get internal volumes of service
-      if is_internal_docker_volume "${DOCKER_VOLUME_SOURCES[volume]}"; then
-        if [ "${DOCKER_VOLUME_FORMATS[volume]}" == "short" ]; then
-          if is_readonly_docker_volume "${DOCKER_VOLUME_FLAGS[volume]}"; then
-            just_docker_entrypoint_internal_ro_volumes+=("${DOCKER_VOLUME_TARGETS[volume]}")
-          else
-            just_docker_entrypoint_internal_volumes+=("${DOCKER_VOLUME_TARGETS[volume]}")
-          fi
+      if [ "${vsi_compose_volume_types[volume]}" = "volume" ]; then
+        if vsi::docker::is_docker_compose_volume_readonly "${vsi_compose_volume_flags[volume]}"; then
+          just_docker_entrypoint_internal_ro_volumes+=("${vsi_compose_volume_targets[volume]}")
         else
-          if is_readonly_docker_compose_long_volume "${DOCKER_VOLUME_FLAGS[volume]}"; then
-            just_docker_entrypoint_internal_ro_volumes+=("${DOCKER_VOLUME_TARGETS[volume]}")
-          else
-            just_docker_entrypoint_internal_volumes+=("${DOCKER_VOLUME_TARGETS[volume]}")
-          fi
+          just_docker_entrypoint_internal_volumes+=("${vsi_compose_volume_targets[volume]}")
         fi
+      else
+        # If directory doesn't exist, attempt to make it as this user. Better than root
+        # When the argument is a docker volume, nothing should happen.
+        docker_premkdir "${vsi_compose_volume_sources[volume]}"
       fi
     done
 
