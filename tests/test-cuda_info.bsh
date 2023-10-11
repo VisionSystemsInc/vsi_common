@@ -291,6 +291,40 @@ begin_test "Cuda 9 test"
 )
 end_test
 
+begin_test "Cuda 11.4 order bug"
+(
+  setup_test
+  # Setup
+  CUDA_VERSION=11.4.100
+  CUDA_CARD_ARCHES=(86)
+
+  # Run code
+  cuda_capabilities "${CUDA_VERSION}"
+  suggested_architectures
+
+  # Test it
+  assert_array_values CUDA_ARCHES 35 37 50 52 53 60 61 62 70 72 75 80 87 86
+  assert_array_values CUDA_CODES 35 37 50 52 53 60 61 62 70 72 75 80 87 86
+  assert_str_eq "${CUDA_VERSION}" "11.4.100"
+  assert_array_values CUDA_SUGGESTED_ARCHES 86
+  assert_array_values CUDA_SUGGESTED_CODES 86
+  assert_str_eq "$(cmake_cuda_flags)" "8.6"
+
+  # Test the future flag
+  CUDA_SUGGESTED_PTX+=(${CUDA_SUGGESTED_PTX+"${CUDA_SUGGESTED_PTX[@]}"} "${CUDA_FORWARD_PTX}")
+  assert_str_eq "$(cmake_cuda_flags)" "8.6 8.6+PTX"
+
+  if [ "${OS-}" = "Windows_NT" ]; then
+    assert_str_eq "${CUDA_MINIMAL_DRIVER_VERSION}" 471.41
+    assert_str_eq "${CUDA_COMPATIBLE_DRIVER_VERSION}" 452.39
+  else
+    assert_str_eq "${CUDA_MINIMAL_DRIVER_VERSION}" 470.57.02
+    assert_str_eq "${CUDA_COMPATIBLE_DRIVER_VERSION}" 450.80.02
+  fi
+)
+end_test
+
+
 begin_test "Cuda 11.8 test"
 (
   setup_test
