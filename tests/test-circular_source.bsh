@@ -96,6 +96,16 @@ end_test
 begin_test "Looking for infinite source loops"
 (
   setup_test
+
+  # unset _VSI_ALREADY_SOURCED "${!_VSI_ALREADY_SOURCED_@}" source_once
+  ( # Workaround for bash_bug_exported_function_corrupt_bash_source
+    source "${VSI_COMMON_DIR}/linux/uwecho.bsh"
+    uwecho "function source_once()
+            {
+              return 1
+            }" > "${TESTDIR}/foo"
+  )
+
   for x in "${VSI_COMMON_DIR}/linux/"* "${VSI_COMMON_DIR}/linux/just_files/"*; do
     if [ -d "${x}" ]; then
       continue
@@ -104,7 +114,7 @@ begin_test "Looking for infinite source loops"
       # Only "library" files should be checked, all other programs and non-bash files should be added to this exception list
       */example_just|*/just_diff|*/just_entrypoint.sh|*/just_env|*/new_just|*/Just_wrap|*/git_safe_update|*.py|*.awk|*/check_shell) ;;
       *)
-        ( timeout 10 bash -c "source_once(){ return 1; }; source \"${x}\"" )
+        ( timeout 10 bash -c "source '${TESTDIR}/foo'; source \"${x}\"" )
         ;;
     esac
   done
