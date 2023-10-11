@@ -12,6 +12,7 @@ source "${VSI_COMMON_DIR}/linux/web_tools.bsh"
 source "${VSI_COMMON_DIR}/linux/compat.bsh"
 source "${VSI_COMMON_DIR}/linux/aliases.bsh"
 source "${VSI_COMMON_DIR}/linux/versions.bsh"
+source "${VSI_COMMON_DIR}/linux/requirements.bsh"
 
 #*# linux/cuda_info
 
@@ -938,6 +939,42 @@ function cmake_cuda_flags()
 
   echo -n ${cmake[*]+"${cmake[*]}"}
 }
+
+#**
+# .. function:: tcnn_cuda_architectures
+#
+# :Parameters: * :var:`cuda_info.bsh CUDA_SUGGESTED_ARCHES`
+#              * :var:`cuda_info.bsh CUDA_SUGGESTED_ARCHES`
+#              * [:var:`cuda_info.bsh CUDA_SUGGESTED_PTX`]
+# :Output: *stdout* - comma delimited string of CUDA architectures for tiny-cuda-nn
+#
+# Generate CUDA architectures for tiny-cuda-nn, suitable for the ``TCNN_CUDA_ARCHITECTURES`` environment variable. Note tiny-cuda-nn will always build both binaries and PTX intermediate code for each specified architecture.
+#
+#**
+function tcnn_cuda_architectures()
+{
+  # check CUDA version
+  if meet_requirements ${CUDA_VERSION-} '<=9.0'; then
+    echo "CUDA version ${CUDA_VERSION-} must be greater than 9.0" >&2
+    local JUST_IGNORE_EXIT_CODES=1
+    return 1
+  fi
+
+  # append suggested arches & ptx
+  local result=(
+    ${CUDA_SUGGESTED_ARCHES[@]+"${CUDA_SUGGESTED_ARCHES[@]}"}
+    ${CUDA_SUGGESTED_PTX[@]+"${CUDA_SUGGESTED_PTX[@]}"}
+  )
+
+  # unique sorted values
+  local IFS=$'\n'
+  result=($(sort -u <<< ${result[*]+"${result[*]}"}))
+
+  # output
+  IFS=','
+  echo -n ${result[*]+"${result[*]}"}
+}
+
 
 #**
 # .. function:: discover_cuda_all
