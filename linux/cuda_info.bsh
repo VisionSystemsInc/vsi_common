@@ -977,6 +977,56 @@ function tcnn_cuda_architectures()
 
 
 #**
+# .. function:: nvcc_gencodes
+#
+# :Arguments: * ``$1`` - delimited string of cuda architectures
+# :Output: *stdout* - string containing nvcc gencode statements
+#
+# Create nvcc gencode statements from input array of cuda capabilities.
+#
+# .. rubric:: Example
+#
+# For example, an input of ``"75 86+PTX"`` would produce the output
+#
+# .. code-block:: bash
+#
+#   -gencode=arch=compute_75,code=sm_75 -gencode=arch=compute_86,code=compute_86
+#
+#**
+function nvcc_gencodes()
+{
+  # input as space delimited string
+  local input="${1//[,;]/ }"
+
+  # remove any periods from cuda architectures (e.g., 7.5->75)
+  input="${input//./}"
+
+  # input as array
+  local capabilities=( ${input} )
+
+  # generate gencode statements
+  local gencodes=()
+  local capability=""
+  local arch=""
+  local code=""
+  for capability in "${capabilities[@]}"; do
+    if [[ "${capability}" == *"+PTX" ]]; then
+      capability="${capability%+PTX}"
+      arch="compute_${capability}"
+      code="compute_${capability}"
+    else
+      arch="compute_${capability}"
+      code="sm_${capability}"
+    fi
+    gencodes+=( "-gencode=arch=${arch},code=${code}" )
+  done
+
+  # output
+  echo -n ${gencodes[*]+"${gencodes[*]}"}
+}
+
+
+#**
 # .. function:: discover_cuda_all
 #
 # Helper function to call all the discovery code in one call.
