@@ -790,26 +790,27 @@ function cuda_capabilities()
 function suggested_architectures()
 {
   local x arch y
-  local IFS="${IFS}"
-
+  local IFS=$'\n'
+  local cuda_arches_sorted=($(sort -u <<< ${CUDA_ARCHES[*]+"${CUDA_ARCHES[*]}"}))
+  local cuda_codes_sorted=($(sort -u <<< ${CUDA_CODES[*]+"${CUDA_CODES[*]}"}))
   CUDA_SUGGESTED_ARCHES=()
   CUDA_SUGGESTED_CODES=()
   CUDA_SUGGESTED_PTX=()
 
   # Loop through all the card aches
   for arch in ${CUDA_CARD_ARCHES[@]+"${CUDA_CARD_ARCHES[@]}"}; do
-    for x in ${CUDA_ARCHES[@]+"${!CUDA_ARCHES[@]}"}; do
+    for x in ${cuda_arches_sorted[@]+"${!cuda_arches_sorted[@]}"}; do
       # If it's an exact match, add it!
-      if [ "${CUDA_ARCHES[x]}" == "${arch}" ]; then
+      if [ "${cuda_arches_sorted[x]}" == "${arch}" ]; then
         CUDA_SUGGESTED_ARCHES+=("${arch}")
         continue 2
       # If it's greater than, that means there is no exact match.
       # The last compute checked was the right answer. Use that.
-      elif [ "${CUDA_ARCHES[x]}" -gt "${arch}" ]; then
+      elif [ "${cuda_arches_sorted[x]}" -gt "${arch}" ]; then
         # Verify the compute family matches, else you probably have a card that
         # is too old, like a Fermi???
         if [ "${x}" -gt "0" ]; then
-          CUDA_SUGGESTED_ARCHES+=("${CUDA_ARCHES[x-1]}")
+          CUDA_SUGGESTED_ARCHES+=("${cuda_arches_sorted[x-1]}")
         else
           : #: CUDA_SUGGESTED_ARCHES+=("TOOOLD")
         fi
@@ -820,31 +821,31 @@ function suggested_architectures()
     # If you get here, either you have a newer arch of an already supported arch,
     # or you have a newer card than this version of cuda supports. Let's check
     # the first case first.
-    if [ "${CUDA_ARCHES[x]:0:1}" == "${arch:0:1}" ]; then
-      CUDA_SUGGESTED_ARCHES+=("${CUDA_ARCHES[x]}")
+    if [ "${cuda_arches_sorted[x]:0:1}" == "${arch:0:1}" ]; then
+      CUDA_SUGGESTED_ARCHES+=("${cuda_arches_sorted[x]}")
     else
       # If you get here, that means you have have a newer card than this version
       # of cuda supports. So the best answer is to PTX compile for it.
-      CUDA_SUGGESTED_PTX+=("${CUDA_ARCHES[x]}")
+      CUDA_SUGGESTED_PTX+=("${cuda_arches_sorted[x]}")
     fi
   done
 
   for arch in ${CUDA_CARD_ARCHES[@]+"${CUDA_CARD_ARCHES[@]}"}; do
-    for x in ${CUDA_CODES[@]+"${!CUDA_CODES[@]}"}; do
+    for x in ${cuda_codes_sorted[@]+"${!cuda_codes_sorted[@]}"}; do
       # If it's an exact match, add it!
-      if [ "${CUDA_CODES[x]}" == "${arch}" ]; then
+      if [ "${cuda_codes_sorted[x]}" == "${arch}" ]; then
         CUDA_SUGGESTED_CODES+=("${arch}")
         continue 2
       # If it's greater than, that means there is no exact match.
       # The last compute checked was the right answer. Use that.
-      elif [ "${CUDA_CODES[x]}" -gt "${arch}" ]; then
+      elif [ "${cuda_codes_sorted[x]}" -gt "${arch}" ]; then
         # Verify the compute family matches, else you probably have a card that
         # is too old, like a Fermi???
         if [ "${x}" == "0" ]; then
           # Too old
           : #CUDA_SUGGESTED_CODES+=("TOOOLD")
-        else # if [ "${CUDA_CODES[$x-1]:0:1}" == "${arch:0:1}" ]; This should always be true
-          CUDA_SUGGESTED_CODES+=("${CUDA_CODES[x-1]}")
+        else # if [ "${cuda_codes_sorted[$x-1]:0:1}" == "${arch:0:1}" ]; This should always be true
+          CUDA_SUGGESTED_CODES+=("${cuda_codes_sorted[x-1]}")
         fi
         continue 2
       fi
@@ -853,15 +854,15 @@ function suggested_architectures()
     # If you get here, either you have a newer arch of an already supported arch,
     # or you have a newer card than this version of cuda supports. Let's check
     # the first case first.
-    if [ "${CUDA_CODES[x]:0:1}" == "${arch:0:1}" ]; then
-      CUDA_SUGGESTED_CODES+=("${CUDA_CODES[x]}")
+    if [ "${cuda_codes_sorted[x]:0:1}" == "${arch:0:1}" ]; then
+      CUDA_SUGGESTED_CODES+=("${cuda_codes_sorted[x]}")
     # no else; PTX is for ARCH, not CODES
     fi
   done
 
-  CUDA_FORWARD_PTX="${CUDA_ARCHES[@]+"${CUDA_ARCHES[${#CUDA_ARCHES[@]}-1]}"}"
+  # This should not use the sorted list, as the last element it the highest OFFICIAL architecture
+  CUDA_FORWARD_PTX="${CUDA_ARCHES[@]+"${CUDA_ARCHES[${#cuda_arches_sorted[@]}-1]}"}"
 
-  IFS=$'\n'
   CUDA_SUGGESTED_ARCHES=($(sort -u <<< ${CUDA_SUGGESTED_ARCHES[*]+"${CUDA_SUGGESTED_ARCHES[*]}"}))
   CUDA_SUGGESTED_CODES=($(sort -u <<< ${CUDA_SUGGESTED_CODES[*]+"${CUDA_SUGGESTED_CODES[*]}"}))
   CUDA_SUGGESTED_PTX=($(sort -u <<< ${CUDA_SUGGESTED_PTX[*]+"${CUDA_SUGGESTED_PTX[*]}"}))
