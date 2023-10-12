@@ -941,6 +941,44 @@ function cmake_cuda_flags()
 }
 
 #**
+# .. function:: cmake_cuda_architectures
+#
+# :Parameters: * :var:`cuda_info.bsh CUDA_SUGGESTED_ARCHES`
+#              * [:var:`cuda_info.bsh CUDA_SUGGESTED_PTX`]
+# :Output: *stdout* - semi-colon delimited string of CUDA capabilities for cmake
+#
+# Generate CUDA capabilities suitable for the ``CMAKE_CUDA_ARCHITECTURES`` environment variable.
+# See cmake docs for more information https://cmake.org/cmake/help/latest/variable/CMAKE_CUDA_ARCHITECTURES.html
+#
+#**
+function cmake_cuda_architectures()
+{
+  # check CUDA version
+  if meet_requirements ${CUDA_VERSION-} '<=9.0'; then
+    echo "CUDA version ${CUDA_VERSION-} must be greater than 9.0" >&2
+    local JUST_IGNORE_EXIT_CODES=1
+    return 1
+  fi
+
+  # cmake capabilties
+  # https://cmake.org/cmake/help/latest/prop_tgt/CUDA_ARCHITECTURES.html
+  local result=()
+  local x=""
+
+  for x in ${CUDA_SUGGESTED_ARCHES[@]+"${CUDA_SUGGESTED_ARCHES[@]}"}; do
+    result+=( "${x}-real" )
+  done
+
+  for x in ${CUDA_SUGGESTED_PTX[@]+"${CUDA_SUGGESTED_PTX[@]}"}; do
+    result+=( "${x}-virtual" )
+  done
+
+  # output
+  local IFS=';'
+  echo -n ${result[*]+"${result[*]}"}
+}
+
+#**
 # .. function:: tcnn_cuda_architectures
 #
 # :Parameters: * :var:`cuda_info.bsh CUDA_SUGGESTED_ARCHES`
@@ -974,7 +1012,6 @@ function tcnn_cuda_architectures()
   IFS=','
   echo -n ${result[*]+"${result[*]}"}
 }
-
 
 #**
 # .. function:: nvcc_gencodes
@@ -1014,6 +1051,14 @@ function nvcc_gencodes()
       capability="${capability%+PTX}"
       arch="compute_${capability}"
       code="compute_${capability}"
+    elif [[ ${capability} = *-real ]]; then
+      capability="${capability%-real}"
+      arch="compute_${capability}"
+      code="sm_${capability}"
+    elif [[ ${capability} = *-virtual ]]; then
+      capability="${capability%-virtual}"
+      arch="compute_${capability}"
+      code="compute_${capability}"
     else
       arch="compute_${capability}"
       code="sm_${capability}"
@@ -1024,7 +1069,6 @@ function nvcc_gencodes()
   # output
   echo -n ${gencodes[*]+"${gencodes[*]}"}
 }
-
 
 #**
 # .. function:: discover_cuda_all
