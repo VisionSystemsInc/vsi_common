@@ -97,7 +97,7 @@ set -eu
 # Making sure we are in / prevents this issue altogether
 cd /
 
-source "${VSI_COMMON_DIR}/linux/source_once.bsh"
+# source "${VSI_COMMON_DIR}/linux/source_once.bsh"
 source "${VSI_COMMON_DIR}/linux/elements.bsh"
 
 #**
