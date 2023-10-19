@@ -158,7 +158,7 @@ PS4=$'+\x1b[0m${BASH_SOURCE[1]+}${BASH_SOURCE[0]##*/}:${LINENO}${FUNCNAME[0]:+:$
 # set -xv
 if [ "${bash_feature_declare_global}" = "1" ]; then
   declare -i extra_args=0
-  declare -i get_args_args_used=0
+  declare -i get_args_args_used
 fi
 
 if [ "${ALREADY_RUN_ONCE+set}" != "set" ]; then
