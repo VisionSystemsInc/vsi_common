@@ -154,10 +154,11 @@ function load_just_settings()
     source "${VSI_COMMON_DIR}/linux/just_files/just_env" "${just_settings}"
   done
 }
-
+PS4=$'+\x1b[0m${BASH_SOURCE[1]+}${BASH_SOURCE[0]##*/}:${LINENO}${FUNCNAME[0]:+:${FUNCNAME[0]}()}\t'
+# set -xv
 if [ "${bash_feature_declare_global}" = "1" ]; then
-  declare -i extra_args
-  declare -i get_args_args_used
+  declare -i extra_args=0
+  declare -i get_args_args_used=0
 fi
 
 if [ "${ALREADY_RUN_ONCE+set}" != "set" ]; then
