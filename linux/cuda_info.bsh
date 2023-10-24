@@ -12,6 +12,7 @@ source "${VSI_COMMON_DIR}/linux/web_tools.bsh"
 source "${VSI_COMMON_DIR}/linux/compat.bsh"
 source "${VSI_COMMON_DIR}/linux/aliases.bsh"
 source "${VSI_COMMON_DIR}/linux/versions.bsh"
+source "${VSI_COMMON_DIR}/linux/requirements.bsh"
 
 #*# linux/cuda_info
 
@@ -937,6 +938,136 @@ function cmake_cuda_flags()
   done
 
   echo -n ${cmake[*]+"${cmake[*]}"}
+}
+
+#**
+# .. function:: cmake_cuda_architectures
+#
+# :Parameters: * :var:`cuda_info.bsh CUDA_SUGGESTED_ARCHES`
+#              * [:var:`cuda_info.bsh CUDA_SUGGESTED_PTX`]
+# :Output: *stdout* - semi-colon delimited string of CUDA capabilities for cmake
+#
+# Generate CUDA capabilities suitable for the ``CMAKE_CUDA_ARCHITECTURES`` environment variable.
+# See cmake docs for more information https://cmake.org/cmake/help/latest/variable/CMAKE_CUDA_ARCHITECTURES.html
+#
+#**
+function cmake_cuda_architectures()
+{
+  # check CUDA version
+  if meet_requirements ${CUDA_VERSION-} '<=9.0'; then
+    echo "CUDA version ${CUDA_VERSION-} must be greater than 9.0" >&2
+    local JUST_IGNORE_EXIT_CODES=1
+    return 1
+  fi
+
+  # cmake capabilties
+  # https://cmake.org/cmake/help/latest/prop_tgt/CUDA_ARCHITECTURES.html
+  local result=()
+  local x=""
+
+  for x in ${CUDA_SUGGESTED_ARCHES[@]+"${CUDA_SUGGESTED_ARCHES[@]}"}; do
+    result+=( "${x}-real" )
+  done
+
+  for x in ${CUDA_SUGGESTED_PTX[@]+"${CUDA_SUGGESTED_PTX[@]}"}; do
+    result+=( "${x}-virtual" )
+  done
+
+  # output
+  local IFS=';'
+  echo -n ${result[*]+"${result[*]}"}
+}
+
+#**
+# .. function:: tcnn_cuda_architectures
+#
+# :Parameters: * :var:`cuda_info.bsh CUDA_SUGGESTED_ARCHES`
+#              * :var:`cuda_info.bsh CUDA_SUGGESTED_ARCHES`
+#              * [:var:`cuda_info.bsh CUDA_SUGGESTED_PTX`]
+# :Output: *stdout* - comma delimited string of CUDA architectures for tiny-cuda-nn
+#
+# Generate CUDA architectures for tiny-cuda-nn, suitable for the ``TCNN_CUDA_ARCHITECTURES`` environment variable. Note tiny-cuda-nn will always build both binaries and PTX intermediate code for each specified architecture.
+#
+#**
+function tcnn_cuda_architectures()
+{
+  # check CUDA version
+  if meet_requirements ${CUDA_VERSION-} '<=9.0'; then
+    echo "CUDA version ${CUDA_VERSION-} must be greater than 9.0" >&2
+    local JUST_IGNORE_EXIT_CODES=1
+    return 1
+  fi
+
+  # append suggested arches & ptx
+  local result=(
+    ${CUDA_SUGGESTED_ARCHES[@]+"${CUDA_SUGGESTED_ARCHES[@]}"}
+    ${CUDA_SUGGESTED_PTX[@]+"${CUDA_SUGGESTED_PTX[@]}"}
+  )
+
+  # unique sorted values
+  local IFS=$'\n'
+  result=($(sort -u <<< ${result[*]+"${result[*]}"}))
+
+  # output
+  IFS=','
+  echo -n ${result[*]+"${result[*]}"}
+}
+
+#**
+# .. function:: nvcc_gencodes
+#
+# :Arguments: * ``$1`` - delimited string of cuda architectures
+# :Output: *stdout* - string containing nvcc gencode statements
+#
+# Create nvcc gencode statements from input array of cuda capabilities.
+#
+# .. rubric:: Example
+#
+# For example, an input of ``"75 86+PTX"`` would produce the output
+#
+# .. code-block:: bash
+#
+#   -gencode=arch=compute_75,code=sm_75 -gencode=arch=compute_86,code=compute_86
+#
+#**
+function nvcc_gencodes()
+{
+  # input as space delimited string
+  local input="${1//[,;]/ }"
+
+  # remove any periods from cuda architectures (e.g., 7.5->75)
+  input="${input//./}"
+
+  # input as array
+  local capabilities=( ${input} ) # noquotes
+
+  # generate gencode statements
+  local gencodes=()
+  local capability=""
+  local arch=""
+  local code=""
+  for capability in "${capabilities[@]}"; do
+    if [[ ${capability} = *+PTX ]]; then
+      capability="${capability%+PTX}"
+      arch="compute_${capability}"
+      code="compute_${capability}"
+    elif [[ ${capability} = *-real ]]; then
+      capability="${capability%-real}"
+      arch="compute_${capability}"
+      code="sm_${capability}"
+    elif [[ ${capability} = *-virtual ]]; then
+      capability="${capability%-virtual}"
+      arch="compute_${capability}"
+      code="compute_${capability}"
+    else
+      arch="compute_${capability}"
+      code="sm_${capability}"
+    fi
+    gencodes+=( "-gencode=arch=${arch},code=${code}" )
+  done
+
+  # output
+  echo -n ${gencodes[*]+"${gencodes[*]}"}
 }
 
 #**
