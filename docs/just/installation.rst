@@ -33,4 +33,4 @@ The ``just`` `wizard <https://visionsystemsinc.github.io/vsi_common/new_just>`_ 
 Executable
 ----------
 
-If you have a ``just`` executable on your path, simply run then you can start using ``just`` commands, such as the wizard: ``just --new``
+If you have a ``just`` executable on your path, then you can start using ``just`` commands such as the wizard: ``just --new``
