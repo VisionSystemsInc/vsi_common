@@ -993,10 +993,48 @@ function cmake_cuda_architectures()
 }
 
 #**
+# .. function:: torch_cuda_arch_list
+#
+# :Parameters: * :var:`cuda_info.bsh CUDA_SUGGESTED_ARCHES`
+#              * [:var:`cuda_info.bsh CUDA_SUGGESTED_PTX`]
+# :Output: *stdout* - comma delimited string of CUDA architectures for pytorch
+#
+# Generate CUDA capabilities suitable for the ``TORCH_CUDA_ARCH_LIST`` environment variable.
+# See pytorch docs for more information https://pytorch.org/docs/stable/cpp_extension.html#torch.utils.cpp_extension.CUDAExtension
+#
+#**
+function torch_cuda_arch_list()
+{
+  # check CUDA version
+  if meet_requirements ${CUDA_VERSION-} '<=9.0'; then
+    echo "CUDA version ${CUDA_VERSION-} must be greater than 9.0" >&2
+    local JUST_IGNORE_EXIT_CODES=1
+    return 1
+  fi
+
+  # TORCH_CUDA_ARCH_LIST
+  # https://pytorch.org/docs/stable/cpp_extension.html#torch.utils.cpp_extension.CUDAExtension
+  local result=()
+  local x=""
+
+  for x in ${CUDA_SUGGESTED_ARCHES[@]+"${CUDA_SUGGESTED_ARCHES[@]}"}; do
+    if ! isin "${x}" ${CUDA_SUGGESTED_PTX[@]+"${CUDA_SUGGESTED_PTX[@]}"}; then
+      result+=( "${x::1}.${x:1}" )
+    fi
+  done
+
+  for x in ${CUDA_SUGGESTED_PTX[@]+"${CUDA_SUGGESTED_PTX[@]}"}; do
+    result+=( "${x::1}.${x:1}+PTX" )
+  done
+
+  # output
+  echo -n ${result[*]+"${result[*]}"}
+}
+
+#**
 # .. function:: tcnn_cuda_architectures
 #
 # :Parameters: * :var:`cuda_info.bsh CUDA_SUGGESTED_ARCHES`
-#              * :var:`cuda_info.bsh CUDA_SUGGESTED_ARCHES`
 #              * [:var:`cuda_info.bsh CUDA_SUGGESTED_PTX`]
 # :Output: *stdout* - comma delimited string of CUDA architectures for tiny-cuda-nn
 #
