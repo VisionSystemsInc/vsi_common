@@ -1032,6 +1032,47 @@ function torch_cuda_arch_list()
 }
 
 #**
+# .. function:: torch_cuda_arch_list_from_cmake
+#
+# :Arguments: * ``$1`` - delimited string of cuda architectures
+# :Output: *stdout* - string containing ``TORCH_CUDA_ARCH_LIST`` statement
+#
+# Create ``TORCH_CUDA_ARCH_LIST`` from ``CMAKE_CUDA_ARCHITECTURES`` statement.
+#
+# .. rubric:: Example
+#
+# For example, an input of ``"80-real 86-virtual"`` would produce the output ``"8.0 8.6+PTX"``
+#**
+function torch_cuda_arch_list_from_cmake()
+{
+  # input as space delimited string
+  local input="${1//[,;]/ }"
+
+  # generate TORCH_CUDA_ARCH_LIST statements
+  local x=""
+  local capability=""
+  local result=()
+  for x in ${input}; do
+
+    # X.Y capability
+    capability="${x//[!0-9]/}"
+    capability="${capability::1}.${capability:1}"
+
+    # append PTX
+    if [[ ${x} = *+PTX ]]; then
+      capability+="+PTX"
+    elif [[ ${x} = *-virtual ]]; then
+      capability+="+PTX"
+    fi
+
+    result+=( "${capability}" )
+  done
+
+  # output
+  echo -n ${result[*]+"${result[*]}"}
+}
+
+#**
 # .. function:: tcnn_cuda_architectures
 #
 # :Parameters: * :var:`cuda_info.bsh CUDA_SUGGESTED_ARCHES`
@@ -1062,6 +1103,39 @@ function tcnn_cuda_architectures()
 
   # output
   IFS=','
+  echo -n ${result[*]+"${result[*]}"}
+}
+
+#**
+# .. function:: tcnn_cuda_architectures_from_cmake
+#
+# :Arguments: * ``$1`` - delimited string of cuda architectures
+# :Output: *stdout* - string containing ``TCNN_CUDA_ARCHITECTURES`` statement
+#
+# Create ``TCNN_CUDA_ARCHITECTURES`` from ``CMAKE_CUDA_ARCHITECTURES`` statement.
+#
+# .. rubric:: Example
+#
+# For example, an input of ``"80-real 86-virtual"`` would produce the output ``"80 86"``
+#**
+function tcnn_cuda_architectures_from_cmake()
+{
+  # input as space delimited string
+  local input="${1//[,;]/ }"
+
+  # generate TCNN_CUDA_ARCHITECTURES statements
+  local x=""
+  local result=()
+  for x in ${input}; do
+    result+=( "${x//[!0-9]/}" )
+  done
+
+  # unique sorted values
+  local IFS=$'\n'
+  result=($(sort -u <<< ${result[*]+"${result[*]}"}))
+
+  # output
+  IFS=' '
   echo -n ${result[*]+"${result[*]}"}
 }
 
