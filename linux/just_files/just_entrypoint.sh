@@ -95,6 +95,8 @@ set -eu
 # shell-init: error retrieving current directory: getcwd: cannot access parent directories: No such file or directory
 # chdir: error retrieving current directory: getcwd: cannot access parent directories: No such file or directory
 # Making sure we are in / prevents this issue altogether
+: ${JUST_ENTRYPOINT_LOCAL_CWD=${PWD}}
+export JUST_ENTRYPOINT_LOCAL_CWD
 cd /
 
 # source "${VSI_COMMON_DIR}/linux/source_once.bsh"
@@ -230,6 +232,8 @@ done
 
 # Unexport it
 unset shell
+cd "${JUST_ENTRYPOINT_LOCAL_CWD}"
+unset JUST_ENTRYPOINT_LOCAL_CWD
 
 if [ "${run_just}" = "1" ]; then
   source "${VSI_COMMON_DIR}/linux/just"
