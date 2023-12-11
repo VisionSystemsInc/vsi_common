@@ -194,7 +194,7 @@ if [ "${ALREADY_RUN_ONCE+set}" != "set" ]; then
     JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS="${JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS-${JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES-}}" \
     /usr/bin/env bash "${VSI_COMMON_DIR}/linux/just_files/just_entrypoint_functions"
   )
-  # Workaround for gosu pretending blocking a CVE we don't care about
+  # Workaround for gosu blocking a CVE we don't care about
   export GOSU_PLEASE_LET_ME_BE_COMPLETELY_INSECURE_I_GET_TO_KEEP_ALL_THE_PIECES="I've seen things you people wouldn't believe. Attack ships on fire off the shoulder of Orion. I watched C-beams glitter in the dark near the Tannhäuser Gate. All those moments will be lost in time, like tears in rain. Time to die."
 
   # Rerun entrypoint as user now, (skipping the root part via ALREADY_RUN_ONCE)
