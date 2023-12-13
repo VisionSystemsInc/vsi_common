@@ -291,6 +291,7 @@ function get_docker_recipes()
 # .. command:: build_recipes
 #
 # :Arguments: [``$1``]... - Recipe names to run
+# :Parameters: ``JUST_RECIPE_BUILDARGS`` - Array of build args to be added to every recipe (e.g. ``FOO=BAR``).
 #
 # Runs ``docker compose build`` for the docker recipes. Useful command to call before ``docker build`` on your own project that uses recipes in vsi_common, to keep them synced with your build.
 #
@@ -346,8 +347,14 @@ function docker_defaultify()
   shift 1
   case ${arg} in
     build_recipes) # Build recipes
+      local build_args=()
+      local build_arg
+      for build_arg in ${JUST_RECIPE_BUILDARGS[@]+"${JUST_RECIPE_BUILDARGS[@]}"}; do
+        build_args+=(--set "*.args.${build_arg}")
+      done
+
       pushd "${VSI_COMMON_DIR}/docker/recipes/" &> /dev/null
-        Docker buildx bake ${@+"${@}"}
+        Docker buildx bake ${build_args[@]+"${build_args[@]}"} ${@+"${@}"}
       popd &> /dev/null
       extra_args=${#}
       ;;
