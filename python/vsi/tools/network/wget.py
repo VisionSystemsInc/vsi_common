@@ -61,7 +61,7 @@ def download(url, filename=None, chunk_size=2**20, cookie={}, disable_ssl_verify
   context=None
   if disable_ssl_verify and url.startswith('https://'):
     import ssl
-    context = ssl.SSLContext(ssl.PROTOCOL_TLSv1) #disable cert checking
+    context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2) #disable cert checking
 
   try:
     response = urllib2.urlopen(request, context=context)
