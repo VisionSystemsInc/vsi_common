@@ -149,7 +149,6 @@ def attach(pid, ip='127.0.0.1', password='vsi', gui=False, break_exit=False):
 
   #attach must come last for some STUPID reason. Dumb parser
   sys.argv = ['', '--pwd=%s' % password, '--host=%s' % ip, '--attach', str(pid)]
-  print(sys.argv)
   if gui:
     import winpdb
     winpdb.main()
