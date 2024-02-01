@@ -29,4 +29,4 @@ def yarp(doc, prefix=''):
   return lines
 
 if __name__ == "__main__":
-  print('\n'.join(yarp(yaml.load(sys.stdin, Loader=yaml.Loader))))
+  print('\n'.join(yarp(yaml.safe_load(sys.stdin))))
