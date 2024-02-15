@@ -1,0 +1,74 @@
+# ${precommit_dir} is specially expanded because I need it. Don't expect
+# other environment variables to work.
+
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+    # .gitlab-ci.yml has !reference which can only be parsed via unsafe,
+    # which is just a simpler syntax-only check instead.
+    # could not determine a constructor for the tag '!reference'
+    - id: check-yaml
+      name: check-yaml .gitlab-ci.yaml
+      args: [--unsafe]
+      additional_dependencies:
+        - -c
+        - ${precommit_dir}/requirements.txt
+      files: ^\.gitlab-ci\.yml$
+    - id: check-yaml
+      name: check-yaml Everything else
+      additional_dependencies:
+        - -c
+        - ${precommit_dir}/requirements.txt
+      exclude: ^external|^\.gitlab-ci\.yml$
+
+    - id: end-of-file-fixer
+      additional_dependencies:
+        - -c
+        - ${precommit_dir}/requirements.txt
+      exclude: "^external"
+      # Multi dir example
+      # exclude: "^dir/subdir|^dir2|^external"
+    - id: trailing-whitespace
+      additional_dependencies:
+        - -c
+        - ${precommit_dir}/requirements.txt
+      exclude: "^external"
+-   repo: https://github.com/psf/black
+    rev: 23.9.1
+    hooks:
+    - id: black
+      args:
+        # If these two are enabled, print warnings without modification of files
+        # - --check
+        # - --diff
+
+        - --line-length=88
+        - --skip-string-normalization
+      types: [python]
+      language_version: python3.12
+      additional_dependencies:
+        - -c
+        - ${precommit_dir}/requirements.txt
+      exclude: "^external"
+- repo: https://github.com/pycqa/flake8
+  rev: 7.0.0
+  hooks:
+    - id: flake8
+      name: flake8 (python)
+      args:
+        - --max-line-length=88
+        - --max-complexity=18
+
+        # Specify which errors will be flagged by flake8
+        # Recommended: https://black.readthedocs.io/en/stable/the_black_code_style/current_style.html#flake8
+        - --select=B,C,E,F,W,B950
+        - --ignore=E203,E501,E701
+
+        # Specify which errors will be ignored by flake8
+        # F Codes https://flake8.pycqa.org/en/latest/user/error-codes.html
+        # D Codes https://www.pydocstyle.org/en/latest/error_codes.html
+        # EW Codes https://pycodestyle.pycqa.org/en/latest/intro.html#error-codes
+        # B Codes https://github.com/PyCQA/flake8-bugbear#opinionated-warnings
+      types: [python]
+      exclude: "^external"

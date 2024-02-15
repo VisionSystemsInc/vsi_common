@@ -1,0 +1,207 @@
+#!/usr/bin/env false bash
+
+if [[ ${-} != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
+# source "${VSI_COMMON_DIR}/linux/command_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/string_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/just_files/just_install_functions.bsh"
+
+#*# just/plugins/just_pre-commit_functions
+
+JUST_DEFAULTIFY_FUNCTIONS+=(pre-commit::defaultify)
+JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
+
+#**
+# .. default-domain:: bash
+#
+# =============================
+# J.U.S.T. Pre-commit Functions
+# =============================
+#
+# .. file:: just_pre-commit_functions.bsh
+#
+# Plugin for using pre-commit on a repo
+
+# Setting up a new project:
+# just pre-commit init setup compile
+# Edit your .pre-commit/config.yml.in file to your hearts content
+# Add to sync in your Justfile:
+# justify pre-commit setup sync enable
+
+
+# Todo Move this!
+function vsi::python::virtualenv_bin()
+{ # $1 - dir $2 - script name
+  if [ "${OS-}" = "Windows_NT" ]; then
+    echo "${1}/Scripts/$2.exe"
+  else
+    echo "${1}/bin/$2"
+  fi
+}
+
+
+function pre-commit::_get_hook_files()
+{
+  local git_dir=$(${GIT} rev-parse --git-dir)
+  local hook_index=0
+  hook_files=("${git_dir}"/hooks/*)
+  for hook_index in ${!hook_files[@]}; do
+    if [ ! -f "${hook_files[hook_index]}" ] || [[ $(basename "${hook_files[hook_index]}") =~ \. ]]; then
+      unset hook_files[hook_index]
+    fi
+  done
+}
+
+
+function pre-commit()
+{
+  # this Does't work
+  # PRE_COMMIT_HOME=${precommit_dir}/cache
+
+  local subcommand=()
+  if (( ${#} )); then
+    case "${1}" in
+      autoupdate|init-templatedir|install|install-hooks|migrate-config|run|try-repo|uninstall)
+        # The commands are executed in some weird .cache dir, relative path to requirements will never work
+        sed 's|\${precommit_dir}|'"${precommit_dir}"'|g' "${precommit_dir}/config.yml.in" > "${precommit_dir}/config.yml"
+        subcommand=("${1}" -c "${precommit_dir}/config.yml")
+        shift 1
+        ;;
+    esac
+  fi
+
+  local JUST_IGNORE_EXIT_CODES=1
+  ${DRYRUN} "$(vsi::python::virtualenv_bin "${python_dir}" pre-commit)" \
+    ${subcommand[@]+"${subcommand[@]}"} ${@+"${@}"}
+
+  if (( ${#subcommand[@]} )) && [[ ${subcommand[0]} = install* ]]; then
+    local hook hook_files
+    pre-commit::_get_hook_files
+    for hook in ${hook_files[@]+"${hook_files[@]}"}; do
+      if ! grep -q pre-commit::filter_lines "${hook}"; then
+        echo "Patching $(basename "${hook}")..." >&2
+        # Designed to patch https://github.com/pre-commit/pre-commit/blob/main/pre_commit/resources/hook-tmpl
+        ${DRYRUN} sed -i 's|^ *exec.*pre[-_]commit "\${ARGS\[@]}"$|& < <("'"${VSI_COMMON_DIR}"'/linux/pre-commit::filter_lines")|' "${hook}"
+      fi
+    done
+  fi
+}
+
+
+function pre-commit::defaultify()
+{
+  local project_cwd="${JUST_PROJECT_PREFIX}_CWD"
+  project_cwd=${!project_cwd}
+  local precommit_dir="${JUST_PROJECT_PREFIX}_PRECOMMIT_DIR"
+  precommit_dir=${!precommit_dir:-${project_cwd}/.pre-commit}
+  local python_dir="${JUST_PROJECT_PREFIX}_PRECOMMIT_PYTHON_DIR"
+  python_dir=${!python_dir-${precommit_dir}/python}
+  local desired_python_version="${JUST_PROJECT_PREFIX}_PRECOMMIT_PYTHON_VERSION"
+  desired_python_version=${!desired_python_version-3.12.1}
+
+  local hook_types="${JUST_PROJECT_PREFIX}_PRECOMMIT_HOOKS[@]"
+  # This won't recognize an array set as empty as a set state, it will be treated as unset
+  hook_types=("${!hook_types-pre-push}")
+
+  arg="${1}"
+  shift 1
+  case ${arg} in
+    pre-commit) # Run pre-commit command (e.g. just pre-commit run)
+      pre-commit "${@}"
+      extra_args=$#
+      ;;
+    pre-commit_run) # Run pre-commit check locally. Defaults to "-a" to run everything
+      if (( ${#} )); then
+        justify pre-commit run "${@}"
+        extra_args=${#}
+      else
+        justify pre-commit run -a
+      fi
+      ;;
+    pre-commit_init) # Initialize precommit for the first time in a new project
+      mkdir -p "${precommit_dir}"
+      cp "${VSI_COMMON_DIR}/templates/pre-commit/requirements.in" "${precommit_dir}/requirements.in"
+      cp "${VSI_COMMON_DIR}/templates/pre-commit/config.yml.in" "${precommit_dir}/config.yml.in"
+
+      local precommit_rel=$(relative_path "${precommit_dir}" "${project_cwd}")
+      local precommit_rel_regex=$(regex_escape "${precommit_rel}")
+      if ! grep '^'"${precommit_rel_regex}"'/config.yml$' .gitignore &> /dev/null; then
+        sed -i '$a'"${precommit_rel}"'/config.yml' .gitignore
+      fi
+      if ! grep '^'"${precommit_rel_regex}"'/python$' .gitignore &> /dev/null; then
+        sed -i '$a'"${precommit_rel}"'/python' .gitignore
+      fi
+
+      echo "Don't forget to run: git add .pre-commit .gitignore" >&2
+      ;;
+    pre-commit_setup) # Setup the pre-commit python
+      local python_exe
+
+      # If pip is missing, install python
+      if [ ! -f "$(vsi::python::virtualenv_bin "${python_dir}" pip)" ]; then
+        local PYTHON_VERSION=${PYTHON_VERSION-${desired_python_version}}
+        # conda-python-install sets: python_exe conda_exe python_activate python_version
+        local python_exe conda_exe python_activate python_version
+        conda-python-install --dir "${python_dir}" --download
+      fi
+
+      # If pip-sync is missing, install just pip-tools
+      if [ ! -f "$(vsi::python::virtualenv_bin "${python_dir}" pip-sync)" ]; then
+        local requirements="${precommit_dir}/requirements.txt"
+        if [ ! -f "${requirements}" ]; then
+          # Bootstrap case
+            requirements="${precommit_dir}/requirements.in"
+        fi
+        "$(vsi::python::virtualenv_bin "${python_dir}" pip)" \
+            install -c "${requirements}" pip-tools
+      fi
+      ;;
+    pre-commit_sync) # Sync the virtual pre-commit and plugins runs in
+      "$(vsi::python::virtualenv_bin "${python_dir}" pip-sync)" -v \
+          "${precommit_dir}/requirements.txt"
+      ;;
+
+    pre-commit_compile) # Compile the requirements file for pre-commit and plugins
+      "$(vsi::python::virtualenv_bin "${python_dir}" pip-compile)" -v \
+          --allow-unsafe --resolver=backtracking \
+          -o "${precommit_dir}/requirements.txt" \
+          "${precommit_dir}/requirements.in"
+      sed -i 's|^black==|#&|' "${precommit_dir}/requirements.txt"
+      ;;
+
+    pre-commit_enable) # Enable pre-commit hooks
+      local hook_args=()
+      local hook_type
+      for hook_type in "${hook_types[@]}"; do
+        hook_args+=("-t" "${hook_type}")
+      done
+      pre-commit install ${hook_args[@]+"${hook_args[@]}"}
+      ;;
+    pre-commit_disable) # Disblae all pre-commit hooks
+      local hook_args=()
+      local hook hook_files
+      pre-commit::_get_hook_files
+      for hook in ${hook_files[@]+"${hook_files[@]}"}; do
+        hook_args+=(-t "$(basename "${hook}")")
+      done
+
+      pre-commit uninstall ${hook_args[@]+"${hook_args[@]}"}
+      ;;
+
+    pre-commit_purge) # Purge the pre-commit environment, removing hooks too.
+      if [ -x "$(vsi::python::virtualenv_bin "${python_dir}" pre-commit)" ]; then
+        justify pre-commit disable
+        pre-commit clean
+      fi
+      if [ -d "${python_dir}" ]; then
+        rm -r "${python_dir}"
+      fi
+      ;;
+    *)
+      plugin_not_found=1
+      ;;
+  esac
+}

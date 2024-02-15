@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+# fail fast
+set -eu
+
+# activate just environment
+source setup.env
+
+# libc6-compat and gcompat are missing symbols
+apk del libc6-compat
+# Error relocating /tmp/tmp..../conda/conda.exe: __res_nsearch: symbol not found
+# Error relocating /tmp/tmp..../conda/conda.exe: __openat_2: symbol not found
+
+# Conda install script uses -print find flag that alpine find didn't have
+apk --no-cache add ca-certificates curl findutils
+curl -fsSLo /etc/apk/keys/sgerrand.rsa.pub https://alpine-pkgs.sgerrand.com/sgerrand.rsa.pub
+curl -fsSLo /tmp/glibc.apk https://github.com/sgerrand/alpine-pkg-glibc/releases/download/2.28-r0/glibc-2.28-r0.apk
+apk --no-cache add /tmp/glibc.apk
+rm /tmp/glibc.apk
+
+# install pre-commit
+just pre-commit setup sync
+
+# Run pre-commit on everything
+just pre-commit run -a
