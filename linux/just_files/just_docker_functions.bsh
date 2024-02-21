@@ -340,6 +340,17 @@ function get_docker_recipes()
 #
 # In the case of the ``delete`` strategy, an optional label, ``com.vsi.just.clean_setup``, can be specified to designate what just target to run to repopulate a volume. Typically this just target should run ``sh -c ":"`` or similar. This allows the entrypoint or another command to properly setup the volume, and set permissions, etc...
 #
+# .. command:: docker-compose_debug
+#
+# :Arguments: ``$1`` - service name to build.
+#             [``$2``] - Stages to disable caching on. See [here](https://docs.docker.com/reference/cli/docker/buildx/build/#no-cache-filter) for the syntax
+#
+# This will use information from ``docker-compose config`` to craft a ``docker buildx debug build`` command with the invoke command to help debug a failing build. As this is an experimental command, support is fairly limited:
+#
+# * Always uses /usr/bin/bash
+# * Requires docker buildx 0.12
+# * Any complicated build args (spaces and special characters) will likely fail
+# * Uses ``.`` as the build context
 #**
 function docker_defaultify()
 {
@@ -515,6 +526,39 @@ function docker_defaultify()
       trap - INT
       trap - TERM
       extra_args=${#}
+      ;;
+
+    docker-compose_debug) # Run docker buildx debug build against a \
+        # docker-compose service. $1 - service name (required) $2 - docker context, defaults to "."
+      # This is not a perfect parser. Won't handle yaml strings that aren't the same syntax as bash strings
+      local compose_config=$(docker-compose config | yarp)
+      # This shouldn't be blank because docker-compose will report "Dockerfile" even if it's absent in the compose file```
+      local dockerfile=$(sed -nE 's|^services\.'"$1"'\.build\.dockerfile = "?(.*[^"])"?|\1|p' <<< "${compose_config}")
+      if [ -z "${dockerfile}" ]; then
+        echo "Dockerfile is empty, either you forgot to specify a service name or specified the wrong service" >&2
+        JUST_IGNORE_EXIT_CODES=1
+        return 1
+      fi
+      # This won't even handle spaces
+      local build_args=($(sed -nE 's|^services\.'"$1"'\.build\.args\.([^ ]*) = "?(.*[^"])"?|--build-arg \1=\2|p' <<< "${compose_config}"))
+
+      if [ -n "${2+set}" ]; then
+        if [ "${2}" = "*" ]; then
+          build_args+=(--no-cache)
+        else
+          build_args+=(--no-cache-filter "${2}")
+        fi
+      fi
+
+      # Requires buildx 0.12 or ?newer? (syntax may change, as this is an experimental feature)
+      # In 0.11 it was docker buildx build --invoke ...\ but I will not be supporting
+      # multiple experimental versions.
+      BUILDX_EXPERIMENTAL=1 Docker buildx debug --invoke /usr/bin/bash \
+        build ${build_args[@]+"${build_args[@]}"} \
+        -f "${dockerfile}" \
+        "." # You can't use JUST_PROJECT_PREFIX+_CWD because of how terra works.
+
+      extra_args=1
       ;;
 
     docker) # Run generic docker command
