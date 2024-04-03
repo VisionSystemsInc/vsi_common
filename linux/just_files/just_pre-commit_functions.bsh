@@ -6,6 +6,7 @@ fi
 
 # source "${VSI_COMMON_DIR}/linux/command_tools.bsh"
 source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/python_tools.bsh"
 source "${VSI_COMMON_DIR}/linux/string_tools.bsh"
 source "${VSI_COMMON_DIR}/linux/just_files/just_install_functions.bsh"
 
@@ -24,24 +25,109 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 # .. file:: just_pre-commit_functions.bsh
 #
 # Plugin for using pre-commit on a repo
-
-# Setting up a new project:
-# just pre-commit init setup compile
-# Edit your .pre-commit/config.yml.in file to your hearts content
-# Add to sync in your Justfile:
-# justify pre-commit setup sync enable
-
-
-# Todo Move this!
-function vsi::python::virtualenv_bin()
-{ # $1 - dir $2 - script name
-  if [ "${OS-}" = "Windows_NT" ]; then
-    echo "${1}/Scripts/$2.exe"
-  else
-    echo "${1}/bin/$2"
-  fi
-}
-
+#
+# ------------------------
+# Setting up a new project
+# ------------------------
+#
+# To setup pre-commit in a new just project, first initialize pre-commit by running:
+#
+# .. code-block:: sh
+#
+#    just pre-commit init setup compile
+#
+# This will create ``config.yml.in`` and ``requirements.in`` files in your :envvar:`${JUST_PROJECT_PREFIX}_PRECOMMIT_DIR`. Now you can edit your ``config.yml.in`` and ``requirements.in`` (which requires ``pre-commit_compile``) file to your hearts content
+#
+# Add to your ``sync`` target in your file:`Justfile`:
+#
+# .. code-block:: sh
+#
+#    justify pre-commit setup sync enable
+#
+# ------------------------------
+# Optional environment variables
+# ------------------------------
+#
+# .. envvar:: ${JUST_PROJECT_PREFIX}_PRECOMMIT_DIR
+#
+# The location of pre-commit files.
+#
+# Default: ``${JUST_PROJECT_PREFIX}_CWD/.pre-commit``
+#
+# .. envvar:: ${JUST_PROJECT_PREFIX}_PRECOMMIT_PYTHON_DIR
+#
+#  The location of the python used to run pre-commit.
+#
+#  Default: :envvar:`${JUST_PROJECT_PREFIX}_PRECOMMIT_DIR`/python``
+#
+# .. envvar:: ${JUST_PROJECT_PREFIX}_PRECOMMIT_PYTHON_VERSION
+#
+#  The version of python installed during ``pre-commit setup``.
+#
+#  Default: ``3.12.1``
+#
+# .. envvar:: ${JUST_PROJECT_PREFIX}_PRECOMMIT_HOOKS
+#
+#  An array of git hook names to setup pre-commit on by default in ``pre-commit enable``.
+#
+#  Default: ``(pre-push)``
+#
+# ----------------
+# J.U.S.T. Targets
+# ----------------
+#
+# .. command:: pre-commit
+#
+# Run pre-commit command in the `${JUST_PROJECT_PREFIX}_PRECOMMIT_PYTHON_DIR` virtualenv (e.g. ``just pre-commit help``)
+#
+# .. command:: pre-commit_run
+#
+# Run pre-commit check locally. If no additional arguments are given, it will defaults to "-a" to run all checks
+#
+# .. command:: pre-commit_init
+#
+# Initialize pre-commit for the first time in a new project. This should only be run once and then the resulting files saved to the repo
+#
+# .. command:: pre-commit_setup
+#
+# Sets up the pre-commit virtual environment. If ``pip`` is not found, it will use conda to install a version of python in :envvar:`${JUST_PROJECT_PREFIX}_PRECOMMIT_PYTHON_DIR`. This function is also responsible for the initial installing of ``pip-tools`` into the virtual environment.
+#
+# .. command:: pre-commit_sync
+#
+# Updates the pre-commit's virtual environment (using ``pip-sync``) to have the correct versions specified in :envvar:`${JUST_PROJECT_PREFIX}_PRECOMMIT_DIR`/``requirements.txt``.
+#
+# .. command:: pre-commit_compile
+#
+# Compiles the requirements file for pre-commit, updating :envvar:`${JUST_PROJECT_PREFIX}_PRECOMMIT_DIR`/``requirements.txt``.
+#
+# .. command:: pre-commit_enable
+#
+# Enables pre-commit hooks (via ``pre-commit install``) according to :envvar:`${JUST_PROJECT_PREFIX}_PRECOMMIT_HOOKS`
+#
+# .. command:: pre-commit_disable
+#
+# Disable all pre-commit hooks (via ``pre-commit uninstall``)
+#
+# .. command:: pre-commit_purge
+#
+# Purge the pre-commit virtual environment and remove all hooks.
+#
+# --
+# CI
+# --
+#
+# You can use the following in gitlab CI to run pre-commit checks:
+#
+# .. code:: yaml
+#
+#    pre-commit:
+#      image: alpine:3.19
+#      stage: pre-commit
+#      before_script:
+#        - apk --no-cache add bash
+#      script:
+#        - bash -c "${CI_PROJECT_DIR}/external/vsi_common/linux/ci/pre-commit.bsh"
+#**
 
 function pre-commit::_get_hook_files()
 {
@@ -49,6 +135,7 @@ function pre-commit::_get_hook_files()
   local hook_index=0
   hook_files=("${git_dir}"/hooks/*)
   for hook_index in ${!hook_files[@]}; do
+    # Remove unexpanded * files            and filenames with extensions, i.e. .sample files
     if [ ! -f "${hook_files[hook_index]}" ] || [[ $(basename "${hook_files[hook_index]}") =~ \. ]]; then
       unset hook_files[hook_index]
     fi
@@ -81,10 +168,10 @@ function pre-commit()
     local hook hook_files
     pre-commit::_get_hook_files
     for hook in ${hook_files[@]+"${hook_files[@]}"}; do
-      if ! grep -q pre-commit::filter_lines "${hook}"; then
+      if ! grep -q pre-commit_filter_lines "${hook}"; then
         echo "Patching $(basename "${hook}")..." >&2
         # Designed to patch https://github.com/pre-commit/pre-commit/blob/main/pre_commit/resources/hook-tmpl
-        ${DRYRUN} sed -i 's|^ *exec.*pre[-_]commit "\${ARGS\[@]}"$|& < <("'"${VSI_COMMON_DIR}"'/linux/pre-commit::filter_lines")|' "${hook}"
+        ${DRYRUN} sed -i 's|^ *exec.*pre[-_]commit "\${ARGS\[@]}"$|& < <("'"${VSI_COMMON_DIR}"'/linux/pre-commit_filter_lines")|' "${hook}"
       fi
     done
   fi
@@ -111,17 +198,17 @@ function pre-commit::defaultify()
   case ${arg} in
     pre-commit) # Run pre-commit command (e.g. just pre-commit run)
       pre-commit "${@}"
-      extra_args=$#
+      extra_args=${#}
       ;;
     pre-commit_run) # Run pre-commit check locally. Defaults to "-a" to run everything
       if (( ${#} )); then
-        justify pre-commit run "${@}"
+        pre-commit run "${@}"
         extra_args=${#}
       else
-        justify pre-commit run -a
+        pre-commit run -a
       fi
       ;;
-    pre-commit_init) # Initialize precommit for the first time in a new project
+    pre-commit_init) # Initialize pre-commit for the first time in a new project
       mkdir -p "${precommit_dir}"
       cp "${VSI_COMMON_DIR}/templates/pre-commit/requirements.in" "${precommit_dir}/requirements.in"
       cp "${VSI_COMMON_DIR}/templates/pre-commit/config.yml.in" "${precommit_dir}/config.yml.in"
@@ -159,7 +246,7 @@ function pre-commit::defaultify()
             install -c "${requirements}" pip-tools
       fi
       ;;
-    pre-commit_sync) # Sync the virtual pre-commit and plugins runs in
+    pre-commit_sync) # Sync the virtualenv pre-commit and plugins runs in
       "$(vsi::python::virtualenv_bin "${python_dir}" pip-sync)" -v \
           "${precommit_dir}/requirements.txt"
       ;;
@@ -180,7 +267,7 @@ function pre-commit::defaultify()
       done
       pre-commit install ${hook_args[@]+"${hook_args[@]}"}
       ;;
-    pre-commit_disable) # Disblae all pre-commit hooks
+    pre-commit_disable) # Disable all pre-commit hooks
       local hook_args=()
       local hook hook_files
       pre-commit::_get_hook_files
