@@ -30,15 +30,15 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 # Setting up a new project
 # ------------------------
 #
-# To setup pre-commit in a new just project, first initialize pre-commit by running:
+# To setup pre-commit in a just project, first initialize pre-commit by running:
 #
 # .. code-block:: sh
 #
 #    just pre-commit init setup compile
 #
-# This will create ``config.yml.in`` and ``requirements.in`` files in your :envvar:`${JUST_PROJECT_PREFIX}_PRECOMMIT_DIR`. Now you can edit your ``config.yml.in`` and ``requirements.in`` (which requires ``pre-commit_compile``) file to your hearts content
+# This will create ``config.yml.in`` and ``requirements.in`` files in your :envvar:`${JUST_PROJECT_PREFIX}_PRECOMMIT_DIR`. Now you can edit your ``config.yml.in`` and ``requirements.in`` (which requires ``pre-commit_compile``) files to your hearts content
 #
-# Add to your ``sync`` target in your file:`Justfile`:
+# Add this to your ``sync`` target in your file:`Justfile`:
 #
 # .. code-block:: sh
 #
@@ -68,7 +68,7 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 #
 # .. envvar:: ${JUST_PROJECT_PREFIX}_PRECOMMIT_HOOKS
 #
-#  An array of git hook names to setup pre-commit on by default in ``pre-commit enable``.
+#  An array of git-hook names to setup for pre-commit in ``pre-commit enable``.
 #
 #  Default: ``(pre-push)``
 #
@@ -135,7 +135,7 @@ function pre-commit::_get_hook_files()
   local hook_index=0
   hook_files=("${git_dir}"/hooks/*)
   for hook_index in ${!hook_files[@]}; do
-    # Remove unexpanded * files            and filenames with extensions, i.e. .sample files
+    # Remove unexpanded * files             and filenames with extensions, i.e. .sample files
     if [ ! -f "${hook_files[hook_index]}" ] || [[ $(basename "${hook_files[hook_index]}") =~ \. ]]; then
       unset hook_files[hook_index]
     fi
@@ -145,7 +145,7 @@ function pre-commit::_get_hook_files()
 
 function pre-commit()
 {
-  # this Does't work
+  # this doesn't work
   # PRE_COMMIT_HOME=${precommit_dir}/cache
 
   local subcommand=()
@@ -215,6 +215,7 @@ function pre-commit::defaultify()
 
       local precommit_rel=$(relative_path "${precommit_dir}" "${project_cwd}")
       local precommit_rel_regex=$(regex_escape "${precommit_rel}")
+      # Add to .gitignore if it is not in there already
       if ! grep '^'"${precommit_rel_regex}"'/config.yml$' .gitignore &> /dev/null; then
         sed -i '$a'"${precommit_rel}"'/config.yml' .gitignore
       fi
@@ -239,14 +240,14 @@ function pre-commit::defaultify()
       if [ ! -f "$(vsi::python::virtualenv_bin "${python_dir}" pip-sync)" ]; then
         local requirements="${precommit_dir}/requirements.txt"
         if [ ! -f "${requirements}" ]; then
-          # Bootstrap case
+            # Bootstrap case
             requirements="${precommit_dir}/requirements.in"
         fi
         "$(vsi::python::virtualenv_bin "${python_dir}" pip)" \
             install -c "${requirements}" pip-tools
       fi
       ;;
-    pre-commit_sync) # Sync the virtualenv pre-commit and plugins runs in
+    pre-commit_sync) # Sync the virtualenv for pre-commit and plugins
       "$(vsi::python::virtualenv_bin "${python_dir}" pip-sync)" -v \
           "${precommit_dir}/requirements.txt"
       ;;
@@ -267,6 +268,7 @@ function pre-commit::defaultify()
       done
       pre-commit install ${hook_args[@]+"${hook_args[@]}"}
       ;;
+
     pre-commit_disable) # Disable all pre-commit hooks
       local hook_args=()
       local hook hook_files
@@ -287,6 +289,7 @@ function pre-commit::defaultify()
         rm -r "${python_dir}"
       fi
       ;;
+
     *)
       plugin_not_found=1
       ;;
