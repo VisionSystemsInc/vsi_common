@@ -1,0 +1,118 @@
+.. default-domain:: bash
+
+=============================
+J.U.S.T. Pre-commit Functions
+=============================
+
+.. file:: just_pre-commit_functions.bsh
+
+Plugin for using pre-commit on a repo
+
+------------------------
+Setting up a new project
+------------------------
+
+To setup pre-commit in a just project, first initialize pre-commit by running:
+
+.. code-block:: sh
+
+   just pre-commit init setup compile
+
+This will create ``config.yml.in`` and ``requirements.in`` files in your :envvar:`${JUST_PROJECT_PREFIX}_PRECOMMIT_DIR`. Now you can edit your ``config.yml.in`` and ``requirements.in`` (which requires :cmd:`pre-commit_compile`) files to your hearts content
+
+Add this to your ``sync`` target in your file:`Justfile`:
+
+.. code-block:: sh
+
+   justify pre-commit setup sync enable
+
+------------------------------
+Optional environment variables
+------------------------------
+
+.. envvar:: ${JUST_PROJECT_PREFIX}_PRECOMMIT_DIR
+
+The location of pre-commit files.
+
+Default: ``${JUST_PROJECT_PREFIX}_CWD/.pre-commit``
+
+.. envvar:: ${JUST_PROJECT_PREFIX}_PRECOMMIT_PYTHON_DIR
+
+ The location of the python used to run pre-commit.
+
+ Default: :envvar:`${JUST_PROJECT_PREFIX}_PRECOMMIT_DIR/python <${JUST_PROJECT_PREFIX}_PRECOMMIT_DIR>`
+
+.. envvar:: ${JUST_PROJECT_PREFIX}_PRECOMMIT_PYTHON_VERSION
+
+ The version of python installed during :cmd:`pre-commit_setup`.
+
+ Default: ``3.12.1``
+
+.. envvar:: ${JUST_PROJECT_PREFIX}_PRECOMMIT_CACHE_DIR
+
+The location of the `pre-commit cache directory <https://pre-commit.com/#managing-ci-caches>`_ by setting ``PRE_COMMIT_HOME``.
+
+Default: :envvar:`${JUST_PROJECT_PREFIX}_PRECOMMIT_DIR/cache <${JUST_PROJECT_PREFIX}_PRECOMMIT_DIR>`
+
+.. envvar:: ${JUST_PROJECT_PREFIX}_PRECOMMIT_HOOKS
+
+ An array of git-hook names to setup for pre-commit in :cmd:`pre-commit_enable`.
+
+ Default: ``(pre-push)``
+
+----------------
+J.U.S.T. Targets
+----------------
+
+.. command:: pre-commit
+
+Run pre-commit command in the :envvar:`${JUST_PROJECT_PREFIX}_PRECOMMIT_PYTHON_DIR` virtualenv (e.g. ``just pre-commit help``)
+
+.. command:: pre-commit_run
+
+Run pre-commit check locally. If no additional arguments are given, it will defaults to ``-a`` to run all checks
+
+.. command:: pre-commit_init
+
+Initialize pre-commit for the first time in a new project. This should only be run once and then the resulting files saved to the repo
+
+.. command:: pre-commit_setup
+
+Sets up the pre-commit virtual environment. If ``pip`` is not found, it will use conda to install a version of python in :envvar:`${JUST_PROJECT_PREFIX}_PRECOMMIT_PYTHON_DIR`. This function is also responsible for the initial installing of ``pip-tools`` into the virtual environment.
+
+.. command:: pre-commit_sync
+
+Updates the pre-commit's virtual environment (using ``pip-sync``) to have the correct versions specified in :envvar:`${JUST_PROJECT_PREFIX}_PRECOMMIT_DIR`/``requirements.txt``.
+
+.. command:: pre-commit_compile
+
+Compiles the requirements file for pre-commit, updating :envvar:`${JUST_PROJECT_PREFIX}_PRECOMMIT_DIR`/``requirements.txt``.
+
+.. command:: pre-commit_enable
+
+Enables pre-commit hooks (via ``pre-commit install``) according to :envvar:`${JUST_PROJECT_PREFIX}_PRECOMMIT_HOOKS`
+
+.. command:: pre-commit_disable
+
+Disable all pre-commit hooks (via ``pre-commit uninstall``)
+
+.. command:: pre-commit_purge
+
+Purge the pre-commit virtual environment and remove all hooks.
+
+--
+CI
+--
+
+You can use the following in gitlab CI to run pre-commit checks:
+
+.. code:: yaml
+
+   pre-commit:
+     image: alpine:3.19
+     stage: pre-commit
+     before_script:
+       - apk --no-cache add bash
+     script:
+       - bash -c "${CI_PROJECT_DIR}/external/vsi_common/linux/ci/pre-commit.bsh"
+
