@@ -48,6 +48,12 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 # Optional environment variables
 # ------------------------------
 #
+# .. envvar:: PRE_COMMIT_HOME
+#
+# The location of the `pre-commit cache directory <https://pre-commit.com/#managing-ci-caches>`_.
+#
+# Default: :envvar:`${JUST_PROJECT_PREFIX}_PRECOMMIT_DIR/cache <${JUST_PROJECT_PREFIX}_PRECOMMIT_DIR>`
+#
 # .. envvar:: ${JUST_PROJECT_PREFIX}_PRECOMMIT_DIR
 #
 # The location of pre-commit files.
@@ -145,10 +151,9 @@ function pre-commit::_get_hook_files()
 
 function pre-commit()
 {
-  # this doesn't work
-  # PRE_COMMIT_HOME=${precommit_dir}/cache
-
   local subcommand=()
+  local PRE_COMMIT_HOME=${PRE_COMMIT_HOME-${precommit_dir}/cache}
+  export PRE_COMMIT_HOME
   if (( ${#} )); then
     case "${1}" in
       autoupdate|init-templatedir|install|install-hooks|migrate-config|run|try-repo|uninstall)
@@ -210,20 +215,25 @@ function pre-commit::defaultify()
       ;;
     pre-commit_init) # Initialize pre-commit for the first time in a new project
       mkdir -p "${precommit_dir}"
-      cp "${VSI_COMMON_DIR}/templates/pre-commit/requirements.in" "${precommit_dir}/requirements.in"
-      cp "${VSI_COMMON_DIR}/templates/pre-commit/config.yml.in" "${precommit_dir}/config.yml.in"
+      local filename
+
+      for filename in requirements.in config.yml.in; do
+        if [ ! -f "${precommit_dir}/${filename}" ]; then
+          cp "${VSI_COMMON_DIR}/templates/pre-commit/${filename}" "${precommit_dir}/${filename}"
+        fi
+      done
 
       local precommit_rel=$(relative_path "${precommit_dir}" "${project_cwd}")
       local precommit_rel_regex=$(regex_escape "${precommit_rel}")
-      # Add to .gitignore if it is not in there already
-      if ! grep '^'"${precommit_rel_regex}"'/config.yml$' .gitignore &> /dev/null; then
-        sed -i '$a'"${precommit_rel}"'/config.yml' .gitignore
-      fi
-      if ! grep '^'"${precommit_rel_regex}"'/python$' .gitignore &> /dev/null; then
-        sed -i '$a'"${precommit_rel}"'/python' .gitignore
-      fi
 
-      echo "Don't forget to run: git add .pre-commit .gitignore" >&2
+      # Add to .gitignore if it is not in there already
+      for filename in config.yml python cache; do
+        if ! grep "^${precommit_rel_regex}/${filename}$" .gitignore &> /dev/null; then
+          sed -i "\$a${precommit_rel}/${filename}" .gitignore
+        fi
+      done
+
+      echo "Don't forget to run: git add .pre-commit .gitignore; git commit" >&2
       ;;
     pre-commit_setup) # Setup the pre-commit python
       local python_exe
