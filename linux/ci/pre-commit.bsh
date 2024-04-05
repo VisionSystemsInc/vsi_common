@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+
+# fail fast
+set -eu
+
+# activate just environment
+source setup.env
+
+apk --no-cache add git ca-certificates curl findutils
+# findutils - Conda install script uses -print find flag that alpine find didn't have
+# git - pre-commit hooks need git
+# curl/ca-certs - download glibc
+
+# Install glibc for conda - https://github.com/conda-forge/miniforge/issues/219#issuecomment-1003216514
+apk del libc6-compat || :
+echo "-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApZ2u1KJKUu/fW4A25y9m
+y70AGEa/J3Wi5ibNVGNn1gT1r0VfgeWd0pUybS4UmcHdiNzxJPgoWQhV2SSW1JYu
+tOqKZF5QSN6X937PTUpNBjUvLtTQ1ve1fp39uf/lEXPpFpOPL88LKnDBgbh7wkCp
+m2KzLVGChf83MS0ShL6G9EQIAUxLm99VpgRjwqTQ/KfzGtpke1wqws4au0Ab4qPY
+KXvMLSPLUp7cfulWvhmZSegr5AdhNw5KNizPqCJT8ZrGvgHypXyiFvvAH5YRtSsc
+Zvo9GI2e2MaZyo9/lvb+LbLEJZKEQckqRj4P26gmASrZEPStwc+yqy1ShHLA0j6m
+1QIDAQAB
+-----END PUBLIC KEY-----" > "/etc/apk/keys/sgerrand.rsa.pub"
+GLIBC_VERSION=2.34-r0 #2.35 will not work
+curl -fsSLo /tmp/glibc.apk "https://github.com/sgerrand/alpine-pkg-glibc/releases/download/${GLIBC_VERSION}/glibc-${GLIBC_VERSION}.apk"
+apk --no-cache add --force-overwrite /tmp/glibc.apk
+rm /tmp/glibc.apk
+
+# May not be necessary, but git is annoying now if you change user-ids
+git config --global --add safe.directory '*'
+
+# install pre-commit
+just pre-commit setup sync
+
+# Run pre-commit on everything
+just pre-commit run -a
