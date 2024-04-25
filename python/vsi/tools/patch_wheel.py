@@ -5,7 +5,6 @@ import pathlib
 import os
 import argparse
 import tempfile
-import wheel
 
 def get_parser():
   parser = argparse.ArgumentParser(
@@ -14,8 +13,8 @@ def get_parser():
                 "version in the rest of the files (e.g. dist-info directory "
                 "name nor versions in .py files)")
   parser.add_argument('filename', help="Wheel name")
-  # This feature requires renaming the .dist-info files, while version number changes do not.
-  # Which should also require RECORD being regenerated. Out of scope until needed.
+  # # This feature requires renaming the .dist-info files, while version number changes do not.
+  # # Which should also require RECORD being regenerated. Out of scope until needed.
   # parser.add_argument('--name', help="The package name, can be different than the filename due name normalization special characters")
   group = parser.add_mutually_exclusive_group()
   group.add_argument('--version', help="Version number to change to")
