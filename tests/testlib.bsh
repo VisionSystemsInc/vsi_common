@@ -776,28 +776,35 @@ testlib_print_test_trace()
         {
           cat -
         }
+      elif [ -z "${_column_table_flags+set}" ]; then
+        _column_table_flags=() # Not a local variable (cached)
+        # --table-wrap wasn't added until 2.30, and RHEL7 is 2.23
+        if column --table-wrap 2 -V &> /dev/null; then
+          _column_table_flags+=(--table-wrap 2)
+        fi
       fi
 
       if [ "${err}" = "${xtrace}" ]; then
-        echo "-- stderr --"
+        echo "-- stderr & xtrace --"
       else
         echo "-- xtrace --"
       fi
-      grep -v -e $'^\+[^\t]*\tend_test' \
-              -e $'^\+[^\t]*\tset +x -e' <"${xtrace}" |
-        sed $'s|^[^+]| \t&|' |
-        column -c1 -s $'\t' -t |
-        sed 's/^/    /'
+      sed $'/^+[^\t]*\tend_test/d;  # Hide end_test and set +x -e, as they are just distractions.
+            /^+[^\t]*\tset +x -e/d; # Leaves test_status=... because it is useful
+            s|^[^+]| \t&|;
+            s/^/  /' <"${xtrace}" |
+        column -t -s $'\t' ${_column_table_flags[@]+"${_column_table_flags[@]}"}
+        # Notice: the column command has to come last in the pipe chain, or else you will have to add `-c ${COLUMNS}` or similar
     fi
     if [ "${TESTLIB_REDIRECT_OUTPUT}" -ge "2" ]; then
       if [ "${err}" != "${xtrace}" ]; then
         echo "-- stderr --"
-        sed 's/^/    /' <"${err}"
+        sed 's/^/  /' <"${err}"
       fi
     fi
     if [ "${TESTLIB_REDIRECT_OUTPUT}" -ge "3" ]; then
       echo "-- stdout --"
-      sed 's/^/    /' <"${out}"
+      sed 's/^/  /' <"${out}"
     fi
     echo "-- EOF "${test_description}" --"
   ) 1>&${test_output}
