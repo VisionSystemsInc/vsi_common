@@ -87,18 +87,26 @@ function check_skip_conda_test()
 CONDA_TEST_ID_ARRAY=(
     "miniconda"
     "miniforge"
+    "miniconda latest"
+    "miniforge latest"
 )
 CONDA_EXTRA_ARGS_ARRAY=(
-    "--miniconda --version py38_4.10.3"
-    "--version 4.11.0-4"
+    "--miniconda --version py312_24.3.0-0"
+    "--version 24.1.2-0"
+    "--miniconda --version latest"
+    "--version latest"
 )
 CONDA_VER_FULL_ARRAY=(
-    "conda 4.10.3"
-    "conda 4.11.0"
+    "conda 24.3.0"
+    "conda 24.1.2"
+    "conda [0-9]{2}(\.[0-9]+){2}"
+    "conda [0-9]{2}(\.[0-9]+){2}"
 )
 CONDA_VER_SHORT_ARRAY=(
-    "4.10.3"
-    "4.11.0"
+    "24.3.0"
+    "24.1.2"
+    "[0-9]{2}(\.[0-9]+){2}"
+    "[0-9]{2}(\.[0-9]+){2}"
 )
 
 for i in "${!CONDA_EXTRA_ARGS_ARRAY[@]}"; do
@@ -143,20 +151,30 @@ for i in "${!CONDA_EXTRA_ARGS_ARRAY[@]}"; do
     # install
     conda-install --dir "${TESTDIR}/conda" ${CONDA_EXTRA_ARGS}
 
-    # output version
-    [ "${conda_version}" = "${CONDA_VER_SHORT}" ]
+    if [[ ${CONDA_EXTRA_ARGS} = *latest* ]]; then
+      [[ ${conda_version} =~ ${CONDA_VER_SHORT} ]] || false
 
-    # This catches some rare scenario when the conda exe without the executable
-    # didn't report the right version. However, if the shebang is longer than 127
-    # characters, then conda will not start without the right python interpreter
-    # So a blank RESULT represent this case, and should be ignored
-    # executable version
-    RESULT="$("${conda_exe}" --version || :)"
-    [ "${RESULT}" = "" ] || [ "${RESULT}" = "${CONDA_VER_FULL}" ]
+      RESULT="$("${conda_exe}" --version || :)"
+      [ "${RESULT}" = "" ] || [[ ${RESULT} =~ ${CONDA_VER_FULL} ]] || false
 
-    # activate version
-    RESULT="$(source "${conda_activate}"; conda --version)"
-    [ "${RESULT}" = "${CONDA_VER_FULL}" ]
+      RESULT="$(source "${conda_activate}"; conda --version)"
+      [[ ${RESULT} =~ ${CONDA_VER_FULL} ]] || false
+    else
+      # output version
+      [ "${conda_version}" = "${CONDA_VER_SHORT}" ]
+
+      # This catches some rare scenario when the conda exe without the executable
+      # didn't report the right version. However, if the shebang is longer than 127
+      # characters, then conda will not start without the right python interpreter
+      # So a blank RESULT represent this case, and should be ignored
+      # executable version
+      RESULT="$("${conda_exe}" --version || :)"
+      [ "${RESULT}" = "" ] || [ "${RESULT}" = "${CONDA_VER_FULL}" ]
+
+      # activate version
+      RESULT="$(source "${conda_activate}"; conda --version)"
+      [ "${RESULT}" = "${CONDA_VER_FULL}" ]
+    fi
 
     # registry test
     if [ "${ENABLE_REGISTRY_TEST-}" = "1" ]; then
@@ -219,7 +237,8 @@ fi
   # --python--
 
   # version info
-  PYTHON_VER="3.7.9"
+  VIRTUALENV_VERSION=20.26.1
+  PYTHON_VER="3.12.3"
   PYTHON_VER_FULL="Python ${PYTHON_VER}"
 
   begin_fail_zone
@@ -259,7 +278,7 @@ fi
   # --pipenv--
 
   # version info
-  PIPENV_VER="2020.8.13"
+  PIPENV_VER="2023.10.3"
   PIPENV_VER_FULL="pipenv, version ${PIPENV_VER}"
 
   # install
