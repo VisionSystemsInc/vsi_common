@@ -265,8 +265,11 @@ function conda-install()
     # manual specification of NoRegistry, AddToPath, & RegisterPython
     # ensure the conda install is not added to the system registry
     # at <HKEY_CURRENT_USER\SOFTWARE\Python\PythonCore>
+    # /NoShortcuts was added in Miniforge 4.11/Miniconda 22.11.1,
+    # Older versions don't seem to mind unrecognized flags as they just get ignored
     MSYS2_ARG_CONV_EXCL="*" "${CONDA_INSTALLER}" \
         /NoRegistry=1 /AddToPath=0 /RegisterPython=0 \
+        /NoShortcuts=1 \
         /InstallationType=JustMe /S /D="$(cygpath -aw "${conda_dir}")"
 
     # conda executable
@@ -276,9 +279,11 @@ function conda-install()
     # cleanup shortcuts
     # older versions use the package name powershell_shortcut and console_shortcut
     # while newer append _miniconda to the name
+    # This code is only needed for MiniForge pre 4.10 or older (Dec 2021) and MiniConda 4.12 or older (Dec 2022).
     local shortcuts=($("${CONDA}" list -p "${conda_dir}" '.*_shortcut.*' | awk '/^#/{next}; {print $1}')) # noquote
-    "${CONDA}" remove --offline -y -p "${conda_dir}" "${shortcuts[@]}"
-
+    if [ "${#shortcuts[@]}" -gt "0" ]; then
+      "${CONDA}" remove --offline -y -p "${conda_dir}" "${shortcuts[@]}"
+    fi
   # linux & darwin
   else
 
