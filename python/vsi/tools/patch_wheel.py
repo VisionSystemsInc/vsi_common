@@ -12,7 +12,7 @@ def get_parser():
                 "wheel metatdata. Note: This does not change any filenames or "
                 "version in the rest of the files (e.g. dist-info directory "
                 "name nor versions in .py files)")
-  parser.add_argument('filename', help="Wheel name")
+  parser.add_argument('filename', help="Wheel (.whl) file")
   # # This feature requires renaming the .dist-info files, while version number changes do not.
   # # Which should also require RECORD being regenerated. Out of scope until needed.
   # parser.add_argument('--name', help="The package name, can be different than the filename due name normalization special characters")
