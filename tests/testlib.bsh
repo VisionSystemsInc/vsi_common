@@ -779,9 +779,21 @@ testlib_print_test_trace()
       elif [ -z "${_column_table_flags+set}" ]; then
         _column_table_flags=() # Not a local variable (cached)
         # --table-wrap wasn't added until 2.30, and RHEL7 is 2.23
-        if column --table-wrap 2 -V &> /dev/null; then
-          # _column_table_flags+=(--table-wrap 2)
+        if [ -t 1 ] && column --table-wrap 2 -V &> /dev/null; then
+          _column_table_flags+=(--table-wrap 2 -l 2)
+        else
+          # Mostly for CI, tell column not to wrap.
           _column_table_flags+=(-c 0)
+
+          # Width based on CI web page tests:
+          # Github actions: 215 (no tty)
+          # Appveyor: 129 (no tty)
+          # CircleCI: 175 (tty)
+          # Gitlab: untested
+          # Because CircleCI is faking a TTY, and doing a really bad job at it,
+          # you need to set the environment variable COLUMNS to 175 to get a good
+          # output, or else the wrapping can go crazy as it approaches 1, and become
+          # impossible to read
         fi
       fi
 
