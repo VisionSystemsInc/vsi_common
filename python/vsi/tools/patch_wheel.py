@@ -46,6 +46,7 @@ def main(filename, version=None):
                                    prefix='.' + filename.stem + '.',
                                    dir=filename.parent,
                                    delete=False) as temp_file:
+    os.chmod(temp_file.name, 0o644) # Python hardcodes this to 600 :(
     with zipfile.ZipFile(filename, 'r') as zin:
       with zipfile.ZipFile(temp_file, 'w') as zout:
         zout.comment = zin.comment # preserve the comment
