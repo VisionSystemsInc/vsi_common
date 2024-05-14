@@ -1,77 +1,112 @@
 #!/usr/bin/env python
 
-import zipfile
-import pathlib
+from pathlib import Path
 import os
 import argparse
 import tempfile
+import subprocess
+import re
+from wheel.wheelfile import WHEEL_INFO_RE
 
 def get_parser():
   parser = argparse.ArgumentParser(
     description="Patch a wheel to change the package name or version in the "
-                "wheel metatdata. Note: This does not change any filenames or "
-                "version in the rest of the files (e.g. dist-info directory "
-                "name nor versions in .py files)")
+                "wheel metatdata. Note: This will also change any filenames or "
+                "versions in the rest of the file namess (e.g. dist-info "
+                "directory name) but will not change versions strings "
+                "hardcodeded in .py files")
   parser.add_argument('filename', help="Wheel (.whl) file")
-  # # This feature requires renaming the .dist-info files, while version number changes do not.
-  # # Which should also require RECORD being regenerated. Out of scope until needed.
-  # parser.add_argument('--name', help="The package name, can be different than the filename due name normalization special characters")
+  parser.add_argument('--name', help="The package name")
   group = parser.add_mutually_exclusive_group()
   group.add_argument('--version', help="Version number to change to")
-  group.add_argument('--add-local', help="Add to the local version segment without having to specify the full version")
+  group.add_argument('--add-local',
+                     help="Add to the local version segment without having to "
+                          "specify the full version")
   return parser
 
 
-def main(filename, version=None):
-  filename = pathlib.Path(filename)
+def main(filename, name=None, version=None):
+  filename = Path(filename)
 
-  # Split to {normalize name}-{version}-{remainder}
-  normalized_name, file_version, remainder = filename.stem.split('-', 2)
+  parsed_name = WHEEL_INFO_RE.match(filename.name)
+  original_name, original_version = parsed_name.group('name', 'ver')
 
+  # These values will be replaced
   patch = {}
-  # if name is not None:
-  #   # https://peps.python.org/pep-0491/#escaping-and-unicode
-  #   normalized_name = re.sub(r"[^\w\d.]+", "_", name).lower()
-  #   patch[b'Name'] = b'Name: ' + name.encode()
-  if version is not None:
-    patch[b'Version'] = b'Version: ' + version.encode()
+  if name is not None:
+    patch['Name'] = f'Name: {name}\n'
   else:
-    version = file_version
+    name = original_name
+  if version is not None:
+    patch['Version'] = f'Version: {version}\n'
+  else:
+    version = original_version
 
-  new_filename = filename.parent / ('-'.join([normalized_name,
-                                              version,
-                                              remainder]) + '.whl')
+  # https://peps.python.org/pep-0491/#escaping-and-unicode
+  normalized_name = re.sub(r"[^\w\d.]+", "_", name).lower()
+  normalized_version = re.sub(r"[^\w\d.+]+", "_", version).lower()
 
-  with tempfile.NamedTemporaryFile(suffix='.whl',
-                                   prefix='.' + filename.stem + '.',
-                                   dir=filename.parent,
-                                   delete=False) as temp_file:
-    os.chmod(temp_file.name, 0o644) # Python hardcodes this to 600 :(
-    with zipfile.ZipFile(filename, 'r') as zin:
-      with zipfile.ZipFile(temp_file, 'w') as zout:
-        zout.comment = zin.comment # preserve the comment
-        for item in zin.infolist():
-          # Patch METADATA to match filename
-          if item.filename.endswith('.dist-info/METADATA'):
-            meta_lines = (patch[key]
-                          if (key := line.split(b':',1)[0]) in patch.keys()
-                          else line
-                          for line in zin.read(item.filename).split(b'\n'))
-            zout.writestr(item, b'\n'.join(meta_lines))
-          else:
-            zout.writestr(item, zin.read(item.filename))
-  os.rename(temp_file.name, new_filename)
+  if name == original_name and version == original_version:
+    raise Exception('No change detected. Package name and version are '
+                    'identical')
+
+  with tempfile.TemporaryDirectory() as temp_extract:
+    # Extract Wheel
+    subprocess.Popen(['wheel', 'unpack', '--dest', temp_extract,
+                      filename]).wait()
+
+    # Patch metadata
+    metadata = (Path(temp_extract) /
+                f'{original_name}-{original_version}' /
+                f'{original_name}-{original_version}.dist-info/METADATA')
+    with open(metadata, 'r+') as fid:
+      meta_lines = (patch[key]
+                    if (key := line.split(':',1)[0]) in patch.keys()
+                    else line
+                    for line in fid.readlines())
+      fid.seek(0)
+      fid.writelines(meta_lines)
+
+
+    # Rename  files
+    os.rename(Path(temp_extract) /
+              f'{original_name}-{original_version}' /
+              f'{original_name}-{original_version}.dist-info',
+              Path(temp_extract) /
+              f'{original_name}-{original_version}' /
+              f'{normalized_name}-{normalized_version}.dist-info')
+    os.rename(Path(temp_extract) /
+              f'{original_name}-{original_version}',
+              Path(temp_extract) /
+              f'{normalized_name}-{normalized_version}')
+
+    # Save new wheel
+    with tempfile.TemporaryDirectory() as temp_wheel:
+      subprocess.Popen(['wheel', 'pack', '--dest', temp_wheel,
+                        Path(temp_extract) / f'{name}-{version}']).wait()
+
+      new_wheel = next(Path(temp_wheel).glob('*.whl'))
+
+      # Replace wheel
+      os.rename(new_wheel, filename.parent / new_wheel.name)
+
+      # It would be possible for the package name/version  to change but the
+      # whl name to rename unchanged due to filename normalization (e.g.: -➡️_)
+      if new_wheel != filename:
+        os.remove(filename)
 
 if __name__ == '__main__':
   parser = get_parser()
   args = parser.parse_args()
 
   version = args.version
-  filename = pathlib.Path(args.filename)
+  filename = Path(args.filename)
 
   if args.add_local is not None:
-    version = filename.stem.split('-', 2)[1]
-    if '+' in filename.stem:
+    version = WHEEL_INFO_RE.match(filename.name).group('ver')
+    if '+' in version:
+      # https://packaging.python.org/en/latest/specifications/version-specifiers/#local-version-identifiers
+      # "each segment of the local version [is] divided by a ."
       version = f'{version}.{args.add_local}'
     else:
       version = f'{version}+{args.add_local}'
