@@ -14,7 +14,7 @@ def get_parser():
                 "wheel metatdata. Note: This will also change any filenames or "
                 "versions in the rest of the file namess (e.g. dist-info "
                 "directory name) but will not change versions strings "
-                "hardcodeded in .py files")
+                "hardcoded in .py files")
   parser.add_argument('filename', help="Wheel (.whl) file")
   parser.add_argument('--name', help="The package name")
   group = parser.add_mutually_exclusive_group()
@@ -90,7 +90,7 @@ def main(filename, name=None, version=None):
       # Replace wheel
       os.rename(new_wheel, filename.parent / new_wheel.name)
 
-      # It would be possible for the package name/version  to change but the
+      # It would be possible for the package name/version to change but the
       # whl name to rename unchanged due to filename normalization (e.g.: -➡️_)
       if new_wheel != filename:
         os.remove(filename)
