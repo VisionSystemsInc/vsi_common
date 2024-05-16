@@ -78,83 +78,138 @@
   <h1>Source code for vsi.tools.patch_wheel</h1><div class="highlight"><pre>
 <span></span><span class="ch">#!/usr/bin/env python</span>
 
-<span class="kn">import</span> <span class="nn">zipfile</span>
-<span class="kn">import</span> <span class="nn">pathlib</span>
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
 <span class="kn">import</span> <span class="nn">os</span>
 <span class="kn">import</span> <span class="nn">argparse</span>
 <span class="kn">import</span> <span class="nn">tempfile</span>
+<span class="kn">import</span> <span class="nn">subprocess</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">from</span> <span class="nn">wheel.wheelfile</span> <span class="kn">import</span> <span class="n">WHEEL_INFO_RE</span>
+<span class="kn">from</span> <span class="nn">wheel.cli.pack</span> <span class="kn">import</span> <span class="n">DIST_INFO_RE</span>
+<span class="kn">from</span> <span class="nn">wheel.cli</span> <span class="kn">import</span> <span class="n">WheelError</span>
 
 <div class="viewcode-block" id="get_parser"><a class="viewcode-back" href="../../../python/vsi.tools.html#vsi.tools.patch_wheel.get_parser">[docs]</a><span class="k">def</span> <span class="nf">get_parser</span><span class="p">():</span>
   <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span>
     <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Patch a wheel to change the package name or version in the &quot;</span>
-                <span class="s2">&quot;wheel metatdata. Note: This does not change any filenames or &quot;</span>
-                <span class="s2">&quot;version in the rest of the files (e.g. dist-info directory &quot;</span>
-                <span class="s2">&quot;name nor versions in .py files)&quot;</span><span class="p">)</span>
+                <span class="s2">&quot;wheel metatdata. Note: This will also change any filenames or &quot;</span>
+                <span class="s2">&quot;versions in the rest of the file namess (e.g. dist-info &quot;</span>
+                <span class="s2">&quot;directory name) but will not change hardcoded strings &quot;</span>
+                <span class="s2">&quot;like __version__ in .py files&quot;</span><span class="p">)</span>
   <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;filename&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Wheel (.whl) file&quot;</span><span class="p">)</span>
-  <span class="c1"># # This feature requires renaming the .dist-info files, while version number changes do not.</span>
-  <span class="c1"># # Which should also require RECORD being regenerated. Out of scope until needed.</span>
-  <span class="c1"># parser.add_argument(&#39;--name&#39;, help=&quot;The package name, can be different than the filename due name normalization special characters&quot;)</span>
+  <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;--name&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;The package name&quot;</span><span class="p">)</span>
   <span class="n">group</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">add_mutually_exclusive_group</span><span class="p">()</span>
   <span class="n">group</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;--version&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Version number to change to&quot;</span><span class="p">)</span>
-  <span class="n">group</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;--add-local&#39;</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Add to the local version segment without having to specify the full version&quot;</span><span class="p">)</span>
+  <span class="n">group</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;--add-local&#39;</span><span class="p">,</span>
+                     <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Add to the local version segment without having to &quot;</span>
+                          <span class="s2">&quot;specify the full version&quot;</span><span class="p">)</span>
   <span class="k">return</span> <span class="n">parser</span></div>
 
 
-<div class="viewcode-block" id="main"><a class="viewcode-back" href="../../../python/vsi.tools.html#vsi.tools.patch_wheel.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">version</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-  <span class="n">filename</span> <span class="o">=</span> <span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
+<div class="viewcode-block" id="main"><a class="viewcode-back" href="../../../python/vsi.tools.html#vsi.tools.patch_wheel.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">version</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+  <span class="n">filename</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span>
 
-  <span class="c1"># Split to {normalize name}-{version}-{remainder}</span>
-  <span class="n">normalized_name</span><span class="p">,</span> <span class="n">file_version</span><span class="p">,</span> <span class="n">remainder</span> <span class="o">=</span> <span class="n">filename</span><span class="o">.</span><span class="n">stem</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;-&#39;</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+  <span class="n">parsed_name</span> <span class="o">=</span> <span class="n">WHEEL_INFO_RE</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">filename</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
 
-  <span class="n">patch</span> <span class="o">=</span> <span class="p">{}</span>
-  <span class="c1"># if name is not None:</span>
-  <span class="c1">#   # https://peps.python.org/pep-0491/#escaping-and-unicode</span>
-  <span class="c1">#   normalized_name = re.sub(r&quot;[^\w\d.]+&quot;, &quot;_&quot;, name).lower()</span>
-  <span class="c1">#   patch[b&#39;Name&#39;] = b&#39;Name: &#39; + name.encode()</span>
-  <span class="k">if</span> <span class="n">version</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="n">patch</span><span class="p">[</span><span class="sa">b</span><span class="s1">&#39;Version&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="sa">b</span><span class="s1">&#39;Version: &#39;</span> <span class="o">+</span> <span class="n">version</span><span class="o">.</span><span class="n">encode</span><span class="p">()</span>
-  <span class="k">else</span><span class="p">:</span>
-    <span class="n">version</span> <span class="o">=</span> <span class="n">file_version</span>
+  <span class="k">with</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">TemporaryDirectory</span><span class="p">()</span> <span class="k">as</span> <span class="n">temp_extract</span><span class="p">:</span>
+    <span class="c1"># Extract Wheel</span>
+    <span class="p">(</span><span class="n">pid</span> <span class="o">:=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">Popen</span><span class="p">([</span><span class="s1">&#39;wheel&#39;</span><span class="p">,</span> <span class="s1">&#39;unpack&#39;</span><span class="p">,</span> <span class="s1">&#39;--dest&#39;</span><span class="p">,</span> <span class="n">temp_extract</span><span class="p">,</span>
+                      <span class="n">filename</span><span class="p">]))</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>
 
-  <span class="n">new_filename</span> <span class="o">=</span> <span class="n">filename</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="p">(</span><span class="s1">&#39;-&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="n">normalized_name</span><span class="p">,</span>
-                                              <span class="n">version</span><span class="p">,</span>
-                                              <span class="n">remainder</span><span class="p">])</span> <span class="o">+</span> <span class="s1">&#39;.whl&#39;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">pid</span><span class="o">.</span><span class="n">returncode</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+      <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s1">&#39;Wheel unpack failed. Is the wheel bad?&#39;</span><span class="p">)</span>
 
-  <span class="k">with</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">NamedTemporaryFile</span><span class="p">(</span><span class="n">suffix</span><span class="o">=</span><span class="s1">&#39;.whl&#39;</span><span class="p">,</span>
-                                   <span class="n">prefix</span><span class="o">=</span><span class="s1">&#39;.&#39;</span> <span class="o">+</span> <span class="n">filename</span><span class="o">.</span><span class="n">stem</span> <span class="o">+</span> <span class="s1">&#39;.&#39;</span><span class="p">,</span>
-                                   <span class="nb">dir</span><span class="o">=</span><span class="n">filename</span><span class="o">.</span><span class="n">parent</span><span class="p">,</span>
-                                   <span class="n">delete</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span> <span class="k">as</span> <span class="n">temp_file</span><span class="p">:</span>
-    <span class="n">os</span><span class="o">.</span><span class="n">chmod</span><span class="p">(</span><span class="n">temp_file</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="mo">0o644</span><span class="p">)</span> <span class="c1"># Python hardcodes this to 600 :(</span>
-    <span class="k">with</span> <span class="n">zipfile</span><span class="o">.</span><span class="n">ZipFile</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">zin</span><span class="p">:</span>
-      <span class="k">with</span> <span class="n">zipfile</span><span class="o">.</span><span class="n">ZipFile</span><span class="p">(</span><span class="n">temp_file</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">zout</span><span class="p">:</span>
-        <span class="n">zout</span><span class="o">.</span><span class="n">comment</span> <span class="o">=</span> <span class="n">zin</span><span class="o">.</span><span class="n">comment</span> <span class="c1"># preserve the comment</span>
-        <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">zin</span><span class="o">.</span><span class="n">infolist</span><span class="p">():</span>
-          <span class="c1"># Patch METADATA to match filename</span>
-          <span class="k">if</span> <span class="n">item</span><span class="o">.</span><span class="n">filename</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="s1">&#39;.dist-info/METADATA&#39;</span><span class="p">):</span>
-            <span class="n">meta_lines</span> <span class="o">=</span> <span class="p">(</span><span class="n">patch</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
-                          <span class="k">if</span> <span class="p">(</span><span class="n">key</span> <span class="o">:=</span> <span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="sa">b</span><span class="s1">&#39;:&#39;</span><span class="p">,</span><span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span> <span class="ow">in</span> <span class="n">patch</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
-                          <span class="k">else</span> <span class="n">line</span>
-                          <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">zin</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">item</span><span class="o">.</span><span class="n">filename</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="sa">b</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">))</span>
-            <span class="n">zout</span><span class="o">.</span><span class="n">writestr</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="sa">b</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">meta_lines</span><span class="p">))</span>
-          <span class="k">else</span><span class="p">:</span>
-            <span class="n">zout</span><span class="o">.</span><span class="n">writestr</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">zin</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">item</span><span class="o">.</span><span class="n">filename</span><span class="p">))</span>
-  <span class="n">os</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">temp_file</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">new_filename</span><span class="p">)</span></div>
+    <span class="c1"># Find the .dist-info directory</span>
+    <span class="n">dist_info_dirs</span> <span class="o">=</span> <span class="p">[</span>
+      <span class="n">fn</span>
+      <span class="k">for</span> <span class="n">fn</span> <span class="ow">in</span> <span class="n">Path</span><span class="p">(</span><span class="n">temp_extract</span><span class="p">)</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s1">&#39;*/*.dist-info/&#39;</span><span class="p">)</span>
+      <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">temp_extract</span><span class="p">,</span> <span class="n">fn</span><span class="p">))</span> <span class="ow">and</span> <span class="n">DIST_INFO_RE</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">fn</span><span class="p">))</span>
+    <span class="p">]</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">dist_info_dirs</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+      <span class="k">raise</span> <span class="n">WheelError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Multiple .dist-info&#39;s found in </span><span class="si">{</span><span class="n">temp_extract</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="ow">not</span> <span class="n">dist_info_dirs</span><span class="p">:</span>
+      <span class="k">raise</span> <span class="n">WheelError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;No .dist-info&#39;s found in </span><span class="si">{</span><span class="n">temp_extract</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="n">metadata</span> <span class="o">=</span> <span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">dist_info_dirs</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">/</span> <span class="s1">&#39;METADATA&#39;</span><span class="p">)</span>
+
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">metadata</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fid</span><span class="p">:</span>
+      <span class="n">meta_lines</span> <span class="o">=</span> <span class="n">fid</span><span class="o">.</span><span class="n">readlines</span><span class="p">()</span>
+
+    <span class="n">original_name</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">line_split</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">meta_lines</span> <span class="k">if</span> <span class="p">(</span><span class="n">line_split</span> <span class="o">:=</span> <span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;:&#39;</span><span class="p">,</span><span class="mi">1</span><span class="p">))[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;Name&#39;</span><span class="p">)</span>
+    <span class="n">original_version</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">line_split</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">meta_lines</span> <span class="k">if</span> <span class="p">(</span><span class="n">line_split</span> <span class="o">:=</span> <span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;:&#39;</span><span class="p">,</span><span class="mi">1</span><span class="p">))[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;Version&#39;</span><span class="p">)</span>
+
+    <span class="n">meta_lines</span> <span class="o">=</span> <span class="p">(</span><span class="n">patch</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
+                  <span class="k">if</span> <span class="p">(</span><span class="n">key</span> <span class="o">:=</span> <span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;:&#39;</span><span class="p">,</span><span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span> <span class="ow">in</span> <span class="n">patch</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span>
+                  <span class="k">else</span> <span class="n">line</span>
+                  <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">meta_lines</span><span class="p">)</span>
+
+    <span class="c1"># These values will be replaced</span>
+    <span class="n">patch</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">if</span> <span class="n">name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+      <span class="n">patch</span><span class="p">[</span><span class="s1">&#39;Name&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;Name: </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="n">name</span> <span class="o">=</span> <span class="n">original_name</span>
+    <span class="k">if</span> <span class="n">version</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+      <span class="n">patch</span><span class="p">[</span><span class="s1">&#39;Version&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;Version: </span><span class="si">{</span><span class="n">version</span><span class="si">}</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="n">version</span> <span class="o">=</span> <span class="n">original_version</span>
+
+    <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="n">original_name</span> <span class="ow">and</span> <span class="n">version</span> <span class="o">==</span> <span class="n">original_version</span><span class="p">:</span>
+      <span class="k">raise</span> <span class="n">WheelError</span><span class="p">(</span><span class="s1">&#39;No change detected. Package name and version are &#39;</span>
+                       <span class="s1">&#39;identical&#39;</span><span class="p">)</span>
+
+    <span class="c1"># Patch metadata</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">metadata</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fid</span><span class="p">:</span>
+      <span class="n">fid</span><span class="o">.</span><span class="n">writelines</span><span class="p">(</span><span class="n">meta_lines</span><span class="p">)</span>
+
+    <span class="c1"># Rename  files</span>
+    <span class="c1"># https://peps.python.org/pep-0491/#escaping-and-unicode</span>
+    <span class="n">normalized_name</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;[^\w\d.]+&quot;</span><span class="p">,</span> <span class="s2">&quot;_&quot;</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+    <span class="n">normalized_version</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;[^\w\d.+]+&quot;</span><span class="p">,</span> <span class="s2">&quot;_&quot;</span><span class="p">,</span> <span class="n">version</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+    <span class="n">normalized_original_name</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;[^\w\d.]+&quot;</span><span class="p">,</span> <span class="s2">&quot;_&quot;</span><span class="p">,</span> <span class="n">original_name</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+    <span class="n">normalized_original_version</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;[^\w\d.+]+&quot;</span><span class="p">,</span> <span class="s2">&quot;_&quot;</span><span class="p">,</span> <span class="n">original_version</span><span class="p">)</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+
+    <span class="n">os</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">temp_extract</span><span class="p">)</span> <span class="o">/</span>
+              <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">normalized_original_name</span><span class="si">}</span><span class="s1">-</span><span class="si">{</span><span class="n">normalized_original_version</span><span class="si">}</span><span class="s1">&#39;</span> <span class="o">/</span>
+              <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">normalized_original_name</span><span class="si">}</span><span class="s1">-</span><span class="si">{</span><span class="n">normalized_original_version</span><span class="si">}</span><span class="s1">.dist-info&#39;</span><span class="p">,</span>
+              <span class="n">Path</span><span class="p">(</span><span class="n">temp_extract</span><span class="p">)</span> <span class="o">/</span>
+              <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">normalized_original_name</span><span class="si">}</span><span class="s1">-</span><span class="si">{</span><span class="n">normalized_original_version</span><span class="si">}</span><span class="s1">&#39;</span> <span class="o">/</span>
+              <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">normalized_name</span><span class="si">}</span><span class="s1">-</span><span class="si">{</span><span class="n">normalized_version</span><span class="si">}</span><span class="s1">.dist-info&#39;</span><span class="p">)</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">temp_extract</span><span class="p">)</span> <span class="o">/</span>
+              <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">normalized_original_name</span><span class="si">}</span><span class="s1">-</span><span class="si">{</span><span class="n">normalized_original_version</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">,</span>
+              <span class="n">Path</span><span class="p">(</span><span class="n">temp_extract</span><span class="p">)</span> <span class="o">/</span>
+              <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">normalized_name</span><span class="si">}</span><span class="s1">-</span><span class="si">{</span><span class="n">normalized_version</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+
+    <span class="c1"># Save new wheel</span>
+    <span class="k">with</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">TemporaryDirectory</span><span class="p">()</span> <span class="k">as</span> <span class="n">temp_wheel</span><span class="p">:</span>
+      <span class="n">subprocess</span><span class="o">.</span><span class="n">Popen</span><span class="p">([</span><span class="s1">&#39;wheel&#39;</span><span class="p">,</span> <span class="s1">&#39;pack&#39;</span><span class="p">,</span> <span class="s1">&#39;--dest&#39;</span><span class="p">,</span> <span class="n">temp_wheel</span><span class="p">,</span>
+                        <span class="n">Path</span><span class="p">(</span><span class="n">temp_extract</span><span class="p">)</span> <span class="o">/</span> <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">normalized_name</span><span class="si">}</span><span class="s1">-</span><span class="si">{</span><span class="n">normalized_version</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">wait</span><span class="p">()</span>
+
+      <span class="n">new_wheel</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">temp_wheel</span><span class="p">)</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s1">&#39;*.whl&#39;</span><span class="p">))</span>
+
+      <span class="c1"># Replace wheel</span>
+      <span class="n">os</span><span class="o">.</span><span class="n">rename</span><span class="p">(</span><span class="n">new_wheel</span><span class="p">,</span> <span class="n">filename</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="n">new_wheel</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+
+      <span class="c1"># It would be possible for the package name/version to change but the</span>
+      <span class="c1"># whl name to rename unchanged due to filename normalization (e.g.: -➡️_)</span>
+      <span class="k">if</span> <span class="n">new_wheel</span><span class="o">.</span><span class="n">name</span> <span class="o">!=</span> <span class="n">filename</span><span class="o">.</span><span class="n">name</span><span class="p">:</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span></div>
 
 <span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s1">&#39;__main__&#39;</span><span class="p">:</span>
   <span class="n">parser</span> <span class="o">=</span> <span class="n">get_parser</span><span class="p">()</span>
   <span class="n">args</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
 
   <span class="n">version</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">version</span>
-  <span class="n">filename</span> <span class="o">=</span> <span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">filename</span><span class="p">)</span>
+  <span class="n">filename</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">filename</span><span class="p">)</span>
 
   <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">add_local</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="n">version</span> <span class="o">=</span> <span class="n">filename</span><span class="o">.</span><span class="n">stem</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;-&#39;</span><span class="p">,</span> <span class="mi">2</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
-    <span class="k">if</span> <span class="s1">&#39;+&#39;</span> <span class="ow">in</span> <span class="n">filename</span><span class="o">.</span><span class="n">stem</span><span class="p">:</span>
+    <span class="n">version</span> <span class="o">=</span> <span class="n">WHEEL_INFO_RE</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">filename</span><span class="o">.</span><span class="n">name</span><span class="p">)</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="s1">&#39;ver&#39;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="s1">&#39;+&#39;</span> <span class="ow">in</span> <span class="n">version</span><span class="p">:</span>
+      <span class="c1"># https://packaging.python.org/en/latest/specifications/version-specifiers/#local-version-identifiers</span>
+      <span class="c1"># &quot;each segment of the local version [is] divided by a .&quot;</span>
       <span class="n">version</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">version</span><span class="si">}</span><span class="s1">.</span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">add_local</span><span class="si">}</span><span class="s1">&#39;</span>
     <span class="k">else</span><span class="p">:</span>
       <span class="n">version</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">version</span><span class="si">}</span><span class="s1">+</span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">add_local</span><span class="si">}</span><span class="s1">&#39;</span>
 
-  <span class="n">main</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">version</span><span class="o">=</span><span class="n">version</span><span class="p">)</span>
+  <span class="n">main</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">version</span><span class="o">=</span><span class="n">version</span><span class="p">)</span>
 </pre></div>
 
            </div>
