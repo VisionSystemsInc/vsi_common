@@ -38,7 +38,7 @@ def main(filename, name=None, version=None):
                       filename])).wait()
 
     if pid.returncode != 0:
-      raise RuntimeError('Wheel unpack failed. Is the wheel is bad?')
+      raise RuntimeError('Wheel unpack failed. Is the wheel bad?')
 
     # Find the .dist-info directory
     dist_info_dirs = [
@@ -58,17 +58,10 @@ def main(filename, name=None, version=None):
     original_name = next(line_split[1].strip() for line in meta_lines if (line_split := line.split(':',1))[0] == 'Name')
     original_version = next(line_split[1].strip() for line in meta_lines if (line_split := line.split(':',1))[0] == 'Version')
 
-    print(original_name)
-    print(original_version)
-
     meta_lines = (patch[key]
                   if (key := line.split(':',1)[0]) in patch.keys()
                   else line
                   for line in meta_lines)
-
-    # original_name = next(
-    # original_name, original_version = parsed_name.group('name', 'ver')
-
 
     # These values will be replaced
     patch = {}
@@ -85,12 +78,9 @@ def main(filename, name=None, version=None):
       raise WheelError('No change detected. Package name and version are '
                        'identical')
 
-
     # Patch metadata
-
     with open(metadata, 'w') as fid:
       fid.writelines(meta_lines)
-
 
     # Rename  files
     # https://peps.python.org/pep-0491/#escaping-and-unicode
