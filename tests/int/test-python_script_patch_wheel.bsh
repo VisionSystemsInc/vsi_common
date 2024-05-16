@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+
+if [ -z "${VSI_COMMON_DIR+set}" ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
+
+source "${VSI_COMMON_DIR}/tests/testlib.bsh"
+source "${VSI_COMMON_DIR}/tests/test_utils.bsh"
+
+if ! command -v pip &> /dev/null &> /dev/null ; then
+  skip_next_test
+fi
+begin_test "Test wheel patch"
+(
+  setup_test
+  python -m venv "${TESTDIR}"
+  . "${TESTDIR}/bin/activate"
+  pip install wheel
+  pip download --find-links https://download.pytorch.org/whl/torchrec --no-deps torchrec==0.7.0+cpu
+
+  cp torchrec-0.7.0+cpu-py3-none-any.whl torchrec-0.7.0+cpu-py3-none-any.whl.orig
+
+  # Add to the existing local version
+  python "${VSI_COMMON_DIR}/python/vsi/tools/patch_wheel.py" torchrec-0.7.0+cpu-py3-none-any.whl --add-local foobar
+  # check filename and if wheel is happy
+  wheel unpack torchrec-0.7.0+cpu.foobar-py3-none-any.whl
+  # Double check paths and value is what we expected
+  grep 'Name: torchrec' torchrec-0.7.0+cpu.foobar/torchrec-0.7.0+cpu.foobar.dist-info/METADATA
+  grep 'Version: 0.7.0+cpu.foobar' torchrec-0.7.0+cpu.foobar/torchrec-0.7.0+cpu.foobar.dist-info/METADATA
+  rm -r torchrec-0.7.0+cpu.foobar-py3-none-any.whl torchrec-0.7.0+cpu.foobar
+
+  # Change name and version
+  cp torchrec-0.7.0+cpu-py3-none-any.whl.orig torchrec-0.7.0+cpu-py3-none-any.whl
+  python "${VSI_COMMON_DIR}/python/vsi/tools/patch_wheel.py" torchrec-0.7.0+cpu-py3-none-any.whl --name foobar --version 1.2.3
+  wheel unpack foobar-1.2.3-py3-none-any.whl
+  grep 'Name: foobar' foobar-1.2.3/foobar-1.2.3.dist-info/METADATA
+  grep 'Version: 1.2.3' foobar-1.2.3/foobar-1.2.3.dist-info/METADATA
+  rm -r foobar-1.2.3
+
+  # Add local with no previous local version
+  python "${VSI_COMMON_DIR}/python/vsi/tools/patch_wheel.py" foobar-1.2.3-py3-none-any.whl --add-local local-test
+  wheel unpack foobar-1.2.3+local_test-py3-none-any.whl
+  grep 'Name: foobar' foobar-1.2.3+local_test/foobar-1.2.3+local_test.dist-info/METADATA
+  grep 'Version: 1.2.3+local-test' foobar-1.2.3+local_test/foobar-1.2.3+local_test.dist-info/METADATA
+  rm -r foobar-1.2.3+local_test
+
+  # Nothing changes, should fail
+  not python "${VSI_COMMON_DIR}/python/vsi/tools/patch_wheel.py" foobar-1.2.3+local_test-py3-none-any.whl --name foobar --version 1.2.3+local-test
+
+  # Version change, but filenames do not due to normalization
+  python "${VSI_COMMON_DIR}/python/vsi/tools/patch_wheel.py" foobar-1.2.3+local_test-py3-none-any.whl --name foobar --version 1.2.3+local_test
+  wheel unpack foobar-1.2.3+local_test-py3-none-any.whl
+  grep 'Name: foobar' foobar-1.2.3+local_test/foobar-1.2.3+local_test.dist-info/METADATA
+  grep 'Version: 1.2.3+local_test' foobar-1.2.3+local_test/foobar-1.2.3+local_test.dist-info/METADATA
+
+  # No args should fail
+  not python "${VSI_COMMON_DIR}/python/vsi/tools/patch_wheel.py" foobar-1.2.3+local_test-py3-none-any.whl
+  # Nothing changed should fail
+  not python "${VSI_COMMON_DIR}/python/vsi/tools/patch_wheel.py" foobar-1.2.3+local_test-py3-none-any.whl --name foobar --version 1.2.3+local_test
+  # No wheel should fail
+  not python "${VSI_COMMON_DIR}/python/vsi/tools/patch_wheel.py" badfile-1.2.3+cpu-py3-none-any.whl --name foobar --version 1.2.3
+)
+end_test
