@@ -194,12 +194,15 @@ def custom_domain(class_name, name='', label='', elements = {}):
 
   return domain_class
 
-__version__ = "0.1"
+__version__ = "0.1.1"
 # for this module's sphinx doc
 release = __version__
 version = release.rsplit('.', 1)[0]
 
-function_sig_re = re.compile(r'^([\w.-]+)( (.*))?')
+# Regex to split function arguments off of the function name, when is is separated by a space.
+# All acceptable character have to be defined in the first group
+# TODO: Why it the first group not: ([^ ]+)
+function_sig_re = re.compile(r'^([\w.:-]+)( (.*))?')
 
 def parse_bash(options, env, sig, signode, sigtype='unknown'):
 
@@ -249,6 +252,7 @@ def parse_bash(options, env, sig, signode, sigtype='unknown'):
 
 
   if args:
+    print(sig, signode, sigtype)
     args = args.split(' ')
     for arg in args:
       # white spaces are striped, use unicode! :D

@@ -33,4 +33,4 @@ The ``just`` `wizard <https://visionsystemsinc.github.io/vsi_common/new_just>`_ 
 Executable
 ----------
 
-Download the latest release from `github <https://github.com/VisionSystemsInc/just/releases>`_ and put the executable on your path, and then you can start using ``juste`` commands, such as the wizard: ``juste --new``
+If you have a ``just`` executable on your path, then you can start using ``just`` commands such as the wizard: ``just --new``

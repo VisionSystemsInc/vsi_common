@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+
+if [[ ${-} != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
+if [ -z "${VSI_COMMON_DIR+set}" ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
+
+source "${VSI_COMMON_DIR}/linux/aliases.bsh"
+
+function precommit::filter_line()
+{
+  local commit_message
+  # if the local object is non-zero, retrieve the commit message. If it is 0,
+  # just keep it
+  if [ "${2}" != "0000000000000000000000000000000000000000" ]; then
+    commit_message=$("${GIT}" log --format=%s -n 1 ${2})
+  fi
+  if [[ ${commit_message-} =~ \[skip\ ci\] ]] || [[ ${commit_message-} =~ \[ci\ skip\] ]]; then
+    return
+  fi
+  echo "${@}"
+}
+
+function precommit::filter_lines()
+{
+  local local_ref local_oid remote_ref remote_oid
+  while read local_ref local_oid remote_ref remote_oid; do
+    precommit::filter_line "${local_ref}" "${local_oid}" "${remote_ref}" "${remote_oid}"
+  done < <(cat -)
+}
+
+if [ "${BASH_SOURCE[0]}" = "${0}" ] || [ "$(basename "${BASH_SOURCE[0]}")" = "${0}" ]; then
+  precommit::filter_lines "${@}"
+  exit "${?}"
+fi

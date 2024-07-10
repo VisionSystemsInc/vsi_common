@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.abspath('/src/python'))
 # -- Project information -----------------------------------------------------
 
 project = 'VSI Common'
-copyright = '2020, Vision Systems, Inc'
+copyright = '2024, Vision Systems, Inc'
 author = 'Vision Systems, Inc'
 
 # The short X.Y version

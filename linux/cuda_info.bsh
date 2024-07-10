@@ -12,6 +12,7 @@ source "${VSI_COMMON_DIR}/linux/web_tools.bsh"
 source "${VSI_COMMON_DIR}/linux/compat.bsh"
 source "${VSI_COMMON_DIR}/linux/aliases.bsh"
 source "${VSI_COMMON_DIR}/linux/versions.bsh"
+source "${VSI_COMMON_DIR}/linux/requirements.bsh"
 
 #*# linux/cuda_info
 
@@ -316,9 +317,10 @@ function cuda_arch_to_cuda_family()
   local cuda_card_arches cuda_card_families
 
   # Put in descending order
-  cuda_card_arches=(90 89 80 75 70 60 50 30 20 10) # Lowest possible architecture for a specific family
+  cuda_card_arches=(  90     89  80     75     70    60     50      30     20    10) # Lowest possible architecture for a specific family
   cuda_card_families=(Hopper Ada Ampere Turing Volta Pascal Maxwell Kepler Fermi Tesla) # Matching Family name
-
+  # Similar to:
+  # https://github.com/pytorch/pytorch/blob/04024926f4d6ee07bfd2368a96d848879c982314/cmake/Modules_CUDA_fix/upstream/FindCUDA/select_compute_arch.cmake#L192-L223
   CUDA_CARD_FAMILIES=()
   local arch fam ver
   for arch in ${CUDA_CARD_ARCHES[@]+"${CUDA_CARD_ARCHES[@]}"}; do
@@ -503,16 +505,14 @@ function cuda_capabilities()
       CUDA_DEPRECATED=(35 37 50)
       ;;
 
-    12.*) # 12.0 and 12.1
+    12.*) # 12.0-12.3
       # "SM90a or SM_90a, compute_90a – (for PTX ISA version 8.0) – adds acceleration for features like wgmma and setmaxnreg. This is required for NVIDIA CUTLASS"
       CUDA_ARCHES=(50 52 53 60 61 62 70 72 75 80 86 87 89 90a 90)
       # The 30s are gone, and there's no longer any deprecated? (50 was undeprecated?)
       CUDA_DEPRECATED=()
       ;;
-    12.1*)
-      ;;
 
-    # 12.2*) ?
+    # 12.4*) ?
     #   # For a while now, nvcc --help appears to have the complete list of arches finally.
     #
     #   ### Old method, still works ###
@@ -521,7 +521,7 @@ function cuda_capabilities()
     #   #
     #   # strings `command -v nvcc` | \grep '^sm_' | sed 's|sm_||' | tr '\n' ' '; echo
     #   # strings `command -v nvcc` | \grep '^compute_' | sed 's|compute_||' | tr '\n' ' '; echo
-    #   # strings `command -v nvcc` | \grep '^lto_' | sed 's|compute_||' | tr '\n' ' '; echo
+    #   # strings `command -v nvcc` | \grep '^lto_' | sed 's|lto_||' | tr '\n' ' '; echo
     #
     #   CUDA_ARCHES=(?)
     #   CUDA_CODES=(?) # only if different, else skip this
@@ -683,7 +683,7 @@ function cuda_capabilities()
     # 11.4.3|11.4.152)
     # 11.4.4|11.4.152)
     11.4*)
-      versions=(470.57.2 472.50)
+      versions=(470.82.01 472.50)
       ;;
 
     11.5.0|11.5.50)
@@ -726,6 +726,21 @@ function cuda_capabilities()
     12.1.0|12.1.66)
       versions=(530.30.02 531.14)
       ;;
+    12.1.1|12.1.105)
+      versions=(530.30.02 531.14)
+      ;;
+    12.2.0|12.2.53)
+      versions=(535.54.03 536.25)
+      ;;
+    12.2.1|12.2.128)
+      versions=(535.86.09 536.67)
+      ;;
+    12.2.2|12.2.140)
+      versions=(535.104.05 537.13)
+      ;;
+    12.3.0|12.3.52)
+      versions=(545.23.06 545.84)
+      ;;
     # E.g. https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html#id4
     # 12.2*)
     #   versions=(linux windows)
@@ -759,7 +774,7 @@ function cuda_capabilities()
     11.*) # 11.1-11.8
       versions=(450.80.02 452.39)
       ;;
-    12.*) # 12.0-12.1
+    12.*) # 12.0-12.3
       versions=(525.60.13 527.41)
       ;;
     # E.g. https://docs.nvidia.com/cuda/archive/12.0.0/cuda-toolkit-release-notes/index.html#id3
@@ -790,26 +805,27 @@ function cuda_capabilities()
 function suggested_architectures()
 {
   local x arch y
-  local IFS="${IFS}"
-
+  local IFS=$'\n'
+  local cuda_arches_sorted=($(sort -u <<< ${CUDA_ARCHES[*]+"${CUDA_ARCHES[*]}"}))
+  local cuda_codes_sorted=($(sort -u <<< ${CUDA_CODES[*]+"${CUDA_CODES[*]}"}))
   CUDA_SUGGESTED_ARCHES=()
   CUDA_SUGGESTED_CODES=()
   CUDA_SUGGESTED_PTX=()
 
   # Loop through all the card aches
   for arch in ${CUDA_CARD_ARCHES[@]+"${CUDA_CARD_ARCHES[@]}"}; do
-    for x in ${CUDA_ARCHES[@]+"${!CUDA_ARCHES[@]}"}; do
+    for x in ${cuda_arches_sorted[@]+"${!cuda_arches_sorted[@]}"}; do
       # If it's an exact match, add it!
-      if [ "${CUDA_ARCHES[x]}" == "${arch}" ]; then
+      if [ "${cuda_arches_sorted[x]}" == "${arch}" ]; then
         CUDA_SUGGESTED_ARCHES+=("${arch}")
         continue 2
       # If it's greater than, that means there is no exact match.
       # The last compute checked was the right answer. Use that.
-      elif [ "${CUDA_ARCHES[x]}" -gt "${arch}" ]; then
+      elif [ "${cuda_arches_sorted[x]}" -gt "${arch}" ]; then
         # Verify the compute family matches, else you probably have a card that
         # is too old, like a Fermi???
         if [ "${x}" -gt "0" ]; then
-          CUDA_SUGGESTED_ARCHES+=("${CUDA_ARCHES[x-1]}")
+          CUDA_SUGGESTED_ARCHES+=("${cuda_arches_sorted[x-1]}")
         else
           : #: CUDA_SUGGESTED_ARCHES+=("TOOOLD")
         fi
@@ -820,31 +836,31 @@ function suggested_architectures()
     # If you get here, either you have a newer arch of an already supported arch,
     # or you have a newer card than this version of cuda supports. Let's check
     # the first case first.
-    if [ "${CUDA_ARCHES[x]:0:1}" == "${arch:0:1}" ]; then
-      CUDA_SUGGESTED_ARCHES+=("${CUDA_ARCHES[x]}")
+    if [ "${cuda_arches_sorted[x]:0:1}" == "${arch:0:1}" ]; then
+      CUDA_SUGGESTED_ARCHES+=("${cuda_arches_sorted[x]}")
     else
       # If you get here, that means you have have a newer card than this version
       # of cuda supports. So the best answer is to PTX compile for it.
-      CUDA_SUGGESTED_PTX+=("${CUDA_ARCHES[x]}")
+      CUDA_SUGGESTED_PTX+=("${cuda_arches_sorted[x]}")
     fi
   done
 
   for arch in ${CUDA_CARD_ARCHES[@]+"${CUDA_CARD_ARCHES[@]}"}; do
-    for x in ${CUDA_CODES[@]+"${!CUDA_CODES[@]}"}; do
+    for x in ${cuda_codes_sorted[@]+"${!cuda_codes_sorted[@]}"}; do
       # If it's an exact match, add it!
-      if [ "${CUDA_CODES[x]}" == "${arch}" ]; then
+      if [ "${cuda_codes_sorted[x]}" == "${arch}" ]; then
         CUDA_SUGGESTED_CODES+=("${arch}")
         continue 2
       # If it's greater than, that means there is no exact match.
       # The last compute checked was the right answer. Use that.
-      elif [ "${CUDA_CODES[x]}" -gt "${arch}" ]; then
+      elif [ "${cuda_codes_sorted[x]}" -gt "${arch}" ]; then
         # Verify the compute family matches, else you probably have a card that
         # is too old, like a Fermi???
         if [ "${x}" == "0" ]; then
           # Too old
           : #CUDA_SUGGESTED_CODES+=("TOOOLD")
-        else # if [ "${CUDA_CODES[$x-1]:0:1}" == "${arch:0:1}" ]; This should always be true
-          CUDA_SUGGESTED_CODES+=("${CUDA_CODES[x-1]}")
+        else # if [ "${cuda_codes_sorted[$x-1]:0:1}" == "${arch:0:1}" ]; This should always be true
+          CUDA_SUGGESTED_CODES+=("${cuda_codes_sorted[x-1]}")
         fi
         continue 2
       fi
@@ -853,15 +869,15 @@ function suggested_architectures()
     # If you get here, either you have a newer arch of an already supported arch,
     # or you have a newer card than this version of cuda supports. Let's check
     # the first case first.
-    if [ "${CUDA_CODES[x]:0:1}" == "${arch:0:1}" ]; then
-      CUDA_SUGGESTED_CODES+=("${CUDA_CODES[x]}")
+    if [ "${cuda_codes_sorted[x]:0:1}" == "${arch:0:1}" ]; then
+      CUDA_SUGGESTED_CODES+=("${cuda_codes_sorted[x]}")
     # no else; PTX is for ARCH, not CODES
     fi
   done
 
-  CUDA_FORWARD_PTX="${CUDA_ARCHES[@]+"${CUDA_ARCHES[${#CUDA_ARCHES[@]}-1]}"}"
+  # This should not use the sorted list, as the last element it the highest OFFICIAL architecture
+  CUDA_FORWARD_PTX="${CUDA_ARCHES[@]+"${CUDA_ARCHES[${#cuda_arches_sorted[@]}-1]}"}"
 
-  IFS=$'\n'
   CUDA_SUGGESTED_ARCHES=($(sort -u <<< ${CUDA_SUGGESTED_ARCHES[*]+"${CUDA_SUGGESTED_ARCHES[*]}"}))
   CUDA_SUGGESTED_CODES=($(sort -u <<< ${CUDA_SUGGESTED_CODES[*]+"${CUDA_SUGGESTED_CODES[*]}"}))
   CUDA_SUGGESTED_PTX=($(sort -u <<< ${CUDA_SUGGESTED_PTX[*]+"${CUDA_SUGGESTED_PTX[*]}"}))
@@ -936,6 +952,248 @@ function cmake_cuda_flags()
   done
 
   echo -n ${cmake[*]+"${cmake[*]}"}
+}
+
+#**
+# .. function:: cmake_cuda_architectures
+#
+# :Parameters: * :var:`cuda_info.bsh CUDA_SUGGESTED_ARCHES`
+#              * [:var:`cuda_info.bsh CUDA_SUGGESTED_PTX`]
+# :Output: *stdout* - semi-colon delimited string of CUDA capabilities for cmake
+#
+# Generate CUDA capabilities suitable for the ``CMAKE_CUDA_ARCHITECTURES`` environment variable.
+# See cmake docs for more information https://cmake.org/cmake/help/latest/variable/CMAKE_CUDA_ARCHITECTURES.html
+#
+#**
+function cmake_cuda_architectures()
+{
+  # check CUDA version
+  if meet_requirements ${CUDA_VERSION-} '<=9.0'; then
+    echo "CUDA version ${CUDA_VERSION-} must be greater than 9.0" >&2
+    local JUST_IGNORE_EXIT_CODES=1
+    return 1
+  fi
+
+  # cmake capabilties
+  # https://cmake.org/cmake/help/latest/prop_tgt/CUDA_ARCHITECTURES.html
+  local result=()
+  local x=""
+
+  for x in ${CUDA_SUGGESTED_ARCHES[@]+"${CUDA_SUGGESTED_ARCHES[@]}"}; do
+    result+=( "${x}-real" )
+  done
+
+  for x in ${CUDA_SUGGESTED_PTX[@]+"${CUDA_SUGGESTED_PTX[@]}"}; do
+    result+=( "${x}-virtual" )
+  done
+
+  # output
+  local IFS=';'
+  echo -n ${result[*]+"${result[*]}"}
+}
+
+#**
+# .. function:: torch_cuda_arch_list
+#
+# :Parameters: * :var:`cuda_info.bsh CUDA_SUGGESTED_ARCHES`
+#              * [:var:`cuda_info.bsh CUDA_SUGGESTED_PTX`]
+# :Output: *stdout* - comma delimited string of CUDA architectures for pytorch
+#
+# Generate CUDA capabilities suitable for the ``TORCH_CUDA_ARCH_LIST`` environment variable.
+# See pytorch docs for more information https://pytorch.org/docs/stable/cpp_extension.html#torch.utils.cpp_extension.CUDAExtension
+#
+#**
+function torch_cuda_arch_list()
+{
+  # check CUDA version
+  if meet_requirements ${CUDA_VERSION-} '<=9.0'; then
+    echo "CUDA version ${CUDA_VERSION-} must be greater than 9.0" >&2
+    local JUST_IGNORE_EXIT_CODES=1
+    return 1
+  fi
+
+  # TORCH_CUDA_ARCH_LIST
+  # https://pytorch.org/docs/stable/cpp_extension.html#torch.utils.cpp_extension.CUDAExtension
+  local result=()
+  local x=""
+
+  for x in ${CUDA_SUGGESTED_ARCHES[@]+"${CUDA_SUGGESTED_ARCHES[@]}"}; do
+    if ! isin "${x}" ${CUDA_SUGGESTED_PTX[@]+"${CUDA_SUGGESTED_PTX[@]}"}; then
+      result+=( "${x::1}.${x:1}" )
+    fi
+  done
+
+  for x in ${CUDA_SUGGESTED_PTX[@]+"${CUDA_SUGGESTED_PTX[@]}"}; do
+    result+=( "${x::1}.${x:1}+PTX" )
+  done
+
+  # output
+  echo -n ${result[*]+"${result[*]}"}
+}
+
+#**
+# .. function:: torch_cuda_arch_list_from_cmake
+#
+# :Arguments: * ``$1`` - delimited string of cuda architectures
+# :Output: *stdout* - string containing ``TORCH_CUDA_ARCH_LIST`` statement
+#
+# Create ``TORCH_CUDA_ARCH_LIST`` from ``CMAKE_CUDA_ARCHITECTURES`` statement.
+#
+# .. rubric:: Example
+#
+# For example, an input of ``"80-real 86-virtual"`` would produce the output ``"8.0 8.6+PTX"``
+#**
+function torch_cuda_arch_list_from_cmake()
+{
+  # input as space delimited string
+  local input="${1//[,;]/ }"
+
+  # generate TORCH_CUDA_ARCH_LIST statements
+  local x=""
+  local capability=""
+  local result=()
+  for x in ${input}; do
+
+    # X.Y capability
+    capability="${x//[!0-9]/}"
+    capability="${capability::1}.${capability:1}"
+
+    # append PTX
+    if [[ ${x} = *+PTX ]]; then
+      capability+="+PTX"
+    elif [[ ${x} = *-virtual ]]; then
+      capability+="+PTX"
+    fi
+
+    result+=( "${capability}" )
+  done
+
+  # output
+  echo -n ${result[*]+"${result[*]}"}
+}
+
+#**
+# .. function:: tcnn_cuda_architectures
+#
+# :Parameters: * :var:`cuda_info.bsh CUDA_SUGGESTED_ARCHES`
+#              * [:var:`cuda_info.bsh CUDA_SUGGESTED_PTX`]
+# :Output: *stdout* - comma delimited string of CUDA architectures for tiny-cuda-nn
+#
+# Generate CUDA architectures for tiny-cuda-nn, suitable for the ``TCNN_CUDA_ARCHITECTURES`` environment variable. Note tiny-cuda-nn will always build both binaries and PTX intermediate code for each specified architecture.
+#
+#**
+function tcnn_cuda_architectures()
+{
+  # check CUDA version
+  if meet_requirements ${CUDA_VERSION-} '<=9.0'; then
+    echo "CUDA version ${CUDA_VERSION-} must be greater than 9.0" >&2
+    local JUST_IGNORE_EXIT_CODES=1
+    return 1
+  fi
+
+  # append suggested arches & ptx
+  local result=(
+    ${CUDA_SUGGESTED_ARCHES[@]+"${CUDA_SUGGESTED_ARCHES[@]}"}
+    ${CUDA_SUGGESTED_PTX[@]+"${CUDA_SUGGESTED_PTX[@]}"}
+  )
+
+  # unique sorted values
+  local IFS=$'\n'
+  result=($(sort -u <<< ${result[*]+"${result[*]}"}))
+
+  # output
+  IFS=','
+  echo -n ${result[*]+"${result[*]}"}
+}
+
+#**
+# .. function:: tcnn_cuda_architectures_from_cmake
+#
+# :Arguments: * ``$1`` - delimited string of cuda architectures
+# :Output: *stdout* - string containing ``TCNN_CUDA_ARCHITECTURES`` statement
+#
+# Create ``TCNN_CUDA_ARCHITECTURES`` from ``CMAKE_CUDA_ARCHITECTURES`` statement.
+#
+# .. rubric:: Example
+#
+# For example, an input of ``"80-real 86-virtual"`` would produce the output ``"80 86"``
+#**
+function tcnn_cuda_architectures_from_cmake()
+{
+  # input as space delimited string
+  local input="${1//[,;]/ }"
+
+  # generate TCNN_CUDA_ARCHITECTURES statements
+  local x=""
+  local result=()
+  for x in ${input}; do
+    result+=( "${x//[!0-9]/}" )
+  done
+
+  # unique sorted values
+  local IFS=$'\n'
+  result=($(sort -u <<< ${result[*]+"${result[*]}"}))
+
+  # output
+  IFS=','
+  echo -n ${result[*]+"${result[*]}"}
+}
+
+#**
+# .. function:: nvcc_gencodes
+#
+# :Arguments: * ``$1`` - delimited string of cuda architectures
+# :Output: *stdout* - string containing nvcc gencode statements
+#
+# Create nvcc gencode statements from input array of cuda capabilities.
+#
+# .. rubric:: Example
+#
+# For example, an input of ``"75 86+PTX"`` would produce the output
+#
+# .. code-block:: bash
+#
+#   -gencode=arch=compute_75,code=sm_75 -gencode=arch=compute_86,code=compute_86
+#
+#**
+function nvcc_gencodes()
+{
+  # input as space delimited string
+  local input="${1//[,;]/ }"
+
+  # remove any periods from cuda architectures (e.g., 7.5->75)
+  input="${input//./}"
+
+  # input as array
+  local capabilities=( ${input} ) # noquotes
+
+  # generate gencode statements
+  local gencodes=()
+  local capability=""
+  local arch=""
+  local code=""
+  for capability in "${capabilities[@]}"; do
+    if [[ ${capability} = *+PTX ]]; then
+      capability="${capability%+PTX}"
+      arch="compute_${capability}"
+      code="compute_${capability}"
+    elif [[ ${capability} = *-real ]]; then
+      capability="${capability%-real}"
+      arch="compute_${capability}"
+      code="sm_${capability}"
+    elif [[ ${capability} = *-virtual ]]; then
+      capability="${capability%-virtual}"
+      arch="compute_${capability}"
+      code="compute_${capability}"
+    else
+      arch="compute_${capability}"
+      code="sm_${capability}"
+    fi
+    gencodes+=( "-gencode=arch=${arch},code=${code}" )
+  done
+
+  # output
+  echo -n ${gencodes[*]+"${gencodes[*]}"}
 }
 
 #**

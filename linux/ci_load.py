@@ -45,7 +45,7 @@ class CiLoad:
                 stdout=PIPE)
     output = pid.communicate()[0]
 
-    self.compose_yaml = yaml.load(output, Loader=yaml.Loader)
+    self.compose_yaml = yaml.safe_load(output)
     self.compose_version = self.compose_yaml.get('version', None)
 
     # Get dockerfile name
@@ -149,8 +149,7 @@ class CiLoad:
     self.restore_recipe_file = tempfile.NamedTemporaryFile(mode='w')
 
     doc = {}
-    compose_yaml = yaml.load(open(self.recipe_compose, 'r').read(),
-                             Loader=yaml.Loader)
+    compose_yaml = yaml.safe_load(open(self.recipe_compose, 'r').read())
     doc['version'] = compose_yaml['version']
 
     services = {}
@@ -239,8 +238,7 @@ class CiLoad:
 
   # 7 build
   def build_stages(self):
-    yaml_content = yaml.load(open(self.add_stages_file.name, 'r').read(),
-                             Loader=yaml.Loader)
+    yaml_content = yaml.safe_load(open(self.add_stages_file.name, 'r').read())
     main_image = self.compose_yaml['services'][self.main_service].get('image')
 
     if self.print_build:

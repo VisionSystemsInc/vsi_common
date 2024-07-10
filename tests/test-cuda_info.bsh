@@ -276,10 +276,16 @@ begin_test "Cuda 9 test"
   assert_array_values CUDA_SUGGESTED_ARCHES 37 52 70
   assert_array_values CUDA_SUGGESTED_CODES 37 52 70
   assert_str_eq "$(cmake_cuda_flags)" "3.7 5.2 7.0"
+  assert_str_eq "$(cmake_cuda_architectures)" "37-real;52-real;70-real"
+  assert_str_eq "$(torch_cuda_arch_list)" "3.7 5.2 7.0"
+  assert_str_eq "$(tcnn_cuda_architectures)" "37,52,70"
 
   # Test the future flag
   CUDA_SUGGESTED_PTX+=(${CUDA_SUGGESTED_PTX+"${CUDA_SUGGESTED_PTX[@]}"} "${CUDA_FORWARD_PTX}")
   assert_str_eq "$(cmake_cuda_flags)" "3.7 5.2 7.0 7.0+PTX"
+  assert_str_eq "$(cmake_cuda_architectures)" "37-real;52-real;70-real;70-virtual"
+  assert_str_eq "$(torch_cuda_arch_list)" "3.7 5.2 7.0+PTX"
+  assert_str_eq "$(tcnn_cuda_architectures)" "37,52,70"
 
   if [ "${OS-}" = "Windows_NT" ]; then
     assert_str_eq "${CUDA_MINIMAL_DRIVER_VERSION}" 385.54
@@ -290,6 +296,40 @@ begin_test "Cuda 9 test"
   assert_unset CUDA_COMPATIBLE_DRIVER_VERSION
 )
 end_test
+
+begin_test "Cuda 11.4 order bug"
+(
+  setup_test
+  # Setup
+  CUDA_VERSION=11.4.100
+  CUDA_CARD_ARCHES=(86)
+
+  # Run code
+  cuda_capabilities "${CUDA_VERSION}"
+  suggested_architectures
+
+  # Test it
+  assert_array_values CUDA_ARCHES 35 37 50 52 53 60 61 62 70 72 75 80 87 86
+  assert_array_values CUDA_CODES 35 37 50 52 53 60 61 62 70 72 75 80 87 86
+  assert_str_eq "${CUDA_VERSION}" "11.4.100"
+  assert_array_values CUDA_SUGGESTED_ARCHES 86
+  assert_array_values CUDA_SUGGESTED_CODES 86
+  assert_str_eq "$(cmake_cuda_flags)" "8.6"
+
+  # Test the future flag
+  CUDA_SUGGESTED_PTX+=(${CUDA_SUGGESTED_PTX+"${CUDA_SUGGESTED_PTX[@]}"} "${CUDA_FORWARD_PTX}")
+  assert_str_eq "$(cmake_cuda_flags)" "8.6 8.6+PTX"
+
+  if [ "${OS-}" = "Windows_NT" ]; then
+    assert_str_eq "${CUDA_MINIMAL_DRIVER_VERSION}" 471.41
+    assert_str_eq "${CUDA_COMPATIBLE_DRIVER_VERSION}" 452.39
+  else
+    assert_str_eq "${CUDA_MINIMAL_DRIVER_VERSION}" 470.57.02
+    assert_str_eq "${CUDA_COMPATIBLE_DRIVER_VERSION}" 450.80.02
+  fi
+)
+end_test
+
 
 begin_test "Cuda 11.8 test"
 (
@@ -310,10 +350,16 @@ begin_test "Cuda 11.8 test"
   assert_array_values CUDA_SUGGESTED_ARCHES 37 52 70
   assert_array_values CUDA_SUGGESTED_CODES 37 52 70
   assert_str_eq "$(cmake_cuda_flags)" "3.7 5.2 7.0"
+  assert_str_eq "$(cmake_cuda_architectures)" "37-real;52-real;70-real"
+  assert_str_eq "$(torch_cuda_arch_list)" "3.7 5.2 7.0"
+  assert_str_eq "$(tcnn_cuda_architectures)" "37,52,70"
 
   # Test the future flag
   CUDA_SUGGESTED_PTX+=(${CUDA_SUGGESTED_PTX+"${CUDA_SUGGESTED_PTX[@]}"} "${CUDA_FORWARD_PTX}")
   assert_str_eq "$(cmake_cuda_flags)" "3.7 5.2 7.0 9.0+PTX"
+  assert_str_eq "$(cmake_cuda_architectures)" "37-real;52-real;70-real;90-virtual"
+  assert_str_eq "$(torch_cuda_arch_list)" "3.7 5.2 7.0 9.0+PTX"
+  assert_str_eq "$(tcnn_cuda_architectures)" "37,52,70,90"
 
   if [ "${OS-}" = "Windows_NT" ]; then
     assert_str_eq "${CUDA_MINIMAL_DRIVER_VERSION}" 522.06
@@ -322,6 +368,87 @@ begin_test "Cuda 11.8 test"
     assert_str_eq "${CUDA_MINIMAL_DRIVER_VERSION}" 520.61.05
     assert_str_eq "${CUDA_COMPATIBLE_DRIVER_VERSION}" 450.80.02
   fi
+)
+end_test
+
+begin_test "tcnn_cuda_architectures_from_cmake"
+(
+  setup_test
+
+  result="30,35,52,53"
+  assert_str_eq "$(tcnn_cuda_architectures_from_cmake "3.0 3.5 5.2 5.3+PTX")" "${result}"
+  assert_str_eq "$(tcnn_cuda_architectures_from_cmake "30;35;52;53+PTX")" "${result}"
+  assert_str_eq "$(tcnn_cuda_architectures_from_cmake "30-real;35-real;52-real;53-virtual")" "${result}"
+
+  result="37,52,70"
+  assert_str_eq "$(tcnn_cuda_architectures_from_cmake "3.7 5.2 7.0")" "${result}"
+  assert_str_eq "$(tcnn_cuda_architectures_from_cmake "37;52;70")" "${result}"
+  assert_str_eq "$(tcnn_cuda_architectures_from_cmake "37-real;52-real;70-real")" "${result}"
+
+  result="37,52,70"
+  assert_str_eq "$(tcnn_cuda_architectures_from_cmake "3.7 5.2 7.0 7.0+PTX")" "${result}"
+  assert_str_eq "$(tcnn_cuda_architectures_from_cmake "37;52;70;70+PTX")" "${result}"
+  assert_str_eq "$(tcnn_cuda_architectures_from_cmake "37-real;52-real;70-real;70-virtual")" "${result}"
+
+  result="37,52,70,90"
+  assert_str_eq "$(tcnn_cuda_architectures_from_cmake "3.7 5.2 7.0 9.0+PTX")" "${result}"
+  assert_str_eq "$(tcnn_cuda_architectures_from_cmake "37;52;70;90+PTX")" "${result}"
+  assert_str_eq "$(tcnn_cuda_architectures_from_cmake "37-real;52-real;70-real;90-virtual")" "${result}"
+
+)
+end_test
+
+begin_test "torch_cuda_arch_list_from_cmake"
+(
+  setup_test
+
+  result="3.0 3.5 5.2 5.3+PTX"
+  assert_str_eq "$(torch_cuda_arch_list_from_cmake "3.0 3.5 5.2 5.3+PTX")" "${result}"
+  assert_str_eq "$(torch_cuda_arch_list_from_cmake "30;35;52;53+PTX")" "${result}"
+  assert_str_eq "$(torch_cuda_arch_list_from_cmake "30-real;35-real;52-real;53-virtual")" "${result}"
+
+  result="3.7 5.2 7.0"
+  assert_str_eq "$(torch_cuda_arch_list_from_cmake "3.7 5.2 7.0")" "${result}"
+  assert_str_eq "$(torch_cuda_arch_list_from_cmake "37;52;70")" "${result}"
+  assert_str_eq "$(torch_cuda_arch_list_from_cmake "37-real;52-real;70-real")" "${result}"
+
+  result="3.7 5.2 7.0 7.0+PTX"
+  assert_str_eq "$(torch_cuda_arch_list_from_cmake "3.7 5.2 7.0 7.0+PTX")" "${result}"
+  assert_str_eq "$(torch_cuda_arch_list_from_cmake "37;52;70;70+PTX")" "${result}"
+  assert_str_eq "$(torch_cuda_arch_list_from_cmake "37-real;52-real;70-real;70-virtual")" "${result}"
+
+  result="3.7 5.2 7.0 9.0+PTX"
+  assert_str_eq "$(torch_cuda_arch_list_from_cmake "3.7 5.2 7.0 9.0+PTX")" "${result}"
+  assert_str_eq "$(torch_cuda_arch_list_from_cmake "37;52;70;90+PTX")" "${result}"
+  assert_str_eq "$(torch_cuda_arch_list_from_cmake "37-real;52-real;70-real;90-virtual")" "${result}"
+
+)
+end_test
+
+begin_test "nvcc_gencodes"
+(
+  setup_test
+
+  gencodes="-gencode=arch=compute_30,code=sm_30 -gencode=arch=compute_35,code=sm_35 -gencode=arch=compute_52,code=sm_52 -gencode=arch=compute_53,code=compute_53"
+  assert_str_eq "$(nvcc_gencodes "3.0 3.5 5.2 5.3+PTX")" "${gencodes}"
+  assert_str_eq "$(nvcc_gencodes "30;35;52;53+PTX")" "${gencodes}"
+  assert_str_eq "$(nvcc_gencodes "30-real;35-real;52-real;53-virtual")" "${gencodes}"
+
+  gencodes="-gencode=arch=compute_37,code=sm_37 -gencode=arch=compute_52,code=sm_52 -gencode=arch=compute_70,code=sm_70"
+  assert_str_eq "$(nvcc_gencodes "3.7 5.2 7.0")" "${gencodes}"
+  assert_str_eq "$(nvcc_gencodes "37;52;70")" "${gencodes}"
+  assert_str_eq "$(nvcc_gencodes "37-real;52-real;70-real")" "${gencodes}"
+
+  gencodes="-gencode=arch=compute_37,code=sm_37 -gencode=arch=compute_52,code=sm_52 -gencode=arch=compute_70,code=sm_70 -gencode=arch=compute_70,code=compute_70"
+  assert_str_eq "$(nvcc_gencodes "3.7 5.2 7.0 7.0+PTX")" "${gencodes}"
+  assert_str_eq "$(nvcc_gencodes "37;52;70;70+PTX")" "${gencodes}"
+  assert_str_eq "$(nvcc_gencodes "37-real;52-real;70-real;70-virtual")" "${gencodes}"
+
+  gencodes="-gencode=arch=compute_37,code=sm_37 -gencode=arch=compute_52,code=sm_52 -gencode=arch=compute_70,code=sm_70 -gencode=arch=compute_90,code=compute_90"
+  assert_str_eq "$(nvcc_gencodes "3.7 5.2 7.0 9.0+PTX")" "${gencodes}"
+  assert_str_eq "$(nvcc_gencodes "37;52;70;90+PTX")" "${gencodes}"
+  assert_str_eq "$(nvcc_gencodes "37-real;52-real;70-real;90-virtual")" "${gencodes}"
+
 )
 end_test
 

@@ -27,7 +27,7 @@ source "${VSI_COMMON_DIR}/linux/aliases.bsh"
 #
 # Set of functions to make using dockers easier
 #
-# .. var:: DOCKER_VOLUME_PATTERN
+# .. var:: VSI_DOCKER_SHORT_VOLUME_PATTERN
 #
 # Regex pattern for matching docker volume short form
 #
@@ -41,7 +41,7 @@ source "${VSI_COMMON_DIR}/linux/aliases.bsh"
 #    3 - flags
 #**
 # https://www.debuggex.com/r/lJRoX_sSnhOKpEER
-DOCKER_VOLUME_PATTERN='^([a-zA-Z]:[/\][^:]*|[^:]+):([a-zA-Z]:[/\][^:]*|[^:]+)((:ro|:rw|:z|:Z|:r?shared|:r?slave|:r?private|:delegated|:cached|:consistent|:nocopy)*)$'
+VSI_DOCKER_SHORT_VOLUME_PATTERN='^([a-zA-Z]:[/\][^:]*|[^:]+):([a-zA-Z]:[/\][^:]*|[^:]+)((:ro|:rw|:z|:Z|:r?shared|:r?slave|:r?private|:delegated|:cached|:consistent|:nocopy)*)$'
 #**
 # .. function:: is_dir_and_not_exist
 #
@@ -151,6 +151,7 @@ function is_readonly_docker_volume()
 
 function is_readonly_docker_compose_long_volume()
 {
+  echo "${FUNCNAME[0]} is deprecated: Use vsi::docker::is_docker_compose_volume_readonly instead" >&2
   local IFS=$'\n'
   local flags=(${1}) # noquotes
   local flag
@@ -163,6 +164,41 @@ function is_readonly_docker_compose_long_volume()
 
   return 1
 }
+
+#**
+# .. function:: vsi::docker::is_docker_compose_volume_readonly
+#
+# :Arguments: * ``$1`` - A ``VSI_COMPOSE_VOLUME_FLAGS`` string to check (Not the whole array)
+# :Return Value: * ``0`` if it is readonly
+#                * ``1`` it if is writeable (according to docker flags only)
+#
+# Checks to see if a volume flags string contains the read only attribute.
+#
+# .. note::
+#
+#   It is still possible the underlying directory is not writeable, this will not check that. Used mostly for docker volumes, where this is not an issue.
+#
+# .. seealso::
+#
+#   vsi::docker::get_compose_volumes
+#     Parses docker compose volumes and generates ``VSI_COMPOSE_VOLUME_FLAGS``
+#**
+
+function vsi::docker::is_docker_compose_volume_readonly()
+{
+  local IFS=$'\n'
+  local flags=(${1}) # noquotes
+  local flag
+
+  for flag in ${flags[@]+"${flags[@]}"}; do
+    if [ "${flag}" == "read_only = true" ]; then
+      return 0
+    fi
+  done
+
+  return 1
+}
+
 
 #**
 # .. function:: container_get_label
@@ -315,7 +351,7 @@ function docker_host_dir()
 
 function docker_parse_volume_string()
 {
-  if [[ ${1} =~ ${DOCKER_VOLUME_PATTERN} ]]; then
+  if [[ ${1} =~ ${VSI_DOCKER_SHORT_VOLUME_PATTERN} ]]; then
     volume_host="${BASH_REMATCH[1]}"
     volume_docker="${BASH_REMATCH[2]}"
     volume_flags="${BASH_REMATCH[3]}"
@@ -560,6 +596,7 @@ function _Docker()
 
 function parse_docker_compose_volumes()
 {
+  echo "${FUNCNAME[0]} is deprecated: Use vsi::docker::get_compose_volumes instead" >&2
   local PREFIX="${2-}"
   local IFS=$'\n'
   DOCKER_VOLUME_LINES=(\
@@ -702,6 +739,8 @@ function docker_compose_list_internal_volumes()
 
 function docker_compose_volumes()
 {
+  echo "${FUNCNAME[0]} is deprecated: Use vsi::docker::get_compose_volumes instead" >&2
+
   local volume_line
   DOCKER_VOLUME_SOURCES=()
   DOCKER_VOLUME_TARGETS=()
@@ -723,7 +762,7 @@ function docker_compose_volumes()
 
     if [ "${volume_line:0:1}" = "S" ]; then # Short format
       volume_line="${volume_line:1}"
-      if [[ ${volume_line} =~ ${DOCKER_VOLUME_PATTERN} ]]; then
+      if [[ ${volume_line} =~ ${VSI_DOCKER_SHORT_VOLUME_PATTERN} ]]; then
         DOCKER_VOLUME_SOURCES[count]="${BASH_REMATCH[1]}"
         DOCKER_VOLUME_TARGETS[count]="${BASH_REMATCH[2]}"
         DOCKER_VOLUME_FORMATS[count]="short"
@@ -752,6 +791,109 @@ function docker_compose_volumes()
       fi
     fi
   done
+}
+
+#**
+# .. function:: vsi::docker::get_compose_volumes
+#
+# :Arguments: * ``$1`` - Name of service of interest
+#             * [``$2``] - Prefix to volume names
+# :Input: **stdin** - :file:`yarp`'d docker compose yaml file
+# :Output: * ``VSI_COMPOSE_VOLUME_SOURCES`` - List of sources
+#          * ``VSI_COMPOSE_VOLUME_TARGETS`` - Corresponding list of targets
+#          * ``VSI_COMPOSE_VOLUME_FLAGS`` - Corresponding list of mount flags (newline separated partial dump from :file:`yarp`)
+#          * ``VSI_COMPOSE_VOLUME_TYPES`` - Corresponding list of volume types (e.g. ``bind``, ``volume``, ``tmpfs``, etc...)
+#
+# Get volume lists from the :file:`yarp` output of a docker-compose configuration file.
+#
+# .. rubric:: Usage
+#
+# .. code-block:: bash
+#
+#    vsi::docker::get_compose_volumes nb < <(docker compose config | yarp)
+#
+# .. seealso::
+#    :file:`yarp`
+#**
+function vsi::docker::get_compose_volumes()
+{
+  local volume_line
+  VSI_COMPOSE_VOLUME_SOURCES=()
+  VSI_COMPOSE_VOLUME_TARGETS=()
+  VSI_COMPOSE_VOLUME_FLAGS=()
+  VSI_COMPOSE_VOLUME_TYPES=()
+  local -i count=0
+
+  local short_flag
+
+  # Regex for parsing both long format (with keys) and short format mounts (without keys)
+  local pattern="services\\.${1}\\.volumes\\[([0-9]+)](\\.[^ ]*)? = (.*)"
+  #BASH_REMATCH 0 - line, 1 - index, 2 - .key 3 - value/entire short format
+
+  local line
+  local index
+  while read -r line; do
+    if [[ ${line} =~ ${pattern} ]]; then
+      index=${BASH_REMATCH[1]}
+
+      case "${BASH_REMATCH[2]#.}" in
+        source)
+          VSI_COMPOSE_VOLUME_SOURCES[index]=${BASH_REMATCH[3]}
+          ;;
+        target)
+          VSI_COMPOSE_VOLUME_TARGETS[index]=${BASH_REMATCH[3]}
+          ;;
+        type)
+          VSI_COMPOSE_VOLUME_TYPES[index]=${BASH_REMATCH[3]}
+          ;;
+
+        # There is no key in the short volume format, so BASH_REMATCH[2 would be an empty string
+        # Note: Docker-compose 2 never outputs short format when you call the config command, so this is largely for backwards compatibility and corner cases.
+        "")
+          if [[ ${BASH_REMATCH[3]} =~ ${VSI_DOCKER_SHORT_VOLUME_PATTERN} ]]; then
+            VSI_COMPOSE_VOLUME_SOURCES[index]=${BASH_REMATCH[1]}
+            VSI_COMPOSE_VOLUME_TARGETS[index]=${BASH_REMATCH[2]}
+            short_flag=${BASH_REMATCH[3]}
+
+            if is_internal_docker_volume "${VSI_COMPOSE_VOLUME_SOURCES[index]}"; then
+              VSI_COMPOSE_VOLUME_TYPES[index]=volume
+            else
+              VSI_COMPOSE_VOLUME_TYPES[index]=bind
+            fi
+
+            VSI_COMPOSE_VOLUME_FLAGS[index]="bind.create_host_path = true"
+
+            # These are the only 3 flags mentioned in https://docs.docker.com/compose/compose-file/05-services/#short-syntax-5 that need addressing
+            if [[ ${short_flag} = *:ro* ]]; then
+              VSI_COMPOSE_VOLUME_FLAGS[index]+=$'\nread_only = true'
+            fi
+            # Cannot be z and Z at the same time
+            if [[ ${short_flag} = *:Z* ]]; then
+              VSI_COMPOSE_VOLUME_FLAGS[index]+=$'\nbind.selinux = Z'
+            elif [[ ${short_flag} = *:z* ]]; then
+              VSI_COMPOSE_VOLUME_FLAGS[index]+=$'\nbind.selinux = z'
+            fi
+          else
+            echo "${FUNCNAME[0]}: Unrecognized short volume format: ${line}" >&2
+          fi
+          ;;
+
+        # All other flags are added to VSI_COMPOSE_VOLUME_FLAGS, new line separated
+        *)
+          VSI_COMPOSE_VOLUME_FLAGS[index]="${VSI_COMPOSE_VOLUME_FLAGS[index]+${VSI_COMPOSE_VOLUME_FLAGS[index]}}${VSI_COMPOSE_VOLUME_FLAGS[index]:+$'\n'}${BASH_REMATCH[2]#.} = ${BASH_REMATCH[3]}"
+          ;;
+      esac
+    fi
+  done
+
+  # The flags array can be non-contiguous. Fill in empty holes to prevent unbound variable errors
+  if [ "${#VSI_COMPOSE_VOLUME_FLAGS[@]}" != "${#VSI_COMPOSE_VOLUME_SOURCES[@]}" ]; then
+    for index in "${!VSI_COMPOSE_VOLUME_SOURCES[@]}"; do
+      if [ -z "${VSI_COMPOSE_VOLUME_FLAGS[index]+set}" ]; then
+        VSI_COMPOSE_VOLUME_FLAGS[index]=""
+      fi
+    done
+  fi
 }
 
 #**

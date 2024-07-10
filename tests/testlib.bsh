@@ -95,6 +95,7 @@ fi
 
 set -eu
 
+source "${VSI_COMMON_DIR}/linux/source_once.bsh"
 if [ "${TESTLIB_SHOW_TIMING-0}" == "1" ] || [[ ${OSTYPE-} = darwin* ]]; then
   . "${VSI_COMMON_DIR}/linux/time_tools.bsh"
 fi
@@ -775,28 +776,48 @@ testlib_print_test_trace()
         {
           cat -
         }
+      elif [ -z "${_column_table_flags+set}" ]; then
+        _column_table_flags=() # Not a local variable (cached)
+        # --table-wrap wasn't added until 2.30, and RHEL7 is 2.23
+        if [ -t 1 ] && column --table-wrap 2 -V &> /dev/null; then
+          _column_table_flags+=(--table-wrap 2 -l 2)
+        else
+          # Mostly for CI, tell column not to wrap.
+          _column_table_flags+=(-c 0)
+
+          # Width based on CI web page tests:
+          # Github actions: based on browser width (no tty)
+          # Appveyor: 129 (no tty)
+          # CircleCI: 175 (tty)
+          # Gitlab: based on browser width (no tty)
+          # Because CircleCI is faking a TTY, and doing a really bad job at it,
+          # you need to set the environment variable COLUMNS to 175 to get a good
+          # output, or else the wrapping can go crazy as it approaches 1, and become
+          # impossible to read
+        fi
       fi
 
       if [ "${err}" = "${xtrace}" ]; then
-        echo "-- stderr --"
+        echo "-- stderr & xtrace --"
       else
         echo "-- xtrace --"
       fi
-      grep -v -e $'^\+[^\t]*\tend_test' \
-              -e $'^\+[^\t]*\tset +x -e' <"${xtrace}" |
-        sed $'s|^[^+]| \t&|' |
-        column -c1 -s $'\t' -t |
-        sed 's/^/    /'
+      sed $'/^+[^\t]*\tend_test/d;  # Hide end_test and set +x -e, as they are just distractions.
+            /^+[^\t]*\tset +x -e/d; # Leaves test_status=... because it is useful
+            s|^[^+]| \t&|;
+            s/^/  /' <"${xtrace}" |
+        column -t -s $'\t' ${_column_table_flags[@]+"${_column_table_flags[@]}"}
+        # Notice: the column command has to come last in the pipe chain, or else you will have to add `-c ${COLUMNS}` or similar
     fi
     if [ "${TESTLIB_REDIRECT_OUTPUT}" -ge "2" ]; then
       if [ "${err}" != "${xtrace}" ]; then
         echo "-- stderr --"
-        sed 's/^/    /' <"${err}"
+        sed 's/^/  /' <"${err}"
       fi
     fi
     if [ "${TESTLIB_REDIRECT_OUTPUT}" -ge "3" ]; then
       echo "-- stdout --"
-      sed 's/^/    /' <"${out}"
+      sed 's/^/  /' <"${out}"
     fi
     echo "-- EOF "${test_description}" --"
   ) 1>&${test_output}

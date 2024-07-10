@@ -64,11 +64,13 @@ function process_line(str)
 
   # Split the line into key and the remainder after the colon
   remain = substr(str, 1+max(RLENGTH, indent))
-  key = match(remain, /^[^ '":]+ *: */)   #"# VS Code parser error
+  # key = match(remain, /^[^ '":]+ *: */) #"# VS Code parser error
+  key = match(remain, /^[^ '":]+ *(: *$|:  *)/) #"# VS Code parser error
   if ( key )
   {
     tmp = RLENGTH
-    match(remain, / *: */)
+    # match(remain, / *: */)
+    match(remain, / *(: *$|:  *)/)
     key = substr(remain, 1, tmp-RLENGTH)
     remain = substr(remain, tmp+1)
   }

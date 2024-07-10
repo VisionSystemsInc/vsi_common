@@ -9,11 +9,11 @@ source "${TESTLIB_DIR}/test_utils.bsh"
 source "${VSI_COMMON_DIR}/linux/just_files/docker_functions.bsh"
 source "${VSI_COMMON_DIR}/linux/just_files/just_functions.bsh"
 source "${VSI_COMMON_DIR}/linux/elements.bsh"
+source "${VSI_COMMON_DIR}/linux/yarp"
 
 setup()
 {
-  compose_file='version: "3.2"
-services:
+  compose_file='services:
   nb:
     image: blah
     volumes:
@@ -29,8 +29,7 @@ services:
 volumes:
   test:'
 
-  compose_file_long='version: "3.2"
-services:
+  compose_file_long='services:
   nb:
     image: blah
     volumes:
@@ -291,6 +290,49 @@ begin_test "Test DOCKER_COMPOSE var"
 end_test
 
 begin_test "parse docker compose volumes"
+(
+  setup_test
+
+  compose_file_long='services:
+  nb:
+    image: blah
+    volumes:
+    - /tmp:/mnt
+    - source: /home/user/src
+      target: /src
+      type: bind
+      read_only: true
+    - test:/opt:ro
+    - source: internal
+      target: /src
+      type: volume
+    - target: /tmp2
+      type: tmpfs
+  foo: &foo_anchor
+    image: bar
+    volumes:
+  bar:
+    image: foo
+volumes:
+  test:'
+
+  ans_sources=(/tmp /home/user/src test internal)
+  ans_targets=(/mnt /src /opt /src /tmp2)
+  ans_flags=("bind.create_host_path = true"
+             "read_only = true"
+             $'bind.create_host_path = true\nread_only = true'
+             "")
+  ans_types=(bind bind volume volume tmpfs)
+
+  vsi::docker::get_compose_volumes nb < <(echo "${compose_file_long}" | yarp)
+  assert_array_values VSI_COMPOSE_VOLUME_SOURCES "${ans_sources[@]}"
+  assert_array_values VSI_COMPOSE_VOLUME_TARGETS "${ans_targets[@]}"
+  assert_array_values VSI_COMPOSE_VOLUME_FLAGS   "${ans_flags[@]}"
+  assert_array_values VSI_COMPOSE_VOLUME_TYPES   "${ans_types[@]}"
+)
+end_test
+
+begin_test "parse docker compose volumes deprecated"
 (
   setup_test
 

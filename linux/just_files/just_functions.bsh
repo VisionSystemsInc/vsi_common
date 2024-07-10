@@ -1073,7 +1073,22 @@ function unknownify()
 # In this case, there is no need to add :var:`extra_args`, :func:`get_args` does this already
 #**
 
-declare -i extra_args
+if [ "${bash_feature_declare_global}" = "0" ]; then
+  declare -ig extra_args=0
+  declare -ig get_args_args_used
+else
+  # A very complicated bug will arise if another file (e.g. `just_env` or `just_functions.bsh` itself) is sourced _inside_ a function. This will result in declaring extra_args/get_args_args_used as local variables that that function, and thus losing their integer status when the function returns. The best solution is setting global, but there is no known way to set a global _and_ integer variable (with eval) in bash 4.1 and older. So just print this message.
+  if [ "${#BASH_SOURCE[@]}" -gt "2" ] && ! declare -p extra_args &> /dev/null; then
+    echo "Warning: Your bash is too old to load just_functions from within a function." >&2
+    echo "Either source ${BASH_SOURCE[0]} at the top level script or declare the following:" >&2
+    echo "  declare -i extra_args=0" >&2
+    echo "  declare -i get_args_args_used" >&2
+    set +xv
+    false
+  fi
+  declare -i extra_args
+  declare -i get_args_args_used
+fi
 
 #**
 # .. function:: justify
@@ -1238,7 +1253,6 @@ function callify()
 #   behavior
 #**
 
-declare -i get_args_args_used
 function get_args()
 {
   local next_break
@@ -1344,6 +1358,32 @@ function safe_load() # Loads a very simple safe config file, and sets environmen
     IFS="${JUST_SAFE_LOAD_DELIMITER}" read -r safe_load_tmp_key "${safe_load_tmp_key}" <<< "${line}"
     export "${safe_load_tmp_key}"
   done < "${1}"
+}
+
+#**
+# .. function:: just_error
+#
+# Helper function to be combined with calls to print a useful error message on error.
+#
+# Errors captured by :func:`just_functions.bsh just_error` will not print out an error stack.
+#
+# :Arguments: Inputs ``$1...`` - Message to echo on error
+#
+# :Return Value: * Returns the same return value of the previously run command
+#
+# :Output: Echos message
+#
+# .. rubric:: Example
+#
+# .. code-block:: bash
+#
+#     run_some_command || just_error "That command failed, here's some helpful advise"
+#**
+function just_error()
+{
+  JUST_IGNORE_EXIT_CODES=${?}
+  echo ${@+"${@}"}
+  return "${JUST_IGNORE_EXIT_CODES}"
 }
 
 #**

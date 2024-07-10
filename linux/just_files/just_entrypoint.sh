@@ -95,8 +95,11 @@ set -eu
 # shell-init: error retrieving current directory: getcwd: cannot access parent directories: No such file or directory
 # chdir: error retrieving current directory: getcwd: cannot access parent directories: No such file or directory
 # Making sure we are in / prevents this issue altogether
+: ${JUST_ENTRYPOINT_LOCAL_CWD=${PWD}}
+export JUST_ENTRYPOINT_LOCAL_CWD
 cd /
 
+# source "${VSI_COMMON_DIR}/linux/source_once.bsh"
 source "${VSI_COMMON_DIR}/linux/elements.bsh"
 
 #**
@@ -153,6 +156,12 @@ function load_just_settings()
     source "${VSI_COMMON_DIR}/linux/just_files/just_env" "${just_settings}"
   done
 }
+PS4=$'+\x1b[0m${BASH_SOURCE[1]+}${BASH_SOURCE[0]##*/}:${LINENO}${FUNCNAME[0]:+:${FUNCNAME[0]}()}\t'
+# set -xv
+if [ "${bash_feature_declare_global}" = "1" ]; then
+  declare -i extra_args=0
+  declare -i get_args_args_used
+fi
 
 if [ "${ALREADY_RUN_ONCE+set}" != "set" ]; then
 
@@ -185,6 +194,9 @@ if [ "${ALREADY_RUN_ONCE+set}" != "set" ]; then
     JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS="${JUST_DOCKER_ENTRYPOINT_CHMOD_DIRS-${JUST_DOCKER_ENTRYPOINT_INTERNAL_VOLUMES-}}" \
     /usr/bin/env bash "${VSI_COMMON_DIR}/linux/just_files/just_entrypoint_functions"
   )
+  # Workaround for gosu blocking a CVE we don't care about
+  export GOSU_PLEASE_LET_ME_BE_COMPLETELY_INSECURE_I_GET_TO_KEEP_ALL_THE_PIECES="I've seen things you people wouldn't believe. Attack ships on fire off the shoulder of Orion. I watched C-beams glitter in the dark near the Tannhäuser Gate. All those moments will be lost in time, like tears in rain. Time to die."
+
   # Rerun entrypoint as user now, (skipping the root part via ALREADY_RUN_ONCE)
   ALREADY_RUN_ONCE=1 exec gosu ${DOCKER_USERNAME} /usr/bin/env bash "${file}" ${@+"${@}"}
 fi
@@ -223,6 +235,8 @@ done
 
 # Unexport it
 unset shell
+cd "${JUST_ENTRYPOINT_LOCAL_CWD}"
+unset JUST_ENTRYPOINT_LOCAL_CWD
 
 if [ "${run_just}" = "1" ]; then
   source "${VSI_COMMON_DIR}/linux/just"

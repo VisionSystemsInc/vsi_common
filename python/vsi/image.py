@@ -43,11 +43,11 @@ def normalized_cross_correlation_2d(template: "np.floating[T]",
 
   # If this happens, it is probably a mistake
   if np.ndim(template) > np.ndim(image):
-    raise ValueError("Template has more dimenstions than img. "
+    raise ValueError("Template has more dimensions than image. "
                      "Arguments probably need to be swapped.")
   if len([i for i in range(np.ndim(template))
                      if template.shape[i] > image.shape[i]]) > 0:
-    raise ValueError("Template is larger than img. "
+    raise ValueError("Template is larger than image. "
                      "Arguments probably need to be swapped.")
 
   template = template - np.mean(template)
