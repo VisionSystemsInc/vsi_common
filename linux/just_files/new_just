@@ -681,6 +681,57 @@ function write_dockerfile()
 
             ###############################################################################
 
+            FROM dep_stage as some_package
+
+# COPY scripts/pip_8210 /src/scripts/
+# COPY requirements.txt /src/
+# RUN \
+#     # Crete wheel storage
+#     mkdir -p /wheelhouse; \
+#     # pypa/pip#8210 support
+#     # Create temporary venv build environment
+#     /usr/local/conda-python/bin/python3 -m venv /tmp/venv; \
+#     . /tmp/venv/bin/activate; \
+#     # Install generic build dependencies
+#     /src/scripts/pip_8210 install wheel # cmake ninja;
+
+
+            ###############################################################################
+
+            #T# The wheelhouse stage is used to cache wheels before they get installed. These
+            #T# wheels fall into 3 main catagories:
+            #T# 1. Large wheels that take a while to download. A 2 GB wheel like torch can
+            #T#    take minutes to download each time.
+            #T# 2. Wheel that take a while to compile (multiple wheels should be done in
+            #T#    separate stages and copied to wheelhouse
+            #T# 3. Wheel that need to not be different from the ones on pypi (requires a
+            #T#    version number patch do they do not collide with on on pypi)
+            #T# This method was chosen over `pip cache`
+            FROM dep_stage as wheelhouse
+
+# COPY scripts/pip_8210 /src/scripts/
+# COPY requirements.txt /src/
+# RUN \
+#     # Crete wheel storage
+#     mkdir -p /wheelhouse; \
+#     # pypa/pip#8210 support
+#     # Create temporary venv build environment
+#     /usr/local/conda-python/bin/python3 -m venv /tmp/venv; \
+#     . /tmp/venv/bin/activate; \
+#     # Install generic build dependencies
+#     /src/scripts/pip_8210 install wheel # cmake ninja;
+
+# # download torch
+# RUN \
+#     # Activate venv
+#     . /tmp/venv/bin/activate; \
+#     # Download torch wheel
+#     /src/scripts/pip_8210 download --extra-index-url https://download.pytorch.org/whl -d /wheelhouse --no-deps torch; \
+#     # Install torch as dependency for tiny-cuda-nn
+#     /src/scripts/pip_8210 install /wheelhouse/torch*.whl
+
+            ###############################################################################
+
             #T# The python_cache stage is a build stage intended to make the operation of the
             #T# "pip-sync" and "pip-compile" commands more efficient. It also helps to
             #T# minimize the size of the final build stage, which does not require any build
