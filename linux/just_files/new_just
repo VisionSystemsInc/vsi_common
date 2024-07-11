@@ -259,6 +259,10 @@ function write_project_env()
             # Remove development packages from deploy image
             : ${'"${PROJECT_PREFIX}"'_REMOVE_DEV_PACKAGES=0}
 
+            : ${'"${PROJECT_PREFIX}"'_NVIDIA_VISIBLE_DEVICES=all}
+            : ${'"${PROJECT_PREFIX}"'_CUDA_VISIBLE_DEVICES=}
+            : ${'"${PROJECT_PREFIX}"'_NVIDIA_DRIVER_CAPABILITIES=compute,graphics,utility}
+
             ###########
             # Docker  #
             # Volumes #
@@ -719,10 +723,10 @@ function write_dockerfile()
             #T# 5) just shell
             #T# 6) python -c "import osgeo.gdal_array" # Should not create an error message
 
-            #T# Call vsi::pip-tools::fake_package for each editable package
-            RUN vsi::pip-tools::fake_package "'"$(docker_add_quote_escape "/src/${RELATIVE_PATH}")"'" vsi python/vsi; \
-                #T# vsi::pip-tools::fake_package /src/external/editable_package package_name {optional_modules_subdir_paths}; \
-                vsi::pip-tools::fake_package /src '"${PROJECT_NAME}"';
+            #T# Call pip-fake for each editable package
+            RUN pip-fake "'"$(docker_add_quote_escape "/src/${RELATIVE_PATH}")"'" vsi python/vsi; \
+                #T# pip-fake /src/external/editable_package package_name {optional_modules_subdir_paths}; \
+                pip-fake /src '"${PROJECT_NAME}"';
 
             ARG SKIP_PIP_SYNC
             #T# Sometimes you need to fix the image so that pip-compile can be run, but
@@ -739,8 +743,8 @@ function write_dockerfile()
             #T#       }; \
             #T#       # Add numpy to the prinstall line to install numpy first,
             #T#       # so that the gdal install works.
-            #T#       vsi::pip-tools::preinstall /src/requirements.txt numpy; \
-                  vsi::pip-tools::preinstall /src/requirements.txt; \
+            #T#       pip-8210 install /src/requirements.txt numpy; \
+                  pip-8210 install /src/requirements.txt; \
                   # Install all packages into the image
                   pip-sync -v /src/requirements.txt; \
                 fi; \
@@ -1036,7 +1040,6 @@ function write_docker_compose_yml()
                   <<: *common_environment
                   JUSTFILE: /src/docker/'"${APP_NAME}"'.Justfile
                   JUST_SETTINGS: /src/'"${PROJECT_NAME}"'.env
-            #     runtime: nvidia  # Uncomment for nvidia gpu support
             #     cap_add:
             #       - SYS_PTRACE # Useful for gdb
                 volumes:
@@ -1588,7 +1591,7 @@ function new_just()
     #**
     if set_default PYTHON_PACKAGE \
                    "$(echo "${PROJECT_NAME-}" | tr '[A-Z]' '[a-z]' | sed -${sed_flag_rE} 's|[^a-z0-9_]+||g')" \
-                   "Docker Repo for images"; then
+                   "Python package name"; then
       PYTHON_PACKAGE="$(echo "${PYTHON_PACKAGE-}" | tr '[A-Z]' '[a-z]' | sed -${sed_flag_rE} 's|[^a-z0-9_]+||g')"
     fi
   fi
@@ -1736,7 +1739,7 @@ function new_just()
           "git add $(quote_escape "${SETUPFILE}") .gitmodules")
   fi
 
-  cmds+=('sed "${sed_flags_i[@]}" '"'"'s|^JUST_VERSION=.*$|JUST_VERSION='"'"'"$(. '"${RELATIVE_PATH}"'/linux/just_files/just_version.bsh; echo "${JUST_VERSION}")|" foo.env')
+  cmds+=('sed "${sed_flags_i[@]}" '"'"'s|^JUST_VERSION=.*$|JUST_VERSION='"'"'"$(. '"${RELATIVE_PATH}"'/linux/just_files/just_version.bsh; echo "${JUST_VERSION}")|" '"$(quote_escape "${PROJECT_NAME}")"'.env')
 
   cmds+=("git add .gitignore README.md $(quote_escape "${JUSTFILE}") $(quote_escape "${PROJECT_NAME}").env")
 
