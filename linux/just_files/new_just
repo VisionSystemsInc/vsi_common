@@ -278,13 +278,12 @@ function write_project_env()
             : ${'"${PROJECT_PREFIX}"'_VSI_COMMON_DIR_DOCKER="/vsi"}
             : ${'"${PROJECT_PREFIX}"'_VSI_COMMON_DIR_TYPE=bind}
 
-
             #T# Add graphical support for Linux containers on Linux
             if [ -d "/tmp/.X11-unix" ]; then
               '"${PROJECT_PREFIX}"'_VOLUMES=("/tmp/.X11-unix:/tmp/.X11-unix:ro"
                   ${'"${PROJECT_PREFIX}"'_VOLUMES+"${'"${PROJECT_PREFIX}"'_VOLUMES[@]}"})
             fi
-
+            #T#
             #T# Example of a Dynamic Volume that is created programmatically instead of
             #T# always there. This directory is added to the container using '"${PROJECT_PREFIX}_${APP_NAME_UPPER}"'_VOLUMES.
             #T# This mechanism is better when the directory doesn'"'"'t exist, as the directory
@@ -313,7 +312,7 @@ function write_project_env()
             #########
             # Other #
             #########
-
+            #T#
             #T# Start adding your own '"${PROJECT_PREFIX}"'_ variables here
 
             ###############################################################################
@@ -341,11 +340,10 @@ function write_project_env()
             # single host. This way all of the docker resources are prefixed with a unique
             # name and do not collide
             source "${VSI_COMMON_DIR}/linux/just_files/docker_functions.bsh" # define docker_compose_sanitize_project_name
-            : ${COMPOSE_PROJECT_NAME=$(docker_compose_sanitize_project_name "${'"${PROJECT_PREFIX}"'_CWD}" "${'"${PROJECT_PREFIX}"'_USERNAME}")}
-            ' >> "${1}"
+            : ${COMPOSE_PROJECT_NAME=$(docker_compose_sanitize_project_name "${'"${PROJECT_PREFIX}"'_CWD}" "${'"${PROJECT_PREFIX}"'_USERNAME}")}' >> "${1}"
     if [ "${USE_PIP_TOOLS}" = "1" ]; then
-      echo ': ${CUSTOM_COMPILE_COMMAND="just pip-compile"}
-            ' >> "${1}"
+      uwecho '
+              : ${CUSTOM_COMPILE_COMMAND="just pip-compile"}' >> "${1}"
     fi
   fi
 }
@@ -383,8 +381,7 @@ function write_readme_md()
   fi
 
   uwecho   '${just_cmd} help
-            ```
-            ' >> "${1}"
+            ```' >> "${1}"
 }
 
 ################
@@ -702,7 +699,7 @@ function write_dockerfile()
             #T# - Editing your requirements.in file
             #T# - just pip-compile
             #T# - just sync # (optionally updates the docker image)
-
+            #T#
             #T# A more complicated python package, for example, is GDAL
             #T# - The GDAL Docker recipe will build the GDAL C Library for you
             #T# - The GDAL pypi package needs numpy installed before it is built,
@@ -722,7 +719,7 @@ function write_dockerfile()
             #T# 4) just sync # (optionally updates the docker image)
             #T# 5) just shell
             #T# 6) python -c "import osgeo.gdal_array" # Should not create an error message
-
+            #T#
             #T# Call pip-fake for each editable package
             RUN pip-fake "'"$(docker_add_quote_escape "/src/${RELATIVE_PATH}")"'" vsi python/vsi; \
                 #T# pip-fake /src/external/editable_package package_name {optional_modules_subdir_paths}; \
@@ -790,7 +787,7 @@ function write_dockerfile()
 
   uwecho   '      ; \
                 rm -rf /var/lib/apt/lists/*
-
+            #T#
             #T# Another typical example of installing a package, using it, and then removing
             #T# it by the end of the RUN command to minimize the size of the docker image
             #T# RUN build_deps="wget ca-certificates"; \
@@ -815,11 +812,9 @@ function write_dockerfile()
             ADD ["'"$(docker_add_quote_escape "${PROJECT_NAME}.env")"'", "/src/"]
 
             ADD ["'"$(docker_add_quote_escape docker/"${APP_NAME}.Justfile")"'", "/src/docker/"]
-
             ' >> "${1}"
     standard_env >> "${1}"
     uwecho '
-
             ENTRYPOINT ["/usr/local/bin/tini", "--", "/usr/bin/env", "bash", "/vsi/linux/just_files/just_entrypoint.sh"]
             #T# Does not require execute permissions, unlike:
             #T# ENTRYPOINT ["/usr/local/bin/tini", "--", "/vsi/linux/just_files/just_entrypoint.sh"]
@@ -1235,10 +1230,12 @@ function format_tutorial()
 {
   if [ "${USE_TUTORIAL-}" = "1" ]; then
     # Convert #T# to #
-    sed "${sed_flags_i[@]}" '/^ *#T# /{ s/#T#/#/; }' "${1}"
+    sed "${sed_flags_i[@]}" '/^ *#T# /{ s/#T#/#/; };
+                             # Clear blank lines
+                             s/^ *#T#$//' "${1}"
   else
     # Remove #T# lines
-    sed "${sed_flags_i[@]}" '/^ *#T# /d' "${1}"
+    sed "${sed_flags_i[@]}" '/^ *#T#/d' "${1}"
   fi
 }
 
