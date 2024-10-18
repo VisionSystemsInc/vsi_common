@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+
+if [[ ${-} != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
+set -eu
+
+if [ -z "${VSI_COMMON_DIR+set}" ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
+
+source "${VSI_COMMON_DIR}/tests/testlib.bsh"
+source "${VSI_COMMON_DIR}/linux/colors.bsh"
+
+function run_troubleshoot_file()
+{
+  if [ -r "${1}" ]; then
+  (
+    source "${1}"
+    for test_name in $(compgen -A function troubleshoot_); do
+      begin_test "${test_name}"
+      xtrace=/dev/null
+      (
+          setup_test
+          "${test_name}"
+      )
+      end_test
+      if [ "${test_status}" != "0" ]; then
+        error_name=error_${test_name#troubleshoot_}
+        "${error_name}"
+      fi
+    done
+    TESTLIB_TEST_FILENAME=$(basename "${1}") atexit
+  ) || :
+  else
+    echo "Skipping ${1}, cannot read"
+  fi
+}
+
+function run_troubleshooter()
+{
+  files=()
+
+  if [ -r ".troubleshoot" ]; then
+    while IFS=$'\n' read -r file || [ -n "${file}" ]; do
+      files+=("${file}")
+    done < ".troubleshoot"
+  fi
+
+  if [ -d ".troubleshoot.d" ]; then
+    set_optflag nullglob
+    files+=(".troubleshoot.d"/*)
+    reset_optflag nullglob
+  fi
+
+  if (( ${#} )); then
+    all_files=(${files[@]+"${files[@]}"})
+    files=()
+    while (( ${#} )); do
+      for file in ${all_files[@]+"${all_files[@]}"}; do
+        if [ "$(basename "${file}")" == "${1}" ]; then
+          files+=("${file}")
+        fi
+      done
+      shift 1
+    done
+  fi
+
+  for file in ${files+"${files[@]}"}; do
+    run_troubleshoot_file "${file}"
+  done
+
+  trap -- exit
+}
+
+if [ "${BASH_SOURCE[0]}" = "${0}" ] || [ "$(basename "${BASH_SOURCE[0]}")" = "${0}" ]; then
+  run_troubleshooter ${@+"${@}"}
+fi
