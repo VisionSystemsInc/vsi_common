@@ -627,6 +627,53 @@ function pipenv-install()
           ' >> "${pipenv_activate}"
 }
 
+#**
+# .. function:: vsbuild-install
+#
+# Install Visual Studio build tools.
+#
+# :Arguments: * [``--installer {INSTALLER}``] - VS installer (default= ``${VS_BUILD_TOOLS_INSTALLER:-}``)
+#             * [``--download``] - Download VS installer
+#
+# Specifying the installer is can be used for offline installations:
+#
+# 1. Download https://aka.ms/vs/17/release/vs_BuildTools.exe
+# 2. ``vs_BuildTools.exe --layout C:\myLayoutDir --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --lang en-US``
+# 3. ... Transfer C:\myLayoutDir ...
+# 4. Now you can use ``--installer C:\myLayoutDir\vs_BuildTools.exe``
+#
+# This currently requires admin privileged, until https://github.com/Data-Oriented-House/PortableBuildTools/issues/20 is resolved
+#**
+function vsbuild-install()
+{
+  if [ "${OS-}" != "Windows_NT" ]; then
+    echo "This is a windows only feature" &> 2
+    local JUST_IGNORE_EXIT_CODES=1
+    return 1
+  fi
+
+  local prefer_download=0
+  local VS_BUILD_TOOLS_INSTALLER=${VS_BUILD_TOOLS_INSTALLER-}
+
+  parse_args installer_extra_args \
+      --installer VS_BUILD_TOOLS_INSTALLER: \
+      --download prefer_download \
+      -- ${@+"${@}"}
+
+  # https://visualstudio.microsoft.com/downloads/
+  if [ ! -f "${VS_BUILD_TOOLS_INSTALLER}" ] && [ "${prefer_download}" != "0" ]; then
+    local temp_dir
+    make_temp_path temp_dir -d
+    VS_BUILD_TOOLS_INSTALLER="${temp_dir}/vs_BuildTools.exe"
+    download_to_file "https://aka.ms/vs/17/release/vs_BuildTools.exe" "${VS_BUILD_TOOLS_INSTALLER}"
+  fi
+
+  if [ "${prefer_download}" = "0" ]; then
+    "${VS_BUILD_TOOLS_INSTALLER}" --noweb --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --passive
+  else
+    "${VS_BUILD_TOOLS_INSTALLER}" --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --passive
+  fi
+}
 
 #**
 # .. command:: install_cmake
@@ -686,6 +733,10 @@ function install_defaultify()
     install_pipenv) # Install a virtualenv containing pipenv
       pipenv-install ${@+"${@}"}
       extra_args=pipenv_extra_args
+      ;;
+    install_vsbuild) # Install Visual Studio Build Tools
+      vsbuild-install ${@+"${@}"}
+      extra_args=installer_extra_args
       ;;
     *)
       plugin_not_found=1
