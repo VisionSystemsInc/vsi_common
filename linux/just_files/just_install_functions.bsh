@@ -630,19 +630,43 @@ function pipenv-install()
 #**
 # .. function:: vsbuild-install
 #
-# Install Visual Studio build tools.
+# Install Visual Studio 2022 Build tools.
 #
 # :Arguments: * [``--installer {INSTALLER}``] - VS installer (default= ``${VS_BUILD_TOOLS_INSTALLER:-}``)
-#             * [``--download``] - Download VS installer
+#             * [``--download``] - Download VS installer and enables online mode
+#             * [``--channel``] - Channel URI. See [here](https://stackoverflow.com/a/78098290/4166604) to figure out a specific channel URI. E.g. ``https://aka.ms/vs/17/release.ltsc.17.0/channel``.
+#             * [``--add``] - Add additional components
 #
-# Specifying the installer is can be used for offline installations:
+# Additional components can be added; the intent is to specify additional MSVC versions.
 #
-# 1. Download https://aka.ms/vs/17/release/vs_BuildTools.exe
-# 2. ``vs_BuildTools.exe --layout C:\myLayoutDir --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --lang en-US``
-# 3. ... Transfer C:\myLayoutDir ...
-# 4. Now you can use ``--installer C:\myLayoutDir\vs_BuildTools.exe``
+# - 2022 - ``Microsoft.VisualStudio.Component.VC.Tools.x86.x64`` (always added, listed just for reference)
+# - 2017 - ``Microsoft.VisualStudio.Component.VC.v141.x86.x64``
+# - 2015 - ``Microsoft.VisualStudio.Component.VC.140``
 #
-# This currently requires admin privileged, until https://github.com/Data-Oriented-House/PortableBuildTools/issues/20 is resolved
+# 2019 is more difficult. Every version has a version number in the component name. E.g.:
+# - ``Microsoft.VisualStudio.Component.VC.14.29.16.11.x86.x64``
+# - ``Microsoft.VisualStudio.Component.VC.14.30.17.0.x86.x64``
+# - ``Microsoft.VisualStudio.Component.VC.14.31.17.1.x86.x64``
+# - ...
+# - ``Microsoft.VisualStudio.Component.VC.14.40.17.10.x86.x64``
+# - ``Microsoft.VisualStudio.Component.VC.14.41.17.11.x86.x64``
+#
+# Similar to retrieving the channel URI, this 2019 list can be retrieved from the ``Catalog.json`` file:
+#
+# .. code:
+#
+#    jq . Catalog.json | \grep -i '"id": "Microsoft.VisualStudio.Component.VC.14.*.x86.x64"'
+#
+# Specifying the installer can be used for offline installations or to specify which version gets installed using [fixed version installers](https://learn.microsoft.com/en-us/visualstudio/releases/2022/release-history#fixed-version-bootstrappers) instead of setting the Channel URI.
+#
+# 1. Download https://aka.ms/vs/17/release/vs_BuildTools.exe (or a fixed version installer)
+# 2. (For offline setup) ``vs_BuildTools.exe --layout C:\myLayoutDir --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --lang en-US``
+#    - Transfer ``C:\myLayoutDir`` ...
+# 3. Now you can use ``--installer C:\myLayoutDir\vs_BuildTools.exe``
+#
+# .. note::
+#
+#    This will prompt UAC for required admin privileges.
 #**
 function vsbuild-install()
 {
@@ -652,27 +676,53 @@ function vsbuild-install()
     return 1
   fi
 
-  local prefer_download=0
+  local allow_download=0
   local VS_BUILD_TOOLS_INSTALLER=${VS_BUILD_TOOLS_INSTALLER-}
+  local additional_packages=()
+
+  local channel_uri # Latest is https://aka.ms/vs/17/release/channel
 
   parse_args installer_extra_args \
       --installer VS_BUILD_TOOLS_INSTALLER: \
-      --download prefer_download \
+      --download allow_download \
+      --add +additional_packages: \
+      --channel channel_uri: \
       -- ${@+"${@}"}
 
-  # https://visualstudio.microsoft.com/downloads/
-  if [ ! -f "${VS_BUILD_TOOLS_INSTALLER}" ] && [ "${prefer_download}" != "0" ]; then
+  # If the installer is not specified or found, and downloads are allowed
+  if [ ! -f "${VS_BUILD_TOOLS_INSTALLER}" ] && [ "${allow_download}" != "0" ]; then
+    # Temporarily download the installer
     local temp_dir
     make_temp_path temp_dir -d
     VS_BUILD_TOOLS_INSTALLER="${temp_dir}/vs_BuildTools.exe"
+    # https://visualstudio.microsoft.com/downloads/
     download_to_file "https://aka.ms/vs/17/release/vs_BuildTools.exe" "${VS_BUILD_TOOLS_INSTALLER}"
   fi
 
-  if [ "${prefer_download}" = "0" ]; then
-    "${VS_BUILD_TOOLS_INSTALLER}" --noweb --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --passive
-  else
-    "${VS_BUILD_TOOLS_INSTALLER}" --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --passive
+  local installer_args=()
+  if [ -n "${channel_uri+set}" ]; then
+    installer_args+=(--channelUri "${channel_uri}")
   fi
+
+  local i
+  for i in ${additional_packages[@]+"${additional_packages[@]}"}; do
+    # Add additional components
+    installer_args+=(--add "${i}")
+  done
+
+  # if allow download is not turned on, disabled internet access. This mostly works
+  if [ "${allow_download}" = "0" ]; then
+    installer_args+=(--noweb)
+  fi
+
+  # --installPath or --path is not used here. As far as I can tell, the "Microsoft" installer
+  # is only meant for one copy, so trying to have one per project would probably result in a
+  # mess, not worth it, since no matter what you need admin privileges.
+
+  "${VS_BUILD_TOOLS_INSTALLER}" \
+    ${installer_args[@]+"${installer_args[@]}"} \
+    --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 \
+    --nocache
 }
 
 #**
