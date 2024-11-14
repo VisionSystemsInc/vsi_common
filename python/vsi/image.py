@@ -4,6 +4,7 @@ import numpy.typing as npt
 import scipy.signal
 
 from collections.abc import Iterable
+from pathlib import Path
 from typing import Callable, Optional, Sequence, Tuple, TypeVar, Union
 
 
@@ -106,19 +107,22 @@ def find_template_offset(template: np.floating, image: np.floating,
   xc = normalized_cross_correlation_2d(template, image)
 
   fit = xc.max()
-  y_peak, x_peak = np.nonzero(xc==fit)
+  y_peak, x_peak = np.nonzero(xc == fit)
 
-  y_offset = y_peak[0]-template.shape[0]+1
-  x_offset = x_peak[0]-template.shape[1]+1
+  y_offset = y_peak[0] - template.shape[0] + 1
+  x_offset = x_peak[0] - template.shape[1] + 1
 
   if debug_dir:
-    visualize_cross_correlation(debug_dir, template, image, xc)
+    visualize_cross_correlation(debug_dir, template, image, xc,
+                                (y_peak, x_peak), fit, (y_offset, x_offset))
 
   return y_offset, x_offset, fit
 
 
 def visualize_cross_correlation(debug_dir: str, template: np.floating,
-                                image: np.floating, xc: np.floating) -> None:
+                                image: np.floating, xc: np.floating,
+                                peak: Tuple[int, int], peak_magnitude: float,
+                                offset: Tuple[int, int]) -> None:
   """
   Save out visualization images to the provided debugging directory.
 
@@ -133,6 +137,12 @@ def visualize_cross_correlation(debug_dir: str, template: np.floating,
     Image array should be floating point numbers between 0 and 1.
   xc: :obj:`numpy.ndarray`
     The 2-D normalized cross correlation of the template and image.
+  peak: :obj:`tuple`
+    The (y, x) pixel coordinate of the peak of the correlation surface.
+  peak_magnitude: :obj:`float`
+    The scalar magnitude of the correlation peak.
+  offset: :obj:`tuple`
+    The (y, x) offset to translate the image by to match the image.
 
   Returns
   -------
@@ -151,6 +161,13 @@ def visualize_cross_correlation(debug_dir: str, template: np.floating,
   plt.imsave(template_image_file, template, cmap='gray')
   plt.imsave(image_file, image, cmap='gray')
   plt.imsave(xc_file, xc)
+
+  # save out JSON
+  cc_data = {'peak': peak,
+             'peak_magnitude': peak_magnitude,
+             'offset': offset}
+  with open('cross_correlation_data.json', 'w') as fp:
+    json.dump(cc_data, fp, indent=2)
 
 
 def find_template_offset_centered(template_image: np.floating,
