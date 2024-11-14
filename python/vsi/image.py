@@ -156,6 +156,7 @@ def visualize_cross_correlation(debug_dir: str, template: np.floating,
   template_image_file = debug_dir / 'template.png'
   image_file = debug_dir / 'image.png'
   xc_file = debug_dir / 'cross_correlation.png'
+  cc_file = debug_dir / 'cross_correlation_data.json'
 
   # save out images
   plt.imsave(template_image_file, template, cmap='gray')
@@ -166,7 +167,7 @@ def visualize_cross_correlation(debug_dir: str, template: np.floating,
   cc_data = {'peak': peak,
              'peak_magnitude': peak_magnitude,
              'offset': offset}
-  with open('cross_correlation_data.json', 'w') as fp:
+  with open(cc_file, 'w') as fp:
     json.dump(cc_data, fp, indent=2)
 
 
