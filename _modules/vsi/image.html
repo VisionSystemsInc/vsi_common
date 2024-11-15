@@ -77,12 +77,13 @@
              
   <h1>Source code for vsi.image</h1><div class="highlight"><pre>
 <span></span><span class="kn">import</span> <span class="nn">math</span>
-<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">TypeVar</span><span class="p">,</span> <span class="n">Union</span><span class="p">,</span> <span class="n">Sequence</span><span class="p">,</span> <span class="n">Tuple</span>
-<span class="kn">from</span> <span class="nn">collections.abc</span> <span class="kn">import</span> <span class="n">Iterable</span>
-
 <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
 <span class="kn">import</span> <span class="nn">numpy.typing</span> <span class="k">as</span> <span class="nn">npt</span>
 <span class="kn">import</span> <span class="nn">scipy.signal</span>
+
+<span class="kn">from</span> <span class="nn">collections.abc</span> <span class="kn">import</span> <span class="n">Iterable</span>
+<span class="kn">from</span> <span class="nn">pathlib</span> <span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Sequence</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">TypeVar</span><span class="p">,</span> <span class="n">Union</span>
 
 
 <span class="c1"># Annotation crap</span>
@@ -153,8 +154,9 @@
   <span class="k">return</span> <span class="n">out</span></div>
 
 
-<div class="viewcode-block" id="find_template_offset"><a class="viewcode-back" href="../../python/vsi.html#vsi.image.find_template_offset">[docs]</a><span class="k">def</span> <span class="nf">find_template_offset</span><span class="p">(</span><span class="n">template</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">,</span>
-                         <span class="n">image</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+<div class="viewcode-block" id="find_template_offset"><a class="viewcode-back" href="../../python/vsi.html#vsi.image.find_template_offset">[docs]</a><span class="k">def</span> <span class="nf">find_template_offset</span><span class="p">(</span><span class="n">template</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">,</span> <span class="n">image</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">,</span>
+                         <span class="n">debug_dir</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> \
+                         <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
 <span class="w">  </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">  Uses 2-D normalized cross correlation to find the offset of the upper right</span>
 <span class="sd">  corners of the template and image</span>
@@ -167,6 +169,8 @@
 <span class="sd">    than length of image. Array should be floating point numbers.</span>
 <span class="sd">  image: :obj:`numpy.ndarray`</span>
 <span class="sd">    Image array should be floating point numbers.</span>
+<span class="sd">  debug_dir: :obj:`str`</span>
+<span class="sd">    Optional directory to write debugging visualization images to.</span>
 
 <span class="sd">  Returns</span>
 <span class="sd">  -------</span>
@@ -181,12 +185,68 @@
   <span class="n">xc</span> <span class="o">=</span> <span class="n">normalized_cross_correlation_2d</span><span class="p">(</span><span class="n">template</span><span class="p">,</span> <span class="n">image</span><span class="p">)</span>
 
   <span class="n">fit</span> <span class="o">=</span> <span class="n">xc</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
-  <span class="n">y_peak</span><span class="p">,</span> <span class="n">x_peak</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nonzero</span><span class="p">(</span><span class="n">xc</span><span class="o">==</span><span class="n">fit</span><span class="p">)</span>
+  <span class="n">y_peak</span><span class="p">,</span> <span class="n">x_peak</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nonzero</span><span class="p">(</span><span class="n">xc</span> <span class="o">==</span> <span class="n">fit</span><span class="p">)</span>
 
-  <span class="n">y_offset</span> <span class="o">=</span> <span class="n">y_peak</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">-</span><span class="n">template</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span>
-  <span class="n">x_offset</span> <span class="o">=</span> <span class="n">x_peak</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">-</span><span class="n">template</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span>
+  <span class="n">y_offset</span> <span class="o">=</span> <span class="n">y_peak</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">template</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span>
+  <span class="n">x_offset</span> <span class="o">=</span> <span class="n">x_peak</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">template</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span>
+
+  <span class="k">if</span> <span class="n">debug_dir</span><span class="p">:</span>
+    <span class="n">visualize_cross_correlation</span><span class="p">(</span><span class="n">debug_dir</span><span class="p">,</span> <span class="n">template</span><span class="p">,</span> <span class="n">image</span><span class="p">,</span> <span class="n">xc</span><span class="p">,</span>
+                                <span class="p">(</span><span class="n">y_peak</span><span class="p">,</span> <span class="n">x_peak</span><span class="p">),</span> <span class="n">fit</span><span class="p">,</span> <span class="p">(</span><span class="n">y_offset</span><span class="p">,</span> <span class="n">x_offset</span><span class="p">))</span>
 
   <span class="k">return</span> <span class="n">y_offset</span><span class="p">,</span> <span class="n">x_offset</span><span class="p">,</span> <span class="n">fit</span></div>
+
+
+<div class="viewcode-block" id="visualize_cross_correlation"><a class="viewcode-back" href="../../python/vsi.html#vsi.image.visualize_cross_correlation">[docs]</a><span class="k">def</span> <span class="nf">visualize_cross_correlation</span><span class="p">(</span><span class="n">debug_dir</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">template</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">,</span>
+                                <span class="n">image</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">,</span> <span class="n">xc</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">,</span>
+                                <span class="n">peak</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="n">peak_magnitude</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+                                <span class="n">offset</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">  </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">  Save out visualization images to the provided debugging directory.</span>
+
+<span class="sd">  Parameters</span>
+<span class="sd">  ----------</span>
+<span class="sd">  debug_dir: :obj:`str`</span>
+<span class="sd">    Debugging directory to write visualization images to.</span>
+<span class="sd">  template: :obj:`numpy.ndarray`</span>
+<span class="sd">    N-D array of template or filter used for cross-correlation. Array should be</span>
+<span class="sd">    floating point numbers between 0 and 1.</span>
+<span class="sd">  image: :obj:`numpy.ndarray`</span>
+<span class="sd">    Image array should be floating point numbers between 0 and 1.</span>
+<span class="sd">  xc: :obj:`numpy.ndarray`</span>
+<span class="sd">    The 2-D normalized cross correlation of the template and image.</span>
+<span class="sd">  peak: :obj:`tuple`</span>
+<span class="sd">    The (y, x) pixel coordinate of the peak of the correlation surface.</span>
+<span class="sd">  peak_magnitude: :obj:`float`</span>
+<span class="sd">    The scalar magnitude of the correlation peak.</span>
+<span class="sd">  offset: :obj:`tuple`</span>
+<span class="sd">    The (y, x) offset to translate the image by to match the image.</span>
+
+<span class="sd">  Returns</span>
+<span class="sd">  -------</span>
+<span class="sd">  None</span>
+<span class="sd">  &quot;&quot;&quot;</span>
+
+  <span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+
+  <span class="c1"># file paths</span>
+  <span class="n">debug_dir</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">debug_dir</span><span class="p">)</span>
+  <span class="n">template_image_file</span> <span class="o">=</span> <span class="n">debug_dir</span> <span class="o">/</span> <span class="s1">&#39;template.png&#39;</span>
+  <span class="n">image_file</span> <span class="o">=</span> <span class="n">debug_dir</span> <span class="o">/</span> <span class="s1">&#39;image.png&#39;</span>
+  <span class="n">xc_file</span> <span class="o">=</span> <span class="n">debug_dir</span> <span class="o">/</span> <span class="s1">&#39;cross_correlation.png&#39;</span>
+  <span class="n">cc_file</span> <span class="o">=</span> <span class="n">debug_dir</span> <span class="o">/</span> <span class="s1">&#39;cross_correlation_data.json&#39;</span>
+
+  <span class="c1"># save out images</span>
+  <span class="n">plt</span><span class="o">.</span><span class="n">imsave</span><span class="p">(</span><span class="n">template_image_file</span><span class="p">,</span> <span class="n">template</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;gray&#39;</span><span class="p">)</span>
+  <span class="n">plt</span><span class="o">.</span><span class="n">imsave</span><span class="p">(</span><span class="n">image_file</span><span class="p">,</span> <span class="n">image</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;gray&#39;</span><span class="p">)</span>
+  <span class="n">plt</span><span class="o">.</span><span class="n">imsave</span><span class="p">(</span><span class="n">xc_file</span><span class="p">,</span> <span class="n">xc</span><span class="p">)</span>
+
+  <span class="c1"># save out JSON</span>
+  <span class="n">cc_data</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;peak&#39;</span><span class="p">:</span> <span class="n">peak</span><span class="p">,</span>
+             <span class="s1">&#39;peak_magnitude&#39;</span><span class="p">:</span> <span class="n">peak_magnitude</span><span class="p">,</span>
+             <span class="s1">&#39;offset&#39;</span><span class="p">:</span> <span class="n">offset</span><span class="p">}</span>
+  <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">cc_file</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">fp</span><span class="p">:</span>
+    <span class="n">json</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="n">cc_data</span><span class="p">,</span> <span class="n">fp</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="find_template_offset_centered"><a class="viewcode-back" href="../../python/vsi.html#vsi.image.find_template_offset_centered">[docs]</a><span class="k">def</span> <span class="nf">find_template_offset_centered</span><span class="p">(</span><span class="n">template_image</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">,</span>
@@ -195,7 +255,9 @@
                                   <span class="n">image_center</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span>
                                   <span class="n">template_radius</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span><span class="nb">int</span><span class="p">]]</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
                                   <span class="n">image_radius</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span><span class="nb">int</span><span class="p">]]</span><span class="o">=</span><span class="mi">200</span><span class="p">,</span>
-                                  <span class="n">adjust_template</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+                                  <span class="n">adjust_template</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Callable</span><span class="p">[[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span>
+                                                                     <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]]</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                                  <span class="n">debug_dir</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 
 <span class="w">  </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">  Uses 2-D normalized cross correlation to find the offset of a point of</span>
@@ -223,6 +285,10 @@
 <span class="sd">    image_radius.</span>
 <span class="sd">  image_radius: :obj:`int` or :obj:`tuple`, optional</span>
 <span class="sd">    The radius around the image. Default: ``200``</span>
+<span class="sd">  adjust_template: :obj:`Callable`</span>
+<span class="sd">    Function to call to warp the template image before correlation.</span>
+<span class="sd">  debug_dir: :obj:`str`</span>
+<span class="sd">    Optional directory to write debugging visualization images to.</span>
 
 
 <span class="sd">  Returns</span>
@@ -267,7 +333,7 @@
 
   <span class="n">offset_y</span><span class="p">,</span> <span class="n">offset_x</span><span class="p">,</span> <span class="n">fit</span> <span class="o">=</span> <span class="n">find_template_offset</span><span class="p">(</span>
       <span class="n">template_image</span><span class="p">[</span><span class="n">min_y1</span><span class="p">:</span><span class="n">max_y1</span><span class="p">,</span> <span class="n">min_x1</span><span class="p">:</span><span class="n">max_x1</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
-      <span class="n">image</span><span class="p">[</span><span class="n">min_y2</span><span class="p">:</span><span class="n">max_y2</span><span class="p">,</span> <span class="n">min_x2</span><span class="p">:</span><span class="n">max_x2</span><span class="p">,</span> <span class="o">...</span><span class="p">])</span>
+      <span class="n">image</span><span class="p">[</span><span class="n">min_y2</span><span class="p">:</span><span class="n">max_y2</span><span class="p">,</span> <span class="n">min_x2</span><span class="p">:</span><span class="n">max_x2</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">debug_dir</span><span class="p">)</span>
 
   <span class="n">offset_y</span> <span class="o">=</span> <span class="n">offset_y</span> <span class="o">-</span> <span class="n">image_center</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="n">min_y2</span> <span class="o">-</span> <span class="n">min_y1</span> <span class="o">+</span> <span class="n">template_center</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
   <span class="n">offset_x</span> <span class="o">=</span> <span class="n">offset_x</span> <span class="o">-</span> <span class="n">image_center</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">min_x2</span> <span class="o">-</span> <span class="n">min_x1</span> <span class="o">+</span> <span class="n">template_center</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
