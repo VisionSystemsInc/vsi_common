@@ -1,10 +1,11 @@
 import math
-from typing import TypeVar, Union, Sequence, Tuple
-from collections.abc import Iterable
-
 import numpy as np
 import numpy.typing as npt
 import scipy.signal
+
+from collections.abc import Iterable
+from pathlib import Path
+from typing import Callable, Optional, Sequence, Tuple, TypeVar, Union
 
 
 # Annotation crap
@@ -75,8 +76,9 @@ def normalized_cross_correlation_2d(template: "np.floating[T]",
   return out
 
 
-def find_template_offset(template: np.floating,
-                         image: np.floating) -> Tuple[int, int, float]:
+def find_template_offset(template: np.floating, image: np.floating,
+                         debug_dir: Optional[str]=None) \
+                         -> Tuple[int, int, float]:
   """
   Uses 2-D normalized cross correlation to find the offset of the upper right
   corners of the template and image
@@ -89,6 +91,8 @@ def find_template_offset(template: np.floating,
     than length of image. Array should be floating point numbers.
   image: :obj:`numpy.ndarray`
     Image array should be floating point numbers.
+  debug_dir: :obj:`str`
+    Optional directory to write debugging visualization images to.
 
   Returns
   -------
@@ -103,12 +107,68 @@ def find_template_offset(template: np.floating,
   xc = normalized_cross_correlation_2d(template, image)
 
   fit = xc.max()
-  y_peak, x_peak = np.nonzero(xc==fit)
+  y_peak, x_peak = np.nonzero(xc == fit)
 
-  y_offset = y_peak[0]-template.shape[0]+1
-  x_offset = x_peak[0]-template.shape[1]+1
+  y_offset = y_peak[0] - template.shape[0] + 1
+  x_offset = x_peak[0] - template.shape[1] + 1
+
+  if debug_dir:
+    visualize_cross_correlation(debug_dir, template, image, xc,
+                                (y_peak, x_peak), fit, (y_offset, x_offset))
 
   return y_offset, x_offset, fit
+
+
+def visualize_cross_correlation(debug_dir: str, template: np.floating,
+                                image: np.floating, xc: np.floating,
+                                peak: Tuple[int, int], peak_magnitude: float,
+                                offset: Tuple[int, int]) -> None:
+  """
+  Save out visualization images to the provided debugging directory.
+
+  Parameters
+  ----------
+  debug_dir: :obj:`str`
+    Debugging directory to write visualization images to.
+  template: :obj:`numpy.ndarray`
+    N-D array of template or filter used for cross-correlation. Array should be
+    floating point numbers between 0 and 1.
+  image: :obj:`numpy.ndarray`
+    Image array should be floating point numbers between 0 and 1.
+  xc: :obj:`numpy.ndarray`
+    The 2-D normalized cross correlation of the template and image.
+  peak: :obj:`tuple`
+    The (y, x) pixel coordinate of the peak of the correlation surface.
+  peak_magnitude: :obj:`float`
+    The scalar magnitude of the correlation peak.
+  offset: :obj:`tuple`
+    The (y, x) offset to translate the image by to match the image.
+
+  Returns
+  -------
+  None
+  """
+
+  import matplotlib.pyplot as plt
+
+  # file paths
+  debug_dir = Path(debug_dir)
+  template_image_file = debug_dir / 'template.png'
+  image_file = debug_dir / 'image.png'
+  xc_file = debug_dir / 'cross_correlation.png'
+  cc_file = debug_dir / 'cross_correlation_data.json'
+
+  # save out images
+  plt.imsave(template_image_file, template, cmap='gray')
+  plt.imsave(image_file, image, cmap='gray')
+  plt.imsave(xc_file, xc)
+
+  # save out JSON
+  cc_data = {'peak': peak,
+             'peak_magnitude': peak_magnitude,
+             'offset': offset}
+  with open(cc_file, 'w') as fp:
+    json.dump(cc_data, fp, indent=2)
 
 
 def find_template_offset_centered(template_image: np.floating,
@@ -117,7 +177,9 @@ def find_template_offset_centered(template_image: np.floating,
                                   image_center: Tuple[int, int],
                                   template_radius: Union[int, Tuple[int,int]]=50,
                                   image_radius: Union[int, Tuple[int,int]]=200,
-                                  adjust_template=None):
+                                  adjust_template: Optional[Callable[[np.ndarray, int, int, int, int],
+                                                                     Tuple[int, int, int, int]]]=None,
+                                  debug_dir: Optional[str]=None):
 
   """
   Uses 2-D normalized cross correlation to find the offset of a point of
@@ -145,6 +207,10 @@ def find_template_offset_centered(template_image: np.floating,
     image_radius.
   image_radius: :obj:`int` or :obj:`tuple`, optional
     The radius around the image. Default: ``200``
+  adjust_template: :obj:`Callable`
+    Function to call to warp the template image before correlation.
+  debug_dir: :obj:`str`
+    Optional directory to write debugging visualization images to.
 
 
   Returns
@@ -189,7 +255,7 @@ def find_template_offset_centered(template_image: np.floating,
 
   offset_y, offset_x, fit = find_template_offset(
       template_image[min_y1:max_y1, min_x1:max_x1, ...],
-      image[min_y2:max_y2, min_x2:max_x2, ...])
+      image[min_y2:max_y2, min_x2:max_x2, ...], debug_dir)
 
   offset_y = offset_y - image_center[0] + min_y2 - min_y1 + template_center[0]
   offset_x = offset_x - image_center[1] + min_x2 - min_x1 + template_center[1]
