@@ -164,6 +164,11 @@ def visualize_cross_correlation(debug_dir: str, template: np.floating,
   plt.imsave(image_file, image, cmap='gray')
   plt.imsave(xc_file, xc)
 
+  # convert numpy data types to primitives which are JSON serializable
+  peak = [int(idx) for idx in peak]
+  peak_magnitude = float(peak_magnitude)
+  offset = [int(idx) for idx in offset]
+
   # save out JSON
   cc_data = {'peak': peak,
              'peak_magnitude': peak_magnitude,
