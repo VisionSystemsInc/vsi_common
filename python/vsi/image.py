@@ -259,6 +259,20 @@ def find_template_offset_centered(template_image: np.floating,
     min_x1 += adjustment[2]
     max_x1 -= adjustment[3]
 
+  def out_of_bounds(img, xmin, xmax, ymin, ymax):
+    return (xmin < 0 or xmin > img.shape[1] or
+            xmax < 0 or xmax > img.shape[1] or
+            ymin < 0 or ymin > img.shape[0] or
+            ymax < 0 or ymax > img.shape[0])
+
+  if out_of_bounds(template_image, min_x1, max_x1, min_y1, max_y1):
+    raise ValueError(f"Bounds ({min_y1}:{max_y1}, {min_x1}:{max_x1}) fall "
+                     "outside of template image with shape "
+                     f"{template_image.shape}")
+  if out_of_bounds(image, min_x2, max_x2, min_y2, max_y2):
+    raise ValueError(f"Bounds ({min_y2}:{max_y2}, {min_x2}:{max_x2}) fall "
+                     f"outside of image with shape {image.shape}")
+
   offset_y, offset_x, fit = find_template_offset(
       template_image[min_y1:max_y1, min_x1:max_x1, ...],
       image[min_y2:max_y2, min_x2:max_x2, ...], debug_dir)
