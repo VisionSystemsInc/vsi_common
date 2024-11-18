@@ -114,8 +114,8 @@ def find_template_offset(template: np.floating, image: np.floating,
   y_peak = y_peak[0]
   x_peak = x_peak[0]
 
-  y_offset = y_peak[0] - template.shape[0] + 1
-  x_offset = x_peak[0] - template.shape[1] + 1
+  y_offset = y_peak - template.shape[0] + 1
+  x_offset = x_peak - template.shape[1] + 1
 
   if debug_dir:
     visualize_cross_correlation(debug_dir, template, image, xc,
