@@ -76,7 +76,8 @@
            <div itemprop="articleBody">
              
   <h1>Source code for vsi.image</h1><div class="highlight"><pre>
-<span></span><span class="kn">import</span> <span class="nn">math</span>
+<span></span><span class="kn">import</span> <span class="nn">json</span>
+<span class="kn">import</span> <span class="nn">math</span>
 <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
 <span class="kn">import</span> <span class="nn">numpy.typing</span> <span class="k">as</span> <span class="nn">npt</span>
 <span class="kn">import</span> <span class="nn">scipy.signal</span>
@@ -187,8 +188,12 @@
   <span class="n">fit</span> <span class="o">=</span> <span class="n">xc</span><span class="o">.</span><span class="n">max</span><span class="p">()</span>
   <span class="n">y_peak</span><span class="p">,</span> <span class="n">x_peak</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nonzero</span><span class="p">(</span><span class="n">xc</span> <span class="o">==</span> <span class="n">fit</span><span class="p">)</span>
 
-  <span class="n">y_offset</span> <span class="o">=</span> <span class="n">y_peak</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">template</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span>
-  <span class="n">x_offset</span> <span class="o">=</span> <span class="n">x_peak</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">template</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span>
+  <span class="c1"># if there are duplicate peak values, take the first</span>
+  <span class="n">y_peak</span> <span class="o">=</span> <span class="n">y_peak</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+  <span class="n">x_peak</span> <span class="o">=</span> <span class="n">x_peak</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+  <span class="n">y_offset</span> <span class="o">=</span> <span class="n">y_peak</span> <span class="o">-</span> <span class="n">template</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span>
+  <span class="n">x_offset</span> <span class="o">=</span> <span class="n">x_peak</span> <span class="o">-</span> <span class="n">template</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span>
 
   <span class="k">if</span> <span class="n">debug_dir</span><span class="p">:</span>
     <span class="n">visualize_cross_correlation</span><span class="p">(</span><span class="n">debug_dir</span><span class="p">,</span> <span class="n">template</span><span class="p">,</span> <span class="n">image</span><span class="p">,</span> <span class="n">xc</span><span class="p">,</span>
@@ -240,6 +245,11 @@
   <span class="n">plt</span><span class="o">.</span><span class="n">imsave</span><span class="p">(</span><span class="n">template_image_file</span><span class="p">,</span> <span class="n">template</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;gray&#39;</span><span class="p">)</span>
   <span class="n">plt</span><span class="o">.</span><span class="n">imsave</span><span class="p">(</span><span class="n">image_file</span><span class="p">,</span> <span class="n">image</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">&#39;gray&#39;</span><span class="p">)</span>
   <span class="n">plt</span><span class="o">.</span><span class="n">imsave</span><span class="p">(</span><span class="n">xc_file</span><span class="p">,</span> <span class="n">xc</span><span class="p">)</span>
+
+  <span class="c1"># convert numpy data types to primitives which are JSON serializable</span>
+  <span class="n">peak</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span> <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">peak</span><span class="p">]</span>
+  <span class="n">peak_magnitude</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">peak_magnitude</span><span class="p">)</span>
+  <span class="n">offset</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span> <span class="k">for</span> <span class="n">idx</span> <span class="ow">in</span> <span class="n">offset</span><span class="p">]</span>
 
   <span class="c1"># save out JSON</span>
   <span class="n">cc_data</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;peak&#39;</span><span class="p">:</span> <span class="n">peak</span><span class="p">,</span>
@@ -330,6 +340,20 @@
     <span class="n">max_y1</span> <span class="o">-=</span> <span class="n">adjustment</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
     <span class="n">min_x1</span> <span class="o">+=</span> <span class="n">adjustment</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
     <span class="n">max_x1</span> <span class="o">-=</span> <span class="n">adjustment</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span>
+
+  <span class="k">def</span> <span class="nf">out_of_bounds</span><span class="p">(</span><span class="n">img</span><span class="p">,</span> <span class="n">xmin</span><span class="p">,</span> <span class="n">xmax</span><span class="p">,</span> <span class="n">ymin</span><span class="p">,</span> <span class="n">ymax</span><span class="p">):</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">xmin</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">xmin</span> <span class="o">&gt;</span> <span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="ow">or</span>
+            <span class="n">xmax</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">xmax</span> <span class="o">&gt;</span> <span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="ow">or</span>
+            <span class="n">ymin</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">ymin</span> <span class="o">&gt;</span> <span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">or</span>
+            <span class="n">ymax</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">ymax</span> <span class="o">&gt;</span> <span class="n">img</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+
+  <span class="k">if</span> <span class="n">out_of_bounds</span><span class="p">(</span><span class="n">template_image</span><span class="p">,</span> <span class="n">min_x1</span><span class="p">,</span> <span class="n">max_x1</span><span class="p">,</span> <span class="n">min_y1</span><span class="p">,</span> <span class="n">max_y1</span><span class="p">):</span>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Bounds (</span><span class="si">{</span><span class="n">min_y1</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">max_y1</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">min_x1</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">max_x1</span><span class="si">}</span><span class="s2">) fall &quot;</span>
+                     <span class="s2">&quot;outside of template image with shape &quot;</span>
+                     <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">template_image</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+  <span class="k">if</span> <span class="n">out_of_bounds</span><span class="p">(</span><span class="n">image</span><span class="p">,</span> <span class="n">min_x2</span><span class="p">,</span> <span class="n">max_x2</span><span class="p">,</span> <span class="n">min_y2</span><span class="p">,</span> <span class="n">max_y2</span><span class="p">):</span>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Bounds (</span><span class="si">{</span><span class="n">min_y2</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">max_y2</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">min_x2</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">max_x2</span><span class="si">}</span><span class="s2">) fall &quot;</span>
+                     <span class="sa">f</span><span class="s2">&quot;outside of image with shape </span><span class="si">{</span><span class="n">image</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 
   <span class="n">offset_y</span><span class="p">,</span> <span class="n">offset_x</span><span class="p">,</span> <span class="n">fit</span> <span class="o">=</span> <span class="n">find_template_offset</span><span class="p">(</span>
       <span class="n">template_image</span><span class="p">[</span><span class="n">min_y1</span><span class="p">:</span><span class="n">max_y1</span><span class="p">,</span> <span class="n">min_x1</span><span class="p">:</span><span class="n">max_x1</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
