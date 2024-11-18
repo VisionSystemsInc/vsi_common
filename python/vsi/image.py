@@ -110,6 +110,10 @@ def find_template_offset(template: np.floating, image: np.floating,
   fit = xc.max()
   y_peak, x_peak = np.nonzero(xc == fit)
 
+  # if there are duplicate peak values, take the first
+  y_peak = y_peak[0]
+  x_peak = x_peak[0]
+
   y_offset = y_peak[0] - template.shape[0] + 1
   x_offset = x_peak[0] - template.shape[1] + 1
 
