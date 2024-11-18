@@ -1,3 +1,4 @@
+import json
 import math
 import numpy as np
 import numpy.typing as npt
@@ -109,8 +110,12 @@ def find_template_offset(template: np.floating, image: np.floating,
   fit = xc.max()
   y_peak, x_peak = np.nonzero(xc == fit)
 
-  y_offset = y_peak[0] - template.shape[0] + 1
-  x_offset = x_peak[0] - template.shape[1] + 1
+  # if there are duplicate peak values, take the first
+  y_peak = y_peak[0]
+  x_peak = x_peak[0]
+
+  y_offset = y_peak - template.shape[0] + 1
+  x_offset = x_peak - template.shape[1] + 1
 
   if debug_dir:
     visualize_cross_correlation(debug_dir, template, image, xc,
@@ -162,6 +167,11 @@ def visualize_cross_correlation(debug_dir: str, template: np.floating,
   plt.imsave(template_image_file, template, cmap='gray')
   plt.imsave(image_file, image, cmap='gray')
   plt.imsave(xc_file, xc)
+
+  # convert numpy data types to primitives which are JSON serializable
+  peak = [int(idx) for idx in peak]
+  peak_magnitude = float(peak_magnitude)
+  offset = [int(idx) for idx in offset]
 
   # save out JSON
   cc_data = {'peak': peak,
@@ -252,6 +262,20 @@ def find_template_offset_centered(template_image: np.floating,
     max_y1 -= adjustment[1]
     min_x1 += adjustment[2]
     max_x1 -= adjustment[3]
+
+  def out_of_bounds(img, xmin, xmax, ymin, ymax):
+    return (xmin < 0 or xmin > img.shape[1] or
+            xmax < 0 or xmax > img.shape[1] or
+            ymin < 0 or ymin > img.shape[0] or
+            ymax < 0 or ymax > img.shape[0])
+
+  if out_of_bounds(template_image, min_x1, max_x1, min_y1, max_y1):
+    raise ValueError(f"Bounds ({min_y1}:{max_y1}, {min_x1}:{max_x1}) fall "
+                     "outside of template image with shape "
+                     f"{template_image.shape}")
+  if out_of_bounds(image, min_x2, max_x2, min_y2, max_y2):
+    raise ValueError(f"Bounds ({min_y2}:{max_y2}, {min_x2}:{max_x2}) fall "
+                     f"outside of image with shape {image.shape}")
 
   offset_y, offset_x, fit = find_template_offset(
       template_image[min_y1:max_y1, min_x1:max_x1, ...],
