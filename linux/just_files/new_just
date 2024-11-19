@@ -489,10 +489,10 @@ function write_justfile()
                           ) | yarp | grep '"'"'^services.[^.]\+\.image = '"'"' | awk '"'"'{print $3}'"'"'
                         )
                       )
-                      Docker image -f rm ${image_names[@]+"${image_names[@]}"} "${'"${PROJECT_PREFIX}"'_BASE_IMAGE}"
-                      git clean -dxvf
+                      Docker image rm -f ${image_names[@]+"${image_names[@]}"} "${'"${PROJECT_PREFIX}"'_BASE_IMAGE}"
+                      git clean -dxf
 
-                      echo "You may want to run: '"'"'docker buildx prune'"'"' to clear the entire computer'"'"'s build cache"
+                      echo "You may want to run: '"'"'${YELLOW}docker buildx prune${NC}'"'"' to clear the ${BOLD}entire${NC} computer'"'"'s build cache"
                     fi
                     ;;
 
@@ -541,7 +541,7 @@ function write_requirements_in()
   exists "${1}" && return 0
 
   uwecho '# Local packages
-          -e /src' >> "${1}"
+          -e /src[docs]' >> "${1}"
 }
 
 ########################
@@ -582,6 +582,9 @@ function write_setup_py()
               description='${PROJECT_NAME} Short description',
               long_description='${PROJECT_NAME} Long description',
               url='https://example.com/${PROJECT_NAME}',
+              extra_requires={
+                'docs': ['sphinx']
+              },
               install_requires=[
                 # Put python dependencies here
               ],
@@ -652,7 +655,7 @@ function write_dockerfile()
             # Install your common dependencies here
             RUN apt-get update; \
                 DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-                  tzdata ca-certificates; \
+                  tzdata ca-certificates readline-common; \
                 rm -r /var/lib/apt/lists/*
             ' >> "${1}"
     standard_env >> "${1}"
@@ -777,12 +780,12 @@ function write_dockerfile()
 
   uwecho   '# Install your runtime dependencies here
             RUN apt-get update; \
-                DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-                  #T# Example of a package
-                  #T# qbs-examples \' >> "${1}"
+                DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \' >> "${1}"
 
   if [ "${USE_PIP_TOOLS}" != "1" ]; then
     echo   '      tzdata \' >> "${1}"
+  else
+    echo   '      readline-common \' >> "${1}"
   fi
 
   uwecho   '      ; \
@@ -1588,7 +1591,7 @@ function new_just()
     #**
     if set_default PYTHON_PACKAGE \
                    "$(echo "${PROJECT_NAME-}" | tr '[A-Z]' '[a-z]' | sed -${sed_flag_rE} 's|[^a-z0-9_]+||g')" \
-                   "Python package name"; then
+                   "Name of python package"; then
       PYTHON_PACKAGE="$(echo "${PYTHON_PACKAGE-}" | tr '[A-Z]' '[a-z]' | sed -${sed_flag_rE} 's|[^a-z0-9_]+||g')"
     fi
   fi
@@ -1620,9 +1623,9 @@ function new_just()
 
     printf "%-40s | %-40s\n" "App Name" "${APP_NAME}"
     printf "%-40s | %-40s\n" "Docker Repo" "${REPO_NAME}"
-    if [ "${USE_VSI_COMMON}" = "1" ]; then
-      printf "%-40s | %-40s\n" "VSI Common Directory" "${VSI_DIR}"
-    fi
+  fi
+  if [ "${USE_VSI_COMMON}" = "1" ]; then
+    printf "%-40s | %-40s\n" "VSI Common Directory" "${VSI_DIR}"
   fi
   printf "%-40s | %-40s\n" "Add Tutorial" "${USE_TUTORIAL}"
   echo
