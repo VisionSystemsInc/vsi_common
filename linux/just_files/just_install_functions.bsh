@@ -289,7 +289,7 @@ function conda-install()
 
     # install conda
     bash "${CONDA_INSTALLER}" -b -p "${conda_dir}" -s
-    # Conda installer doesn't support spacer, PERIOD!
+    # Conda installer doesn't support spaces, PERIOD!
     # ERROR: Cannot install into directories with spaces
 
     # conda executable
@@ -351,7 +351,7 @@ function conda-install()
 # * else: system level conda if available, then temporary miniconda3 download
 #
 # :Arguments: * [``--dir {dir}``] - Python install directory
-#             * [``--version {version}``] - Python version for install (default= ``${PYTHON_VERSION:-3.6.9}``)
+#             * [``--version {version}``] - Python version for install (default= ``${PYTHON_VERSION:-3.6.9}``). Specifying ``3.x`` will auto select the latest in the 3.x versions.
 #             * [``--conda {CONDA}``] - Conda executable
 #             * [``--conda-installer {INSTALLER}``] - Conda installer
 #             * [``--download``] - Download miniconda
@@ -384,6 +384,14 @@ function conda-python-install()
       --package +packages: \
       --list list_versions \
       -- ${@+"${@}"}
+
+  local minor_version_pattern='^([0-9]+)\.([0-9]+)$'
+  local install_version="==${python_ver}"
+  local check_version=("${install_version}")
+  if [[ ${python_ver} =~ ${minor_version_pattern} ]]; then
+    check_version=(">=${BASH_REMATCH[0]}" "<${BASH_REMATCH[1]}.$((${BASH_REMATCH[2]}+1))")
+    install_version="${check_version[0]},${check_version[1]}"
+  fi
 
   if [ "${list_versions}" != "0" ]; then
     # This has worked since at least 2016, so fairly stable
@@ -439,7 +447,7 @@ function conda-python-install()
     if [ -r "${conda_activate-}" ]; then
       source "${conda_activate}"
     fi
-    "${CONDA}" create -y -p "${python_dir}" "python==${python_ver}" ${packages[@]+"${packages[@]}"}
+    "${CONDA}" create -y -p "${python_dir}" "python${install_version}" ${packages[@]+"${packages[@]}"}
   )
   local python_exe_footer
   if [ "${OS-}" = "Windows_NT" ]; then
@@ -460,7 +468,7 @@ function conda-python-install()
   echo "Python ${python_version} installed at \"${python_exe}\"" >&2
 
   # Make sure python meets request
-  if ! meet_requirements "${python_version}" "==${python_ver}"; then
+  if ! meet_requirements "${python_version}" "${check_version[@]}"; then
     echo "Python version ${python_version} is not the requested version ${python_ver}" >&2
     JUST_IGNORE_EXIT_CODES=1
     return 1
