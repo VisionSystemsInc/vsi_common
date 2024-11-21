@@ -360,7 +360,7 @@ function write_readme_md()
             ```' >> "${1}"
 
   if [ "${USE_VSI_COMMON}" = "1" ]; then
-    echo   "source $(quote_escape "${SETUPFILE}")" >> "${1}"
+    echo   "source $(quote_escape "${$}")" >> "${1}"
   fi
 
   if [ "${USE_DOCKER}" = "1" ]; then
@@ -538,39 +538,52 @@ function write_requirements_txt()
               # via -r /src/requirements.in' >> "${1}"
 }
 
-################
-### setup.py ###
-################
-function write_setup_py()
+######################
+### pyproject.toml ###
+######################
+function write_pyproject_toml()
 {
   exists "${1}" && return 0
 
-  uwecho "import os
+  uwecho "[build-system]
+          requires = [
+            \"setuptools >= 61.0\",
+            #T# Add other build dependencies here, e.g. numpy
+          ]
+          build-backend = \"setuptools.build_meta\"
 
-          from setuptools import setup
+          [project]
+          name = \"${PYTHON_PACKAGE}\"
+          version = \"0.0.1\"
+          dependencies = [
+            # Put python dependencies here
+          ]
+          authors = [
+            {name = \"VSI Author\", email = \"vsi@visionsystemsinc.com\"},
+          ]
+          license = {text = \"MIT License\"}
+          readme = \"README.md\"
+          description = \"${PROJECT_NAME} description\"
 
-          setup(
-              name='${PROJECT_NAME}',
-              version='0.0.1',
-              packages=['${PYTHON_PACKAGE}'],
-              author = 'VSI Author',
-              author_email = 'vsi@visionsystemsinc.com',
-              license='MIT License',
-              description='${PROJECT_NAME} Short description',
-              long_description='${PROJECT_NAME} Long description',
-              url='https://example.com/${PROJECT_NAME}',
-              extra_requires={
-                'docs': ['sphinx']
-              },
-              install_requires=[
-                # Put python dependencies here
-              ],
-              entry_points={
-              #    '${PYTHON_PACKAGE}.something': [
-              #        '${PYTHON_PACKAGE} = ${PYTHON_PACKAGE}.something:SomeMethod'
-              #    ]
-              }
-          )" >> "${1}"
+          [project.urls]
+          Homepage = \"https://github.com/visionsysmtesinc/${PYTHON_PACKAGE}\"
+          Documentation = \"https://visionsysmtesinc.github.io/${PYTHON_PACKAGE}\"
+          Repository = \"https://github.com/visionsysmtesinc/${PYTHON_PACKAGE}.git\"
+          \"Bug Tracker\" = \"https://github.com/visionsysmtesinc/${PYTHON_PACKAGE}/issues\"
+
+          [project.optional-dependencies]
+          docs = [\"sphinx\"]
+
+          # [tool.setuptools]
+          # #T# Only directories with __init__.py will be considered part of the package
+          # packages = [\"\"]
+
+          [tool.setuptools.packages]
+          #T# Only directories with __init__.py will be considered part of the package
+          find = {namespaces = false}  # Disable implicit namespaces
+
+          #T# [projects.scripts]
+          #T# ${PYTHON_PACKAGE}-cli = \"${PYTHON_PACKAGE}:main_cli\"" >> "${1}"
 }
 
 function standard_env()
@@ -673,7 +686,7 @@ function write_dockerfile()
             #       g++ git; \
             #     rm -r /var/lib/apt/lists/*
 
-            ADD requirements.txt /src/
+            ADD requirements.txt pyproject.toml /src/
 
             #T# Simple packages can be added as dependencies to your project by:
             #T# - Editing your requirements.in file
@@ -715,14 +728,11 @@ function write_dockerfile()
                   . /venv/src/bin/activate; \
                   pip-8210 install pip-tools; \
             #T# # Uncomment for GDAL
-            #T#       # Get the version markers specified in the lock file, else blank
-            #T#       function pipfile_lock_version() { \
-            #T#         python3 -c "import json; print(json.load(open('"'"'${PIPENV_PIPFILE}.lock'"'"', '"'"'r'"'"'))['"'"'default'"'"']['"'"'$1'"'"']['"'"'version'"'"'])" 2>/dev/null || :; \
-            #T#       }; \
             #T#       # Add numpy to the prinstall line to install numpy first,
             #T#       # so that the gdal install works.
             #T#       pip-8210 install numpy; \
                   # Install all packages into the image
+                  # --no-build-isolation
                   pip-sync -v /src/requirements.txt; \
                 fi; \
                 # Cleanup and make way for the real /src that will be mounted at runtime
@@ -944,7 +954,7 @@ function deploy_Dockerfile_dockerignore()
             # !requirements.in
             !requirements.txt
             !'"${PROJECT_NAME}.env"'
-            !setup.py
+            !pyproject.toml
 
             # apps & scripts
             !scripts
@@ -1117,6 +1127,9 @@ function write_dockerignore()
   if [ "${USE_PIP_TOOLS}" = "1" ]; then
     if ! grep -q '!requirements.txt$' "${1}" 2>/dev/null; then
       echo '!requirements.txt' >> "${1}"
+    fi
+    if ! grep -q '!pyproject.toml$' "${1}" 2>/dev/null; then
+      echo '!pyproject.toml' >> "${1}"
     fi
   fi
 }
@@ -1629,67 +1642,66 @@ function new_just()
 
   # Make project dir
   mkdir -p "${PROJECT_DIR}"
-  cd "${PROJECT_DIR}"
 
   ###################
   # Write out files #
   ###################
   if [ "${USE_VSI_COMMON}" = "1" ]; then
-    write_setup_env "${SETUPFILE}"
+    write_setup_env "${PROJECT_DIR}/${SETUPFILE}"
   fi
 
-  write_project_env "${PROJECT_NAME}.env"
-  format_tutorial "${PROJECT_NAME}.env"
+  write_project_env "${PROJECT_DIR}/${PROJECT_NAME}.env"
+  format_tutorial "${PROJECT_DIR}/${PROJECT_NAME}.env"
 
-  write_readme_md "README.md"
+  write_readme_md "${PROJECT_DIR}/README.md"
 
-  write_justfile "${JUSTFILE}"
-  format_tutorial "${JUSTFILE}"
+  write_justfile "${PROJECT_DIR}/${JUSTFILE}"
+  format_tutorial "${PROJECT_DIR}/${JUSTFILE}"
 
   if [ "${USE_PIP_TOOLS}" = "1" ]; then
-    write_requirements_in requirements.in
-    format_tutorial requirements.in
-    write_requirements_txt requirements.txt
-    format_tutorial requirements.txt
-    write_setup_py setup.py
-    format_tutorial setup.py
+    write_requirements_in "${PROJECT_DIR}/requirements.in"
+    format_tutorial "${PROJECT_DIR}/requirements.in"
+    write_requirements_txt "${PROJECT_DIR}/requirements.txt"
+    format_tutorial "${PROJECT_DIR}/requirements.txt"
+    write_pyproject_toml "${PROJECT_DIR}/pyproject.toml"
+    format_tutorial "${PROJECT_DIR}/pyproject.toml"
 
-    mkdir -p "${PYTHON_PACKAGE}"
-    touch "${PYTHON_PACKAGE}/__init__.py"
+    mkdir -p "${PROJECT_DIR}/${PYTHON_PACKAGE}"
+    touch "${PROJECT_DIR}/${PYTHON_PACKAGE}/__init__.py"
 
-    mkdir -p scripts
-    test_script scripts/test_script.py
-    chmod 755 scripts/test_script.py
+    mkdir -p "${PROJECT_DIR}/scripts"
+    test_script "${PROJECT_DIR}/scripts/test_script.py"
+    chmod 755 "${PROJECT_DIR}/scripts/test_script.py"
   fi
 
   if [ "${USE_DOCKER}" = "1" ]; then
-    mkdir -p docker
+    mkdir -p "${PROJECT_DIR}/docker"
 
-    write_dockerfile "docker/${APP_NAME}.Dockerfile"
-    format_tutorial "docker/${APP_NAME}.Dockerfile"
+    write_dockerfile "${PROJECT_DIR}/docker/${APP_NAME}.Dockerfile"
+    format_tutorial "${PROJECT_DIR}/docker/${APP_NAME}.Dockerfile"
 
-    write_app_justfile "docker/${APP_NAME}.Justfile"
-    format_tutorial "docker/${APP_NAME}.Justfile"
+    write_app_justfile "${PROJECT_DIR}/docker/${APP_NAME}.Justfile"
+    format_tutorial "${PROJECT_DIR}/docker/${APP_NAME}.Justfile"
 
-    write_deploy_dockerfile "docker/deploy.Dockerfile"
-    format_tutorial "docker/deploy.Dockerfile"
+    write_deploy_dockerfile "${PROJECT_DIR}/docker/deploy.Dockerfile"
+    format_tutorial "${PROJECT_DIR}/docker/deploy.Dockerfile"
 
-    deploy_Dockerfile_dockerignore "docker/deploy.Dockerfile.dockerignore"
-    format_tutorial "docker/deploy.Dockerfile"
+    deploy_Dockerfile_dockerignore "${PROJECT_DIR}/docker/deploy.Dockerfile.dockerignore"
+    format_tutorial "${PROJECT_DIR}/docker/deploy.Dockerfile"
 
-    write_docker_compose_yml docker-compose.yml
-    format_tutorial docker-compose.yml
+    write_docker_compose_yml "${PROJECT_DIR}/docker-compose.yml"
+    format_tutorial "${PROJECT_DIR}/docker-compose.yml"
 
-    write_dockerignore .dockerignore
-    format_tutorial .dockerignore
+    write_dockerignore "${PROJECT_DIR}/.dockerignore"
+    format_tutorial "${PROJECT_DIR}/.dockerignore"
   else
-    write_hi_cpp hi.cpp
+    write_hi_cpp "${PROJECT_DIR}/hi.cpp"
   fi
 
   # Some final bookkeeping...
-  write_gitignore .gitignore
-  write_gitattributes .gitattributes
-  format_tutorial .gitattributes
+  write_gitignore "${PROJECT_DIR}/.gitignore"
+  write_gitattributes "${PROJECT_DIR}/.gitattributes"
+  format_tutorial "${PROJECT_DIR}/.gitattributes"
 
   # ****************************************************************************
   # ****DONE****DONE****DONE****DONE****DONE****DONE****DONE****DONE****DONE****
@@ -1703,7 +1715,7 @@ function new_just()
           To complete your git initialization, the following commands must be run:
           ------------------------------------------------------------------------"
   cmds+=("cd $(quote_escape "${PROJECT_DIR}")")
-  if [ ! -e ".git" ]; then
+  if [ ! -e "${PROJECT_DIR}/.git" ]; then
     cmds+=("git init .")
   fi
 
@@ -1726,7 +1738,7 @@ function new_just()
     cmds+=("git add hi.cpp")
   fi
   if [ "${USE_PIP_TOOLS}" = "1" ]; then
-    cmds+=("git add '${PYTHON_PACKAGE}' requirements.in requirements.txt setup.py scripts/test_script.py")
+    cmds+=("git add '${PYTHON_PACKAGE}' requirements.in requirements.txt pyproject.toml scripts/test_script.py")
   fi
 
   cmds+=("git commit -m 'Initial commit'")
@@ -1739,9 +1751,11 @@ function new_just()
   ask_question "Do you want these git commands to be executed for you now?" SETUP_GIT y
 
   if [ "${SETUP_GIT}" = "1" ]; then
-    for cmd in "${cmds[@]}"; do
-      eval "${cmd}"
-    done
+    pushd "${PROJECT_DIR}" &> /dev/null
+      for cmd in "${cmds[@]}"; do
+        eval "${cmd}"
+      done
+    popd &> /dev/null
   fi
 
   uwecho "
