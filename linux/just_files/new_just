@@ -331,8 +331,8 @@ function write_project_env()
 
             #T# When volumes get large enough, some docker compose commands will take longer
             #T# than the default 60 seconds timeout, and error out when nothing is wrong.
-            #T# 10 minutes is a more reasonable timeline. This only really matters everytime
-            #T# the venv volume is cleaned
+            #T# 10 minutes is a more reasonable timeline. This only really matters when the
+            #T# venv volume is cleaned
             : ${COMPOSE_HTTP_TIMEOUT=600}
 
             # Use this to add the user name to the docker compose project name. This is
@@ -574,10 +574,6 @@ function write_pyproject_toml()
           [project.optional-dependencies]
           docs = [\"sphinx\"]
 
-          # [tool.setuptools]
-          # #T# Only directories with __init__.py will be considered part of the package
-          # packages = [\"\"]
-
           [tool.setuptools.packages]
           #T# Only directories with __init__.py will be considered part of the package
           find = {namespaces = false}  # Disable implicit namespaces
@@ -588,13 +584,13 @@ function write_pyproject_toml()
 
 function standard_env()
 {
-  # This has to be handled in a separate function to be DRY, cause uwecho can't
+  # This has to be handled in a separate function to be DRY, because uwecho can't
   # handle multiline string expansion, it throws off the line counting
   uwecho 'ENV JUSTFILE="/src/docker/'"$(docker_env_quote_escape "${APP_NAME}.Justfile")"'" \
               JUST_SETTINGS="/src/'"$(docker_env_quote_escape "${PROJECT_NAME}.env")"'" \
-              #T# Points many linux tools to use this for cache
+              #T# Location of the cache used by many linux tools
               XDG_CACHE_HOME=/cache \
-              #T# Some tools recommends that these env variables be set to en_US.UTF-8.
+              #T# Some tools recommend that these env variables be set to en_US.UTF-8.
               #T# On debian, C.UTF-8 exists by default instead, and seems to work.
               #T# More detail: https://stackoverflow.com/a/38553499
               #T# Note: en_US.UTF-8 exists by default in Centos/Fedora base images
@@ -618,7 +614,7 @@ function write_dockerfile()
             FROM ${VSI_RECIPE_REPO}:gosu AS gosu
             #T# Dockers do not reap zombies by default, tini does this
             FROM ${VSI_RECIPE_REPO}:tini AS tini
-            #T# Just dockers use vsi common
+            #T# "just" dockers use vsi common
             FROM ${VSI_RECIPE_REPO}:vsi AS vsi' >> "${1}"
 
   if [ "${USE_PIP_TOOLS}" = "1" ]; then
@@ -639,7 +635,7 @@ function write_dockerfile()
             FROM ${BASE_IMAGE} AS dep_stage
 
             #T# Unlike normal docker shells, this shell will stop after any error, so you
-            #T# no longer need to end command lines with "&& \", you can just use a "; \"
+            #T# no longer need to end command lines with "&& \", you can just use "; \"
             SHELL ["/usr/bin/env", "bash", "-euxvc"]
 
             # Install your common dependencies here
@@ -660,7 +656,7 @@ function write_dockerfile()
                 ln -s /usr/local/conda-python/lib/{tcl,tk}*/ /usr/local/lib;
             COPY --from=pip-tools /usr/local /usr/local
             COPY --from=tini /usr/local /usr/local
-            #T# Do not use gosu in a production environment, it should be removed by then
+            #T# Do not use gosu in a production environment; it should be removed by then
             COPY --from=gosu /usr/local/bin/gosu /usr/local/bin/gosu
             RUN chmod u+s /usr/local/bin/gosu
 
@@ -673,14 +669,14 @@ function write_dockerfile()
 
             #T# The python_cache stage is a build stage intended to make the operation of the
             #T# "pip-sync" and "pip-compile" commands more efficient. It also helps to
-            #T# minimize the size of the final build stage, which does not require any build
-            #T# dependencies needed by this stage to compile python packages during
-            #T# "pip-sync" that, for example, do not have a pre-built wheels
+            #T# minimize the size of the final build stage, which does not require any of the
+            #T# build dependencies needed by this stage in order to compile python packages
+            #T# during "pip-sync" that, for example, do not have pre-built wheels
             FROM dep_stage AS python_cache
 
             # Install your build dependencies for python packages here
             #T# This is an example of installing g++ and git as dependencies. Your dependencies
-            #T# Will depend on what your python packages require
+            #T# will depend on what your python packages require
             # RUN apt-get update; \
             #     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             #       g++ git; \
@@ -689,9 +685,9 @@ function write_dockerfile()
             ADD requirements.txt pyproject.toml /src/
 
             #T# Simple packages can be added as dependencies to your project by:
-            #T# - Editing your requirements.in file
-            #T# - just pip-compile
-            #T# - just sync # (optionally updates the docker image)
+            #T# 1) Editing your requirements.in file
+            #T# 2) just pip-compile
+            #T# 3) just sync # (optionally updates the docker image)
             #T#
             #T# A more complicated python package, for example, is GDAL
             #T# - The GDAL Docker recipe will build the GDAL C Library for you
@@ -702,21 +698,22 @@ function write_dockerfile()
             #T# To test this out:
             #T# 1) Uncomment all the "Uncomment for GDAL" sections
             #T# 2) just sync # Update the image
-            #T# 3) Editing your requirements.in file and add numpy and gdal==3.2.1
+            #T# 3) Edit your requirements.in file and add numpy and gdal==3.2.1
             #T# 4) just pip-compile
             #T#    This will add the latest version of numpy (although a specific version can
             #T#    be specified) and a version of the pypi package GDAL compatible with the
             #T#    GDAL C Library from the recipe.
             #T#    Note: the version of the pypi GDAL and C GDAL should match as closely as
             #T#    possible
-            #T# 4) just sync # (optionally updates the docker image)
-            #T# 5) just shell
-            #T# 6) python -c "import osgeo.gdal_array" # Should not create an error message
+            #T# 5) just sync # (optionally updates the docker image)
+            #T# 6) just shell
+            #T# 7) python -c "import osgeo.gdal_array" # Should not create an error message
             #T#
             #T# Call pip-fake for each editable package
-            RUN pip-fake "'"$(docker_add_quote_escape "/src/${RELATIVE_PATH}")"'" vsi python/vsi; \
-                #T# pip-fake /src/external/editable_package package_name {optional_modules_subdir_paths}; \
-                pip-fake /src '"${PROJECT_NAME}"';
+            RUN pip-fake /src '"${PROJECT_NAME}"'; \
+                #T# pip-fake /src/external/editable_package package_name; \
+                pip-fake "'"$(docker_add_quote_escape "/src/${RELATIVE_PATH}")"'" vsi python/vsi
+
 
             ARG SKIP_PIP_SYNC
             #T# Sometimes you need to fix the image so that pip-compile can be run, but
@@ -728,19 +725,17 @@ function write_dockerfile()
                   . /venv/src/bin/activate; \
                   pip-8210 install pip-tools; \
             #T# # Uncomment for GDAL
-            #T#       # Add numpy to the prinstall line to install numpy first,
-            #T#       # so that the gdal install works.
-            #T#       pip-8210 install numpy; \
-                  # Install all packages into the image
-                  # --no-build-isolation
+            #T#       # Add numpy to the pre-install line above to install the correct version of numpy,
+            #T#       # so that when gdal compiles, it uses the correct version of numpy.
+            #T#       pip-8210 install pip-tools numpy; \
                   pip-sync -v /src/requirements.txt; \
                 fi; \
                 # Cleanup and make way for the real /src that will be mounted at runtime
                 rm -rf /src/* /tmp/pip*
 
             # These recipes are added here instead of in the dep_stage so that docker
-            # is not constantly rerunning pip-sync every time the slightest change
-            # to vsi_common is made.
+            # is not constantly rerunning pip-sync every time the slightest change to
+            # vsi_common is made.
             COPY --from=vsi /vsi /vsi
 
             ENTRYPOINT ["/usr/bin/env", "bash", "/vsi/linux/just_files/just_entrypoint.sh"]
@@ -804,10 +799,11 @@ function write_dockerfile()
             ADD ["'"$(docker_add_quote_escape docker/"${APP_NAME}.Justfile")"'", "/src/docker/"]
             ' >> "${1}"
     standard_env >> "${1}"
+
+    # Does not require execute permissions, unlike:
+    # ENTRYPOINT ["/usr/local/bin/tini", "--", "/vsi/linux/just_files/just_entrypoint.sh"]
     uwecho '
             ENTRYPOINT ["/usr/local/bin/tini", "--", "/usr/bin/env", "bash", "/vsi/linux/just_files/just_entrypoint.sh"]
-            #T# Does not require execute permissions, unlike:
-            #T# ENTRYPOINT ["/usr/local/bin/tini", "--", "/vsi/linux/just_files/just_entrypoint.sh"]
 
             #T# Update the default '"${APP_NAME}.Justfile"' target
             CMD ["'"${APP_NAME}"'-cmd"]' >> "${1}"
@@ -870,7 +866,7 @@ function write_deploy_dockerfile()
     echo   'RUN rm -rf /src /vsi' >> "${1}"
   fi
   uwecho   '
-            # Copy from source_cache
+            # copy from source_cache
             COPY --from=source_cache /src /src
             COPY --from=source_cache /vsi /vsi
 
@@ -1006,7 +1002,7 @@ function write_docker_compose_yml()
   uwecho   '#   - &home_volume
             #     type: volume
             #     source: home-volume
-            #     target: ${'"${PROJECT_PREFIX}"'_HOME} # home-volume should be overridable
+            #     target: ${'"${PROJECT_PREFIX}"'_HOME} # override home-volume
 
             services:
               runner: &runner
@@ -1116,7 +1112,7 @@ function write_dockerignore()
             !docker' >> "${1}"
   fi
   if [ "${USE_VSI_COMMON}" = "1" ] && ! grep -q '!'"${RELATIVE_PATH}" "${1}" 2>/dev/null; then
-    uwecho '#T# We need the vsi common dir for the vsi recipe
+    uwecho '#T# We need the vsi common dir for the vsi recipes
             !'"${RELATIVE_PATH}" >> "${1}"
   fi
 
