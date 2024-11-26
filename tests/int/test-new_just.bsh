@@ -70,13 +70,14 @@ begin_test "New Just"
 (
   setup_test
   "${VSI_COMMON_DIR}/linux/just_files/new_just" --continue --vsi \
-                                     --docker --pipenv --no-git \
+                                     --docker --pip-tools --no-git \
                                      --prefix JTEST \
                                      --project-dir "${TESTDIR}" \
                                      --justfile "j.u.s.t  f i'l\"e" \
                                      --setupfile "set u.p  f i'l\"e" \
                                      --project-name "je.  t e's\"t" \
                                      --vsi-dir "v.s.i  d i'r\"" \
+                                     --python-package yap \
                                      --app yaan \
                                      --tutorial \
                                      --repo atest/btest
@@ -103,10 +104,10 @@ begin_test "New Just"
   popd
   chmod 755 ss/docker
 
-  [ "$(just build)" = "mockd buildx bake gosu pipenv tini vsi
-mockd compose -f ${TESTDIR}/docker-compose.yml build
-mockd volume rm testpro_venv" ]
-  [ "$(just build example)" = "mockd compose -f ${TESTDIR}/docker-compose.yml build example" ]
+  assert_str_eq "$(just build)" "mockd buildx bake conda-python gosu pip-tools tini vsi
+mockd buildx bake yaan python_cache
+mockd volume rm testpro_venv"
+  assert_str_eq "$(just build example)" "mockd buildx bake build example"
 
   file_name="${TESTDIR}/docker-compose.yml"
   if [[ ${file_name} =~ ^${does_not_needs_quote_escape_regex}$ ]]; then
@@ -120,8 +121,7 @@ mockd volume rm testpro_venv" ]
 
   tmp_file="$(quote_unescape "${BASH_REMATCH[1]}")"
 
-  ans="version: '2.4'
-services:
+  ans="services:
   yaan:
 "
   if [ -d "/tmp/.X11-unix" ]; then
@@ -139,7 +139,18 @@ services:
   ans+="
       - JTEST_SOURCE_DIR_HOST=${TESTDIR}
       - JTEST_SOURCE_DIR=${JUST_PATH_ESC}/src
-  yaan_pipenv:
+      - JTEST_USERNAME_HOST=$(id -n -u)
+      - JTEST_USERNAME=user
+      - JTEST_VSI_COMMON_DIR_HOST=${TESTDIR}/v.s.i  d i'r\"
+      - JTEST_VSI_COMMON_DIR=/vsi
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [compute,graphics,utility]
+              device_ids: [\"all\"]
+  python_cache:
 "
   if [ -d "/tmp/.X11-unix" ]; then
     ans+="    volumes:
@@ -154,7 +165,45 @@ services:
   fi
   ans+="
       - JTEST_SOURCE_DIR_HOST=${TESTDIR}
-      - JTEST_SOURCE_DIR=${JUST_PATH_ESC}/src"
+      - JTEST_SOURCE_DIR=${JUST_PATH_ESC}/src
+      - JTEST_USERNAME_HOST=$(id -n -u)
+      - JTEST_USERNAME=user
+      - JTEST_VSI_COMMON_DIR_HOST=${TESTDIR}/v.s.i  d i'r\"
+      - JTEST_VSI_COMMON_DIR=/vsi
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [compute,graphics,utility]
+              device_ids: [\"all\"]
+  deploy:
+"
+  if [ -d "/tmp/.X11-unix" ]; then
+    ans+="    volumes:
+      - ${x11_dir}:/tmp/.X11-unix:ro
+"
+  fi
+  ans+="    environment:
+      - JUST_IN_CONTAINER=docker"
+  if [ "${OS-}" = "Windows_NT" ]; then
+    ans+="
+      - JUST_HOST_WINDOWS=1"
+  fi
+  ans+="
+      - JTEST_SOURCE_DIR_HOST=${TESTDIR}
+      - JTEST_SOURCE_DIR=${JUST_PATH_ESC}/src
+      - JTEST_USERNAME_HOST=$(id -n -u)
+      - JTEST_USERNAME=user
+      - JTEST_VSI_COMMON_DIR_HOST=${TESTDIR}/v.s.i  d i'r\"
+      - JTEST_VSI_COMMON_DIR=/vsi
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [compute,graphics,utility]
+              device_ids: [\"all\"]"
 
   assert_str_eq "$(cat "${tmp_file}")" "${ans}"
 
@@ -176,10 +225,10 @@ services:
 )
 end_test
 
-begin_test "New Just no pipenv"
+begin_test "New Just no pip-tools"
 (
   setup_test
-  "${VSI_COMMON_DIR}/linux/just_files/new_just" --defaults --continue --prefix JTEST --vsi --no-pipenv
+  "${VSI_COMMON_DIR}/linux/just_files/new_just" --defaults --continue --prefix JTEST --vsi --no-pip-tools
 
   mkdir -p "${TESTDIR}/external"
 
@@ -202,9 +251,10 @@ begin_test "New Just no pipenv"
   popd
   chmod 755 ${TESTDIR}/ss/docker*
 
-  [ "$(just build)" = "mockd buildx bake gosu tini vsi
-mockd compose -f ${TESTDIR}/docker-compose.yml build" ]
-  [ "$(just build example)" = "mockd compose -f ${TESTDIR}/docker-compose.yml build example" ]
+  assert_str_eq "$(just build)" "mockd buildx bake gosu tini vsi
+mockd buildx bake runner
+mockd volume rm andytest2_venv"
+  assert_str_eq "$(just build runner)" "mockd buildx bake build runner"
 
   file_name="${TESTDIR}/docker-compose.yml"
   if [[ ${file_name} =~ ^${does_not_needs_quote_escape_regex}$ ]]; then
@@ -214,13 +264,12 @@ mockd compose -f ${TESTDIR}/docker-compose.yml build" ]
     file_name="$(quote_escape "${file_name}")"
   fi
 
-  [[ $(just -n run example) =~ docker\ compose\ -f\ ${file_name}\ -f\ (.*)\ run\ --rm\ --service-ports\ example ]] || false
+  [[ $(just -n run runner) =~ docker\ compose\ -f\ ${file_name}\ -f\ (.*)\ run\ --rm\ --service-ports\ runner ]] || false
 
   tmp_file="$(quote_unescape "${BASH_REMATCH[1]}")"
 
-  ans="version: '2.4'
-services:
-  example:
+  ans="services:
+  runner:
 "
   if [ -d "/tmp/.X11-unix" ]; then
     x11_dir=$(real_path /tmp/.X11-unix)
@@ -236,7 +285,45 @@ services:
   fi
   ans+="
       - JTEST_SOURCE_DIR_HOST=${TESTDIR}
-      - JTEST_SOURCE_DIR=${JUST_PATH_ESC}/src"
+      - JTEST_SOURCE_DIR=${JUST_PATH_ESC}/src
+      - JTEST_USERNAME_HOST=$(id -n -u)
+      - JTEST_USERNAME=user
+      - JTEST_VSI_COMMON_DIR_HOST=${TESTDIR}/external/vsi_common
+      - JTEST_VSI_COMMON_DIR=/vsi
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [compute,graphics,utility]
+              device_ids: [\"all\"]
+  deploy:
+"
+  if [ -d "/tmp/.X11-unix" ]; then
+    ans+="    volumes:
+      - ${x11_dir}:/tmp/.X11-unix:ro
+"
+  fi
+  ans+="    environment:
+      - JUST_IN_CONTAINER=docker"
+  if [ "${OS-}" = "Windows_NT" ]; then
+    ans+="
+      - JUST_HOST_WINDOWS=1"
+  fi
+  ans+="
+      - JTEST_SOURCE_DIR_HOST=${TESTDIR}
+      - JTEST_SOURCE_DIR=${JUST_PATH_ESC}/src
+      - JTEST_USERNAME_HOST=$(id -n -u)
+      - JTEST_USERNAME=user
+      - JTEST_VSI_COMMON_DIR_HOST=${TESTDIR}/external/vsi_common
+      - JTEST_VSI_COMMON_DIR=/vsi
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [compute,graphics,utility]
+              device_ids: [\"all\"]"
 
   assert_str_eq "$(cat "${tmp_file}")" "${ans}"
 
@@ -249,13 +336,14 @@ begin_test "New Just no docker"
   setup_test
 
   "${VSI_COMMON_DIR}/linux/just_files/new_just" --continue --vsi \
-                                     --no-docker --no-pipenv --no-git \
+                                     --no-docker --no-pip-tools --no-git \
                                      --prefix JTEST \
                                      --project-dir "${TESTDIR}" \
                                      --justfile "j.u.s.t  f i'l\"e" \
                                      --setupfile "set u.p  f i'l\"e" \
                                      --project-name "je.  t e's\"t" \
                                      --vsi-dir "v.s.i  d i'r\"" \
+                                     --python-package yap \
                                      --app yaan \
                                      --no-tutorial \
                                      --repo atest/btest
@@ -332,13 +420,14 @@ begin_test "New just instructions test (git)"
   rv=0
   # Evaluate git commands
   "${VSI_COMMON_DIR}/linux/just_files/new_just" --continue --vsi \
-                                                --docker --pipenv --git \
+                                                --docker --pip-tools --git \
                                                 --prefix JTEST \
                                                 --project-dir "${TESTDIR}" \
                                                 --justfile "j.u.s.t  f i'l${tough_name}e" \
                                                 --setupfile "set u.p  f i'l${tough_name}e" \
                                                 --project-name "je.  t e's${tough_name}t" \
                                                 --vsi-dir "v.s.i  d i'r${tough_name}" \
+                                                --python-package yap \
                                                 --app yaan \
                                                 --tutorial \
                                                 --repo tmp || rv="${?}"
@@ -384,6 +473,7 @@ begin_test "New just docker test"
                                      --project-dir "${TESTDIR}" \
                                      --prefix JTEST \
                                      --no-tutorial \
+                                     --python-package yap \
                                      --app yaan --repo tmp
 
   if [ "${OS-}" = "Windows_NT" ]; then
@@ -407,7 +497,7 @@ begin_test "New just docker test"
   fi
 
   # for some reason, only on Windows running through xargs do I have this tty issue, and only here
-  [[ $(DOCKER_COMPOSE_EXTRA_RUN_ARGS='-T' just run yaan pipenv run pip freeze --all) =~ pip==.*setuptools==.*wheel==.* ]] || false
+  [[ $(DOCKER_COMPOSE_EXTRA_RUN_ARGS='-T' just run yaan pip freeze --all) =~ pip==.*setuptools==.*wheel==.* ]] || false
 
   just docker compose down
 )

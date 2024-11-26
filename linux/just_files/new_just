@@ -14,7 +14,7 @@ fi
 
 # Use a command like true, so that when I comment, it still works
 # COMMENT NEXT LINE when developing, uncomment before committing.
-# cat - << 'true' > "${temp_file}"
+cat - << 'true' > "${temp_file}"
 
 #*# just/new_just
 
@@ -137,6 +137,12 @@ function docker_env_quote_escape()
   echo "${foo//\"/\\\"}"
 }
 
+function bash_default_quote_escape()
+{
+  local foo="${1//\'/\\\'}"
+  echo "${foo//\"/\\\"}"
+}
+
 # $1 - Var name
 # $2 - default
 # $3 - Prompt message
@@ -245,15 +251,15 @@ function write_project_env()
             : ${'"${PROJECT_PREFIX}"'_DOCKER_REPO='"${REPO_NAME}"'}
             : ${VSI_RECIPE_REPO=${'"${PROJECT_PREFIX}"'_DOCKER_REPO}_recipes}
             : ${'"${PROJECT_PREFIX}"'_IMAGE_FOOTER=_${'"${PROJECT_PREFIX}"'_USERNAME}}
-            : ${'"${PROJECT_PREFIX}"'_RUNNER_IMAGE=${'"${PROJECT_PREFIX}"'_DOCKER_REPO}:runner${'"${PROJECT_PREFIX}"'_IMAGE_FOOTER}}
+            : ${'"${PROJECT_PREFIX}_${APP_NAME_UPPER}"'_IMAGE=${'"${PROJECT_PREFIX}"'_DOCKER_REPO}:'"${APP_NAME}"'${'"${PROJECT_PREFIX}"'_IMAGE_FOOTER}}
             : ${'"${PROJECT_PREFIX}"'_PYTHON_CACHE_IMAGE=${'"${PROJECT_PREFIX}"'_DOCKER_REPO}:python_cache${'"${PROJECT_PREFIX}"'_IMAGE_FOOTER}}
             : ${'"${PROJECT_PREFIX}"'_DEPLOY_IMAGE=${'"${PROJECT_PREFIX}"'_DOCKER_REPO}:deploy${'"${PROJECT_PREFIX}"'_IMAGE_FOOTER}}
 
             # Primary service runner
             if [ "${JUST_RODEO-}" = "1" ]; then
-              : ${'"${PROJECT_PREFIX}"'_COMPOSE_SERVICE_RUNNER=deploy}
+              : ${'"${PROJECT_PREFIX}"'_COMPOSE_SERVICE_'"${APP_NAME_UPPER}"'=deploy}
             else
-              : ${'"${PROJECT_PREFIX}"'_COMPOSE_SERVICE_RUNNER=runner}
+              : ${'"${PROJECT_PREFIX}"'_COMPOSE_SERVICE_'"${APP_NAME_UPPER}=${APP_NAME}"'}
             fi
 
             # Remove development packages from deploy image
@@ -274,8 +280,8 @@ function write_project_env()
             : ${'"${PROJECT_PREFIX}"'_SOURCE_DIR_DOCKER=/src}
             : ${'"${PROJECT_PREFIX}"'_SOURCE_DIR_TYPE=bind}
             #T# vsi_common volume
-            : ${'"${PROJECT_PREFIX}"'_VSI_COMMON_DIR="${'"${PROJECT_PREFIX}"'_CWD}/'"${RELATIVE_PATH}"'"}
-            : ${'"${PROJECT_PREFIX}"'_VSI_COMMON_DIR_DOCKER="/vsi"}
+            : ${'"${PROJECT_PREFIX}"'_VSI_COMMON_DIR=${'"${PROJECT_PREFIX}"'_CWD}/'"$(bash_default_quote_escape "${RELATIVE_PATH}")"'}
+            : ${'"${PROJECT_PREFIX}"'_VSI_COMMON_DIR_DOCKER=/vsi}
             : ${'"${PROJECT_PREFIX}"'_VSI_COMMON_DIR_TYPE=bind}
 
             #T# Add graphical support for Linux containers on Linux
@@ -429,19 +435,20 @@ function write_justfile()
                     else
                       justify build recipes-auto "${'"${PROJECT_PREFIX}"'_CWD}/docker"/*.Dockerfile' >> "${1}"
     if [ "${USE_PIP_TOOLS}" = "1" ]; then
-      uwecho '        Docker buildx bake runner python_cache
+      uwecho '        Docker buildx bake '"${APP_NAME}"' python_cache
                       justify docker compose clean venv' >> "${1}"
     else
-      uwecho '        Docker buildx bake runner
+      uwecho '        Docker buildx bake '"${APP_NAME}"'
                       justify docker compose clean venv' >> "${1}"
     fi
     uwecho   '      fi
                     ;;
                   build_deploy) # Build the deploy docker image
                     Docker buildx bake deploy
-                    ;;' >> "${1}"
+                    ;;
+              ' >> "${1}"
     uwecho   '    run_'"${APP_NAME}"') # Run '"${APP_NAME}"' 1
-                    # These commands should run your app
+                    # These commands will run your app
                     Just-docker-compose run --service-ports '"${APP_NAME}"' ${@+"${@}"}
                     extra_args=${#}
                     ;;
@@ -455,6 +462,7 @@ function write_justfile()
                     if [ ! -e "${'"${PROJECT_PREFIX}"'_CWD}/.just_synced" ]; then
                       #T# Add any commands here, like initializing a database, etc... that need
                       #T# to be run the first time sync is run.
+
                       touch "${'"${PROJECT_PREFIX}"'_CWD}/.just_synced"
                     fi
                     # Add any extra steps to run when syncing
@@ -563,7 +571,7 @@ function write_pyproject_toml()
           ]
           license = {text = \"MIT License\"}
           readme = \"README.md\"
-          description = \"${PROJECT_NAME} description\"
+          description = \"${PROJECT_NAME//\"/\\\"} description\"
 
           [project.urls]
           Homepage = \"https://github.com/visionsysmtesinc/${PYTHON_PACKAGE}\"
@@ -710,9 +718,9 @@ function write_dockerfile()
             #T# 7) python -c "import osgeo.gdal_array" # Should not create an error message
             #T#
             #T# Call pip-fake for each editable package
-            RUN pip-fake /src '"${PROJECT_NAME}"'; \
+            RUN pip-fake /src '"${PYTHON_PACKAGE}"'; \
                 #T# pip-fake /src/external/editable_package package_name; \
-                pip-fake "'"$(docker_add_quote_escape "/src/${RELATIVE_PATH}")"'" vsi python/vsi
+                pip-fake '"$(quote_escape "/src/${RELATIVE_PATH}")"' vsi python/vsi
 
 
             ARG SKIP_PIP_SYNC
@@ -818,7 +826,7 @@ function write_deploy_dockerfile()
 
   uwecho   '# syntax=docker/dockerfile:1.4
             ARG SOURCE_IMAGE
-            ARG RUNNER_IMAGE
+            ARG '"${APP_NAME_UPPER}"'_IMAGE
 
             # --------------------
             # Source cache: /src /vsi
@@ -836,8 +844,8 @@ function write_deploy_dockerfile()
             COPY --from=vsi /vsi /vsi
 
             # link src, vsi, etc...
-            RUN mkdir -p "/src/'"$(docker_add_quote_escape "$(dirname "${RELATIVE_PATH}")")"'"; \
-                ln -s /vsi "/src/'"$(docker_add_quote_escape "${RELATIVE_PATH}")"'";
+            RUN mkdir -p /src/'"$(quote_escape "$(dirname "${RELATIVE_PATH}")")"'; \
+                ln -s /vsi /src/'"$(quote_escape "${RELATIVE_PATH}")"';
 
             # files & folders' >> "${1}"
   if [ "${USE_PIP_TOOLS}" = "1" ]; then
@@ -857,7 +865,7 @@ function write_deploy_dockerfile()
   uwecho   '# --------------------
             # Final deployment
             # --------------------
-            FROM ${RUNNER_IMAGE}
+            FROM ${'"${APP_NAME_UPPER}"'_IMAGE}
 
             # clear the way' >> "${1}"
   if [ "${USE_PIP_TOOLS}" = "1" ]; then
@@ -884,7 +892,7 @@ function write_deploy_dockerfile()
                       ; \
                 fi
 
-            # entrypoint & command are reused from RUNNER_IMAGE' >> "${1}"
+            # entrypoint & command are reused from '"${APP_NAME_UPPER}"'_IMAGE' >> "${1}"
 }
 
 ####################
@@ -953,9 +961,13 @@ function deploy_Dockerfile_dockerignore()
             !pyproject.toml
 
             # apps & scripts
-            !scripts
-            !'"${PYTHON_PACKAGE}"'
+            !scripts' >> "${1}"
 
+  if [ "${USE_PIP_TOOLS}" = "1" ]; then
+    echo   "!${PYTHON_PACKAGE}" >> "${1}"
+  fi
+
+  uwecho   '
             # vsi_common
             !'"${RELATIVE_PATH}" >> "${1}"
 }
@@ -1005,8 +1017,8 @@ function write_docker_compose_yml()
             #     target: ${'"${PROJECT_PREFIX}"'_HOME} # override home-volume
 
             services:
-              runner: &runner
-                build: &runner_build
+              '"${APP_NAME}"': &'"${APP_NAME}"'
+                build: &'"${APP_NAME}"'_build
                   context: .
                   dockerfile: docker/'"${APP_NAME}"'.Dockerfile
                   args:
@@ -1016,7 +1028,7 @@ function write_docker_compose_yml()
                     BASE_IMAGE: "${'"${PROJECT_PREFIX}"'_BASE_IMAGE}"
 
                 #T# prevent different users from clobbering each others images
-                image: ${'"${PROJECT_PREFIX}"'_RUNNER_IMAGE}
+                image: ${'"${PROJECT_PREFIX}_${APP_NAME_UPPER}"'_IMAGE}
                 environment:
                   <<: *common_environment
                   JUSTFILE: /src/docker/'"${APP_NAME}"'.Justfile
@@ -1034,9 +1046,9 @@ function write_docker_compose_yml()
     uwecho '      - <<: *venv_volume
 
               python_cache:
-                <<: *runner
+                <<: *'"${APP_NAME}"'
                 build:
-                  <<: *runner_build
+                  <<: *'"${APP_NAME}"'_build
                   target: python_cache
                 image: ${'"${PROJECT_PREFIX}"'_PYTHON_CACHE_IMAGE}
                 volumes:
@@ -1051,13 +1063,13 @@ function write_docker_compose_yml()
   uwecho   '
               # Deploy image
               deploy: &deploy
-                <<: *runner
+                <<: *'"${APP_NAME}"'
                 build:
                   context: .
                   dockerfile: docker/deploy.Dockerfile
                   args:
-                    SOURCE_IMAGE: ${'"${PROJECT_PREFIX}"'_RUNNER_IMAGE}
-                    RUNNER_IMAGE: ${'"${PROJECT_PREFIX}"'_RUNNER_IMAGE}
+                    SOURCE_IMAGE: ${'"${PROJECT_PREFIX}_${APP_NAME_UPPER}"'_IMAGE}
+                    '"${APP_NAME_UPPER}"'_IMAGE: ${'"${PROJECT_PREFIX}_${APP_NAME_UPPER}"'_IMAGE}
                     REMOVE_DEV_PACKAGES: ${'"${PROJECT_PREFIX}"'_REMOVE_DEV_PACKAGES}
                 image: ${'"${PROJECT_PREFIX}"'_DEPLOY_IMAGE}
                 environment:
@@ -1085,9 +1097,9 @@ function write_singular_compose_env()
 {
   exists "${1}" && return 0
 
-  uwecho 'instances+=(runner)
-          runner_singular_flags=(-c -e)
-          : ${runner_image=${'"${PROJECT_PREFIX}"'_RUN_DIR}/build/'"${APP_NAME}"'_runner.simg}' >> "${1}"
+  uwecho 'instances+=('"${APP_NAME}"')
+          '"${APP_NAME}"'_singular_flags=(-c -e)
+          : ${'"${APP_NAME}"'_image=${'"${PROJECT_PREFIX}"'_RUN_DIR}/build/'"${APP_NAME}"'_'"${APP_NAME}"'.simg}' >> "${1}"
 }
 
 #####################
@@ -1210,8 +1222,8 @@ function test_script()
   exists "${1}" && return 0
 
   uwecho '#!/usr/bin/env python
-          import runner
-          print(runner.__file__)' >> "${1}"
+          import '"${PYTHON_PACKAGE}"'
+          print('"${PYTHON_PACKAGE}"'.__file__)' >> "${1}"
 }
 
 
@@ -1724,7 +1736,7 @@ function new_just()
           "git add $(quote_escape "${SETUPFILE}") .gitmodules")
   fi
 
-  cmds+=('sed "${sed_flags_i[@]}" '"'"'s|^JUST_VERSION=.*$|JUST_VERSION='"'"'"$(. '"${RELATIVE_PATH}"'/linux/just_files/just_version.bsh; echo "${JUST_VERSION}")|" '"$(quote_escape "${PROJECT_NAME}")"'.env')
+  cmds+=('sed "${sed_flags_i[@]}" '"'"'s|^JUST_VERSION=.*$|JUST_VERSION='"'"'"$(. '"$(quote_escape "${RELATIVE_PATH}")"'/linux/just_files/just_version.bsh; echo "${JUST_VERSION}")|" '"$(quote_escape "${PROJECT_NAME}")"'.env')
 
   cmds+=("git add .gitignore README.md $(quote_escape "${JUSTFILE}") $(quote_escape "${PROJECT_NAME}").env")
 
