@@ -64,7 +64,7 @@ function cmake-install()
   # directory check
   if [ -z "${cmake_dir-}" ]; then
     echo "CMake install must specify --dir" >& 2
-    local JUST_IGNORE_EXIT_CODES=1
+    JUST_IGNORE_EXIT_CODES=1
     return 1
   fi
 
@@ -140,7 +140,7 @@ function cmake-install()
   # Make sure python meets request
   if ! meet_requirements "${cmake_version}" "==${cmake_ver}"; then
     echo "CMake version ${cmake_version} is not the requested version ${cmake_ver}" >&2
-    local JUST_IGNORE_EXIT_CODES=1
+    JUST_IGNORE_EXIT_CODES=1
     return 1
   fi
 
@@ -197,7 +197,7 @@ function conda-install()
   # directory check
   if [ -z "${conda_dir-}" ]; then
     echo "Conda install must specify --dir" >& 2
-    local JUST_IGNORE_EXIT_CODES=1
+    JUST_IGNORE_EXIT_CODES=1
     return 1
   fi
 
@@ -289,7 +289,7 @@ function conda-install()
 
     # install conda
     bash "${CONDA_INSTALLER}" -b -p "${conda_dir}" -s
-    # Conda installer doesn't support spacer, PERIOD!
+    # Conda installer doesn't support spaces, PERIOD!
     # ERROR: Cannot install into directories with spaces
 
     # conda executable
@@ -310,7 +310,7 @@ function conda-install()
     conda_ver_match="${conda_ver_match%-*}"  # remove any "-??" suffix (as in miniforge 4.3.10-1)
     if ! meet_requirements "${conda_version}" "==${conda_ver_match}"; then
       echo "Conda version ${conda_version} is not the requested version ${conda_ver}" >&2
-      local JUST_IGNORE_EXIT_CODES=1
+      JUST_IGNORE_EXIT_CODES=1
       return 1
     fi
   fi
@@ -351,7 +351,7 @@ function conda-install()
 # * else: system level conda if available, then temporary miniconda3 download
 #
 # :Arguments: * [``--dir {dir}``] - Python install directory
-#             * [``--version {version}``] - Python version for install (default= ``${PYTHON_VERSION:-3.6.9}``)
+#             * [``--version {version}``] - Python version for install (default= ``${PYTHON_VERSION:-3.6.9}``). Specifying ``3.x`` will auto select the latest in the 3.x versions.
 #             * [``--conda {CONDA}``] - Conda executable
 #             * [``--conda-installer {INSTALLER}``] - Conda installer
 #             * [``--download``] - Download miniconda
@@ -385,6 +385,14 @@ function conda-python-install()
       --list list_versions \
       -- ${@+"${@}"}
 
+  local minor_version_pattern='^([0-9]+)\.([0-9]+)$'
+  local install_version="==${python_ver}"
+  local check_version=("${install_version}")
+  if [[ ${python_ver} =~ ${minor_version_pattern} ]]; then
+    check_version=(">=${BASH_REMATCH[0]}" "<${BASH_REMATCH[1]}.$((${BASH_REMATCH[2]}+1))")
+    install_version="${check_version[0]},${check_version[1]}"
+  fi
+
   if [ "${list_versions}" != "0" ]; then
     # This has worked since at least 2016, so fairly stable
     download_to_stdout https://anaconda.org/anaconda/python/files | sed -n${sed_flag_rE} 's|^ *<a href=".*/anaconda/python/files\?version=([0-9.]*)">|\1|p'
@@ -395,7 +403,7 @@ function conda-python-install()
   # directory check
   if [ -z "${python_dir-}" ]; then
     echo "Conda python install must specify --dir" >& 2
-    local JUST_IGNORE_EXIT_CODES=1
+    JUST_IGNORE_EXIT_CODES=1
     return 1
   fi
 
@@ -439,7 +447,7 @@ function conda-python-install()
     if [ -r "${conda_activate-}" ]; then
       source "${conda_activate}"
     fi
-    "${CONDA}" create -y -p "${python_dir}" "python==${python_ver}" ${packages[@]+"${packages[@]}"}
+    "${CONDA}" create -y -p "${python_dir}" "python${install_version}" ${packages[@]+"${packages[@]}"}
   )
   local python_exe_footer
   if [ "${OS-}" = "Windows_NT" ]; then
@@ -460,9 +468,9 @@ function conda-python-install()
   echo "Python ${python_version} installed at \"${python_exe}\"" >&2
 
   # Make sure python meets request
-  if ! meet_requirements "${python_version}" "==${python_ver}"; then
+  if ! meet_requirements "${python_version}" "${check_version[@]}"; then
     echo "Python version ${python_version} is not the requested version ${python_ver}" >&2
-    local JUST_IGNORE_EXIT_CODES=1
+    JUST_IGNORE_EXIT_CODES=1
     return 1
   fi
 
@@ -547,7 +555,7 @@ function pipenv-install()
   # check for pipenv directory
   if [ -z "${pipenv_dir-}" ]; then
     echo "Pipenv install must specify --dir" >& 2
-    local JUST_IGNORE_EXIT_CODES=1
+    JUST_IGNORE_EXIT_CODES=1
     return 1
   fi
 
@@ -555,14 +563,14 @@ function pipenv-install()
   : ${PYTHON:=$( (command -v python3 || command -v python || command -v python2) | head -n 1)}
   if [ ! -f "${PYTHON}" ]; then
     echo "Pipenv install cannot find python executable" >&2
-    local JUST_IGNORE_EXIT_CODES=1
+    JUST_IGNORE_EXIT_CODES=1
     return 1
   fi
 
   # optional python_activate script
   if [ -n "${python_activate-}" ] && [ ! -f "${python_activate}" ]; then
     echo "Pipenv install cannot find \"${python_activate}\"" >&2
-    local JUST_IGNORE_EXIT_CODES=1
+    JUST_IGNORE_EXIT_CODES=1
     return 1
   fi
 
@@ -604,7 +612,7 @@ function pipenv-install()
   # Make sure pipenv meets requirements
   if ! meet_requirements "${pipenv_version}" "==${pipenv_ver}"; then
     echo "Pipenv version ${pipenv_version} does not match request ${pipenv_ver}" >&2
-    local JUST_IGNORE_EXIT_CODES=1
+    JUST_IGNORE_EXIT_CODES=1
     return 1
   fi
 
@@ -627,6 +635,109 @@ function pipenv-install()
           ' >> "${pipenv_activate}"
 }
 
+#**
+# .. function:: vsbuild-install
+#
+# Install Visual Studio 2022 Build tools. This is a system wide install and not a local user install.
+#
+# :Arguments: * [``--installer {INSTALLER}``] - VS installer (default= ``${VS_BUILD_TOOLS_INSTALLER:-}``)
+#             * [``--download``] - Download VS installer and enables online mode
+#             * [``--channel``] - Channel URI. See [here](https://stackoverflow.com/a/78098290/4166604) to figure out a specific channel URI. E.g. ``https://aka.ms/vs/17/release.ltsc.17.0/channel``.
+#             * [``--add``] - Add additional components
+#
+# Additional components can be added; the intent is to specify additional MSVC versions.
+#
+# - 2022 - ``Microsoft.VisualStudio.Component.VC.Tools.x86.x64`` (always added, listed just for reference)
+# - 2017 - ``Microsoft.VisualStudio.Component.VC.v141.x86.x64``
+# - 2015 - ``Microsoft.VisualStudio.Component.VC.140``
+#
+# 2019 is more difficult. Every version has a version number in the component name. E.g.:
+# - ``Microsoft.VisualStudio.Component.VC.14.29.16.11.x86.x64``
+# - ``Microsoft.VisualStudio.Component.VC.14.30.17.0.x86.x64``
+# - ``Microsoft.VisualStudio.Component.VC.14.31.17.1.x86.x64``
+# - ...
+# - ``Microsoft.VisualStudio.Component.VC.14.40.17.10.x86.x64``
+# - ``Microsoft.VisualStudio.Component.VC.14.41.17.11.x86.x64``
+#
+# Similar to retrieving the channel URI, this 2019 list can be retrieved from the ``Catalog.json`` file:
+#
+# .. code:
+#
+#    jq . Catalog.json | \grep -i '"id": "Microsoft.VisualStudio.Component.VC.14.*.x86.x64"'
+#
+# Specifying the installer can be used for offline installations or to specify which version gets installed using [fixed version installers](https://learn.microsoft.com/en-us/visualstudio/releases/2022/release-history#fixed-version-bootstrappers) instead of setting the Channel URI.
+#
+# 1. Download https://aka.ms/vs/17/release/vs_BuildTools.exe (or a fixed version installer)
+# 2. (For offline setup) ``vs_BuildTools.exe --layout C:\myLayoutDir --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --lang en-US``
+#    - Transfer ``C:\myLayoutDir`` ...
+# 3. Now you can use ``--installer C:\myLayoutDir\vs_BuildTools.exe``
+#
+# .. note::
+#
+#    This will prompt UAC for required admin privileges.
+#**
+function vsbuild-install()
+{
+  if [ "${OS-}" != "Windows_NT" ]; then
+    echo "This is a windows only feature" &> 2
+    JUST_IGNORE_EXIT_CODES=1
+    return 1
+  fi
+
+  local allow_download=0
+  local VS_BUILD_TOOLS_INSTALLER=${VS_BUILD_TOOLS_INSTALLER-}
+  local additional_packages=()
+
+  local channel_uri # Latest is https://aka.ms/vs/17/release/channel
+
+  parse_args installer_extra_args \
+      --installer VS_BUILD_TOOLS_INSTALLER: \
+      --download allow_download \
+      --add +additional_packages: \
+      --channel channel_uri: \
+      -- ${@+"${@}"}
+
+  # If the installer is not specified or found, and downloads are allowed
+  if [ ! -f "${VS_BUILD_TOOLS_INSTALLER}" ]; then
+    if [ "${allow_download}" != "0" ]; then
+      # Temporarily download the installer
+      local temp_dir
+      make_temp_path temp_dir -d
+      VS_BUILD_TOOLS_INSTALLER="${temp_dir}/vs_BuildTools.exe"
+      # https://visualstudio.microsoft.com/downloads/
+      download_to_file "https://aka.ms/vs/17/release/vs_BuildTools.exe" "${VS_BUILD_TOOLS_INSTALLER}"
+    else
+      echo "You didn't specify --download or a functional installer, you need to add \"--download\"" >&2
+      JUST_IGNORE_EXIT_CODES=1
+      return 1
+    fi
+  fi
+
+  local installer_args=()
+  if [ -n "${channel_uri+set}" ]; then
+    installer_args+=(--channelUri "${channel_uri}")
+  fi
+
+  local i
+  for i in ${additional_packages[@]+"${additional_packages[@]}"}; do
+    # Add additional components
+    installer_args+=(--add "${i}")
+  done
+
+  # if allow download is not turned on, disabled internet access. This mostly works
+  if [ "${allow_download}" = "0" ]; then
+    installer_args+=(--noweb)
+  fi
+
+  # --installPath or --path is not used here. As far as I can tell, the "Microsoft" installer
+  # is only meant for one copy, so trying to have one per project would probably result in a
+  # mess, not worth it, since no matter what you need admin privileges.
+
+  "${VS_BUILD_TOOLS_INSTALLER}" \
+    ${installer_args[@]+"${installer_args[@]}"} \
+    --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 \
+    --quiet --nocache
+}
 
 #**
 # .. command:: install_cmake
@@ -686,6 +797,10 @@ function install_defaultify()
     install_pipenv) # Install a virtualenv containing pipenv
       pipenv-install ${@+"${@}"}
       extra_args=pipenv_extra_args
+      ;;
+    install_vsbuild) # Install Visual Studio Build Tools
+      vsbuild-install ${@+"${@}"}
+      extra_args=installer_extra_args
       ;;
     *)
       plugin_not_found=1
