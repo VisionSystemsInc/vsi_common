@@ -32,6 +32,26 @@ function setup()
     fi
   fi
 
+  function id()
+  {
+    case "${1}" in
+      -u)
+        if [ "${2-}" = "-n" ]; then
+          echo 'myuser'
+        else
+          echo 1001
+        fi
+        ;;
+      -G)
+        echo 1002 1003
+        ;;
+      *)
+        return 5
+        ;;
+    esac
+  }
+  export -f id
+
   # Cache results
   git_bug_submodule_path_with_special_characters || :
 }
@@ -117,8 +137,8 @@ mockd volume rm testpro_venv"
     file_name="$(quote_escape "${file_name}")"
   fi
 
-  [[ $(just -n run yaan) =~ docker\ compose\ -f\ ${file_name}\ -f\ (.*)\ run\ --rm\ --service-ports\ yaan ]] || false
-
+  pattern="docker compose -f ${file_name} -f (.*) run --rm --service-ports yaan"
+  [[ $(just -n run yaan) =~ ${pattern} ]] || false
   tmp_file="$(quote_unescape "${BASH_REMATCH[1]}")"
 
   ans="services:
@@ -139,7 +159,7 @@ mockd volume rm testpro_venv"
   ans+="
       - JTEST_SOURCE_DIR_HOST=${TESTDIR}
       - JTEST_SOURCE_DIR=${JUST_PATH_ESC}/src
-      - JTEST_USERNAME_HOST=$(id -n -u)
+      - JTEST_USERNAME_HOST=myuser
       - JTEST_USERNAME=user
       - JTEST_VSI_COMMON_DIR_HOST=${TESTDIR}/v.s.i  d i'r\"
       - JTEST_VSI_COMMON_DIR=/vsi
@@ -166,7 +186,7 @@ mockd volume rm testpro_venv"
   ans+="
       - JTEST_SOURCE_DIR_HOST=${TESTDIR}
       - JTEST_SOURCE_DIR=${JUST_PATH_ESC}/src
-      - JTEST_USERNAME_HOST=$(id -n -u)
+      - JTEST_USERNAME_HOST=myuser
       - JTEST_USERNAME=user
       - JTEST_VSI_COMMON_DIR_HOST=${TESTDIR}/v.s.i  d i'r\"
       - JTEST_VSI_COMMON_DIR=/vsi
@@ -193,7 +213,7 @@ mockd volume rm testpro_venv"
   ans+="
       - JTEST_SOURCE_DIR_HOST=${TESTDIR}
       - JTEST_SOURCE_DIR=${JUST_PATH_ESC}/src
-      - JTEST_USERNAME_HOST=$(id -n -u)
+      - JTEST_USERNAME_HOST=myuser
       - JTEST_USERNAME=user
       - JTEST_VSI_COMMON_DIR_HOST=${TESTDIR}/v.s.i  d i'r\"
       - JTEST_VSI_COMMON_DIR=/vsi
@@ -253,7 +273,7 @@ begin_test "New Just no pip-tools"
 
   assert_str_eq "$(just build)" "mockd buildx bake gosu tini vsi
 mockd buildx bake runner
-mockd volume rm andytest2_venv"
+mockd volume rm myusertest2_venv"
   assert_str_eq "$(just build runner)" "mockd buildx bake build runner"
 
   file_name="${TESTDIR}/docker-compose.yml"
@@ -286,7 +306,7 @@ mockd volume rm andytest2_venv"
   ans+="
       - JTEST_SOURCE_DIR_HOST=${TESTDIR}
       - JTEST_SOURCE_DIR=${JUST_PATH_ESC}/src
-      - JTEST_USERNAME_HOST=$(id -n -u)
+      - JTEST_USERNAME_HOST=myuser
       - JTEST_USERNAME=user
       - JTEST_VSI_COMMON_DIR_HOST=${TESTDIR}/external/vsi_common
       - JTEST_VSI_COMMON_DIR=/vsi
@@ -313,7 +333,7 @@ mockd volume rm andytest2_venv"
   ans+="
       - JTEST_SOURCE_DIR_HOST=${TESTDIR}
       - JTEST_SOURCE_DIR=${JUST_PATH_ESC}/src
-      - JTEST_USERNAME_HOST=$(id -n -u)
+      - JTEST_USERNAME_HOST=myuser
       - JTEST_USERNAME=user
       - JTEST_VSI_COMMON_DIR_HOST=${TESTDIR}/external/vsi_common
       - JTEST_VSI_COMMON_DIR=/vsi
@@ -496,8 +516,9 @@ begin_test "New just docker test"
     echo "    name: ${tmp_volume}" >> "${TESTDIR}/docker-compose.yml"
   fi
 
-  # for some reason, only on Windows running through xargs do I have this tty issue, and only here
-  [[ $(DOCKER_COMPOSE_EXTRA_RUN_ARGS='-T' just run yaan pip freeze --all) =~ pip==.*setuptools==.*wheel==.* ]] || false
+  # for some reason, I only have this tty issue on Windows running through xargs, and only here
+  assert_regex_eq "$(DOCKER_COMPOSE_EXTRA_RUN_ARGS='-T' just run yaan pip freeze --all)" \
+                  "pip==.*setuptools==.*wheel==.*"
 
   just docker compose down
 )
