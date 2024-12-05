@@ -1,0 +1,175 @@
+#!/usr/bin/env false bash
+
+if [[ ${-} != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
+# source "${VSI_COMMON_DIR}/linux/just_files/just_singularity_functions.bsh" # Don't import here
+# source "${VSI_COMMON_DIR}/linux/just_files/docker_functions.bsh" # Don't import here
+source "${VSI_COMMON_DIR}/linux/ask_question"
+
+#*# just/plugins/just_pip-tools_functions
+
+#**
+# ============================
+# J.U.S.T. Pip-tools Functions
+# ============================
+#
+# .. default-domain:: bash
+#
+# A plugin for creating a pip-tools environment
+#
+# .. file:: just_pip-tools_functions.bsh
+#
+# .. env:: ${JUST_PROJECT_PREFIX}_PIP_TOOLS_ENVIRONMENT
+#
+# The type of environment for running in. Options are:
+#
+# * ``local`` - Runs locally in a virtual env
+# * ``docker`` - Runs in a docker
+# * ``singularity`` - Runs using singular-compose
+#
+# Default: ``local``
+#
+# .. env:: ${JUST_PROJECT_PREFIX}_PIP_TOOLS_SERVICE
+#
+# Default: ``python_cache``
+#
+# .. env:: ${JUST_PROJECT_PREFIX}_PIP_TOOLS_DIR
+#
+# Default: ``${${JUST_PROJECT_PREFIX}_CWD}/build/python`` for ``local`` or ``/venv/src`` for containers
+#**
+
+JUST_DEFAULTIFY_FUNCTIONS+=(just::defaultify::pip-tools)
+JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
+
+function just::pip-tools::shell()
+{
+  local pip_tools_env="${JUST_PROJECT_PREFIX}_PIP_TOOLS_ENVIRONMENT"
+  pip_tools_env=${!pip_tools_env-local}
+  local service_name="${JUST_PROJECT_PREFIX}_PIP_TOOLS_SERVICE"
+  service_name=${!service_name-python_cache}
+  local venv_dir="${JUST_PROJECT_PREFIX}_PIP_TOOLS_DIR"
+  local source_dir="${JUST_PROJECT_PREFIX}_SOURCE_DIR"
+  source_dir="${!source_dir}"
+
+  if [ -n "${JUST_IN_CONTAINER+set}" ] || [ "${pip_tools_env}" = "local" ]; then
+    if [ -n "${JUST_IN_CONTAINER+set}" ]; then
+      venv_dir=${!venv_dir-/venv/src}
+    else
+      venv_dir=${!venv_dir-${!id_project_cwd}/build/python}
+
+      if [ ! -x "${venv_dir}/bin/python" ] && [ ! -e "${venv_dir}/Scripts/python.exe" &> /dev/null ]; then
+        justify pip-setup
+      fi
+    fi
+
+    case "${1}" in
+      pip-sync|pip-compile)
+        # Make sure pip-tools is installed (e.g. if SKIP_PIP_SYNC was used)
+        if ! command -v "${venv_dir}/bin/${1}" &> /dev/null; then
+          source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
+          local tmp_requirements
+          make_temp_path tmp_requirements
+          # Strip editables. extras are already stripped via --strip-extras
+          grep -v '^-e' "${source_dir}/requirements.txt" > "${tmp_requirements}"
+          ${venv_dir}/bin/pip install -c "${tmp_requirements}" pip-tools
+        fi
+    esac
+
+    if [ "${1}" = "pip-shell" ]; then
+      # Just run a bash shell for pip-shell
+      shift 1
+      bash --rcfile "${venv_dir}/bin/activate" ${@+"${@}"}
+    elif [ "${1}" = "pip-compile" -a "${#}" = "1" ]; then
+      "${venv_dir}/bin/pip-compile" -v --strip-extras --allow-unsafe --resolver=backtracking -o "${source_dir}/requirements.txt" "${source_dir}/requirements.in"
+      # We can't do hashes until https://github.com/VisionSystemsInc/vsi_common/issues/437 is solved
+      # exec pip-compile --strip-extras --allow-unsafe --generate-hashes --resolver=backtracking -o "${source_dir}/requirements.txt" "${source_dir}/requirements.in"
+    elif [ "${1}" = "pip-sync" -a "${#}" = "1" ]; then
+      "${venv_dir}/bin/pip-sync" -v "${source_dir}/requirements.txt"
+    else
+      bash -c 'source "'"${venv_dir}/bin/activate"'"; ${@+"${@}"}' -- ${@+"${@}"}
+    fi
+  elif [ "${pip_tools_env}" = "docker" ]; then
+    Just-docker-compose run "${service_name}" ${@+"${@}"}
+  elif [ "${pip_tools_env}" = "singularity" ]; then
+    justify singular-compose run "${service_name}" ${@+"${@}"}
+  else
+    echo "Unknown value for '${JUST_PROJECT_PREFIX}_PIP_TOOLS_ENVIRONMENT': '${pip_tools_env}'" >&2
+    return 1
+  fi
+}
+
+# function just::pip-tools::pip()
+# {
+#   just::pip-tools::shell pip ${@+"${@}"}
+# }
+
+# function just::pip-tools::python()
+# {
+#   just::pip-tools::shell python ${@+"${@}"}
+# }
+
+function just::defaultify::pip-tools()
+{
+  arg="${1}"
+  shift 1
+
+  local id_project_cwd="${JUST_PROJECT_PREFIX}_CWD"
+
+  case "${arg}" in
+    # pip) # Run pip in pip-tools managed environment
+    # pip-shell) # Start a bash shell in pip-tools managed environment
+    # pip-sync) # Run pip-sync for project
+    # pip-compile) # Run pip-compile for project
+    pip|pip-shell|pip-sync|pip-compile)
+      just::pip-tools::shell "${arg}" ${@+"${@}"}
+      extra_args=${#}
+      ;;
+
+    pip-setup) # Setup python and a venv for local pip-tools environments
+      source "${VSI_COMMON_DIR}/linux/just_files/just_install_functions.bsh"
+
+      local venv_dir="${JUST_PROJECT_PREFIX}_PIP_TOOLS_ENVIRONMENT"
+      if [ "${!venv_dir-local}" != "local" ]; then
+        echo "${RED}Error: This is for local environments only. ${venv_dir} is set to \"${!venv_dir}\"${NC}" >&2
+        return 1
+      fi
+      venv_dir="${JUST_PROJECT_PREFIX}_PIP_TOOLS_DIR"
+      venv_dir=${!venv_dir-${!id_project_cwd}/build/python}
+
+      # Setup python interpreter
+      local python_version="${JUST_PROJECT_PREFIX}_PYTHON_VERSION"
+      : ${PYTHON_VERSION=${TERRA_PYTHON_VERSION:-3.10.12}}
+      if (( ${#} )); then
+        conda-python-install --dir "${venv_dir}/.python" ${@+"${@}"}
+      else
+        conda-python-install --dir "${venv_dir}/.python" --download ${@+"${@}"}
+      fi
+      extra_args=${#}
+
+      # Setup the virtualenv
+      "${venv_dir}/.python/bin/python" -m venv "${venv_dir}"
+
+      # Setup local.env
+      local platform_bin
+      if [ "${OS-}" = "Windows_NT" ]; then
+        platform_bin=Scripts
+      else
+        platform_bin=bin
+      fi
+      local add_to_local="${add_to_local-}"
+      echo "" >&2
+      ask_question "Do you want to add \"${venv_dir}/${platform_bin}\" to your local.env automatically?" add_to_local y
+      if [ "${add_to_local}" == "1" ]; then
+        echo $'\n'"PATH=\"${venv_dir}/${platform_bin}:\${PATH}\"" >> "${!id_project_cwd}/local.env"
+      fi
+      ;;
+
+    *)
+      plugin_not_found=1
+      ;;
+  esac
+
+  return 0
+}

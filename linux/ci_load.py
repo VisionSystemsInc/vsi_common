@@ -116,10 +116,10 @@ class CiLoad:
     services = dict()
     for cache_id, cache_loc in enumerate([self.cache_repo] + self.other_repos):
       services.update(_service_dict(cache_id, cache_loc))
-    self.pull_dict = {'version': '3.5', 'services': services}
+    self.pull_dict = {'services': services}
 
     # push dictionary
-    self.push_dict = {'version': '3.5', 'services': _service_dict()}
+    self.push_dict = {'services': _service_dict()}
 
   # 2 pull images
   def pull_images(self):
@@ -150,7 +150,8 @@ class CiLoad:
 
     doc = {}
     compose_yaml = yaml.safe_load(open(self.recipe_compose, 'r').read())
-    doc['version'] = compose_yaml['version']
+    if self.compose_version is not None:
+      doc['version'] = self.compose_version
 
     services = {}
 
