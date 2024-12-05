@@ -634,8 +634,6 @@ function write_dockerfile()
             #T# Installs a python for pip-tools to use. pip-tools manages the python virtual
             #T# env and installs a consistent set of packages
             FROM ${VSI_RECIPE_REPO}:conda-python AS python
-            #T# # Uncomment for GDAL
-            #T# FROM ${VSI_RECIPE_REPO}:gdal AS gdal
 
             ###############################################################################
 
@@ -657,8 +655,6 @@ function write_dockerfile()
     uwecho '    # PYTHONPATH="${PYTHONPATH:+${PYTHONPATH}:}/install/lib/python3/site-packages"
 
             #T# Additional dep stage recipes
-            #T# # Uncomment for GDAL
-            #T# COPY --from=gdal /usr/local /usr/local
             COPY --from=python /usr/local /usr/local/conda-python
             RUN ln -s /usr/local/conda-python/bin/* /usr/local/bin; \
                 #T# required for matplotlib TkAgg backend
@@ -698,26 +694,6 @@ function write_dockerfile()
             #T# 2) just pip-compile
             #T# 3) just sync # (optionally updates the docker image)
             #T#
-            #T# A more complicated python package, for example, is GDAL
-            #T# - The GDAL Docker recipe will build the GDAL C Library for you
-            #T# - The GDAL pypi package needs numpy installed before it is built,
-            #T#   otherwise, numpy integration will not be compiled and
-            #T#   "import osgeo.gdal_array" will fail
-            #T#
-            #T# To test this out:
-            #T# 1) Uncomment all the "Uncomment for GDAL" sections
-            #T# 2) just sync # Update the image
-            #T# 3) Edit your requirements.in file and add numpy and gdal==3.2.1
-            #T# 4) just pip-compile
-            #T#    This will add the latest version of numpy (although a specific version can
-            #T#    be specified) and a version of the pypi package GDAL compatible with the
-            #T#    GDAL C Library from the recipe.
-            #T#    Note: the version of the pypi GDAL and C GDAL should match as closely as
-            #T#    possible
-            #T# 5) just sync # (optionally updates the docker image)
-            #T# 6) just shell
-            #T# 7) python -c "import osgeo.gdal_array" # Should not create an error message
-            #T#
             #T# Call pip-fake for each editable package
             RUN pip-fake /src '"${PYTHON_PACKAGE}"'; \
                 #T# pip-fake /src/external/editable_package package_name; \
@@ -732,11 +708,19 @@ function write_dockerfile()
             RUN /usr/local/conda-python/bin/python3 -m venv /venv/src; \
                 if [ "${SKIP_PIP_SYNC-}" != "1" ]; then \
                   . /venv/src/bin/activate; \
+                  #T# The pip-8210 command is a wrapper for pip that uses the
+                  #T# requirements.txt as a constraint to install the correct versions of
+                  #T# libraries and their dependencies. Additionally, it handles all
+                  #T# incomptibilies covered in pip issue #8210
                   pip-8210 install pip-tools; \
-            #T# # Uncomment for GDAL
-            #T#       # Add numpy to the pre-install line above to install the correct version of numpy,
-            #T#       # so that when gdal compiles, it uses the correct version of numpy.
-            #T#       pip-8210 install pip-tools numpy; \
+
+                  #T# # Modern pyproject.toml packages shouldn't require this, but older setup.py projects
+                  #T# # might have an "build requirment" just to start the build process. Common examples
+                  #T# # of this include numpy and torch. E.g. to install numpy before a package builds,
+                  #T# # add numpy to the pre-install line above to install the correct version of numpy
+                  #T# # like this:
+                  #T# # pip-8210 install pip-tools numpy; \
+
                   pip-sync -v /src/requirements.txt; \
                 fi; \
                 # Cleanup and make way for the real /src that will be mounted at runtime
