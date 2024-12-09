@@ -94,7 +94,7 @@ begin_test "new_just write no_docker_version"
 (
   setup_test
 
-  JUST_VERSION=just_version new_just --continue --no-git --defaults --no-docker --no-pipenv
+  JUST_VERSION=just_version new_just --continue --no-git --defaults --no-docker --no-pip-tools
   mkdir -p "${TESTDIR}/external/vsi_common"
   echo "echo foobar" > "${TESTDIR}/external/vsi_common/env.bsh"
 
@@ -144,11 +144,11 @@ begin_test "new_just write no_docker_version"
 )
 end_test
 
-begin_test "new_just write docker_pipenv_version"
+begin_test "new_just write docker_piptools_version"
 (
   setup_test
 
-  JUST_VERSION=just_version new_just --continue --no-git --defaults --docker --pipenv
+  JUST_VERSION=just_version new_just --continue --no-git --defaults --docker --pip-tools
   mkdir -p "${TESTDIR}/external/vsi_common"
   echo "echo foobar" > "${TESTDIR}/external/vsi_common/env.bsh"
 
@@ -192,62 +192,68 @@ begin_test "new_just write docker_pipenv_version"
     fi
 
     . Justfile
-    ans="docker buildx bake gosu pipenv tini vsi
-docker compose -f ${TESTDIR}/docker-compose.yml build
-docker volume rm username${project_name}_venv"
 
-    [ "$(DRYRUN=echo caseify build)" = "${ans}" ]
-    ans="docker compose -f ${TESTDIR}/docker-compose.yml build example
+    ans="docker buildx bake conda-python gosu pip-tools tini vsi
+docker buildx bake runner python_cache
 docker volume rm username${project_name}_venv"
-    [ "$(DRYRUN=echo caseify build example)" = "${ans}" ]
+    assert_str_eq "$(DRYRUN=echo caseify build)" "${ans}"
 
-    ans="docker compose -f ${TESTDIR}/docker-compose.yml build example2"
-    [ "$(DRYRUN=echo caseify build example2)" = "${ans}" ]
+    ans="docker buildx bake build runner
+docker volume rm username${project_name}_venv"
+    assert_str_eq "$(DRYRUN=echo caseify build runner)" "${ans}"
+
+    ans="docker buildx bake build example2"
+    assert_str_eq "$(DRYRUN=echo caseify build example2)" "${ans}"
 
     function Just-docker-compose()
     {
       echo "jdc ${@}"
     }
-    [ "$(DRYRUN=echo caseify run_example)" = "jdc run --service-ports example" ]
-    [ "$(DRYRUN=echo caseify pipenv foo)" = "jdc run example_pipenv pipenv foo" ]
+    assert_str_eq "$(DRYRUN=echo caseify run_runner)" "jdc run --service-ports runner"
+    assert_str_eq "$(DRYRUN=echo caseify pip-sync foo)" "jdc run python_cache pip-sync foo"
 
     function justify()
     {
       echo "Justify ${@}"
     }
+    function docker()
+    {
+      echo ${@+"${@}"}
+    }
     ans="docker compose -f ${TESTDIR}/docker-compose.yml down
 Justify git_submodule-update
 Justify build"
     [ ! -e ".just_synced" ]
-    [ "$(DRYRUN=echo caseify sync)" = "${ans}" ]
+    assert_str_eq "$(DRYRUN=echo caseify sync)" "${ans}"
     [ -e ".just_synced" ]
   )
   # example.Justfile
   (
-    . docker/example.Justfile
+    TEST5_CWD=`pwd`
+    . docker/runner.Justfile
 
-    ans="Run example here: example-cmd foo bar"
-    [ "$(caseify example-cmd foo bar)" = "${ans}" ]
-    function exec()
-    {
-      echo "e ${@}"
-    }
-    [ "$(caseify nopipenv foobar)" = "e foobar" ]
-    [ "$(caseify pipenv FooBar)" = "e pipenv FooBar" ]
+    ans="Run runner here: runner-cmd foo bar"
+    assert_str_eq "$(caseify runner-cmd foo bar)" "${ans}"
+    # function exec()
+    # {
+    #   echo "e ${@}"
+    # }
+    # assert_str_eq "$(caseify nopipenv foobar)" "e foobar"
+    # assert_str_eq "$(caseify pipenv FooBar)" "e pipenv FooBar"
 
   )
-  # Pipfile
-  grep -q '\[dev-packages]' Pipfile
-  grep -q '"default": {}' Pipfile.lock
-  grep -q '"develop": {}' Pipfile.lock
+  # requirements.in
+  grep -q -e '-e /src' requirements.in
+  grep -q -e '-e file:///src' requirements.txt
   # Dockerfile
-  grep -q 'COPY --from=vsi /vsi /vsi' docker/example.Dockerfile
-  grep -q "ADD \[\"${project_name}.env\", \"Pipfile\", \"Pipfile.lock\", \"/src/\"]" docker/example.Dockerfile
-  grep -q "ADD \[\"docker/example.Justfile\", \"/src/docker/\"]" docker/example.Dockerfile
-  grep -q "ENV JUSTFILE=\"/src/docker/example.Justfile\"" docker/example.Dockerfile
-  grep -q "JUST_SETTINGS=\"/src/${project_name}.env\"" docker/example.Dockerfile
+  grep -q 'COPY --from=vsi /vsi /vsi' docker/runner.Dockerfile
+  grep -q "ADD \[\"${project_name}.env\", \"/src/\"]" docker/runner.Dockerfile
+  grep -q "ADD requirements.txt pyproject.toml /src" docker/runner.Dockerfile
+  grep -q "ADD \[\"docker/runner.Justfile\", \"/src/docker/\"]" docker/runner.Dockerfile
+  grep -q "ENV JUSTFILE=\"/src/docker/runner.Justfile\"" docker/runner.Dockerfile
+  grep -q "JUST_SETTINGS=\"/src/${project_name}.env\"" docker/runner.Dockerfile
   # docker-compose.yml
-  grep -q -e "- DOCKER_UID=\${${project_prefix}_UID}" docker-compose.yml
+  grep -q -e "  DOCKER_UID: \${${project_prefix}_UID}" docker-compose.yml
   # .gitignore
   grep -q '^local.env$' .gitignore
   grep -q '^local_post.env$' .gitignore
