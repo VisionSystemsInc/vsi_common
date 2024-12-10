@@ -385,6 +385,14 @@ function conda-python-install()
       --list list_versions \
       -- ${@+"${@}"}
 
+  local minor_version_pattern='^([0-9]+)\.([0-9]+)$'
+  local install_version="==${python_ver}"
+  local check_version=("${install_version}")
+  if [[ ${python_ver} =~ ${minor_version_pattern} ]]; then
+    check_version=(">=${BASH_REMATCH[0]}" "<${BASH_REMATCH[1]}.$((${BASH_REMATCH[2]}+1))")
+    install_version="${check_version[0]},${check_version[1]}"
+  fi
+
   if [ "${list_versions}" != "0" ]; then
     # This has worked since at least 2016, so fairly stable
     download_to_stdout https://anaconda.org/anaconda/python/files | sed -n${sed_flag_rE} 's|^ *<a href=".*/anaconda/python/files\?version=([0-9.]*)">|\1|p'
@@ -439,7 +447,7 @@ function conda-python-install()
     if [ -r "${conda_activate-}" ]; then
       source "${conda_activate}"
     fi
-    "${CONDA}" create -y -p "${python_dir}" "python==${python_ver}" ${packages[@]+"${packages[@]}"}
+    "${CONDA}" create -y -p "${python_dir}" "python${install_version}" ${packages[@]+"${packages[@]}"}
   )
   local python_exe_footer
   if [ "${OS-}" = "Windows_NT" ]; then
@@ -460,7 +468,7 @@ function conda-python-install()
   echo "Python ${python_version} installed at \"${python_exe}\"" >&2
 
   # Make sure python meets request
-  if ! meet_requirements "${python_version}" "==${python_ver}"; then
+  if ! meet_requirements "${python_version}" "${check_version[@]}"; then
     echo "Python version ${python_version} is not the requested version ${python_ver}" >&2
     JUST_IGNORE_EXIT_CODES=1
     return 1
