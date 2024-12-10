@@ -1,9 +1,9 @@
-FROM vsiri/recipe:gosu as gosu
-FROM vsiri/recipe:tini as tini
-FROM vsiri/recipe:jq as jq
-FROM vsiri/recipe:vsi as vsi
-FROM vsiri/recipe:docker as docker
-FROM docker/compose:alpine-1.25.4 as docker-compose
+FROM vsiri/recipe:gosu AS gosu
+FROM vsiri/recipe:tini AS tini
+FROM vsiri/recipe:jq AS jq
+FROM vsiri/recipe:vsi AS vsi
+FROM vsiri/recipe:docker AS docker
+FROM docker/compose:alpine-1.25.4 AS docker-compose
 
 FROM ruby:2.6.5-buster
 

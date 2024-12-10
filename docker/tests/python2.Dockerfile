@@ -1,6 +1,6 @@
-FROM vsiri/recipe:pipenv as pipenv
+FROM vsiri/recipe:pipenv AS pipenv
 
-FROM python:2 as dep_stage
+FROM python:2 AS dep_stage
 SHELL ["/usr/bin/env", "bash", "-euxvc"]
 
 COPY --from=pipenv /usr/local /usr/local
@@ -15,7 +15,7 @@ ENV WORKON_HOME=/venv \
 
 ###############################################################################
 
-FROM dep_stage as pipenv_cache
+FROM dep_stage AS pipenv_cache
 
 ADD Pipfile2 Pipfile2.lock /vsi/docker/tests/
 
