@@ -1,6 +1,6 @@
-FROM vsiri/recipe:pipenv as pipenv
+FROM vsiri/recipe:pipenv AS pipenv
 
-FROM python:3 as dep_stage
+FROM python:3 AS dep_stage
 SHELL ["/usr/bin/env", "bash", "-euxvc"]
 
 # For wxPython, which I don't actually need
@@ -23,7 +23,7 @@ ENV WORKON_HOME=/venv \
 
 ###############################################################################
 
-FROM dep_stage as pipenv_cache
+FROM dep_stage AS pipenv_cache
 
 # For wxPython, which I don't actually need
 # RUN apt-get update; \

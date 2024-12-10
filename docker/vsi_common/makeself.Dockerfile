@@ -1,6 +1,6 @@
-FROM vsiri/recipe:tini-musl as tini
-FROM vsiri/recipe:gosu as gosu
-FROM vsiri/recipe:vsi as vsi
+FROM vsiri/recipe:tini-musl AS tini
+FROM vsiri/recipe:gosu AS gosu
+FROM vsiri/recipe:vsi AS vsi
 
 FROM alpine:3.13
 

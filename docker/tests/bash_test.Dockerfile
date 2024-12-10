@@ -1,13 +1,13 @@
 ARG BASH_VERSION=5.0
 ARG DOCKER_BUILDX_VERSION=0.9.1
 
-FROM vsiri/recipe:gosu as gosu
-FROM vsiri/recipe:tini-musl as tini
-FROM vsiri/recipe:jq as jq
-# FROM vsiri/recipe:vsi as vsi
-FROM vsiri/recipe:docker as docker
-FROM vsiri/recipe:docker-compose as docker-compose
-FROM docker/buildx-bin:${DOCKER_BUILDX_VERSION} as buildx
+FROM vsiri/recipe:gosu AS gosu
+FROM vsiri/recipe:tini-musl AS tini
+FROM vsiri/recipe:jq AS jq
+# FROM vsiri/recipe:vsi AS vsi
+FROM vsiri/recipe:docker AS docker
+FROM vsiri/recipe:docker-compose AS docker-compose
+FROM docker/buildx-bin:${DOCKER_BUILDX_VERSION} AS buildx
 
 FROM bash:${BASH_VERSION}
 
