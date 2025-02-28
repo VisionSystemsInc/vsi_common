@@ -289,7 +289,11 @@ function log_all_outgoing_commits()
 #   This does not change a submodule's tracked URL (i.e., the URL in the .gitmodules file) nor a submodule's URL (i.e., .git/config:submodule), only the URL of the remote in .git/\*\*/config (e.g., .git/modules/docker/recipes/config:remote)
 #**
 
-# REVIEW use the ssh://git@... protocol, which doesn't require replacing / with :
+# REVIEW use the ssh://git@... protocol, which doesn't require replacing the
+# / with : between the host and rpath
+# FIXME at least for github, the trailing / must be striped (e.g.,
+# git@github.com:visionsystemsinc/vsi_common/ will fail to read from the remote
+# repository)
 function convert_git_remote_http_to_git()
 {
   local remote_name="${1-origin}"
@@ -306,7 +310,7 @@ function convert_git_remote_http_to_git()
   local remote_git_url
   # local foo="$(bar)" || rv="${?}" does not work as one line in bash 4.2 or older. Use two lines
   remote_git_url="$(_http_to_git_protocol "${remote_url}")" || remote_git_url_rv="${?}"
-  if [ "${remote_git_url_rv}" == "0" ]; then
+  if [ "${remote_git_url_rv}" -eq "0" ]; then
     # NOTE since git v1.8, a remote (e.g., origin) can have multiple associated
     # pushurls (see .git/config:remote)
     # RE providing the old url (remote_url) will update the correct url
@@ -314,6 +318,11 @@ function convert_git_remote_http_to_git()
     # RE If a pushurl is configured, this function returns early; therefore,
     # assume a pushurl is not configured
     "${GIT}" remote set-url "${remote_name}" --push "${remote_git_url}"
+    #
+    # Alternatively, use git config .insteadOf so as not to change the default
+    # configuration, although this would affect both the url and pushurl
+    # https://stackoverflow.com/a/51920532
+    # RE It does look like this option was available in git v1.8.3
   else # See if URL is already in the expected format
     # This is very simple; basically undo the simple transform done here.
     # Perhaps one day we will have a git remote url parser in parser.bsh
@@ -430,6 +439,8 @@ function is_submodule()
 # If the vsi_common repository is cloned (recursively) at ``/src``, and then :func:`git_project_root_dir` will output ``/src/vsi_common``. This is true regardless of where in the work-tree the function is run from, including from within submodules, sub-submodules, etc. Cf. git rev-parse --show-superproject-working-tree (available in git v2.13.7), which only outputs the absolute path to the working tree of the superproject of the current submodule.
 #**
 
+# REVIEW Rename to git_project_working_tree or git_topmost_working_tree
+# RE Should mirror git_project_git_dir
 function git_project_root_dir()
 {
   local toplevel="$("${GIT}" rev-parse --show-toplevel 2> /dev/null)"
@@ -594,7 +605,7 @@ function git_submodule_summary()
 
     # List the changes (in commits) to the working tree of a submodule
     # cf. git submodule summary, which doesn't show that there is modified or
-    # staged content
+    # staged content, although it does count up differences (ahead/behind)
     # RE The implementation for git submodule summary sm_path [1] and this
     # command, git diff --submodule=log sm_path [2], are not the same
     # RE Unfortunately, both commands only list the first parents [3]
