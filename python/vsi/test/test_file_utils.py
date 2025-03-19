@@ -1,6 +1,5 @@
 import json
 import glob
-import numpy as np
 import os
 from stat import S_IREAD
 from tifffile import imwrite
