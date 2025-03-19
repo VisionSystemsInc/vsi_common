@@ -105,8 +105,7 @@ class TestFileUtils(TestCase):
 
     # an image file
     foo_image_file = os.path.join(foo_dir, 'temp1.tif')
-    foo_data = np.random.randint(0, 255, (256, 256, 3), 'uint8')
-    imwrite(foo_image_file, foo_data, photometric='rgb')
+    open(foo_image_file, 'w').close()
 
     # a json file
     foo_json_file = os.path.join(foo_dir, 'temp1.json')
