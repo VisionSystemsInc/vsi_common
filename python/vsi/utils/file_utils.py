@@ -12,7 +12,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # This function was copied from cpython,
-# and changed to allow the root directory to be kept.
+# and changed to allow the base directory to be kept.
 # Source: https://github.com/python/cpython/blob/v3.6.15/Lib/shutil.py#L451
 def rmtree(path, ignore_errors=False, onerror=None, keep_base_dir=False):
   """"
