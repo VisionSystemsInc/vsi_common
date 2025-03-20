@@ -29,7 +29,7 @@ def rmtree(path, ignore_errors=False, onerror=None, keep_base_dir=False):
       Function to be called when an error is encountered. Only used if ignore_errors is False.
       Default: None
   keep_base_dir : bool, optional
-      If True, the directory will remain while its children are deleted. Default: False
+      If True, the base directory will remain while its children are deleted. Default: False
   """
   if ignore_errors:
     def onerror(*args):
