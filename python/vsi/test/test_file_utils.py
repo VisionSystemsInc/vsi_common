@@ -1,8 +1,6 @@
 import json
-import glob
 import os
 from stat import S_IREAD
-from tifffile import imwrite
 
 from vsi.utils import file_utils
 from vsi.test.utils import TestCase
