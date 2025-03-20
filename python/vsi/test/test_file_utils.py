@@ -59,34 +59,36 @@ class TestFileUtils(TestCase):
     # first create a temp directory
     foo_dir = self.temp_dir.name
 
-    # temp files
-    foo_files = []
-    # an empty list is returned if no files with the given extension exist.
-    extensions = ['tif', 'tiff']
-    files = file_utils.get_files_with_extension_from_dir(foo_dir, extensions)
-    self.assertEqual(files, foo_files)
+    with self.subTest("Verify no files are found"):
+      # temp files
+      foo_files = []
+      # an empty list is returned if no files with the given extension exist.
+      extensions = ['tif', 'tiff']
+      files = file_utils.get_files_with_extension_from_dir(foo_dir, extensions)
+      self.assertEqual(files, foo_files)
 
-    for key, value in sub_foo_dirs.items():
-      sub_foo_dir = os.path.join(foo_dir,key)
+    with self.subTest("Verify text files are found"):
+      for key, value in sub_foo_dirs.items():
+        sub_foo_dir = os.path.join(foo_dir,key)
 
-      # Make the subdirectory
-      os.makedirs(sub_foo_dir)
-      # create some files in the subdirectory
-      for f in value:
-        foo_file = os.path.join(sub_foo_dir, f)
-        # write to each file
-        with open(foo_file,'w') as foo:
-          foo.write('test')
-        foo_files.append(foo_file)
+        # Make the subdirectory
+        os.makedirs(sub_foo_dir)
+        # create some files in the subdirectory
+        for f in value:
+          foo_file = os.path.join(sub_foo_dir, f)
+          # write to each file
+          with open(foo_file,'w') as foo:
+            foo.write('test')
+          foo_files.append(foo_file)
 
-    # sort the list of foo files
-    foo_files.sort()
-    # test finding the files with the specified extension(s)
-    extensions = ['txt']
-    files = file_utils.get_files_with_extension_from_dir(foo_dir, extensions)
-    # sort the list of expected files
-    files.sort()
-    self.assertEqual(files, foo_files)
+      # sort the list of foo files
+      foo_files.sort()
+      # test finding the files with the specified extension(s)
+      extensions = ['txt']
+      files = file_utils.get_files_with_extension_from_dir(foo_dir, extensions)
+      # sort the list of expected files
+      files.sort()
+      self.assertEqual(files, foo_files)
 
 
   def test_get_neighbor_files_with_extension(self):
@@ -113,21 +115,24 @@ class TestFileUtils(TestCase):
       json.dump(foo_dict, fp)
 
     # test for image neighbors of json file
-    src_file = foo_json_file
-    image_extensions = ('tif', 'tiff')
-    support_files = file_utils.get_neighbor_files_with_extension(src_file, image_extensions)
-    expected_file = [foo_image_file]
-    self.assertEqual(support_files, expected_file)
+    with self.subTest("Verify image neighbor is found"):
+      src_file = foo_json_file
+      image_extensions = ('tif', 'tiff')
+      support_files = file_utils.get_neighbor_files_with_extension(src_file, image_extensions)
+      expected_file = [foo_image_file]
+      self.assertEqual(support_files, expected_file)
 
     # test for text file neighbors of json file
-    text_extension = ('txt',)
-    support_files = file_utils.get_neighbor_files_with_extension(src_file, text_extension)
-    expected_file = [foo_text_file]
-    self.assertEqual(support_files, expected_file)
+    with self.subTest("Verify text neighbor is found"):
+      text_extension = ('txt',)
+      support_files = file_utils.get_neighbor_files_with_extension(src_file, text_extension)
+      expected_file = [foo_text_file]
+      self.assertEqual(support_files, expected_file)
 
     # test for meta data neighbors of the image file
     # since there are no meta data files, this is expected to return an empty list
-    src_file = foo_image_file
-    meta_extensions = ('imd', 'pvl')
-    support_files = file_utils.get_neighbor_files_with_extension(src_file, meta_extensions)
-    self.assertEqual(support_files, [])
+    with self.subTest("Verify no metadata neighbor is found"):
+      src_file = foo_image_file
+      meta_extensions = ('imd', 'pvl')
+      support_files = file_utils.get_neighbor_files_with_extension(src_file, meta_extensions)
+      self.assertEqual(support_files, [])
