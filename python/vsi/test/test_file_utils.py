@@ -40,13 +40,13 @@ class TestFileUtils(TestCase):
       raise ValueError (
         '{} does not exist! It is a temporary directory that is deleted once it is out of scope.'
         .format(foo_dir))
-    elif os.path.isdir(foo_dir):
+    else:
       # remove directory recursively but keep the top dir
       file_utils.rmtree(foo_dir, ignore_errors=False, rmdir=False)
       if not os.path.isdir(foo_dir):
         raise ValueError ('{} should still exist since rmdir is False.'.format(foo_dir))
       # now remove the top dir
-      elif os.path.isdir(foo_dir):
+      else:
         file_utils.rmtree(foo_dir)
       # This directory should no longer exist.
       if os.path.isdir(foo_dir):
@@ -54,8 +54,8 @@ class TestFileUtils(TestCase):
 
 
   def test_get_files_with_extension_from_dir(self):
-
     # tests finding files with the specified extension(s)
+
     # first create a temp directory
     foo_dir = self.temp_dir.name
 

@@ -13,19 +13,19 @@ logger = logging.getLogger(__name__)
 
 
 def rmtree(path, ignore_errors=False, onerror=None, rmdir=True):
-  """" shutil.rmtree with the ability to keep top dir
+  """" shutil.rmtree with the ability to keep the directory at `path`
 
   Parameters
   ----------
   path : str
       Path to the directory with contents to remove
   ignore_errors : bool, optional
-      True if exceptions should not be raised when an error is encountered. Default: False
+      If True, exceptions will not be raised when an error is encountered. Default: False
   onerror : Callable, optional
-      Function to be called when an error is encountered. Only used if ignore_errors is false.
+      Function to be called when an error is encountered. Only used if ignore_errors is False.
       Default: None
   rmdir : bool, optional
-      True if the directory should be removed along with its children. Default: True
+      If True, the directory will be removed along with its children. Default: True
   """
   if ignore_errors:
     def onerror(*args):
@@ -78,10 +78,10 @@ def _rmtree_unsafe(path, onerror, rmdir=True):
   path : str
       Path to the directory with contents to remove
   onerror : Callable, optional
-      Function to be called when an error is encountered. Only used if ignore_errors is false.
+      Function to be called when an error is encountered. Only used if ignore_errors is False.
       Default: None
   rmdir : bool, optional
-      True if the directory should be removed along with its children. Default: True
+      If True, the directory will be removed along with its children. Default: True
   """
   try:
     if os.path.islink(path):
