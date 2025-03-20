@@ -42,9 +42,9 @@ class TestFileUtils(TestCase):
         .format(foo_dir))
     else:
       # remove directory recursively but keep the top dir
-      file_utils.rmtree(foo_dir, ignore_errors=False, rmdir=False)
+      file_utils.rmtree(foo_dir, ignore_errors=False, keep_base_dir=True)
       if not os.path.isdir(foo_dir):
-        raise ValueError ('{} should still exist since rmdir is False.'.format(foo_dir))
+        raise ValueError ('{} should still exist since keep_base_dir is True.'.format(foo_dir))
       # now remove the top dir
       else:
         file_utils.rmtree(foo_dir)
@@ -53,7 +53,7 @@ class TestFileUtils(TestCase):
         raise ValueError ('{} should no longer exist.'.format(foo_dir))
 
 
-  def test_get_files_with_extension_from_dir(self):
+  def test_glob_files_with_extensions(self):
     # tests finding files with the specified extension(s)
 
     # first create a temp directory
@@ -61,37 +61,57 @@ class TestFileUtils(TestCase):
 
     with self.subTest("Verify no files are found"):
       # temp files
-      foo_files = []
+      all_foo_files = []
       # an empty list is returned if no files with the given extension exist.
       extensions = ['tif', 'tiff']
-      files = file_utils.get_files_with_extension_from_dir(foo_dir, extensions)
-      self.assertEqual(files, foo_files)
+      files = file_utils.glob_files_with_extensions(foo_dir, extensions)
+      self.assertEqual(files, all_foo_files)
 
-    with self.subTest("Verify text files are found"):
-      for key, value in sub_foo_dirs.items():
-        sub_foo_dir = os.path.join(foo_dir,key)
+    # Function to create a list of test files under the given directory
+    def write_files(dir, filenames):
+      created_files = []
+      for f in filenames:
+        foo_file = os.path.join(dir, f)
+        # write to each file
+        with open(foo_file,'w') as foo:
+          foo.write('test')
+        created_files.append(foo_file)
+      return created_files
 
-        # Make the subdirectory
-        os.makedirs(sub_foo_dir)
-        # create some files in the subdirectory
-        for f in value:
-          foo_file = os.path.join(sub_foo_dir, f)
-          # write to each file
-          with open(foo_file,'w') as foo:
-            foo.write('test')
-          foo_files.append(foo_file)
+    # Create files in subdirectories
+    for key, value in sub_foo_dirs.items():
+      sub_foo_dir = os.path.join(foo_dir,key)
 
-      # sort the list of foo files
-      foo_files.sort()
-      # test finding the files with the specified extension(s)
-      extensions = ['txt']
-      files = file_utils.get_files_with_extension_from_dir(foo_dir, extensions)
-      # sort the list of expected files
+      # Make the subdirectory
+      os.makedirs(sub_foo_dir)
+      # create files in the subdirectory
+      all_foo_files.extend(write_files(sub_foo_dir, value))
+
+    # Create files in base directory
+    base_foo_files = write_files(foo_dir, foo_files)
+
+    # Add base files to sub-directory files and sort
+    all_foo_files.extend(base_foo_files)
+    all_foo_files.sort()
+    # test finding the files with the specified extension(s)
+    extensions = ['txt']
+
+    with self.subTest("Verify only base level files are found with recursive False"):
+      files = file_utils.glob_files_with_extensions(foo_dir, extensions, recursive=False)
+      # Sort the returned files
       files.sort()
-      self.assertEqual(files, foo_files)
+      # Sort the list of expected base level files
+      base_foo_files.sort()
+      self.assertEqual(files, base_foo_files)
+
+    with self.subTest("Verify no files are found with recursive False"):
+      files = file_utils.glob_files_with_extensions(foo_dir, extensions)
+      # sort the list of returned files
+      files.sort()
+      self.assertEqual(files, all_foo_files)
 
 
-  def test_get_neighbor_files_with_extension(self):
+  def test_glob_neighbor_files_with_extensions(self):
 
     # tests finding files in the same directory,
     # with the same name, but have different extensions
@@ -118,14 +138,14 @@ class TestFileUtils(TestCase):
     with self.subTest("Verify image neighbor is found"):
       src_file = foo_json_file
       image_extensions = ('tif', 'tiff')
-      support_files = file_utils.get_neighbor_files_with_extension(src_file, image_extensions)
+      support_files = file_utils.glob_neighbor_files_with_extensions(src_file, image_extensions)
       expected_file = [foo_image_file]
       self.assertEqual(support_files, expected_file)
 
     # test for text file neighbors of json file
     with self.subTest("Verify text neighbor is found"):
       text_extension = ('txt',)
-      support_files = file_utils.get_neighbor_files_with_extension(src_file, text_extension)
+      support_files = file_utils.glob_neighbor_files_with_extensions(src_file, text_extension)
       expected_file = [foo_text_file]
       self.assertEqual(support_files, expected_file)
 
@@ -134,5 +154,5 @@ class TestFileUtils(TestCase):
     with self.subTest("Verify no metadata neighbor is found"):
       src_file = foo_image_file
       meta_extensions = ('imd', 'pvl')
-      support_files = file_utils.get_neighbor_files_with_extension(src_file, meta_extensions)
+      support_files = file_utils.glob_neighbor_files_with_extensions(src_file, meta_extensions)
       self.assertEqual(support_files, [])
