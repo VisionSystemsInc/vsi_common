@@ -118,8 +118,7 @@ class TestFileUtils(TestCase):
 
   def test_glob_neighbor_files_with_extensions(self):
 
-    # tests finding files in the same directory,
-    # with the same name, but have different extensions
+    # tests finding files in the same directory, with the same name, but have different extensions
     # first create a subdirectory
     foo_dir = self.temp_dir.name
 
