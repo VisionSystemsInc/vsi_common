@@ -5,9 +5,16 @@ from stat import S_IREAD
 from vsi.utils import file_utils
 from vsi.test.utils import TestCase
 
-sub_foo_dirs = {'tmp_subdir_0':['tmp_file0.txt','file1.txt','tmp_file2.txt'], 'tmp_subdir_1':['file0.txt','tmp_file1.txt'], 'tmp_sub_dir2':['tmp_file0.txt']}
+sub_foo_dirs = {'tmp_subdir_0':['tmp_file0.txt','file1.txt','tmp_file2.txt'],
+                'tmp_subdir_1':['file0.txt','tmp_file1.txt'],
+                'tmp_sub_dir2':['tmp_file0.txt']}
 foo_dirs = ['foo_file_dir', 'foo_f_dir']
-foo_files = ['foo_file0.txt', 'foo_file1.txt', 'foo_file2.txt', 'foo_f0.txt','foo_f1.txt', 'f2.txt']
+foo_files = ['foo_file0.txt',
+             'foo_file1.txt',
+             'foo_file2.txt',
+             'foo_f0.txt',
+             'foo_f1.txt',
+             'f2.txt']
 foo_pattern_files = ['foo_08_04_2023.txt', 'foo_08_04_23.txt']
 
 class TestFileUtils(TestCase):
