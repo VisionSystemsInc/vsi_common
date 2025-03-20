@@ -280,11 +280,20 @@ function log_all_outgoing_commits()
 #
 # :Arguments: - [``$1``] - The name of a remote to convert. Default: origin
 #
+# .. rubric:: Example
+#
+# The remote URL ``https://git-server.com/co/project.git`` is converted to ``git@git-server.com:co/project.git``
+#
 # .. note::
 #
 #   This does not change a submodule's tracked URL (i.e., the URL in the .gitmodules file) nor a submodule's URL (i.e., .git/config:submodule), only the URL of the remote in .git/\*\*/config (e.g., .git/modules/docker/recipes/config:remote)
 #**
 
+# REVIEW use the ssh://git@... protocol, which doesn't require replacing the
+# / with : between the host and rpath
+# FIXME at least for github, the trailing / must be striped (e.g.,
+# git@github.com:visionsystemsinc/vsi_common/ will fail to read from the remote
+# repository)
 function convert_git_remote_http_to_git()
 {
   local remote_name="${1-origin}"
@@ -301,7 +310,7 @@ function convert_git_remote_http_to_git()
   local remote_git_url
   # local foo="$(bar)" || rv="${?}" does not work as one line in bash 4.2 or older. Use two lines
   remote_git_url="$(_http_to_git_protocol "${remote_url}")" || remote_git_url_rv="${?}"
-  if [ "${remote_git_url_rv}" == "0" ]; then
+  if [ "${remote_git_url_rv}" -eq "0" ]; then
     # NOTE since git v1.8, a remote (e.g., origin) can have multiple associated
     # pushurls (see .git/config:remote)
     # RE providing the old url (remote_url) will update the correct url
@@ -309,6 +318,11 @@ function convert_git_remote_http_to_git()
     # RE If a pushurl is configured, this function returns early; therefore,
     # assume a pushurl is not configured
     "${GIT}" remote set-url "${remote_name}" --push "${remote_git_url}"
+    #
+    # Alternatively, use git config .insteadOf so as not to change the default
+    # configuration, although this would affect both the url and pushurl
+    # https://stackoverflow.com/a/51920532
+    # RE It does look like this option was available in git v1.8.3
   else # See if URL is already in the expected format
     # This is very simple; basically undo the simple transform done here.
     # Perhaps one day we will have a git remote url parser in parser.bsh
@@ -425,6 +439,8 @@ function is_submodule()
 # If the vsi_common repository is cloned (recursively) at ``/src``, and then :func:`git_project_root_dir` will output ``/src/vsi_common``. This is true regardless of where in the work-tree the function is run from, including from within submodules, sub-submodules, etc. Cf. git rev-parse --show-superproject-working-tree (available in git v2.13.7), which only outputs the absolute path to the working tree of the superproject of the current submodule.
 #**
 
+# REVIEW Rename to git_project_working_tree or git_topmost_working_tree
+# RE Should mirror git_project_git_dir
 function git_project_root_dir()
 {
   local toplevel="$("${GIT}" rev-parse --show-toplevel 2> /dev/null)"
@@ -587,14 +603,20 @@ function git_submodule_summary()
   for sm_key in ${submodule_keys[@]+"${submodule_keys[@]}"}; do
     local sm_path="$("${GIT}" config --file .gitmodules --get submodule."${sm_key}".path)"
 
-    # List the changes (as commits) to the working tree of a submodule
-    # cf. git submodule summary, which doesn't show modified/staged content
-    # RE The implementation for git submodule summary [1] and this command,
-    # git diff --submodule=log sm_path [2], are not the same
+    # List the changes (in commits) to the working tree of a submodule
+    # cf. git submodule summary, which doesn't show that there is modified or
+    # staged content, although it does count up differences (ahead/behind)
+    # RE The implementation for git submodule summary sm_path [1] and this
+    # command, git diff --submodule=log sm_path [2], are not the same
     # RE Unfortunately, both commands only list the first parents [3]
+    # Alternatively, git -c status.submoduleSummary=True status sm_path is
+    # similar as well
     # REVIEW Because of these limitations, it might be nicer if this function
-    # entered into submodule and ran git log... directly (which is not too hard)
-    # RE Could even run git status --porcelain=1
+    # entered into each submodule and ran git log... directly (which is not too
+    # hard, see below), which could show the full set of changes (in commits)
+    # to the working tree (not only the first parents)
+    # RE Could even run git status --porcelain=1 to show changes in the working
+    # tree
     #
     # [1] https://github.com/git/git/blob/v2.24.1/git-submodule.sh#L777
     # [2] https://github.com/git/git/blob/v2.24.1/diff.c#L3400 =>
@@ -604,14 +626,15 @@ function git_submodule_summary()
     "${GIT}" diff --submodule=log "${sm_path}"
 
 
-    # git diff --submodule=log SHA~1..SHA (or equivalently
-    # git log --patch --submodule=log SHA~1..SHA) can also be used to list the
-    # changes (in commits) to a submodule, but again, only to the first parents
-    # FIXME this could also be updated in ~/.gitconfig:submodule-lhist
+    # git diff --submodule=log SHA~1..SHA sm_path (or equivalently
+    # git log --patch --submodule=log SHA~1..SHA sm_path) can also be used to
+    # list the changes (in commits) to a submodule (but again, only the first
+    # parents) between two commits in the enclosing repository
     # RE For example,
     #     git diff --submodule=log 0088b126~1..0088b126 docker/recipes
-    # vs  ( cd docker/recipes && git hist 18ca5ee9..fe4f42d4 )
-    # vs  ( cd docker/recipes && git hist 18ca5ee9..fe4f42d4 --first-parent )
+    # ~=  git log --patch --submodule=log 0088b126~1..0088b126 docker/recipes
+    # vs  ( cd docker/recipes && git log --graph 18ca5ee9..fe4f42d4 --first-parent )
+    # cf. ( cd docker/recipes && git log --graph 18ca5ee9..fe4f42d4 )
 
 
     if [ -n "${_recursive_summary:+set}" ]; then
