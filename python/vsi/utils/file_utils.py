@@ -133,7 +133,8 @@ def glob_files_with_extensions(directory, extensions, recursive=True):
 
   # List of files to search for extension
   if recursive:
-    all_files = glob.glob(os.path.join(directory, "**", "*.*"), recursive=True)
+    all_files = [os.path.join(root, file) for root, _, files in os.walk(directory)
+                 for file in files if '.' in file and not file.startswith('.')]
   else:
     all_files = glob.glob(os.path.join(directory, "*.*"), recursive=False)
 
