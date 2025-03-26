@@ -927,6 +927,93 @@ function git_push_main()
           # now, only filter out refs/remotes
           # RE It is possible to get refs/remotes if a bare repo fetches from
           # another (bare) repo, which could then be pushed to, e.g., github
+          # RE Unfortunately, other refs can cause the error, "deny updating a
+          # hidden ref:"; e.g., refs/merge-requests/1/head, which is gitlab's
+          # version of a PR. Sometimes it seems the server simply denys refs
+          # from some namespaces (e.g., refs/merge-requests) or rejects them
+          # for some other reason (e.g., pre-receive hook declined or merge is
+          # non-fast-forward). Unfortunately, however, that is not always the
+          # case; sometimes it is possible to push those refs (perhaps the ref
+          # doesn't exist on the server yet). But if a refs/merge-requests ref
+          # IS pushed, at least in gitlab, it does not show up as a Merge
+          # Request (that info is probably pulled instead from a database).
+          # Consequently, it seems dangerous to push a ref that ostensibly
+          # belongs to the server.
+          # RE hidden refs may be related to the config option transfer.hideRefs
+          # configured on the server [1]
+          # RE RE confirmed. I tested this and it will cause the "deny updating
+          # hidden ref:" error
+          # RE branches can also be protected, although the user doing the
+          # transfer should ensure she is not affected by such restrictions
+          #
+          # RE as recommended by https://stackoverflow.com/a/54413257, I could
+          # do git clone --bare instead of git clone --mirror in git_clone_main,
+          # which only clones refs/heads/* and refs/tags/* (although the latter
+          # is not clear from the documentation, and surprisingly it is not the
+          # result of [3]); but irritatingly, it does not create a refspec in
+          # the config file, which prevents future fetches, so we would have to
+          # add one (which is easy enough).
+          # RE RE Perhaps we should do git clone --bare instead of --mirror in
+          # git_clone_main, add the refspec, and add a parameter to pass in a
+          # list of additional refspecs-of-interest; e.g., refs/qa or whatever,
+          # which can be included using the git clone -c remote.origin.fetch
+          # option [2]
+          # RE RE NOTE in this case, the refspec should be symmetric, e.g.,
+          # refs/heads/*:refs/heads/*
+          # RE RE The problem with this is that if an additional refspec
+          # overlaps with the default refspec, it causes an error; ensuring this
+          # does not happen (short of running the command) is hard; negative
+          # refspecs are even allowed in git v2.29.
+          # RE Instead, simply init a bare repo, add either a default refspec
+          # for heads and tags (as when cloning a bare repo) or the specified
+          # refspec, which could either be appended to the default refspec (as
+          # overlapping refspecs are allowed with fetch) or alternatively
+          # replace it
+          # Alternatively, is there a problem with mirroring the repo as we
+          # currently do, but only pushing the refspec? Or even tag (in a
+          # namespace) ALL the refs but only push the refspec (which would
+          # include all of these new tags, but they would never need to be
+          # force pushed (since I namespace them by datetime). Although this
+          # would create a lot of tags)
+          # RE One quirk here is tags are treated a little differently than
+          # other refs; i.e., all tags are not cloned by default; however,
+          # those that are reachable from a head ARE cloned [3].
+          # RE Alternatively, create (a copy) of ALL the refs in a namespace
+          # (as we do when tagging, e.g., refs/heads, in git_tag_main), push
+          # them so the SHA exists on the remote, and then push other refs
+          # according to the provided refspec; that way we don't clutter up
+          # tags, just branches...
+          # RE One problem is where to put this namespace; it would have to be
+          # something like refs/just_git_mirror since the refspec could include
+          # anything (refs/heads refs/tags refs/qa, etc.), but this would not
+          # be cloned by the default refspec...
+          # RE Another problem with this is what to do with tags; I guess these
+          # can just be treated as any other ref (albeit technically moveable)
+          # NOTE With any approach, need to ensure that incremental transfers
+          # untar correctly
+          #
+          # Ultimately, the server could reject a ref for any number of reasons.
+          # The problem is that unpushable refs cause the repo to be in an
+          # unexpected state. What should we do in this case?
+          # RE If/when we change how this works and only push things in the
+          # refspec, we should probably error; otherwise, the repo would not be
+          # in the expected state
+          # RE Although we could try to push everything and provide a summary
+          # of the refs that were force pushed and those that failed to push
+          # NOTE It is the responsibility of the merge engineer to make sure
+          # the mirrored repositories are in the expected state, not the
+          # developer who clones/fetches from the mirrors
+          #
+          # NOTE By default, when fetching refs/heads, any reachable tag is also
+          # fetched [3]
+          #
+          # [1] https://git-scm.com/docs/git-config/2.17.0# ...
+          #             Documentation/git-config.txt-transferhideRefs
+          # [2] https://git-scm.com/docs/git-config/2.17.0# ...
+          #             Documentation/git-config.txt-remoteltnamegtfetch
+          # [3] https://git-scm.com/docs/git-fetch/2.25.0
+          # oye, this is a comment...
+
 
           # I could fetch refs from the remote so I can determine when a (fast-
           # forward) push was not possible; and if a force push was done, what
@@ -1019,7 +1106,7 @@ function git_push_main()
 #
 # Tag the refs in the mirrored repository and all submodules
 #
-# Before pushing the mirrored repository and all of its submodules to the new git server with :func:`git_push_main`, tag the refs so that if, during the **next** transfer, they become dereferenced (due to a force push, which is sometimes necessary), they are not lost. For a ref of the form refs/heads/main, this (annotated) tag takes the (long) form of refs/tags/just_git_mirror/{datetime}/heads/main
+# Before pushing the mirrored repository and all of its submodules to the new git server with :func:`git_push_main`, tag the refs so that if, during the **next** transfer, they become dereferenced (due to a force push, which is sometimes necessary), they are not lost. For a ref of the form refs/heads/main, this tag takes the (long) form of refs/tags/just_git_mirror/{datetime}/heads/main
 #
 # :Arguments: ``$1`` - A file specifying the mapping between each repository and its mirror URL; see :func:`_git_mirror_load_info`
 #             ``$2`` - The mirrored repositories (extracted from the archive) created by :func:`git_mirror_main`
@@ -1071,6 +1158,10 @@ function git_tag_main()
             # Unfortunately, it doesn't look like there is something like
             # git tag --points-at for ls-remote. Instead, return all of our
             # tags that match our ref and grep for the correct SHA
+            # REVIEW I could, however, save this list of tags so as to not make
+            # the same remote query multiple times, although it is only being
+            # done for refs/heads, and refs/tags
+
             #
             # git has two kinds of tags: lightweight and annotated [1].
             # Lightweight tags are like branches that do not move. Annotated
@@ -1135,6 +1226,10 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ] || [ "$(basename "${BASH_SOURCE[0]}")" = "${
     push)
       shift 1
       git_push_main ${@+"${@}"}
+      ;;
+    tag)
+      shift 1
+      git_tag_main ${@+"${@}"}
       ;;
     clone)
       shift 1

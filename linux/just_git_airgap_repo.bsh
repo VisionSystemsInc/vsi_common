@@ -32,11 +32,11 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 #
 # .. file:: just_git_airgap_repo.bsh
 #
-# While creating a git mirror is as simple as ``git clone --mirror``, unfortunately this command does not support git submodules or lfs. These functions help in creating and subsequently cloning a mirror of a project with submodules and/or git lfs.
+# While creating a git mirror is as simple as ``git clone --mirror``, unfortunately this command does not support git submodules or git lfs. This plugin helps create and subsequently clone a mirror of a project with submodules and/or git lfs.
 #
 # .. rubric:: Example
 #
-# Assume we have a ``just`` project called project_A stored at ``https://git-server.com/projectA/project_A.git`` and vsi_common is a submodule of it.
+# Assume we have a ``just`` project called project_A hosted at ``https://git-server.com/projectA/project_A.git`` and vsi_common is a submodule of it.
 #
 # This repository is recursively cloned to /src; it looks like
 #
@@ -51,11 +51,9 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 #
 # Before this repository can be mirrored (which is not the same thing as a clone) and pushed to a new air-gapped git server, first, a little setup is necessary.
 #
-# The need for this setup is due to a chicken-and-egg problem. chicken) If a developer tried to simply clone the mirrored repository in the air-gapped environment, the submodules would fail to update because their URLs cannot be reached in that environment. Instead, the submodules must first be re-configured; then, they can be updated (recursively). This is handled by the ``git_airgap-submodule-update`` ``just`` target. egg) However, this obviously cannot be called until the vsi_common submodule is itself initialized and updated.
+# The need for this setup is due to a chicken-and-egg problem. *chicken*) If a developer tried to simply clone the mirrored repository in the air-gapped environment, the submodules would fail to update because their URLs cannot be reached in that environment. Instead, the submodules must first be re-configured; then, they can be updated (recursively). This is handled by the ``just git airgap-submodule-update`` target. *egg*) However, this obviously cannot be called until the vsi_common submodule is itself initialized and updated.
 #
-# To accomplish this, a small function, :func:`git_airgap_submodule_helper.bsh git_airgap_submodule_update`, is (orphan) committed to the air-gapped repository so that it is available for this task.
-#
-# As no ``just`` functions can be called yet, this function should be called in the file specified by :envvar:`JUST_SETUP_SCRIPT` (typically called setup.env). For example, the setup.env script, which typically looks like:
+# To accomplish this, a small function, :func:`git_airgap_submodule_helper.bsh git_airgap_submodule_update`, is (orphan) committed to the air-gapped repository so that it is available for this task. As no ``just`` functions can be called yet, this function should be called in the file specified by :envvar:`JUST_SETUP_SCRIPT` (typically called setup.env). For example, the setup.env script, which typically looks like:
 #
 # .. code-block:: bash
 #
@@ -80,6 +78,11 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 #      git_airgap_submodule_update external/vsi_common
 #    fi
 #    source "$(dirname "${BASH_SOURCE[0]}")/external/vsi_common/env.bsh"
+#
+# Also, as mentioned, the ``git airgap-submodule-update`` ``just`` target handles reconfiguring the submodules for the air-gapped environment. As such, it should be called in place of the ``git submodule-update`` ``just`` target. For instance, if ``just sync`` calls ``git submodule-update``, then in an air-gapped environment it should call ``git airgap-submodule-update`` instead.
+#
+# .. note::
+#   Currently ``git airgap-submodule-update`` does not update the submodules with the additional safety provided by ``git submodule-update`` (although it is no less safe than the corresponding git calls).
 #
 # This repository is now setup and can be mirrored and pushed to a new air-gapped git server:
 #
@@ -139,7 +142,7 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 #
 #   Limitations - There are a few limitations with a mirrored repository:
 #
-#   1. While the mirrored repository is a proper git repository, care must be taken to ensure subsequent (incremental) mirrors are successful: specifically, the transferred branches must remain read-only. However, additional branches/tags can be created as long as their names won't clash with those from the host repository.
+#   1. While the mirrored repository is a proper git repository, care must be taken to ensure subsequent (incremental) mirrors are successful: specifically, the transferred branches must remain read-only. However, additional branches/tags can be created as long as their names don't clash with those from the host repository.
 #
 #   #. :func:`git_mirror git_mirror_main`, and by extension this plugin, does not mirror all submodules that have ever been part of the repo, only those from a specific branch/SHA/tag you specify (git's init.defaultBranch by default). Consequently, checking out another version of the repository with a different version of the .gitmodules file in which a submodule has been deleted or renamed may cause the ``git_airgap-submodule-update`` to fail because the submodule's remote URL could not be re-configured to point to the mirror.
 #
@@ -786,6 +789,11 @@ function relocate_git_defaultify()
       pushd "${main_dir}" &>/dev/null
         orphan_commit_repo_map "${repo_map}"
       popd &>/dev/null
+
+      echo "IMPORTANT You must have permissions to push and if necessary force push branches"
+      echo "          to the remote; in addition to access-level permissions, server-side"
+      echo "          configurations like protected branches and pre-commit hooks, which can"
+      echo "          result in branches failing to push, must not apply."
 
       git_tag_main repo_map.env ./
       git_push_main repo_map.env ./
