@@ -13,7 +13,7 @@ This is a quickstart guide for the intended customers of a just project. This gu
 What is J.U.S.T.
 ----------------
 
-Think of :file:`just` as a bunch of scripts all wrapped into one command (or script), with the added benefit that it works on Linux, Windows (provided ``git`` is installed), and macos without additional dependencies.
+Think of :file:`just` as a bunch of scripts all wrapped into one command (or script), with the added benefit that it works on Linux, Windows (provided ``git`` is installed), and macOS without additional dependencies.
 
 The developer will create a number of tasks, and assign them to just targets. For example, if there was a ``compile`` target that compiles the code, you run ``just compile`` to run that target.
 
