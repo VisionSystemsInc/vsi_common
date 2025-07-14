@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+
+if [ -z "${VSI_COMMON_DIR+set}" ]; then
+  VSI_COMMON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
+fi
+
+source "${VSI_COMMON_DIR}/tests/testlib.bsh"
+source "${TESTLIB_DIR}/test_utils.bsh"
+source "${VSI_COMMON_DIR}/linux/aliases.bsh"
+source "${VSI_COMMON_DIR}/linux/compat.bsh"
+source "${VSI_COMMON_DIR}/linux/just_files/just_archive.bsh"
+
+if ! command -v "${GIT}" &> /dev/null; then
+  TESTLIB_SKIP_TESTS='.*'
+fi
+
+function create_repo()
+{
+  # inputs
+  local name="${1}"
+  local submodules="${@:2}"
+
+  # create repo directory
+  local repo="${REPO_DIR}/${name}"
+  mkdir -p "${repo}"
+
+  # repo setup
+  pushd "${repo}" &> /dev/null
+
+    # create repo
+    ${GIT} init . >& /dev/null
+    touch "readme_${name}"
+    ${GIT} add "readme_${name}"
+    ${GIT} commit -m "Initial commit"
+    ${GIT} branch -m main
+
+    # submodule setup
+    local submodule=
+    for submodule in ${submodules[@]}; do
+      ${GIT} submodule add --name ${submodule} "${REPO_DIR}/${submodule}" ${submodule}
+      ${GIT} add ${submodule}
+      ${GIT} commit -m "Add ${submodule}"
+    done
+
+    # update all submodules
+    ${GIT} submodule update --init --recursive
+
+  popd &> /dev/null
+}
+
+function setup()
+{
+  # Easier way to take care of committers on vanilla install
+  export GIT_COMMITTER_NAME='Foo Bar'
+  export GIT_AUTHOR_NAME='Foo Bar'
+  export GIT_COMMITTER_EMAIL='foo.bar@example.com'
+  export GIT_AUTHOR_EMAIL='foo.bar@example.com'
+}
+
+begin_test "Test git-archive-recursive"
+(
+  setup_test
+
+  # test with gtar on macos
+  if [[ ${OSTYPE-} = darwin* ]]; then
+    TAR=gtar
+  fi
+
+  # redirect mktemp & make_temp_path
+  export TMPDIR="${TESTDIR}/tmp"
+  mkdir -p "${TMPDIR}"
+
+  # repo directory
+  REPO_DIR="${TESTDIR}/repos"
+  mkdir -p "${REPO_DIR}"
+
+  # create repos
+  create_repo sub1_sub
+  create_repo sub1 sub1_sub
+  create_repo sub2
+  create_repo main sub1 sub2
+
+  # variables
+  MAIN_REPO="${REPO_DIR}/main"
+  ARCHIVE_FILE="${TESTDIR}/archive.tar"
+
+  # report
+  echo "Setup Complete"
+
+  # enter main repo
+  cd "${MAIN_REPO}"
+
+  # archive
+  echo "Archive initial repo"
+  git-archive-recursive --output "${ARCHIVE_FILE}"
+
+  RESULT="$(${TAR} -tf "${ARCHIVE_FILE}")"
+  EXPECTED="\
+.gitmodules
+readme_main
+sub1/
+sub1/.gitmodules
+sub1/readme_sub1
+sub1/sub1_sub/
+sub1/sub1_sub/readme_sub1_sub
+sub2/
+sub2/readme_sub2"
+  assert_str_eq "${RESULT}" "${EXPECTED}"
+
+  # commit file to submodule
+  # the resulting archive should include the commited file
+  echo "Add file to submodule & archive..."
+  pushd "${MAIN_REPO}/sub2" &> /dev/null
+    touch z_file_sub2
+    ${GIT} add z_file_sub2
+    ${GIT} commit -m "z_file_sub2"
+  popd &> /dev/null
+
+  git-archive-recursive --output "${ARCHIVE_FILE}" --overwrite
+
+  RESULT="$(${TAR} -tf "${ARCHIVE_FILE}")"
+  EXPECTED+="
+sub2/z_file_sub2"
+  assert_str_eq "${RESULT}" "${EXPECTED}"
+
+)
+end_test

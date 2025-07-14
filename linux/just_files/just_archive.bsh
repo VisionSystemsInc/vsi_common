@@ -1,0 +1,178 @@
+#!/usr/bin/env false bash
+
+if [[ ${-} != *i* ]]; then
+  source_once &> /dev/null && return 0
+fi
+
+# dependencies
+source "${VSI_COMMON_DIR}/linux/aliases.bsh"
+source "${VSI_COMMON_DIR}/linux/command_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/compat.bsh"
+source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
+
+#*# just/plugins/just_archive_functions
+
+JUST_DEFAULTIFY_FUNCTIONS+=(archive_defaultify)
+JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
+
+#**
+# .. default-domain:: bash
+#
+# ==========================
+# J.U.S.T. Archive Functions
+# ==========================
+#
+# .. file:: just_archive_functions.bsh
+#
+# git archive plugin for just
+#**
+
+#**
+# .. envvar:: JUST_ARCHIVE_FILE
+#
+# Default archive file.
+#
+# .. seealso::
+#
+#   :func:`git-archive-recursive`
+#**
+
+: ${JUST_ARCHIVE_FILE=}
+
+#**
+# .. envvar:: JUST_ARCHIVE_DIR
+#
+# Default archive directory containing git repo.
+#
+# .. seealso::
+#
+#   :func:`git-archive-recursive`
+#**
+
+: ${JUST_ARCHIVE_DIR=}
+
+#**
+# .. function:: git-archive-recursive
+#
+# Recursive ``git archive`` on current repo including submodules, saving result to a tarball. The archive will be created from the current repo (i.e., ``HEAD``) & current submodules (i.e., ``HEAD`` of each submodule)
+#
+# :Arguments: * [``-o|--output {file}``] - Output archive file
+#             * [``--overwrite``] - Overwrite existing archive file
+#             * [``-C {path}``] - Run as if git was started in ``<path>`` instead of the current working directory.
+#
+# :Output: * archive_extra_args - number of arguments consumed
+#
+#**
+
+function git-archive-recursive()
+{
+  local archive_file="${JUST_ARCHIVE_FILE}"
+  local archive_dir="${JUST_ARCHIVE_DIR}"
+  local overwrite=0
+  local archive_extra_args
+  parse_args archive_extra_args \
+      --output archive_file: \
+      --overwrite overwrite \
+      -C archive_dir: \
+      -- ${@+"${@}"}
+
+  # check for overwrite
+  if [ -f "${archive_file}" ]; then
+    if [ "${overwrite}" != "0" ]; then
+      echo "WARNING: output archive file exists and will be overwritten " \
+           "<${archive_file}>" >&2
+    else
+      echo "ERROR: output archive file exists and overwrite is disabled "\
+           "<${archive_file}>" >&2
+      JUST_IGNORE_EXIT_CODES=1
+      return 1
+    fi
+  fi
+
+  # check that ``tar --concatenate`` is available
+  if ! tar_feature_concatenate; then
+    echo "ERROR: 'git-archive-recursive' requires 'tar --concatenate'" >&2
+    JUST_IGNORE_EXIT_CODES=1
+    return 1
+  fi
+
+  # check archive_dir
+  if [ -z "${archive_dir}" ]; then
+    archive_dir="$(pwd)"
+  elif [ ! -d "${archive_dir}" ]; then
+    echo "ERROR: archive directory does not exist <${archive_dir}>" >&2
+    JUST_IGNORE_EXIT_CODES=1
+    return 1
+  fi
+
+  # enter archive dir
+  pushd "${archive_dir}" >& /dev/null
+
+  # generate main archive
+  echo "Archiving main repo" >&2
+  ${GIT} archive --format=tar HEAD -o "${archive_file}"
+
+  # self-cleaning temporary directory for submodule tarballs
+  local temp_dir
+  make_temp_path temp_dir -d
+
+  # concatenate submodules to archive
+  local displaypath prefix sub_path sub_file
+
+  ${GIT} submodule foreach --recursive --quiet \
+    'echo "${displaypath:-?}" "${prefix:-?}"' | \
+    while read -r displaypath prefix;
+  do
+    # Older git has a missing or incorrect $displaypath, instead offering the
+    # $prefix variable. When present, use $prefix (without trailing slash).
+    if [ "${prefix}" != "?" ]; then
+      sub_path="${prefix%/}"
+    else
+      sub_path="${displaypath}"
+    fi
+    # report
+    echo "Archiving submodule : ${sub_path}" >&2
+    # generate submodule archive
+    sub_file="$(mktemp -p "${temp_dir}")"
+    pushd "${sub_path}" >& /dev/null
+      ${GIT} archive --prefix="${sub_path}/" --format=tar HEAD -o "${sub_file}"
+    popd >& /dev/null
+    # remove empty submodule path from tarball
+    # (this step is nice to have, but not explictly necessary)
+    ${TAR} -f "${archive_file}" --delete "${sub_path}/" >& /dev/null || :
+    # add submodule to main archive
+    ${TAR} -f "${archive_file}" --concatenate "${sub_file}"
+  done
+
+  # exit archive dir
+  popd >& /dev/null
+}
+
+#**
+# .. function:: archive_defaultify
+#
+# Archive plugin for just
+function archive_defaultify()
+{
+  arg="${1}"
+  shift 1
+  case ${arg} in
+    #**
+    # .. command:: archive
+    #
+    # Recursive ``git archive`` on current repo including submodules, saving result to a tarball.
+    #
+    # .. seealso::
+    #
+    #   :func:`git-archive-recursive`
+    #**
+    archive) # Recursive ``git archive``
+      git-archive-recursive ${@+"${@}"}
+      extra_args=archive_extra_args
+      ;;
+    *)
+      plugin_not_found=1
+      ;;
+  esac
+  return 0
+}
