@@ -9,6 +9,7 @@ source "${VSI_COMMON_DIR}/linux/aliases.bsh"
 source "${VSI_COMMON_DIR}/linux/command_tools.bsh"
 source "${VSI_COMMON_DIR}/linux/compat.bsh"
 source "${VSI_COMMON_DIR}/linux/dir_tools.bsh"
+source "${VSI_COMMON_DIR}/linux/git_functions.bsh"
 
 #*# just/plugins/just_archive_functions
 
@@ -22,7 +23,7 @@ JUST_HELP_FILES+=("${BASH_SOURCE[0]}")
 # J.U.S.T. Archive Functions
 # ==========================
 #
-# .. file:: just_archive_functions.bsh
+# .. file:: just_archive.bsh
 #
 # git archive plugin for just
 #**
@@ -82,7 +83,7 @@ function git-archive-recursive()
       echo "WARNING: output archive file exists and will be overwritten " \
            "<${archive_file}>" >&2
     else
-      echo "ERROR: output archive file exists and overwrite is disabled "\
+      echo "ERROR: output archive file exists and overwrite is disabled " \
            "<${archive_file}>" >&2
       JUST_IGNORE_EXIT_CODES=1
       return 1
@@ -91,7 +92,9 @@ function git-archive-recursive()
 
   # check that ``tar --concatenate`` is available
   if ! tar_feature_concatenate; then
-    echo "ERROR: 'git-archive-recursive' requires 'tar --concatenate'" >&2
+    echo "ERROR: 'git-archive-recursive' requires 'tar --concatenate'." \
+         "Try setting \$TAR to a GNU version of tar, or install a GNU" \
+         "version of tar if one is not available." >&2
     JUST_IGNORE_EXIT_CODES=1
     return 1
   fi
@@ -100,7 +103,8 @@ function git-archive-recursive()
   if [ -z "${archive_dir}" ]; then
     archive_dir="$(pwd)"
   elif [ ! -d "${archive_dir}" ]; then
-    echo "ERROR: archive directory does not exist <${archive_dir}>" >&2
+    echo "ERROR: archive directory does not exist <${archive_dir}>." \
+         "Set the -C flag or \$JUST_ARCHIVE_DIR and try again." >&2
     JUST_IGNORE_EXIT_CODES=1
     return 1
   fi
@@ -117,32 +121,21 @@ function git-archive-recursive()
   make_temp_path temp_dir -d
 
   # concatenate submodules to archive
-  local displaypath prefix sub_path sub_file
-
-  ${GIT} submodule foreach --recursive --quiet \
-    'echo "${displaypath:-?}" "${prefix:-?}"' | \
-    while read -r displaypath prefix;
-  do
-    # Older git has a missing or incorrect $displaypath, instead offering the
-    # $prefix variable. When present, use $prefix (without trailing slash).
-    if [ "${prefix}" != "?" ]; then
-      sub_path="${prefix%/}"
-    else
-      sub_path="${displaypath}"
-    fi
+  local displaypath
+  while IFS= read -r displaypath; do
     # report
-    echo "Archiving submodule : ${sub_path}" >&2
+    echo "Archiving submodule : ${displaypath}" >&2
     # generate submodule archive
     sub_file="$(mktemp -p "${temp_dir}")"
-    pushd "${sub_path}" >& /dev/null
-      ${GIT} archive --prefix="${sub_path}/" --format=tar HEAD -o "${sub_file}"
+    pushd "${displaypath}" >& /dev/null
+      ${GIT} archive --prefix="${displaypath}/" --format=tar HEAD -o "${sub_file}"
     popd >& /dev/null
     # remove empty submodule path from tarball
     # (this step is nice to have, but not explictly necessary)
-    ${TAR} -f "${archive_file}" --delete "${sub_path}/" >& /dev/null || :
+    ${TAR} -f "${archive_file}" --delete "${displaypath}/" >& /dev/null || :
     # add submodule to main archive
     ${TAR} -f "${archive_file}" --concatenate "${sub_file}"
-  done
+  done <<< "$(git_submodule_displaypaths_recursive)"
 
   # exit archive dir
   popd >& /dev/null
@@ -166,7 +159,7 @@ function archive_defaultify()
     #
     #   :func:`git-archive-recursive`
     #**
-    archive) # Recursive ``git archive``
+    git_archive) # Recursive ``git archive``
       git-archive-recursive ${@+"${@}"}
       extra_args=archive_extra_args
       ;;
