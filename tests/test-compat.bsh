@@ -545,6 +545,60 @@ begin_test "Tar flags"
 )
 end_test
 
+begin_test "Tar delete"
+(
+  setup_test
+
+  # enter test directory
+  cd "${TESTDIR}"
+
+  # create tarball
+  mkdir -p foo
+  touch foo/A.txt foo/B.txt
+  ${TAR-tar} cf foo.tar foo
+
+  # test delete
+  if tar_feature_delete; then
+    ${TAR-tar} -f foo.tar --delete foo/B.txt &> /dev/null
+
+    # confirm file was deleted
+    RESULT="$(${TAR-tar} -tf foo.tar)"
+    EXPECTED=$(echo -e "foo/\nfoo/A.txt")
+    assert_str_eq "${RESULT}" "${EXPECTED}"
+  else
+    not ${TAR-tar} -f foo.tar --delete foo/B.txt &> /dev/null
+  fi
+)
+end_test
+
+begin_test "Tar concatenate"
+(
+  setup_test
+
+  # enter test directory
+  cd "${TESTDIR}"
+
+  # create two tarballs
+  mkdir -p "A" "B"
+  touch "A/A.txt" "B/B.txt"
+  ${TAR-tar} cf A.tar A
+  ${TAR-tar} cf B.tar B
+
+  # test concatenate
+  if tar_feature_concatenate; then
+    ${TAR-tar} -f A.tar --concatenate B.tar &> /dev/null
+
+    # confirm files were concatenated
+    RESULT="$(${TAR-tar} -tf A.tar)"
+    EXPECTED=$(echo -e "A/\nA/A.txt\nB/\nB/B.txt")
+    assert_str_eq "${RESULT}" "${EXPECTED}"
+
+  else
+    not ${TAR-tar} -f A.tar --concatenate B.tar &> /dev/null
+  fi
+)
+end_test
+
 begin_test "Singularity flags"
 (
   setup_test
