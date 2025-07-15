@@ -32,6 +32,8 @@ RUN apk add --no-cache \
       git \
       # For git_mirror
       git-lfs \
+      # GNU tar that supports --concatenate
+      tar \
       # unit test interactive shells
       screen \
       # Make typeing in the docker easier (for debugging)
