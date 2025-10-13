@@ -130,6 +130,10 @@ source "${VSI_COMMON_DIR}/linux/requirements.bsh"
 # Suggested PTX architectures to compile for. If your graphics card is too new for the :var:`CUDA_VERSION` version of CUDA, you will need to compile to a pure virtual architecture (by embedding PTX code in the fatbinary) in order to use it. That way, the real architecture can be JIT (Just-In-Time) compiled for at runtime.
 #
 # :var:`CUDA_SUGGESTED_PTX` identifies the PTX architectures you need to run on newer (unrecognized) cards. You can choose to add them to your builds.
+#
+# .. var:: DEVICE_QUERY
+#
+# Path to a specific ``deviceQuery``. Default: ``deviceQuery`` using the system path.
 #**
 
 #**
@@ -380,9 +384,29 @@ function discover_cuda_info()
   else
     echo "nvidia-smi not available or does not have 'compute_cap' query, "
     echo "deviceQuery not found, and nvidia-docker v1 plugin not running."
-    echo "deviceQuery can be downloaded from https://www.vsi-ri.com/bin/deviceQuery"
-    echo "or https://goo.gl/equvX3"
-    echo "(Use https://www.vsi-ri.com/bin/deviceQuery.exe for Windows)"
+    echo "deviceQuery can be downloaded via 'download_device_query'."
+  fi
+}
+
+#**
+# .. function:: download_device_query
+#
+# Download deviceQuery executable if not already present. Executable location defaults to ``"${${JUST_PROJECT_PREFIX}_CWD}/.bin/deviceQuery"``
+#
+# :Output: * :var:`cuda_info.bsh DEVICE_QUERY`
+#**
+function download_device_query()
+{
+  local url="https://github.com/VisionSystemsInc/small_trinkets/releases/download/deviceQuery/deviceQuery90"
+
+  local cwd_var="${JUST_PROJECT_PREFIX}_CWD"
+  : ${DEVICE_QUERY="${!cwd_var}/.bin/deviceQuery"}
+
+  if [ ! -x "${DEVICE_QUERY}" ]; then
+    echo "Downloading deviceQuery to ${DEVICE_QUERY}..." >&2
+    mkdir -p "$(dirname "${DEVICE_QUERY}")"
+    download_to_file "${url}" "${DEVICE_QUERY}"
+    chmod 755 "${DEVICE_QUERY}"
   fi
 }
 
