@@ -4,26 +4,29 @@
 
 set -eu
 
-if ! command -v git &> /dev/null; then
-  apk add --no-cache git
-fi
+apk add --no-cache git jq
 
 SHELLCHECK_ARGS=(
+  # no fancy args with spaces, won't work because of how I pass array below
   -f json
   # -S error
   # -e ...
-  -Calways
 )
 
 cd "${CI_PROJECT_DIR-/code}"
 
 git config --global --add safe.directory /src/external/terra/external/vsi_common
 
-git ls-files -z | ash
+git ls-files -z |
   xargs -0 -n1 sh -c '[ -f "${1}" ] && \
                       head -n 1 "$1" | \
                       grep -qE "^#!.*(bash|false)" \
                       && echo "$1"' _ | \
   grep -v '\.simplecov' | \
-  xargs -n10 bash -c 'echo shellcheck "${SHELLCHECK_ARGS[@]}" "${@}" | tee /tmp/results.$$' _
+  xargs -n10 -P "$(nproc)" bash -c 'shellcheck '"${SHELLCHECK_ARGS[*]}"' "${@}" > /tmp/results.$$; for x in "${@}"; do echo "${x}" processed.; done' _
   # process 10 at a time, because 50 at a time causes it to hang. 49 worked
+
+mkdir -p /tmp/results
+jq -s add /tmp/results.* > /tmp/results/shellcheck.json
+
+jq -r '.[] | select(.level == "error" or .level == "warning") | "::\(.level) file=\(.file),line=\(.line),col=\(.column),endColumn=\(.endColumn),title=Wtf::\(.message)"' /tmp/results/shellcheck.json
