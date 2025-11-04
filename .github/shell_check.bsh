@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+
+# docker run -it --rm -v "${VSI_COMMON_DIR}:/code:ro" registry.gitlab.com/pipeline-components/shellcheck:latest /code/.github/shell_check.bsh
+
+set -eu
+
+if ! command -v git &> /dev/null; then
+  apk add --no-cache git
+fi
+
+SHELLCHECK_ARGS=(
+  -f json
+  # -S error
+  # -e ...
+  -Calways
+)
+
+cd "${CI_PROJECT_DIR-/code}"
+
+git config --global --add safe.directory /src/external/terra/external/vsi_common
+
+git ls-files -z | ash
+  xargs -0 -n1 sh -c '[ -f "${1}" ] && \
+                      head -n 1 "$1" | \
+                      grep -qE "^#!.*(bash|false)" \
+                      && echo "$1"' _ | \
+  grep -v '\.simplecov' | \
+  xargs -n10 bash -c 'echo shellcheck "${SHELLCHECK_ARGS[@]}" "${@}" | tee /tmp/results.$$' _
+  # process 10 at a time, because 50 at a time causes it to hang. 49 worked
