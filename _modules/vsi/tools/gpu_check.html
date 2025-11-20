@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>vsi.tools.gpu_check &mdash; VSI Common 0.2.2+1dev documentation</title>
+      <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../../_static/jquery.js"></script>
+        <script src="../../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
+        <script src="../../../_static/doctools.js"></script>
+        <script src="../../../_static/sphinx_highlight.js"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            VSI Common
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../just/index.html">J.U.S.T. Useful Simple Tasking</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../linux/index.html">Linux Utilities</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../windows/index.html">Windows Utilities</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tests/index.html">Unit Tests</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../python/modules.html">vsi</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../docker/recipes/get-pipenv.auto.html">Get Pipenv</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../docker/recipes/pip-8210.auto.html">pip 8210</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../docker/recipes/pip-opencv.auto.html">pip opencv</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../docker/recipes/index.html">Docker recipes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../style.html">Contributing Style Guide</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">VSI Common</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">vsi.tools.gpu_check</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for vsi.tools.gpu_check</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">argparse</span>
+<span class="kn">import</span> <span class="nn">ctypes</span>
+<span class="kn">import</span> <span class="nn">glob</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">pathlib</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="find_cudart"><a class="viewcode-back" href="../../../python/vsi.tools.html#vsi.tools.gpu_check.find_cudart">[docs]</a><span class="k">def</span> <span class="nf">find_cudart</span><span class="p">(</span><span class="n">search_dirs</span><span class="p">):</span>
+<span class="w">  </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  Find, load, and return the ``libcudart.so`` library.</span>
+
+<span class="sd">  Paramters</span>
+<span class="sd">  ---------</span>
+<span class="sd">  search_dirs : :obj:`list`</span>
+<span class="sd">    List of directories to search</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+  <span class="k">for</span> <span class="n">search_dir</span> <span class="ow">in</span> <span class="n">search_dirs</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">file</span> <span class="ow">in</span> <span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">(</span><span class="n">search_dir</span><span class="p">)</span><span class="o">.</span><span class="n">rglob</span><span class="p">(</span><span class="s1">&#39;libcudart.so*&#39;</span><span class="p">):</span>
+      <span class="k">try</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">cdll</span><span class="o">.</span><span class="n">LoadLibrary</span><span class="p">(</span><span class="n">file</span><span class="p">)</span>
+      <span class="k">except</span> <span class="ne">OSError</span><span class="p">:</span>
+        <span class="k">continue</span>
+
+  <span class="k">raise</span> <span class="ne">OSError</span><span class="p">(</span><span class="s2">&quot;Failed to find &amp; load libcudart.so&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="load_cudart"><a class="viewcode-back" href="../../../python/vsi.tools.html#vsi.tools.gpu_check.load_cudart">[docs]</a><span class="k">def</span> <span class="nf">load_cudart</span><span class="p">(</span><span class="n">file</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">  </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  Load ``libcudart.so`` library.  If not provided as an input, search</span>
+<span class="sd">  standard locations for the library.</span>
+
+<span class="sd">  Paramters</span>
+<span class="sd">  ---------</span>
+<span class="sd">  file : :obj:`str`</span>
+<span class="sd">    Location of ``libcudart.so``</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+
+  <span class="c1"># load directly</span>
+  <span class="k">if</span> <span class="n">file</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">cdll</span><span class="o">.</span><span class="n">LoadLibrary</span><span class="p">(</span><span class="n">file</span><span class="p">)</span>
+
+  <span class="c1"># list of directories to search (via recursive glob)</span>
+  <span class="c1"># - /usr/local/cuda*</span>
+  <span class="c1"># - /usr/cuda*</span>
+  <span class="c1"># - ${LD_LIBRARY_PATH}</span>
+  <span class="c1"># - /usr</span>
+  <span class="n">search_dirs</span> <span class="o">=</span> <span class="nb">list</span><span class="p">()</span>
+
+  <span class="n">search_dirs</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">(</span><span class="s1">&#39;/usr/local&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s1">&#39;cuda*&#39;</span><span class="p">))</span>
+  <span class="n">search_dirs</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">(</span><span class="s1">&#39;/usr&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s1">&#39;cuda*&#39;</span><span class="p">))</span>
+
+  <span class="n">LD_LIBRARY_PATH</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s1">&#39;LD_LIBRARY_PATH&#39;</span><span class="p">)</span>
+  <span class="k">if</span> <span class="n">LD_LIBRARY_PATH</span><span class="p">:</span>
+    <span class="n">search_dirs</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">LD_LIBRARY_PATH</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">pathsep</span><span class="p">))</span>
+
+  <span class="n">search_dirs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s1">&#39;/usr&#39;</span><span class="p">)</span>
+
+  <span class="c1"># ensure all search directories are pathlib</span>
+  <span class="n">search_dirs</span> <span class="o">=</span> <span class="p">[</span><span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">(</span><span class="n">d</span><span class="p">)</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">search_dirs</span><span class="p">]</span>
+
+  <span class="c1"># search for cudart</span>
+  <span class="k">return</span> <span class="n">find_cudart</span><span class="p">(</span><span class="n">search_dirs</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="load_nvidia_uvm"><a class="viewcode-back" href="../../../python/vsi.tools.html#vsi.tools.gpu_check.load_nvidia_uvm">[docs]</a><span class="k">def</span> <span class="nf">load_nvidia_uvm</span><span class="p">(</span><span class="n">file</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">  </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  A function to load the nvidia uvm device</span>
+
+<span class="sd">  Some (older) Linux Operating systems do not load ``/dev/nvidia-uvm`` on boot</span>
+<span class="sd">  to runlevel 3 (headless). This results in the ``nvidia-uvm`` module not being</span>
+<span class="sd">  loaded.</span>
+
+<span class="sd">  Unfortunately, a simple modprobe does not fix the issue, but a CUDA call on</span>
+<span class="sd">  the host (not in a container) will.</span>
+
+<span class="sd">  This scripts attempts to locate a ``libcudart.so`` library and calls the</span>
+<span class="sd">  ``cudaGetDeviceCount`` function, which loads the ``/dev/nvidia-uvm`` driver.</span>
+<span class="sd">  If it cannot locate the cuda runtime, you can give it the location as an</span>
+<span class="sd">  argument.</span>
+
+<span class="sd">  The CUDA Runtime is required on the host.</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+
+  <span class="c1"># check file exists</span>
+  <span class="k">if</span> <span class="n">file</span><span class="p">:</span>
+    <span class="n">file</span> <span class="o">=</span> <span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">(</span><span class="n">file</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">file</span><span class="o">.</span><span class="n">is_file</span><span class="p">():</span>
+      <span class="k">raise</span> <span class="ne">OSError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;File does not exist </span><span class="si">{</span><span class="n">file</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+  <span class="c1"># load libcudart.so</span>
+  <span class="k">try</span><span class="p">:</span>
+    <span class="n">cudart</span> <span class="o">=</span> <span class="n">load_cudart</span><span class="p">(</span><span class="n">file</span><span class="p">)</span>
+  <span class="k">except</span> <span class="ne">OSError</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">file</span><span class="p">:</span>
+      <span class="k">raise</span> <span class="ne">OSError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Failed to load cuda runtime from </span><span class="si">{</span><span class="n">file</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+      <span class="k">raise</span> <span class="ne">OSError</span><span class="p">(</span><span class="s2">&quot;Failed to find &amp; load cuda runtime. Try passing the &quot;</span>
+                    <span class="s2">&quot;full path of cuda runtime as an argument.&quot;</span><span class="p">)</span>
+
+  <span class="c1"># report</span>
+  <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;found libcudart.so : </span><span class="si">{</span><span class="n">cudart</span><span class="o">.</span><span class="n">_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+  <span class="c1"># run cudaGetDeviceCount</span>
+  <span class="n">cudart</span><span class="o">.</span><span class="n">cudaGetDeviceCount</span><span class="o">.</span><span class="n">argtypes</span> <span class="o">=</span> <span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">POINTER</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">c_int</span><span class="p">),</span> <span class="p">)</span>
+  <span class="n">gpu_count</span> <span class="o">=</span> <span class="n">ctypes</span><span class="o">.</span><span class="n">c_int</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+  <span class="n">exit_code</span> <span class="o">=</span> <span class="n">cudart</span><span class="o">.</span><span class="n">cudaGetDeviceCount</span><span class="p">(</span><span class="n">ctypes</span><span class="o">.</span><span class="n">pointer</span><span class="p">(</span><span class="n">gpu_count</span><span class="p">))</span>
+
+  <span class="c1"># report</span>
+  <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;cudaGetDeviceCount : </span><span class="si">{</span><span class="n">exit_code</span><span class="si">=}</span><span class="s2">, gpu_count=</span><span class="si">{</span><span class="n">gpu_count</span><span class="o">.</span><span class="n">value</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="gpu_check"><a class="viewcode-back" href="../../../python/vsi.tools.html#vsi.tools.gpu_check.gpu_check">[docs]</a><span class="k">def</span> <span class="nf">gpu_check</span><span class="p">(</span><span class="n">file</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">  </span><span class="sd">&#39;&#39;&#39;Try to load nvidia-uvm if not already loaded&#39;&#39;&#39;</span>
+
+  <span class="c1"># Only bother checking if there are any nvidia cards present</span>
+  <span class="k">if</span> <span class="ow">not</span> <span class="n">glob</span><span class="o">.</span><span class="n">glob</span><span class="p">(</span><span class="s1">&#39;/dev/nvidia[0-9]&#39;</span><span class="p">):</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Skip gpu_check : /dev/nvidia[0-9] missing&#39;</span><span class="p">)</span>
+    <span class="k">return</span>
+
+  <span class="c1"># is nvidia-uvm already loaded</span>
+  <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="s1">&#39;/dev/nvidia-uvm&#39;</span><span class="p">):</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s1">&#39;Skip gpu_check : /dev/nvidia-uvm already loaded&#39;</span><span class="p">)</span>
+    <span class="k">return</span>
+
+  <span class="c1"># call load_nvidia_uvm</span>
+  <span class="k">try</span><span class="p">:</span>
+    <span class="n">load_nvidia_uvm</span><span class="p">(</span><span class="n">file</span><span class="p">)</span>
+  <span class="k">except</span> <span class="ne">OSError</span> <span class="k">as</span> <span class="n">err</span><span class="p">:</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;load_nvidia_uvm failure : </span><span class="si">{</span><span class="n">err</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+
+  <span class="c1"># nvidia-uvm report</span>
+  <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="s1">&#39;/dev/nvidia-uvm&#39;</span><span class="p">):</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;/dev/nvidia-uvm has been successfully loaded&quot;</span><span class="p">)</span>
+  <span class="k">else</span><span class="p">:</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">critical</span><span class="p">(</span><span class="s2">&quot;load_nvidia_uvm ran but /dev/nvidia-uvm is still not loaded&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="main"><a class="viewcode-back" href="../../../python/vsi.tools.html#vsi.tools.gpu_check.main">[docs]</a><span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
+<span class="w">  </span><span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">  Command line interface to :func:`gpu_check`</span>
+<span class="sd">  &#39;&#39;&#39;</span>
+
+  <span class="c1"># argument parser</span>
+  <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">()</span>
+  <span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s1">&#39;--file&#39;</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">,</span>
+                      <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                      <span class="n">help</span><span class="o">=</span><span class="s2">&quot;Path to libcudart.so&quot;</span><span class="p">)</span>
+
+  <span class="n">args</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
+
+  <span class="c1"># basic logging when called from command line</span>
+  <span class="n">log_format</span> <span class="o">=</span> <span class="s2">&quot;[</span><span class="si">%(asctime)s</span><span class="s2">] {</span><span class="si">%(filename)s</span><span class="s2">:</span><span class="si">%(lineno)d</span><span class="s2">} </span><span class="si">%(levelname)s</span><span class="s2"> : </span><span class="si">%(message)s</span><span class="s2">&quot;</span>
+  <span class="n">logging</span><span class="o">.</span><span class="n">basicConfig</span><span class="p">(</span><span class="n">level</span><span class="o">=</span><span class="s1">&#39;DEBUG&#39;</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="n">log_format</span><span class="p">)</span>
+
+  <span class="c1"># run gpu_check</span>
+  <span class="n">gpu_check</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">file</span><span class="p">)</span></div>
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s1">&#39;__main__&#39;</span><span class="p">:</span>
+  <span class="n">main</span><span class="p">()</span>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Vision Systems, Inc.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
