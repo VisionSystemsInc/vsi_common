@@ -12,7 +12,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def rmtree(path, *args, keep_base_dir=False, **kwargs):
+def rmtree(path, ignore_errors=False, onerror=None, *args, onexc=None, keep_base_dir=False, **kwargs):
   """"
   shutil.rmtree with the ability to keep the directory at `path`. Necessary for situations
   when deleting the root directory would cause it to be unmounted.
@@ -25,12 +25,64 @@ def rmtree(path, *args, keep_base_dir=False, **kwargs):
   The rest of ``shutil.rmtree``'s parameters should be passed along.
   """
   if keep_base_dir == False:
-    shutil.rmtree(path, *args, **kwargs)
+    shutil.rmtree(path, ignore_errors=ignore_errors, onerror=onerror, *args,
+                  onexc=onexc, **kwargs)
   else:
-    names = os.listdir(path)
+    # https://github.com/python/cpython/blob/v3.15.0a2/Lib/shutil.py#L832
+    # Replicate this for file cleanup
+    if ignore_errors:
+      def onexc(*args):
+        pass
+    elif onerror is None and onexc is None:
+      def onexc(*args):
+        raise
+    elif onexc is None:
+      # delegate to onerror
+      def onexc(*args):
+        func, path, exc = args
+        if exc is None:
+          exc_info = None, None, None
+        else:
+          exc_info = type(exc), exc, exc.__traceback__
+        return onerror(func, path, exc_info)
+
+    try:
+      names = os.listdir(path)
+    except FileNotFoundError:
+      return
+    except OSError as err:
+      onexc(os.listdir, path, err)
+
     for name in names:
       fullname = os.path.join(path, name)
-      shutil.rmtree(fullname, *args, **kwargs)
+      if os.path.isdir(fullname):
+        # Changes in rmtree signature by version
+        # 3.10 shutil.rmtree(path, ignore_errors=False, onerror=None)
+        #   EOL 10/2026
+        # 3.11 shutil.rmtree(path, ignore_errors=False, onerror=None, *,
+        #                    dir_fd=None)
+        #   EOL 10/2027
+        # 3.12 shutil.rmtree(path, ignore_errors=False, onerror=None, *,
+        #                    onexc=None, dir_fd=None)
+        #   EOL 10/2028
+        # 3.15 shutil.rmtree(path, ignore_errors=False, onerror=None, *,
+        #                    onexc=None, dir_fd=None)
+        #   EOL 10/2031
+        if sys.version_info[1] < 12:
+          # pre 3.12, shutil doesn't have onexc.
+          # TODO: Remove this if branch on 10/2028
+          shutil.rmtree(fullname, ignore_errors, onerror, *args, **kwargs)
+        else:
+          # don't need onerror or ignore error anymore, they were processed
+          # into onexc
+          shutil.rmtree(fullname, *args, onexc=None, **kwargs)
+      else:
+        try:
+          os.unlink(fullname)
+        except FileNotFoundError:
+          continue
+        except OSError as err:
+          onexc(os.unlink, fullname, err)
 
 
 def glob_files_with_extensions(directory, extensions, recursive=True):
