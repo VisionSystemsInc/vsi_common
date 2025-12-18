@@ -5,6 +5,7 @@ from stat import S_IREAD
 from vsi.utils import file_utils
 from vsi.test.utils import TestCase
 
+top_foo_files = ['foo_file_1.txt', 'read_only.txt']
 sub_foo_dirs = {'tmp_subdir_0':['tmp_file0.txt','file1.txt','tmp_file2.txt'],
                 'tmp_subdir_1':['file0.txt','tmp_file1.txt'],
                 'tmp_sub_dir2':['tmp_file0.txt']}
@@ -24,6 +25,14 @@ class TestFileUtils(TestCase):
 
     # write temp subdirectories to a temp directory
     foo_dir = self.temp_dir.name
+
+    for f in top_foo_files:
+      foo_file = os.path.join(foo_dir, f)
+      with open(foo_file,'w') as foo:
+        foo.write('test')
+        if f == 'read_only.txt':
+          os.chmod(foo_file, S_IREAD)
+
     for key, value in sub_foo_dirs.items():
       sub_foo_dir = os.path.join(foo_dir,key)
 
@@ -39,7 +48,6 @@ class TestFileUtils(TestCase):
         # create a read only file to test the ignore_errors variable
         if key == 'sub_dir2':
           os.chmod(foo_file, S_IREAD)
-
     # Check that the temp directory exists.
     if not os.path.isdir(foo_dir):
       raise ValueError (
