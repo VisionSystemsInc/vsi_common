@@ -261,6 +261,14 @@ function conda-install()
   local conda_exe_footer
   # windows
   if [ "${OS-}" = "Windows_NT" ]; then
+    # There is an egregious bug in conda where it says:
+    # ::error:: 'Destination Folder' contains the following invalid character:
+    # complaining about tildes. In order to fix that, we need the -l flag on
+    # cygpath, but that will only work if the full path exists, even if the
+    # subdirectory already exists (i.e. if ~/foobar~1 exists, ~/foobar~1/stuff
+    # fails to expand). So mkdir first
+    mkdir -p "${conda_dir}"
+    local windows_conda_dir=$(cygpath -law "${conda_dir}")
 
     # manual specification of NoRegistry, AddToPath, & RegisterPython
     # ensure the conda install is not added to the system registry
@@ -270,7 +278,7 @@ function conda-install()
     MSYS2_ARG_CONV_EXCL="*" "${CONDA_INSTALLER}" \
         /NoRegistry=1 /AddToPath=0 /RegisterPython=0 \
         /NoShortcuts=1 \
-        /InstallationType=JustMe /S /D="$(cygpath -aw "${conda_dir}")"
+        /InstallationType=JustMe /S /D="${windows_conda_dir}"
 
     # conda executable
     conda_exe_footer="Scripts/conda.exe"
