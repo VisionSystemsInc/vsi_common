@@ -7,8 +7,16 @@ import tempfile
 import subprocess
 import re
 from wheel.wheelfile import WHEEL_INFO_RE
-from wheel.cli.pack import DIST_INFO_RE
-from wheel.cli import WheelError
+
+# wheel.cli is deprecated as of v0.46.0
+try:
+   from wheel.wheelfile import WheelError
+except ImportError:
+   from wheel.cli import WheelError
+
+# https://github.com/pypa/wheel/blob/0.46.3/src/wheel/_commands/pack.py#L11
+DIST_INFO_RE = re.compile(r"^(?P<namever>(?P<name>.+?)-(?P<ver>\d.*?))\.dist-info$")
+
 
 def get_parser():
   parser = argparse.ArgumentParser(
