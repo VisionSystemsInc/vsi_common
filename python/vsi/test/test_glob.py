@@ -52,8 +52,8 @@ class GlobTest(TestCase):
                      [os.path.join(os.path.pardir, '*'),           5,            5,      self.test1],]
 
   def test_runAllTests(self):
-    for (pattern, result, resultI, basedir) in self.testData:
-      if basedir is not None:
+    for (pattern, result, resultI, testDir) in self.testData:
+      if testDir is not None:
         with Chdir(self.test1):
           self.run_test(pattern, result, resultI)
       else:
