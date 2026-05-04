@@ -1,13 +1,29 @@
-from unittest import mock, TestCase as TestCaseOriginal
+from unittest import mock, TestCase as TestCaseOriginal, TestProgram
 from unittest.util import safe_repr
 import tempfile
 from tempfile import (
   NamedTemporaryFile as NamedTemporaryFileOrig,
   TemporaryDirectory
 )
+import inspect
 import os
 import sys
 import types
+
+
+def unittest_verbosity():
+  '''
+  Verbosity level of currently running unittest program,
+  or 0 if no unittest program is running.
+  https://stackoverflow.com/a/32883243
+  '''
+  frame = inspect.currentframe()
+  while frame:
+    self = frame.f_locals.get('self')
+    if isinstance(self, TestProgram):
+      return self.verbosity
+    frame = frame.f_back
+  return 0
 
 
 class TestCase(TestCaseOriginal):
@@ -19,6 +35,7 @@ class TestCase(TestCaseOriginal):
   * Initialized ``self.patches`` to an empty list, so you can append patches
   * On ``setUp``, auto starts all ``self.patches``
   * On tearDown, auto stops all ``self.patches``
+  * stores verbosity level of current unittest program in ``self.verbosity``
 
   .. rubric:: Example
 
@@ -33,6 +50,10 @@ class TestCase(TestCaseOriginal):
           print(self.temp_dir.name)
           self.assertEqual(settings.foo, 15)
   '''
+
+  @classmethod
+  def setUpClass(cls):
+    cls.verbosity = unittest_verbosity()
 
   def __init__(self, *args, **kwargs):
     super().__init__(*args, **kwargs)

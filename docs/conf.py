@@ -116,6 +116,7 @@ autodoc_mock_imports = [
     "boxm2_adaptor",
     "boxm2_scene_adaptor",
     "vpgl_adaptor_boxm2_batch",
+    "wheel",
     "yaml",
     "prompt_toolkit"
 ]

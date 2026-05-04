@@ -159,7 +159,11 @@ function pre-commit()
     case "${1}" in
       autoupdate|init-templatedir|install|install-hooks|migrate-config|run|try-repo|uninstall)
         # The commands are executed in some weird .cache dir, relative path to requirements will never work
-        sed 's|\${precommit_dir}|'"${precommit_dir}"'|g' "${precommit_dir}/config.yml.in" > "${precommit_dir}/config.yml"
+        local precommit_dir_sed="${precommit_dir}"
+        if [ "${OS-}" = "Windows_NT" ]; then
+          precommit_dir_sed="$(cygpath -m "${precommit_dir_sed}")"
+        fi
+        sed 's|\${precommit_dir}|'"${precommit_dir_sed}"'|g' "${precommit_dir}/config.yml.in" > "${precommit_dir}/config.yml"
         subcommand=("${1}" -c "${precommit_dir}/config.yml")
         shift 1
         ;;
@@ -239,12 +243,12 @@ function pre-commit::defaultify()
     pre-commit_setup) # Setup the pre-commit python
       local python_exe
 
-      # If pip is missing, install python
+      # If pip is missing, install python with pip
       if [ ! -f "$(vsi::python::virtualenv_bin "${python_dir}" pip)" ]; then
         local PYTHON_VERSION=${PYTHON_VERSION-${desired_python_version}}
         # conda-python-install sets: python_exe conda_exe python_activate python_version
         local python_exe conda_exe python_activate python_version
-        conda-python-install --dir "${python_dir}" --download
+        conda-python-install --dir "${python_dir}" --download --package pip
       fi
 
       # If pip-sync is missing, install just pip-tools

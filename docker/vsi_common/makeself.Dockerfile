@@ -1,6 +1,8 @@
-FROM vsiri/recipe:tini-musl AS tini
-FROM vsiri/recipe:gosu AS gosu
-FROM vsiri/recipe:vsi AS vsi
+ARG VSI_RECIPE_REPO="vsiri/recipe"
+
+FROM ${VSI_RECIPE_REPO}:tini-musl AS tini
+FROM ${VSI_RECIPE_REPO}:gosu AS gosu
+FROM ${VSI_RECIPE_REPO}:vsi AS vsi
 
 FROM alpine:3.13
 

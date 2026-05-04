@@ -1,8 +1,10 @@
-FROM vsiri/recipe:gosu AS gosu
-FROM vsiri/recipe:tini AS tini
-FROM vsiri/recipe:jq AS jq
-FROM vsiri/recipe:vsi AS vsi
-FROM vsiri/recipe:docker AS docker
+ARG VSI_RECIPE_REPO="vsiri/recipe"
+
+FROM ${VSI_RECIPE_REPO}:gosu AS gosu
+FROM ${VSI_RECIPE_REPO}:tini AS tini
+FROM ${VSI_RECIPE_REPO}:jq AS jq
+FROM ${VSI_RECIPE_REPO}:vsi AS vsi
+FROM ${VSI_RECIPE_REPO}:docker AS docker
 FROM docker/compose:alpine-1.25.4 AS docker-compose
 
 FROM ruby:2.6.5-buster

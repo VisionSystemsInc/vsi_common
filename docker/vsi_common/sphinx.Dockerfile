@@ -1,7 +1,9 @@
-FROM vsiri/recipe:gosu AS gosu
-FROM vsiri/recipe:tini AS tini
-FROM vsiri/recipe:pipenv AS pipenv
-FROM vsiri/recipe:vsi AS vsi
+ARG VSI_RECIPE_REPO="vsiri/recipe"
+
+FROM ${VSI_RECIPE_REPO}:gosu AS gosu
+FROM ${VSI_RECIPE_REPO}:tini AS tini
+FROM ${VSI_RECIPE_REPO}:pipenv AS pipenv
+FROM ${VSI_RECIPE_REPO}:vsi AS vsi
 
 FROM python:3.10.11
 
