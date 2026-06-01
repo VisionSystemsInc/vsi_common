@@ -354,6 +354,39 @@ begin_test "Bash flags"
     bash -xv "${TESTDIR}/foo_19"
   fi
 
+  ### bash_behavior_null_pushd
+  if [ "${bash_behavior_null_pushd}" = "0" ]; then
+    pushd ""
+    popd
+  elif pushd ""; then
+    false
+  fi
+
+  ### bash_behavior_multiline_caller
+
+
+  function callee_test()
+  {
+    call_info="$(caller)"
+  }
+  line_bookmark=${LINENO}
+  function caller_test()
+  {
+    local call_info
+
+    callee_test "Foo bar" # bookmaark+5
+    assert_str_eq "${call_info}" "$((line_bookmark+5)) ${BASH_SOURCE[0]}"
+    callee_test "Foo
+                 bar" # bookmaark+7/8
+    assert_str_eq "${call_info}" "$((line_bookmark+8-bash_behavior_multiline_caller)) ${BASH_SOURCE[0]}"
+    callee_test "Foo
+
+
+                 bar" # bookmaark+10/13
+    assert_str_eq "${call_info}" "$((line_bookmark+13-3*bash_behavior_multiline_caller)) ${BASH_SOURCE[0]}"
+  }
+  caller_test
+
   ### bash_behavior_strict_posix_functions
   function foo_20()
   {

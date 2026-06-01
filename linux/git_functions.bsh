@@ -365,6 +365,36 @@ function _http_to_git_protocol()
 }
 
 #**
+# .. function:: git_helper_cdup
+#
+# Helper function to get consistent relative paths from ``--show-cdup``
+#**
+function git_helper_cdup()
+{
+  # Relative path from the CWD to the root of the current repository
+  local up_path="$("${GIT}" rev-parse --show-cdup)"
+  # Remove trailing / which might be inconsistently added
+  up_path="${up_path%/}"
+  # handle empty string as .
+  echo "${up_path:-.}"
+}
+
+#**
+# .. function:: git_helper_toplevel
+#
+# Helper function to get consistent relative paths from ``--show-toplevel``
+#**
+function git_helper_toplevel()
+{
+  # The absolute path to the current repository/submodule work tree; e.g.,
+  # from /src/vsi_common/docker/recipes/hooks, this command prints
+  # /src/vsi_common/docker/recipes
+  local toplevel="$("${GIT}" rev-parse --show-toplevel 2> /dev/null)"
+  # Strip trailing / (this may be guaranteed by --show-toplevel)
+  echo "${toplevel%/}"
+}
+
+#**
 # .. function:: is_submodule
 #
 # :Output: - Returns ``0`` if the PWD is in a submodule, ``1`` for it is not
@@ -372,19 +402,14 @@ function _http_to_git_protocol()
 
 function is_submodule()
 {
-  local toplevel="$("${GIT}" rev-parse --show-toplevel 2> /dev/null)"
-  # Strip trailing / (this may be guaranteed by --show-toplevel)
-  toplevel="${toplevel%/}"
+  local toplevel="$(git_helper_toplevel)"
   local sm_basename="$(basename "${toplevel}")"
   local is_submod=1
   pushd "${toplevel}/../" &> /dev/null
     # Are we still in a git repo
-    local superlevel="$("${GIT}" rev-parse --show-toplevel 2> /dev/null)"
+    local superlevel="$(git_helper_toplevel)"
     if [ -n "${superlevel:+set}" ]; then
-      local prefix="$("${GIT}" rev-parse --show-prefix)"
-      # Guarantee a trailing / or empty string (this may be guaranteed by
-      # --show-prefix)
-      prefix="${prefix:+"${prefix%/}/"}"
+      local prefix=$("${GIT}" rev-parse --show-prefix)
       pushd "${superlevel}" &> /dev/null
         # In git v1.8.3, git submodule must be run in the toplevel of the
         # working tree
@@ -404,28 +429,6 @@ function is_submodule()
       popd &> /dev/null
     fi
   popd &> /dev/null
-  #
-  # git rev-parse --git-dir | awk -F '/.git' '{print $1}')"
-  #   The (usually) absolute path to the repository's .git directory or the
-  #   submodule's equivalent (e.g., .git/modules/docker/recipes); e.g., from
-  #   /src/vsi_common/linux, this command prints /src/vsi_common/.git
-  # git rev-parse --show-toplevel
-  #   The absolute path to the current repository/submodule work tree; e.g.,
-  #   from /src/vsi_common/docker/recipes/hooks, this command prints
-  #   /src/vsi_common/docker/recipes
-  # git rev-parse --show-cdup
-  #   The relative path from the CWD to the current repository/submodule
-  #   work tree; e.g., from /src/vsi_common/docker/recipes/hooks, this command
-  #   prints ../ Although, from /src/vsi_common/docker/recipes, this
-  #   command prints '' (unfortunately)
-  # git rev-parse --show-prefix
-  #   The relative path from the current repository/submodule work tree to the
-  #   CWD
-  # git rev-parse --show-superproject-working-tree (available in git v2.13.7)
-  #   The absolute path to the working tree of the superproject of the current
-  #   submodule; e.g., from /src/vsi_common/docker/recipes/hooks, this command
-  #   prints /src/vsi_common
-
   return "${is_submod}"
 }
 
@@ -443,7 +446,7 @@ function is_submodule()
 # RE Should mirror git_project_git_dir
 function git_project_root_dir()
 {
-  local toplevel="$("${GIT}" rev-parse --show-toplevel 2> /dev/null)"
+  local toplevel="$(git_helper_toplevel)"
   if is_submodule; then
     pushd "${toplevel}/../" &> /dev/null
       git_project_root_dir
@@ -486,7 +489,7 @@ function git_project_git_dir()
     # will (unfortunately/surprisingly) not output anything. (Similarly,
     # core.worktree isn't set). Fortunately, in this case, --git-dir is correct
     local dir
-    dir="$("${GIT}" rev-parse --show-toplevel)"
+    dir="$("${GIT}" rev-parse --show-toplevel)" # Don't use git_helper_toplevel, logic reasons
     if [ -z "${dir:+set}" ]; then
       dir="$("${GIT}" rev-parse --git-dir)"
       if [ "${dir}" == "." ]; then
@@ -584,66 +587,61 @@ function git_submodule_summary()
   # If we are not in the top-level directory of the repo, change to it and
   # re-call this function
   # Alternatively, re-write using git_submodule_displaypaths
-  local up_path="$("${GIT}" rev-parse --show-cdup)"
-  if [ -n "${up_path:+set}" ]; then
-    pushd "${up_path}" &> /dev/null
-      git_submodule_summary
-    popd &> /dev/null
-    return
-  fi
+  local up_path="$(git_helper_cdup)"
+  pushd "${up_path}" &> /dev/null
+    echo "Entering ${PWD}"
 
-  echo "Entering ${PWD}"
+    local OLD_IFS="${IFS}"
+    IFS=$'\n'
+    local submodule_keys=($(git_submodule_names))
+    IFS="${OLD_IFS}"
 
-  local OLD_IFS="${IFS}"
-  IFS=$'\n'
-  local submodule_keys=($(git_submodule_names))
-  IFS="${OLD_IFS}"
+    local sm_key
+    for sm_key in ${submodule_keys[@]+"${submodule_keys[@]}"}; do
+      local sm_path="$("${GIT}" config --file .gitmodules --get submodule."${sm_key}".path)"
 
-  local sm_key
-  for sm_key in ${submodule_keys[@]+"${submodule_keys[@]}"}; do
-    local sm_path="$("${GIT}" config --file .gitmodules --get submodule."${sm_key}".path)"
-
-    # List the changes (in commits) to the working tree of a submodule
-    # cf. git submodule summary, which doesn't show that there is modified or
-    # staged content, although it does count up differences (ahead/behind)
-    # RE The implementation for git submodule summary sm_path [1] and this
-    # command, git diff --submodule=log sm_path [2], are not the same
-    # RE Unfortunately, both commands only list the first parents [3]
-    # Alternatively, git -c status.submoduleSummary=True status sm_path is
-    # similar as well
-    # REVIEW Because of these limitations, it might be nicer if this function
-    # entered into each submodule and ran git log... directly (which is not too
-    # hard, see below), which could show the full set of changes (in commits)
-    # to the working tree (not only the first parents)
-    # RE Could even run git status --porcelain=1 to show changes in the working
-    # tree
-    #
-    # [1] https://github.com/git/git/blob/v2.24.1/git-submodule.sh#L777
-    # [2] https://github.com/git/git/blob/v2.24.1/diff.c#L3400 =>
-    #     https://github.com/git/git/blob/v2.24.1/submodule.c#L613-L640
-    #     https://github.com/git/git/blob/v2.24.1/submodule.c#L554-L563
-    # [3] https://github.com/git/git/blob/v2.24.1/submodule.c#L450
-    "${GIT}" diff --submodule=log "${sm_path}"
+      # List the changes (in commits) to the working tree of a submodule
+      # cf. git submodule summary, which doesn't show that there is modified or
+      # staged content, although it does count up differences (ahead/behind)
+      # RE The implementation for git submodule summary sm_path [1] and this
+      # command, git diff --submodule=log sm_path [2], are not the same
+      # RE Unfortunately, both commands only list the first parents [3]
+      # Alternatively, git -c status.submoduleSummary=True status sm_path is
+      # similar as well
+      # REVIEW Because of these limitations, it might be nicer if this function
+      # entered into each submodule and ran git log... directly (which is not too
+      # hard, see below), which could show the full set of changes (in commits)
+      # to the working tree (not only the first parents)
+      # RE Could even run git status --porcelain=1 to show changes in the working
+      # tree
+      #
+      # [1] https://github.com/git/git/blob/v2.24.1/git-submodule.sh#L777
+      # [2] https://github.com/git/git/blob/v2.24.1/diff.c#L3400 =>
+      #     https://github.com/git/git/blob/v2.24.1/submodule.c#L613-L640
+      #     https://github.com/git/git/blob/v2.24.1/submodule.c#L554-L563
+      # [3] https://github.com/git/git/blob/v2.24.1/submodule.c#L450
+      "${GIT}" diff --submodule=log "${sm_path}"
 
 
-    # git diff --submodule=log SHA~1..SHA sm_path (or equivalently
-    # git log --patch --submodule=log SHA~1..SHA sm_path) can also be used to
-    # list the changes (in commits) to a submodule (but again, only the first
-    # parents) between two commits in the enclosing repository
-    # RE For example,
-    #     git diff --submodule=log 0088b126~1..0088b126 docker/recipes
-    # ~=  git log --patch --submodule=log 0088b126~1..0088b126 docker/recipes
-    # vs  ( cd docker/recipes && git log --graph 18ca5ee9..fe4f42d4 --first-parent )
-    # cf. ( cd docker/recipes && git log --graph 18ca5ee9..fe4f42d4 )
+      # git diff --submodule=log SHA~1..SHA sm_path (or equivalently
+      # git log --patch --submodule=log SHA~1..SHA sm_path) can also be used to
+      # list the changes (in commits) to a submodule (but again, only the first
+      # parents) between two commits in the enclosing repository
+      # RE For example,
+      #     git diff --submodule=log 0088b126~1..0088b126 docker/recipes
+      # ~=  git log --patch --submodule=log 0088b126~1..0088b126 docker/recipes
+      # vs  ( cd docker/recipes && git log --graph 18ca5ee9..fe4f42d4 --first-parent )
+      # cf. ( cd docker/recipes && git log --graph 18ca5ee9..fe4f42d4 )
 
 
-    if [ -n "${_recursive_summary:+set}" ]; then
-      pushd "${sm_path}" &>/dev/null
-        # Depth-first traversal
-        git_submodule_summary
-      popd &>/dev/null
-    fi
-  done
+      if [ -n "${_recursive_summary:+set}" ]; then
+        pushd "${sm_path}" &>/dev/null
+          # Depth-first traversal
+          git_submodule_summary
+        popd &>/dev/null
+      fi
+    done
+  popd &> /dev/null
 }
 
 #**
@@ -694,8 +692,9 @@ function git_submodule_displaypaths()
     recursive_flag=("--recursive")
   fi
 
+  # Slashes are added because that's how the git 1.8.3 compatibility code was originally written
   # Relative path from the CWD to the root of the current repository
-  local up_path="$("${GIT}" rev-parse --show-cdup)"
+  local up_path="$(git_helper_cdup)/"
   # Relative path from the root of the current repository to the CWD
   local relative_cwd="$("${GIT}" rev-parse --show-prefix)"
   # Guarantee a trailing / or empty string (this probably is guaranteed by
@@ -717,6 +716,11 @@ function git_submodule_displaypaths()
   local submodule_paths
   if [ "${submodule_foreach_rv}" -eq "0" ]; then
     pushd "${up_path}" &> /dev/null
+      # The following logic works based off of these variables being empty instead of `./` for proper output
+      if [ "${up_path}" = "./" ]; then
+        up_path=
+      fi
+
       # In git v1.8.3, git submodule must be run in the toplevel of the working
       # tree
       # git v1.8.3 does not support git -C
@@ -818,7 +822,8 @@ function git_submodule_urls()
 
   # git submodule foreach must be run from the top-level working tree in
   # git v1.8.3
-  pushd "$("${GIT}" rev-parse --show-cdup)" &> /dev/null
+  local git_top_dir="$(git_helper_cdup)"
+  pushd "${git_top_dir}" &> /dev/null
     # Query the URL from the submodule's repository configuration
     # (e.g., .git/modules/docker/recipes/config)
     # REVIEW Should i unset GIT_DIR?
@@ -909,7 +914,8 @@ function git_submodule_names()
 
   # git submodule foreach must be run from the top-level working tree in
   # git v1.8.3
-  pushd "$("${GIT}" rev-parse --show-cdup)" &> /dev/null
+  local git_top_dir="$(git_helper_cdup)"
+  pushd "${git_top_dir}" &> /dev/null
     "${GIT}" submodule foreach --quiet ${recursive_flag[@]+"${recursive_flag[@]}"} 'echo "${name}"'
   popd &> /dev/null
   #
@@ -975,7 +981,8 @@ function git_submodule_toplevels()
 
   # git submodule foreach must be run from the top-level working tree in
   # git v1.8.3
-  pushd "$("${GIT}" rev-parse --show-cdup)" &> /dev/null
+  local git_top_dir="$(git_helper_cdup)"
+  pushd "${git_top_dir}" &> /dev/null
     "${GIT}" submodule foreach --quiet ${recursive_flag[@]+"${recursive_flag[@]}"} \
       'if [ "${OS-}" = "Windows_NT" ]; then
          cygpath "${toplevel}"
@@ -1169,7 +1176,7 @@ function git_submodule_sync()
   # If we are not in the top-level directory of the repo, change to it
   # Alternatively, strip the 'git rev-parse --show-cdup' prefix off of each
   # in_displaypath
-  local up_path="$("${GIT}" rev-parse --show-cdup)"
+  local up_path="$(git_helper_cdup)"
   pushd "${up_path}" &> /dev/null
     _git_submodule_sync "${remote_name}" "${submodule_names[@]}"
   popd &> /dev/null
@@ -1259,7 +1266,7 @@ function git_submodule_is_published_recursive()
   local is_tracked_change_private=0
 
   # If we are not in the top-level directory of the repo, change to it
-  local up_path="$("${GIT}" rev-parse --show-cdup)"
+  local up_path="$(git_helper_cdup)"
   pushd "${up_path}" &> /dev/null
     _git_submodule_is_published_recursive
   popd &> /dev/null
