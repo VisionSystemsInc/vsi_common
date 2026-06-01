@@ -136,8 +136,10 @@ uwecho ()
     local line_number="$(caller)";
     local file_name="${line_number#* }";
     line_number="${line_number%% *}";
-    local lines="$(echo -n ${@+"${@}"} | wc -l)";
-    line_number="$((line_number-lines))";
+    if [ "${bash_behavior_multiline_caller}" = "0" ]; then
+        local lines="$(echo -n ${@+"${@}"} | wc -l)";
+        line_number="$((line_number-lines))";
+    fi;
     local source_line="$(sed -n "${line_number}p" "${file_name}")";
     local spaces="$(echo -n "${source_line}" | sed -${sed_flag_rE} 's|^( *uwecho +['"'"'"]?).*|\1|' | tr -d '\n' | wc -c)";
     spaces="${spaces#${spaces%%[![:space:]]*}}";
@@ -315,6 +317,13 @@ load_vsi_compat ()
     fi;
     local bash_major_version="${BASH_VERSINFO[0]}";
     local bash_minor_version="${bash_major_version}${BASH_VERSINFO[1]}";
+    if [ "${bash_minor_version}" -ge "53" ]; then
+        bash_behavior_null_pushd=1;
+        bash_behavior_multiline_caller=1;
+    else
+        bash_behavior_null_pushd=0;
+        bash_behavior_multiline_caller=0;
+    fi;
     if [ "${bash_minor_version}" -ge "51" ]; then
         bash_feature_posix_process_substitution=0;
     else
