@@ -1,3 +1,4 @@
+#!/usr/bin/env false
 
 #*# tests/test_colors
 
