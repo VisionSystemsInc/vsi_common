@@ -643,6 +643,90 @@ function pipenv-install()
           ' >> "${pipenv_activate}"
 }
 
+
+#**
+# .. function:: uv-install
+#
+# Install ``uv``, an extremely fast Python package and project manager written in Rust.
+#
+# :Arguments: * [``--dir {dir}``] - ``uv`` install directory
+#             * [``--version {version}``] - ``uv`` version for install (default= ``${UV_VERSION:-latest}``)
+#
+# :Output: * uv_exe - ``uv`` executable
+#          * uv_version - ``uv`` version
+#          * uv_extra_args - number of arguments consumed
+#          * uv_activate - Bash file to activate ``uv`` executable
+#**
+
+function uv-install()
+{
+  local uv_dir  # install directory
+  local uv_ver="${UV_VERSION:-latest}"  # uv version
+
+  parse_args uv_extra_args \
+      --dir uv_dir: \
+      --version uv_ver: \
+      -- ${@+"${@}"}
+
+  # check for directory
+  if [ -z "${uv_dir-}" ]; then
+    echo "uv install must specify --dir" >& 2
+    JUST_IGNORE_EXIT_CODES=1
+    return 1
+  fi
+
+  # download install script
+  local uv_temp_dir
+  make_temp_path uv_temp_dir -d
+
+  local uv_url
+  if [ "${uv_ver}" == "latest" ]; then
+    uv_url="https://astral.sh/uv/install.sh"
+  else
+    uv_url="https://astral.sh/uv/${uv_ver}/install.sh"
+  fi
+
+  echo "Downloading uv install script from <${uv_url}>..." >&2
+  local uv_script="${uv_temp_dir}/uv_install.sh"
+  download_to_file "${uv_url}" "${uv_script}"
+
+  # call install script
+  UV_INSTALL_DIR="${uv_dir}" sh "${uv_script}"
+
+  # outputs: executable & version
+  uv_exe="${uv_dir}/uv"
+  uv_version="$("${uv_exe}" --version | awk 'NR==1{print $2}')"
+  echo "uv ${uv_version} installed at \"${uv_exe}\"" >&2
+
+  ls -lah "${uv_dir}" >&2
+
+  # Make sure uv meets requirements
+  if ! meet_requirements "${uv_version}" "==${uv_ver}"; then
+    echo "uv version ${uv_version} does not match request ${uv_ver}" >&2
+    JUST_IGNORE_EXIT_CODES=1
+    return 1
+  fi
+
+  # uv activate
+  uv_activate="${uv_dir}/uv_${JUST_INSTALL_ACTIVATE_BASENAME}"
+  uwecho '#!/usr/bin/env bash
+          set -eu
+
+          # folder where this file resides
+          UV_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"; pwd)"
+          ' > "${uv_activate}"
+  uwecho "
+          # executable & version
+          UV_EXE=\"\${UV_DIR}/uv\"
+          UV_VER=\"${uv_version}\"
+          " >> "${uv_activate}"
+  uwecho '
+          # update PATH
+          PATH="$(dirname "${UV_EXE}"):${PATH}"
+          ' >> "${uv_activate}"
+}
+
+
 #**
 # .. function:: vsbuild-install
 #
@@ -805,6 +889,10 @@ function install_defaultify()
     install_pipenv) # Install a virtualenv containing pipenv
       pipenv-install ${@+"${@}"}
       extra_args=pipenv_extra_args
+      ;;
+    install_uv) # Install uv
+      uv-install ${@+"${@}"}
+      extra_args=uv_extra_args
       ;;
     install_vsbuild) # Install Visual Studio Build Tools
       vsbuild-install ${@+"${@}"}
