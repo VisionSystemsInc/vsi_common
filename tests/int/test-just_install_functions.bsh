@@ -12,6 +12,7 @@ if [ -z "${VSI_COMMON_DIR+set}" ]; then
 fi
 
 source "${VSI_COMMON_DIR}/tests/testlib.bsh"
+source "${TESTLIB_DIR}/test_utils.bsh"
 source "${VSI_COMMON_DIR}/linux/common_source.sh"
 source "${VSI_COMMON_DIR}/linux/versions.bsh"
 source "${VSI_COMMON_DIR}/linux/requirements.bsh"
@@ -322,6 +323,37 @@ begin_test "conda-python-install and pipenv-install"
   if check_windows_has_short_paths; then
     rm -r "/tmp/python.$$"
   fi
+
+)
+end_test
+
+# test uv install
+begin_test "uv-install"
+(
+  setup_test
+
+  # environment
+  export JUST_INSTALL_ACTIVATE_BASENAME="test_just_activate.bsh"
+
+  # version info
+  UV_VER="0.11.18"
+  UV_VER_START="uv 0.11.18"
+
+  # install
+  uv-install \
+      --dir "${TESTDIR}/uv" \
+      --version "${UV_VER}"
+
+  # output version
+  assert_str_eq "${uv_version}" "${UV_VER}"
+
+  # executable version
+  RESULT="$("${uv_exe}" --version)"
+  assert_starts_with "${RESULT}" "${UV_VER_START}"
+
+  # activate version
+  RESULT="$(source "${uv_activate}"; "${UV_EXE}" --version)"
+  assert_starts_with "${RESULT}" "${UV_VER_START}"
 
 )
 end_test
