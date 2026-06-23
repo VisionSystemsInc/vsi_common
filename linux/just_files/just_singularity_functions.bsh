@@ -345,18 +345,16 @@ function singular_defaultify()
 
           singular_load_env "${instance}"
 
-          # for mount_point in ${singular_mount_points[@]+"${singular_mount_points[@]}"}; do
-            # mount_point_args+=(--mount "${mount_point}")
-          # done
-
           local entrypoint=
           local cmd=
           local docker_cwd=$(docker inspect --format '{{.Config.WorkingDir}}' "${docker_image}")
           local entrypoint_array=()
           local cmd_array=()
 
-          # Docker adds an extra \0\n to the end, resulting in newline being erroneously added as an argument.
-          # There is also the possibility that cmd or entrypoint is empty, which docker will result in a newline only character.
+          # Docker inspect (using the go templated array format) adds an extra \0\n to the end,
+          # resulting in newline being erroneously added as an argument.
+          # There is also the possibility that cmd or entrypoint is empty,
+          # which docker will result in a newline only character.
           # The perl expression below will resolve both of these situations
 
           # Turn null separated strings from docker into bash arrays
@@ -385,11 +383,23 @@ function singular_defaultify()
             entrypoint=${entrypoint% }
           fi
 
+          # Create a simple def file to customized singularity build to how we want it.
+          # https://docs.sylabs.io/guides/latest/user-guide/definition_files.html
           local def_file=$(
             echo "Bootstrap: docker-daemon"
             echo "From: ${docker_image}"
             echo "%runscript"
             echo "  #!/bin/sh"
+            # Unfortunately, this is where docker and singularity differ. In docker, you have
+            # a WorkingDir that it defaults to; if you specify a working dir (--cwd) at
+            # runtime, it uses that override instead. Singularity does not appear to have
+            # the former behavior. Apptainer and singularity-ce both pick a different
+            # directory from docker (and each other) by default. The override behavior is the
+            # same, however, there is no way to know if the directory the singularity container
+            # starts in is the "default" or override value. So it becomes impossible to
+            # duplicate both behaviors. This printf will always pick the container's default
+            # directory and there will be no way to override the starting directory.
+            # TL;DR: we are choosing to always ignore --cwd
             echo "  $(printf 'cd %q' "${docker_cwd}")"
             echo '  if [ "${#}" = "0" ]; then'
             echo "    exec ${entrypoint} ${cmd}"
