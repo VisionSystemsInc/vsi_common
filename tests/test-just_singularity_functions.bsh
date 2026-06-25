@@ -146,3 +146,90 @@ begin_test "singular-compose"
   )
 )
 end_test
+
+begin_test "Singularity import"
+(
+  setup_test
+
+  function Docker()
+  {
+    dock_args=(${@+"${@}"})
+    if [ "${read_stdin-0}" = "1" ]; then
+      IFS= read -r -d '' dock_stdin || [ -n "${dock_stdin}" ]
+    else
+      unset dock_stdin
+    fi
+  }
+
+  function id()
+  {
+    if [ "${1}" = "-u" ]; then
+      echo "111"
+    else
+      echo "222"
+    fi
+  }
+
+  out_img="t e  \"st.sif"
+  in_img=docker://test:latest
+
+  singular_defaultify singularity_import "${out_img}" "${in_img}"
+
+  # basic flags
+  first_args=("${dock_args[@]:0:3}")
+  assert_array_values first_args run -i --rm
+
+  # docker image to run apptainer in
+  isin alpine "${dock_args[@]}"
+  assert_str_eq "${dock_args[${#dock_args[@]}-1]}" "${in_img}"
+  assert_str_eq "${dock_args[${#dock_args[@]}-2]}" "--"
+
+  # mount point for output
+  isin "source=${TESTDIR},destination=/output,type=bind" "${dock_args[@]}"
+  isin "source=/var/run/docker.sock,destination=/var/run/docker.sock,type=bind" "${dock_args[@]}"
+
+  cmd=${dock_args[${#dock_args[@]}-3]}
+  assert_sub_str "${cmd}" "apk add --no-cache apptainer"
+  assert_sub_str "${cmd}" '${@+"${@}"}'
+  assert_sub_str "${cmd}" 'chown "111:222" "${singularity_image}"'
+  not assert_sub_str "${cmd}" '--force'
+
+  number_of_docker_args="${#dock_args[@]}"
+
+  # Test custom uid/gid
+  out_img="foobar.sif"
+  SINGULARITY_IMAGE_UID=333 SINGULARITY_IMAGE_GID=444 singular_defaultify singularity_import "${out_img}" "${in_img}"
+  assert_sub_str "${dock_args[${#dock_args[@]}-3]}" 'chown "333:444" "${singularity_image}"'
+
+  # Test custom docker port
+  SINGULARITY_DOCKER_SOCKET="-v /foo:/bar:ro" singular_defaultify singularity_import "${out_img}" "${in_img}"
+  not isin "source=/var/run/docker.sock,destination=/var/run/docker.sock,type=bind" "${dock_args[@]}"
+  isin "/foo:/bar:ro" "${dock_args[@]}"
+
+  SINGULARITY_DOCKER_SOCKET=(--mymount "source=/var/b a  r.sock,destination=/var/run/docker.sock,type=bind" --extra)
+  singular_defaultify singularity_import "${out_img}" "${in_img}"
+  i=$(findin "${SINGULARITY_DOCKER_SOCKET[1]}" "${dock_args[@]}")
+  assert_str_eq "${dock_args[i]}" "${SINGULARITY_DOCKER_SOCKET[1]}"
+  assert_str_eq "${dock_args[i-1]}" "--mymount"
+  assert_str_eq "${dock_args[i+1]}" "--extra"
+  unset SINGULARITY_DOCKER_SOCKET
+
+  # This is how you disable to socket mount altogether. Although normally, if you do this
+  # you would also be setting an environment variabl (Also via SINGULARITY_DOCKER_SOCKET)
+  SINGULARITY_DOCKER_SOCKET= singular_defaultify singularity_import "${out_img}" "${in_img}"
+  assert_str_eq $((number_of_docker_args - 2)) "${#dock_args[@]}"
+
+  # Test --force flag w/docker
+  SINGULARITY_IMPORT_FORCE=1 singular_defaultify singularity_import "${out_img}" "${in_img}"
+  assert_sub_str "${dock_args[${#dock_args[@]}-3]}" '--force'
+
+  # Test stdin
+  def=$'Bootstrap: docker\nFrom: alpine:latest'
+  read_stdin=1 singular_defaultify singularity_import "${out_img}" <<< "${def}"
+  assert_sub_str "${dock_stdin}" "${def}"
+
+  # TEst bring your own singularity
+  sing_args=$(SINGULARITY_CMD=echo singular_defaultify singularity_import "${out_img}" "${in_img}")
+  assert_str_eq "${sing_args}" "build ${out_img} ${in_img}"
+)
+end_test

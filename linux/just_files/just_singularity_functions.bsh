@@ -42,7 +42,7 @@ function singular_defaultify()
     # :Parameters: * ``SINGULARITY_DOCKER_SOCKET`` - An array to specify a custom docker socket to connect to docker. If SINGULARITY_DOCKER_SOCKET is not an array, it is converted to an array where whitespaces will be split. Default: ``(--mount source=/var/run/docker.sock,destination=/var/run/docker.sock,type=bind)``
     #              * ``SINGULARITY_IMAGE_UID`` - The user id to set the image to after it is built (as root). Default: current uid
     #              * ``SINGULARITY_IMAGE_GID`` - The group id to set the image to after it is built (as root). Default: current gid
-    #              * ``SINGULARITY_CMD`` - Optional name for a singularity executable to use. If this is not set, the default behavior is to create a docker and install singularity in there. Using ``SINGULARITY_CMD`` ignores ``SINGULARITY_DOCKER_SOCKET``, ``SINGULARITY_IMAGE_UID``, and ``SINGULARITY_IMAGE_GID``.
+    #              * ``SINGULARITY_CMD`` - Optional name for a singularity executable to use. If this is not set, the default behavior is to create a docker and install singularity in there. Using ``SINGULARITY_CMD`` ignores ``SINGULARITY_DOCKER_SOCKET``, ``SINGULARITY_IMAGE_UID``, and ``SINGULARITY_IMAGE_GID``. Spaces are treated as multiple arguments.
     #              * ``SINGULARITY_IMPORT_FORCE`` - Setting this variable to anything other than null will add the ``--force`` flag to singularity build, overwriting the destination image if it already exists without prompting. Default behavior is to prompt and wait for user input, and defaults to "no" if there is no stdin.
     #**
     singularity_import) # Export docker image "$1" to singularity. The rest of the arguments are passed on to \
@@ -51,6 +51,7 @@ function singular_defaultify()
       extra_args=${#}
       shift 1
 
+      local build_spec
       if [ "${#}" = "0" ]; then
         # read from stdin if no arguments are available
         build_spec='<(cat /dev/stdin)'
@@ -60,7 +61,9 @@ function singular_defaultify()
       fi
 
       if [ -n "${SINGULARITY_CMD:+set}" ]; then
-        ${DRYRUN} bash -c "${SINGULARITY_CMD} build ${SINGULARITY_IMPORT_FORCE:+--force} \"${singular_image}\" ${build_spec}"  -- "${@}"
+        ${DRYRUN-} env "singular_image=${singular_image}" bash -c "
+          ${SINGULARITY_CMD} build ${SINGULARITY_IMPORT_FORCE:+--force} \"\${singular_image}\" ${build_spec}
+        "  -- "${@}"
       else
         local singularity_image_container="/output/$(basename "${singular_image}")"
         local singularity_dirname=$(cd "$(dirname "${singular_image}")"; pwd)
@@ -68,7 +71,7 @@ function singular_defaultify()
         local SINGULARITY_IMAGE_GID=${SINGULARITY_IMAGE_GID-$(id -g)}
 
         local docker_socket
-        if declare -p SINGULARITY_DOCKER_SOCKET &> /dev/null; then
+        if [ -n "${SINGULARITY_DOCKER_SOCKET+set}" ]; then
           if is_array SINGULARITY_DOCKER_SOCKET; then
             docker_socket=(${SINGULARITY_DOCKER_SOCKET[@]+"${SINGULARITY_DOCKER_SOCKET[@]}"})
           else
@@ -79,13 +82,14 @@ function singular_defaultify()
         fi
 
         Docker run -i --rm \
-            ${docker_socket[@]+"${docker_socket[@]}"} \
-            --mount "source=${singularity_dirname},destination=/output,type=bind" \
-            alpine sh -c "
-              apk add --no-cache apptainer
-              apptainer build ${SINGULARITY_IMPORT_FORCE:+--force} \"${singularity_image_container}\" ${build_spec}
-              chown \"${SINGULARITY_IMAGE_UID-0}:${SINGULARITY_IMAGE_GID-0}\" \"${singularity_image_container}\"
-            " -- ${@+"${@}"}
+          ${docker_socket[@]+"${docker_socket[@]}"} \
+          --mount "source=${singularity_dirname},destination=/output,type=bind" \
+          --env "singularity_image=${singularity_image_container}" \
+          alpine sh -euxvc "
+            apk add --no-cache apptainer bash
+            apptainer build ${SINGULARITY_IMPORT_FORCE:+--force} \"\${singularity_image}\" ${build_spec}
+            chown \"${SINGULARITY_IMAGE_UID-0}:${SINGULARITY_IMAGE_GID-0}\" \"\${singularity_image}\"
+          " -- ${@+"${@}"}
       fi
       ;;
     #**
@@ -339,7 +343,7 @@ function singular_defaultify()
           Singularity "${subcommand}" ${@+"${@}"}
           extra_args+=${#}
           ;;
-        #singular-compose_import) Create a singularity image for a service ($1) from a docker image ($2) using local docker
+        #singular-compose_import) Create a singularity image for a service ($1) from docker image ($2) using local docker
         import)
           local instance=${1}
           local docker_image=${2}
@@ -356,7 +360,7 @@ function singular_defaultify()
           # Docker inspect (using the go templated array format) adds an extra \0\n to the end,
           # resulting in newline being erroneously added as an argument.
           # There is also the possibility that cmd or entrypoint is empty,
-          # which docker will interpret as a newline only character.
+          # which docker will result in a newline only character.
           # The perl expression below will resolve both of these situations
 
           # Turn null separated strings from docker into bash arrays
@@ -385,7 +389,7 @@ function singular_defaultify()
             entrypoint=${entrypoint% }
           fi
 
-          # Create a simple def file to customize `singularity build` to how we want it.
+          # Create a simple def file to customized singularity build to how we want it.
           # https://docs.sylabs.io/guides/latest/user-guide/definition_files.html
           local def_file=$(
             echo "Bootstrap: docker-daemon"
