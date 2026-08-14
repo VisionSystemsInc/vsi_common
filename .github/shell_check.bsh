@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+
+# docker run -it --rm -v "${VSI_COMMON_DIR}:/code:ro" registry.gitlab.com/pipeline-components/shellcheck:latest /code/.github/shell_check.bsh
+
+set -eu
+
+SHELLCHECK_ARGS=(
+  # no fancy args with spaces, won't work because of how I pass array below
+  -f json
+  # -S error
+  # -e ...
+)
+
+cd "${GITHUB_WORKSPACE-/code}"
+
+git config --global --add safe.directory /src/external/terra/external/vsi_common
+
+git ls-files -z |
+  xargs -0 -n1 sh -c '[ -f "${1}" ] && \
+                      head -n 1 "$1" | \
+                      grep -qE "^#!.*(bash|false)" \
+                      && echo "$1"' _ | \
+  grep -v '\.simplecov' | \
+  xargs -n10 -P "$(nproc)" bash -c 'shellcheck '"${SHELLCHECK_ARGS[*]}"' "${@}" > /tmp/results.$$; for x in "${@}"; do echo "${x}" processed.; done' _
+  # process 10 at a time, because 50 at a time causes it to hang. 49 worked
+
+mkdir -p /tmp/results
+jq -s add /tmp/results.* > /tmp/results/shellcheck.json
+
+jq -r '.[] | select(.level == "error" or .level == "warning") | "::\(.level) file=\(.file),line=\(.line),endLine=\(.endLine),col=\(.column),endColumn=\(.endColumn),title=ShellCheck::\(.message)"' /tmp/results/shellcheck.json
