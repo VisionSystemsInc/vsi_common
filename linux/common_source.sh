@@ -1,3 +1,5 @@
+#!/usr/bin/env false
+
 #*# linux/common_source
 
 # Use the sh POSIX compliant version of source_once
