@@ -265,7 +265,13 @@ function _get_listening_ports()
   if command -v ss &> /dev/null; then
     ss ${VSI_LIST_PROTO--t} -Hln | sed -${sed_flag_rE} 's/^(\S+\s+){3}\S*:(\S+).*/\2/'
   elif command -v netstat &> /dev/null; then
-    netstat ${VSI_LIST_PROTO--t} -nnnl | sed -${sed_flag_rE} '/^Active/d; /^Proto/d; s/^(\S+\s+){3}\S*:(\S+).*/\2/'
+    if [ "${OS-}" = "Windows_NT" ]; then
+      # For some reason, the netstat list is unstable on kaku, and the state being Listening is unstable in Powershell.
+      # So Just get all the ports without caring about state.
+      powershell "Get-NetTCPConnection | ForEach-Object LocalPort"
+    else
+      netstat ${VSI_LIST_PROTO--t} -nnnl | sed -${sed_flag_rE} '/^Active/d; /^Proto/d; s/^(\S+\s+){3}\S*:(\S+).*/\2/'
+    fi
   else
     # lsof doesn't work well unprivileged
     echo "ss or netstat not found. Cannot auto detect ports" >&2
